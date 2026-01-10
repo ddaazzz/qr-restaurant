@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Staff Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f8f8f8;
+    }
+
+    h1 { color: #333; }
+    section {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    button {
+      padding: 5px 10px;
+      margin: 5px 0;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+
+    .available {
+      color: green;
+      font-weight: bold;
+    }
+    .unavailable {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Staff Dashboard</h1>
+
+  <!-- Section 1: Generate QR / Add Table -->
+   <section id="tables-section">
+    <h2>Tables & QR Codes</h2>
+    <div id="tables-list">Loading tables...</div>
+</section>
+
+  </section>
+
+  <!-- TRUNCATED
+   Section 2: Active Sessions 
+  <section id="sessions-section">
+    <h2>Active Sessions</h2>
+    <div id="sessions-list">
+      Loading active sessions...
+    </div>
+  </section>
+-->
+
+  <!-- Section 3: Menu Management -->
+  <section id="menu-section">
+    <h2>Menu Management</h2>
+    <div id="menu-list">Loading menu...</div>
+  </section>
+  
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+const API = "http://localhost:3000/api";
+const restaurantId = 1;
+async function loadTables() {
+  const [tablesRes, sessionsRes] = await Promise.all([
+    fetch(`${API}/restaurants/${restaurantId}/tables`),
+    fetch(`${API}/restaurants/${restaurantId}/active-sessions-with-orders`)
+  ]);
+
+  const tables = await tablesRes.json();
+  const sessionRows = await sessionsRes.json();
+
+  // Group sessions by table
+  const sessionsByTable = {};
+
+  sessionRows.forEach(r => {
+    if (!sessionsByTable[r.table_id]) {
+      sessionsByTable[r.table_id] = {
+        session_id: r.session_id,
+        table_name: r.table_name,
+        orders: {}
+      };
+    }
+
+    if (r.order_id) {
+      if (!sessionsByTable[r.table_id].orders[r.order_id]) {
+        sessionsByTable[r.table_id].orders[r.order_id] = {
+          status: r.order_status,
+          items: [],
+          total: 0
+        };
+      }
+
+      const itemTotal = r.price_cents * r.quantity;
+
+      sessionsByTable[r.table_id].orders[r.order_id].items.push({
+        name: r.item_name,
+        quantity: r.quantity,
+        price: r.price_cents,
+        total: itemTotal
+      });
+
+      sessionsByTable[r.table_id].orders[r.order_id].total += itemTotal;
+    }
+  });
+
+  const container = document.getElementById("tables-list");
+  container.innerHTML = "";
+
+  tables.forEach(table => {
+    const div = document.createElement("div");
+
+    const qrUrl = `http://localhost:3000/${table.qr_token}`;
+    const canvasId = `qr-${table.id}`;
+    const session = sessionsByTable[table.id];
+
+    let ordersHtml = "";
+    let sessionTotal = 0;
+
+    if (session) {
+      Object.entries(session.orders).forEach(([orderId, order]) => {
+        sessionTotal += order.total;
+
+        ordersHtml += `
+          <div style="margin-left:15px;">
+            <strong>Order #${orderId}</strong> (${order.status})
+            <ul>
+              ${order.items.map(i => `
+                <li>
+                  ${i.quantity} × ${i.name}
+                  — $${(i.price / 100).toFixed(2)}
+                  = <strong>$${(i.total / 100).toFixed(2)}</strong>
+                </li>
+              `).join("")}
+            </ul>
+            <strong>Order Total: $${(order.total / 100).toFixed(2)}</strong>
+          </div>
+        `;
+      });
+    }
+
+    div.innerHTML = `
+      <strong>${table.name}</strong><br/>
+      QR URL: <small>${qrUrl}</small><br/>
+      <div id="${canvasId}"></div><br/>
+
+      <strong>Status:</strong>
+      ${session ? "<span class='available'>ACTIVE</span>" : "<span class='unavailable'>INACTIVE</span>"}<br/>
+
+      ${
+        session
+          ? `<button onclick="endSession(${session.session_id})">End Session</button>`
+          : `<button onclick="startSession(${table.id})">Start Session</button>`
+      }
+
+      ${
+        session
+          ? `
+            <hr/>
+            <strong>Active Orders</strong>
+            ${ordersHtml || "<em>No orders yet</em>"}
+            <hr/>
+            <strong>Session Total: $${(sessionTotal / 100).toFixed(2)}</strong>
+          `
+          : ""
+      }
+
+      <hr/>
+    `;
+
+    container.appendChild(div);
+
+    new QRCode(document.getElementById(canvasId), {
+      text: qrUrl,
+      width: 150,
+      height: 150
+    });
+  });
+} gi
+
+async function regenerateQR(tableId) {
+  await fetch(
+    `${API}/tables/${tableId}/regenerate-qr`,
+    { method: "POST" }
+  );
+  loadTables();
+}
+
+loadTables();
+
+  async function loadActiveSessions() {
+  const res = await fetch(
+    `${API}/restaurants/${restaurantId}/active-sessions-with-orders`
+  );
+
+  const rows = await res.json();
+  const container = document.getElementById("sessions-list");
+  container.innerHTML = "";
+
+  const sessions = {};
+
+  // Group by session
+  rows.forEach(r => {
+    if (!sessions[r.session_id]) {
+      sessions[r.session_id] = {
+        table: r.table_name,
+        orders: {}
+      };
+    }
+
+    if (r.order_id) {
+      if (!sessions[r.session_id].orders[r.order_id]) {
+        sessions[r.session_id].orders[r.order_id] = {
+          status: r.order_status,
+          items: []
+        };
+      }
+
+      sessions[r.session_id].orders[r.order_id].items.push({
+        name: r.item_name,
+        quantity: r.quantity,
+        price_cents: r.price_cents,
+        line_total_cents: r.price_cents * r.quantity
+      });
+    }
+  });
+
+  // Render
+  Object.entries(sessions).forEach(([sessionId, session]) => {
+    const div = document.createElement("div");
+
+    let ordersHtml = "";
+
+    Object.entries(session.orders).forEach(([orderId, order]) => {
+       let orderTotal = 0;
+      ordersHtml += `
+        <div style="margin-left:15px;">
+          <strong>Order #${orderId}</strong>
+          (${order.status})
+          <ul>
+            ${
+              order.items.length
+                ? order.items
+                    .map(i => {
+     orderTotal += i.line_total_cents;
+    return `
+        <li>
+        ${i.quantity} × ${i.name}
+        @ $${(i.price_cents / 100).toFixed(2)}
+        = <strong>$${(i.line_total_cents / 100).toFixed(2)}</strong>
+        </li>
+            `;
+                })
+                .join("")
+                : "<li>No items</li>"
+            }
+                
+          </ul>
+          <p><strong>Order Total: $${(orderTotal / 100).toFixed(2)}</strong></p>
+        </div>
+      `;
+    });
+
+    div.innerHTML = `
+      <strong>Table: ${session.table}</strong><br/>
+      Session ID: ${sessionId}<br/>
+
+      ${ordersHtml || "<em>No orders yet</em>"}
+
+      <hr/>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+
+async function loadMenu() {
+  const res = await fetch(
+    `${API}/restaurants/${restaurantId}/menu/staff`
+  );
+  const menu = await res.json();
+
+  const container = document.getElementById("menu-list");
+  container.innerHTML = "";
+
+  menu.forEach(item => {
+    const div = document.createElement("div");
+
+    div.innerHTML = `
+      <strong>${item.name}</strong> (${item.category_name})<br/>
+      $${(item.price_cents / 100).toFixed(2)}<br/>
+
+      Status:
+      <span class="${item.available ? "available" : "unavailable"}">
+        ${item.available ? "AVAILABLE" : "SOLD OUT"}
+      </span><br/>
+
+      <button onclick="toggleAvailability(${item.id}, ${!item.available})">
+        Mark as ${item.available ? "Sold Out" : "Available"}
+      </button>
+
+      <hr/>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+
+async function toggleAvailability(itemId, available) {
+  await fetch(`${API}/menu-items/${itemId}/availability`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ available })
+  });
+
+  loadMenu();
+}
+
+
+  async function startSession(tableId) {
+    await fetch(`${API}/tables/${tableId}/sessions`, {
+      method: "POST"
+    });
+    loadTables();
+  }
+
+  async function endSession(sessionId) {
+    await fetch(`${API}/sessions/${sessionId}/end`, {
+      method: "POST"
+    });
+    loadTables();
+  }
+
+  loadMenu();   
+  loadTables();
+  setInterval(loadTables, 5000);
+</script>
+
+</body>
+</html>

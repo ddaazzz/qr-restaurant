@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Restaurant Menu</title>
+</head>
+<body>
+ <h1 id="restaurant"></h1>
+<p id="status">Loading...</p>
+  <div id="menu"></div>
+
+<hr />
+
+<div id="cart">
+  <h2>Your Order</h2>
+  <p>No items yet</p>
+</div>
+
+<hr />
+
+<div id="order-status">
+  <h2>Order Status</h2>
+  <p>No order yet.</p>
+</div>
+
+
+  <script>
+    const qrToken = window.location.pathname.split("/").pop();
+    let sessionId = null;
+    let restaurantId = null;
+      // 🛒 NEW: Cart state
+    let cart = [];
+
+    async function init() {
+      // Scan QR
+      const sessionRes = await fetch(
+        `http://localhost:3000/api/scan/${qrToken}`,{
+             method: "POST"
+        }
+      );
+      const session = await sessionRes.json();
+      sessionId = session.session_id;
+      restaurantId = session.restaurant_id;
+
+      console.log(sessionId, restaurantId) //debug
+
+      // Load menu
+      const menuRes = await fetch(
+  `http://localhost:3000/api/restaurants/${restaurantId}/menu`
+);
+
+      const menu = await menuRes.json();
+
+        // 🔥 REMOVE LOADING TEXT HERE
+    document.getElementById("status").textContent = "";
+    document.getElementById("restaurant").textContent = "My Restaurant";
+
+
+      renderMenu(menu);
+    }
+    function renderMenu(menu) {
+  const container = document.getElementById("menu");
+  container.innerHTML = "";
+
+  const { categories, items } = menu;
+
+  categories.forEach(category => {
+    // Category title
+    const h2 = document.createElement("h2");
+    h2.textContent = category.name;
+    container.appendChild(h2);
+
+    // Items in this category
+    const categoryItems = items.filter(
+      item => item.category_id === category.id
+    );
+
+    categoryItems.forEach(item => {
+      const div = document.createElement("div");
+      div.style.marginLeft = "20px";
+
+      div.innerHTML = `
+        <h3>${item.name}</h3>
+        <p>Price: $${(item.price_cents / 100).toFixed(2)}</p>
+        <button onclick="order(${item.id}, ${item.price_cents}, '${item.name}')">
+        Add to Cart
+        </button>
+      `;
+
+      container.appendChild(div);
+    });
+  });
+}
+
+function renderCart() {
+  const cartDiv = document.getElementById("cart");
+
+  if (cart.length === 0) {
+    cartDiv.innerHTML = `
+      <h2>Your Order</h2>
+      <p>No items yet</p>
+    `;
+    return;
+  }
+
+  cartDiv.innerHTML = "<h2>Your Order</h2>";
+
+  let total = 0;
+
+  cart.forEach(item => {
+    total += item.priceCents * item.quantity;
+    cartDiv.innerHTML += `
+      <p>
+        ${item.name} × ${item.quantity}
+      </p>
+    `;
+  });
+
+  window.submitOrder = async function () {
+  if (cart.length === 0) return;
+
+await fetch(
+  `http://localhost:3000/api/sessions/${sessionId}/orders`,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      items: cart.map(i => ({
+        menu_item_id: i.menuItemId,
+        quantity: i.quantity
+      }))
+    })
+  }
+);
+
+
+
+  cart = [];
+  renderCart();
+  alert("Order sent to kitchen!");
+  loadOrderStatus();
+};
+
+
+
+  cartDiv.innerHTML += `
+    <hr />
+    <p><strong>Total: $${(total / 100).toFixed(2)}</strong></p>
+    <button onclick="submitOrder()">Confirm Order</button>
+    <br /><br />
+    <button onclick="closeSession()">End Session</button>
+  `;
+}
+
+async function closeSession() {
+  await fetch(`http://localhost:3000/api/sessions/${sessionId}/close`, {
+    method: "POST"
+  });
+
+  alert("Session closed. Thank you!");
+  window.location.reload();
+}
+
+
+
+function order(menuItemId, priceCents, name) {
+  const existing = cart.find(i => i.menuItemId === menuItemId);
+
+  if (existing) {
+    existing.quantity += 1;
+  } else {
+    cart.push({
+      menuItemId,
+      name,
+      quantity: 1,
+      priceCents
+    });
+  }
+
+  renderCart();
+}
+
+async function loadOrderStatus() {
+  if (!sessionId) return;
+
+  const res = await fetch(
+    `http://localhost:3000/api/sessions/${sessionId}/orders`
+  );
+  const data = await res.json();
+  console.log(data);
+
+  const statusDiv = document.getElementById("order-status");
+
+  if (!data.items || data.items.length === 0) {
+    statusDiv.innerHTML = `
+      <h2>Order Status</h2>
+      <p>No order yet.</p>
+    `;
+    return;
+  }
+  // Flatten all order items for display
+  let allItems = [];
+  let lastStatus = "pending"; // default
+  let totalCents = 0;
+
+  data.items.forEach(order => {
+    lastStatus = order.status; // take last order status
+    totalCents += Number(order.total_cents);
+    allItems = allItems.concat(order.items); // order.items is an array
+  });
+
+  statusDiv.innerHTML = `
+    <h2>Order Status</h2>
+    <p><strong>Status:</strong> ${lastStatus}</p>
+    <ul>
+      ${allItems.map(i =>
+        `<li>${i.quantity} × ${i.name}</li>`
+      ).join("")}
+    </ul>
+    <p><strong>Total:</strong> $${(totalCents / 100).toFixed(2)}</p>
+  `;
+}
+    init();
+    setInterval(loadOrderStatus, 5000);
+
+  </script>
+</body>
+</html>
