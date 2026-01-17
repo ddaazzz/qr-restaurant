@@ -30,10 +30,17 @@ router.get("/restaurants/:restaurantId/menu", async (req, res) => {
         let variants: any[] = [];
         if(itemIds.length > 0){
             const variantsResult = await pool.query(
-                `SELECT v.*, o.id AS option_id, o.name AS option_name, o.price_cents
-                 FROM menu_item_variants v
-                 LEFT JOIN menu_item_variant_options o ON v.id=o.variant_id
-                 WHERE v.menu_item_id = ANY($1::int[])`,
+                `SELECT
+                  v.*,
+                  o.id AS option_id,
+                  o.name AS option_name,
+                  o.price_cents,
+                  o.is_available
+                FROM menu_item_variants v
+                LEFT JOIN menu_item_variant_options o
+                  ON v.id = o.variant_id
+                WHERE v.menu_item_id = ANY($1::int[])`
+                ,
                 [itemIds]
             );
             variants = variantsResult.rows;
@@ -62,7 +69,8 @@ router.get("/restaurants/:restaurantId/menu", async (req, res) => {
                 existing.options.push({
                   id: v.option_id,
                   name: v.option_name,
-                  price_cents: v.price_cents
+                  price_cents: v.price_cents,
+                  is_available: v.is_available
                 });
               }
 
@@ -582,15 +590,6 @@ router.post("/variants/:variantId/options", async (req, res) => {
     if (!name) {
       return res.status(400).json({ error: "Option name required" });
     }
-    if (required && min_select === null) {
-  min_select = 1;
-}
-
-    if (!required && min_select && min_select > 0) {
-        return res.status(400).json({
-          error: "min_select cannot be > 0 if variant is not required"
-        });
-      }
 
     const result = await pool.query(
       `
@@ -608,6 +607,7 @@ router.post("/variants/:variantId/options", async (req, res) => {
     res.status(500).json({ error: "Failed to create option" });
   }
 });
+
 
 /**
  * UPDATE variant option
@@ -634,15 +634,7 @@ router.patch("/variant-options/:optionId", async (req, res) => {
       ]
     );
 
-    if (required && min_select === null) {
-  min_select = 1;
-}
-
-    if (!required && min_select && min_select > 0) {
-      return res.status(400).json({
-        error: "min_select cannot be > 0 if variant is not required"
-      });
-    }
+    
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Option not found" });

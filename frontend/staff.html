@@ -93,12 +93,6 @@ function deriveOrderStatus(items) {
   return "served";
 }
 
-function normalizeVariants(v) {
-  if (!v) return [];
-  if (Array.isArray(v)) return v;
-  return v.split(",").map(x => x.trim());
-}
-
 
 function isEditing(orderId) {
   return EDITING_ORDER_ID === Number(orderId);
@@ -186,8 +180,9 @@ async function loadTables() {
 
     if (session) {
       Object.entries(session.orders).forEach(([orderId, order]) => {
+        if (!isEditing(orderId)){
         ORDER_ITEM_CACHE[orderId] = order.items;
-
+      }
         sessionTotal += order.total;
 
         ordersHtml += `
@@ -223,6 +218,16 @@ async function loadTables() {
               <strong style="color:orange;">(${i.status})</strong>
 
               ${
+                Array.isArray(i.variants) && i.variants.length
+                  ? `<div style="margin-left:15px;font-size:12px;">
+                      ${i.variants
+                        .map(v => `• ${v.variant}: ${v.option}`)
+                        .join("<br>")}
+                    </div>`
+                  : ""
+              }
+
+              ${
                 isEditing(orderId) && !locked && !isDeleted
                   ? `
                     <button onclick="editQty(${orderId}, '${i.order_item_id}', 1)">+</button>
@@ -232,6 +237,7 @@ async function loadTables() {
                   : ""
               }
             </li>
+
           `;
         }).join("")
       }
@@ -434,16 +440,13 @@ ${
 */
 function editQty(orderId, orderItemId, delta) {
   const buffer = EDIT_BUFFER[orderId];
-  const item = buffer.find(i => i.order_item_id === orderItemId);
+  const item = buffer.find(i => String(i.order_item_id) === String(orderItemId));
   if (!item) return;
 
   const newQty = item.quantity + delta;
 
   if (newQty <= 0) {
-    // treat as delete
-    EDIT_BUFFER[orderId] = buffer.filter(
-      i => i.order_item_id !== orderItemId
-    );
+    item.quantity = 0; // mark as deleted, do NOT remove
   } else {
     item.quantity = newQty;
   }
@@ -451,21 +454,15 @@ function editQty(orderId, orderItemId, delta) {
   loadTables();
 }
 
-function editVariant(orderId, orderItemId, variant) {
+
+function editRemove(orderId, orderItemId) {
   const item = EDIT_BUFFER[orderId].find(
-    i => i.order_item_id == orderItemId
+    i => String(i.order_item_id) === String(orderItemId)
   );
   if (!item) return;
 
-  item.variants = variant;
+  item.quantity = 0; // mark deleted
   loadTables();
-}
-
-function editRemove(orderId, orderItemId) {
-  EDIT_BUFFER[orderId] = EDIT_BUFFER[orderId].filter(
-    i => i.order_item_id !== orderItemId
-  );
-  loadTables(); // 👈 ADD THIS
 }
 
 function orderForTable(qrToken) {
@@ -504,7 +501,6 @@ async function confirmEdit(orderId) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quantity: editedItem.quantity,
-          variants: editedItem.variants
         })
       });
     }
@@ -561,7 +557,26 @@ if (Array.isArray(item.variants)) {
   item.variants.forEach(variant => {
     const vDiv = document.createElement("div");
     vDiv.style.marginLeft = "20px";
-    vDiv.innerHTML = `<strong>• ${variant.name}</strong>`;
+    vDiv.innerHTML = `
+      <strong>
+        • ${variant.name}
+        ${
+          variant.min_select > 0
+            ? `<span style="color:red;font-size:12px;">
+                (Required: ${variant.min_select})
+              </span>`
+            : ""
+        }
+        ${
+          variant.max_select
+            ? `<span style="font-size:12px;">
+                (Max: ${variant.max_select})
+              </span>`
+            : ""
+        }
+      </strong>
+    `;
+
 
     variant.options.forEach(option => {
       const oDiv = document.createElement("div");
@@ -626,6 +641,16 @@ async function toggleAvailability(itemId, available) {
     loadTables();
   }
 
+function normalizeVariants(variants) {
+  if (!Array.isArray(variants)) return [];
+
+  return variants.map(v => ({
+    variant: v.name,
+    option: v.options?.[0]?.name || null
+  }));
+}
+
+
 // Add food item
 function addItemToEdit(orderId, menuItemId) {
   if (!menuItemId) return;
@@ -643,8 +668,7 @@ function addItemToEdit(orderId, menuItemId) {
     price: menuItem.price_cents,
     total: menuItem.price_cents,
     status: "pending",
-    variants: variants.length ? variants[0] : null,
-    variantOptions: variants,
+    variants: variants,
     isNew: true
   });
 
@@ -702,10 +726,9 @@ async function toggleVariantOptionAvailability(optionId, isAvailable) {
   loadMenu();   
   loadTables();
   setInterval(() => {
-  if (EDITING_ORDER_ID === null) {
+  if (EDITING_ORDER_ID === null) return;
     loadTables();
     loadMenu();
-  }
 }, 5000);
 
 </script>

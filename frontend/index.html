@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Restaurant Menu</title>
+    <title>Restaurant Menu</title>
+  <link rel="stylesheet" href="customer.css">
 </head>
 <body>
   <h1 id="restaurant"></h1>
@@ -136,7 +137,7 @@ function renderMenuItem(item){
 
 
 
-        v.options
+        (v.options || [])
         .filter(o => o.is_available)
         .forEach(o => {
         const opt = document.createElement("label");
@@ -167,7 +168,6 @@ container.appendChild(vContainer);
     const addBtn = document.createElement("button");
     addBtn.textContent = "Add to Cart";
     addBtn.dataset.itemId = item.id;
-    addBtn.disabled = true;
     addBtn.onclick = () => addToCart(item);
     addBtn.disabled = !canAddToCart(item);
 
@@ -259,22 +259,6 @@ function updateAddToCartButton(item) {
   if (!btn) return;
 
   btn.disabled = !canAddToCart(item);
-}
-
-function showVariantError(itemId, variant) {
-  const el = document.getElementById(
-    `variant-error-${itemId}-${variant.id}`
-  );
-
-  const selected =
-    variantSelections[itemId]?.[variant.id]?.length || 0;
-
-  if (selected < variant.min_select) {
-    el.textContent = `Select at least ${variant.min_select}`;
-    el.style.display = "block";
-  } else {
-    el.style.display = "none";
-  }
 }
 
 function updateVariantCounter(itemId, variant) {
@@ -382,7 +366,6 @@ function onVariantChange(itemId, variantId, optionId, checked) {
     variant.min_select === variant.max_select
   ) {
     if (checked) {
-      // replace selection
       selected = [optionId];
 
       // force UI sync
@@ -394,9 +377,8 @@ function onVariantChange(itemId, variantId, optionId, checked) {
           input.checked = Number(input.value) === optionId;
         });
     } else {
-      // do not allow unchecking below min
-      if (variant.min_select > 0) 
-        return;
+      // prevent unchecking below min
+      if (variant.min_select > 0) return;
       selected = [];
     }
   }
@@ -407,7 +389,7 @@ function onVariantChange(itemId, variantId, optionId, checked) {
   else {
     if (checked) {
       if (variant.max_select && selected.length >= variant.max_select) {
-        // immediately undo UI change
+        // undo UI change
         const input = document.querySelector(
           `input[data-item-id="${itemId}"][data-variant-id="${variantId}"][value="${optionId}"]`
         );
@@ -415,8 +397,7 @@ function onVariantChange(itemId, variantId, optionId, checked) {
         return;
       }
       selected.push(optionId);
-    }
- else {
+    } else {
       selected = selected.filter(id => id !== optionId);
     }
   }
@@ -441,6 +422,7 @@ function onVariantChange(itemId, variantId, optionId, checked) {
   updateVariantCounter(itemId, variant);
   updateAddToCartButton(item);
 }
+
 
 async function closeSession() {
   await fetch(`http://localhost:3000/api/sessions/${sessionId}/close`, {
