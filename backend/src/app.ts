@@ -22,6 +22,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api", tableRoutes);
 app.use("/api", scanRoutes);

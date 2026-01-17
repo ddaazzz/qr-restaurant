@@ -4,9 +4,13 @@
   <title>Restaurant Menu</title>
 </head>
 <body>
- <h1 id="restaurant"></h1>
-<p id="status">Loading...</p>
+  <h1 id="restaurant"></h1>
+  <p id="status">Loading...</p>
+
+  <div id="staff-indicator"></div>   <!-- ✅ HERE -->
+
   <div id="menu"></div>
+
 
 <hr />
 
@@ -24,11 +28,23 @@
 
 
   <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const IS_STAFF = urlParams.get("staff") === "1";
+
+if (IS_STAFF) {
+  document.getElementById("staff-indicator").textContent =
+    "👨‍🍳 Staff Ordering Mode";
+}
+
     const qrToken = window.location.pathname.split("/").pop();
     let sessionId = null;
     let restaurantId = null;
       // 🛒 NEW: Cart state
     let cart = [];
+
+    // 🔥 Variant selection state (REQUIRED)
+    const variantSelections = {};
+
 
     async function init() {
       // Scan QR
@@ -48,7 +64,7 @@
   `http://localhost:3000/api/restaurants/${restaurantId}/menu`
 );
 
-      const menu = await menuRes.json();
+      window.menu = await menuRes.json();
 
         // 🔥 REMOVE LOADING TEXT HERE
     document.getElementById("status").textContent = "";
@@ -57,7 +73,8 @@
 
       renderMenu(menu);
     }
-    function renderMenu(menu) {
+
+function renderMenu(menu) {
   const container = document.getElementById("menu");
   container.innerHTML = "";
 
@@ -73,22 +90,208 @@
     const categoryItems = items.filter(
       item => item.category_id === category.id
     );
+categoryItems.forEach(item => {
+  const itemEl = renderMenuItem(item);
+  itemEl.style.marginLeft = "20px";
+  container.appendChild(itemEl);
+});
 
-    categoryItems.forEach(item => {
-      const div = document.createElement("div");
-      div.style.marginLeft = "20px";
-
-      div.innerHTML = `
-        <h3>${item.name}</h3>
-        <p>Price: $${(item.price_cents / 100).toFixed(2)}</p>
-        <button onclick="order(${item.id}, ${item.price_cents}, '${item.name}')">
-        Add to Cart
-        </button>
-      `;
-
-      container.appendChild(div);
-    });
   });
+}
+
+function renderMenuItem(item){
+    const container = document.createElement("div");
+    container.classList.add("menu-item");
+
+    container.innerHTML = `
+        <h4>${item.name} - $${(item.price_cents/100).toFixed(2)}</h4>
+        <p>${item.description || ""}</p>
+    `;
+
+    // Add variants
+    if (Array.isArray(item.variants)) {
+  item.variants.forEach(v => {
+        const vContainer = document.createElement("div");
+        vContainer.classList.add("variant-group");
+
+        vContainer.innerHTML = `
+          <div class="variant-title">
+            <strong>
+              ${v.name}
+              ${v.required ? `<span style="color:red;"> *</span>` : ""}
+            </strong>
+            <small id="variant-counter-${item.id}-${v.id}" style="margin-left:6px;color:#666;">
+              ${
+                v.min_select === v.max_select && v.min_select !== null
+                  ? `(select ${v.min_select})`
+                  : v.max_select
+                  ? `(select ${v.min_select ?? 0}–${v.max_select})`
+                  : v.min_select
+                  ? `(select at least ${v.min_select})`
+                  : `(optional)`
+              }
+            </small>
+          </div>
+        `;
+
+
+
+        v.options
+        .filter(o => o.is_available)
+        .forEach(o => {
+        const opt = document.createElement("label");
+
+        opt.innerHTML = `
+          <input
+            type="checkbox"
+            value="${o.id}"
+            data-item-id="${item.id}"
+            data-variant-id="${v.id}"
+            onchange="onVariantChange(${item.id}, ${v.id}, ${o.id}, this.checked)"
+          />
+
+          ${o.name}
+          ${o.price_cents > 0 ? `(+$${(o.price_cents / 100).toFixed(2)})` : ""}
+        `;
+
+        vContainer.appendChild(opt);       
+         vContainer.appendChild(document.createElement("br"));
+
+      });
+
+container.appendChild(vContainer);
+    });
+  }
+
+    // Add to cart button
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "Add to Cart";
+    addBtn.dataset.itemId = item.id;
+    addBtn.disabled = true;
+    addBtn.onclick = () => addToCart(item);
+    addBtn.disabled = !canAddToCart(item);
+
+    
+    container.appendChild(addBtn);
+    return container;
+
+
+}
+
+function addToCart(item) {
+  const selectedOptions = [];
+  const variantDetails = [];
+  let extraPrice = 0;
+
+  item.variants.forEach(v => {
+  const selectedIds = variantSelections[item.id]?.[v.id] || [];
+
+ if (v.required && selectedIds.length === 0) {
+  alert(`Please select ${v.name}`);
+  throw new Error("Missing required variant");
+}
+
+if (v.max_select && selectedIds.length > v.max_select) {
+  alert(`You can only select ${v.max_select} for ${v.name}`);
+  throw new Error("Too many selections");
+}
+
+  selectedIds.forEach(optionId => {
+    const option = v.options.find(o => o.id === optionId);
+
+    selectedOptions.push(optionId);
+    variantDetails.push({
+      variant: v.name,
+      option: option.name
+    });
+
+    extraPrice += option.price_cents || 0;
+  });
+});
+
+
+  const existing = cart.find(
+    c =>
+      c.menuItemId === item.id &&
+      JSON.stringify(c.variantOptionIds) === JSON.stringify(selectedOptions)
+  );
+
+  if (existing) {
+    existing.quantity += 1;
+  } else {
+    cart.push({
+  menuItemId: item.id,
+  name: item.name,
+  quantity: 1,
+  basePriceCents: item.price_cents,
+  totalPriceCents: item.price_cents + extraPrice,
+  variantOptionIds: selectedOptions,
+  variantOptionDetails: variantDetails
+});
+
+  }
+
+  renderCart();
+}
+
+function canAddToCart(item) {
+  if (!item.variants || item.variants.length === 0) return true;
+
+  for (const v of item.variants) {
+    const selected =
+      variantSelections[item.id]?.[v.id]?.length || 0;
+
+    const min = v.min_select ?? (v.required ? 1 : 0);
+
+    if (selected < min) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function updateAddToCartButton(item) {
+  const btn = document.querySelector(
+    `button[data-item-id="${item.id}"]`
+  );
+
+  if (!btn) return;
+
+  btn.disabled = !canAddToCart(item);
+}
+
+function showVariantError(itemId, variant) {
+  const el = document.getElementById(
+    `variant-error-${itemId}-${variant.id}`
+  );
+
+  const selected =
+    variantSelections[itemId]?.[variant.id]?.length || 0;
+
+  if (selected < variant.min_select) {
+    el.textContent = `Select at least ${variant.min_select}`;
+    el.style.display = "block";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function updateVariantCounter(itemId, variant) {
+  const count =
+    variantSelections[itemId]?.[variant.id]?.length || 0;
+
+  const el = document.getElementById(
+    `variant-counter-${itemId}-${variant.id}`
+  );
+
+  if (!el) return;
+
+  if (variant.max_select) {
+    el.textContent = `${count} / ${variant.max_select} selected`;
+  } else {
+    el.textContent = `${count} selected`;
+  }
 }
 
 function renderCart() {
@@ -107,13 +310,21 @@ function renderCart() {
   let total = 0;
 
   cart.forEach(item => {
-    total += item.priceCents * item.quantity;
-    cartDiv.innerHTML += `
-      <p>
-        ${item.name} × ${item.quantity}
-      </p>
-    `;
-  });
+  const variantText = item.variantOptionDetails
+    ?.map(v => `• ${v.variant}: ${v.option}`)
+    .join("<br>") || "";
+
+  total += item.totalPriceCents * item.quantity;
+
+  cartDiv.innerHTML += `
+    <p>
+      <strong>${item.name}</strong> × ${item.quantity}<br>
+      <small>${variantText}</small>
+      <br><em>$${(item.totalPriceCents / 100).toFixed(2)} each</em>
+    </p>
+  `;
+});
+
 
   window.submitOrder = async function () {
   if (cart.length === 0) return;
@@ -125,9 +336,10 @@ await fetch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       items: cart.map(i => ({
-        menu_item_id: i.menuItemId,
-        quantity: i.quantity
-      }))
+  menu_item_id: i.menuItemId,
+  quantity: i.quantity,
+  selected_option_ids: i.variantOptionIds
+}))
     })
   }
 );
@@ -151,6 +363,85 @@ await fetch(
   `;
 }
 
+function onVariantChange(itemId, variantId, optionId, checked) {
+  if (!variantSelections[itemId]) {
+    variantSelections[itemId] = {};
+  }
+
+  const item = window.menu.items.find(i => i.id === itemId);
+  const variant = item.variants.find(v => v.id === variantId);
+
+  let selected = variantSelections[itemId][variantId] || [];
+
+  // ------------------------------
+  // EXACT MODE (min === max)
+  // ------------------------------
+  if (
+    variant.min_select !== null &&
+    variant.max_select !== null &&
+    variant.min_select === variant.max_select
+  ) {
+    if (checked) {
+      // replace selection
+      selected = [optionId];
+
+      // force UI sync
+      document
+        .querySelectorAll(
+          `input[data-item-id="${itemId}"][data-variant-id="${variantId}"]`
+        )
+        .forEach(input => {
+          input.checked = Number(input.value) === optionId;
+        });
+    } else {
+      // do not allow unchecking below min
+      if (variant.min_select > 0) 
+        return;
+      selected = [];
+    }
+  }
+
+  // ------------------------------
+  // NORMAL MULTI MODE
+  // ------------------------------
+  else {
+    if (checked) {
+      if (variant.max_select && selected.length >= variant.max_select) {
+        // immediately undo UI change
+        const input = document.querySelector(
+          `input[data-item-id="${itemId}"][data-variant-id="${variantId}"][value="${optionId}"]`
+        );
+        if (input) input.checked = false;
+        return;
+      }
+      selected.push(optionId);
+    }
+ else {
+      selected = selected.filter(id => id !== optionId);
+    }
+  }
+
+  variantSelections[itemId][variantId] = selected;
+
+  // ------------------------------
+  // Disable unchecked when max reached
+  // ------------------------------
+  if (variant.max_select) {
+    document
+      .querySelectorAll(
+        `input[data-item-id="${itemId}"][data-variant-id="${variantId}"]`
+      )
+      .forEach(input => {
+        const id = Number(input.value);
+        input.disabled =
+          selected.length >= variant.max_select && !selected.includes(id);
+      });
+  }
+
+  updateVariantCounter(itemId, variant);
+  updateAddToCartButton(item);
+}
+
 async function closeSession() {
   await fetch(`http://localhost:3000/api/sessions/${sessionId}/close`, {
     method: "POST"
@@ -159,8 +450,6 @@ async function closeSession() {
   alert("Session closed. Thank you!");
   window.location.reload();
 }
-
-
 
 function order(menuItemId, priceCents, name) {
   const existing = cart.find(i => i.menuItemId === menuItemId);
@@ -186,7 +475,7 @@ async function loadOrderStatus() {
     `http://localhost:3000/api/sessions/${sessionId}/orders`
   );
   const data = await res.json();
-  console.log(data);
+  //console.log(data);
 
   const statusDiv = document.getElementById("order-status");
 
@@ -199,26 +488,38 @@ async function loadOrderStatus() {
   }
   // Flatten all order items for display
   let allItems = [];
-  let lastStatus = "pending"; // default
   let totalCents = 0;
 
   data.items.forEach(order => {
-    lastStatus = order.status; // take last order status
     totalCents += Number(order.total_cents);
     allItems = allItems.concat(order.items); // order.items is an array
   });
 
+  function deriveStatus(items) {
+  if (items.some(i => i.status === "pending")) return "pending";
+  if (items.some(i => i.status === "preparing")) return "preparing";
+  return "served";
+}
+
+const derivedStatus = deriveStatus(allItems);
   statusDiv.innerHTML = `
     <h2>Order Status</h2>
-    <p><strong>Status:</strong> ${lastStatus}</p>
+    <p><strong>Overall Status:</strong> ${derivedStatus}</p>
     <ul>
       ${allItems.map(i =>
-        `<li>${i.quantity} × ${i.name}</li>`
-      ).join("")}
+        `<li>
+  ${i.quantity} × ${i.name}
+  <strong style="color:orange;">(${i.status})</strong>
+  ${i.variants ? `<br><small>${i.variants}</small>` : ""}
+</li>
+`).join("")}
     </ul>
     <p><strong>Total:</strong> $${(totalCents / 100).toFixed(2)}</p>
   `;
 }
+    
+
+
     init();
     setInterval(loadOrderStatus, 5000);
 

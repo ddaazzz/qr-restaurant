@@ -24,11 +24,11 @@ router.get("/restaurants/:restaurantId/tables", async (req, res) => {
   }
 });
 
+
 /**
  * CREATE table + QR token
  * (Staff only)
  */
-
 // GET tables for a restaurant
 router.post("/restaurants/:restaurantId/tables", async (req, res) => {
   try {
@@ -87,5 +87,96 @@ router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
     res.status(500).json({ error: "Failed to regenerate QR" });
   }
 });
+
+/**
+ * UPDATE table name
+ * (Admin / Staff)
+ */
+router.patch("/tables/:tableId", async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Table name required" });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE tables
+      SET name = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [name.trim(), tableId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Table not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update table" });
+  }
+});
+
+
+/**
+ * DELETE table
+ * (Admin only)
+ */
+router.delete("/tables/:tableId", async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { tableId } = req.params;
+
+    await client.query("BEGIN");
+
+    // Block delete if active session exists
+    const activeSession = await client.query(
+      `
+      SELECT id
+      FROM table_sessions
+      WHERE table_id = $1
+        AND ended_at IS NULL
+      `,
+      [tableId]
+    );
+
+    if (activeSession.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        error: "Cannot delete table with active session"
+      });
+    }
+
+    const result = await client.query(
+      `
+      DELETE FROM tables
+      WHERE id = $1
+      RETURNING *
+      `,
+      [tableId]
+    );
+
+    if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Table not found" });
+    }
+
+    await client.query("COMMIT");
+    res.json({ success: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete table" });
+  } finally {
+    client.release();
+  }
+});
+
 
 export default router;

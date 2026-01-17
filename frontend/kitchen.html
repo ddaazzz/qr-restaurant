@@ -9,90 +9,119 @@
       padding: 20px;
     }
 
-    .order {
+    .table {
       background: white;
       padding: 15px;
-      margin-bottom: 15px;
+      margin-bottom: 20px;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
 
-    .order h3 {
-      margin: 0 0 10px 0;
+    .item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
     }
 
-    .item {
-      margin-left: 15px;
+    .item:last-child {
+      border-bottom: none;
     }
 
     .status {
       font-weight: bold;
+      margin-left: 10px;
       color: orange;
+    }
+
+    button {
+      padding: 6px 10px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-  <h1>🍳 Kitchen Orders</h1>
-  <div id="orders">Loading...</div>
+  <h1>🍳 Kitchen Items</h1>
+  <div id="items">Loading...</div>
 
   <script>
-    async function loadOrders() {
-      const res = await fetch("http://localhost:3000/api/orders");
-      const orders = await res.json();
-      const container = document.getElementById("orders");
+    async function loadItems() {
+      const res = await fetch("http://localhost:3000/api/kitchen/items");
+      const items = await res.json();
+      const container = document.getElementById("items");
       container.innerHTML = "";
 
-      if (orders.length === 0) {
-        container.innerHTML = "<p>No active orders.</p>";
+      
+      if (items.length === 0) {
+        container.innerHTML = "<p>No active kitchen items.</p>";
         return;
       }
 
-      orders.forEach(order => {
-        console.log(order);
-  const div = document.createElement("div");
-  div.className = "order";
+      // Group items by table
+      const tableMap = {};
 
-  div.innerHTML = `
-    <h3>Table: ${order.table_name}</h3>
-    <p>Status: <span class="status">${order.status}</span></p>
-    <ul>
-      ${order.items.map(i =>
-        `<li class="item">${i.quantity} × ${i.name}</li>`
-      ).join("")}
-    </ul>
+      items.forEach(item => {
+        if (!tableMap[item.table_name]) {
+          tableMap[item.table_name] = [];
+        }
+        tableMap[item.table_name].push(item);
+      });
 
-    ${order.status === "pending" ? `
-  <button onclick="updateStatus(${order.order_id}, 'preparing')">
-    Preparing
-  </button>
-` : ""}
+      Object.entries(tableMap).forEach(([tableName, tableItems]) => {
+        const tableDiv = document.createElement("div");
+        tableDiv.className = "table";
 
-${order.status === "preparing" ? `
-  <button onclick="updateStatus(${order.order_id}, 'served')">
-    Served
-  </button>
-` : ""}
-`;
+        tableDiv.innerHTML = `<h3>Table: ${tableName}</h3>`;
 
-  container.appendChild(div);
-});
+        tableItems.forEach(item => {
+          const itemDiv = document.createElement("div");
+          itemDiv.className = "item";
 
+          itemDiv.innerHTML = `
+            <div>
+              ${item.quantity} × ${item.item_name}
+              ${item.variants ? `<br><small>${item.variants}</small>` : ""}
+              <span class="status">(${item.status})</span>
+
+            </div>
+            <div>
+              ${
+                item.status === "pending"
+                  ? `<button onclick="updateItemStatus(${item.order_item_id}, 'preparing')">Start</button>`
+                  : ""
+              }
+              ${
+                item.status === "preparing"
+                  ? `<button onclick="updateItemStatus(${item.order_item_id}, 'served')">Serve</button>`
+                  : ""
+              }
+            </div>
+          `;
+
+          tableDiv.appendChild(itemDiv);
+        });
+
+        container.appendChild(tableDiv);
+      });
     }
 
-    loadOrders();
-    
-    async function updateStatus(orderId, status) {
-  await fetch(`http://localhost:3000/api/orders/${orderId}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status })
-  });
+    async function updateItemStatus(orderItemId, status) {
+      await fetch(
+        `http://localhost:3000/api/order-items/${orderItemId}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status })
+        }
+      );
 
-  loadOrders();
-}
+      loadItems();
+    }
 
-    setInterval(loadOrders, 5000); // refresh every 5s
+    loadItems();
+    setInterval(loadItems, 5000);
   </script>
 
 </body>

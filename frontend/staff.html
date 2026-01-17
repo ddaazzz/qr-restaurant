@@ -60,7 +60,6 @@
     <div id="tables-list">Loading tables...</div>
 </section>
 
-  </section>
 
   <!-- TRUNCATED
    Section 2: Active Sessions 
@@ -80,8 +79,52 @@
   
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
+  let MENU_CACHE = [];
+  let EDITING_ORDER_ID = null;
+  let EDIT_BUFFER = {}; 
+  
+  // { [orderId]: [ { order_item_id, quantity, status, name, variants } ] }
+
+  
+
+function deriveOrderStatus(items) {
+  if (items.some(i => i.status === "preparing")) return "preparing";
+  if (items.some(i => i.status === "pending")) return "pending";
+  return "served";
+}
+
+function normalizeVariants(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  return v.split(",").map(x => x.trim());
+}
+
+
+function isEditing(orderId) {
+  return EDITING_ORDER_ID === Number(orderId);
+}
+
+function startEditOrder(orderId) {
+  EDITING_ORDER_ID = Number(orderId);
+  EDIT_BUFFER[orderId] = JSON.parse(
+    JSON.stringify(ORDER_ITEM_CACHE[orderId])
+  );
+  loadTables();
+}
+
+
+function cancelEditOrder() {
+  EDITING_ORDER_ID = null;
+  EDIT_BUFFER = {};
+  loadTables();
+}
+
+
 const API = "http://localhost:3000/api";
 const restaurantId = 1;
+const ORDER_ITEM_CACHE = {};
+
+//Main rendering function
 async function loadTables() {
   const [tablesRes, sessionsRes] = await Promise.all([
     fetch(`${API}/restaurants/${restaurantId}/tables`),
@@ -106,7 +149,6 @@ async function loadTables() {
     if (r.order_id) {
       if (!sessionsByTable[r.table_id].orders[r.order_id]) {
         sessionsByTable[r.table_id].orders[r.order_id] = {
-          status: r.order_status,
           items: [],
           total: 0
         };
@@ -115,15 +157,19 @@ async function loadTables() {
       const itemTotal = r.price_cents * r.quantity;
 
       sessionsByTable[r.table_id].orders[r.order_id].items.push({
+        order_item_id: r.order_item_id,  
         name: r.item_name,
         quantity: r.quantity,
         price: r.price_cents,
-        total: itemTotal
+        total: itemTotal,
+        variants: r.variants,
+        status: r.item_status || "pending"
       });
 
       sessionsByTable[r.table_id].orders[r.order_id].total += itemTotal;
     }
   });
+  
 
   const container = document.getElementById("tables-list");
   container.innerHTML = "";
@@ -140,23 +186,73 @@ async function loadTables() {
 
     if (session) {
       Object.entries(session.orders).forEach(([orderId, order]) => {
+        ORDER_ITEM_CACHE[orderId] = order.items;
+
         sessionTotal += order.total;
 
         ordersHtml += `
-          <div style="margin-left:15px;">
-            <strong>Order #${orderId}</strong> (${order.status})
-            <ul>
-              ${order.items.map(i => `
-                <li>
-                  ${i.quantity} × ${i.name}
-                  — $${(i.price / 100).toFixed(2)}
-                  = <strong>$${(i.total / 100).toFixed(2)}</strong>
-                </li>
-              `).join("")}
-            </ul>
-            <strong>Order Total: $${(order.total / 100).toFixed(2)}</strong>
-          </div>
-        `;
+  <div style="margin-left:15px;">
+    <strong>Order #${orderId}</strong>
+    (${deriveOrderStatus(order.items)})
+
+    ${
+      deriveOrderStatus(order.items) === "pending"
+        ? isEditing(orderId)
+          ? `
+            <button onclick="confirmEdit(${orderId})">✅ Confirm</button>
+            <button onclick="cancelEditOrder()">❌ Cancel</button>
+          `
+          : `<button onclick="startEditOrder(${orderId})">✏️ Edit Order</button>`
+        : `<em style="color:#999;">Kitchen started — locked</em>`
+    }
+
+    <ul>
+      ${
+        (isEditing(orderId)
+          ? EDIT_BUFFER[orderId]
+          : order.items
+        ).map(i => {
+          const locked = i.status !== "pending";
+          const isDeleted = i.quantity === 0;
+
+          return `
+            <li style="
+              ${locked || isDeleted ? "text-decoration:line-through;color:#999;" : ""}
+            ">
+              ${i.quantity} × ${i.name}
+              <strong style="color:orange;">(${i.status})</strong>
+
+              ${
+                isEditing(orderId) && !locked && !isDeleted
+                  ? `
+                    <button onclick="editQty(${orderId}, '${i.order_item_id}', 1)">+</button>
+                    <button onclick="editQty(${orderId}, '${i.order_item_id}', -1)">−</button>
+                    <button onclick="editRemove(${orderId}, '${i.order_item_id}')">🗑</button>
+                  `
+                  : ""
+              }
+            </li>
+          `;
+        }).join("")
+      }
+    </ul>
+
+    ${
+      isEditing(orderId)
+        ? `
+          <select onchange="addItemToEdit(${orderId}, this.value)">
+            <option value="">➕ Add item</option>
+            ${MENU_CACHE.map(m =>
+              `<option value="${m.id}">${m.name}</option>`
+            ).join("")}
+          </select>
+        `
+        : ""
+    }
+
+    <strong>Order Total: $${(order.total / 100).toFixed(2)}</strong>
+  </div>
+`;
       });
     }
 
@@ -173,6 +269,10 @@ async function loadTables() {
           ? `<button onclick="endSession(${session.session_id})">End Session</button>`
           : `<button onclick="startSession(${table.id})">Start Session</button>`
       }
+<button onclick="orderForTable('${table.qr_token}')">
+  ➕ Order for Table
+</button>
+
 
       ${
         session
@@ -197,7 +297,7 @@ async function loadTables() {
       height: 150
     });
   });
-} gi
+}
 
 async function regenerateQR(tableId) {
   await fetch(
@@ -209,7 +309,7 @@ async function regenerateQR(tableId) {
 
 loadTables();
 
-  async function loadActiveSessions() {
+/*  async function loadActiveSessions() {
   const res = await fetch(
     `${API}/restaurants/${restaurantId}/active-sessions-with-orders`
   );
@@ -238,11 +338,16 @@ loadTables();
       }
 
       sessions[r.session_id].orders[r.order_id].items.push({
-        name: r.item_name,
-        quantity: r.quantity,
-        price_cents: r.price_cents,
-        line_total_cents: r.price_cents * r.quantity
-      });
+  order_item_id: r.order_item_id,
+  name: r.item_name,
+  quantity: r.quantity,
+  status: r.item_status,
+  price: r.price_cents,
+  total: r.price_cents * r.quantity,
+  variants: r.variants
+});
+
+
     }
   });
 
@@ -265,21 +370,53 @@ loadTables();
                     .map(i => {
      orderTotal += i.line_total_cents;
     return `
-        <li>
-        ${i.quantity} × ${i.name}
-        @ $${(i.price_cents / 100).toFixed(2)}
-        = <strong>$${(i.line_total_cents / 100).toFixed(2)}</strong>
-        </li>
+       <li>
+  ${i.quantity} × ${i.name}
+  <strong style="color:orange;">(${i.status})</strong>
+
+  ${
+    i.status === "pending"
+      ? `
+        <button onclick="changeQty(${i.order_item_id}, ${i.quantity + 1})">+</button>
+        <button onclick="changeQty(${i.order_item_id}, ${i.quantity - 1})">−</button>
+        <button onclick="removeItem(${i.order_item_id})">🗑</button>
+      `
+      : ""
+  }
+  ${i.variants ? `<br><small>${i.variants}</small>` : ""}
+  <br>
+  — $${(i.price / 100).toFixed(2)}
+  = <strong>$${(i.total / 100).toFixed(2)}</strong>
+</li>
+
             `;
                 })
                 .join("")
                 : "<li>No items</li>"
             }
                 
-          </ul>
-          <p><strong>Order Total: $${(orderTotal / 100).toFixed(2)}</strong></p>
-        </div>
-      `;
+          </ul>    <select
+  onchange="addItem(${orderId}, this.value)"
+  ${deriveOrderStatus(order.items) !== "pending" ? "disabled" : ""}
+>
+  <option value="">➕ Add Item</option>
+  ${MENU_CACHE.map(m =>
+    `<option value="${m.id}">${m.name}</option>`
+  ).join("")}
+</select>
+
+${
+  deriveOrderStatus(order.items) !== "pending"
+    ? `<div style="color:gray;font-size:12px;">
+         Kitchen already started
+       </div>`
+    : ""
+}
+
+    <br/>
+    <strong>Order Total: $${(order.total / 100).toFixed(2)}</strong>
+  </div>
+`;
     });
 
     div.innerHTML = `
@@ -294,14 +431,112 @@ loadTables();
     container.appendChild(div);
   });
 }
+*/
+function editQty(orderId, orderItemId, delta) {
+  const buffer = EDIT_BUFFER[orderId];
+  const item = buffer.find(i => i.order_item_id === orderItemId);
+  if (!item) return;
 
+  const newQty = item.quantity + delta;
+
+  if (newQty <= 0) {
+    // treat as delete
+    EDIT_BUFFER[orderId] = buffer.filter(
+      i => i.order_item_id !== orderItemId
+    );
+  } else {
+    item.quantity = newQty;
+  }
+
+  loadTables();
+}
+
+function editVariant(orderId, orderItemId, variant) {
+  const item = EDIT_BUFFER[orderId].find(
+    i => i.order_item_id == orderItemId
+  );
+  if (!item) return;
+
+  item.variants = variant;
+  loadTables();
+}
+
+function editRemove(orderId, orderItemId) {
+  EDIT_BUFFER[orderId] = EDIT_BUFFER[orderId].filter(
+    i => i.order_item_id !== orderItemId
+  );
+  loadTables(); // 👈 ADD THIS
+}
+
+function orderForTable(qrToken) {
+  const url = `${location.origin}/${qrToken}?staff=1`;
+  window.open(url, "_blank");
+}
+
+
+async function confirmEdit(orderId) {
+  const original = ORDER_ITEM_CACHE[orderId] || [];
+  const edited = EDIT_BUFFER[orderId] || [];
+
+  const editedMap = new Map(
+    edited.map(i => [i.order_item_id, i])
+  );
+
+  // 1️⃣ Handle existing items (update or delete)
+  for (const orig of original) {
+    const editedItem = editedMap.get(orig.order_item_id);
+
+    // Deleted
+    if (!editedItem) {
+      await fetch(`${API}/order-items/${orig.order_item_id}`, {
+        method: "DELETE"
+      });
+      continue;
+    }
+
+    // Quantity changed OR variant changed
+    if (
+      editedItem.quantity !== orig.quantity ||
+      editedItem.variants !== orig.variants
+    ) {
+      await fetch(`${API}/order-items/${orig.order_item_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quantity: editedItem.quantity,
+          variants: editedItem.variants
+        })
+      });
+    }
+  }
+
+  // 2️⃣ Handle NEW items
+  for (const item of edited) {
+    if (item.isNew && item.quantity > 0) {
+      await fetch(`${API}/orders/${orderId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          menu_item_id: item.menu_item_id,
+          quantity: item.quantity,
+          variants: item.variants
+        })
+      });
+    }
+  }
+
+  // 3️⃣ Exit edit mode
+  EDITING_ORDER_ID = null;
+  EDIT_BUFFER = {};
+  loadTables();
+}
 
 async function loadMenu() {
   const res = await fetch(
     `${API}/restaurants/${restaurantId}/menu/staff`
   );
   const menu = await res.json();
-
+  MENU_CACHE = menu;
   const container = document.getElementById("menu-list");
   container.innerHTML = "";
 
@@ -309,25 +544,61 @@ async function loadMenu() {
     const div = document.createElement("div");
 
     div.innerHTML = `
-      <strong>${item.name}</strong> (${item.category_name})<br/>
-      $${(item.price_cents / 100).toFixed(2)}<br/>
+  <strong>${item.name}</strong> (${item.category_name})<br/>
+  $${(item.price_cents / 100).toFixed(2)}<br/>
 
-      Status:
-      <span class="${item.available ? "available" : "unavailable"}">
-        ${item.available ? "AVAILABLE" : "SOLD OUT"}
-      </span><br/>
+  Status:
+  <span class="${item.available ? "available" : "unavailable"}">
+    ${item.available ? "AVAILABLE" : "SOLD OUT"}
+  </span><br/>
 
-      <button onclick="toggleAvailability(${item.id}, ${!item.available})">
-        Mark as ${item.available ? "Sold Out" : "Available"}
-      </button>
+  <button onclick="toggleAvailability(${item.id}, ${!item.available})">
+    Mark as ${item.available ? "Sold Out" : "Available"}
+  </button>
+`;
 
-      <hr/>
-    `;
+if (Array.isArray(item.variants)) {
+  item.variants.forEach(variant => {
+    const vDiv = document.createElement("div");
+    vDiv.style.marginLeft = "20px";
+    vDiv.innerHTML = `<strong>• ${variant.name}</strong>`;
+
+    variant.options.forEach(option => {
+      const oDiv = document.createElement("div");
+      oDiv.style.marginLeft = "20px";
+
+      oDiv.innerHTML = `
+        <label>
+          <input
+            type="checkbox"
+            ${option.is_available ? "checked" : ""}
+            onchange="toggleVariantOptionAvailability(${option.id}, this.checked)"
+          />
+          ${option.name}
+          ${option.price_cents > 0
+            ? `(+$${(option.price_cents / 100).toFixed(2)})`
+            : ""}
+        </label>
+        <span class="${
+          option.is_available ? "available" : "unavailable"
+        }">
+          ${option.is_available ? "AVAILABLE" : "UNAVAILABLE"}
+        </span>
+      `;
+
+      vDiv.appendChild(oDiv);
+    });
+
+    div.appendChild(vDiv);
+  });
+}
+
+div.appendChild(document.createElement("hr"));
+
 
     container.appendChild(div);
   });
 }
-
 
 async function toggleAvailability(itemId, available) {
   await fetch(`${API}/menu-items/${itemId}/availability`, {
@@ -340,7 +611,6 @@ async function toggleAvailability(itemId, available) {
 
   loadMenu();
 }
-
 
   async function startSession(tableId) {
     await fetch(`${API}/tables/${tableId}/sessions`, {
@@ -356,9 +626,88 @@ async function toggleAvailability(itemId, available) {
     loadTables();
   }
 
+// Add food item
+function addItemToEdit(orderId, menuItemId) {
+  if (!menuItemId) return;
+
+  const menuItem = MENU_CACHE.find(m => m.id == menuItemId);
+  if (!menuItem) return;
+
+  const variants = normalizeVariants(menuItem.variants);
+
+  EDIT_BUFFER[orderId].push({
+    order_item_id: "NEW_" + Math.random(),
+    menu_item_id: menuItem.id,
+    name: menuItem.name,
+    quantity: 1,
+    price: menuItem.price_cents,
+    total: menuItem.price_cents,
+    status: "pending",
+    variants: variants.length ? variants[0] : null,
+    variantOptions: variants,
+    isNew: true
+  });
+
+  loadTables();
+}
+
+  //Change Order items
+async function changeQty(orderItemId, quantity) {
+  await fetch(`${API}/order-items/${orderItemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity })
+  });
+
+  loadTables();
+}
+
+//Remove item quantity
+async function removeItem(orderItemId) {
+  await fetch(`${API}/order-items/${orderItemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity: 0 })
+  });
+
+  loadTables();
+}
+
+//Add item quantity
+async function addItem(orderId, menuItemId) {
+  if (!menuItemId) return;
+
+  await fetch(`${API}/orders/${orderId}/items`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ menu_item_id: menuItemId })
+  });
+
+  loadTables();
+}
+
+//Toggle variant option availability
+async function toggleVariantOptionAvailability(optionId, isAvailable) {
+  await fetch(
+    `${API}/menu-item-variant-options/${optionId}/availability`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_available: isAvailable })
+    }
+  );
+}
+
+
   loadMenu();   
   loadTables();
-  setInterval(loadTables, 5000);
+  setInterval(() => {
+  if (EDITING_ORDER_ID === null) {
+    loadTables();
+    loadMenu();
+  }
+}, 5000);
+
 </script>
 
 </body>
