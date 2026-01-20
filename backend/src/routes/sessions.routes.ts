@@ -48,7 +48,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       [tableId]
     );
 
-    if (existing.rowCount > 0) {
+    if (existing?.rowCount > 0) {
       return res.status(400).json({ error: "Session already active" });
     }
 

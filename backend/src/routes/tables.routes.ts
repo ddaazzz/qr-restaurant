@@ -146,7 +146,7 @@ router.delete("/tables/:tableId", async (req, res) => {
       [tableId]
     );
 
-    if (activeSession.rowCount > 0) {
+    if (activeSession?.rowCount > 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         error: "Cannot delete table with active session"

@@ -26,7 +26,7 @@ router.post("/scan/:qrToken", async (req, res) => {
 
   let session;
 
-  if (sessionResult.rowCount > 0) {
+  if (sessionResult?.rowCount > 0) {
     session = sessionResult.rows[0];
   } else {
     // Create session
