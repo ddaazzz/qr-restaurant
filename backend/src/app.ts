@@ -42,6 +42,7 @@ app.use("/api", ordersRoutes);
 app.use("/api", sessionsRoutes);
 app.use("/api", staffRoutes);
 app.use("/api", authRoutes);
+
 /* ======================
    FRONTEND (AFTER APIs)
 ====================== */
