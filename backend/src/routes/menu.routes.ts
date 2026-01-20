@@ -4,11 +4,156 @@ import { upload } from "../config/upload";
 
 const router = Router();
 
+
+/**
+ * ==========================
+ * MENU CATEGORIES (Admin)
+ * ==========================
+ */
+
+/**
+ * GET categories by restaurant
+ * /api/menu_categories?restaurant_id=1
+ */
+router.get(
+  "/restaurants/:restaurantId/menu_categories",
+  async (req, res) => {
+    try {
+      const restaurantId = Number(req.params.restaurantId);
+
+      if (!restaurantId || Number.isNaN(restaurantId)) {
+        return res.status(400).json({ error: "Invalid restaurant ID" });
+      }
+
+      const result = await pool.query(
+        `
+        SELECT id, name, sort_order
+        FROM menu_categories
+        WHERE restaurant_id = $1
+        ORDER BY sort_order, id
+        `,
+        [restaurantId]
+      );
+
+      res.json(result.rows);
+    } catch (err) {
+      console.error("LOAD CATEGORIES ERROR:", err);
+      res.status(500).json({ error: "Failed to load categories" });
+    }
+  }
+);
+
+//Create category
+router.post(
+  "/restaurants/:restaurantId/menu_categories",
+  async (req, res) => {
+    try {
+      const restaurantId = Number(req.params.restaurantId);
+      const { name } = req.body;
+
+      if (!restaurantId || !name) {
+        return res.status(400).json({
+          error: "restaurantId and name required"
+        });
+      }
+
+      const result = await pool.query(
+        `
+        INSERT INTO menu_categories (restaurant_id, name)
+        VALUES ($1, $2)
+        RETURNING *
+        `,
+        [restaurantId, name.trim()]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error("CREATE CATEGORY ERROR:", err);
+      res.status(500).json({ error: "Failed to create category" });
+    }
+  }
+);
+
+//Update Category Name
+router.patch("/menu_categories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: "name required" });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE menu_categories
+      SET name = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [name.trim(), id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("UPDATE CATEGORY ERROR:", err);
+    res.status(500).json({ error: "Failed to update category" });
+  }
+});
+
+//Delete Category name
+router.delete("/menu_categories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const used = await pool.query(
+      `
+      SELECT 1
+      FROM menu_items
+      WHERE category_id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (used.rowCount > 0) {
+      return res.status(400).json({
+        error: "Cannot delete category with menu items"
+      });
+    }
+
+    const result = await pool.query(
+      "DELETE FROM menu_categories WHERE id = $1",
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE CATEGORY ERROR:", err);
+    res.status(500).json({ error: "Failed to delete category" });
+  }
+});
+
+
 // Get full menu for a restaurant
 // GET /restaurants/:restaurantId/menu
 router.get("/restaurants/:restaurantId/menu", async (req, res) => {
-    const { restaurantId } = req.params;
-
+      const restaurantId = Number(req.params.restaurantId);
+       
+      
+      if (!restaurantId || Number.isNaN(restaurantId)) {
+      return res.status(400).json({
+        error: "Invalid restaurant ID"
+      });
+    }
     try {
         const categoriesResult = await pool.query(
             "SELECT * FROM menu_categories WHERE restaurant_id=$1 ORDER BY sort_order",

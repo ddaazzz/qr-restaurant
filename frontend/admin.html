@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Portal – Tables</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    h1 { margin-bottom: 5px; }
+    h2 { margin-top: 30px; }
+
+    section {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    input {
+      padding: 6px;
+      margin-right: 6px;
+    }
+
+    button {
+      padding: 6px 10px;
+      margin-right: 5px;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+
+    .danger {
+      background: #ffdddd;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>🛠 Admin Portal</h1>
+<p>Restaurant Tables Management</p>
+
+<section>
+  <h2>Add Table</h2>
+  <input id="new-table-name" placeholder="Table name (e.g. Table 5)" />
+  <button onclick="createTable()">➕ Add Table</button>
+</section>
+
+<section>
+  <h2>Tables</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>QR</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tables-body">
+      <tr><td colspan="4">Loading...</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>🍽 Menu Items</h2>
+  <h3>
+  Add New Item
+  <button onclick="startCreateItem()">➕</button>
+</h3>
+
+
+<div id="create-item-form" style="display:none;">
+  <!-- existing create inputs here -->
+   <input id="new-item-name" placeholder="Item name">
+<input id="new-item-price" placeholder="Price (cents)" type="number">
+<input id="new-item-category" placeholder="Category ID" type="number">
+<br><br>
+<textarea id="new-item-desc" placeholder="Description"></textarea>
+<br><br>
+<button onclick="createMenuItem()">➕ Create Item</button>
+</div>
+
+
+
+<hr>
+
+  <div id="menu-items">Loading menu...</div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+const API = "http://localhost:3000/api";
+const restaurantId = 1;
+
+let CREATING_ITEM = false;
+let EDITING_ITEM_ID = null;
+let OPEN_VARIANTS_ITEM_ID = null;
+let EDITING_VARIANT_ID = null;
+let CURRENT_VARIANTS = [];
+
+
+
+async function loadTables() {
+  const res = await fetch(
+    `${API}/restaurants/${restaurantId}/tables`
+  );
+  const tables = await res.json();
+
+  const tbody = document.getElementById("tables-body");
+  tbody.innerHTML = "";
+
+  if (!tables.length) {
+    tbody.innerHTML =
+      "<tr><td colspan='4'>No tables yet</td></tr>";
+    return;
+  }
+
+  tables.forEach(t => {
+    const tr = document.createElement("tr");
+
+    const qrUrl = `http://localhost:3000/${t.qr_token}`;
+    const qrId = `qr-${t.id}`;
+
+    tr.innerHTML = `
+      <td>${t.id}</td>
+      <td>
+        <input
+          value="${t.name}"
+          onchange="renameTable(${t.id}, this.value)"
+        />
+      </td>
+      <td>
+        <div id="${qrId}"></div>
+        <small>${qrUrl}</small>
+      </td>
+      <td>
+        <button onclick="regenQR(${t.id})">🔄 QR</button>
+        <button class="danger" onclick="deleteTable(${t.id})">🗑 Delete</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+
+    new QRCode(document.getElementById(qrId), {
+      text: qrUrl,
+      width: 80,
+      height: 80
+    });
+  });
+}
+
+async function createTable() {
+  const input = document.getElementById("new-table-name");
+  const name = input.value.trim();
+  if (!name) return alert("Table name required");
+
+  await fetch(
+    `${API}/restaurants/${restaurantId}/tables`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    }
+  );
+
+  input.value = "";
+  loadTables();
+}
+
+async function renameTable(tableId, name) {
+  if (!name.trim()) return;
+
+  await fetch(`${API}/tables/${tableId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+}
+
+async function regenQR(tableId) {
+  await fetch(
+    `${API}/tables/${tableId}/regenerate-qr`,
+    { method: "POST" }
+  );
+  loadTables();
+}
+
+async function deleteTable(tableId) {
+  if (!confirm("Delete this table permanently?")) return;
+
+  await fetch(`${API}/tables/${tableId}`, {
+    method: "DELETE"
+  });
+
+  loadTables();
+}
+
+async function loadMenuItems() {
+  const res = await fetch(
+    `${API}/restaurants/${restaurantId}/menu/staff`
+  );
+
+  const items = await res.json();
+    console.log(items);
+
+  const container = document.getElementById("menu-items");
+  container.innerHTML = "";
+
+  if (!items.length) {
+    container.innerHTML = "<p>No menu items yet</p>";
+    return;
+  }
+  
+
+  items.forEach(item => {
+    const div = document.createElement("div");
+    div.style.border = "1px solid #ccc";
+    div.style.padding = "10px";
+    div.style.marginBottom = "10px";
+
+    div.innerHTML = `
+      <div>
+
+${
+  EDITING_ITEM_ID === item.id
+    ? `
+      <div style="margin-top:10px;">
+        <input
+          value="${item.name}"
+          onchange="updateMenuItem(${item.id}, { name: this.value })"
+        /><br>
+
+        <input
+          type="number"
+          value="${item.price_cents}"
+          onchange="updateMenuItem(${item.id}, { price_cents: Number(this.value) })"
+        /> cents<br><br>
+${item.image_url ? `<img src="${item.image_url}" width="80"><br>` : "Upload a food item image<br>"}
+        <input
+          type="file"
+          onchange="uploadItemImage(${item.id}, this.files[0])"
+        /><br>
+
+        <button onclick="endEditItem()">✅ Done</button><br>
+<br><button class="danger" onclick="deleteMenuItem(${item.id})">
+  🗑 Delete Item
+</button>
+      </div>
+    `
+    : `<strong>${item.category_name}</strong><br>
+      <strong>${item.name}</strong><br>
+      
+      $${(item.price_cents / 100).toFixed(2)}<br>
+
+      ${item.image_url ? `<img src="${item.image_url}" width="80"><br>` : ""}
+
+      <button onclick="startEditItem(${item.id})">✏️ Edit</button>
+      
+    `
+}
+
+</div>
+
+<br>
+<button onclick="manageVariants(${item.id})">🧩 Variants</button>
+<div id="variants-${item.id}">
+    `;
+
+    container.appendChild(div);
+    
+    if (OPEN_VARIANTS_ITEM_ID === item.id) {
+  fetchVariants(item.id).then(variants => {
+    document.getElementById(`variants-${item.id}`).innerHTML =
+      renderVariants(item.id, variants);
+  });
+}
+
+  });
+}
+
+async function createMenuItem() {
+  const name = document.getElementById("new-item-name").value.trim();
+  const price = Number(document.getElementById("new-item-price").value);
+  const categoryId = Number(document.getElementById("new-item-category").value);
+  const description = document.getElementById("new-item-desc").value.trim();
+
+  if (!name || !price || !categoryId) {
+    return alert("Name, price, and category are required");
+  }
+
+  await fetch(
+    `${API}/restaurants/${restaurantId}/menu-items`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        price_cents: price,
+        category_id: categoryId,
+        description
+      })
+    }
+  );
+
+  // reset form
+  document.getElementById("new-item-name").value = "";
+  document.getElementById("new-item-price").value = "";
+  document.getElementById("new-item-category").value = "";
+  document.getElementById("new-item-desc").value = "";
+
+  loadMenuItems();
+  endCreateItem();
+
+}
+
+//TO DO: availability toggle (future)
+/*async function toggleItem(itemId, available) {
+  await fetch(
+    `${API}/menu-items/${itemId}/availability`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ available })
+    }
+  );
+}
+*/
+
+function startCreateItem() {
+  CREATING_ITEM = true;
+  document.getElementById("create-item-form").style.display = "block";
+}
+
+function endCreateItem() {
+  CREATING_ITEM = false;
+  document.getElementById("create-item-form").style.display = "none";
+}
+
+async function updateMenuItem(itemId, changes) {
+  await fetch(
+    `${API}/menu-items/${itemId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes)
+    }
+  );
+}
+
+async function deleteMenuItem(itemId) {
+  if (!confirm("Delete this menu item permanently?")) return;
+
+  const res = await fetch(
+    `${API}/menu-items/${itemId}`,
+    { method: "DELETE" }
+  );
+
+  if (!res.ok) {
+    const err = await res.json();
+    return alert(err.error || "Cannot delete item");
+  }
+
+  loadMenuItems();
+}
+
+function manageVariants(itemId) {
+  if (!itemId) return; // SAFETY GUARD
+
+  OPEN_VARIANTS_ITEM_ID =
+    OPEN_VARIANTS_ITEM_ID === itemId ? null : itemId;
+
+  EDITING_VARIANT_ID = null;
+  loadMenuItems();
+}
+
+async function fetchVariants(itemId) {
+  const res = await fetch(`${API}/menu-items/${itemId}/variants`);
+  const data = await res.json();
+  CURRENT_VARIANTS = data;
+  return data;
+}
+
+
+function renderVariants(itemId, variants) {
+  if (OPEN_VARIANTS_ITEM_ID !== itemId) return "";
+
+  return `
+    <div style="margin-top:10px; padding-left:10px; border-left:3px solid #ddd;">
+      ${variants.map(v => `
+        <div style="margin-bottom:8px;">
+          ${
+            EDITING_VARIANT_ID === v.id
+              ? `
+                <label><input
+                  value="${v.name}"
+                  onchange="updateVariant(${v.id}, { name: this.value })"
+                /><input
+                    type="checkbox"
+                    ${v.required ? "checked" : ""}
+                    onchange="
+                      updateVariant(${v.id}, {
+                        required: this.checked,
+                        min_select: this.checked ? (v.min_select ?? 1) : 0
+                      })
+                    "
+                  />
+                  Required
+                </label>
+<input type="number"
+  value="${v.min_select ?? ""}"
+  placeholder="Min"
+  onchange="updateVariant(${v.id}, {
+    min_select: this.value === '' ? null : Number(this.value)
+  })">
+
+<input type="number"
+  value="${v.max_select ?? ""}"
+  placeholder="Max"
+  onchange="updateVariant(${v.id}, {
+    max_select: this.value === '' ? null : Number(this.value)
+  })">
+
+                <button onclick="EDITING_VARIANT_ID=null; loadMenuItems()">✅</button>
+              `
+              : `
+                <strong>${v.name}</strong>
+                <small>${v.required ? " (required)" : ""}
+                    ${(v.min_select || v.max_select)
+                    ? ` (min ${v.min_select ?? 0}, max ${v.max_select ?? ""})`
+                    : ""}
+                </small>
+
+                <button onclick="EDITING_VARIANT_ID=${v.id}; loadMenuItems()">✏️</button>                
+              <button class="danger"
+  onclick="deleteVariant(${v.id}, ${itemId})">
+  🗑 Delete Variant
+</button>
+`
+          } 
+
+          <div style="margin-left:15px;">
+            ${v.options.map(o => `
+              ${
+                EDITING_VARIANT_ID === v.id
+                  ? `
+                    <input
+                      value="${o.name}"
+                      onchange="updateVariantOption(${o.id}, { name: this.value })"
+                    />
+                    <input
+                      type="number"
+                      value="${o.price_cents ?? 0}"
+                      onchange="updateVariantOption(${o.id}, { price_cents: Number(this.value) })"
+                    /> cents
+                    <button onclick="deleteVariantOption(${o.id})">🗑</button>
+                    <br>
+                  `
+                  : `
+                    • ${o.name}
+                    ${o.price_cents ? `(+${o.price_cents}¢)` : ""}
+                  `
+              }
+            `).join("")}
+          </div>${
+  EDITING_VARIANT_ID === v.id
+    ? `
+      <input
+        id="new-option-name-${v.id}"
+        placeholder="Option name"
+      >
+      <input
+        id="new-option-price-${v.id}"
+        type="number"
+        placeholder="+ cents"
+      >
+      <button onclick="addVariantOption(${v.id})">➕ Add Option</button>
+    `
+    : ``
+}        </div>
+      `).join("")}
+      <hr>
+        <input
+        id="new-variant-name-${itemId}"
+        placeholder="Variant name (e.g. Toppings)"
+        >
+
+        <label>
+        <input type="checkbox" id="new-variant-required-${itemId}">
+        Required
+        </label>
+
+        <input
+        id="new-variant-min-${itemId}"
+        type="number"
+        min="0"
+        placeholder="Min"
+        style="width:60px;"
+        >
+
+        <input
+        id="new-variant-max-${itemId}"
+        type="number"
+        min="0"
+        placeholder="Max"
+        style="width:60px;"
+        >
+
+        <button onclick="addVariantGroup(${itemId})">➕ Add Variant</button>
+
+
+    </div>
+  `;
+}
+
+async function addVariantGroup(itemId) {
+  const name = document
+    .getElementById(`new-variant-name-${itemId}`)
+    .value.trim();
+
+  const required = document
+    .getElementById(`new-variant-required-${itemId}`)
+    .checked;
+
+  const minSelectRaw =
+    document.getElementById(`new-variant-min-${itemId}`).value;
+  const maxSelectRaw =
+    document.getElementById(`new-variant-max-${itemId}`).value;
+
+  const min_select =
+    minSelectRaw === "" ? null : Number(minSelectRaw);
+  const max_select =
+    maxSelectRaw === "" ? null : Number(maxSelectRaw);
+
+  if (!required && min_select > 0) {
+    return alert("Min must be 0 if variant is not required");
+  }
+
+  if (min_select !== null && max_select !== null && min_select > max_select) {
+    return alert("Min cannot be greater than Max");
+  }
+
+  if (!name) return alert("Variant name required");
+
+  await fetch(`${API}/menu-items/${itemId}/variants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      required,
+      min_select,
+      max_select
+    })
+  });
+
+  loadMenuItems();
+}
+
+async function addVariantOption(variantId) {
+  const nameInput =
+    document.getElementById(`new-option-name-${variantId}`);
+  const priceInput =
+    document.getElementById(`new-option-price-${variantId}`);
+
+  const name = nameInput.value.trim();
+  const price = Number(priceInput.value) || 0;
+
+  if (!name) return alert("Option name required");
+
+  const res = await fetch(`${API}/variants/${variantId}/options`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      price_cents: price
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    alert(err.error || "Failed to add option");
+    return;
+  }
+
+  nameInput.value = "";
+  priceInput.value = "";
+
+  manageVariants(OPEN_VARIANTS_ITEM_ID);
+
+}
+
+function sanitizeVariantChanges(existing, changes) {
+  const merged = { ...existing, ...changes };
+
+  // Rule 1: not required → min = 0
+  if (!merged.required) {
+    merged.min_select = 0;
+  }
+
+  // Rule 2: min <= max
+  if (
+    merged.min_select !== null &&
+    merged.max_select !== null &&
+    merged.min_select > merged.max_select
+  ) {
+    merged.max_select = merged.min_select;
+  }
+
+  return merged;
+}
+
+async function updateVariant(variantId, changes) {
+  const variant = CURRENT_VARIANTS.find(v => v.id === variantId);
+  if (!variant) return;
+
+  const clean = sanitizeVariantChanges(variant, changes);
+
+  const res = await fetch(`${API}/variants/${variantId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(clean)
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    alert(err.error || "Variant update failed");
+  }
+
+  loadMenuItems();
+}
+
+async function deleteVariant(variantId, itemId) {
+  if (!confirm("Delete this variant?")) return;
+
+  await fetch(
+    `${API}/variants/${variantId}`,
+    { method: "DELETE" }
+  );
+
+  manageVariants(itemId);
+}
+
+function startEditItem(itemId) {
+  EDITING_ITEM_ID = itemId;
+  loadMenuItems();
+}
+
+function endEditItem() {
+  EDITING_ITEM_ID = null;
+  loadMenuItems();
+}
+
+async function uploadItemImage(itemId, file) {
+  if (!file) return;
+
+  const form = new FormData();
+  form.append("image", file);
+
+  await fetch(
+    `${API}/menu-items/${itemId}/image`,
+    {
+      method: "POST",
+      body: form
+    }
+  );
+
+  loadMenuItems();
+}
+
+async function updateVariantOption(optionId, changes) {
+  await fetch(`${API}/variant-options/${optionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes)
+  });
+}
+
+async function deleteVariantOption(optionId) {
+  if (!confirm("Delete this option?")) return;
+
+  await fetch(`${API}/variant-options/${optionId}`, {
+    method: "DELETE"
+  });
+
+  loadMenuItems();
+}
+
+loadTables();
+loadMenuItems();
+
+</script>
+
+</body>
+</html>

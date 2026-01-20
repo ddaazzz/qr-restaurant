@@ -154,8 +154,8 @@ async function loadTables() {
         order_item_id: r.order_item_id,  
         name: r.item_name,
         quantity: r.quantity,
-        price: r.price_cents,
-        total: itemTotal,
+        unit_price_cents: r.price_cents,
+        total_price_cents: itemTotal,
         variants: r.variants,
         status: r.item_status || "pending"
       });
@@ -188,10 +188,19 @@ async function loadTables() {
         ordersHtml += `
   <div style="margin-left:15px;">
     <strong>Order #${orderId}</strong>
-    (${deriveOrderStatus(order.items)})
+    (${
+      deriveOrderStatus(
+        isEditing(orderId)
+          ? EDIT_BUFFER[orderId]
+          : order.items
+      )
+    })
+
 
     ${
-      deriveOrderStatus(order.items) === "pending"
+      deriveOrderStatus(isEditing(orderId)
+      ? EDIT_BUFFER[orderId]
+      : order.items) === "pending"
         ? isEditing(orderId)
           ? `
             <button onclick="confirmEdit(${orderId})">✅ Confirm</button>
@@ -215,7 +224,8 @@ async function loadTables() {
               ${locked || isDeleted ? "text-decoration:line-through;color:#999;" : ""}
             ">
               ${i.quantity} × ${i.name}
-              <strong style="color:orange;">(${i.status})</strong>
+              <strong class="item-status ${i.status}">(${i.status})</strong>
+
 
               ${
                 Array.isArray(i.variants) && i.variants.length
@@ -472,6 +482,8 @@ function orderForTable(qrToken) {
 
 
 async function confirmEdit(orderId) {
+
+  if (!EDIT_BUFFER[orderId]) return;
   const original = ORDER_ITEM_CACHE[orderId] || [];
   const edited = EDIT_BUFFER[orderId] || [];
 
@@ -484,7 +496,7 @@ async function confirmEdit(orderId) {
     const editedItem = editedMap.get(orig.order_item_id);
 
     // Deleted
-    if (!editedItem) {
+    if (!editedItem || editedItem.quantity === 0) {
       await fetch(`${API}/order-items/${orig.order_item_id}`, {
         method: "DELETE"
       });
@@ -494,7 +506,8 @@ async function confirmEdit(orderId) {
     // Quantity changed OR variant changed
     if (
       editedItem.quantity !== orig.quantity ||
-      editedItem.variants !== orig.variants
+      JSON.stringify(editedItem.variants) !== JSON.stringify(orig.variants)
+
     ) {
       await fetch(`${API}/order-items/${orig.order_item_id}`, {
         method: "PATCH",
@@ -665,8 +678,8 @@ function addItemToEdit(orderId, menuItemId) {
     menu_item_id: menuItem.id,
     name: menuItem.name,
     quantity: 1,
-    price: menuItem.price_cents,
-    total: menuItem.price_cents,
+    unit_price_cents: menuItem.price_cents,
+    total_price_cents: menuItem.price_cents,
     status: "pending",
     variants: variants,
     isNew: true
@@ -726,9 +739,8 @@ async function toggleVariantOptionAvailability(optionId, isAvailable) {
   loadMenu();   
   loadTables();
   setInterval(() => {
-  if (EDITING_ORDER_ID === null) return;
+  if (EDITING_ORDER_ID !== null) return;
     loadTables();
-    loadMenu();
 }, 5000);
 
 </script>
