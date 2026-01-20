@@ -48,7 +48,7 @@
 
   <script>
     async function loadItems() {
-      const res = await fetch("http://localhost:3000/api/kitchen/items");
+      const res = await fetch("https://chuio.io/api/kitchen/items");
       const items = await res.json();
       const container = document.getElementById("items");
       container.innerHTML = "";
@@ -109,7 +109,7 @@
 
     async function updateItemStatus(orderItemId, status) {
       await fetch(
-        `http://localhost:3000/api/order-items/${orderItemId}/status`,
+        `https://chuio.io/api/order-items/${orderItemId}/status`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
