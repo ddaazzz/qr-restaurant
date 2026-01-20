@@ -239,12 +239,13 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
     const itemsResult = await pool.query(
       `
       SELECT
-        mi.id,
-        mi.name,
-        mi.price_cents,
-        mi.available,
-        mi.image_url,
-        mc.name AS category_name
+      mi.id,
+      mi.name,
+      mi.price_cents,
+      mi.available,
+      mi.image_url,
+      mi.category_id,              -- ✅ ADD THIS
+      mc.name AS category_name
       FROM menu_items mi
       JOIN menu_categories mc ON mc.id = mi.category_id
       WHERE mc.restaurant_id = $1
@@ -316,7 +317,6 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       ...item,
       variants: variantsByItem[item.id] || []
     }));
-
 
         res.json(itemsWithVariants);
       } catch (err) {

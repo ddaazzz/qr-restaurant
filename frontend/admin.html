@@ -131,6 +131,8 @@ let OPEN_VARIANTS_ITEM_ID = null;
 let EDITING_VARIANT_ID = null;
 let CURRENT_VARIANTS = [];
 let MENU_CATEGORIES = [];
+let MENU_ITEMS = [];
+let SELECTED_CATEGORY = null; // currently selected category for display
 
 
 async function loadTables() {
@@ -229,25 +231,24 @@ async function deleteTable(tableId) {
 }
 
 
-
 async function loadMenuItems() {
-  // Fetch categories for this restaurant
+  console.log("🔄 loadMenuItems() called");
+
+  // Load categories
   const catRes = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`);
   MENU_CATEGORIES = await catRes.json();
+  console.log("📂 CATEGORIES:", MENU_CATEGORIES);
 
-  // Fetch menu items
+  // Load items
   const res = await fetch(`${API}/restaurants/${restaurantId}/menu/staff`);
-  const items = await res.json();
+  MENU_ITEMS = await res.json();
+  console.log("🍽 MENU ITEMS:", MENU_ITEMS);
 
   const container = document.getElementById("menu-items");
   container.innerHTML = "";
 
-  if (!MENU_CATEGORIES.length) {
-    container.innerHTML = "<p>No categories yet. Add a category first.</p>";
-    return;
-  }
+  /* ================= LEFT: CATEGORIES ================= */
 
-  // LEFT: Category list with edit/add/delete
   const categoriesDiv = document.createElement("div");
   categoriesDiv.style.float = "left";
   categoriesDiv.style.width = "25%";
@@ -255,17 +256,22 @@ async function loadMenuItems() {
 
   MENU_CATEGORIES.forEach(cat => {
     const catDiv = document.createElement("div");
+    catDiv.style.cursor = "pointer";
     catDiv.style.marginBottom = "6px";
+    catDiv.style.fontWeight =
+      SELECTED_CATEGORY && SELECTED_CATEGORY.id === cat.id ? "bold" : "normal";
 
     catDiv.innerHTML = `
-      <strong>${cat.name}</strong>
+      <span onclick='selectCategory(${JSON.stringify(cat)})'>
+        ${cat.name}
+      </span>
       <button onclick="editCategoryName(${cat.id}, '${cat.name}')">✏️</button>
       <button onclick="deleteCategory(${cat.id})">🗑</button>
     `;
+
     categoriesDiv.appendChild(catDiv);
   });
 
-  // Add category button
   const addBtn = document.createElement("button");
   addBtn.textContent = "➕ Add Category";
   addBtn.onclick = addCategory;
@@ -273,53 +279,73 @@ async function loadMenuItems() {
 
   container.appendChild(categoriesDiv);
 
-  // RIGHT: Menu items grouped by category
+  /* ================= RIGHT: ITEMS ================= */
+
   const itemsDiv = document.createElement("div");
   itemsDiv.style.float = "left";
   itemsDiv.style.width = "70%";
 
-  MENU_CATEGORIES.forEach(cat => {
-    const catItems = items.filter(i => i.category_id === cat.id);
+  if (!SELECTED_CATEGORY) {
+    itemsDiv.innerHTML = "<p>Select a category to see items</p>";
+    container.appendChild(itemsDiv);
+    return;
+  }
 
-    const catTitle = document.createElement("h4");
-    catTitle.textContent = cat.name;
-    itemsDiv.appendChild(catTitle);
+  const visibleItems = MENU_ITEMS.filter(
+    i => Number(i.category_id) === Number(SELECTED_CATEGORY.id)
+  );
 
-    if (!catItems.length) {
-      const p = document.createElement("p");
-      p.textContent = "No items in this category";
-      itemsDiv.appendChild(p);
-    }
+MENU_ITEMS.forEach(i => {
+  console.log(
+    "🍽 Item:",
+    i.name,
+    "| category_id:",
+    i.category_id,
+    "| type:",
+    typeof i.category_id
+  );
+});  
+console.log("🧪 Visible items:", visibleItems);
 
-    catItems.forEach(item => {
+  if (!visibleItems.length) {
+    itemsDiv.innerHTML = "<p>No items in this category</p>";
+  } else {
+    visibleItems.forEach(item => {
       const div = document.createElement("div");
       div.style.border = "1px solid #ccc";
       div.style.padding = "10px";
       div.style.marginBottom = "10px";
 
       div.innerHTML = `
-        <div>
         ${
           EDITING_ITEM_ID === item.id
-            ? `<div style="margin-top:10px;">
-                <select onchange="updateMenuItem(${item.id}, { category_id: Number(this.value) })">
-                  ${MENU_CATEGORIES.map(c => `<option value="${c.id}" ${c.id===item.category_id?'selected':''}>${c.name}</option>`).join("")}
-                </select><br>
+            ? `
+              <select onchange="updateMenuItem(${item.id}, { category_id: Number(this.value) })">
+                ${MENU_CATEGORIES.map(c =>
+                  `<option value="${c.id}" ${c.id === item.category_id ? "selected" : ""}>
+                    ${c.name}
+                  </option>`
+                ).join("")}
+              </select><br>
 
-                <input value="${item.name}" onchange="updateMenuItem(${item.id}, { name: this.value })"/><br>
-                <textarea onchange="updateMenuItem(${item.id}, { description: this.value })">${item.description || ""}</textarea><br>
-                <input type="number" value="${item.price_cents}" onchange="updateMenuItem(${item.id}, { price_cents: Number(this.value) })"/> cents<br>
-                ${item.image_url ? `<img src="${item.image_url}" width="80"><br>` : "Upload a food item image<br>"}
-                <input type="file" onchange="uploadItemImage(${item.id}, this.files[0])"/><br>
-                <button onclick="endEditItem()">✅ Done</button>
-                <button class="danger" onclick="deleteMenuItem(${item.id})">🗑 Delete</button>
-              </div>`
-            : `<strong>${item.name}</strong><br>
-               $${(item.price_cents / 100).toFixed(2)}<br>
-               ${item.image_url ? `<img src="${item.image_url}" width="80"><br>` : ""}
-               <button onclick="startEditItem(${item.id})">✏️ Edit</button>`
+              <input value="${item.name}" onchange="updateMenuItem(${item.id}, { name: this.value })"/><br>
+              <textarea onchange="updateMenuItem(${item.id}, { description: this.value })">${item.description || ""}</textarea><br>
+              <input type="number" value="${item.price_cents}" onchange="updateMenuItem(${item.id}, { price_cents: Number(this.value) })"/> cents<br>
+
+              ${item.image_url ? `<img src="${item.image_url}" width="80"><br>` : ""}
+              <input type="file" onchange="uploadItemImage(${item.id}, this.files[0])"/><br>
+
+              <button onclick="endEditItem()">✅ Done</button>
+              <button class="danger" onclick="deleteMenuItem(${item.id})">🗑 Delete</button>
+            `
+            : `
+              <strong>${item.name}</strong><br>
+              $${(item.price_cents / 100).toFixed(2)}<br>
+              ${item.image_url ? `<img src="${item.image_url}" width="80"><br>` : ""}
+              <button onclick="startEditItem(${item.id})">✏️ Edit</button>
+            `
         }
-        </div>
+
         <br>
         <button onclick="manageVariants(${item.id})">🧩 Variants</button>
         <div id="variants-${item.id}"></div>
@@ -334,14 +360,21 @@ async function loadMenuItems() {
         });
       }
     });
-  });
+  }
 
   container.appendChild(itemsDiv);
 
-  // Clear float
   const clearDiv = document.createElement("div");
   clearDiv.style.clear = "both";
   container.appendChild(clearDiv);
+}
+
+
+
+// 🔹 Called when a category is clicked
+function selectCategory(categoryId) {
+  SELECTED_CATEGORY = categoryId;
+  loadMenuItems();
 }
 
 // CATEGORY FUNCTIONS
