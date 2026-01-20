@@ -78,6 +78,22 @@
   </section>
   
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+  const token = localStorage.getItem("token");
+  const role = localStorage.getItem("role");
+
+  if (!token) {
+    window.location.href = "/login";
+  }
+
+  if (role !== "staff") {
+    alert("Access denied");
+    window.location.href = "/login";
+  }
+</script>
+
+
 <script>
   let MENU_CACHE = [];
   let EDITING_ORDER_ID = null;
@@ -92,7 +108,6 @@ function deriveOrderStatus(items) {
   if (items.some(i => i.status === "pending")) return "pending";
   return "served";
 }
-
 
 function isEditing(orderId) {
   return EDITING_ORDER_ID === Number(orderId);
@@ -640,14 +655,14 @@ async function toggleAvailability(itemId, available) {
   loadMenu();
 }
 
-  async function startSession(tableId) {
+async function startSession(tableId) {
     await fetch(`${API}/tables/${tableId}/sessions`, {
       method: "POST"
     });
     loadTables();
   }
 
-  async function endSession(sessionId) {
+async function endSession(sessionId) {
     await fetch(`${API}/sessions/${sessionId}/end`, {
       method: "POST"
     });

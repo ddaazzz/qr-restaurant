@@ -119,7 +119,7 @@ console.log("QR TOKEN:", qrToken);
       // Scan QR
       const sessionRes = await fetch(
         `${API_BASE}/scan/${qrToken}`,{
-             method: "POST"
+             method: "POST"x
         }
       );
 
@@ -137,7 +137,7 @@ tableName = session.table_id;
     // UI
     document.getElementById("table-indicator").textContent = `Table ${tableName}`;
     document.getElementById("status").textContent = "";
-    document.getElementById("restaurant").textContent = "My Restaurant";
+    document.getElementById("restaurant").textContent = session.restaurant_name;
     document.getElementById("confirm-order-btn").addEventListener("click", submitOrder);
     document.getElementById("drawer-overlay").addEventListener("click", closeAllDrawers);
     document.getElementById("orders-btn").addEventListener("click", openOrdersDrawer);
@@ -258,7 +258,7 @@ function renderMenu(menu) {
   });
 }
 
-//Clicking an item navigates to detail paige
+//Clicking an item navigates to detail page
 function renderMenuItem(item) {
   const card = document.createElement("div");
   card.className = "menu-item";
