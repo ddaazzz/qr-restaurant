@@ -288,7 +288,6 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
 });
 
 
-
 // GET all active orders for kitchen
 // GET kitchen orders (with variants)
 router.get("/kitchen/items", async (_req, res) => {

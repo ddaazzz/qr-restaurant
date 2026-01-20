@@ -15,8 +15,7 @@ const router = Router();
  * GET categories by restaurant
  * /api/menu_categories?restaurant_id=1
  */
-router.get(
-  "/restaurants/:restaurantId/menu_categories",
+router.get("/restaurants/:restaurantId/menu_categories",
   async (req, res) => {
     try {
       const restaurantId = Number(req.params.restaurantId);
@@ -44,8 +43,7 @@ router.get(
 );
 
 //Create category
-router.post(
-  "/restaurants/:restaurantId/menu_categories",
+router.post("/restaurants/:restaurantId/menu_categories",
   async (req, res) => {
     try {
       const restaurantId = Number(req.params.restaurantId);

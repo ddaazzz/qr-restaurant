@@ -29,7 +29,7 @@ router.get("/restaurants/:restaurantId/tables", async (req, res) => {
  * CREATE table + QR token
  * (Staff only)
  */
-// GET tables for a restaurant
+// CREATE tables for a restaurant
 router.post("/restaurants/:restaurantId/tables", async (req, res) => {
   try {
     const { restaurantId } = req.params;
@@ -63,6 +63,7 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
     res.status(500).json({ error: "Failed to create table" });
   }
 });
+
 
 // Regenerate QR token (staff)
 router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
