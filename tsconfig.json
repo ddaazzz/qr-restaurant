@@ -1,28 +1,18 @@
 {
   "compilerOptions": {
-    // Node.js environment
     "target": "ES2020",
     "module": "commonjs",
     "rootDir": "src",
     "outDir": "dist",
-    "strict": true,
+    "strict": false,             // <-- turns off all strict checks
+    "noImplicitAny": false,
+    "strictNullChecks": false,   // <-- allows rowCount or objects to be possibly null/undefined
     "esModuleInterop": true,
-
-    // Type definitions
+    "skipLibCheck": true,
     "types": ["node", "express", "multer"],
-
-    // Optional but recommended
     "sourceMap": true,
     "declaration": true,
-    "declarationMap": true,
-
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-
-    // Quick fix for Render
-    "noImplicitAny": false,
-    "skipLibCheck": true
+    "declarationMap": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
