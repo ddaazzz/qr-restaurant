@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chuio - Welcome</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <!-- Landing styles -->
+  <link rel="stylesheet" href="landing.css" />
+
+  <!-- Menu styles -->
+  <link rel="stylesheet" href="menu.css" />
+</head>
+
+<body>
+
+  <!-- ================= LANDING PAGE ================= -->
+  <div id="landing-page" class="landing">
+    <img id="logo" class="landing-logo" />
+    <h2 id="restaurantName"></h2>
+
+    <p id="tableInfo"></p>
+    <p id="address"></p>
+    <p id="phone"></p>
+
+    <button id="start-order-btn">Start Ordering</button>
+    <button id="check-orders-btn">Check Orders</button>
+  </div>
+
+  <!-- ================= MENU APP (HIDDEN INITIALLY) ================= -->
+  <div id="app" style="display:none;">
+
+    <!-- Header -->
+    <div class="app-header">
+      <span id="table-indicator"></span>
+
+      <div class="header-main">
+        <span id="restaurant"></span>
+        <span id="status"></span>
+      </div>
+
+      <button id="orders-btn">🧾</button>
+    </div>
+
+    <!-- Main layout -->
+    <div class="layout">
+      <div id="categories"></div>
+      <div id="menu"></div>
+    </div>
+
+    <!-- Cart bar -->
+    <div id="cart-bar">
+      <div class="cart-info">
+        <span id="cart-count">0 items</span>
+        <span id="cart-total">$0.00</span>
+      </div>
+      <button id="confirm-order-btn" disabled>
+        Confirm Order
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= DRAWERS & OVERLAY ================= -->
+  <div id="drawer-overlay"></div>
+
+  <div id="item-drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-content"></div>
+  </div>
+
+  <div id="cart-drawer">
+    <div class="drawer-content" id="cart-drawer-content"></div>
+  </div>
+
+  <div id="orders-drawer">
+    <div class="drawer-content" id="orders-drawer-content"></div>
+  </div>
+
+  <!-- ================= SCRIPTS ================= -->
+  <script src="landing.js" defer></script>
+  <script src="menu.js" defer></script>
+
+</body>
+</html>

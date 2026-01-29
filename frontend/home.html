@@ -1,39 +1,692 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Chuio – QR Restaurant System</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="landing.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <title>Chuio - Restaurant Ordering System</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary-color: #f97316;
+      --text-dark: #1f2937;
+      --text-light: #6b7280;
+      --bg-light: #f9fafb;
+      --border-color: #e5e7eb;
+      --white: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: var(--text-dark);
+      background-color: var(--white);
+      line-height: 1.6;
+    }
+
+    /* NAVIGATION */
+    nav {
+      background-color: var(--white);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 70px;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--primary-color);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-links {
+      display: flex;
+      list-style: none;
+      gap: 0;
+      align-items: center;
+    }
+
+    .nav-links > li {
+      position: relative;
+    }
+
+    .nav-links > li > a {
+      display: block;
+      padding: 10px 18px;
+      color: var(--text-dark);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s ease;
+    }
+
+    .nav-links > li > a:hover {
+      color: var(--primary-color);
+    }
+
+    /* DROPDOWN MENU */
+    .dropdown {
+      position: relative;
+    }
+
+    .dropdown > a::after {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(-45deg);
+      margin-left: 6px;
+      transition: transform 0.3s ease;
+    }
+
+    .dropdown:hover > a::after {
+      transform: rotate(-225deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background-color: var(--white);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      margin-top: 8px;
+    }
+
+    .dropdown:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-menu a {
+      display: block;
+      padding: 12px 20px;
+      color: var(--text-dark);
+      text-decoration: none;
+      font-weight: 500;
+      transition: background-color 0.3s ease;
+      border-left: 3px solid transparent;
+    }
+
+    .dropdown-menu a:hover {
+      background-color: var(--bg-light);
+      border-left-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .dropdown-menu a:first-child {
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+    }
+
+    .dropdown-menu a:last-child {
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px;
+    }
+
+    .login-btn {
+      background-color: var(--primary-color);
+      color: var(--white);
+      padding: 10px 24px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+
+    .login-btn:hover {
+      background-color: #ea6317;
+      transform: translateY(-2px);
+    }
+
+    /* HERO SECTION */
+    .hero {
+      background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+      color: var(--white);
+      padding: 80px 20px;
+      text-align: center;
+    }
+
+    .hero-content {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      margin-bottom: 16px;
+      font-weight: 800;
+    }
+
+    .hero p {
+      font-size: 20px;
+      margin-bottom: 32px;
+      opacity: 0.95;
+      line-height: 1.5;
+    }
+
+    .hero-cta {
+      display: inline-block;
+      background-color: var(--white);
+      color: var(--primary-color);
+      padding: 14px 40px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .hero-cta:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .hero-splash-image {
+      max-width: 100%;
+      height: auto;
+      margin-bottom: 32px;
+      max-height: 1200px;
+      object-fit: contain;
+    }
+
+    /* FEATURES SECTION */
+    .features {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 20px;
+      background-color: var(--bg-light);
+    }
+
+    .section-title {
+      font-size: 36px;
+      text-align: center;
+      margin-bottom: 48px;
+      color: var(--text-dark);
+      font-weight: 700;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+    }
+
+    .feature-card {
+      background: var(--white);
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .feature-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .feature-card h3 {
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: var(--text-dark);
+    }
+
+    .feature-card p {
+      color: var(--text-light);
+      line-height: 1.6;
+    }
+
+    /* HOW IT WORKS */
+    .how-it-works {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 20px;
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 40px;
+      margin-top: 48px;
+    }
+
+    .step {
+      text-align: center;
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 60px;
+      height: 60px;
+      background-color: var(--primary-color);
+      color: var(--white);
+      border-radius: 50%;
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+
+    .step h4 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: var(--text-dark);
+    }
+
+    .step p {
+      color: var(--text-light);
+    }
+
+    /* PRODUCTS SECTION */
+    .products {
+      background-color: var(--bg-light);
+      padding: 80px 20px;
+    }
+
+    .products-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 28px;
+      margin-top: 48px;
+    }
+
+    .product-item {
+      background: var(--white);
+      padding: 28px;
+      border-radius: 12px;
+      border-left: 4px solid var(--primary-color);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease;
+    }
+
+    .product-item:hover {
+      transform: translateX(8px);
+    }
+
+    .product-item h4 {
+      font-size: 18px;
+      color: var(--text-dark);
+      margin-bottom: 10px;
+    }
+
+    .product-item p {
+      color: var(--text-light);
+      font-size: 14px;
+    }
+
+    /* PRICING SECTION */
+    .pricing {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 20px;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+      margin-top: 48px;
+    }
+
+    .pricing-card {
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      padding: 40px 32px;
+      text-align: center;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .pricing-card.featured {
+      border-color: var(--primary-color);
+      transform: scale(1.05);
+      box-shadow: 0 8px 32px rgba(249, 115, 22, 0.2);
+    }
+
+    .pricing-card h3 {
+      font-size: 22px;
+      margin-bottom: 16px;
+      color: var(--text-dark);
+    }
+
+    .pricing-price {
+      font-size: 48px;
+      font-weight: bold;
+      color: var(--primary-color);
+      margin: 20px 0;
+    }
+
+    .pricing-price span {
+      font-size: 16px;
+      color: var(--text-light);
+    }
+
+    .pricing-features {
+      list-style: none;
+      margin: 32px 0;
+      text-align: left;
+    }
+
+    .pricing-features li {
+      padding: 12px 0;
+      color: var(--text-light);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .pricing-features li:before {
+      content: '✓ ';
+      color: var(--primary-color);
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .pricing-btn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 24px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .pricing-card:not(.featured) .pricing-btn {
+      background-color: var(--border-color);
+      color: var(--text-dark);
+    }
+
+    .pricing-card:not(.featured) .pricing-btn:hover {
+      background-color: var(--text-light);
+      color: var(--white);
+    }
+
+    .pricing-card.featured .pricing-btn {
+      background-color: var(--primary-color);
+      color: var(--white);
+    }
+
+    .pricing-card.featured .pricing-btn:hover {
+      background-color: #ea6317;
+      transform: translateY(-2px);
+    }
+
+    /* FOOTER */
+    footer {
+      background-color: var(--text-dark);
+      color: var(--white);
+      text-align: center;
+      padding: 40px 20px;
+      margin-top: 60px;
+    }
+
+    footer p {
+      margin-bottom: 12px;
+    }
+
+    footer a {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .nav-links {
+        gap: 0;
+      }
+
+      .nav-links > li > a {
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+
+      .dropdown-menu {
+        min-width: 160px;
+      }
+
+      .hero h1 {
+        font-size: 32px;
+      }
+
+      .hero p {
+        font-size: 16px;
+      }
+
+      .section-title {
+        font-size: 28px;
+      }
+
+      .pricing-card.featured {
+        transform: scale(1);
+      }
+    }
+  </style>
 </head>
 <body>
+  <!-- NAVIGATION -->
+  <nav>
+    <div class="nav-container">
+      <a href="#home" class="logo">
+        <img src="/uploads/chuio/chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
+      </a>
+      <ul class="nav-links">
+        <li><a href="#home">Home</a></li>
+        <li class="dropdown">
+          <a href="#products">Products</a>
+          <div class="dropdown-menu">
+            <a href="#qr-scanning">QR Scanning</a>
+            <a href="#ordering">Ordering System</a>
+            <a href="#menu-management">Menu Management</a>
+            <a href="#table-management">Table Management</a>
+            <a href="#staff-management">Staff Management</a>
+          </div>
+        </li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="login.html" class="login-btn">Login</a></li>
+      </ul>
+    </div>
+  </nav>
 
-<header class="hero">
-  <h1>Chuio</h1>
-  <p>QR Ordering Made Simple for Restaurants</p>
-  <a href="/login" class="cta">Restaurant Login</a>
-</header>
+  <!-- HERO SECTION -->
+  <section id="home" class="hero">
+    <div class="hero-content">
+      <img src="/uploads/chuio/landing_splash.png" alt="Chuio Restaurant Ordering System Illustration" class="hero-splash-image" />
+      <h1>Chuio - Restaurant Ordering System</h1>
+      <p>Streamline your restaurant operations with modern QR code ordering, real-time kitchen management, and seamless customer experience.</p>
+      <a href="login.html" class="hero-cta">Get Started</a>
+    </div>
+  </section>
 
-<section>
-  <h2>How It Works</h2>
-  <ol>
-    <li>Customer scans QR code</li>
-    <li>Orders from their phone</li>
-    <li>Kitchen & staff receive orders instantly</li>
-  </ol>
-</section>
+  <!-- FEATURES SECTION -->
+  <section class="features">
+    <h2 class="section-title">Why Choose Chuio?</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3>Mobile-First Ordering</h3>
+        <p>Customers scan a QR code at their table and order directly from their phone. No app installation needed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Instant Order Updates</h3>
+        <p>Kitchen staff receives orders instantly and can update status in real-time. Customers see when their food is ready.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Complete Dashboard</h3>
+        <p>Manage menus, tables, staff, and track orders from a single, intuitive admin dashboard.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔐</div>
+        <h3>Secure & Reliable</h3>
+        <p>Bank-grade security for all transactions and data. Your restaurant's information stays safe.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3>Easy Management</h3>
+        <p>Manage staff roles, permissions, and activities with our comprehensive staff management system.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📈</div>
+        <h3>Growth Ready</h3>
+        <p>Scale from a single table to multiple restaurants with our flexible and powerful platform.</p>
+      </div>
+    </div>
+  </section>
 
-<section>
-  <h2>Built for Restaurants</h2>
-  <ul>
-    <li>Admin dashboard</li>
-    <li>Staff order management</li>
-    <li>Kitchen live view</li>
-  </ul>
-</section>
+  <!-- HOW IT WORKS SECTION -->
+  <section class="how-it-works">
+    <h2 class="section-title">How It Works</h2>
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h4>Customer Scans QR</h4>
+        <p>Each table has a unique QR code that customers scan with their phone to access the menu.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h4>Browse & Order</h4>
+        <p>Customers browse the menu, customize items, and submit their order directly from their device.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h4>Kitchen Receives Order</h4>
+        <p>Kitchen staff instantly receives the order with all customizations and can prioritize accordingly.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <h4>Real-Time Updates</h4>
+        <p>Customers receive live updates on their order status, improving satisfaction and reducing inquiries.</p>
+      </div>
+    </div>
+  </section>
 
-<footer>
-  <p>© Chuio.io</p>
-</footer>
+  <!-- PRODUCTS SECTION -->
+  <section class="products">
+    <div class="products-container">
+      <h2 class="section-title">Our Products</h2>
+      <div class="products-grid">
+        <div class="product-item">
+          <h4>🔗 QR Scanning</h4>
+          <p>Generate and manage unique QR codes for each table. Easy deployment and customization.</p>
+        </div>
+        <div class="product-item">
+          <h4>🛒 Ordering System</h4>
+          <p>Full-featured ordering system with customizations, special requests, and multiple payment options.</p>
+        </div>
+        <div class="product-item">
+          <h4>📋 Menu Management</h4>
+          <p>Create, update, and manage your restaurant menu with images, descriptions, and pricing.</p>
+        </div>
+        <div class="product-item">
+          <h4>🍽️ Table Management</h4>
+          <p>Organize tables, track occupancy, and manage seating arrangements efficiently.</p>
+        </div>
+        <div class="product-item">
+          <h4>👥 Staff Management</h4>
+          <p>Manage staff roles, permissions, activity logs, and staff performance tracking.</p>
+        </div>
+        <div class="product-item">
+          <h4>🎯 Kitchen Display</h4>
+          <p>Real-time kitchen display system showing incoming orders and their status.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
+  <!-- PRICING SECTION -->
+  <section id="pricing" class="pricing">
+    <h2 class="section-title">Simple Pricing</h2>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <h3>Starter</h3>
+        <div class="pricing-price">$99<span>/month</span></div>
+        <ul class="pricing-features">
+          <li>Up to 15 tables</li>
+          <li>Basic menu management</li>
+          <li>Order tracking</li>
+          <li>1 staff member</li>
+          <li>Email support</li>
+        </ul>
+        <button class="pricing-btn">Get Started</button>
+      </div>
+      <div class="pricing-card featured">
+        <h3>Professional</h3>
+        <div class="pricing-price">$299<span>/month</span></div>
+        <ul class="pricing-features">
+          <li>Up to 50 tables</li>
+          <li>Advanced menu management</li>
+          <li>Real-time order tracking</li>
+          <li>Unlimited staff members</li>
+          <li>Priority support</li>
+          <li>Kitchen display system</li>
+        </ul>
+        <button class="pricing-btn">Get Started</button>
+      </div>
+      <div class="pricing-card">
+        <h3>Enterprise</h3>
+        <div class="pricing-price">Custom</div>
+        <ul class="pricing-features">
+          <li>Unlimited tables</li>
+          <li>Multi-location support</li>
+          <li>Custom integrations</li>
+          <li>Dedicated support</li>
+          <li>Advanced analytics</li>
+          <li>White-label options</li>
+        </ul>
+        <button class="pricing-btn">Contact Sales</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>&copy; 2026 Chuio. All rights reserved.</p>
+    <p>Built to simplify restaurant operations and improve customer experience.</p>
+    <p>Questions? <a href="mailto:support@qrrestaurant.com">Contact our support team</a></p>
+  </footer>
 </body>
 </html>

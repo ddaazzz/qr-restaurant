@@ -1,7 +1,7 @@
 console.log("LOGIN JS LOADED FROM:", window.location.href);
 
 const API_BASE = window.location.origin;
-
+let restaurantId;
 
 console.log("API_BASE:", API_BASE);
 
@@ -27,11 +27,11 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
 
     localStorage.setItem("token", data.token);
     localStorage.setItem("role", data.role);
-
+    localStorage.setItem("restaurantId", data.restaurantId);
     if (data.role === "admin") {
       window.location.href = "/admin.html";
     } else if (data.role === "staff") {
-      window.location.href = "/staff.html";
+      window.location.href = "/admin.html";
     }
   } catch (err) {
     console.error(err);

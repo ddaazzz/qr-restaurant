@@ -1,0 +1,248 @@
+Claude Prompt – Full-Stack QR Restaurant System
+
+Task: Build a full-stack web application for a QR-based restaurant ordering system. The system should support customers ordering via QR codes, staff/admin management, and a responsive, mobile-first UI. Use PostgreSQL as the database. Include backend APIs, frontend pages, and all business logic described below.
+
+1. Database Schema (PostgreSQL)
+
+Tables:
+
+restaurants – Stores restaurant info
+
+id, name, logo_url, theme_color, address, phone, service_charge_percent
+
+users – Staff and admin accounts
+
+id, name, email, password_hash, role (admin/staff)
+
+tables – Physical tables in the restaurant
+
+id, restaurant_id, category_id, name, capacity
+
+table_units – Individual QR codes for tables
+
+id, table_id, display_name, qr_token
+
+table_sessions – Active customer sessions per table
+
+id, table_unit_id, started_at, ended_at
+
+table_categories – Categories for tables if needed
+
+id, restaurant_id, name
+
+orders – Customer orders per session
+
+id, session_id, status, created_at, updated_at, total_cents
+
+order_items – Items in an order
+
+id, order_id, menu_item_id, quantity, total_price_cents, status
+
+order_item_variants – Variants selected for each order item
+
+id, order_item_id, variant_option_id
+
+menu_categories – Menu categories
+
+id, restaurant_id, name
+
+menu_items – Menu items
+
+id, restaurant_id, category_id, name, description, price_cents, image_url, available
+
+menu_item_variants – Variants for menu items
+
+id, menu_item_id, name
+
+menu_item_variant_options – Options for each variant
+
+id, variant_id, name, price_cents
+
+2. Pages & Functionality
+A. Landing Page (landing.html)
+
+Input: QR code token (from URL)
+
+Fetch table info (/scan/:qrToken)
+
+Display:
+
+Restaurant logo, name
+
+Table number and Pax
+
+Address, phone
+
+Buttons:
+
+Start Ordering: Hides landing, opens menu page
+
+Check Orders: Opens menu + active orders drawer
+
+Store sessionId, restaurantId, tableName in local storage for later use
+
+B. Menu Page (index.html)
+
+Display menu items per category
+
+Categories sidebar scrolls to items
+
+Item cards:
+
+Name, price, image
+
+Variants
+
+Availability toggle (for staff/admin)
+
+Cart bar shows selected items with subtotal
+
+Drawer for variants
+
+Orders drawer (see next section)
+
+Responsive, mobile-first grid layout
+
+Calculates total with service charge
+
+C. Orders Drawer
+
+Slides from bottom
+
+Header:
+
+Left: Hide button
+
+Center: Active Orders
+
+Right: Table number
+
+Item lines:
+
+Name, quantity × price
+
+Variants underneath in smaller, lighter font
+
+Status indicator
+
+Footer:
+
+Subtotal
+
+Service charge (%)
+
+Total
+
+Dynamically updates when new items are added
+
+Real-time polling to refresh orders
+
+D. Admin Panel
+
+Accessible only to admins
+
+Sections:
+
+Restaurant Settings: Name, logo (upload staged first), theme color, address, phone, service charge
+
+Menu Management: Categories, items, variants, images, availability
+
+Staff Management: Create/modify/delete staff, assign roles
+
+Permissions Matrix: Role-based permission toggles
+
+Inline editing with "Edit" → input fields, "Save" → sends PATCH request
+
+Logo upload handled separately; saved to payload only on save
+
+E. Staff Mode
+
+Access via ?staff=1
+
+Can see active orders
+
+Update order status
+
+Toggle item availability
+
+Polling for new orders
+
+3. Backend API (Express/Node.js Example)
+
+Key Endpoints:
+
+/scan/:qrToken → Get table/session info
+
+/qr/:token/landing → Landing page info
+
+/restaurants/:restaurantId/menu → Menu + categories
+
+/menu-items/:itemId/availability → PATCH availability
+
+/restaurants/:restaurantId/settings → GET/PATCH settings
+
+/restaurants/:restaurantId/logo → POST image upload
+
+/orders → POST new order / GET active orders
+
+/staff → CRUD staff accounts
+
+/menu_categories → CRUD categories
+
+/menu_items → CRUD menu items and variants
+
+/order_items/:id/status → Update item status
+
+4. Frontend
+
+Single-page flow: Landing page transitions into menu page without reload
+
+Libraries/UX:
+
+Optional: lightweight-charts, simple CSS for mobile-first drawer and menu grid
+
+Drawer components for orders and variants
+
+Real-time updates via polling
+
+Local Storage: Store sessionId, tableId, restaurantId, cart contents
+
+Theme: Admin can set restaurant color theme
+
+Error handling: Alerts for invalid QR, network errors
+
+5. File Structure Suggestion
+/public
+  /css
+    landing.css
+    menu.css
+  /js
+    landing.js
+    menu.js
+    admin.js
+  landing.html
+  index.html
+  admin.html
+/backend
+  server.js
+  /routes
+    scan.routes.js
+    menu.routes.js
+    admin.routes.js
+    orders.routes.js
+  /models
+    ...DB models for all tables
+
+6. Technical Notes
+
+Frontend: HTML, CSS, Vanilla JS (or optional React)
+
+Backend: Node.js + Express
+
+DB: PostgreSQL
+
+Images: Upload to server, staged locally before save in admin
+
+Polling for real-time updates (orders, item availability)
+
+Modular, maintainable, responsive design
