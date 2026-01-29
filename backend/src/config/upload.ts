@@ -1,11 +1,25 @@
 import multer from "multer";
 import path from "path";
 import crypto from "crypto";
+import fs from "fs";
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, "uploads/menu");
+  destination: (req, _file, cb) => {
+    let folder = "uploads";
+
+    // Route-based destination
+    if (req.originalUrl.includes("/menu-items")) {
+      folder = "uploads/menu";
+    } else if (req.originalUrl.includes("/logo")) {
+      folder = "uploads/restaurants";
+    }
+
+    // Ensure folder exists
+    fs.mkdirSync(folder, { recursive: true });
+
+    cb(null, folder);
   },
+
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname);
     const name = crypto.randomBytes(16).toString("hex");

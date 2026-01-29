@@ -4,16 +4,44 @@ import crypto from "crypto";
 
 const router = Router();
 
-/**
- * GET all tables for a restaurant
- * (Staff dashboard)
- */
+// GET derived table categories
+router.get("/restaurants/:restaurantId/table-categories",
+  async (req, res) => {
+    const { restaurantId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT id, "key"
+      FROM table_categories
+      WHERE restaurant_id = $1
+      ORDER BY sort_order
+      `,
+      [restaurantId]
+    );
+
+    res.json(result.rows);
+  }
+);
+
 router.get("/restaurants/:restaurantId/tables", async (req, res) => {
   try {
     const { restaurantId } = req.params;
 
     const result = await pool.query(
-      "SELECT * FROM tables WHERE restaurant_id = $1 ORDER BY id",
+      `
+      SELECT
+        t.id,
+        t.name,
+        t.seat_count,
+        t.created_at,
+        t.category_id,
+        tc.key   AS category_key
+      FROM tables t
+      JOIN table_categories tc
+        ON tc.id = t.category_id
+      WHERE t.restaurant_id = $1
+      ORDER BY sort_order, t.name
+      `,
       [restaurantId]
     );
 
@@ -24,46 +52,328 @@ router.get("/restaurants/:restaurantId/tables", async (req, res) => {
   }
 });
 
+// POST new table category
+router.post("/restaurants/:restaurantId/table-categories",
+  async (req, res) => {
+    const { restaurantId } = req.params;
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: "Category name is required" });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        INSERT INTO table_categories (restaurant_id, "key")
+        VALUES ($1, $2)
+        RETURNING *
+        `,
+        [restaurantId, name.trim()]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to create table category" });
+    }
+  }
+);
 
 /**
  * CREATE table + QR token
  * (Staff only)
  */
 // CREATE tables for a restaurant
+// CREATE table + QR token (manual table name)
 router.post("/restaurants/:restaurantId/tables", async (req, res) => {
+  const client = await pool.connect();
+
   try {
+    await client.query("BEGIN");
+
+    const { restaurantId } = req.params;
+    const { category_id, name, seat_count } = req.body;
+
+    if (!name || !category_id || seat_count == null) {
+      return res.status(400).json({ error: "Category, name, and seat_count required" });
+    }
+
+    // 1️⃣ Insert table with user-provided name
+    const tableRes = await client.query(
+      `
+      INSERT INTO tables (restaurant_id, name, category_id, seat_count)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+      `,
+      [restaurantId, name.trim(), category_id, seat_count]
+    );
+
+    const table = tableRes.rows[0];
+
+    // 2️⃣ Create table units
+    const units = [];
+
+    for (let i = 0; i < seat_count; i++) {
+      const code = category_id === "BAR" ? `seat${i + 1}` : String.fromCharCode(97 + i);
+      const qrToken = crypto.randomBytes(16).toString("hex");
+
+      const unitRes = await client.query(
+        `
+        INSERT INTO table_units (table_id, unit_code, display_name, qr_token)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+        `,
+        [
+          table.id,
+          code,
+          category_id === "BAR" ? `${name}-Seat${i + 1}` : `${name}${code}`,
+          qrToken
+        ]
+      );
+
+      units.push(unitRes.rows[0]);
+    }
+
+    await client.query("COMMIT");
+
+    res.status(201).json({ table, units });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "Failed to create table" });
+  } finally {
+    client.release();
+  }
+});
+
+// Regenerate QR token (staff)
+router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
+  try {
+    const { tableId } = req.params;
+
+    const newToken = crypto.randomBytes(16).toString("hex");
+
+    const result = await pool.query(
+      `
+      UPDATE table_units
+      SET qr_token = $1
+      WHERE id = $2
+      RETURNING id, name, qr_token
+      `,
+      [newToken, tableId]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to regenerate QR" });
+  }
+});
+
+/**
+ * UPDATE table name
+ * (Admin / Staff)
+ */
+/**
+ * PATCH /tables/:tableId
+ * Update table name and/or seat_count
+ */
+router.patch("/tables/:tableId", async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    const { name, seat_count } = req.body;
+
+    if (!name && !seat_count) {
+      return res.status(400).json({ error: "Nothing to update" });
+    }
+
+    // Build dynamic SET clause
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (name) {
+      fields.push(`name = $${idx++}`);
+      values.push(name);
+    }
+
+    if (seat_count !== undefined) {
+      if (typeof seat_count !== "number" || seat_count <= 0) {
+        return res.status(400).json({ error: "Invalid seat count" });
+      }
+      fields.push(`seat_count = $${idx++}`);
+      values.push(seat_count);
+    }
+
+    values.push(tableId); // last param = tableId
+
+    const result = await pool.query(
+      `UPDATE tables
+       SET ${fields.join(", ")}
+       WHERE id = $${idx}
+       RETURNING *`,
+      values
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Table not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update table" });
+  }
+});
+
+/**
+ * DELETE table
+ * (Admin only)
+ */
+
+// GET derived table categories
+router.get("/restaurants/:restaurantId/table-categories",
+  async (req, res) => {
+    const { restaurantId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT id, "key"
+      FROM table_categories
+      WHERE restaurant_id = $1
+      ORDER BY sort_order
+      `,
+      [restaurantId]
+    );
+
+    res.json(result.rows);
+  }
+);
+
+router.get("/restaurants/:restaurantId/tables", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        t.id,
+        t.name,
+        t.seat_count,
+        t.created_at,
+        t.category_id,
+        tc.key   AS category_key
+      FROM tables t
+      JOIN table_categories tc
+        ON tc.id = t.category_id
+      WHERE t.restaurant_id = $1
+      ORDER BY sort_order, t.name
+      `,
+      [restaurantId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch tables" });
+  }
+});
+
+// POST new table category
+router.post("/restaurants/:restaurantId/table-categories",
+  async (req, res) => {
     const { restaurantId } = req.params;
     const { name } = req.body;
 
     if (!name) {
-      return res.status(400).json({ error: "Table name is required" });
+      return res.status(400).json({ error: "Category name is required" });
     }
 
-    const qrToken = crypto.randomBytes(16).toString("hex");
+    try {
+      const result = await pool.query(
+        `
+        INSERT INTO table_categories (restaurant_id, "key")
+        VALUES ($1, $2)
+        RETURNING *
+        `,
+        [restaurantId, name.trim()]
+      );
 
-    const result = await pool.query(
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to create table category" });
+    }
+  }
+);
+
+/**
+ * CREATE table + QR token
+ * (Staff only)
+ */
+// CREATE tables for a restaurant
+// CREATE table + QR token (manual table name)
+router.post("/restaurants/:restaurantId/tables", async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const { restaurantId } = req.params;
+    const { category_id, name, seat_count } = req.body;
+
+    if (!name || !category_id || seat_count == null) {
+      return res.status(400).json({ error: "Category, name, and seat_count required" });
+    }
+
+    // 1️⃣ Insert table with user-provided name
+    const tableRes = await client.query(
       `
-      INSERT INTO tables (restaurant_id, name, qr_token)
-      VALUES ($1, $2, $3)
+      INSERT INTO tables (restaurant_id, name, category_id, seat_count)
+      VALUES ($1, $2, $3, $4)
       RETURNING *
       `,
-      [restaurantId, name, qrToken]
+      [restaurantId, name.trim(), category_id, seat_count]
     );
 
-    const table = result.rows[0];
+    const table = tableRes.rows[0];
 
-    res.status(201).json({
-      table_id: table.id, 
-      table_name: table.name,
-      qr_token: table.qr_token,
-      qr_url: `http://localhost:3000/${qrToken}`
-    });
+    // 2️⃣ Create table units
+    const units = [];
+
+    for (let i = 0; i < seat_count; i++) {
+      const code = category_id === "BAR" ? `seat${i + 1}` : String.fromCharCode(97 + i);
+      const qrToken = crypto.randomBytes(16).toString("hex");
+
+      const unitRes = await client.query(
+        `
+        INSERT INTO table_units (table_id, unit_code, display_name, qr_token)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+        `,
+        [
+          table.id,
+          code,
+          category_id === "BAR" ? `${name}-Seat${i + 1}` : `${name}${code}`,
+          qrToken
+        ]
+      );
+
+      units.push(unitRes.rows[0]);
+    }
+
+    await client.query("COMMIT");
+
+    res.status(201).json({ table, units });
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error(err);
     res.status(500).json({ error: "Failed to create table" });
+  } finally {
+    client.release();
   }
 });
-
 
 // Regenerate QR token (staff)
 router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
@@ -92,24 +402,45 @@ router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
 /**
  * UPDATE table name
  * (Admin / Staff)
+/**
+ * PATCH /tables/:tableId
+ * Update table name and/or seat_count
  */
 router.patch("/tables/:tableId", async (req, res) => {
   try {
     const { tableId } = req.params;
-    const { name } = req.body;
+    const { name, seat_count } = req.body;
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: "Table name required" });
+    if (!name && !seat_count) {
+      return res.status(400).json({ error: "Nothing to update" });
     }
 
+    // Build dynamic SET clause
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (name) {
+      fields.push(`name = $${idx++}`);
+      values.push(name);
+    }
+
+    if (seat_count !== undefined) {
+      if (typeof seat_count !== "number" || seat_count <= 0) {
+        return res.status(400).json({ error: "Invalid seat count" });
+      }
+      fields.push(`seat_count = $${idx++}`);
+      values.push(seat_count);
+    }
+
+    values.push(tableId); // last param = tableId
+
     const result = await pool.query(
-      `
-      UPDATE tables
-      SET name = $1
-      WHERE id = $2
-      RETURNING *
-      `,
-      [name.trim(), tableId]
+      `UPDATE tables
+       SET ${fields.join(", ")}
+       WHERE id = $${idx}
+       RETURNING *`,
+      values
     );
 
     if (result.rowCount === 0) {
@@ -122,7 +453,6 @@ router.patch("/tables/:tableId", async (req, res) => {
     res.status(500).json({ error: "Failed to update table" });
   }
 });
-
 
 /**
  * DELETE table

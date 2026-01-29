@@ -5,6 +5,48 @@ import { upload } from "../config/upload";
 const router = Router();
 
 
+
+//QR Landing Info
+
+router.get("/qr/:token/landing", async (req, res) => {
+  const { token } = req.params;
+
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT
+        r.name AS restaurant_name,
+        r.logo_url,
+        r.address,
+        r.phone,
+        r.service_charge_percent,
+        t.restaurant_id,
+        t.name AS table_name,
+        ts.id AS session_id,
+        ts.pax
+
+      FROM table_units tu
+      JOIN tables t ON t.id = tu.table_id
+      JOIN restaurants r ON r.id = t.restaurant_id
+      LEFT JOIN table_sessions ts
+        ON ts.table_id = t.id
+       AND ts.ended_at IS NULL
+
+      WHERE tu.qr_token = $1
+      `,
+      [token]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: "Invalid QR" });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("QR landing load failed:", err);
+    res.status(500).json({ error: "Failed to load QR landing" });
+  }
+});
+
 /**
  * ==========================
  * MENU CATEGORIES (Admin)
@@ -353,8 +395,7 @@ if (typeof available !== "boolean") {
 });
 
 // STAFF toggle menu variant availability
-router.patch(
-  "/menu-item-variant-options/:id/availability",
+router.patch("/menu-item-variant-options/:id/availability",
   async (req, res) => {
     const { id } = req.params;
     const { is_available } = req.body;
@@ -394,12 +435,11 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO menu_items
-        (restaurant_id, category_id, name, price_cents, description, available)
-      VALUES ($1, $2, $3, $4, $5, true)
+        (category_id, name, price_cents, description, available)
+      VALUES ($1, $2, $3, $4, true)
       RETURNING *
       `,
       [
-        restaurantId,
         category_id,
         name.trim(),
         price_cents,
@@ -413,6 +453,8 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
     res.status(500).json({ error: "Failed to create menu item" });
   }
 });
+
+
 
 /**
  * UPDATE menu item
@@ -816,8 +858,7 @@ router.delete("/variant-options/:id", async (req, res) => {
  * UPLOAD menu item image
  * (Admin)
  */
-router.post(
-  "/menu-items/:menuItemId/image",
+router.post("/menu-items/:menuItemId/image",
   upload.single("image"),
   async (req, res) => {
     try {

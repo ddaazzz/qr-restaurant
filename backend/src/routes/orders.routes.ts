@@ -5,7 +5,7 @@ const router = Router();
 
 // Place an order
 // POST place order (with variants)
-router.post("/sessions/:sessionId/orders", async (req, res) => {
+router.post("/:sessionId/orders", async (req, res) => {
   const { sessionId } = req.params;
   const { items } = req.body;
 
@@ -202,7 +202,7 @@ for (const v of variants) {
 
 // Get all orders for a session
 // GET orders for a session (with variants)
-router.get("/sessions/:sessionId/orders", async (req, res) => {
+router.get("/:sessionId/orders", async (req, res) => {
   const { sessionId } = req.params;
 
   try {
@@ -234,7 +234,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
       LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
       LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
-
+       
       WHERE o.session_id = $1
 
       GROUP BY
@@ -295,71 +295,70 @@ router.get("/kitchen/items", async (_req, res) => {
     const result = await pool.query(
       `
       SELECT
-  oi.id AS order_item_id,
-  oi.status,
-  oi.quantity,
+        oi.id AS order_item_id,
+        oi.status,
+        oi.quantity,
 
-  mi.name AS item_name,
+        mi.name AS item_name,
 
-  t.name AS table_name,
-  o.id AS order_id,
-  ts.id AS session_id,
-  o.created_at,
+        tu.display_name AS table_name,
+        o.id AS order_id,
+        ts.id AS session_id,
+        o.created_at,
 
-  COALESCE(
-    STRING_AGG(
-      DISTINCT v.name || ': ' || vo.name,
-      ', '
-    ),
-    ''
-  ) AS variants
+        COALESCE(
+          STRING_AGG(
+            DISTINCT v.name || ': ' || vo.name,
+            ', '
+          ),
+          ''
+        ) AS variants
 
-FROM order_items oi
-JOIN orders o ON oi.order_id = o.id
-JOIN table_sessions ts ON o.session_id = ts.id
-JOIN tables t ON ts.table_id = t.id
-JOIN menu_items mi ON oi.menu_item_id = mi.id
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      JOIN table_sessions ts ON o.session_id = ts.id
+      JOIN table_units tu ON ts.table_unit_id = tu.id
+      JOIN menu_items mi ON oi.menu_item_id = mi.id
 
-LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
-LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
-LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
+      LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
+      LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
+      LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
 
-WHERE oi.status != 'served'
+      WHERE oi.status != 'served'
 
-GROUP BY
-  oi.id,
-  oi.status,
-  oi.quantity,
-  mi.name,
-  t.name,
-  o.id,
-  ts.id,
-  o.created_at
+      GROUP BY
+        oi.id,
+        oi.status,
+        oi.quantity,
+        mi.name,
+        tu.display_name,
+        o.id,
+        ts.id,
+        o.created_at
 
-ORDER BY o.created_at ASC;
-
-
+      ORDER BY o.created_at ASC
       `
     );
-res.json(
-  result.rows.map(row => ({
-    order_item_id: row.order_item_id,
-    order_id: row.order_id,
-    session_id: row.session_id,
-    table_name: row.table_name,
-    item_name: row.item_name,
-    quantity: row.quantity,
-    status: row.status,
-    variants: row.variants,   // ✅ NEW
-    created_at: row.created_at
-  }))
-);
 
+    res.json(
+      result.rows.map(row => ({
+        order_item_id: row.order_item_id,
+        order_id: row.order_id,
+        session_id: row.session_id,
+        table_name: row.table_name, // ✅ T01a / B01-Seat2
+        item_name: row.item_name,
+        quantity: row.quantity,
+        status: row.status,
+        variants: row.variants,
+        created_at: row.created_at
+      }))
+    );
   } catch (err) {
     console.error("Kitchen orders failed:", err);
     res.status(500).json({ error: "Failed to load kitchen orders" });
   }
 });
+
 
 //Update order status on order food items
 router.patch("/order-items/:orderItemId/status", async (req, res) => {
@@ -514,6 +513,7 @@ router.post("/sessions/:sessionId/close", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 
 
