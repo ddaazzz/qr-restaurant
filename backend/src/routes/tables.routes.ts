@@ -232,6 +232,78 @@ router.patch("/tables/:tableId", async (req, res) => {
  * (Admin only)
  */
 
+// PATCH /table-categories/:categoryId - Update category name
+router.patch("/restaurants/:restaurantId/table-categories/:categoryId", async (req, res) => {
+  try {
+    const { categoryId, restaurantId } = req.params;
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: "Category name is required" });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE table_categories
+      SET "key" = $1
+      WHERE id = $2 AND restaurant_id = $3
+      RETURNING *
+      `,
+      [name.trim(), categoryId, restaurantId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Table category not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update table category" });
+  }
+});
+
+// DELETE /table-categories/:categoryId - Delete category
+router.delete("/restaurants/:restaurantId/table-categories/:categoryId", async (req, res) => {
+  try {
+    const { categoryId, restaurantId } = req.params;
+
+    // Check if category has tables
+    const tablesInCategory = await pool.query(
+      `
+      SELECT COUNT(*) as count
+      FROM tables
+      WHERE category_id = $1 AND restaurant_id = $2
+      `,
+      [categoryId, restaurantId]
+    );
+
+    if (parseInt(tablesInCategory.rows[0].count) > 0) {
+      return res.status(400).json({
+        error: "Cannot delete category with existing tables. Delete all tables first."
+      });
+    }
+
+    const result = await pool.query(
+      `
+      DELETE FROM table_categories
+      WHERE id = $1 AND restaurant_id = $2
+      RETURNING *
+      `,
+      [categoryId, restaurantId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Table category not found" });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete table category" });
+  }
+});
+
 // GET derived table categories
 router.get("/restaurants/:restaurantId/table-categories",
   async (req, res) => {
@@ -312,8 +384,6 @@ router.post("/restaurants/:restaurantId/table-categories",
  * CREATE table + QR token
  * (Staff only)
  */
-// CREATE tables for a restaurant
-// CREATE table + QR token (manual table name)
 router.post("/restaurants/:restaurantId/tables", async (req, res) => {
   const client = await pool.connect();
 
@@ -477,7 +547,7 @@ router.delete("/tables/:tableId", async (req, res) => {
       [tableId]
     );
 
-    if (activeSession?.rowCount > 0) {
+    if ((activeSession?.rowCount ?? 0) > 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         error: "Cannot delete table with active session"

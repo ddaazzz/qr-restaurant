@@ -25,8 +25,6 @@ router.post("/auth/login", async (req, res) => {
     }
 
     const user = result.rows[0];
-    const restaurantId = user.restaurant_id;
-console.log (restaurantId);
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -39,7 +37,38 @@ console.log (restaurantId);
       { expiresIn: "8h" }
     );
 
-    res.json({ token, role: user.role, restaurantId });
+    // For superadmin, fetch all restaurants
+    let restaurants = [];
+    let defaultRestaurantId = user.restaurant_id;
+    
+    if (user.role === "superadmin") {
+      const restaurantsResult = await pool.query(
+        "SELECT id, name FROM restaurants ORDER BY id"
+      );
+      restaurants = restaurantsResult.rows;
+      // Default to first restaurant if available
+      defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
+    }
+
+    res.json({
+      token,
+      role: user.role,
+      restaurantId: defaultRestaurantId,
+      restaurants: user.role === "superadmin" ? restaurants : [],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});;
+
+// GET /api/auth/restaurants
+router.get("/auth/restaurants", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, name FROM restaurants ORDER BY id"
+    );
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -50,13 +79,45 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
   const { name, email, password, pin, role } = req.body;
   const { restaurantId } = req.params;
 
+  // Validate all required fields
   if (!name || !email || !password || !pin) {
     return res.status(400).json({ error: "All fields required" });
   }
 
+  // Ensure PIN is 6 digits
+  if (!/^\d{6}$/.test(pin)) {
+    return res.status(400).json({ error: "PIN must be 6 digits" });
+  }
+
+  // Validate email format
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  // Determine role - only allow 'staff' or 'kitchen'
   const staffRole = role === 'kitchen' ? 'kitchen' : 'staff';
 
   try {
+    // Verify restaurant exists
+    const restaurantCheck = await pool.query(
+      `SELECT id FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+
+    if (restaurantCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    // Check if email already exists for this restaurant
+    const emailCheck = await pool.query(
+      `SELECT id FROM users WHERE email = $1 AND restaurant_id = $2`,
+      [email, restaurantId]
+    );
+
+    if (emailCheck.rowCount && emailCheck.rowCount > 0) {
+      return res.status(400).json({ error: "Email already exists in this restaurant" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
@@ -65,13 +126,14 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
       [name, email, hashedPassword, staffRole, pin, restaurantId]
     );
 
+    console.log(`✅ Staff created for restaurant ${restaurantId}: ${email} (${staffRole})`);
     res.json({ staff: result.rows[0] });
   } catch (err: any) {
-    console.error(err);
+    console.error("❌ Staff creation failed:", err);
     
-    // Handle duplicate email error
+    // Handle duplicate email error (system-wide)
     if (err.code === '23505' && err.constraint === 'users_email_key') {
-      return res.status(400).json({ error: "Email already exists. Please use a different email address." });
+      return res.status(400).json({ error: "Email already exists in system" });
     }
 
     res.status(500).json({ error: "Failed to create staff" });
@@ -83,7 +145,7 @@ router.get("/restaurants/:restaurantId/staff", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, pin FROM users WHERE restaurant_id = $1 AND role = 'staff'`,
+      `SELECT id, name, email, role, pin FROM users WHERE restaurant_id = $1 AND (role = 'staff' OR role = 'kitchen')`,
       [restaurantId]
     );
 
@@ -94,12 +156,29 @@ router.get("/restaurants/:restaurantId/staff", async (req, res) => {
   }
 });
 
-router.delete("/staff/:id", async (req, res) => {
+router.delete("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
+  const { restaurantId, staffId } = req.params;
+
   try {
-    await pool.query(`DELETE FROM users WHERE id = $1 AND role='staff'`, [req.params.id]);
+    // Ensure the staff member belongs to this restaurant
+    const staffCheck = await pool.query(
+      `SELECT id FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
+      [staffId, restaurantId]
+    );
+
+    if (!staffCheck.rowCount) {
+      return res.status(404).json({ error: "Staff member not found in this restaurant" });
+    }
+
+    await pool.query(
+      `DELETE FROM users WHERE id = $1 AND restaurant_id = $2`,
+      [staffId, restaurantId]
+    );
+
+    console.log(`✅ Staff deleted: ${staffId} from restaurant ${restaurantId}`);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("Failed to delete staff:", err);
     res.status(500).json({ error: "Failed to delete staff" });
   }
 });

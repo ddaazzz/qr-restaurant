@@ -4,17 +4,19 @@
     ? "http://localhost:10000/api"
     : "https://chuio.io/api";
 
-const restaurantId = localStorage.getItem("restaurantId");
+let restaurantId = localStorage.getItem("restaurantId");
 const token = localStorage.getItem("token");
-const role = localStorage.getItem("role"); // "admin" | "staff"
+const role = localStorage.getItem("role"); // "admin" | "staff" | "superadmin"
+let superadminRestaurants = [];
 
-if (!token || !["admin", "staff"].includes(role)) {
+if (!token || !["admin", "staff", "superadmin"].includes(role)) {
   alert("Access denied");
   window.location.href = "/login";
 }
 
 const IS_ADMIN = role === "admin";
 const IS_STAFF = role === "staff";
+const IS_SUPERADMIN = role === "superadmin";
 
 let CREATING_ITEM = false;
 let EDITING_ITEM_ID = null;
@@ -65,7 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
 function initializeApp() {
   // Hide admin-only elements (but NOT sections) for staff
   document.querySelectorAll(".admin-only:not(section)").forEach(el => {
-    if (IS_ADMIN) {
+    if (IS_ADMIN || IS_SUPERADMIN) {
       el.classList.add("admin-visible");
     }
   });
@@ -180,7 +182,7 @@ async function submitPinModal() {
 
 // ============= MAIN APP LOAD =============
 async function loadApp() {
-  if (IS_ADMIN) {
+  if (IS_ADMIN || IS_SUPERADMIN) {
     await loadAdminSettings();
     await loadStaff();
     await loadMenuItems();
@@ -191,7 +193,7 @@ async function loadApp() {
 }
 
 function adminOnly(actionName = "This action") {
-  if (!IS_ADMIN) {
+  if (!IS_ADMIN && !IS_SUPERADMIN) {
     alert(`${actionName} is admin only`);
     return false;
   }
@@ -336,8 +338,12 @@ async function saveAdminSettings() {
 async function loadStaff() {
   if (!adminOnly("MANAGE_STAFF")) return;
 
+  console.log("Loading staff for restaurantId:", restaurantId);
+
   const res = await fetch(`${API}/restaurants/${restaurantId}/staff`);
   const staff = await res.json();
+
+  console.log("Staff loaded:", staff);
 
   const container = document.getElementById("staff-list");
   container.innerHTML = "";
@@ -353,6 +359,8 @@ async function loadStaff() {
         <div>
           <strong>${s.name}</strong><br>
           <span style="font-size: 12px; color: var(--text-light);">${s.email}</span>
+          <br>
+          <span style="font-size: 11px; color: var(--text-light); background: var(--bg-light); padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">${s.role || 'staff'}</span>
         </div>
         <button onclick="deleteStaff(${s.id})">🗑</button>
       </div>
@@ -375,6 +383,8 @@ async function createStaff() {
   const pin = document.getElementById("staff-pin").value;
   const role = document.getElementById("staff-role")?.value || "staff";
 
+  console.log("Creating staff:", { name, email, pin, role });
+
   if (!name || !email || !password || !pin) {
     errorEl.textContent = "All fields are required";
     errorEl.style.display = "flex";
@@ -382,13 +392,17 @@ async function createStaff() {
   }
 
   try {
+    const payload = { name, email, password, pin, role };
+    console.log("Sending payload:", payload);
+
     const res = await fetch(`${API}/restaurants/${restaurantId}/staff`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, pin, role })
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json();
+    console.log("Response status:", res.status, "Data:", data);
 
     if (!res.ok) {
       errorEl.textContent = data.error || "Failed to create staff";
@@ -409,6 +423,8 @@ async function createStaff() {
     successEl.textContent = `${role === 'kitchen' ? 'Kitchen staff' : 'Staff'} member created successfully`;
     successEl.style.display = "flex";
     
+    console.log("Staff created successfully, reloading staff list");
+
     // Auto-hide success message after 4 seconds
     setTimeout(() => {
       successEl.style.display = "none";
@@ -416,7 +432,7 @@ async function createStaff() {
 
     loadStaff(); // refresh staff list
   } catch (err) {
-    console.error(err);
+    console.error("Error creating staff:", err);
     errorEl.textContent = "Network error: " + (err.message || "Failed to create staff");
     errorEl.style.display = "flex";
   }
@@ -428,7 +444,7 @@ async function deleteStaff(staffId) {
   if (!confirm("Are you sure you want to delete this staff?")) return;
 
   try {
-    const res = await fetch(`${API}/staff/${staffId}`, { method: "DELETE" });
+    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${staffId}`, { method: "DELETE" });
     
     if (!res.ok) {
       const error = await res.json();
@@ -511,15 +527,6 @@ function renderTableCategoryTabs() {
 
     tabs.appendChild(btn);
   });
-
-  // ➕ Add Category Tab
-  if (IS_ADMIN) {
-  const addBtn = document.createElement("button");
-  addBtn.className = "tab add-tab";
-  addBtn.textContent = "+";
-  addBtn.onclick = openCreateTablesCategory;
-  tabs.appendChild(addBtn);
-}
 }
 
 function openCreateTablesCategory() {
@@ -551,7 +558,7 @@ async function createTablesCategory() {
 
   document.getElementById("new-tables-category-name").value = "";
   closeCreateTablesCategory();
-
+  loadTablesCategoryTable();
 }
 
 function renderCategoryTablesGrid() {
@@ -577,7 +584,7 @@ function renderCategoryTablesGrid() {
       <strong>${table.name}</strong><br>
       Seats: ${usedSeats}/${table.seat_count}<br>
 
-      ${IS_ADMIN ? `
+      ${IS_ADMIN || IS_SUPERADMIN ? `
   <div class="table-actions">
     <button onclick="renameTablePrompt(${table.id}, '${table.name}')">✏️ Rename</button>
     <button onclick="changeTableSeatsPrompt(${table.id}, ${table.seat_count})">🪑 Change Seats</button>
@@ -662,6 +669,9 @@ async function loadTablesCategoryTable() {
   TABLES = Object.values(tableMap);
 
   renderCategoryTablesGrid();
+  renderTableCategoriesList();
+  renderTablesList();
+  updateTableCategorySelect();
 }
 
 function renderTableSessions(table) {
@@ -792,6 +802,83 @@ async function renderSessionOrder(session) {
   await loadAndRenderOrders(session.id);
 }
 
+async function loadAndRenderOrders(sessionId) {
+  try {
+    const res = await fetch(`${API}/sessions/${sessionId}/orders`);
+    if (!res.ok) {
+      const err = await res.json();
+      console.error("Error loading orders:", err);
+      return;
+    }
+    
+    const data = await res.json();
+    const orders = data.items || [];
+
+    console.log("📦 Loaded orders for session:", sessionId, "Orders:", orders);
+
+    const container = document.getElementById("session-orders");
+    const totalEl = document.getElementById("session-total");
+
+    if (!orders.length) {
+      container.innerHTML = "<p>No orders yet</p>";
+      totalEl.textContent = "Total: $0.00";
+      return;
+    }
+
+    let totalCents = 0;
+
+    // Build order HTML + compute subtotal
+    container.innerHTML = orders.map(order => `
+      <div class="order-card">
+        <strong>Order #${order.order_id}</strong>
+
+        ${order.items.map(i => {
+          const itemTotal = i.quantity * i.unit_price_cents;
+          totalCents += itemTotal;
+
+          console.log("Item:", i.name, "Variants:", i.variants, "Status:", i.status);
+
+          return `
+            <div class="order-item" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <span style="flex:1;min-width:200px;">
+                <div><strong>${i.name}</strong></div>
+                ${i.variants && i.variants.trim() ? `<div style="font-size:0.85em;color:#666;margin-top:2px;font-style:italic;">${i.variants}</div>` : ''}
+                <div style="color:#999;font-size:0.9em;">Status: ${i.status}</div>
+                <div style="font-weight:bold;margin-top:4px;">$${(itemTotal / 100).toFixed(2)}</div>
+              </span>
+              ${
+                IS_EDIT_MODE
+                  ? `
+                    <button onclick="updateOrderItem(${i.order_item_id}, ${i.quantity - 1})">−</button>
+                    <span>${i.quantity}</span>
+                    <button onclick="updateOrderItem(${i.order_item_id}, ${i.quantity + 1})">+</button>
+                    <button onclick="removeOrderItem(${i.order_item_id})">🗑</button>
+                  `
+                  : `<span>x${i.quantity}</span>`
+              }
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `).join("");
+
+    // Service charge
+    const serviceChargePercent = serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 0);
+    const serviceCharge = Math.round(totalCents * serviceChargePercent / 100);
+    const grandTotal = totalCents + serviceCharge;
+
+    // Render totals
+    totalEl.innerHTML = `
+      Subtotal: $${(totalCents / 100).toFixed(2)}<br>
+      Service Charge (${serviceChargePercent}%): $${(serviceCharge / 100).toFixed(2)}<br>
+      <strong>Total: $${(grandTotal / 100).toFixed(2)}</strong>
+    `;
+  } catch (error) {
+    console.error("Error in loadAndRenderOrders:", error);
+    document.getElementById("session-orders").innerHTML = `<p style="color:red;">Error loading orders: ${error.message}</p>`;
+  }
+}
+
 function getSessionLabel(table, sessionId) {
   const index = table.sessions.findIndex(s => s.id === sessionId);
   const letter = String.fromCharCode(65 + index);
@@ -842,7 +929,7 @@ async function changeSessionPax(sessionId) {
 }
 
 async function printBill(sessionId) {
-  const res = await fetch(`${API}/${sessionId}/bill`);
+  const res = await fetch(`${API}/sessions/${sessionId}/bill`);
   if (!res.ok) return alert("Failed to load bill");
 
   const bill = await res.json();
@@ -850,8 +937,8 @@ async function printBill(sessionId) {
   
   let itemsHTML = '';
   bill.items.forEach(i => {
-    const lineTotal = (i.unit_price_cents * i.quantity / 100).toFixed(2);
-    itemsHTML += `<div class="item-row"><div class="item-name">${i.item_name}</div><div class="item-qty">x${i.quantity}</div><div class="item-price">$${lineTotal}</div></div>`;
+    const lineTotal = (i.price_cents * i.quantity / 100).toFixed(2);
+    itemsHTML += `<div class="item-row"><div class="item-name">${i.name}</div><div class="item-qty">x${i.quantity}</div><div class="item-price">$${lineTotal}</div></div>`;
   });
   
   const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>Service Charge:</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';
@@ -887,10 +974,10 @@ async function printBill(sessionId) {
   <body>
     <div class="receipt">
       <div class="header">
-        ${bill.restaurant.logo_url ? `<img src="${bill.restaurant.logo_url}" class="logo" alt="Logo"/>` : ''}
-        <div class="restaurant-name">${bill.restaurant.name}</div>
-        <div class="restaurant-info">${bill.restaurant.address}</div>
-        <div class="restaurant-info">${bill.restaurant.phone}</div>
+        ${bill.restaurant && bill.restaurant.logo_url ? `<img src="${bill.restaurant.logo_url}" class="logo" alt="Logo"/>` : ''}
+        <div class="restaurant-name">${bill.restaurant?.name || 'Receipt'}</div>
+        <div class="restaurant-info">${bill.restaurant?.address || ''}</div>
+        <div class="restaurant-info">${bill.restaurant?.phone || ''}</div>
       </div>
       <div class="divider"></div>
       <div class="items">${itemsHTML}</div>
@@ -921,7 +1008,7 @@ async function printBill(sessionId) {
 }
 
 async function splitBill(sessionId) {
-  const res = await fetch(`${API}/${sessionId}/bill`);
+  const res = await fetch(`${API}/sessions/${sessionId}/bill`);
   if (!res.ok) return alert("Failed to load bill");
 
   const bill = await res.json();
@@ -1066,7 +1153,8 @@ function findSessionById(sessionId) {
 }
 
 async function createTable() {
-  if (!SELECTED_TABLE_CATEGORY) return alert("Select a table category first");
+  const categoryId = Number(document.getElementById("new-table-category").value);
+  if (!categoryId) return alert("Select a table category first");
 
   const name = document.getElementById("new-table-name").value.trim();
   const seats = Number(document.getElementById("new-table-seats").value) || 1;
@@ -1076,7 +1164,7 @@ async function createTable() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      category_id: SELECTED_TABLE_CATEGORY.id,
+      category_id: categoryId,
       name,
       seat_count: seats
     })
@@ -1084,6 +1172,7 @@ async function createTable() {
 
   document.getElementById("new-table-name").value = "";
   document.getElementById("new-table-seats").value = "";
+  document.getElementById("new-table-category").value = "";
 
   await loadTablesCategoryTable();
 }
@@ -1118,66 +1207,102 @@ async function deleteTable(tableId) {
   loadTablesCategoryTable();
 }
 
-async function loadAndRenderOrders(sessionId) {
-  const res = await fetch(`${API}/${sessionId}/orders`);
-  const data = await res.json();
-  const orders = data.items || [];
+// ============= TABLE MANAGEMENT RENDERING =============
+function renderTableCategoriesList() {
+  const listDiv = document.getElementById("table-categories-list");
+  if (!listDiv) return;
 
-  const container = document.getElementById("session-orders");
-  const totalEl = document.getElementById("session-total");
+  listDiv.innerHTML = "";
 
-  if (!orders.length) {
-    container.innerHTML = "<p>No orders yet</p>";
-    totalEl.textContent = "Total: $0.00";
+  if (!TABLE_CATEGORIES.length) {
+    listDiv.innerHTML = "<p>No table categories yet</p>";
     return;
   }
 
-  let totalCents = 0;
-
-  // Build order HTML + compute subtotal
-  container.innerHTML = orders.map(order => `
-    <div class="order-card">
-      <strong>Order #${order.order_id}</strong>
-
-      ${order.items.map(i => {
-        const itemTotal = i.quantity * i.unit_price_cents;
-        totalCents += itemTotal;
-
-        return `
-          <div class="order-item" style="display:flex;gap:6px;align-items:center;">
-            <span style="flex:1;">
-              ${i.name} — $${(itemTotal / 100).toFixed(2)}
-            </span>
-            ${
-              IS_EDIT_MODE
-                ? `
-                  <button onclick="updateOrderItem(${i.order_item_id}, ${i.quantity - 1})">−</button>
-                  <span>${i.quantity}</span>
-                  <button onclick="updateOrderItem(${i.order_item_id}, ${i.quantity + 1})">+</button>
-                  <button onclick="removeOrderItem(${i.order_item_id})">🗑</button>
-                `
-                : `<span>x${i.quantity}</span>`
-            }
-          </div>
-        `;
-      }).join("")}
-    </div>
-  `).join("");
-
-  // Service charge
-  const serviceChargePercent = serviceChargeFee;
-  Number(window.RESTAURANT_SERVICE_CHARGE || 0);
-
-  const serviceCharge = Math.round(totalCents * serviceChargePercent / 100);
-  const grandTotal = totalCents + serviceCharge;
-
-  // Render totals
-  totalEl.innerHTML = `
-    Subtotal: $${(totalCents / 100).toFixed(2)}<br>
-    Service Charge (${serviceChargePercent}%): $${(serviceCharge / 100).toFixed(2)}<br>
-    <strong>Total: $${(grandTotal / 100).toFixed(2)}</strong>
-  `;
+  TABLE_CATEGORIES.forEach(cat => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = `
+      <div>
+        <strong>${cat.key}</strong>
+      </div>
+      <div class="item-actions">
+        <button onclick="editTableCategory(${cat.id}, '${cat.key}')" class="btn-secondary">✏️ Edit</button>
+        <button onclick="deleteTableCategory(${cat.id})" class="btn-danger">🗑 Delete</button>
+      </div>
+    `;
+    listDiv.appendChild(item);
+  });
 }
+
+function renderTablesList() {
+  const listDiv = document.getElementById("tables-list");
+  if (!listDiv) return;
+
+  listDiv.innerHTML = "";
+
+  if (!TABLES.length) {
+    listDiv.innerHTML = "<p>No tables yet</p>";
+    return;
+  }
+
+  TABLES.forEach(table => {
+    const category = TABLE_CATEGORIES.find(c => c.id === table.category_id);
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = `
+      <div>
+        <strong>${table.name}</strong> - ${category?.key || "N/A"} (${table.seat_count} seats)
+      </div>
+      <div class="item-actions">
+        <button onclick="renameTablePrompt(${table.id}, '${table.name}')" class="btn-secondary">✏️ Rename</button>
+        <button onclick="changeTableSeatsPrompt(${table.id}, ${table.seat_count})" class="btn-secondary">🪑 Seats</button>
+        <button onclick="deleteTable(${table.id})" class="btn-danger">🗑 Delete</button>
+      </div>
+    `;
+    listDiv.appendChild(item);
+  });
+}
+
+function editTableCategory(catId, currentName) {
+  const newName = prompt("Enter new category name:", currentName);
+  if (!newName?.trim()) return;
+
+  fetch(`${API}/restaurants/${restaurantId}/table-categories/${catId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: newName })
+  }).then(() => loadTablesCategoryTable());
+}
+
+async function deleteTableCategory(catId) {
+  if (!confirm("Delete this category? All tables in it will be affected.")) return;
+
+  await fetch(`${API}/restaurants/${restaurantId}/table-categories/${catId}`, {
+    method: "DELETE"
+  });
+
+  loadTablesCategoryTable();
+}
+
+function updateTableCategorySelect() {
+  const select = document.getElementById("new-table-category");
+  if (!select) return;
+
+  const currentValue = select.value;
+  select.innerHTML = '<option value="">-- Select Category --</option>';
+
+  TABLE_CATEGORIES.forEach(cat => {
+    const option = document.createElement("option");
+    option.value = cat.id;
+    option.textContent = cat.key;
+    select.appendChild(option);
+  });
+
+  if (currentValue) select.value = currentValue;
+}
+
+
 
 async function updateOrderItem(orderItemId, quantity) {
   const res = await fetch(`${API}/order-items/${orderItemId}`, {
@@ -2084,12 +2209,79 @@ async function clearManualDiscount(sessionId) {
 }
 
 (async function init() {
+  // Handle superadmin restaurant selector
+  if (IS_SUPERADMIN) {
+    await initializeSuperadmin();
+    document.getElementById("restaurant-selector").style.display = "flex";
+  }
+
   // Only load if admin (staff waits for PIN login)
-  if (IS_ADMIN) {
+  if (IS_ADMIN || IS_SUPERADMIN) {
     document.getElementById("login-screen").style.display = "none";
     document.getElementById("app-container").style.display = "flex";
     initializeApp();
     loadCoupons(); // Load coupons on init
   }
 })();
+
+// ============= SUPERADMIN RESTAURANT SWITCHING =============
+async function initializeSuperadmin() {
+  try {
+    const response = await fetch(`${API}/auth/restaurants`);
+    const restaurants = await response.json();
+    superadminRestaurants = restaurants;
+
+    // Display restaurant name in button
+    const currentRestaurant = restaurants.find(r => r.id === parseInt(restaurantId));
+    const restaurantNameBtn = document.getElementById("restaurant-name-btn");
+    if (currentRestaurant) {
+      restaurantNameBtn.textContent = `🏢 ${currentRestaurant.name}`;
+    }
+
+    // Populate restaurant list dropdown
+    const restaurantListDiv = document.getElementById("restaurant-list");
+    restaurantListDiv.innerHTML = restaurants.map(r => 
+      `<button class="restaurant-item ${r.id === parseInt(restaurantId) ? 'active' : ''}" 
+               onclick="switchRestaurant(${r.id}, '${r.name}')">${r.name} (ID: ${r.id})</button>`
+    ).join("");
+  } catch (err) {
+    console.error("Error loading restaurants:", err);
+  }
+}
+
+function toggleRestaurantList() {
+  const restaurantList = document.getElementById("restaurant-list");
+  const isVisible = restaurantList.style.display !== "none";
+  restaurantList.style.display = isVisible ? "none" : "block";
+}
+
+async function switchRestaurant(newRestaurantId, restaurantName) {
+  restaurantId = newRestaurantId;
+  localStorage.setItem("restaurantId", restaurantId);
+
+  // Update button text
+  const restaurantNameBtn = document.getElementById("restaurant-name-btn");
+  restaurantNameBtn.textContent = `🏢 ${restaurantName}`;
+
+  // Close dropdown
+  document.getElementById("restaurant-list").style.display = "none";
+
+  // Update active state in dropdown
+  document.querySelectorAll(".restaurant-item").forEach(item => {
+    item.classList.remove("active");
+  });
+  event.target.classList.add("active");
+
+  // Reload app data for new restaurant
+  MENU_CATEGORIES = [];
+  MENU_ITEMS = [];
+  TABLE_CATEGORIES = [];
+  TABLES = [];
+  MENU_ITEM_VARIANTS = [];
+  CURRENT_VARIANTS = [];
+
+  // Reload the app
+  loadApp();
+  switchSection("tables");
+}
 

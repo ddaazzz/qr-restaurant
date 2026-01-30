@@ -5,7 +5,7 @@ const router = Router();
 
 // Place an order
 // POST place order (with variants)
-router.post("/:sessionId/orders", async (req, res) => {
+router.post("/sessions/:sessionId/orders", async (req, res) => {
   const { sessionId } = req.params;
   const { items } = req.body;
 
@@ -202,7 +202,7 @@ for (const v of variants) {
 
 // Get all orders for a session
 // GET orders for a session (with variants)
-router.get("/:sessionId/orders", async (req, res) => {
+router.get("/sessions/:sessionId/orders", async (req, res) => {
   const { sessionId } = req.params;
 
   try {
@@ -218,6 +218,7 @@ router.get("/:sessionId/orders", async (req, res) => {
         oi.price_cents AS unit_price_cents,
 
         mi.name AS item_name,
+        COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
 
         COALESCE(
           STRING_AGG(
@@ -229,7 +230,9 @@ router.get("/:sessionId/orders", async (req, res) => {
 
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id
+      JOIN table_sessions ts ON o.session_id = ts.id
       JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
 
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
       LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
@@ -243,7 +246,9 @@ router.get("/:sessionId/orders", async (req, res) => {
         oi.id,
         oi.quantity,
         oi.price_cents,
-        mi.name
+        mi.name,
+        ts.restaurant_id,
+        mc.restaurant_id
 
       ORDER BY o.created_at ASC, oi.id ASC
       `,
@@ -258,6 +263,7 @@ router.get("/:sessionId/orders", async (req, res) => {
         ordersMap[row.order_id] = {
           order_id: row.order_id,
           created_at: row.created_at,
+          restaurant_id: row.restaurant_id,
           items: [],
           total_cents: 0
         };
@@ -267,6 +273,7 @@ router.get("/:sessionId/orders", async (req, res) => {
         Number(row.unit_price_cents) * Number(row.quantity);
 
       ordersMap[row.order_id].items.push({
+        order_item_id: row.order_item_id,
         name: row.item_name,
         quantity: row.quantity,
         status: row.item_status,
@@ -288,10 +295,10 @@ router.get("/:sessionId/orders", async (req, res) => {
 });
 
 
-// GET all active orders for kitchen
-// GET kitchen orders (with variants)
+// GET all active orders for kitchen - FILTERED BY RESTAURANT
 router.get("/kitchen/items", async (_req, res) => {
   try {
+    console.log("🔄 Fetching kitchen orders...");
     const result = await pool.query(
       `
       SELECT
@@ -301,9 +308,10 @@ router.get("/kitchen/items", async (_req, res) => {
 
         mi.name AS item_name,
 
-        tu.display_name AS table_name,
+        COALESCE(tu.display_name, 'Unknown Table') AS table_name,
         o.id AS order_id,
         ts.id AS session_id,
+        COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
         o.created_at,
 
         COALESCE(
@@ -317,14 +325,16 @@ router.get("/kitchen/items", async (_req, res) => {
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       JOIN table_sessions ts ON o.session_id = ts.id
-      JOIN table_units tu ON ts.table_unit_id = tu.id
+      LEFT JOIN table_units tu ON ts.table_unit_id = tu.id
       JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
 
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
       LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
       LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
 
       WHERE oi.status != 'served'
+      AND (COALESCE(ts.restaurant_id, mc.restaurant_id) IS NOT NULL)
 
       GROUP BY
         oi.id,
@@ -334,28 +344,37 @@ router.get("/kitchen/items", async (_req, res) => {
         tu.display_name,
         o.id,
         ts.id,
+        ts.restaurant_id,
+        mc.restaurant_id,
         o.created_at
 
       ORDER BY o.created_at ASC
       `
     );
 
+    console.log(`📦 Found ${result.rows.length} kitchen orders`);
+    if (result.rows.length > 0) {
+      console.log("Sample order:", result.rows[0]);
+    }
+
     res.json(
       result.rows.map(row => ({
         order_item_id: row.order_item_id,
         order_id: row.order_id,
         session_id: row.session_id,
-        table_name: row.table_name, // ✅ T01a / B01-Seat2
+        table_name: row.table_name,
         item_name: row.item_name,
         quantity: row.quantity,
         status: row.status,
         variants: row.variants,
-        created_at: row.created_at
+        created_at: row.created_at,
+        restaurant_id: row.restaurant_id
       }))
     );
-  } catch (err) {
-    console.error("Kitchen orders failed:", err);
-    res.status(500).json({ error: "Failed to load kitchen orders" });
+  } catch (err: any) {
+    console.error("❌ Kitchen orders failed:", err);
+    console.error("Error details:", err.message, err.code);
+    res.status(500).json({ error: err.message || "Failed to load kitchen orders" });
   }
 });
 

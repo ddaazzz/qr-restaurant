@@ -200,6 +200,36 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
   }
 
   try {
+    // Get session details to find restaurant_id
+    const sessionRes = await pool.query(
+      `
+      SELECT ts.table_id, t.restaurant_id
+      FROM table_sessions ts
+      JOIN tables t ON t.id = ts.table_id
+      WHERE ts.id = $1
+      `,
+      [sessionId]
+    );
+
+    if (sessionRes.rowCount === 0) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const restaurantId = sessionRes.rows[0].restaurant_id;
+
+    // Get restaurant info
+    const restaurantRes = await pool.query(
+      `
+      SELECT id, name, address, phone, logo_url, service_charge_percent
+      FROM restaurants
+      WHERE id = $1
+      `,
+      [restaurantId]
+    );
+
+    const restaurant = restaurantRes.rows[0];
+
+    // Get order items
     const { rows } = await pool.query(
       `
       SELECT
@@ -215,13 +245,20 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
       [sessionId]
     );
 
-    const total_cents = rows.reduce(
+    const subtotal_cents = rows.reduce(
       (sum, r) => sum + r.quantity * r.price_cents,
       0
     );
 
+    const serviceChargePercent = restaurant?.service_charge_percent || 0;
+    const service_charge_cents = Math.round(subtotal_cents * serviceChargePercent / 100);
+    const total_cents = subtotal_cents + service_charge_cents;
+
     res.json({
+      restaurant,
       items: rows,
+      subtotal_cents,
+      service_charge_cents,
       total_cents
     });
   } catch (err) {

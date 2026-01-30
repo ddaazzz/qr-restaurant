@@ -61,6 +61,12 @@
         <h1>🍽️ Restaurant Portal</h1>
       </div>
       <div class="header-right">
+        <div id="restaurant-selector" class="restaurant-selector" style="display: none;">
+          <button class="restaurant-name-btn" id="restaurant-name-btn" onclick="toggleRestaurantList()"></button>
+          <div id="restaurant-list" class="restaurant-list" style="display: none;">
+            <!-- Populated by JS -->
+          </div>
+        </div>
         <button id="pin-login-btn" class="pin-login-btn" onclick="openPinLoginModal()">🔐 PIN</button>
         <button id="logout-btn" class="logout-btn" onclick="handleLogout()">Logout</button>
       </div>
@@ -254,14 +260,14 @@
                 </div>
                 <div class="form-group">
                   <label>Email Address</label>
-                  <input id="staff-email" type="email" placeholder="e.g., john@restaurant.com" />
+                  <input id="staff-email" type="email" autocomplete="email" placeholder="e.g., john@restaurant.com" />
                 </div>
               </div>
 
               <div class="form-row">
                 <div class="form-group">
                   <label>Password</label>
-                  <input id="staff-password" type="password" placeholder="Enter secure password" />
+                    <input id="staff-password" type="password" placeholder="Enter secure password" autocomplete="current-password" required>
                 </div>
                 <div class="form-group">
                   <label>PIN (6 digits)</label>
@@ -308,10 +314,24 @@
             </div>
           </div>
 
+          <!-- List Table Categories -->
+          <div class="section-card">
+            <h3>Table Categories</h3>
+            <div id="table-categories-list" class="list-grid">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
           <!-- Add Table Form -->
           <div class="section-card">
             <h3>Add Table</h3>
             <div class="form-row">
+              <div class="form-group">
+                <label>Select Category</label>
+                <select id="new-table-category">
+                  <option value="">-- Select Category --</option>
+                </select>
+              </div>
               <div class="form-group">
                 <label>Table Name</label>
                 <input id="new-table-name" placeholder="e.g., T1, T-Patio-01" />
@@ -323,6 +343,14 @@
             </div>
             <div class="form-actions">
               <button onclick="createTable()" class="btn-primary">➕ Add Table</button>
+            </div>
+          </div>
+
+          <!-- List Tables -->
+          <div class="section-card">
+            <h3>Manage Tables</h3>
+            <div id="tables-list" class="list-grid">
+              <!-- Populated by JS -->
             </div>
           </div>
         </section>

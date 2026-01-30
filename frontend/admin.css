@@ -215,6 +215,80 @@ body {
   box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
 }
 
+/* RESTAURANT SELECTOR */
+.restaurant-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.restaurant-name-btn {
+  background: var(--bg-light);
+  color: var(--text-dark);
+  border: 2px solid var(--border-color);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  min-width: 200px;
+  text-align: left;
+}
+
+.restaurant-name-btn:hover {
+  border-color: var(--primary-color);
+  background: var(--white);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.15);
+}
+
+.restaurant-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--white);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 250px;
+  margin-top: 8px;
+}
+
+.restaurant-item {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-dark);
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.restaurant-item:first-child {
+  border-radius: 6px 6px 0 0;
+}
+
+.restaurant-item:last-child {
+  border-radius: 0 0 6px 6px;
+}
+
+.restaurant-item:hover {
+  background: var(--bg-light);
+  color: var(--primary-color);
+}
+
+.restaurant-item.active {
+  background: var(--primary-color);
+  color: var(--white);
+  font-weight: 600;
+}
+
 /* PIN LOGIN MODAL */
 .modal-overlay {
   position: fixed;
@@ -498,6 +572,62 @@ body {
 .form-actions button {
   flex: 1;
   min-width: 140px;
+}
+
+/* LIST GRID FOR MANAGEMENT */
+.list-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-light);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.list-item:hover {
+  background: var(--white);
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.1);
+}
+
+.list-item > div:first-child {
+  flex: 1;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.item-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
+  min-width: auto;
+  white-space: nowrap;
+}
+
+.btn-danger {
+  background: var(--error-color);
+  color: var(--white);
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
 }
 
 /* ERROR AND SUCCESS MESSAGES */
