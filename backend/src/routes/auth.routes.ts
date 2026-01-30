@@ -47,20 +47,22 @@ console.log (restaurantId);
 });
 
 router.post("/restaurants/:restaurantId/staff", async (req, res) => {
-  const { name, email, password, pin } = req.body;
+  const { name, email, password, pin, role } = req.body;
   const { restaurantId } = req.params;
 
   if (!name || !email || !password || !pin) {
     return res.status(400).json({ error: "All fields required" });
   }
 
+  const staffRole = role === 'kitchen' ? 'kitchen' : 'staff';
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
       `INSERT INTO users (name, email, password_hash, role, pin, restaurant_id)
-       VALUES ($1, $2, $3, 'staff', $4, $5) RETURNING id, name, email, pin`,
-      [name, email, hashedPassword, pin, restaurantId]
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, pin`,
+      [name, email, hashedPassword, staffRole, pin, restaurantId]
     );
 
     res.json({ staff: result.rows[0] });
@@ -108,7 +110,7 @@ router.post("/auth/staff-login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, role FROM users WHERE pin=$1 AND restaurant_id=$2 AND role='staff'",
+      "SELECT id, role FROM users WHERE pin=$1 AND restaurant_id=$2 AND (role='staff' OR role='kitchen')",
       [pin, restaurantId]
     );
 
@@ -131,7 +133,7 @@ router.post("/auth/staff-login", async (req, res) => {
       meta: { method: "PIN" }
     });
 
-    res.json({ token, role: user.role });
+    res.json({ token, role: user.role, restaurantId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });

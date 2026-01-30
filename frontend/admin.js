@@ -373,6 +373,7 @@ async function createStaff() {
   const email = document.getElementById("staff-email").value;
   const password = document.getElementById("staff-password").value;
   const pin = document.getElementById("staff-pin").value;
+  const role = document.getElementById("staff-role")?.value || "staff";
 
   if (!name || !email || !password || !pin) {
     errorEl.textContent = "All fields are required";
@@ -384,7 +385,7 @@ async function createStaff() {
     const res = await fetch(`${API}/restaurants/${restaurantId}/staff`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, pin })
+      body: JSON.stringify({ name, email, password, pin, role })
     });
 
     const data = await res.json();
@@ -400,9 +401,12 @@ async function createStaff() {
     document.getElementById("staff-email").value = "";
     document.getElementById("staff-password").value = "";
     document.getElementById("staff-pin").value = "";
+    if (document.getElementById("staff-role")) {
+      document.getElementById("staff-role").value = "staff";
+    }
 
     // Show success message
-    successEl.textContent = "Staff member created successfully";
+    successEl.textContent = `${role === 'kitchen' ? 'Kitchen staff' : 'Staff'} member created successfully`;
     successEl.style.display = "flex";
     
     // Auto-hide success message after 4 seconds
