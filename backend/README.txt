@@ -1,3 +1,17 @@
+Demo Restaurant Credentials:
+
+Admin:
+Admin@example.com
+AdminPassword123
+
+Staff:
+Staff@example.com
+StaffPassword123
+
+Kitchen:
+Kitchen@example.com
+KitchenPassword123
+-------------------------------------------------------------------------------------------------------------
 This is the backend of the qr booking and ordering system.
 It should consist of : 
 🔐 Authentication & Authorization

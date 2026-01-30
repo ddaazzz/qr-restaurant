@@ -27,10 +27,38 @@ app.use(
 );
 
 /* ======================
+   MIDDLEWARE - SECURITY HEADERS
+====================== */
+app.use((req, res, next) => {
+  // Security headers for SEO and protection
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  next();
+});
+
+/* ======================
    HEALTH
 ====================== */
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+/* ======================
+   SEO & SITEMAP FILES
+====================== */
+app.get("/robots.txt", (_req, res) => {
+  const FRONTEND_PATH = path.join(__dirname, "../../frontend");
+  res.setHeader("Content-Type", "text/plain");
+  res.sendFile(path.join(FRONTEND_PATH, "robots.txt"));
+});
+
+app.get("/sitemap.xml", (_req, res) => {
+  const FRONTEND_PATH = path.join(__dirname, "../../frontend");
+  res.setHeader("Content-Type", "application/xml");
+  res.sendFile(path.join(FRONTEND_PATH, "sitemap.xml"));
 });
 
 /* ======================

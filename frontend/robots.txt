@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /kitchen
+Disallow: /login
+Disallow: /staff
+Disallow: /uploads/
+Allow: /uploads/chuio/
+
+Sitemap: https://chuio.io/sitemap.xml
+
+# Crawl delay (optional, in seconds)
+Crawl-delay: 1
+
+# Request-rate (optional, requests per second)
+Request-rate: 10/1s

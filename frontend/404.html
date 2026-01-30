@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+  <title>404 - Page Not Found | Chuio</title>
+  <meta name="description" content="The page you're looking for doesn't exist. Return to Chuio's homepage.">
+  <meta name="robots" content="noindex, follow">
+  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <link rel="stylesheet" href="home.css" />
+  <style>
+    .error-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 70vh;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .error-code {
+      font-size: 120px;
+      font-weight: bold;
+      color: #f97316;
+      margin: 0;
+      line-height: 1;
+    }
+    .error-title {
+      font-size: 42px;
+      color: #2c3e50;
+      margin: 20px 0;
+    }
+    .error-message {
+      font-size: 18px;
+      color: #7f8c8d;
+      margin: 20px 0 40px 0;
+      max-width: 500px;
+    }
+    .error-button {
+      display: inline-block;
+      padding: 14px 40px;
+      background-color: #f97316;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+    .error-button:hover {
+      background-color: #ea6317;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+    }
+    .error-suggestions {
+      margin-top: 60px;
+      padding-top: 40px;
+      border-top: 1px solid #ecf0f1;
+    }
+    .error-suggestions h3 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+    .suggestions-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .suggestion-link {
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #2c3e50;
+      transition: all 0.3s ease;
+      border: 1px solid #ecf0f1;
+    }
+    .suggestion-link:hover {
+      background-color: #fff;
+      border-color: #f97316;
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <!-- NAVIGATION -->
+  <nav>
+    <div class="nav-container">
+      <a href="home.html" class="logo">
+        <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
+      </a>
+      <ul class="nav-links">
+        <li><a href="home.html">Home</a></li>
+        <li><a href="products.html">Products</a></li>
+        <li><a href="home.html#pricing">Pricing</a></li>
+        <li><a href="login.html" class="login-btn">Login</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="error-container">
+    <h1 class="error-code">404</h1>
+    <h2 class="error-title">Page Not Found</h2>
+    <p class="error-message">Sorry, the page you're looking for doesn't exist or has been moved. Let's get you back on track.</p>
+    <a href="home.html" class="error-button">← Back to Home</a>
+
+    <div class="error-suggestions">
+      <h3>Quick Links</h3>
+      <div class="suggestions-list">
+        <a href="home.html" class="suggestion-link">
+          <strong>Home</strong><br>
+          <small>Main landing page</small>
+        </a>
+        <a href="products.html" class="suggestion-link">
+          <strong>Products</strong><br>
+          <small>Our features & offerings</small>
+        </a>
+        <a href="home.html#pricing" class="suggestion-link">
+          <strong>Pricing</strong><br>
+          <small>Our plans & pricing</small>
+        </a>
+        <a href="login.html" class="suggestion-link">
+          <strong>Login</strong><br>
+          <small>Access your account</small>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer style="background-color: #1a1a1a; color: #fff; padding: 40px 20px; text-align: center; margin-top: 60px;">
+    <p style="margin: 0; font-size: 14px;">&copy; 2026 Chuio. All rights reserved. <a href="mailto:support@chuio.io" style="color: #f97316; text-decoration: none;">Need help? Contact us</a></p>
+  </footer>
+</body>
+</html>
