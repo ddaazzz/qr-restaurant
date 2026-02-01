@@ -40,10 +40,10 @@ class LanguageSwitcher {
           <span class="lang-text">${currentLang === 'en' ? t('lang.english') : t('lang.chinese')}</span>
         </button>
         <div class="lang-dropdown">
-          <a href="#" class="lang-option" data-lang="en" ${currentLang === 'en' ? 'class="lang-option active"' : 'class="lang-option"'}>
+          <a href="#" class="lang-option" data-lang="en">
             ${t('lang.english')}
           </a>
-          <a href="#" class="lang-option" data-lang="zh" ${currentLang === 'zh' ? 'class="lang-option active"' : 'class="lang-option"'}>
+          <a href="#" class="lang-option" data-lang="zh">
             ${t('lang.chinese')}
           </a>
         </div>
@@ -63,6 +63,15 @@ class LanguageSwitcher {
     
     console.log('[LanguageSwitcher] Found', options.length, 'language options');
     
+    // Set initial active state
+    options.forEach(option => {
+      if (option.getAttribute('data-lang') === currentLang) {
+        option.classList.add('active');
+      } else {
+        option.classList.remove('active');
+      }
+    });
+    
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
       const dropdown = pickerElement.querySelector('.lang-dropdown');
@@ -78,8 +87,24 @@ class LanguageSwitcher {
         const lang = option.getAttribute('data-lang');
         console.log('[LanguageSwitcher] Language option clicked:', lang);
         setLanguage(lang);
+        
+        // Update active state
+        options.forEach(opt => {
+          if (opt.getAttribute('data-lang') === lang) {
+            opt.classList.add('active');
+          } else {
+            opt.classList.remove('active');
+          }
+        });
+        
         this.updatePickerDisplay(pickerElement);
         this.updatePageContent();
+        
+        // Close dropdown
+        const dropdown = pickerElement.querySelector('.lang-dropdown');
+        if (dropdown) {
+          dropdown.classList.remove('show');
+        }
       });
     });
     
