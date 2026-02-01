@@ -80,6 +80,7 @@ html {
 .features-section {
   padding: 60px 20px;
   background: var(--bg-white);
+  scroll-margin-top: 120px;
 }
 
 .feature-card {
@@ -89,6 +90,7 @@ html {
   align-items: center;
   margin-bottom: 80px;
   animation: fadeInUp 0.6s ease-out;
+  scroll-margin-top: 120px;
 }
 
 @keyframes fadeInUp {

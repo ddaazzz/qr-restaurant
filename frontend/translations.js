@@ -12,6 +12,7 @@ const translations = {
     'nav.pricing': 'Pricing',
     'nav.login': 'Login',
     'nav.back-home': '← Home',
+    'nav.kitchen-dashboard': 'Kitchen Dashboard',
 
     // Home page
     'home.title': 'Chuio - Restaurant Ordering System',
@@ -339,6 +340,7 @@ const translations = {
     'nav.pricing': '價格',
     'nav.login': '登錄',
     'nav.back-home': '← 首頁',
+    'nav.kitchen-dashboard': '廚房儀表板',
 
     // Home page
     'home.title': 'Chuio - 餐廳訂購系統',
