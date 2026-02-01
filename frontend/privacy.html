@@ -4,10 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
   <title>Privacy Policy - Chuio</title>
+  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <link rel="apple-touch-icon" href="/uploads/chuio/Chuio_logo.png" />
   <meta name="description" content="Chuio Privacy Policy - Learn how we protect your restaurant data and customer information.">
   <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Privacy Policy - Chuio" />
+  <meta property="og:description" content="Chuio Privacy Policy - Learn how we protect your restaurant data and customer information." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://chuio.io/privacy.html" />
+  <meta property="og:image" content="https://chuio.io/uploads/chuio/Chuio_logo.png" />
   <link rel="canonical" href="https://chuio.io/privacy">
-  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <link rel="stylesheet" href="language-switcher.css" />
   <link rel="stylesheet" href="home.css" />
   <style>
     .policy-container {
@@ -58,16 +65,17 @@
         <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
       </a>
       <ul class="nav-links">
-        <li><a href="home.html">Home</a></li>
-        <li><a href="products.html">Products</a></li>
-        <li><a href="home.html#pricing">Pricing</a></li>
-        <li><a href="login.html" class="login-btn">Login</a></li>
+        <li><a href="home.html" data-i18n="nav.home">Home</a></li>
+        <li><a href="products.html" data-i18n="nav.products">Products</a></li>
+        <li><a href="home.html#pricing" data-i18n="nav.pricing">Pricing</a></li>
+        <li><a href="login.html" class="login-btn" data-i18n="nav.login">Login</a></li>
+        <li style="list-style: none;" data-language-picker></li>
       </ul>
     </div>
   </nav>
 
   <div class="policy-container">
-    <h1>Privacy Policy</h1>
+    <h1 data-i18n="privacy.title">Privacy Policy</h1>
     <p class="last-updated">Last Updated: January 2026</p>
 
     <h2>1. Introduction</h2>
@@ -161,7 +169,10 @@
 
   <!-- FOOTER -->
   <footer style="background-color: #1a1a1a; color: #fff; padding: 40px 20px; text-align: center; margin-top: 60px;">
-    <p style="margin: 0; font-size: 14px;">&copy; 2026 Chuio. All rights reserved.</p>
+    <p style="margin: 0; font-size: 14px;" data-i18n="footer.copyright">&copy; 2026 Chuio. All rights reserved.</p>
   </footer>
+
+  <script src="translations.js"></script>
+  <script src="language-switcher.js"></script>
 </body>
 </html>

@@ -1,0 +1,128 @@
+/* Language Switcher Styles */
+.language-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  z-index: 100;
+}
+
+.lang-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background-color: transparent;
+  border: none;
+  color: var(--text-dark, #1f2937);
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  min-height: 40px;
+}
+
+.lang-toggle:hover {
+  background-color: rgba(249, 115, 22, 0.08);
+  color: var(--primary-color, #f97316);
+}
+
+.lang-toggle:active {
+  transform: scale(0.98);
+}
+
+.lang-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.lang-text {
+  display: none;
+  font-size: 13px;
+}
+
+@media (min-width: 768px) {
+  .lang-text {
+    display: inline;
+  }
+}
+
+.lang-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: var(--white, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 4px;
+  margin-top: 4px;
+  min-width: 130px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px);
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.lang-dropdown.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.lang-option {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  color: var(--text-dark, #1f2937);
+  text-decoration: none;
+  text-align: left;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.lang-option:hover {
+  background-color: rgba(249, 115, 22, 0.08);
+  color: var(--primary-color, #f97316);
+}
+
+.lang-option.active {
+  background-color: rgba(249, 115, 22, 0.1);
+  color: var(--primary-color, #f97316);
+  font-weight: 600;
+}
+
+.lang-option:first-child {
+  border-radius: 6px 6px 0 0;
+}
+
+.lang-option:last-child {
+  border-radius: 0 0 6px 6px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .lang-toggle {
+    padding: 8px 12px;
+    font-size: 13px;
+    border: 2px solid var(--border-color, #e5e7eb);
+  }
+
+  .lang-dropdown {
+    min-width: 130px;
+  }
+
+  .lang-option {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}

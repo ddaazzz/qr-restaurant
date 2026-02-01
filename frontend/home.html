@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
   <title>Chuio - QR Code Restaurant Ordering & Kitchen Management System</title>
+  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon (1).ico" />
+  <link rel="apple-touch-icon" href="/uploads/chuio/Chuio_logo.png" />
   <meta name="description" content="Chuio revolutionizes restaurant operations with QR code ordering, real-time kitchen management, table management, staff control, and promotions. Increase efficiency and customer satisfaction.">
   <meta name="keywords" content="QR ordering system, restaurant management software, kitchen display system, table management, digital menu ordering">
   <meta name="author" content="Chuio">
@@ -12,6 +14,7 @@
   <meta property="og:description" content="Revolutionize your restaurant operations with modern QR code ordering, real-time kitchen management, and seamless customer experience." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://chuio.io" />
+  <meta property="og:image" content="https://chuio.io/uploads/chuio/Chuio_logo.png" />
   <meta property="og:image" content="/uploads/chuio/landing_splash.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Chuio - QR Code Restaurant Ordering System" />
@@ -68,19 +71,20 @@
         <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
       </a>
       <ul class="nav-links">
-        <li><a href="#home">Home</a></li>
+        <li><a href="#home" data-i18n="nav.home">Home</a></li>
         <li class="dropdown">
-          <a href="#products">Products</a>
+          <a href="#products" data-i18n="nav.products">Products</a>
           <div class="dropdown-menu">
-            <a href="#qr-scanning">QR Scanning</a>
-            <a href="#ordering">Ordering System</a>
-            <a href="#menu-management">Menu Management</a>
-            <a href="#table-management">Table Management</a>
-            <a href="#staff-management">Staff Management</a>
+            <a href="#qr-scanning" data-i18n="nav.qr-scanning">QR Scanning</a>
+            <a href="#ordering" data-i18n="nav.ordering">Ordering System</a>
+            <a href="#menu-management" data-i18n="nav.menu-management">Menu Management</a>
+            <a href="#table-management" data-i18n="nav.table-management">Table Management</a>
+            <a href="#staff-management" data-i18n="nav.staff-management">Staff Management</a>
           </div>
         </li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="login.html" class="login-btn">Login</a></li>
+        <li><a href="#pricing" data-i18n="nav.pricing">Pricing</a></li>
+        <li><a href="login.html" class="login-btn" data-i18n="nav.login">Login</a></li>
+        <li data-language-picker></li>
       </ul>
     </div>
   </nav>
@@ -89,72 +93,72 @@
   <section id="home" class="hero">
     <div class="hero-content">
       <img src="/uploads/chuio/landing_splash.png" alt="Chuio Restaurant Ordering System Illustration" class="hero-splash-image" />
-      <h1>Chuio - Restaurant Ordering System</h1>
-      <p>Streamline your restaurant operations with modern QR code ordering, real-time kitchen management, and seamless customer experience.</p>
-      <a href="login.html" class="hero-cta">Get Started</a>
+      <h1 data-i18n="home.title">Chuio - Restaurant Ordering System</h1>
+      <p data-i18n="home.description">Streamline your restaurant operations with modern QR code ordering, real-time kitchen management, and seamless customer experience.</p>
+      <a href="login.html" class="hero-cta" data-i18n="home.get-started">Get Started</a>
     </div>
   </section>
 
   <!-- FEATURES SECTION -->
   <section class="features">
-    <h2 class="section-title">Why Choose Chuio?</h2>
+    <h2 class="section-title" data-i18n="home.why-choose">Why Choose Chuio?</h2>
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon">📱</div>
-        <h3>Mobile-First Ordering</h3>
-        <p>Customers scan a QR code at their table and order directly from their phone. No app installation needed.</p>
+        <h3 data-i18n="home.mobile-first">Mobile-First Ordering</h3>
+        <p data-i18n="home.mobile-desc">Customers scan a QR code at their table and order directly from their phone. No app installation needed.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">⚡</div>
-        <h3>Instant Order Updates</h3>
-        <p>Kitchen staff receives orders instantly and can update status in real-time. Customers see when their food is ready.</p>
+        <h3 data-i18n="home.instant-updates">Instant Order Updates</h3>
+        <p data-i18n="home.instant-desc">Kitchen staff receives orders instantly and can update status in real-time. Customers see when their food is ready.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">📊</div>
-        <h3>Complete Dashboard</h3>
-        <p>Manage menus, tables, staff, and track orders from a single, intuitive admin dashboard.</p>
+        <h3 data-i18n="home.complete-dashboard">Complete Dashboard</h3>
+        <p data-i18n="home.dashboard-desc">Manage menus, tables, staff, and track orders from a single, intuitive admin dashboard.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🔐</div>
-        <h3>Secure & Reliable</h3>
-        <p>Bank-grade security for all transactions and data. Your restaurant's information stays safe.</p>
+        <h3 data-i18n="home.secure">Secure & Reliable</h3>
+        <p data-i18n="home.secure-desc">Bank-grade security for all transactions and data. Your restaurant's information stays safe.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🎯</div>
-        <h3>Easy Management</h3>
-        <p>Manage staff roles, permissions, and activities with our comprehensive staff management system.</p>
+        <h3 data-i18n="home.easy-management">Easy Management</h3>
+        <p data-i18n="home.management-desc">Manage staff roles, permissions, and activities with our comprehensive staff management system.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">📈</div>
-        <h3>Growth Ready</h3>
-        <p>Scale from a single table to multiple restaurants with our flexible and powerful platform.</p>
+        <h3 data-i18n="home.growth-ready">Growth Ready</h3>
+        <p data-i18n="home.growth-desc">Scale from a single table to multiple restaurants with our flexible and powerful platform.</p>
       </div>
     </div>
   </section>
 
   <!-- HOW IT WORKS SECTION -->
   <section class="how-it-works">
-    <h2 class="section-title">How It Works</h2>
+    <h2 class="section-title" data-i18n="home.how-it-works">How It Works</h2>
     <div class="steps-grid">
       <div class="step">
         <div class="step-number">1</div>
-        <h4>Customer Scans QR</h4>
-        <p>Each table has a unique QR code that customers scan with their phone to access the menu.</p>
+        <h4 data-i18n="home.step1-title">Customer Scans QR</h4>
+        <p data-i18n="home.step1-desc">Each table has a unique QR code that customers scan with their phone to access the menu.</p>
       </div>
       <div class="step">
         <div class="step-number">2</div>
-        <h4>Browse & Order</h4>
-        <p>Customers browse the menu, customize items, and submit their order directly from their device.</p>
+        <h4 data-i18n="home.step2-title">Browse & Order</h4>
+        <p data-i18n="home.step2-desc">Customers browse the menu, customize items, and submit their order directly from their device.</p>
       </div>
       <div class="step">
         <div class="step-number">3</div>
-        <h4>Kitchen Receives Order</h4>
-        <p>Kitchen staff instantly receives the order with all customizations and can prioritize accordingly.</p>
+        <h4 data-i18n="home.step3-title">Kitchen Receives Order</h4>
+        <p data-i18n="home.step3-desc">Kitchen staff instantly receives the order with all customizations and can prioritize accordingly.</p>
       </div>
       <div class="step">
         <div class="step-number">4</div>
-        <h4>Real-Time Updates</h4>
-        <p>Customers receive live updates on their order status, improving satisfaction and reducing inquiries.</p>
+        <h4 data-i18n="home.step4-title">Real-Time Updates</h4>
+        <p data-i18n="home.step4-desc">Customers receive live updates on their order status, improving satisfaction and reducing inquiries.</p>
       </div>
     </div>
   </section>
@@ -162,31 +166,31 @@
   <!-- PRODUCTS SECTION -->
   <section class="products" id="products">
     <div class="products-container">
-      <h2 class="section-title">Our Products</h2>
+      <h2 class="section-title" data-i18n="home.our-products">Our Products</h2>
       <div class="products-grid">
         <div class="product-item">
-          <h4>🔗 QR Scan & Order</h4>
-          <p>Customers scan QR codes at tables to instantly access the menu and place orders from their phones. No app installation required.</p>
+          <h4 data-i18n="home.qr-order-title">🔗 QR Scan & Order</h4>
+          <p data-i18n="home.qr-order-desc">Customers scan QR codes at tables to instantly access the menu and place orders from their phones. No app installation required.</p>
         </div>
         <div class="product-item">
-          <h4>📋 Menu Management</h4>
-          <p>Create, update, and manage your restaurant menu with images, descriptions, variants, and pricing.</p>
+          <h4 data-i18n="home.menu-title">📋 Menu Management</h4>
+          <p data-i18n="home.menu-desc-short">Create, update, and manage your restaurant menu with images, descriptions, variants, and pricing.</p>
         </div>
         <div class="product-item">
-          <h4>🍽️ Table Management</h4>
-          <p>Organize tables, track occupancy, and manage seating arrangements efficiently with real-time updates.</p>
+          <h4 data-i18n="home.table-title">🍽️ Table Management</h4>
+          <p data-i18n="home.table-desc-short">Organize tables, track occupancy, and manage seating arrangements efficiently with real-time updates.</p>
         </div>
         <div class="product-item">
-          <h4>👥 Staff Management</h4>
-          <p>Manage staff roles, permissions, activity logs, and staff performance tracking with role-based access.</p>
+          <h4 data-i18n="home.staff-title">👥 Staff Management</h4>
+          <p data-i18n="home.staff-desc-short">Manage staff roles, permissions, activity logs, and staff performance tracking with role-based access.</p>
         </div>
         <div class="product-item">
-          <h4>🍳 Kitchen Dashboard</h4>
-          <p>Live kitchen dashboard with real-time order tracking, status updates, and kitchen staff operations.</p>
+          <h4 data-i18n="home.kitchen-title">🍳 Kitchen Dashboard</h4>
+          <p data-i18n="home.kitchen-desc-short">Live kitchen dashboard with real-time order tracking, status updates, and kitchen staff operations.</p>
         </div>
         <div class="product-item">
-          <h4>🎟️ Coupons & Promotions</h4>
-          <p>Built-in coupon system to drive sales, manage discounts, and track promotional effectiveness.</p>
+          <h4 data-i18n="home.coupons-title">🎟️ Coupons & Promotions</h4>
+          <p data-i18n="home.coupons-desc">Built-in coupon system to drive sales, manage discounts, and track promotional effectiveness.</p>
         </div>
       </div>
       <div style="text-align: center; margin-top: 40px;">
@@ -200,7 +204,7 @@
           font-weight: 600;
           font-size: 16px;
           transition: all 0.3s ease;
-        " onmouseover="this.style.background='#ea6317'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='#f97316'; this.style.transform='translateY(0)';">
+        " onmouseover="this.style.background='#ea6317'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='#f97316'; this.style.transform='translateY(0)';", data-i18n="home.learn-more">
           Learn More About Our Products →
         </a>
       </div>
@@ -209,70 +213,70 @@
 
   <!-- PRICING SECTION -->
   <section id="pricing" class="pricing">
-    <h2 class="section-title">Simple Pricing</h2>
+    <h2 class="section-title" data-i18n="home.simple-pricing">Simple Pricing</h2>
     <div class="pricing-grid">
       <div class="pricing-card featured">
-        <h3>Chuio Pro</h3>
-        <div class="pricing-price">$399<span> HKD/month</span></div>
-        <p class="pricing-tagline">Everything you need to run your restaurant</p>
+        <h3 data-i18n="home.chuio-pro">Chuio Pro</h3>
+        <div class="pricing-price"><span data-i18n="home.pricing-hkd">$399 HKD/month</span></div>
+        <p class="pricing-tagline" data-i18n="home.everything-needed">Everything you need to run your restaurant</p>
         
         <div class="pricing-category">
-          <h4>Core Products</h4>
+          <h4 data-i18n="home.core-products">Core Products</h4>
           <ul class="pricing-features">
-            <li><span>Unlimited tables</span></li>
-            <li><span>Complete menu management</span></li>
-            <li><span>Real-time order tracking</span></li>
-            <li><span>Kitchen display system</span></li>
-            <li><span>Table management</span></li>
+            <li><span data-i18n="home.unlimited-tables">Unlimited tables</span></li>
+            <li><span data-i18n="home.complete-menu-mgmt">Complete menu management</span></li>
+            <li><span data-i18n="home.real-time-tracking">Real-time order tracking</span></li>
+            <li><span data-i18n="home.kds">Kitchen display system</span></li>
+            <li><span data-i18n="home.table-mgmt">Table management</span></li>
           </ul>
         </div>
         
         <div class="pricing-category">
-          <h4>Team & Operations</h4>
+          <h4 data-i18n="home.team-ops">Team & Operations</h4>
           <ul class="pricing-features">
-            <li><span>Unlimited staff members</span></li>
-            <li><span>Staff activity logging</span></li>
-            <li><span>Role-based access control</span></li>
+            <li><span data-i18n="home.unlimited-staff">Unlimited staff members</span></li>
+            <li><span data-i18n="home.staff-logging">Staff activity logging</span></li>
+            <li><span data-i18n="home.rbac">Role-based access control</span></li>
           </ul>
         </div>
         
         <div class="pricing-category">
-          <h4>Promotions & Support</h4>
+          <h4 data-i18n="home.promos-support">Promotions & Support</h4>
           <ul class="pricing-features">
-            <li><span>Coupons & promotions</span></li>
-            <li><span>All current & future updates</span></li>
-            <li><span>Priority support</span></li>
+            <li><span data-i18n="home.coupons-promos">Coupons & promotions</span></li>
+            <li><span data-i18n="home.all-updates">All current & future updates</span></li>
+            <li><span data-i18n="home.priority-support">Priority support</span></li>
           </ul>
         </div>
         
-        <button class="pricing-btn" onclick="contactWhatsApp('Pro')">Get Started Now</button>
+        <button class="pricing-btn" onclick="contactWhatsApp('Pro')" data-i18n="home.get-started-now">Get Started Now</button>
       </div>
       
       <div class="pricing-card">
-        <h3>Enterprise</h3>
-        <div class="pricing-price">Custom</div>
-        <p class="pricing-tagline">For large-scale operations</p>
+        <h3 data-i18n="home.enterprise">Enterprise</h3>
+        <div class="pricing-price" data-i18n="home.custom-pricing">Custom</div>
+        <p class="pricing-tagline" data-i18n="home.large-scale">For large-scale operations</p>
         
         <div class="pricing-category">
-          <h4>Advanced Features</h4>
+          <h4 data-i18n="home.advanced-features">Advanced Features</h4>
           <ul class="pricing-features">
-            <li><span>Multi-location support</span></li>
-            <li><span>Custom integrations</span></li>
-            <li><span>Advanced analytics & reporting</span></li>
-            <li><span>White-label options</span></li>
+            <li><span data-i18n="home.multi-location">Multi-location support</span></li>
+            <li><span data-i18n="home.custom-integrations">Custom integrations</span></li>
+            <li><span data-i18n="home.analytics">Advanced analytics & reporting</span></li>
+            <li><span data-i18n="home.white-label">White-label options</span></li>
           </ul>
         </div>
         
         <div class="pricing-category">
-          <h4>Dedicated Support</h4>
+          <h4 data-i18n="home.dedicated-support">Dedicated Support</h4>
           <ul class="pricing-features">
-            <li><span>Dedicated account manager</span></li>
-            <li><span>SLA guarantees</span></li>
-            <li><span>Custom training</span></li>
+            <li><span data-i18n="home.account-manager">Dedicated account manager</span></li>
+            <li><span data-i18n="home.sla">SLA guarantees</span></li>
+            <li><span data-i18n="home.training">Custom training</span></li>
           </ul>
         </div>
         
-        <button class="pricing-btn" onclick="contactWhatsApp('Custom')">Contact Sales</button>
+        <button class="pricing-btn" onclick="contactWhatsApp('Custom')" data-i18n="home.contact-sales">Contact Sales</button>
       </div>
     </div>
   </section>
@@ -282,40 +286,42 @@
     <div style="max-width: 1200px; margin: 0 auto;">
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 40px; margin-bottom: 40px; text-align: left;">
         <div>
-          <h4 style="margin-bottom: 15px; color: #f97316;">Chuio</h4>
-          <p style="font-size: 14px; color: #999; margin-bottom: 15px;">Revolutionizing restaurant operations with modern technology.</p>
-          <p style="font-size: 12px; color: #666;">© 2026 Chuio. All rights reserved.</p>
+          <h4 style="margin-bottom: 15px; color: #f97316;" data-i18n="footer.brand">Chuio</h4>
+          <p style="font-size: 14px; color: #999; margin-bottom: 15px;" data-i18n="footer.brand-desc">Revolutionizing restaurant operations with modern technology.</p>
+          <p style="font-size: 12px; color: #666;" data-i18n="footer.copyright">© 2026 Chuio. All rights reserved.</p>
         </div>
         <div>
-          <h4 style="margin-bottom: 15px; color: #f97316;">Product</h4>
+          <h4 style="margin-bottom: 15px; color: #f97316;" data-i18n="footer.product-title">Product</h4>
           <ul style="list-style: none; padding: 0; margin: 0;">
-            <li><a href="home.html#products" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Features</a></li>
-            <li><a href="products.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Products</a></li>
-            <li><a href="home.html#pricing" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Pricing</a></li>
+            <li><a href="home.html#products" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.features">Features</a></li>
+            <li><a href="products.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.products">Products</a></li>
+            <li><a href="home.html#pricing" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.pricing">Pricing</a></li>
           </ul>
         </div>
         <div>
-          <h4 style="margin-bottom: 15px; color: #f97316;">Legal</h4>
+          <h4 style="margin-bottom: 15px; color: #f97316;" data-i18n="footer.legal-title">Legal</h4>
           <ul style="list-style: none; padding: 0; margin: 0;">
-            <li><a href="privacy.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Privacy Policy</a></li>
-            <li><a href="terms.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Terms of Service</a></li>
-            <li><a href="mailto:support@chuio.io" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Contact Us</a></li>
+            <li><a href="privacy.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.privacy">Privacy Policy</a></li>
+            <li><a href="terms.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.terms">Terms of Service</a></li>
+            <li><a href="mailto:support@chuio.io" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.contact">Contact Us</a></li>
           </ul>
         </div>
         <div>
-          <h4 style="margin-bottom: 15px; color: #f97316;">Support</h4>
+          <h4 style="margin-bottom: 15px; color: #f97316;" data-i18n="footer.support-title">Support</h4>
           <ul style="list-style: none; padding: 0; margin: 0;">
-            <li><a href="mailto:support@chuio.io" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Email Support</a></li>
-            <li><a href="https://wa.me/message" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">WhatsApp Support</a></li>
-            <li><a href="login.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;">Admin Portal</a></li>
+            <li><a href="mailto:support@chuio.io" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.email-support">Email Support</a></li>
+            <li><a href="https://wa.me/message" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.whatsapp-support">WhatsApp Support</a></li>
+            <li><a href="login.html" style="color: #999; text-decoration: none; font-size: 14px; line-height: 1.8;" data-i18n="footer.admin-portal">Admin Portal</a></li>
           </ul>
         </div>
       </div>
       <div style="border-top: 1px solid #333; padding-top: 20px; margin-top: 20px;">
-        <p style="font-size: 12px; color: #666; margin: 0;">Chuio is a modern restaurant management and QR ordering platform designed to streamline operations and enhance customer experience.</p>
+        <p style="font-size: 12px; color: #666; margin: 0;" data-i18n="footer.platform-desc">Chuio is a modern restaurant management and QR ordering platform designed to streamline operations and enhance customer experience.</p>
       </div>
     </div>
   </footer>
+  <script src="translations.js"></script>
+  <script src="language-switcher.js"></script>
   <script src="home.js"></script>
 </body>
 </html>

@@ -4,11 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
   <title>Login - Chuio Restaurant Management System</title>
+  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <link rel="apple-touch-icon" href="/uploads/chuio/Chuio_logo.png" />
   <meta name="description" content="Login to your Chuio restaurant management account. Access your dashboard, orders, menu, and kitchen management tools.">
   <meta name="robots" content="noindex, follow">
   <meta name="theme-color" content="#f97316">
   <link rel="canonical" href="https://chuio.io/login">
-  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <link rel="stylesheet" href="language-switcher.css" />
   <style>
     * {
       margin: 0;
@@ -77,6 +79,8 @@
       list-style: none;
       gap: 24px;
       align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .nav-links a {
@@ -294,11 +298,11 @@
   <nav>
     <div class="nav-container">
       <a href="home.html" class="logo">
-        <img src="/uploads/chuio/chuio_logo.png" alt="Chuio Logo" style="height: 60px;" />
+        <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
       </a>
       <div class="nav-links">
-        <a href="home.html">Back to Home</a>
-        <a href="home.html" class="home-btn">← Home</a>
+        <a href="home.html" class="home-btn" data-i18n="nav.back-home">← Home</a>
+        <div style="flex-shrink: 0;" data-language-picker></div>
       </div>
     </div>
   </nav>
@@ -307,36 +311,38 @@
   <main>
     <div class="login-container">
       <div class="login-header">
-        <h1>Welcome Back</h1>
-        <p>Sign in to manage your restaurant</p>
+        <h1 data-i18n="login.title">Welcome Back</h1>
+        <p data-i18n="login.subtitle">Sign in to manage your restaurant</p>
       </div>
 
       <form id="loginForm" class="login-form">
         <div id="error"></div>
 
         <div class="form-group">
-          <label for="email">Email Address</label>
+          <label for="email" data-i18n="login.email">Email Address</label>
           <input
             type="email"
             id="email"
             placeholder="your@restaurant.com"
+            data-i18n-placeholder="login.email-placeholder"
             required
             autocomplete="email"
           />
         </div>
 
         <div class="form-group">
-          <label for="password">Password</label>
+          <label for="password" data-i18n="login.password">Password</label>
           <input
             type="password"
             id="password"
             placeholder="••••••••"
+            data-i18n-placeholder="login.password-placeholder"
             required
             autocomplete="current-password"
           />
         </div>
 
-        <button type="submit" class="login-btn" id="loginSubmitBtn">
+        <button type="submit" class="login-btn" id="loginSubmitBtn" data-i18n="login.sign-in">
           Sign In
         </button>
       </form>
@@ -345,9 +351,11 @@
 
   <!-- FOOTER -->
   <footer>
-    <p>&copy; 2026 Chuio. All rights reserved.</p>
+    <p data-i18n="footer.copyright">&copy; 2026 Chuio. All rights reserved.</p>
   </footer>
 
+  <script src="translations.js"></script>
+  <script src="language-switcher.js"></script>
   <script src="login.js" defer></script>
 </body>
 </html>

@@ -2208,6 +2208,126 @@ async function clearManualDiscount(sessionId) {
   await loadAndRenderOrders(sessionId);
 }
 
+// ============= CREATE NEW RESTAURANT =============
+function openCreateRestaurantModal() {
+  const html = `
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;" id="create-restaurant-modal">
+      <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+        <h2 style="margin-top: 0; color: #2c3e50;">Create New Restaurant</h2>
+        
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Restaurant Name</label>
+          <input type="text" id="new-restaurant-name" placeholder="e.g., My Restaurant" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Admin Email</label>
+          <input type="email" id="new-admin-email" placeholder="admin@example.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Admin Password</label>
+          <input type="password" id="new-admin-password" placeholder="Enter a strong password" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Confirm Password</label>
+          <input type="password" id="new-admin-password-confirm" placeholder="Confirm password" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Restaurant Address (Optional)</label>
+          <input type="text" id="new-restaurant-address" placeholder="123 Main St, City, Country" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Restaurant Phone (Optional)</label>
+          <input type="tel" id="new-restaurant-phone" placeholder="+1 (555) 123-4567" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button onclick="createRestaurant()" style="flex: 1; padding: 12px; background-color: #f97316; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">Create Restaurant</button>
+          <button onclick="document.getElementById('create-restaurant-modal').remove()" style="flex: 1; padding: 12px; background-color: #ecf0f1; color: #2c3e50; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">Cancel</button>
+        </div>
+
+        <div id="create-restaurant-error" style="margin-top: 15px; padding: 12px; background-color: #fee; color: #c00; border-radius: 6px; display: none; font-size: 14px;"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function createRestaurant() {
+  const restaurantName = document.getElementById("new-restaurant-name").value.trim();
+  const adminEmail = document.getElementById("new-admin-email").value.trim();
+  const adminPassword = document.getElementById("new-admin-password").value;
+  const adminPasswordConfirm = document.getElementById("new-admin-password-confirm").value;
+  const restaurantAddress = document.getElementById("new-restaurant-address").value.trim();
+  const restaurantPhone = document.getElementById("new-restaurant-phone").value.trim();
+  const errorDiv = document.getElementById("create-restaurant-error");
+
+  // Validation
+  if (!restaurantName) {
+    errorDiv.textContent = "Restaurant name is required";
+    errorDiv.style.display = "block";
+    return;
+  }
+
+  if (!adminEmail || !adminEmail.includes("@")) {
+    errorDiv.textContent = "Valid admin email is required";
+    errorDiv.style.display = "block";
+    return;
+  }
+
+  if (!adminPassword || adminPassword.length < 8) {
+    errorDiv.textContent = "Password must be at least 8 characters";
+    errorDiv.style.display = "block";
+    return;
+  }
+
+  if (adminPassword !== adminPasswordConfirm) {
+    errorDiv.textContent = "Passwords do not match";
+    errorDiv.style.display = "block";
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API}/auth/create-restaurant`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TOKEN}`
+      },
+      body: JSON.stringify({
+        restaurant_name: restaurantName,
+        admin_email: adminEmail,
+        admin_password: adminPassword,
+        address: restaurantAddress || null,
+        phone: restaurantPhone || null
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      errorDiv.textContent = data.message || "Failed to create restaurant";
+      errorDiv.style.display = "block";
+      return;
+    }
+
+    alert(`✅ Restaurant created successfully!\nID: ${data.restaurant_id}\nAdmin Email: ${adminEmail}`);
+    document.getElementById("create-restaurant-modal").remove();
+
+    // Reload restaurants list
+    await initializeSuperadmin();
+  } catch (err) {
+    console.error("Error creating restaurant:", err);
+    errorDiv.textContent = "Error creating restaurant. Please try again.";
+    errorDiv.style.display = "block";
+  }
+}
+
 (async function init() {
   // Handle superadmin restaurant selector
   if (IS_SUPERADMIN) {
@@ -2243,7 +2363,8 @@ async function initializeSuperadmin() {
     restaurantListDiv.innerHTML = restaurants.map(r => 
       `<button class="restaurant-item ${r.id === parseInt(restaurantId) ? 'active' : ''}" 
                onclick="switchRestaurant(${r.id}, '${r.name}')">${r.name} (ID: ${r.id})</button>`
-    ).join("");
+    ).join("") + 
+    `<button class="restaurant-item" style="background-color: #f97316; color: white; border-top: 1px solid #ddd; margin-top: 8px;" onclick="openCreateRestaurantModal()">+ Create New Restaurant</button>`;
   } catch (err) {
     console.error("Error loading restaurants:", err);
   }
