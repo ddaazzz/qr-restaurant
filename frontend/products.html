@@ -27,7 +27,12 @@
       <a href="home.html" class="logo">
         <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
       </a>
-      <ul class="nav-links">
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <ul class="nav-links" id="navLinks">
         <li><a href="home.html" data-i18n="nav.home">Home</a></li>
         <li class="dropdown">
           <a href="products.html" data-i18n="nav.products">Products</a>
@@ -359,12 +364,21 @@
       </div>
       <div style="border-top: 1px solid #333; padding-top: 20px; margin-top: 20px;">
         <p style="font-size: 12px; color: #666; margin: 0;" data-i18n="footer.platform-desc">Chuio is a modern restaurant management and QR ordering platform designed to streamline operations and enhance customer experience.</p>
+        <div style="margin-top: 15px; font-size: 12px; color: #999; line-height: 1.8;">
+          <p style="margin: 5px 0; font-weight: 600;" data-i18n="footer.contact-address">Business Address</p>
+          <p style="margin: 2px 0;">Flat G, 14/F Imperial Building</p>
+          <p style="margin: 2px 0;">58 Canton Road, Tsim Sha Tsui</p>
+          <p style="margin: 2px 0;">Hong Kong</p>
+          <p style="margin: 8px 0;"><span data-i18n="footer.contact-phone">Phone</span>: +852 63433995</p>
+          <p style="margin: 2px 0;"><span data-i18n="footer.contact-email">Email</span>: <a href="mailto:dta@chuio.io" style="color: #999; text-decoration: none;">dta@chuio.io</a></p>
+        </div>
       </div>
     </div>
   </footer>
 
   <script src="translations.js"></script>
   <script src="language-switcher.js"></script>
+  <script src="mobile-menu.js"></script>
   <script src="products.js"></script>
 </body>
 </html>

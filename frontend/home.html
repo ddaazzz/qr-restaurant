@@ -71,7 +71,12 @@
       <a href="#home" class="logo">
         <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
       </a>
-      <ul class="nav-links">
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <ul class="nav-links" id="navLinks">
         <li><a href="#home" data-i18n="nav.home">Home</a></li>
         <li class="dropdown">
           <a href="products.html" data-i18n="nav.products">Products</a>
@@ -97,7 +102,10 @@
       <img src="/uploads/chuio/landing_splash.png" alt="Chuio Restaurant Ordering System Illustration" class="hero-splash-image" />
       <h1 data-i18n="home.title">Chuio - Restaurant Ordering System</h1>
       <p data-i18n="home.description">Streamline your restaurant operations with modern QR code ordering, real-time kitchen management, and seamless customer experience.</p>
-      <a href="login.html" class="hero-cta" data-i18n="home.get-started">Get Started</a>
+      <div class="hero-buttons">
+        <a href="login.html" class="hero-cta" data-i18n="home.get-started">Get Started</a>
+        <a href="https://wa.me/85263433995?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20a%20demo%20of%20your%20restaurant%20ordering%20system" target="_blank" class="hero-cta hero-cta-whatsapp" data-i18n="home.contact-whatsapp">WhatsApp Us</a>
+      </div>
     </div>
   </section>
 
@@ -283,6 +291,48 @@
     </div>
   </section>
 
+  <!-- CONTACT US SECTION -->
+  <section id="contact" class="contact-section">
+    <div class="contact-container">
+      <h2 data-i18n="home.contact-title">Schedule a Demo</h2>
+      <p data-i18n="home.contact-subtitle">Let us show you how Chuio can transform your restaurant. Fill in your details and we'll contact you to arrange a demo at your store.</p>
+      
+      <form id="contactForm" class="contact-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="contactName" data-i18n="form.name">Name</label>
+            <input type="text" id="contactName" name="name" required placeholder="Your name">
+          </div>
+          <div class="form-group">
+            <label for="contactPhone" data-i18n="form.phone">Phone Number</label>
+            <input type="tel" id="contactPhone" name="phone" required placeholder="+852 XXXX XXXX">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="contactEmail" data-i18n="form.email">Email (Optional)</label>
+            <input type="email" id="contactEmail" name="email" placeholder="your@email.com">
+          </div>
+          <div class="form-group">
+            <label for="contactRestaurant" data-i18n="form.restaurant">Restaurant Name</label>
+            <input type="text" id="contactRestaurant" name="restaurant" placeholder="Your restaurant name">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="contactMessage" data-i18n="form.message">Message (Optional)</label>
+            <textarea id="contactMessage" name="message" placeholder="Tell us about your restaurant and what you're looking for..." rows="4"></textarea>
+          </div>
+        </div>
+
+        <button type="submit" class="contact-submit" data-i18n="form.submit">Request Demo</button>
+        <p class="form-note" data-i18n="form.note">We'll contact you within 24 hours to schedule your personalized demo.</p>
+      </form>
+    </div>
+  </section>
+
   <!-- FOOTER -->
   <footer style="background-color: #1a1a1a; color: #fff; padding: 60px 20px; text-align: center;">
     <div style="max-width: 1200px; margin: 0 auto;">
@@ -319,11 +369,20 @@
       </div>
       <div style="border-top: 1px solid #333; padding-top: 20px; margin-top: 20px;">
         <p style="font-size: 12px; color: #666; margin: 0;" data-i18n="footer.platform-desc">Chuio is a modern restaurant management and QR ordering platform designed to streamline operations and enhance customer experience.</p>
+        <div style="margin-top: 15px; font-size: 12px; color: #999; line-height: 1.8;">
+          <p style="margin: 5px 0; font-weight: 600;" data-i18n="footer.contact-address">Business Address</p>
+          <p style="margin: 2px 0;">Flat G, 14/F Imperial Building</p>
+          <p style="margin: 2px 0;">58 Canton Road, Tsim Sha Tsui</p>
+          <p style="margin: 2px 0;">Hong Kong</p>
+          <p style="margin: 8px 0;"><span data-i18n="footer.contact-phone">Phone</span>: +852 63433995</p>
+          <p style="margin: 2px 0;"><span data-i18n="footer.contact-email">Email</span>: <a href="mailto:dta@chuio.io" style="color: #999; text-decoration: none;">dta@chuio.io</a></p>
+        </div>
       </div>
     </div>
   </footer>
   <script src="translations.js"></script>
   <script src="language-switcher.js"></script>
+  <script src="mobile-menu.js"></script>
   <script src="home.js"></script>
 </body>
 </html>
