@@ -102,6 +102,10 @@ app.get("/zh", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "home.html"));
 });
 
+app.get("/en", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "home.html"));
+});
+
 app.get("/login", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "login.html"));
 });

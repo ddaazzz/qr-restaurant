@@ -700,7 +700,7 @@ const translations = {
 
 // Get translation by key
 function t(key, lang = null) {
-  const currentLang = lang || (localStorage.getItem('language') || 'en');
+  const currentLang = lang || (localStorage.getItem('language') || 'zh');
   
   // Direct key lookup (keys are stored as strings like 'nav.home', not nested objects)
   let value = translations[currentLang] && translations[currentLang][key];
@@ -725,13 +725,13 @@ function setLanguage(lang) {
 
 // Get current language
 function getCurrentLanguage() {
-  // Check if URL contains /zh path - set it as the language preference
-  if (window.location.pathname.includes('/zh')) {
-    localStorage.setItem('language', 'zh');
-    return 'zh';
+  // Check if URL contains /en path - set English as the language preference
+  if (window.location.pathname.includes('/en')) {
+    localStorage.setItem('language', 'en');
+    return 'en';
   }
   
-  const lang = localStorage.getItem('language') || 'en';
+  const lang = localStorage.getItem('language') || 'zh';
   console.log('[Translations] Current language:', lang);
   return lang;
 }
