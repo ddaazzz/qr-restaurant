@@ -99,7 +99,15 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
       return res.status(400).json({ error: "Category, name, and seat_count required" });
     }
 
-    // 1️⃣ Insert table with user-provided name
+    // 1️⃣ Check restaurant QR preference (static vs dynamic)
+    const restaurantRes = await client.query(
+      `SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    const restaurantSettings = restaurantRes.rows[0];
+    const isStaticQR = restaurantSettings?.regenerate_qr_per_session === false;
+
+    // 2️⃣ Insert table with user-provided name
     const tableRes = await client.query(
       `
       INSERT INTO tables (restaurant_id, name, category_id, seat_count)
@@ -111,12 +119,13 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
 
     const table = tableRes.rows[0];
 
-    // 2️⃣ Create table units
+    // 3️⃣ Create table units with static QR codes (if static mode) or null (if dynamic mode)
     const units = [];
 
     for (let i = 0; i < seat_count; i++) {
       const code = category_id === "BAR" ? `seat${i + 1}` : String.fromCharCode(97 + i);
-      const qrToken = crypto.randomBytes(16).toString("hex");
+      // Generate QR token immediately if static mode, otherwise null (will be generated per session)
+      const qrToken = isStaticQR ? crypto.randomBytes(16).toString("hex") : null;
 
       const unitRes = await client.query(
         `
@@ -397,7 +406,15 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
       return res.status(400).json({ error: "Category, name, and seat_count required" });
     }
 
-    // 1️⃣ Insert table with user-provided name
+    // 1️⃣ Check restaurant QR preference (static vs dynamic)
+    const restaurantRes = await client.query(
+      `SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    const restaurantSettings = restaurantRes.rows[0];
+    const isStaticQR = restaurantSettings?.regenerate_qr_per_session === false;
+
+    // 2️⃣ Insert table with user-provided name
     const tableRes = await client.query(
       `
       INSERT INTO tables (restaurant_id, name, category_id, seat_count)
@@ -409,12 +426,13 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
 
     const table = tableRes.rows[0];
 
-    // 2️⃣ Create table units
+    // 3️⃣ Create table units with static QR codes (if static mode) or null (if dynamic mode)
     const units = [];
 
     for (let i = 0; i < seat_count; i++) {
       const code = category_id === "BAR" ? `seat${i + 1}` : String.fromCharCode(97 + i);
-      const qrToken = crypto.randomBytes(16).toString("hex");
+      // Generate QR token immediately if static mode, otherwise null (will be generated per session)
+      const qrToken = isStaticQR ? crypto.randomBytes(16).toString("hex") : null;
 
       const unitRes = await client.query(
         `

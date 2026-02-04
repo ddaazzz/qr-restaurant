@@ -130,7 +130,8 @@ async function runMigration() {
     console.log("  • Staff and kitchen staff per restaurant");
     console.log("  • Restaurant-specific orders and sessions");
     console.log("  • Foreign key constraints for data integrity");
-    console.log("  • Performance indexes for multi-restaurant queries\n");
+    console.log("  • Performance indexes for multi-restaurant queries");
+    console.log("  • Staff activity logging with login/logout tracking\n");
 
     process.exit(0);
   } catch (error: any) {

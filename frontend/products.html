@@ -22,20 +22,15 @@
 
 <body>
   <!-- NAVIGATION (Same as homepage) -->
-  <nav class="navbar-home">
+  <nav>
     <div class="nav-container">
       <a href="home.html" class="logo">
         <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
       </a>
-      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
       <ul class="nav-links" id="navLinks">
         <li><a href="home.html" data-i18n="nav.home">Home</a></li>
         <li class="dropdown">
-          <a href="products.html" data-i18n="nav.products">Products</a>
+          <a href="#products" data-i18n="nav.products">Products</a>
           <div class="dropdown-menu">
             <a href="#qr-scan-order" data-i18n="nav.qr-scanning">QR Scanning</a>
             <a href="#smart-ordering" data-i18n="nav.ordering">Ordering System</a>
@@ -47,8 +42,15 @@
         </li>
         <li><a href="home.html#pricing" data-i18n="nav.pricing">Pricing</a></li>
         <li><a href="login.html" class="login-btn" data-i18n="nav.login">Login</a></li>
-        <li style="list-style: none;" data-language-picker></li>
       </ul>
+      <div class="nav-actions">
+        <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div data-language-picker></div>
+      </div>
     </div>
   </nav>
 

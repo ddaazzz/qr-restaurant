@@ -96,6 +96,10 @@
             <span class="icon">👥</span>
             <span>Staff</span>
           </button>
+          <button class="menu-btn" data-section="reports" onclick="switchSection('reports')" id="reports-nav-btn">
+            <span class="icon">📊</span>
+            <span>Reports</span>
+          </button>
           <button class="menu-btn" data-section="settings" onclick="switchSection('settings')" id="settings-nav-btn">
             <span class="icon">⚙️</span>
             <span>Settings</span>
@@ -300,6 +304,23 @@
         <section id="section-tables-mgmt" class="content-section admin-only">
           <h2>⚙️ Table Management</h2>
 
+          <!-- QR Code Preference -->
+          <div class="section-card">
+            <h3>QR Code Settings</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>
+                  <input type="checkbox" id="regenerate-qr-checkbox" onchange="toggleQRRegeneration()" />
+                  Generate New QR Code for Each Session
+                </label>
+                <p style="font-size: 0.9em; color: #666; margin-top: 8px;">
+                  <strong>Checked:</strong> A new QR code is generated each time a session starts (customer scans fresh code)<br>
+                  <strong>Unchecked:</strong> QR codes remain static - print once per seat (useful for permanent table setups)
+                </p>
+              </div>
+            </div>
+          </div>
+
           <!-- Create Category -->
           <div class="section-card">
             <h3>Create Table Category</h3>
@@ -351,6 +372,52 @@
             <h3>Manage Tables</h3>
             <div id="tables-list" class="list-grid">
               <!-- Populated by JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= REPORTS SECTION ================= -->
+        <section id="section-reports" class="content-section admin-only">
+          <h2>📊 Orders & Bills Report</h2>
+
+          <div class="section-card">
+            <h3>Report Filters</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>From Date</label>
+                <input id="report-from-date" type="date" />
+              </div>
+              <div class="form-group">
+                <label>To Date</label>
+                <input id="report-to-date" type="date" />
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select id="report-status">
+                  <option value="">All Orders</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="ready">Ready</option>
+                  <option value="served">Served</option>
+                  <option value="paid">Paid</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <button onclick="loadReports()" class="btn-primary">🔍 Load Report</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <h3>Orders & Bills</h3>
+            <div id="reports-summary" style="display:none; margin-bottom: 20px; padding: 15px; background-color: #f0f9ff; border-radius: 8px; border-left: 4px solid #0284c7;">
+              <p><strong>Total Orders:</strong> <span id="summary-total-orders">0</span></p>
+              <p><strong>Total Revenue:</strong> <span id="summary-total-revenue">$0.00</span></p>
+              <p><strong>Average Bill:</strong> <span id="summary-avg-bill">$0.00</span></p>
+            </div>
+            <div id="reports-container" class="reports-container">
+              <p style="text-align: center; color: #999;">Select date range and click "Load Report" to view orders</p>
             </div>
           </div>
         </section>

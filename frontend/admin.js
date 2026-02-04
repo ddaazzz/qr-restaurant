@@ -111,9 +111,23 @@ function switchSection(sectionName) {
 // ============= LOGOUT =============
 function handleLogout() {
   if (confirm("Are you sure you want to logout?")) {
+    const userId = localStorage.getItem("userId");
+    const restaurantId = localStorage.getItem("restaurantId");
+    const role = localStorage.getItem("role");
+    
+    // Log the logout activity
+    if (userId && restaurantId) {
+      fetch(`${API_BASE}/api/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: parseInt(userId), restaurantId: parseInt(restaurantId), role })
+      }).catch(err => console.error("Error logging logout:", err));
+    }
+    
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     localStorage.removeItem("restaurantId");
+    localStorage.removeItem("userId");
     window.location.href = "/login.html";
   }
 }
@@ -222,7 +236,13 @@ async function loadAdminSettings() {
   document.getElementById("serviceChargeInput").value =
     s.service_charge_percent ?? 0;
     
-    serviceChargeFee = s.service_charge_percent;
+  serviceChargeFee = s.service_charge_percent;
+
+  // Set QR regeneration checkbox
+  const qrCheckbox = document.getElementById("regenerate-qr-checkbox");
+  if (qrCheckbox) {
+    qrCheckbox.checked = s.regenerate_qr_per_session !== false;
+  }
 
   // Logo
   const logoEl = document.getElementById("restaurant-logo");
@@ -290,6 +310,7 @@ async function saveAdminSettings() {
     theme_color: document.getElementById("colorInput").value,
     service_charge_percent:
       Number(document.getElementById("serviceChargeInput").value) || 0,
+    regenerate_qr_per_session: document.getElementById("regenerate-qr-checkbox").checked
   };
 
   // If a new logo was staged, upload it first
@@ -334,6 +355,40 @@ async function saveAdminSettings() {
   loadAdminSettings(); // refresh view
 }
 
+// ============= QR REGENERATION PREFERENCE =============
+async function toggleQRRegeneration() {
+  const checkbox = document.getElementById("regenerate-qr-checkbox");
+  const isChecked = checkbox.checked;
+
+  const payload = {
+    ...ADMIN_SETTINGS_CACHE,
+    regenerate_qr_per_session: isChecked
+  };
+
+  try {
+    const res = await fetch(`${API}/${restaurantId}/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      alert("Failed to save QR preference");
+      checkbox.checked = !isChecked; // Revert checkbox
+      return;
+    }
+
+    ADMIN_SETTINGS_CACHE.regenerate_qr_per_session = isChecked;
+    const message = isChecked 
+      ? "QR codes will be regenerated for each session" 
+      : "QR codes will remain static (same for each session)";
+    alert(message);
+  } catch (err) {
+    console.error("Error toggling QR regeneration:", err);
+    alert("Error saving preference");
+    checkbox.checked = !isChecked; // Revert checkbox
+  }
+}
 
 async function loadStaff() {
   if (!adminOnly("MANAGE_STAFF")) return;
@@ -2404,5 +2459,173 @@ async function switchRestaurant(newRestaurantId, restaurantName) {
   // Reload the app
   loadApp();
   switchSection("tables");
+}
+
+// ============= REPORTS =============
+async function loadReports() {
+  const fromDate = document.getElementById("report-from-date").value;
+  const toDate = document.getElementById("report-to-date").value;
+  const status = document.getElementById("report-status").value;
+
+  if (!fromDate || !toDate) {
+    alert("Please select both from and to dates");
+    return;
+  }
+
+  try {
+    // Fetch all sessions for the restaurant
+    const sessionsRes = await fetch(`${API}/restaurants/${restaurantId}/sessions`);
+    if (!sessionsRes.ok) throw new Error("Failed to load sessions");
+    const sessions = await sessionsRes.json();
+
+    // Fetch all orders
+    let allOrders = [];
+    for (const session of sessions) {
+      const ordersRes = await fetch(`${API}/sessions/${session.session_id}/orders`);
+      if (ordersRes.ok) {
+        const orderData = await ordersRes.json();
+        if (orderData.items) {
+          // Group items by order_id
+          const ordersMap = {};
+          orderData.items.forEach(item => {
+            if (!ordersMap[item.order_id]) {
+              ordersMap[item.order_id] = {
+                order_id: item.order_id,
+                session_id: session.session_id,
+                table_name: session.table_name,
+                created_at: session.started_at,
+                items: [],
+                total_cents: 0,
+                status: item.status || "pending"
+              };
+            }
+            ordersMap[item.order_id].items.push(item);
+            ordersMap[item.order_id].total_cents += item.quantity * item.unit_price_cents;
+          });
+          allOrders = allOrders.concat(Object.values(ordersMap));
+        }
+      }
+    }
+
+    // Filter by date range
+    const fromDateTime = new Date(fromDate);
+    const toDateTime = new Date(toDate);
+    toDateTime.setHours(23, 59, 59, 999);
+
+    let filteredOrders = allOrders.filter(order => {
+      const orderDate = new Date(order.created_at);
+      return orderDate >= fromDateTime && orderDate <= toDateTime;
+    });
+
+    // Filter by status
+    if (status && status !== "all") {
+      filteredOrders = filteredOrders.filter(order => order.status === status);
+    }
+
+    // Sort by date (newest first)
+    filteredOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    // Calculate summary stats
+    const summary = {
+      total_orders: filteredOrders.length,
+      total_revenue: 0,
+      average_bill: 0
+    };
+
+    filteredOrders.forEach(order => {
+      summary.total_revenue += order.total_cents;
+    });
+
+    if (filteredOrders.length > 0) {
+      summary.average_bill = summary.total_revenue / filteredOrders.length;
+    }
+
+    // Render reports
+    renderReports(filteredOrders, summary);
+
+    // Show summary
+    const summaryEl = document.getElementById("reports-summary");
+    summaryEl.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+        <div style="padding: 12px; background: var(--bg-light); border-radius: 6px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-light); margin-bottom: 4px;">Total Orders</div>
+          <div style="font-size: 20px; font-weight: bold; color: var(--primary-color);">${summary.total_orders}</div>
+        </div>
+        <div style="padding: 12px; background: var(--bg-light); border-radius: 6px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-light); margin-bottom: 4px;">Total Revenue</div>
+          <div style="font-size: 20px; font-weight: bold; color: var(--primary-color);">$${(summary.total_revenue / 100).toFixed(2)}</div>
+        </div>
+        <div style="padding: 12px; background: var(--bg-light); border-radius: 6px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-light); margin-bottom: 4px;">Average Bill</div>
+          <div style="font-size: 20px; font-weight: bold; color: var(--primary-color);">$${(summary.average_bill / 100).toFixed(2)}</div>
+        </div>
+      </div>
+    `;
+    summaryEl.style.display = "block";
+  } catch (error) {
+    console.error("Error loading reports:", error);
+    alert("Error loading reports: " + error.message);
+  }
+}
+
+function renderReports(orders, summary) {
+  const container = document.getElementById("reports-container");
+  
+  if (!orders.length) {
+    container.innerHTML = '<div class="empty-state">No orders found for the selected date range</div>';
+    return;
+  }
+
+  container.innerHTML = orders.map(order => {
+    const statusColors = {
+      pending: "#f97316",
+      confirmed: "#3b82f6",
+      ready: "#8b5cf6",
+      served: "#10b981",
+      paid: "#059669",
+      cancelled: "#ef4444"
+    };
+
+    const statusColor = statusColors[order.status] || "#6b7280";
+
+    return `
+      <div class="report-card">
+        <div class="report-header">
+          <div>
+            <strong>Order #${order.order_id}</strong>
+            <div style="font-size: 12px; color: #666; margin-top: 2px;">
+              Table: ${order.table_name} | ${new Date(order.created_at).toLocaleString()}
+            </div>
+          </div>
+          <div class="report-status" style="background-color: ${statusColor};">
+            ${order.status.toUpperCase()}
+          </div>
+        </div>
+        
+        <div class="report-items">
+          <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Items:</div>
+          <div class="report-item-list">
+            ${order.items.map(item => `
+              <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f0f0f0;">
+                <div>
+                  <span>${item.quantity}×</span>
+                  <span>${item.name}</span>
+                  ${item.variants ? `<div style="font-size: 11px; color: #999; margin-top: 2px;">${item.variants}</div>` : ''}
+                </div>
+                <div style="font-weight: 600;">$${((item.quantity * item.unit_price_cents) / 100).toFixed(2)}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="report-total">
+          <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 2px solid #f0f0f0;">
+            <strong>Total:</strong>
+            <strong style="color: var(--primary-color); font-size: 16px;">$${(order.total_cents / 100).toFixed(2)}</strong>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 

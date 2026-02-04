@@ -208,9 +208,21 @@ function getTimeAgo(timestamp) {
 }
 
 function handleLogout() {
+  const sessionId = localStorage.getItem("sessionId");
+  
+  // Log the logout if we have a sessionId
+  if (sessionId) {
+    fetch(`${window.location.origin}/api/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId })
+    }).catch(err => console.error("Error logging logout:", err));
+  }
+  
   sessionStorage.removeItem("kitchenToken");
   sessionStorage.removeItem("kitchenStaffLogged");
   sessionStorage.removeItem("restaurantId");
+  localStorage.removeItem("sessionId");
   pin = "";
   token = null;
   restaurantId = null;

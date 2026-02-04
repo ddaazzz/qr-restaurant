@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pool from "../config/db";
+import crypto from "crypto";
 
 const router = Router();
 
@@ -17,21 +18,29 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       return res.status(400).json({ error: "Invalid pax" });
     }
 
-    // 1️⃣ Load table
+    // 1️⃣ Load table with restaurant info
     const tableRes = await client.query(
-      `SELECT id, seat_count FROM tables WHERE id = $1`,
+      `SELECT t.id, t.seat_count, t.restaurant_id FROM tables t WHERE t.id = $1`,
       [tableId]
     );
     const table = tableRes.rows[0];
     if (!table) throw new Error("Table not found");
 
-    // 2️⃣ Find all units for table
+    // 2️⃣ Get restaurant QR preference
+    const restaurantRes = await client.query(
+      `SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`,
+      [table.restaurant_id]
+    );
+    const restaurantSettings = restaurantRes.rows[0];
+    const shouldRegenerateQR = restaurantSettings?.regenerate_qr_per_session !== false;
+
+    // 3️⃣ Find all units for table
     const unitsRes = await client.query(
       `SELECT id FROM table_units WHERE table_id = $1 ORDER BY id`,
       [tableId]
     );
 
-    // 3️⃣ Find used seats + used units
+    // 4️⃣ Find used seats + used units
     const activeRes = await client.query(
       `
       SELECT table_unit_id, pax
@@ -61,7 +70,27 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       return res.status(400).json({ error: "No free table units" });
     }
 
-    // 4️⃣ Create session WITH unit
+    // 5️⃣ Fetch the current QR token for the unit
+    const unitRes = await client.query(
+      `SELECT qr_token FROM table_units WHERE id = $1`,
+      [freeUnit.id]
+    );
+    const currentUnit = unitRes.rows[0];
+
+    // 6️⃣ Handle QR token based on mode:
+    // Dynamic mode (regenerate_qr_per_session = true): Generate NEW QR token for each session
+    // Static mode (regenerate_qr_per_session = false): Keep existing QR token (already created at table creation)
+    if (shouldRegenerateQR) {
+      // Dynamic mode: generate new QR for this session
+      const newQRToken = crypto.randomBytes(16).toString("hex");
+      await client.query(
+        `UPDATE table_units SET qr_token = $1 WHERE id = $2`,
+        [newQRToken, freeUnit.id]
+      );
+    }
+    // Static mode: QR token was already generated at table creation, just use it
+
+    // 7️⃣ Create session WITH unit
     const insertRes = await client.query(
       `
       INSERT INTO table_sessions (table_id, table_unit_id, pax, started_at)
@@ -149,7 +178,11 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
 
 // Start Sessions
 router.post("/table-units/:tableUnitId/sessions", async (req, res) => {
+  const client = await pool.connect();
+
   try {
+    await client.query("BEGIN");
+
     const { tableUnitId } = req.params;
     const { pax } = req.body;
 
@@ -157,9 +190,9 @@ router.post("/table-units/:tableUnitId/sessions", async (req, res) => {
       return res.status(400).json({ error: "Invalid pax" });
     }
 
-    const unitRes = await pool.query(
+    const unitRes = await client.query(
       `
-      SELECT tu.table_id, t.seat_count
+      SELECT tu.table_id, t.seat_count, t.restaurant_id
       FROM table_units tu
       JOIN tables t ON t.id = tu.table_id
       WHERE tu.id = $1
@@ -172,8 +205,30 @@ router.post("/table-units/:tableUnitId/sessions", async (req, res) => {
     }
 
     const tableId = unitRes.rows[0].table_id;
+    const restaurantId = unitRes.rows[0].restaurant_id;
 
-    const insert = await pool.query(
+    // Get restaurant QR preference
+    const restaurantRes = await client.query(
+      `SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    const restaurantSettings = restaurantRes.rows[0];
+    const shouldRegenerateQR = restaurantSettings?.regenerate_qr_per_session !== false;
+
+    // Handle QR token based on mode:
+    // Dynamic mode (regenerate_qr_per_session = true): Generate NEW QR token for each session
+    // Static mode (regenerate_qr_per_session = false): Keep existing QR token (already created at table creation)
+    if (shouldRegenerateQR) {
+      // Dynamic mode: generate new QR for this session
+      const newQRToken = crypto.randomBytes(16).toString("hex");
+      await client.query(
+        `UPDATE table_units SET qr_token = $1 WHERE id = $2`,
+        [newQRToken, tableUnitId]
+      );
+    }
+    // Static mode: QR token was already generated at table creation, just use it
+
+    const insert = await client.query(
       `
       INSERT INTO table_sessions (table_id, table_unit_id, pax, started_at)
       VALUES ($1, $2, $3, NOW())
@@ -182,10 +237,14 @@ router.post("/table-units/:tableUnitId/sessions", async (req, res) => {
       [tableId, tableUnitId, pax]
     );
 
+    await client.query("COMMIT");
     res.status(201).json(insert.rows[0]);
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error(err);
     res.status(500).json({ error: "Failed to start session" });
+  } finally {
+    client.release();
   }
 });
 
@@ -285,8 +344,35 @@ router.post("/table-sessions/:sessionId/end", async (req, res) => {
   res.json({ success: true });
 });
 
+// GET all sessions for a restaurant (for reports)
+router.get("/restaurants/:restaurantId/sessions", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
 
+    const result = await pool.query(
+      `
+      SELECT
+        ts.id AS session_id,
+        ts.started_at,
+        ts.ended_at,
+        ts.pax,
+        t.id AS table_id,
+        t.name AS table_name,
+        t.restaurant_id
+      FROM table_sessions ts
+      JOIN tables t ON t.id = ts.table_id
+      WHERE t.restaurant_id = $1
+      ORDER BY ts.started_at DESC
+      `,
+      [restaurantId]
+    );
 
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load sessions" });
+  }
+});
 
 
 

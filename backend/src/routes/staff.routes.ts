@@ -17,7 +17,8 @@ router.get("/:id/settings", async (req, res) => {
          address,
          phone,
          theme_color,
-         service_charge_percent
+         service_charge_percent,
+         regenerate_qr_per_session
        FROM restaurants
        WHERE id = $1`,
       [id]
@@ -40,7 +41,8 @@ router.patch("/:id/settings", async (req, res) => {
     address,
     phone,
     theme_color,
-    service_charge_percent
+    service_charge_percent,
+    regenerate_qr_per_session
   } = req.body;
 
   try {
@@ -51,8 +53,9 @@ router.patch("/:id/settings", async (req, res) => {
            address = $3,
            phone = $4,
            theme_color = $5,
-           service_charge_percent = $6
-       WHERE id = $7`,
+           service_charge_percent = $6,
+           regenerate_qr_per_session = $7
+       WHERE id = $8`,
       [
         name,
         logo_url,
@@ -60,6 +63,7 @@ router.patch("/:id/settings", async (req, res) => {
         phone,
         theme_color,
         service_charge_percent,
+        regenerate_qr_per_session,
         id
       ]
     );

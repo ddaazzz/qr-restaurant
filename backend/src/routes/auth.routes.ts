@@ -50,8 +50,23 @@ router.post("/auth/login", async (req, res) => {
       defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
     }
 
+    // Log the login activity with timestamp
+    await logStaffActivity({
+      restaurantId: defaultRestaurantId,
+      staffId: user.id,
+      action: STAFF_ACTIONS.STAFF_LOGIN,
+      meta: {
+        email: email,
+        role: user.role,
+        ipAddress: req.ip || req.connection.remoteAddress || "unknown",
+        userAgent: req.get("user-agent") || "unknown",
+        loginTime: new Date().toISOString(),
+      }
+    });
+
     res.json({
       token,
+      userId: user.id,
       role: user.role,
       restaurantId: defaultRestaurantId,
       restaurants: user.role === "superadmin" ? restaurants : [],
@@ -316,6 +331,31 @@ router.post("/auth/create-restaurant", async (req, res) => {
   } catch (err) {
     console.error("Error creating restaurant:", err);
     res.status(500).json({ message: "Failed to create restaurant" });
+  }
+});
+
+// POST /api/auth/logout - Log user logout activity
+router.post("/auth/logout", async (req, res) => {
+  const { userId, restaurantId, role } = req.body;
+
+  if (!userId || !restaurantId) {
+    return res.status(400).json({ error: "User ID and Restaurant ID required" });
+  }
+
+  try {
+    await logStaffActivity({
+      restaurantId: restaurantId,
+      staffId: userId,
+      action: STAFF_ACTIONS.STAFF_LOGOUT,
+      meta: {
+        role: role,
+        logoutTime: new Date().toISOString(),
+      }
+    });
+    res.json({ message: "Logged out successfully" });
+  } catch (err) {
+    console.error("Error logging out:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 

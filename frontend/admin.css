@@ -574,6 +574,130 @@ body {
   min-width: 140px;
 }
 
+/* REPORTS CONTAINER */
+.reports-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 800px;
+  overflow-y: auto;
+}
+
+.report-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-light);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.report-card:hover {
+  background: var(--white);
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.1);
+}
+
+.report-header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.report-header h4 {
+  margin: 0;
+  font-size: 1.1em;
+  color: var(--text-dark);
+}
+
+.report-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.report-status.pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.report-status.confirmed {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.report-status.ready {
+  background-color: #c7d2fe;
+  color: #3730a3;
+}
+
+.report-status.served {
+  background-color: #bbf7d0;
+  color: #065f46;
+}
+
+.report-status.paid {
+  background-color: #86efac;
+  color: #166534;
+}
+
+.report-status.cancelled {
+  background-color: #fecaca;
+  color: #991b1b;
+}
+
+.report-info {
+  font-size: 0.9em;
+  color: #666;
+  margin: 0;
+}
+
+.report-info strong {
+  color: var(--text-dark);
+}
+
+.report-items {
+  grid-column: 1 / -1;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.9em;
+}
+
+.report-item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.report-item-list li {
+  padding: 6px 0;
+  color: #555;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.report-item-list li:last-child {
+  border-bottom: none;
+}
+
+.report-total {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 2px solid var(--border-color);
+  font-weight: 600;
+  font-size: 1.05em;
+}
+
 /* LIST GRID FOR MANAGEMENT */
 .list-grid {
   display: grid;

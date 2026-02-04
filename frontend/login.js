@@ -28,6 +28,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     localStorage.setItem("token", data.token);
     localStorage.setItem("role", data.role);
     localStorage.setItem("restaurantId", data.restaurantId);
+    localStorage.setItem("userId", data.userId || "");
     sessionStorage.setItem("restaurantId", data.restaurantId);
     
     // Store restaurants list for superadmin
@@ -56,4 +57,3 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     document.getElementById("error").innerText = "Server error";
   }
 });
-

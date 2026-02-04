@@ -461,18 +461,18 @@ const translations = {
     // Products page
     'products.title': 'Chuio 產品',
     'products.subtitle': '完整的餐廳管理和訂購解決方案',
-    'products.qr-scan-title': '二維碼掃描和訂購',
-    'products.qr-scan-desc': '客戶在餐桌上掃描二維碼，立即訪問數字菜單，直接從手機下單。',
+    'products.qr-scan-title': '二維碼掃描和餐單',
+    'products.qr-scan-desc': '客戶在餐桌上掃描二維碼，立即訪問電子餐單，直接從手機下單。',
     'products.qr-no-app': '✓ 無需安裝應用程序',
-    'products.qr-one-tap': '✓ 一鍵訪問訂購',
+    'products.qr-one-tap': '✓ 一鍵訪問下單',
     'products.qr-any-phone': '✓ 適用於任何智能手機',
     'products.qr-table-info': '✓ 立即查看餐桌信息',
     'products.smart-ordering-title': '智能訂購體驗',
     'products.smart-ordering-desc': '我們的直觀移動優先界面可引導客戶完成順暢的訂購流程，具有實時反饋和清晰的項目描述。',
     'products.smart-browse': '✓ 瀏覽帶有圖片的完整菜單',
-    'products.smart-customize': '✓ 用食物選擇和選項自定義食物項目',
+    'products.smart-customize': '✓ 調選食物多種項目配對選擇',
     'products.smart-tracking': '✓ 實時訂單跟蹤',
-    'products.smart-payment': '✓ 安全結賬和支付',
+    'products.smart-payment': '✓ 與POS無縫鏈接達到安全結賬和支付',
     'products.menu-mgmt-title': '菜單管理',
     'products.create-items-title': '創建菜單項目',
     'products.create-items-desc': '輕鬆創建新食品項目，包括詳細信息、圖像、定價和可用性狀態。添加類別並輕鬆組織菜單。',
@@ -487,8 +487,8 @@ const translations = {
     'products.edit-unavailable': '✓ 標記項目不可用',
     'products.edit-updates': '✓ 實時菜單更新',
     'products.table-mgmt-title': '餐桌管理',
-    'products.organize-tables-title': '組織和跟蹤餐桌',
-    'products.organize-tables-desc': '高效管理餐廳中的所有餐桌。跟蹤餐桌入住情況、分配用餐容量並實時監控活躍會話。',
+    'products.organize-tables-title': '餐桌分配及組織',
+    'products.organize-tables-desc': '高效管理餐廳中的所有房間及餐桌。跟蹤餐桌實時狀況、分配用餐人數並實時調動。',
     'products.tables-unlimited': '✓ 創建無限餐桌',
     'products.tables-capacity': '✓ 設置餐桌容量和位置',
     'products.tables-track': '✓ 跟蹤活躍會話',
@@ -673,7 +673,7 @@ const translations = {
     // Footer
     'footer.brand': 'Chuio',
     'footer.brand-desc': '以現代技術革新餐廳運營。',
-    'footer.copyright': '© 2026 Chuio。版權所有。',
+    'footer.copyright': '© 2025 Chuio。版權所有。',
     'footer.product-title': '產品',
     'footer.features': '功能',
     'footer.products': '產品',
@@ -725,8 +725,9 @@ function setLanguage(lang) {
 
 // Get current language
 function getCurrentLanguage() {
-  // Check if URL contains /zh path
+  // Check if URL contains /zh path - set it as the language preference
   if (window.location.pathname.includes('/zh')) {
+    localStorage.setItem('language', 'zh');
     return 'zh';
   }
   

@@ -40,14 +40,8 @@
 }
 
 .lang-text {
-  display: none;
+  display: inline;
   font-size: 13px;
-}
-
-@media (min-width: 768px) {
-  .lang-text {
-    display: inline;
-  }
 }
 
 .lang-dropdown {
