@@ -5,7 +5,7 @@ const router = Router();
 
 /**
  * @route POST /scan/:qrToken
- * @desc Retrieve table info and active session for staff
+ * @desc Retrieve table info and active session for staff - ✅ MULTI-RESTAURANT SUPPORT
  *       Do NOT create a session automatically — session must be started by staff/admin
  */
 router.post("/scan/:qrToken", async (req, res) => {
@@ -45,7 +45,7 @@ router.post("/scan/:qrToken", async (req, res) => {
     );
 
     let session = sessionResult.rowCount > 0 ? sessionResult.rows[0] : null;
-  console.log(unit.restaurant_id);
+    console.log("Restaurant ID:", unit.restaurant_id);
 
     // 3️⃣ Return table info and session (if exists)
     res.json({
@@ -53,7 +53,7 @@ router.post("/scan/:qrToken", async (req, res) => {
       table_id: unit.table_id,
       table_name: unit.display_name,
       restaurant_id: unit.restaurant_id,
-      session_id: session.id, // null if no session active
+      session_id: session?.id || null, // null if no session active
     });
 
   } catch (err) {

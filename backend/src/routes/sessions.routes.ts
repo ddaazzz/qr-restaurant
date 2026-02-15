@@ -374,6 +374,166 @@ router.get("/restaurants/:restaurantId/sessions", async (req, res) => {
   }
 });
 
+/**
+ * CLOSE BILL - ✅ MULTI-RESTAURANT SUPPORT
+ * POST /sessions/:sessionId/close-bill
+ * Supports POS integration via webhooks
+ */
+router.post("/sessions/:sessionId/close-bill", async (req, res) => {
+  const { sessionId } = req.params;
+  const { 
+    payment_method = 'cash', 
+    amount_paid = 0, 
+    discount_applied = 0, 
+    notes = '',
+    send_to_pos = false,
+    pos_system = null,
+    staff_id = null,
+    restaurantId
+  } = req.body;
 
+  if (!sessionId) {
+    return res.status(400).json({ error: "Missing session id" });
+  }
+
+  if (!restaurantId) {
+    return res.status(400).json({ error: "Restaurant ID is required" });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // Get session and bill data - VALIDATE RESTAURANT_ID
+    const sessionRes = await client.query(
+      `SELECT ts.id, ts.table_id, t.name as table_name, ts.started_at, 
+              t.restaurant_id FROM table_sessions ts
+       JOIN tables t ON t.id = ts.table_id
+       WHERE ts.id = $1 AND t.restaurant_id = $2`,
+      [sessionId, restaurantId]
+    );
+
+    const session = sessionRes.rows[0];
+    if (!session) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Session not found or doesn't belong to this restaurant" });
+    }
+
+    // Get all orders with items for this session
+    const ordersRes = await client.query(
+      `SELECT o.id, oi.id as item_id, oi.quantity, oi.price_cents
+       FROM orders o
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       WHERE o.session_id = $1 AND o.status <> 'cancelled'
+       AND (oi.removed IS FALSE OR oi.removed IS NULL)`,
+      [sessionId]
+    );
+
+    // Calculate totals from order items
+    const orders = ordersRes.rows;
+    let subtotal = 0;
+    orders.forEach(item => {
+      if (item.quantity && item.price_cents) {
+        subtotal += item.quantity * item.price_cents;
+      }
+    });
+
+    const total = subtotal - discount_applied;
+    const posReference = `CHUIO-${Date.now()}-${sessionId}`;
+
+    // Update session status
+    await client.query(
+      `UPDATE table_sessions SET 
+        ended_at = NOW(),
+        payment_method = $1,
+        amount_paid = $2,
+        discount_applied = $3,
+        notes = $4,
+        closed_by_staff_id = $5,
+        pos_reference = $6
+       WHERE id = $7`,
+      [payment_method, amount_paid, discount_applied, notes, staff_id, posReference, sessionId]
+    );
+
+    // Free up the table
+    await client.query(
+      `UPDATE tables SET available = true WHERE id = $1`,
+      [session.table_id]
+    );
+
+    await client.query("COMMIT");
+
+    // Send to POS if requested
+    let webhookSent = false;
+    let webhookError = null;
+
+    if (send_to_pos && pos_system) {
+      try {
+        // Get restaurant POS webhook URL from settings
+        const settingsRes = await pool.query(
+          `SELECT pos_webhook_url, pos_api_key FROM restaurants WHERE id = $1`,
+          [session.restaurant_id]
+        );
+
+        const settings = settingsRes.rows[0];
+        if (settings?.pos_webhook_url) {
+          const billData = {
+            external_id: posReference,
+            session_id: sessionId,
+            table_number: session.table_name,
+            payment_method,
+            amount_paid,
+            discount_applied,
+            subtotal,
+            total,
+            items: orders,
+            timestamp: new Date().toISOString(),
+            notes
+          };
+
+          // Send webhook
+          const webhookRes = await fetch(settings.pos_webhook_url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${settings.pos_api_key}`,
+              'X-Webhook-Signature': `chuio-v1=${posReference}`
+            },
+            body: JSON.stringify(billData)
+          });
+
+          webhookSent = webhookRes.ok;
+          if (!webhookSent) {
+            webhookError = `POS webhook failed: ${webhookRes.status}`;
+            console.error(webhookError);
+          }
+        }
+      } catch (err) {
+        webhookError = err instanceof Error ? err.message : String(err);
+        console.error("Error sending to POS:", err);
+        // Don't fail the bill closure if webhook fails
+      }
+    }
+
+    res.json({
+      success: true,
+      session_id: sessionId,
+      pos_reference: posReference,
+      total_cents: total,
+      payment_method,
+      closed_at: new Date().toISOString(),
+      webhook_sent: webhookSent,
+      webhook_error: webhookError
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error closing bill:", err);
+    res.status(500).json({ error: "Failed to close bill" });
+  } finally {
+    client.release();
+  }
+});
 
 export default router;

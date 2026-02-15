@@ -10,29 +10,29 @@ router.get("/:id/settings", async (req, res) => {
   const { id } = req.params;
 
   try {
+    console.log("Fetching settings for restaurant:", id);
     const { rows } = await pool.query(
-      `SELECT 
-         name,
-         logo_url,
-         address,
-         phone,
-         theme_color,
-         service_charge_percent,
-         regenerate_qr_per_session
-       FROM restaurants
-       WHERE id = $1`,
+      `SELECT * FROM restaurants WHERE id = $1`,
       [id]
     );
 
+    console.log("Query result:", rows);
+
+    if (!rows || rows.length === 0) {
+      console.warn("No restaurant found with id:", id);
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    console.log("Sending settings:", rows[0]);
     res.json(rows[0]);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Load settings failed:", err);
-    res.status(500).json({ error: "Failed to load settings" });
+    res.status(500).json({ error: "Failed to load settings", details: err.message });
   }
 });
 
 
-//Update Admin Settings (get)
+//Update Admin Settings (PATCH)
 router.patch("/:id/settings", async (req, res) => {
   const { id } = req.params;
   const {
@@ -42,7 +42,11 @@ router.patch("/:id/settings", async (req, res) => {
     phone,
     theme_color,
     service_charge_percent,
-    regenerate_qr_per_session
+    regenerate_qr_per_session,
+    qr_mode,
+    pos_webhook_url,
+    pos_api_key,
+    booking_time_allowance_mins
   } = req.body;
 
   try {
@@ -54,8 +58,12 @@ router.patch("/:id/settings", async (req, res) => {
            phone = $4,
            theme_color = $5,
            service_charge_percent = $6,
-           regenerate_qr_per_session = $7
-       WHERE id = $8`,
+           regenerate_qr_per_session = $7,
+           qr_mode = $8,
+           pos_webhook_url = $9,
+           pos_api_key = $10,
+           booking_time_allowance_mins = COALESCE($11, booking_time_allowance_mins)
+       WHERE id = $12`,
       [
         name,
         logo_url,
@@ -64,6 +72,10 @@ router.patch("/:id/settings", async (req, res) => {
         theme_color,
         service_charge_percent,
         regenerate_qr_per_session,
+        qr_mode,
+        pos_webhook_url,
+        pos_api_key,
+        booking_time_allowance_mins,
         id
       ]
     );
@@ -206,11 +218,25 @@ router.get("/restaurant/:id", async (req, res) => {
   }
 });
 
-// Router to get the bill for a session
+// Get bill for a session - ✅ MULTI-RESTAURANT SUPPORT
 router.get("/:sessionId/bill", async (req, res) => {
   const { sessionId } = req.params;
 
   try {
+    // Get session with restaurant_id validation
+    const sessionRes = await pool.query(`
+      SELECT ts.id, t.restaurant_id
+      FROM table_sessions ts
+      JOIN tables t ON t.id = ts.table_id
+      WHERE ts.id = $1
+    `, [sessionId]);
+
+    if (sessionRes.rowCount === 0) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const restaurantId = sessionRes.rows[0].restaurant_id;
+
     // Fetch orders and total for the session
     const result = await pool.query(`
       SELECT
@@ -234,10 +260,14 @@ router.get("/:sessionId/bill", async (req, res) => {
 
     const totalCents = orders.reduce((sum, order) => sum + order.total_price_cents, 0);
 
-    // Fetch restaurant details
+    // Fetch restaurant details - USE RESTAURANT_ID FROM SESSION
     const restaurantRes = await pool.query(`
-      SELECT name, logo_url, address, phone FROM restaurants WHERE id = 1
-    `);
+      SELECT name, logo_url, address, phone FROM restaurants WHERE id = $1
+    `, [restaurantId]);
+
+    if (restaurantRes.rowCount === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
 
     const restaurant = restaurantRes.rows[0];
 

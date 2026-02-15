@@ -1,9 +1,5 @@
-console.log("LOGIN JS LOADED FROM:", window.location.href);
-
 const API_BASE = window.location.origin;
 let restaurantId;
-
-console.log("API_BASE:", API_BASE);
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -36,21 +32,13 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
       localStorage.setItem("superadminRestaurants", JSON.stringify(data.restaurants));
     }
     
-    console.log("LOGIN SUCCESS - Role:", data.role, "RestaurantId:", data.restaurantId);
-    
     if (data.role === "admin" || data.role === "superadmin") {
-      console.log("Redirecting to admin.html");
       window.location.href = "/admin.html";
     } else if (data.role === "staff") {
-      console.log("Redirecting to admin.html (staff)");
       window.location.href = "/admin.html";
     } else if (data.role === "kitchen") {
-      console.log("Redirecting to kitchen.html");
       sessionStorage.setItem("kitchenStaffLogged", "true");
       window.location.href = "/kitchen.html";
-    } else {
-      console.log("Unknown role:", data.role);
-      document.getElementById("error").innerText = "Unknown role. Please contact support.";
     }
   } catch (err) {
     console.error(err);

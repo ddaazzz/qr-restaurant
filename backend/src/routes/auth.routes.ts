@@ -77,7 +77,7 @@ router.post("/auth/login", async (req, res) => {
   }
 });;
 
-// GET /api/auth/restaurants
+// GET /api/auth/restaurants - for superadmin
 router.get("/auth/restaurants", async (req, res) => {
   try {
     const result = await pool.query(
@@ -90,13 +90,47 @@ router.get("/auth/restaurants", async (req, res) => {
   }
 });
 
+// GET /api/auth/admin-restaurants - for admin with multiple restaurants
+router.get("/auth/admin-restaurants", async (req, res) => {
+  try {
+    // Get the current user's restaurants from their token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing or invalid token" });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "devsecret") as any;
+
+    if (decoded.role === "superadmin") {
+      // Superadmin gets all restaurants
+      const result = await pool.query(
+        "SELECT id, name FROM restaurants ORDER BY id"
+      );
+      return res.json(result.rows);
+    } else if (decoded.role === "admin") {
+      // Admin gets their assigned restaurants
+      const result = await pool.query(
+        "SELECT id, name FROM restaurants WHERE id = (SELECT restaurant_id FROM users WHERE id = $1) ORDER BY id",
+        [decoded.id]
+      );
+      return res.json(result.rows);
+    } else {
+      return res.status(403).json({ error: "Only admin and superadmin can access this endpoint" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.post("/restaurants/:restaurantId/staff", async (req, res) => {
-  const { name, email, password, pin, role } = req.body;
+  const { name, pin, role = "staff", access_rights = [] } = req.body;
   const { restaurantId } = req.params;
 
   // Validate all required fields
-  if (!name || !email || !password || !pin) {
-    return res.status(400).json({ error: "All fields required" });
+  if (!name || !pin) {
+    return res.status(400).json({ error: "Name and PIN are required" });
   }
 
   // Ensure PIN is 6 digits
@@ -104,13 +138,8 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
     return res.status(400).json({ error: "PIN must be 6 digits" });
   }
 
-  // Validate email format
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: "Invalid email format" });
-  }
-
-  // Determine role - only allow 'staff' or 'kitchen'
-  const staffRole = role === 'kitchen' ? 'kitchen' : 'staff';
+  // Default role is staff
+  const staffRole = role === "kitchen" ? "kitchen" : "staff";
 
   try {
     // Verify restaurant exists
@@ -123,35 +152,27 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
       return res.status(404).json({ error: "Restaurant not found" });
     }
 
-    // Check if email already exists for this restaurant
-    const emailCheck = await pool.query(
-      `SELECT id FROM users WHERE email = $1 AND restaurant_id = $2`,
-      [email, restaurantId]
+    // Check if PIN already exists for this restaurant
+    const pinCheck = await pool.query(
+      `SELECT id FROM users WHERE restaurant_id = $1 AND pin = $2`,
+      [restaurantId, pin]
     );
 
-    if (emailCheck.rowCount && emailCheck.rowCount > 0) {
-      return res.status(400).json({ error: "Email already exists in this restaurant" });
+    if (pinCheck.rowCount && pinCheck.rowCount > 0) {
+      return res.status(400).json({ error: "PIN already exists for another staff member in this restaurant" });
     }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, pin, restaurant_id)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, pin`,
-      [name, email, hashedPassword, staffRole, pin, restaurantId]
+      `INSERT INTO users (name, email, role, pin, restaurant_id, access_rights)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, role, pin, access_rights`,
+      [name, null, staffRole, pin, restaurantId, JSON.stringify(access_rights)]
     );
 
-    console.log(`✅ Staff created for restaurant ${restaurantId}: ${email} (${staffRole})`);
-    res.json({ staff: result.rows[0] });
+    console.log(`✅ Staff created for restaurant ${restaurantId}: ${name}`);
+    res.json({ staff: result.rows[0], success: true });
   } catch (err: any) {
     console.error("❌ Staff creation failed:", err);
-    
-    // Handle duplicate email error (system-wide)
-    if (err.code === '23505' && err.constraint === 'users_email_key') {
-      return res.status(400).json({ error: "Email already exists in system" });
-    }
-
-    res.status(500).json({ error: "Failed to create staff" });
+    res.status(500).json({ error: "Failed to create staff", details: err.message });
   }
 });
 
@@ -160,14 +181,132 @@ router.get("/restaurants/:restaurantId/staff", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, pin FROM users WHERE restaurant_id = $1 AND (role = 'staff' OR role = 'kitchen')`,
+      `SELECT id, name, email, role, pin, access_rights FROM users WHERE restaurant_id = $1 AND (role = 'staff' OR role = 'kitchen')`,
       [restaurantId]
     );
 
-    res.json(result.rows);
+    // Parse access_rights JSON
+    const staff = result.rows.map(s => ({
+      ...s,
+      access_rights: s.access_rights ? (typeof s.access_rights === 'string' ? JSON.parse(s.access_rights) : s.access_rights) : []
+    }));
+
+    res.json(staff);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch staff" });
+  }
+});
+
+// ✅ GET single staff member (for editing)
+router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
+  const { restaurantId, staffId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, role, pin, access_rights FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
+      [staffId, restaurantId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Staff member not found" });
+    }
+
+    const staff = result.rows[0];
+    // Parse access_rights JSON
+    staff.access_rights = staff.access_rights ? (typeof staff.access_rights === 'string' ? JSON.parse(staff.access_rights) : staff.access_rights) : [];
+
+    res.json(staff);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch staff member" });
+  }
+});
+
+// ✅ PATCH staff member (update)
+router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
+  const { restaurantId, staffId } = req.params;
+  const { name, pin, role, access_rights } = req.body;
+
+  try {
+    // Verify staff belongs to restaurant
+    const staffCheck = await pool.query(
+      `SELECT id, role FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
+      [staffId, restaurantId]
+    );
+
+    if (staffCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Staff member not found" });
+    }
+
+    const existingStaff = staffCheck.rows[0];
+
+    // If PIN is being changed, verify uniqueness
+    if (pin && pin !== (await pool.query(`SELECT pin FROM users WHERE id = $1`, [staffId])).rows[0].pin) {
+      if (!/^\d{6}$/.test(pin)) {
+        return res.status(400).json({ error: "PIN must be 6 digits" });
+      }
+
+      const pinCheck = await pool.query(
+        `SELECT id FROM users WHERE restaurant_id = $1 AND pin = $2 AND id != $3`,
+        [restaurantId, pin, staffId]
+      );
+
+      if (pinCheck.rowCount && pinCheck.rowCount > 0) {
+        return res.status(400).json({ error: "PIN already exists for another staff member" });
+      }
+    }
+
+    // Build update query
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
+
+    if (name) {
+      updates.push(`name = $${paramIndex}`);
+      params.push(name);
+      paramIndex++;
+    }
+
+    if (pin) {
+      updates.push(`pin = $${paramIndex}`);
+      params.push(pin);
+      paramIndex++;
+    }
+
+    if (role) {
+      updates.push(`role = $${paramIndex}`);
+      params.push(role);
+      paramIndex++;
+    }
+
+    if (access_rights !== undefined) {
+      updates.push(`access_rights = $${paramIndex}`);
+      params.push(JSON.stringify(access_rights));
+      paramIndex++;
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    // Add WHERE clause
+    updates.push(`id = $${paramIndex}`);
+    params.push(staffId);
+
+    const query = `UPDATE users SET ${updates.join(', ')} RETURNING id, name, role, pin, access_rights`;
+    const result = await pool.query(query, params);
+
+    console.log(`✅ Staff updated: ${staffId} in restaurant ${restaurantId}`);
+
+    const staff = result.rows[0];
+    // Parse access_rights JSON
+    staff.access_rights = staff.access_rights ? (typeof staff.access_rights === 'string' ? JSON.parse(staff.access_rights) : staff.access_rights) : [];
+
+    res.json({ staff, success: true });
+  } catch (err) {
+    console.error("Failed to update staff:", err);
+    res.status(500).json({ error: "Failed to update staff" });
   }
 });
 
@@ -199,18 +338,26 @@ router.delete("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
 });
 
 router.post("/auth/staff-login", async (req, res) => {
-  const { pin, restaurantId } = req.body;
+  const { pin, restaurantId, role: requestedRole } = req.body;
   if (!pin) return res.status(400).json({ error: "PIN required" });
 
   try {
     const result = await pool.query(
-      "SELECT id, role FROM users WHERE pin=$1 AND restaurant_id=$2 AND (role='staff' OR role='kitchen')",
+      "SELECT id, role, access_rights FROM users WHERE pin=$1 AND restaurant_id=$2 AND (role='staff' OR role='kitchen')",
       [pin, restaurantId]
     );
 
     const user = result.rows[0];
     if (!user) {
       return res.status(401).json({ error: "Invalid PIN" });
+    }
+
+    // Validate that the PIN's role matches the requested role
+    // This prevents kitchen staff from logging into staff.html and vice versa
+    if (requestedRole && user.role !== requestedRole) {
+      return res.status(403).json({ 
+        error: `PIN does not match requested role. Expected ${requestedRole} but found ${user.role}` 
+      });
     }
 
     const token = jwt.sign(
@@ -224,10 +371,16 @@ router.post("/auth/staff-login", async (req, res) => {
       restaurantId,
       staffId: user.id,
       action: STAFF_ACTIONS.STAFF_LOGIN,
-      meta: { method: "PIN" }
+      meta: { method: "PIN", role: user.role }
     });
 
-    res.json({ token, role: user.role, restaurantId });
+    // Parse access_rights if it's a string (from database)
+    let accessRights = {};
+    if (user.access_rights) {
+      accessRights = typeof user.access_rights === 'string' ? JSON.parse(user.access_rights) : user.access_rights;
+    }
+
+    res.json({ token, role: user.role, restaurantId, access_rights: accessRights });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });

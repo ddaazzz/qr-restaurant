@@ -85,10 +85,11 @@ for (const o of optionsRes.rows) {
 const selectedByVariant: Record<number, number[]> = {};
 
 for (const o of optionsRes.rows) {
-  if (!selectedByVariant[o.variant_id]) {
-    selectedByVariant[o.variant_id] = [];
+  const variantId = o.variant_id;
+  if (!selectedByVariant[variantId]) {
+    selectedByVariant[variantId] = [];
   }
-  selectedByVariant[o?.variant_id].push(o.id);
+  selectedByVariant[variantId].push(o.id);
 }
 
 // Validate each variant
@@ -295,10 +296,16 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
 });
 
 
-// GET all active orders for kitchen - FILTERED BY RESTAURANT
-router.get("/kitchen/items", async (_req, res) => {
+// GET all active orders for kitchen - ✅ FILTERED BY RESTAURANT
+router.get("/kitchen/items", async (req, res) => {
   try {
-    console.log("🔄 Fetching kitchen orders...");
+    const { restaurantId } = req.query;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    console.log("🔄 Fetching kitchen orders for restaurant:", restaurantId);
     const result = await pool.query(
       `
       SELECT
@@ -307,11 +314,12 @@ router.get("/kitchen/items", async (_req, res) => {
         oi.quantity,
 
         mi.name AS item_name,
+        mi.category_id,
 
         COALESCE(tu.display_name, 'Unknown Table') AS table_name,
         o.id AS order_id,
         ts.id AS session_id,
-        COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
+        ts.restaurant_id,
         o.created_at,
 
         COALESCE(
@@ -334,25 +342,26 @@ router.get("/kitchen/items", async (_req, res) => {
       LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
 
       WHERE oi.status != 'served'
-      AND (COALESCE(ts.restaurant_id, mc.restaurant_id) IS NOT NULL)
+      AND ts.restaurant_id = $1
 
       GROUP BY
         oi.id,
         oi.status,
         oi.quantity,
         mi.name,
+        mi.category_id,
         tu.display_name,
         o.id,
         ts.id,
         ts.restaurant_id,
-        mc.restaurant_id,
         o.created_at
 
       ORDER BY o.created_at ASC
-      `
+      `,
+      [restaurantId]
     );
 
-    console.log(`📦 Found ${result.rows.length} kitchen orders`);
+    console.log(`📦 Found ${result.rows.length} kitchen orders for restaurant ${restaurantId}`);
     if (result.rows.length > 0) {
       console.log("Sample order:", result.rows[0]);
     }
@@ -379,30 +388,52 @@ router.get("/kitchen/items", async (_req, res) => {
 });
 
 
-//Update order status on order food items
+//Update order status on order food items - ✅ MULTI-RESTAURANT SUPPORT
 router.patch("/order-items/:orderItemId/status", async (req, res) => {
   const { orderItemId } = req.params;
-  const { status } = req.body;
+  const { status, restaurantId } = req.body;
 
   if (!["pending", "preparing", "served"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
 
-  const result = await pool.query(
-    `
-    UPDATE order_items
-    SET status = $1
-    WHERE id = $2
-    RETURNING *
-    `,
-    [status, orderItemId]
-  );
-
-  if (result.rowCount === 0) {
-    return res.status(404).json({ error: "Order item not found" });
+  if (!restaurantId) {
+    return res.status(400).json({ error: "Restaurant ID is required" });
   }
 
-  res.json(result.rows[0]);
+  try {
+    // Verify order item belongs to restaurant
+    const orderCheck = await pool.query(
+      `SELECT oi.id FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       JOIN table_sessions ts ON o.session_id = ts.id
+       WHERE oi.id = $1 AND ts.restaurant_id = $2`,
+      [orderItemId, restaurantId]
+    );
+
+    if (orderCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Order item not found or doesn't belong to this restaurant" });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE order_items
+      SET status = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [status, orderItemId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Order item not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Update order status failed:", err);
+    res.status(500).json({ error: "Failed to update order status" });
+  }
 });
 
 
@@ -491,26 +522,32 @@ router.patch("/orders/:id/status", async (req, res) => {
   }
 });*/
 
-// Close a session
+// Close a session - ✅ MULTI-RESTAURANT SUPPORT
 router.post("/sessions/:sessionId/close", async (req, res) => {
-    try{
+    try {
   const { sessionId } = req.params;
+  const { restaurantId } = req.body;
 
-  // Check if session exists and is open
+  if (!restaurantId) {
+    return res.status(400).json({ error: "Restaurant ID is required" });
+  }
+
+  // Check if session exists, is open, and belongs to restaurant
   const sessionResult = await pool.query(
-    "SELECT * FROM table_sessions WHERE id = $1 AND ended_at IS NULL",
-    [sessionId]
+    `SELECT ts.id, t.restaurant_id FROM table_sessions ts
+     JOIN tables t ON t.id = ts.table_id
+     WHERE ts.id = $1 AND ts.ended_at IS NULL AND t.restaurant_id = $2`,
+    [sessionId, restaurantId]
   );
 
   if (sessionResult.rowCount === 0) {
-    return res.status(400).json({ error: "Session already closed or not found" });
+    return res.status(404).json({ error: "Session not found, already closed, or doesn't belong to this restaurant" });
   }
 
   // Close session
   await pool.query(
     "UPDATE table_sessions SET ended_at = NOW() WHERE id = $1",
     [sessionId]
-    
   );
 
   // Close all open orders
@@ -525,7 +562,6 @@ router.post("/sessions/:sessionId/close", async (req, res) => {
   [sessionId]
 );
 
-
   res.json({ message: "Session closed" });
   } catch (err) {
     console.error(err);
@@ -533,7 +569,111 @@ router.post("/sessions/:sessionId/close", async (req, res) => {
   }
 });
 
+// ✅ GET all orders for a restaurant (for history/reporting)
+router.get("/restaurants/:restaurantId/orders", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { limit } = req.query;
+    const limitVal = limit ? parseInt(limit as string) : 20;
 
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
 
+    const result = await pool.query(
+      `
+      SELECT
+        o.id,
+        o.session_id,
+        o.status,
+        o.created_at,
+        COUNT(oi.id) as item_count,
+        SUM(oi.price_cents * oi.quantity) as total_cents
+      FROM orders o
+      JOIN table_sessions ts ON o.session_id = ts.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
+      WHERE ts.restaurant_id = $1
+      GROUP BY o.id, o.session_id, o.status, o.created_at
+      ORDER BY o.created_at DESC
+      LIMIT $2
+      `,
+      [restaurantId, limitVal]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ GET specific order details (for cart restoration)
+router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
+  try {
+    const { restaurantId, orderId } = req.params;
+
+    // Get order header
+    const orderRes = await pool.query(
+      `
+      SELECT
+        o.id,
+        o.session_id,
+        o.status,
+        o.created_at,
+        SUM(oi.price_cents * oi.quantity) as total_cents
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
+      JOIN table_sessions ts ON o.session_id = ts.id
+      WHERE o.id = $1 AND ts.restaurant_id = $2
+      GROUP BY o.id, o.session_id, o.status, o.created_at
+      `,
+      [orderId, restaurantId]
+    );
+
+    if (orderRes.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orderRes.rows[0];
+
+    // Get order items with variants
+    const itemsRes = await pool.query(
+      `
+      SELECT
+        oi.id,
+        oi.order_id,
+        oi.menu_item_id,
+        oi.quantity,
+        oi.price_cents,
+        oi.status,
+        mi.name as item_name,
+        mi.image_url,
+        STRING_AGG(
+          DISTINCT vo.id::text,
+          ','
+        ) as variant_option_ids,
+        STRING_AGG(
+          DISTINCT v.name || ':' || vo.name,
+          '; '
+        ) as variants
+      FROM order_items oi
+      JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
+      LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
+      LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
+      WHERE oi.order_id = $1 AND oi.removed = false
+      GROUP BY oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price_cents, oi.status, mi.name, mi.image_url
+      `,
+      [orderId]
+    );
+
+    order.items = itemsRes.rows;
+
+    res.json(order);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 export default router;

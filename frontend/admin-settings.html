@@ -1,0 +1,360 @@
+<!-- ================= ADMIN SETTINGS HTML ================= -->
+
+<div class="settings-container">
+<!-- Settings Cards Grid -->
+<div class="settings-cards-grid">
+    <!-- Preferences Card -->
+    <div class="settings-card" onclick="openSettingsModal('preferences')">
+      <h3 data-i18n="admin.preferences">Preferences</h3>
+      <p data-i18n="admin.language">Language</p>
+    </div>
+
+    <!-- Restaurant Information Card -->
+    <div class="settings-card" onclick="openSettingsModal('restaurant-info')">
+      <h3 data-i18n="admin.restaurant-info">Restaurant Information</h3>
+      <p id="restaurant-info-preview">Restaurant details</p>
+    </div>
+
+    <!-- POS Integration Card -->
+    <div class="settings-card" onclick="openSettingsModal('pos-integration')">
+      <h3 data-i18n="admin.pos-integration">🔌 POS Integration</h3>
+      <p id="pos-status-preview">Not configured</p>
+    </div>
+
+    <!-- Staff Login Links Card -->
+    <div class="settings-card" onclick="openSettingsModal('staff-login-links')">
+      <h3 data-i18n="admin.staff-login-links">👥 Staff Login Links</h3>
+      <p data-i18n="admin.share-with-staff">Share with staff</p>
+    </div>
+
+    <!-- QR Code Settings Card -->
+    <div class="settings-card" onclick="openSettingsModal('qr-settings')">
+      <h3 data-i18n="admin.qr-settings">QR Code Settings</h3>
+      <p id="qr-mode-preview">Configure QR modes</p>
+    </div>
+
+    <!-- Coupons Card -->
+    <div class="settings-card" onclick="openSettingsModal('coupons')">
+      <h3>🎟️ Coupons</h3>
+      <p data-i18n="admin.manage-coupons">Manage coupons</p>
+    </div>
+
+    <!-- Booking Settings Card -->
+    <div class="settings-card" onclick="openSettingsModal('booking-settings')">
+      <h3>📅 Booking Settings</h3>
+      <p id="booking-settings-preview">Manage reservations</p>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Preferences Modal -->
+  <div id="modal-preferences" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('preferences')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 data-i18n="admin.preferences">Preferences</h3>
+        <button class="modal-close" onclick="closeSettingsModal('preferences')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label data-i18n="admin.language" style="display: block; margin-bottom: 12px; font-weight: 600;">Language</label>
+          <div data-language-picker class="language-picker-settings" style="display: flex; gap: 12px;">
+            <button id="lang-zh-settings" class="lang-btn active" onclick="setLanguage('zh')" style="flex: 1; padding: 12px; border: 2px solid var(--primary-color); background: var(--primary-color); color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">中文</button>
+            <button id="lang-en-settings" class="lang-btn" onclick="setLanguage('en')" style="flex: 1; padding: 12px; border: 2px solid var(--border-color); background: white; color: var(--text-dark); border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">English</button>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <button id="logout-btn-settings" class="btn-danger" onclick="handleLogout()" data-i18n="admin.logout" style="width: 100%; padding: 12px;">🚪 Logout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Restaurant Information Modal -->
+  <div id="modal-restaurant-info" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('restaurant-info')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 data-i18n="admin.restaurant-info">Restaurant Information</h3>
+        <button class="modal-close" onclick="closeSettingsModal('restaurant-info')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label data-i18n="admin.rest-name">Restaurant Name</label>
+            <span id="view-name" class="view-mode"></span>
+            <input id="restaurant-name" placeholder="e.g., The Italian Kitchen" class="hidden" />
+          </div>
+          <div class="form-group">
+            <label data-i18n="admin.rest-phone">Phone</label>
+            <span id="view-phone" class="view-mode"></span>
+            <input id="restaurant-phone" placeholder="e.g., (555) 123-4567" class="hidden" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label data-i18n="admin.rest-address">Address</label>
+            <span id="view-address" class="view-mode"></span>
+            <input id="restaurant-address" placeholder="e.g., 123 Main St, City, State" class="hidden" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label data-i18n="admin.rest-service-charge">Service Charge (%)</label>
+            <span id="view-service-charge" class="view-mode"></span>
+            <input id="serviceChargeInput" type="number" min="0" step="0.1" placeholder="e.g., 15" class="hidden" />
+          </div>
+          <div class="form-group">
+            <label data-i18n="admin.rest-theme-color">Theme Color</label>
+            <span id="view-color" class="view-mode"></span>
+            <input type="color" id="colorInput" class="hidden" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label data-i18n="admin.rest-logo">Restaurant Logo</label>
+          <img id="restaurant-logo" class="logo-preview hidden" />
+          <input id="logoInput" type="file" accept="image/*" class="hidden" 
+            onchange="uploadRestaurantLogo(this.files[0])" />
+        </div>
+
+        <div class="form-actions">
+          <button id="edit-settings-btn" onclick="enterEditMode()" class="btn-primary" data-i18n="admin.edit-settings">✎ Edit Settings</button>
+          <button id="save-settings-btn" onclick="saveAdminSettings()" class="btn-primary hidden" data-i18n="admin.save-settings">✓ Save</button>
+          <button id="cancel-settings-btn" onclick="cancelEditMode()" class="btn-secondary hidden" data-i18n="admin.cancel-settings">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: POS Integration Modal -->
+  <div id="modal-pos-integration" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('pos-integration')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 data-i18n="admin.pos-integration">🔌 POS Integration</h3>
+        <button class="modal-close" onclick="closeSettingsModal('pos-integration')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label data-i18n="admin.pos-webhook-url">Webhook URL</label>
+            <span id="view-webhook-url" class="view-mode"></span>
+            <input id="pos-webhook-url" type="url" placeholder="https://your-pos.com/webhook" class="hidden" />
+          </div>
+          <div class="form-group">
+            <label data-i18n="admin.pos-api-key">API Key</label>
+            <span id="view-api-key" class="view-mode" style="color:#999;">••••••••••••••••</span>
+            <input id="pos-api-key" type="password" placeholder="Your POS API Key" class="hidden" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label data-i18n="admin.pos-system-type">POS System Type</label>
+            <span id="view-pos-system" class="view-mode"></span>
+            <select id="pos-system-type" class="hidden">
+              <option value="">-- Select POS System --</option>
+              <option value="webhook">REST API (Webhook)</option>
+              <option value="square">Square POS</option>
+              <option value="toast">Toast POS</option>
+              <option value="lightspeed">Lightspeed</option>
+              <option value="custom">Custom Integration</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label data-i18n="admin.pos-connection-status">Connection Status</label>
+          <div id="pos-connection-status" style="padding:10px; background:#f0fdf4; border-radius:6px; color:#166534; border-left:4px solid #22c55e;">
+            🟢 Not Configured
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button id="edit-pos-btn" onclick="enterEditModePOS()" class="btn-primary" data-i18n="admin.edit">✎ Edit</button>
+          <button id="save-pos-btn" onclick="savePOSSettings()" class="btn-primary hidden" data-i18n="admin.save">✓ Save</button>
+          <button id="test-pos-btn" onclick="testPOSConnection()" class="btn-secondary hidden" data-i18n="admin.test">🧪 Test Connection</button>
+          <button id="cancel-pos-btn" onclick="cancelEditModePOS()" class="btn-secondary hidden" data-i18n="admin.cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Staff Login Links Modal -->
+  <div id="modal-staff-login-links" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('staff-login-links')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 data-i18n="admin.staff-login-links">👥 Staff Login Links</h3>
+        <button class="modal-close" onclick="closeSettingsModal('staff-login-links')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p data-i18n="admin.staff-login-help" style="margin-bottom: 20px; font-size: 14px;">Share these links with your staff members to allow them to login without admin credentials:</p>
+        
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label data-i18n="admin.table-staff-link">Table Staff Login Link</label>
+            <div style="display: flex; gap: 8px;">
+              <input id="staff-link" type="text" readonly class="form-input" style="flex: 1; font-size: 12px;" />
+              <button class="btn-secondary" onclick="copyToClipboard('staff-link')" data-i18n="admin.copy">📋 Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label data-i18n="admin.kitchen-staff-link">Kitchen Staff Login Link</label>
+            <div style="display: flex; gap: 8px;">
+              <input id="kitchen-link" type="text" readonly class="form-input" style="flex: 1; font-size: 12px;" />
+              <button class="btn-secondary" onclick="copyToClipboard('kitchen-link')" data-i18n="admin.copy">📋 Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: QR Code Settings Modal -->
+  <div id="modal-qr-settings" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('qr-settings')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 data-i18n="admin.qr-settings">QR Code Settings</h3>
+        <button class="modal-close" onclick="closeSettingsModal('qr-settings')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 0.9em; color: #856404;">
+          <strong>⚠️ Note:</strong> <span data-i18n="admin.qr-mode-warning">QR Code Mode can only be changed when there are no active sessions. Please close all sessions before making changes.</span>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="qr-mode-select" style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.qr-code-mode">QR Code Mode</label>
+            <select id="qr-mode-select" onchange="changeQRMode()" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+              <option value="regenerate" data-i18n="admin.qr-regenerate-option">Regenerate QR Code Each Session</option>
+              <option value="static_table" data-i18n="admin.qr-static-table-option">Static QR Code Per Table (One Session Only)</option>
+              <option value="static_seat" data-i18n="admin.qr-static-seat-option">Static QR Code Per Seat</option>
+            </select>
+            <p style="font-size: 0.85em; color: #666; margin-top: 12px; line-height: 1.6;">
+              <strong data-i18n="admin.qr-regenerate-desc">Regenerate QR Code Each Session:</strong> <span data-i18n="admin.qr-regenerate-desc-text">New QR code generated each time session starts</span><br><br>
+              <strong data-i18n="admin.qr-static-table-desc">Static QR Code Per Table:</strong> <span data-i18n="admin.qr-static-table-desc-text">One session per table, cannot start new session</span><br><br>
+              <strong data-i18n="admin.qr-static-seat-desc">Static QR Code Per Seat:</strong> <span data-i18n="admin.qr-static-seat-desc-text">Each seat has independent QR code and session</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Coupons Modal -->
+  <div id="modal-coupons" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('coupons')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🎟️ Coupons</h3>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="coupon-edit-btn" class="btn-secondary" onclick="toggleCouponEditMode()" data-i18n="admin.edit" style="padding: 6px 12px; font-size: 13px;">✎ Edit</button>
+          <button class="modal-close" onclick="closeSettingsModal('coupons')">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Coupons List View (shown by default) -->
+        <div id="coupon-list-view">
+          <div id="coupons-list" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- JS renders active coupons here -->
+          </div>
+          <p id="no-coupons-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;" data-i18n="admin.no-coupons">No active coupons</p>
+        </div>
+
+        <!-- Coupon Creation Form (hidden until Edit is clicked) -->
+        <div id="coupon-edit-view" style="display: none;">
+          <div id="coupon-error" class="error-message" style="display: none;"></div>
+          <div id="coupon-success" class="success-message" style="display: none;"></div>
+          
+          <button onclick="clearCouponForm(); document.getElementById('new-coupon-code').focus();" class="btn-primary" style="width: 100%; margin-bottom: 20px; padding: 12px;" data-i18n="admin.add-new-coupon">➕ Add a new coupon</button>
+          
+          <div id="coupons-list-edit" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+            <!-- Coupons will be rendered here in edit mode -->
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label data-i18n="admin.coupon-code">Coupon Code</label>
+              <input id="new-coupon-code" placeholder="e.g., SUMMER20" maxlength="50" style="text-transform: uppercase;" />
+            </div>
+            <div class="form-group">
+              <label data-i18n="admin.discount-type">Discount Type</label>
+              <select id="new-coupon-type">
+                <option value="percentage" data-i18n="admin.percentage">Percentage (%)</option>
+                <option value="fixed" data-i18n="admin.fixed-amount">Fixed Amount ($)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label data-i18n="admin.discount-value">Discount Value</label>
+              <input id="new-coupon-value" type="number" placeholder="e.g., 20" step="0.01" />
+            </div>
+            <div class="form-group">
+              <label data-i18n="admin.min-order-value">Minimum Order Value ($)</label>
+              <input id="new-coupon-min-order" type="number" placeholder="e.g., 50" step="0.01" value="0" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label data-i18n="admin.max-uses">Max Uses (leave blank for unlimited)</label>
+              <input id="new-coupon-max-uses" type="number" placeholder="e.g., 100" />
+            </div>
+            <div class="form-group">
+              <label data-i18n="admin.valid-until">Valid Until</label>
+              <input id="new-coupon-valid-until" type="date" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label data-i18n="admin.coupon-description">Description</label>
+              <textarea id="new-coupon-description" placeholder="e.g., Summer special - 20% off all items"></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button onclick="createCoupon()" class="btn-primary" data-i18n="admin.create-coupon">➕ Create Coupon</button>
+            <button onclick="toggleCouponEditMode()" class="btn-secondary" data-i18n="admin.cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Booking Settings Modal -->
+  <div id="modal-booking-settings" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('booking-settings')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>📅 Booking Settings</h3>
+        <button class="modal-close" onclick="closeSettingsModal('booking-settings')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Reservation Time Allowance</label>
+          <p style="color: #666; font-size: 14px; margin-bottom: 12px;">How long a reservation is held past the booked time before it expires (in minutes)</p>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input id="booking-time-allowance" type="number" placeholder="15" min="5" max="120" step="5" value="15" style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
+            <span style="color: #666; font-weight: 500;">minutes</span>
+          </div>
+          <p style="color: #999; font-size: 12px; margin-top: 8px;">Default: 15 minutes</p>
+        </div>
+
+        <div class="form-actions" style="margin-top: 24px;">
+          <button onclick="saveBookingSettings()" class="btn-primary">💾 Save Settings</button>
+          <button onclick="closeSettingsModal('booking-settings')" class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,25 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Staff Dashboard | Chuio</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+  <title>Staff Dashboard | Chuio</title>
   <link rel="stylesheet" href="staff.css" />
+  
+  <!-- Translations -->
+  <script src="/translations.js"></script>
+  <script src="/language-switcher.js"></script>
 </head>
 <body>
 
-<h1>Staff Dashboard</h1>
+  <!-- ================= LOGIN SCREEN ================= -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-container">
+      <div class="login-header">
+        <img src="/uploads/chuio/chuio_logo.png" alt="Chuio Logo" />
+        <h1 data-i18n="staff.title">👨‍💼 Staff Dashboard</h1>
+        <p data-i18n="staff.enter-pin">Enter PIN to continue</p>
+      </div>
 
-<section>
-  <h2>Tables & QR Codes</h2>
-  <div id="tables-list">Loading tables...</div>
-</section>
+      <div id="pin-login">
+        <div id="pin-dots" class="pin-dots">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
 
-<section>
-  <h2>Menu Management</h2>
-  <div id="menu-list">Loading menu...</div>
-</section>
+        <div class="keypad">
+          <button onclick="pressKey(1)">1</button>
+          <button onclick="pressKey(2)">2</button>
+          <button onclick="pressKey(3)">3</button>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-<script src="staff.js"></script>
+          <button onclick="pressKey(4)">4</button>
+          <button onclick="pressKey(5)">5</button>
+          <button onclick="pressKey(6)">6</button>
+
+          <button onclick="pressKey(7)">7</button>
+          <button onclick="pressKey(8)">8</button>
+          <button onclick="pressKey(9)">9</button>
+
+          <button class="clear" onclick="clearPin()">⌫</button>
+          <button onclick="pressKey(0)">0</button>
+          <button class="enter" onclick="submitPin()">⏎</button>
+        </div>
+
+        <div id="error-message" class="error-message"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STAFF APP ================= -->
+  <div id="staff-app">
+    <h1>Staff Dashboard</h1>
+
+    <section>
+      <h2>Tables & QR Codes</h2>
+      <div id="tables-list">Loading tables...</div>
+    </section>
+
+    <section>
+      <h2>Menu Management</h2>
+      <div id="menu-list">Loading menu...</div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="staff.js"></script>
 </body>
 </html>

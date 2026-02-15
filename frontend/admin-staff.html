@@ -1,0 +1,78 @@
+<!-- ================= ADMIN STAFF HTML ================= -->
+
+<div class="staff-container">
+  <!-- Create/Edit Form (Hidden by default, shown in edit mode) -->
+  <div class="section-card hidden" id="staff-create-section" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <h3 data-i18n="admin.create-new-staff">Create/Edit Staff</h3>
+      <button onclick="toggleStaffEditMode()" style="font-size: 20px; background: none; border: none; cursor: pointer; color: #999;">✕</button>
+    </div>
+    <div id="staff-error" class="error-message" style="display: none;"></div>
+    <div id="staff-success" class="success-message" style="display: none;"></div>
+    
+    <form onsubmit="event.preventDefault(); createOrUpdateStaff();">
+      <div class="form-row">
+        <div class="form-group">
+          <label data-i18n="admin.staff-name">Staff Name</label>
+          <input id="staff-name" placeholder="e.g., John Smith" required />
+        </div>
+        <div class="form-group">
+          <label data-i18n="admin.pin-6digits">PIN (6 digits)</label>
+          <input id="staff-pin" type="text" placeholder="e.g., 123456" maxlength="6" required />
+        </div>
+                <div class="form-group">
+                  <label>Role</label>
+                  <select id="staff-role" onchange="handleStaffRoleChange()" required>
+                    <option value="staff">Staff</option>
+                    <option value="kitchen">Kitchen</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Access Rights Section (shows based on role) -->
+              <div id="staff-access-rights-section" style="margin-top: 15px;">
+                <!-- Tab Access for Staff Role -->
+                <div id="staff-tab-access" style="display: none;">
+                  <h4 style="margin-top: 0; margin-bottom: 10px;">Tab Access Permissions</h4>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-orders" class="staff-access-checkbox" value="orders" /> Orders
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-tables" class="staff-access-checkbox" value="tables" /> Tables
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-menu" class="staff-access-checkbox" value="menu" /> Menu
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-staff" class="staff-access-checkbox" value="staff" /> Staff
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-reports" class="staff-access-checkbox" value="reports" /> Reports
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-settings" class="staff-access-checkbox" value="settings" /> Settings
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Category Access for Kitchen Role -->
+                <div id="kitchen-category-access" style="display: none;">
+                  <h4 style="margin-top: 0; margin-bottom: 10px;">Food Categories Access</h4>
+                  <div id="kitchen-categories-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <!-- JS populates this with menu categories -->
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 15px;">
+                <button type="submit" id="staff-submit-btn" class="btn-primary">➕ Add Staff</button>
+                <button type="button" onclick="toggleStaffEditMode()" class="btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+  <div id="staff-grid" class="staff-grid">
+    <!-- JS renders staff cards here -->
+  </div>
+</div>

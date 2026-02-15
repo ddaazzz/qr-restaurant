@@ -46,15 +46,29 @@ router.post("/restaurants/:restaurantId/coupons", async (req, res) => {
   }
 });
 
-// Update a coupon (Admin only)
+// Update a coupon (Admin only) - ✅ MULTI-RESTAURANT SUPPORT
 router.put("/coupons/:couponId", async (req, res) => {
   try {
     const { couponId } = req.params;
-    const { code, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value } = req.body;
+    const { code, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    // Verify coupon belongs to restaurant
+    const couponCheck = await db.query(
+      "SELECT id FROM coupons WHERE id = $1 AND restaurant_id = $2",
+      [couponId, restaurantId]
+    );
+
+    if (couponCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Coupon not found or doesn't belong to this restaurant" });
+    }
 
     const result = await db.query(
-      `UPDATE coupons SET code = COALESCE($1, code), discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value), description = COALESCE($4, description), is_active = COALESCE($5, is_active), max_uses = COALESCE($6, max_uses), valid_until = COALESCE($7, valid_until), minimum_order_value = COALESCE($8, minimum_order_value), updated_at = CURRENT_TIMESTAMP WHERE id = $9 RETURNING *`,
-      [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, couponId]
+      `UPDATE coupons SET code = COALESCE($1, code), discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value), description = COALESCE($4, description), is_active = COALESCE($5, is_active), max_uses = COALESCE($6, max_uses), valid_until = COALESCE($7, valid_until), minimum_order_value = COALESCE($8, minimum_order_value), updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND restaurant_id = $10 RETURNING *`,
+      [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, couponId, restaurantId]
     );
 
     if (result.rows.length === 0) {
@@ -68,11 +82,30 @@ router.put("/coupons/:couponId", async (req, res) => {
   }
 });
 
-// Delete a coupon (Admin only)
+// Delete a coupon (Admin only) - ✅ MULTI-RESTAURANT SUPPORT
 router.delete("/coupons/:couponId", async (req, res) => {
   try {
     const { couponId } = req.params;
-    const result = await db.query("DELETE FROM coupons WHERE id = $1", [couponId]);
+    const { restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    // Verify coupon belongs to restaurant
+    const couponCheck = await db.query(
+      "SELECT id FROM coupons WHERE id = $1 AND restaurant_id = $2",
+      [couponId, restaurantId]
+    );
+
+    if (couponCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Coupon not found or doesn't belong to this restaurant" });
+    }
+
+    const result = await db.query(
+      "DELETE FROM coupons WHERE id = $1 AND restaurant_id = $2",
+      [couponId, restaurantId]
+    );
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Coupon not found" });

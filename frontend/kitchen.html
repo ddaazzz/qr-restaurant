@@ -6,6 +6,10 @@
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
   <title>Kitchen Dashboard | Chuio</title>
   <link rel="stylesheet" href="kitchen.css" />
+  
+  <!-- Translations -->
+  <script src="/translations.js"></script>
+  <script src="/language-switcher.js"></script>
 </head>
 <body>
 
@@ -14,8 +18,8 @@
     <div class="login-container">
       <div class="login-header">
         <img src="/uploads/chuio/chuio_logo.png" alt="Chuio Logo" />
-        <h1>Kitchen Dashboard</h1>
-        <p>Enter PIN to continue</p>
+        <h1 data-i18n="kitchen.title">🍳 Kitchen Dashboard</h1>
+        <p data-i18n="kitchen.enter-pin">Enter PIN to continue</p>
       </div>
 
       <div id="pin-login">
@@ -49,18 +53,24 @@
   <!-- ================= KITCHEN APP ================= -->
   <div id="kitchen-app" class="kitchen-app">
     <div class="kitchen-header">
-      <h1>🍳 Kitchen Dashboard</h1>
-      <button class="logout-btn" onclick="handleLogout()">Logout</button>
+      <h1 data-i18n="kitchen.title">🍳 Kitchen Dashboard</h1>
+      <button class="logout-btn" onclick="handleLogout()" data-i18n="kitchen.logout">Logout</button>
     </div>
 
     <div class="kitchen-content">
       <div id="orders-container" class="orders-container">
-        <p class="no-orders">Loading orders...</p>
+        <p class="no-orders" data-i18n="kitchen.loading">Loading orders...</p>
       </div>
     </div>
   </div>
 
   <script src="kitchen.js"></script>
+  <script>
+    // Initialize translations and language switcher for kitchen
+    document.addEventListener('DOMContentLoaded', () => {
+      new LanguageSwitcher();
+    });
+  </script>
 
 </body>
 </html>

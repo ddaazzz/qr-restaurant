@@ -31,7 +31,7 @@ async function loadLanding() {
     data.restaurant_name;
 
   document.getElementById("tableInfo").textContent =
-    `${data.table_name} • Pax ${data.pax ?? "-"}`;
+    `${data.table_name} • Pax ${data.pax != null ? data.pax : "-"}`;
 
   document.getElementById("address").textContent = data.address || "";
   document.getElementById("phone").textContent = data.phone || "";

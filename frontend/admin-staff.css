@@ -1,0 +1,275 @@
+/* ============== ADMIN STAFF CSS ============== */
+
+/* Staff card as perfect square */
+.staff-card {
+  background: white;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+.staff-card:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  transform: translateY(-4px);
+  border-color: var(--primary-color);
+}
+
+.staff-card:active {
+  transform: translateY(0);
+}
+
+.staff-card-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-dark);
+  margin-bottom: 8px;
+}
+
+.staff-card-role {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.staff-card-pin {
+  font-size: 11px;
+  color: var(--text-light);
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--bg-light);
+  border-radius: 4px;
+}
+
+.staff-card-access {
+  font-size: 10px;
+  color: var(--text-light);
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--bg-light);
+  border-radius: 4px;
+  max-height: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.add-staff-card-style {
+  border: 2px dashed var(--border-color);
+  background: #f9f9f9;
+}
+
+.add-staff-card-style:hover {
+  border-color: var(--primary-color);
+  background: #f0f7ff;
+}
+
+.staff-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  width: 100%;
+}
+
+.staff-card-actions button {
+  padding: 8px 12px;
+  font-size: 14px;
+  background: none;
+  color: var(--text-dark);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.staff-card-actions .btn-edit {
+  background: #3b82f6;
+  color: white;
+}
+
+.staff-card-actions .btn-edit:hover {
+  background: #2563eb;
+  transform: scale(1.05);
+}
+
+.staff-card-actions .btn-delete {
+  background: #ef4444;
+  color: white;
+}
+
+.staff-card-actions .btn-delete:hover {
+  background: #dc2626;
+  transform: scale(1.05);
+}
+/* Staff Grid Layout */
+.staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.staff-card.hidden {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .staff-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+}
+
+/* Staff card action buttons layout */
+.staff-card-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  margin-top: auto;
+  width: 100%;
+  justify-content: center;
+}
+
+.staff-card-actions button {
+  padding: 6px 8px;
+  font-size: 14px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 0;
+}
+
+.staff-card-actions button.btn-delete {
+  background: #ef4444;
+}
+
+.staff-card-actions button:hover {
+  opacity: 0.9;
+}
+
+.staff-card-actions button:active {
+  transform: scale(0.95);
+}
+/* ============== SLIDING FORM PANEL ============== */
+.staff-form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 999;
+  transition: opacity 0.3s ease;
+  cursor: pointer;
+}
+
+.staff-form-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.staff-form-panel {
+  position: fixed;
+  top: 0;
+  right: -450px;
+  width: 450px;
+  height: 100vh;
+  background: white;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.staff-form-panel:not(.hidden) {
+  right: 0;
+}
+
+.staff-form-panel.hidden {
+  right: -450px;
+  pointer-events: none;
+}
+
+.staff-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-light);
+  flex-shrink: 0;
+}
+
+.staff-form-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-dark);
+}
+
+.staff-form-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-light);
+  padding: 4px 8px;
+  transition: color 0.2s ease;
+}
+
+.staff-form-close:hover {
+  color: var(--text-dark);
+}
+
+.staff-form-content {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.staff-form-content .form-group {
+  margin-bottom: 16px;
+}
+
+.staff-form-content .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-dark);
+  font-size: 14px;
+}
+
+.staff-form-content .form-group input,
+.staff-form-content .form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.staff-form-content .form-group input:focus,
+.staff-form-content .form-group select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+}

@@ -1,11 +1,30 @@
-const API_BASE = 
-  window.location.hostname === "localhost"
-    ? "http://localhost:10000/api"
-    : "https://chuio.io/api";
+const API_BASE = (() => {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return "http://localhost:10000/api";
+  } else if (window.location.hostname.startsWith("192.") || window.location.hostname.startsWith("10.") || window.location.hostname.startsWith("172.")) {
+    // Local network IP (iPad, phone, etc.)
+    return `http://${window.location.hostname}:10000/api`;
+  } else {
+    return "https://chuio.io/api";
+  }
+})();
 
 let pin = "";
 let token = null;
 let restaurantId = null;
+let allowedCategoryIds = []; // Categories this kitchen staff can view
+
+// Get restaurantId from URL on page load
+(() => {
+  const params = new URLSearchParams(window.location.search);
+  restaurantId = params.get("restaurantId");
+  
+  if (!restaurantId) {
+    alert("No restaurant selected. Please login from admin panel.");
+    window.location.href = "/login";
+    return;
+  }
+})();
 
 // ============== PIN LOGIN ============== 
 function pressKey(num) {
@@ -34,19 +53,10 @@ async function submitPin() {
   errorEl.style.display = "none";
 
   try {
-    // restaurantId should already be in sessionStorage from login.js
-    restaurantId = sessionStorage.getItem("restaurantId");
-
-    if (!restaurantId) {
-      errorEl.textContent = "Restaurant ID not found. Please login again.";
-      errorEl.style.display = "block";
-      return;
-    }
-
     const res = await fetch(`${API_BASE}/auth/staff-login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin, restaurantId })
+      body: JSON.stringify({ pin, restaurantId, role: "kitchen" })
     });
 
     const data = await res.json();
@@ -69,8 +79,14 @@ async function submitPin() {
     }
 
     token = data.token;
-    sessionStorage.setItem("kitchenToken", token);
-    sessionStorage.setItem("kitchenStaffLogged", "true");
+    localStorage.setItem("token", token);
+    localStorage.setItem("role", "kitchen");
+    localStorage.setItem("restaurantId", restaurantId);
+
+    // Extract allowed categories from access_rights if they exist
+    if (data.access_rights && data.access_rights.allowed_categories) {
+      allowedCategoryIds = data.access_rights.allowed_categories.map(id => parseInt(id, 10));
+    }
 
     // Show kitchen dashboard
     document.getElementById("login-screen").style.display = "none";
@@ -88,29 +104,28 @@ async function submitPin() {
 
 // ============== KITCHEN DASHBOARD ============== 
 async function loadKitchenOrders() {
-  console.log("🔄 loadKitchenOrders() called - restaurantId:", restaurantId);
   if (!restaurantId) {
-    console.log("❌ restaurantId not set, returning early");
     return;
   }
 
   try {
     const res = await fetch(`${API_BASE}/kitchen/items`);
-    console.log("📡 API Response status:", res.status);
     if (!res.ok) {
-      console.log("❌ API returned error:", res.status);
       return;
     }
 
     const items = await res.json();
-    console.log("📦 Raw items from API:", items);
 
-    // Filter items for this restaurant and group by order
-    const orderMap = {};
 
     items.forEach(item => {
-      console.log("📌 Processing item - restaurant_id:", item.restaurant_id, "restaurantId filter:", restaurantId, "match:", item.restaurant_id == restaurantId);
       if (item.restaurant_id != restaurantId) return;
+
+      // Filter by allowed categories if restrictions exist
+      if (allowedCategoryIds.length > 0 && item.category_id) {
+        if (!allowedCategoryIds.includes(parseInt(item.category_id, 10))) {
+          return;
+        }
+      }
 
       const orderId = item.order_id;
       if (!orderMap[orderId]) {
@@ -124,7 +139,6 @@ async function loadKitchenOrders() {
       orderMap[orderId].items.push(item);
     });
 
-    console.log("✅ Grouped orders:", Object.values(orderMap));
     renderKitchenOrders(Object.values(orderMap));
   } catch (err) {
     console.error("❌ Failed to load kitchen items:", err);
@@ -252,10 +266,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // Check if already logged in via PIN
   const savedToken = sessionStorage.getItem("kitchenToken");
-  console.log("Checking PIN login - savedToken:", savedToken);
   
   if (savedToken && restaurantId) {
-    console.log("User authenticated via PIN, showing dashboard");
     token = savedToken;
     document.getElementById("login-screen").style.display = "none";
     document.getElementById("kitchen-app").classList.add("active");

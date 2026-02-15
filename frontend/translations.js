@@ -9,6 +9,7 @@ const translations = {
     'nav.menu-management': 'Menu Management',
     'nav.table-management': 'Table Management',
     'nav.staff-management': 'Staff Management',
+    'nav.features': 'Features',
     'nav.pricing': 'Pricing',
     'nav.login': 'Login',
     'nav.back-home': '← Home',
@@ -346,6 +347,284 @@ const translations = {
     'footer.contact-phone': 'Phone',
     'footer.contact-email': 'Email',
 
+    // Admin Portal
+    'admin.staff-portal': 'Staff Portal',
+    'admin.enter-pin': 'Enter PIN',
+    'admin.restaurant-portal': '🍽️ Restaurant Portal',
+    'admin.tables': 'Tables',
+    'admin.menu': 'Menu',
+    'admin.table-mgmt': 'Table Mgmt',
+    'admin.coupons': 'Coupons',
+    'admin.staff': 'Staff',
+    'admin.reports': 'Reports',
+    'admin.settings': 'Settings',
+    'admin.preferences': 'Preferences',
+    'admin.language': 'Language',
+    'admin.logout': 'Logout',
+    'admin.pin-login': '🔐 PIN',
+    'admin.staff-login': '👥 Staff Login',
+    'admin.staff-login-type': 'Select Staff Type',
+    'admin.choose-role': 'Choose your role to login',
+    'admin.staff-login-links': 'Staff Login Links',
+    'admin.staff-login-help': 'Share these links with your staff members to allow them to login without admin credentials:',
+    'admin.table-staff-link': 'Table Staff Login Link',
+    'admin.kitchen-staff-link': 'Kitchen Staff Login Link',
+    'admin.copy': '📋 Copy',
+    
+    // Close Bill
+    'admin.close-bill': 'Close Bill',
+    'admin.close-bill-submit': 'Close Bill',
+    'admin.table-number': 'Table',
+    'admin.total-amount': 'Total Amount',
+    'admin.payment-method': 'Payment Method',
+    'admin.cash': 'Cash',
+    'admin.card': 'Card',
+    'admin.online': 'Online',
+    'admin.amount-paid': 'Amount Paid',
+    'admin.discount': 'Discount Applied',
+    'admin.notes': 'Notes',
+    'admin.send-to-pos': 'Send to POS System',
+    
+    // Restaurant Settings
+    'admin.restaurant-info': 'Restaurant Information',
+    'admin.rest-name': 'Restaurant Name',
+    'admin.rest-phone': 'Phone',
+    'admin.rest-address': 'Address',
+    'admin.rest-service-charge': 'Service Charge (%)',
+    'admin.rest-theme-color': 'Theme Color',
+    'admin.rest-logo': 'Restaurant Logo',
+    'admin.edit-settings': '✎ Edit Settings',
+    'admin.save-settings': '✓ Save',
+    'admin.cancel-settings': 'Cancel',
+    
+    // POS Integration
+    'admin.pos-integration': 'POS Integration',
+    'admin.pos-webhook-url': 'Webhook URL',
+    'admin.pos-api-key': 'API Key',
+    'admin.pos-system-type': 'POS System Type',
+    'admin.pos-connection-status': 'Connection Status',
+    'admin.edit': 'Edit',
+    'admin.save': 'Save',
+    'admin.test': 'Test Connection',
+    'admin.cancel': 'Cancel',
+    
+    // Menu Management
+    'admin.add-menu-item': 'Add Menu Item',
+    'admin.add-item': '➕ Add Item',
+    'admin.item-name': 'Item Name',
+    'admin.price': 'Price',
+    'admin.price-cents': 'Price (cents)',
+    'admin.category': 'Category',
+    'admin.select-category': '-- Select a category --',
+    'admin.description': 'Description',
+    'admin.variants': 'Variants',
+    'admin.item-image': 'Food Item Image',
+    'admin.recommended-size': '(Recommended: 400px × 300px)',
+    'admin.create-item': '✓ Create Item',
+    'admin.cancel-item': '✕ Cancel',
+    
+    // Coupons Management
+    'admin.create-new-coupon': 'Create New Coupon',
+    'admin.coupon-code': 'Coupon Code',
+    'admin.discount-type': 'Discount Type',
+    'admin.percentage': 'Percentage (%)',
+    'admin.fixed-amount': 'Fixed Amount ($)',
+    'admin.discount-value': 'Discount Value',
+    'admin.min-order-value': 'Minimum Order Value ($)',
+    'admin.max-uses': 'Max Uses (leave blank for unlimited)',
+    'admin.valid-until': 'Valid Until',
+    'admin.coupon-description': 'Description',
+    'admin.create-coupon': '➕ Create Coupon',
+    'admin.manage-coupons': 'Manage coupons and discounts',
+    'admin.no-coupons': 'No active coupons',
+    
+    // Settings Cards
+    'admin.share-with-staff': 'Share with staff members',
+    'admin.create-new-staff': 'Create New Staff',
+    'admin.staff-name': 'Staff Name',
+    'admin.email-address': 'Email Address',
+    'admin.password': 'Password',
+    'admin.pin-6digits': 'PIN (6 digits)',
+    'admin.role': 'Role',
+    'admin.staff-role': 'Staff',
+    'admin.kitchen-role': 'Kitchen',
+    'admin.create-staff': '➕ Create Staff',
+    
+    // Access Rights
+    'admin.access-rights': 'Access Rights',
+    'admin.allowed-categories': 'Allowed Food Categories',
+    'admin.kitchen-categories-help': 'Select which food categories this kitchen staff can view',
+    'admin.access-view-tables': 'View Tables',
+    'admin.access-manage-orders': 'Manage Orders',
+    'admin.access-view-menu': 'View Menu',
+    'admin.access-close-bills': 'Close Bills',
+    'admin.access-manage-menu': 'Manage Menu',
+    'admin.access-manage-staff': 'Manage Staff',
+    'admin.access-view-reports': 'View Reports',
+    
+    // Session Panel
+    'admin.select-session': 'Select a session to view orders',
+    'admin.start-new-session': 'Start New Session',
+    'admin.number-of-pax': 'Number of Pax',
+    'admin.start-session': 'Start Session',
+    'admin.cancel': 'Cancel',
+    
+    // Tables Management
+    'admin.create-table': 'Create New Table',
+    'admin.table-name': 'Table Name',
+    'admin.table-number': 'Table Number',
+    'admin.max-seats': 'Max Seats',
+    'admin.location': 'Location',
+    'admin.create': '➕ Create',
+    
+    // Reports
+    'admin.filter-by-date': 'Filter by Date',
+    'admin.start-date': 'Start Date',
+    'admin.end-date': 'End Date',
+    'admin.filter': '🔍 Filter',
+    'admin.load-reports': '📊 Load Reports',
+    'admin.no-reports': 'No reports found',
+    'admin.status': 'Status',
+    
+    // Table Management Section
+    'admin.table-categories': 'Table Categories',
+    'admin.add-table': 'Add Table',
+    'admin.number-seats': 'Number of Seats',
+    'admin.add-table-btn': '➕ Add Table',
+    'admin.manage-tables': 'Manage Tables',
+    'admin.category-name': 'Category Name',
+    'admin.add-category': '➕ Add Category',
+    'admin.qr-settings': 'QR Code Settings',
+    'admin.qr-code-mode': 'QR Code Mode',
+    'admin.qr-mode-warning': 'QR Code Mode can only be changed when there are no active sessions. Please close all sessions before making changes.',
+    'admin.qr-regenerate-option': 'Regenerate QR Code Each Session',
+    'admin.qr-static-table-option': 'Static QR Code Per Table (One Session Only)',
+    'admin.qr-static-seat-option': 'Static QR Code Per Seat',
+    'admin.qr-regenerate-desc': 'Regenerate QR Code Each Session',
+    'admin.qr-regenerate-desc-text': 'New QR code generated each time session starts',
+    'admin.qr-static-table-desc': 'Static QR Code Per Table',
+    'admin.qr-static-table-desc-text': 'One session per table, cannot start new session',
+    'admin.qr-static-seat-desc': 'Static QR Code Per Seat',
+    'admin.qr-static-seat-desc-text': 'Each seat has independent QR code and session',
+    'admin.gen-new-qr': 'Generate New QR Code for Each Session',
+    'admin.checked': 'Checked',
+    'admin.checked-desc': 'A new QR code is generated each time a session starts (customer scans fresh code)',
+    'admin.unchecked': 'Unchecked',
+    'admin.unchecked-desc': 'QR codes remain static - print once per seat (useful for permanent table setups)',
+    'admin.create-table-category': 'Create Table Category',
+    
+    // Booking Settings
+    'admin.booking-settings': 'Booking Settings',
+    'admin.reservation-time-allowance': 'Reservation Time Allowance',
+    'admin.booking-time-desc': 'How long a reservation is held past the booked time before it expires (in minutes)',
+    'admin.default-15-mins': 'Default: 15 minutes',
+    
+    // Reports Section
+    'admin.orders-bills': 'Orders & Bills',
+    'admin.total-orders': 'Total Orders',
+    'admin.total-revenue': 'Total Revenue',
+    'admin.avg-bill': 'Average Bill',
+    'admin.select-date-range': 'Select date range and click "Load Report" to view orders',
+    'admin.all-orders': 'All Orders',
+    'admin.pending': 'Pending',
+    'admin.confirmed': 'Confirmed',
+    'admin.ready': 'Ready',
+    'admin.served': 'Served',
+    'admin.paid': 'Paid',
+    'admin.cancelled': 'Cancelled',
+    
+    // PIN Modal
+    'admin.switch-account': 'Switch user account',
+    'admin.enter-pin': 'Enter PIN',
+    'admin.close': 'Close',
+    
+    // Close Bill Modal
+    'admin.table': 'Table',
+    'admin.payment-method': 'Payment Method',
+    'admin.cash': '💵 Cash',
+    'admin.card': '💳 Card',
+    'admin.online': '💻 Online',
+    'admin.amount-paid': 'Amount Paid',
+    'admin.discount': 'Discount Applied',
+    'admin.notes': 'Notes (Optional)',
+    'admin.send-to-pos': 'Send to POS System',
+    'admin.close-bill-submit': '💰 Close Bill',
+    
+    // Dynamic Content (Table Cards & Session Panel)
+    'admin.seats': 'Seats',
+    'admin.rename': '✏️ Rename',
+    'admin.change-seats': '🪑 Change Seats',
+    'admin.delete': '🗑 Delete',
+    'admin.session': '🧾 Session',
+    'admin.pax': 'pax',
+    'admin.change-pax': 'Change Pax',
+    'admin.print-qr': '📱 Print QR',
+    'admin.print-bill': 'Print Bill',
+    'admin.split-bill': 'Split Bill',
+    'admin.end-session': 'End Session',
+    'admin.change-table': 'Change Table',
+    'admin.edit-order': 'Edit Order',
+    'admin.confirm-edit': 'Confirm Edit',
+    'admin.order-for-table': 'Order for Table',
+    'admin.loading-orders': 'Loading orders…',
+    'admin.apply-discount': 'Apply',
+    'admin.clear-discount': 'Clear',
+    'admin.apply-discount-admin': '💰 Apply Discount (Admin Only)',
+    'admin.total': 'Total',
+    'admin.no-tables': 'No tables in this category',
+    'admin.edit-mode': 'Edit Order',
+    'admin.confirm-mode': 'Confirm Edit',
+
+    // Kitchen Dashboard
+    'kitchen.title': '🍳 Kitchen Dashboard',
+    'kitchen.enter-pin': 'Enter PIN to continue',
+    'kitchen.logout': 'Logout',
+    'kitchen.loading': 'Loading orders...',
+    'kitchen.no-orders': 'No orders',
+    'kitchen.new-order': 'New Order',
+    'kitchen.preparing': 'Preparing',
+    'kitchen.ready': 'Ready',
+    'kitchen.order-status': 'Order Status',
+
+    // Order Panel
+    'admin.no-orders': 'No orders yet',
+    'admin.subtotal': 'Subtotal',
+    'admin.service-charge': 'Service Charge',
+    'admin.total-label': 'Total',
+    'admin.status': 'Status',
+    'admin.quantity': 'Quantity',
+    'admin.order': 'Order',
+    'admin.view-orders': 'View Full Orders',
+    'admin.all-orders': 'All Orders',
+    'admin.more': 'more',
+    'admin.close': 'Close',
+
+    // Menu/Ordering Page
+    'menu.start-ordering': 'Start Ordering',
+    'menu.check-orders': 'Check Orders',
+    'menu.loading': 'Loading...',
+    'menu.add-to-cart': 'Add to Cart',
+    'menu.remove': 'Remove',
+    'menu.quantity': 'Quantity',
+    'menu.price': 'Price',
+    'menu.total': 'Total',
+    'menu.checkout': 'Checkout',
+    'menu.empty-cart': 'Cart is Empty',
+    'menu.order-confirmed': 'Order Confirmed',
+
+    // Common
+    'common.edit': 'Edit',
+    'common.delete': 'Delete',
+    'common.save': 'Save',
+    'common.cancel': 'Cancel',
+    'common.close': 'Close',
+    'common.add': 'Add',
+    'common.search': 'Search',
+    'common.filter': 'Filter',
+    'common.loading': 'Loading...',
+    'common.error': 'Error',
+    'common.success': 'Success',
+
     'lang.english': 'English',
     'lang.chinese': '中文',
   },
@@ -491,7 +770,7 @@ const translations = {
     'products.organize-tables-desc': '高效管理餐廳中的所有房間及餐桌。跟蹤餐桌實時狀況、分配用餐人數並實時調動。',
     'products.tables-unlimited': '✓ 創建無限餐桌',
     'products.tables-capacity': '✓ 設置餐桌容量和位置',
-    'products.tables-track': '✓ 跟蹤活躍會話',
+    'products.tables-track': '✓ 跟蹤活躍期間',
     'products.tables-realtime': '✓ 實時監控餐桌狀態',
     'products.tables-qr': '✓ 為每張餐桌生成唯一的二維碼',
     'products.staff-mgmt-title': '員工管理',
@@ -693,6 +972,287 @@ const translations = {
     'footer.address-line3': '',
     'footer.contact-phone': '電話',
     'footer.contact-email': '電子郵件',
+
+    // Admin Portal
+    'admin.staff-portal': '員工門戶',
+    'admin.enter-pin': '輸入 PIN',
+    'admin.restaurant-portal': '🍽️ 餐廳門戶',
+    'admin.tables': '餐桌',
+    'admin.menu': '菜單',
+    'admin.table-mgmt': '餐桌管理',
+    'admin.coupons': '優惠券',
+    'admin.staff': '員工',
+    'admin.reports': '報告',
+    'admin.settings': '設置',
+    'admin.preferences': '偏好設置',
+    'admin.language': '語言',
+    'admin.logout': '登出',
+    'admin.pin-login': '🔐 PIN',
+    'admin.staff-login': '👥 員工登入',
+    'admin.staff-login-type': '選擇員工類型',
+    'admin.choose-role': '選擇您的角色登入',
+    'admin.staff-login-links': '員工登入連結',
+    'admin.staff-login-help': '與員工分享這些連結，讓他們可以不需要管理員認證即可登入：',
+    'admin.table-staff-link': '餐桌員工登入連結',
+    'admin.kitchen-staff-link': '廚房員工登入連結',
+    'admin.copy': '📋 複製',
+    
+    // Close Bill
+    'admin.close-bill': '結算賬單',
+    'admin.close-bill-submit': '結算賬單',
+    'admin.table-number': '餐桌',
+    'admin.total-amount': '總額',
+    'admin.payment-method': '付款方式',
+    'admin.cash': '現金',
+    'admin.card': '信用卡',
+    'admin.online': '在線支付',
+    'admin.amount-paid': '支付金額',
+    'admin.discount': '折扣',
+    'admin.notes': '備註',
+    'admin.send-to-pos': '發送至 POS 系統',
+    
+    // Restaurant Settings
+    'admin.restaurant-info': '餐廳信息',
+    'admin.rest-name': '餐廳名稱',
+    'admin.rest-phone': '電話',
+    'admin.rest-address': '地址',
+    'admin.rest-service-charge': '服務費 (%)',
+    'admin.rest-theme-color': '主題顏色',
+    'admin.rest-logo': '餐廳徽標',
+    'admin.edit-settings': '✎ 編輯設置',
+    'admin.save-settings': '✓ 保存',
+    'admin.cancel-settings': '取消',
+    
+    // POS Integration
+    'admin.pos-integration': '🔌 POS 集成',
+    'admin.pos-webhook-url': 'Webhook 網址',
+    'admin.pos-api-key': 'API 密鑰',
+    'admin.pos-system-type': 'POS 系統類型',
+    'admin.pos-connection-status': '連接狀態',
+    'admin.edit': '編輯',
+    'admin.save': '保存',
+    'admin.test': '測試連接',
+    'admin.cancel': '取消',
+    
+    // Menu Management
+    'admin.add-menu-item': '添加菜單項目',
+    'admin.add-item': '➕ 添加項目',
+    'admin.item-name': '項目名稱',
+    'admin.price': '價格',
+    'admin.price-cents': '價格(分)',
+    'admin.category': '類別',
+    'admin.select-category': '-- 選擇一個類別 --',
+    'admin.description': '描述',
+    'admin.variants': '變體',
+    'admin.item-image': '食品項目圖像',
+    'admin.recommended-size': '(推薦: 400px × 300px)',
+    'admin.create-item': '✓ 建立項目',
+    'admin.cancel-item': '✕ 取消',
+    
+    // Coupons Management
+    'admin.create-new-coupon': '建立新優惠券',
+    'admin.coupon-code': '優惠券代碼',
+    'admin.discount-type': '折扣類型',
+    'admin.percentage': '百分比 (%)',
+    'admin.fixed-amount': '固定金額 ($)',
+    'admin.discount-value': '折扣值',
+    'admin.min-order-value': '最小訂單值 ($)',
+    'admin.max-uses': '最大使用次數(留空為無限)',
+    'admin.valid-until': '有效期至',
+    'admin.coupon-description': '描述',
+    'admin.create-coupon': '➕ 建立優惠券',
+    'admin.manage-coupons': '管理優惠券和折扣',
+    'admin.no-coupons': '沒有有效的優惠券',
+    
+    // Settings Cards (Chinese)
+    'admin.share-with-staff': '與員工分享',
+    
+    // Staff Management
+    'admin.create-new-staff': '建立新員工',
+    'admin.staff-name': '員工名稱',
+    'admin.email-address': '電郵地址',
+    'admin.password': '密碼',
+    'admin.pin-6digits': 'PIN(6位數字)',
+    'admin.role': '角色',
+    'admin.staff-role': '員工',
+    'admin.kitchen-role': '廚房',
+    'admin.create-staff': '➕ 建立員工',
+    
+    // Access Rights (Chinese)
+    'admin.access-rights': '使用權限',
+    'admin.allowed-categories': '允許的食物類別',
+    'admin.kitchen-categories-help': '選擇此廚房員工可以查看的食物類別',
+    'admin.access-view-tables': '查看餐桌',
+    'admin.access-manage-orders': '管理訂單',
+    'admin.access-view-menu': '查看菜單',
+    'admin.access-close-bills': '關閉賬單',
+    'admin.access-manage-menu': '管理菜單',
+    'admin.access-manage-staff': '管理員工',
+    'admin.access-view-reports': '查看報告',
+    
+    // Session Panel
+    'admin.select-session': '選擇一個期間以查看訂單',
+    'admin.start-new-session': '開始新期間',
+    'admin.number-of-pax': '客人數量',
+    'admin.start-session': '開始期間',
+    'admin.cancel': '取消',
+    
+    // Tables Management
+    'admin.create-table': '建立新餐桌',
+    'admin.table-name': '餐桌名稱',
+    'admin.table-number': '餐桌號碼',
+    'admin.max-seats': '最大座位',
+    'admin.location': '位置',
+    'admin.create': '➕ 建立',
+    
+    // Reports
+    'admin.filter-by-date': '按日期篩選',
+    'admin.start-date': '開始日期',
+    'admin.end-date': '結束日期',
+    'admin.filter': '🔍 篩選',
+    'admin.load-reports': '📊 加載報告',
+    'admin.no-reports': '未找到報告',
+    'admin.status': '狀態',
+    
+    // Table Management Section (Chinese)
+    'admin.table-categories': '餐桌分類',
+    'admin.add-table': '添加餐桌',
+    'admin.number-seats': '座位數',
+    'admin.add-table-btn': '➕ 添加餐桌',
+    'admin.manage-tables': '管理餐桌',
+    'admin.category-name': '分類名稱',
+    'admin.add-category': '➕ 添加分類',
+    'admin.qr-settings': '二維碼設置',
+    'admin.qr-code-mode': '二維碼模式',
+    'admin.qr-regenerate-option': '每次期間重新生成二維碼',
+    'admin.qr-static-table-option': '每個餐桌靜態二維碼（每個餐桌只能有一個期間）',
+    'admin.qr-static-seat-option': '每個座位靜態二維碼',
+    'admin.qr-regenerate-desc': '每次期間重新生成二維碼',
+    'admin.qr-regenerate-desc-text': '每次期間開始時生成新的二維碼',
+    'admin.qr-static-table-desc': '每個餐桌靜態二維碼',
+    'admin.qr-static-table-desc-text': '每個餐桌只能有一個期間，無法開始新期間',
+    'admin.qr-static-seat-desc': '每個座位靜態二維碼',
+    'admin.qr-static-seat-desc-text': '每個座位有獨立的二維碼和期間',
+    'admin.gen-new-qr': '每次期間生成新的二維碼',
+    'admin.checked': '已勾選',
+    'admin.checked-desc': '每次期間開始時生成新的二維碼(客戶掃描新代碼)',
+    'admin.unchecked': '未勾選',
+    'admin.unchecked-desc': '二維碼保持靜態 - 每個座位打印一次(適合永久餐桌設置)',
+    'admin.create-table-category': '創建餐桌分類',
+    'admin.qr-mode-warning': '只能在沒有活動期間時更改二維碼模式。請先關閉所有期間。',
+    
+    // Booking Settings (Chinese)
+    'admin.booking-settings': '預訂設置',
+    'admin.reservation-time-allowance': '預訂時間寬限',
+    'admin.booking-time-desc': '預訂超時後保留預訂多長時間（分鐘）',
+    'admin.default-15-mins': '默認值：15 分鐘',
+    
+    // Reports Section (Chinese)
+    'admin.orders-bills': '訂單和賬單',
+    'admin.total-orders': '訂單總數',
+    'admin.total-revenue': '總收入',
+    'admin.avg-bill': '平均賬單',
+    'admin.select-date-range': '選擇日期範圍，點擊"加載報告"查看訂單',
+    'admin.all-orders': '所有訂單',
+    'admin.pending': '待處理',
+    'admin.confirmed': '已確認',
+    'admin.ready': '已準備好',
+    'admin.served': '已提供',
+    'admin.paid': '已支付',
+    'admin.cancelled': '已取消',
+    
+    // PIN Modal (Chinese)
+    'admin.switch-account': '切換用戶帳戶',
+    'admin.enter-pin': '輸入 PIN',
+    'admin.close': '關閉',
+    
+    // Close Bill Modal (Chinese)
+    'admin.table': '餐桌',
+    'admin.payment-method': '支付方式',
+    'admin.cash': '💵 現金',
+    'admin.card': '💳 信用卡',
+    'admin.online': '💻 在線支付',
+    'admin.amount-paid': '支付金額',
+    'admin.discount': '折扣',
+    'admin.notes': '備註',
+    'admin.send-to-pos': '發送至 POS 系統',
+    'admin.close-bill-submit': '💰 結算賬單',
+    
+    // Dynamic Content (Table Cards & Session Panel) - Chinese
+    'admin.seats': '座位',
+    'admin.rename': '✏️ 重命名',
+    'admin.change-seats': '🪑 更改座位',
+    'admin.delete': '🗑 刪除',
+    'admin.session': '🧾 期間',
+    'admin.pax': '人',
+    'admin.change-pax': '更改人數',
+    'admin.print-qr': '📱 打印二維碼',
+    'admin.print-bill': '打印賬單',
+    'admin.split-bill': '分割賬單',
+    'admin.end-session': '結束期間',
+    'admin.change-table': '轉台',
+    'admin.edit-order': '編輯訂單',
+    'admin.confirm-edit': '確認編輯',
+    'admin.order-for-table': '為餐桌下單',
+    'admin.loading-orders': '正在加載訂單…',
+    'admin.apply-discount': '應用',
+    'admin.clear-discount': '清除',
+    'admin.apply-discount-admin': '💰 應用折扣(僅管理員)',
+    'admin.total': '合計',
+    'admin.no-tables': '此分類中沒有餐桌',
+    'admin.edit-mode': '編輯訂單',
+    'admin.confirm-mode': '確認編輯',
+
+    // Kitchen Dashboard
+    'kitchen.title': '🍳 廚房儀表板',
+    'kitchen.enter-pin': '輸入 PIN 繼續',
+    'kitchen.logout': '登出',
+    'kitchen.loading': '正在加載訂單...',
+    'kitchen.no-orders': '沒有訂單',
+    'kitchen.new-order': '新訂單',
+    'kitchen.preparing': '正在準備',
+    'kitchen.ready': '準備好',
+    'kitchen.order-status': '訂單狀態',
+
+    // Order Panel
+    'admin.no-orders': '還沒有訂單',
+    'admin.subtotal': '小計',
+    'admin.service-charge': '服務費',
+    'admin.total-label': '總計',
+    'admin.status': '狀態',
+    'admin.quantity': '數量',
+    'admin.order': '訂單',
+    'admin.view-orders': '📖 查看全部訂單',
+    'admin.all-orders': '📋 全部訂單',
+    'admin.more': '更多',
+    'admin.close': '關閉',
+
+    // Menu/Ordering Page
+    'menu.start-ordering': '開始訂購',
+    'menu.check-orders': '檢查訂單',
+    'menu.loading': '正在加載...',
+    'menu.add-to-cart': '添加到購物車',
+    'menu.remove': '移除',
+    'menu.quantity': '數量',
+    'menu.price': '價格',
+    'menu.total': '總計',
+    'menu.checkout': '結賬',
+    'menu.empty-cart': '購物車為空',
+    'menu.order-confirmed': '訂單已確認',
+
+    // Common
+    'common.edit': '編輯',
+    'common.delete': '刪除',
+    'common.save': '保存',
+    'common.cancel': '取消',
+    'common.close': '關閉',
+    'common.add': '添加',
+    'common.search': '搜索',
+    'common.filter': '篩選',
+    'common.loading': '正在加載...',
+    'common.error': '出錯',
+    'common.success': '成功',
+
     'lang.english': 'English',
     'lang.chinese': '中文',
   }
@@ -716,12 +1276,28 @@ function t(key, lang = null) {
 }
 
 // Set language
-function setLanguage(lang) {
+window.setLanguage = function(lang) {
   console.log('[Translations] Setting language to:', lang);
   localStorage.setItem('language', lang);
   document.documentElement.lang = lang;
+  
+  // Apply translations to DOM elements
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key, lang);
+  });
+  
+  // Update language button states
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  const activeLangBtn = document.getElementById(`lang-${lang}-settings`) || document.getElementById(`lang-${lang}`);
+  if (activeLangBtn) {
+    activeLangBtn.classList.add('active');
+  }
+  
   window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
-}
+};
 
 // Get current language
 function getCurrentLanguage() {

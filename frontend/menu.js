@@ -18,6 +18,8 @@ const qrToken = window.location.pathname.split("/").filter(Boolean)[0];
 
 let sessionId = null;
 let tableName = null;
+let restaurantId = null;
+let serviceChargePct = 0;
 let orderPollerStarted = false;
 
 // cart, variants — unchanged
@@ -35,6 +37,7 @@ async function initLanding() {
   sessionId = session.session_id;
   restaurantId = session.restaurant_id;
   tableName = session.table_name;
+  serviceChargePct = session.service_charge_percent || 0;
 console.log("Session data:", session);
   // 🔥 Populate landing page
   const logoEl = document.getElementById("landing-logo")
@@ -237,7 +240,7 @@ function renderMenuItemWithVariants(item){
                 v.min_select === v.max_select && v.min_select !== null
                   ? `(select ${v.min_select})`
                   : v.max_select
-                  ? `(select ${v.min_select ?? 0}–${v.max_select})`
+                  ? `(select ${v.min_select != null ? v.min_select : 0}–${v.max_select})`
                   : v.min_select
                   ? `(select at least ${v.min_select})`
                   : `(optional)`
@@ -260,7 +263,7 @@ function renderMenuItemWithVariants(item){
             data-item-id="${item.id}"
             data-variant-id="${v.id}"
              ${
-    variantSelections[item.id]?.[v.id]?.includes(o.id)
+    (variantSelections[item.id] && variantSelections[item.id][v.id] && variantSelections[item.id][v.id].includes(o.id))
       ? "checked"
       : ""}
             onchange="onVariantChange(${item.id}, ${v.id}, ${o.id}, this.checked)"
@@ -389,9 +392,9 @@ function canAddToCart(item) {
 
   for (const v of item.variants) {
     const selected =
-      variantSelections[item.id]?.[v.id]?.length || 0;
+      (variantSelections[item.id] && variantSelections[item.id][v.id]) ? variantSelections[item.id][v.id].length : 0;
 
-    const min = v.min_select ?? (v.required ? 1 : 0);
+    const min = v.min_select != null ? v.min_select : (v.required ? 1 : 0);
 
     if (selected < min) {
       return false;
@@ -413,7 +416,7 @@ function updateAddToCartButton(item) {
 
 function updateVariantCounter(itemId, variant) {
   const selected =
-    variantSelections[itemId]?.[variant.id] || [];
+    (variantSelections[itemId] && variantSelections[itemId][variant.id]) ? variantSelections[itemId][variant.id] : [];
 
   const count = selected.length;
 
@@ -652,12 +655,12 @@ function renderCartDrawer() {
     return;
   }
 
-  let total = 0;
+  let subtotal = 0;
 
   let html = '<div class="cart-items">';
   html += cart.items.map((item, idx) => {
     const line = item.totalPriceCents * item.quantity;
-    total += line;
+    subtotal += line;
 
     return `
       <div class="cart-item">
@@ -665,7 +668,7 @@ function renderCartDrawer() {
           <strong>${item.name}</strong>
           <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
         </div>
-        ${item.variantOptionDetails?.map(v => `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`).join("") || ""}
+        ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}
         <div class="qty-controls">
           <button class="qty-btn" onclick="updateCartQty(${idx}, -1)">−</button>
           <span class="qty-display">${item.quantity}</span>
@@ -677,6 +680,9 @@ function renderCartDrawer() {
   }).join("");
   html += '</div>';
 
+  const serviceCharge = Math.round(subtotal * serviceChargePct / 100);
+  const total = subtotal + serviceCharge;
+
   html += `
     <div class="cart-footer">
       <div class="coupon-section">
@@ -684,9 +690,21 @@ function renderCartDrawer() {
         <button onclick="applyCouponToCart()" class="btn-secondary">Apply Coupon</button>
         <div id="cart-coupon-display"></div>
       </div>
-      <div class="cart-total">
-        <span>Total:</span>
-        <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
+      <div class="cart-summary">
+        <div class="summary-line">
+          <span>Subtotal:</span>
+          <span>$${(subtotal / 100).toFixed(2)}</span>
+        </div>
+        ${serviceChargePct > 0 ? `
+          <div class="summary-line">
+            <span>Service Charge (${serviceChargePct}%):</span>
+            <span>$${(serviceCharge / 100).toFixed(2)}</span>
+          </div>
+        ` : ''}
+        <div class="cart-total">
+          <span>Total:</span>
+          <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
+        </div>
       </div>
       <button class="btn-primary cart-submit" onclick="submitOrder()">Confirm Order</button>
     </div>
@@ -735,10 +753,12 @@ function updateCartBar() {
   const totalEl = document.getElementById("cart-total");
 
   const count = cart.items.reduce((s, i) => s + i.quantity, 0);
-  const totalCents = cart.items.reduce(
+  const subtotalCents = cart.items.reduce(
     (sum, i) => sum + i.totalPriceCents * i.quantity,
     0
   );
+  const serviceCharge = Math.round(subtotalCents * serviceChargePct / 100);
+  const totalCents = subtotalCents + serviceCharge;
 
   countEl.textContent = `${count} item${count !== 1 ? "s" : ""}`;
   totalEl.textContent = `$${(totalCents / 100).toFixed(2)}`;
@@ -909,7 +929,8 @@ function closeAllDrawers() {
     d.style.transform = "";
   });
 
-  document.getElementById("drawer-overlay")?.classList.remove("open");
+  const drawerOverlay = document.getElementById("drawer-overlay");
+  if (drawerOverlay) drawerOverlay.classList.remove("open");
   document.body.style.overflow = "";
   activeDrawer = null;
 }

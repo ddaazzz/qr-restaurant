@@ -16,7 +16,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 
 // WhatsApp contact function
 function contactWhatsApp(plan) {
-  const phoneNumber = '85263433995';
+  const phoneNumber = '85267455358';
   const message = `I want to enquire about Chuio.io ${plan}`;
   const encodedMessage = encodeURIComponent(message);
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }, 3000);
           
           // Optionally send WhatsApp notification to admin
-          const adminPhoneNumber = '85263433995';
+          const adminPhoneNumber = '85267455358';
           const adminMessage = `New Demo Request: ${formData.name}, Phone: ${formData.phone}`;
           const encodedAdminMessage = encodeURIComponent(adminMessage);
           const whatsappUrl = `https://wa.me/${adminPhoneNumber}?text=${encodedAdminMessage}`;
@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
           alert('Failed to submit. Please try WhatsApp instead.');
           // Fallback to WhatsApp
-          const phoneNumber = '85263433995';
+          const phoneNumber = '85267455358';
           const fallbackMessage = `Hi, I'm interested in a demo. Name: ${formData.name}, Phone: ${formData.phone}`;
           const encodedMessage = encodeURIComponent(fallbackMessage);
           const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Error submitting form:', error);
         alert('Error submitting form. Please try WhatsApp instead.');
         // Fallback to WhatsApp
-        const phoneNumber = '85263433995';
+        const phoneNumber = '85267455358';
         const fallbackMessage = `Hi, I'm interested in a demo. Name: ${formData.name}, Phone: ${formData.phone}`;
         const encodedMessage = encodeURIComponent(fallbackMessage);
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
@@ -142,4 +142,29 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-});
+
+  // Waitlist form handler
+  const waitlistForm = document.getElementById('waitlist-form');
+  if (waitlistForm) {
+    waitlistForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(this);
+      const restaurantName = this.querySelector('input[placeholder="Restaurant Name"]').value;
+      const email = this.querySelector('input[placeholder="Email Address"]').value;
+      const phone = this.querySelector('input[placeholder="Phone Number"]').value;
+      
+      // Send to WhatsApp with waitlist info
+      const phoneNumber = '85267455358';
+      const message = `Hello! I'd like to join the Chuio waitlist.\n\nRestaurant Name: ${restaurantName}\nEmail: ${email}\nPhone: ${phone}`;
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+      
+      // Show confirmation and redirect
+      alert('Thank you for joining our waitlist! We\'ll be in touch soon.');
+      window.open(whatsappUrl, '_blank');
+      
+      // Reset form
+      this.reset();
+    });
+  }

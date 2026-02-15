@@ -1,29 +1,100 @@
 
-const API =
-  window.location.hostname === "localhost"
-    ? "http://localhost:10000/api"
-    : "https://chuio.io/api";
-const restaurantId = 1;
-
-let MENU_CACHE = [];
-let EDITING_ORDER_ID = null;
-let EDIT_BUFFER = {};
-const ORDER_ITEM_CACHE = {};
-const qrURL = window.location.hostname === "localhost"
-    ? "http://localhost:10000/"
-    : "https://chuio.io/"`${table.qr_token}`;
-const canvasId = `qr-${table.id}`
-
-// 🔐 Auth guard
-(() => {
-  const token = localStorage.getItem("token");
-  const role = localStorage.getItem("role");
-
-  if (!token || role !== "staff") {
-    alert("Access denied");
-    window.location.href = "/login";
+const API = (() => {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return "http://localhost:10000/api";
+  } else if (window.location.hostname.startsWith("192.") || window.location.hostname.startsWith("10.") || window.location.hostname.startsWith("172.")) {
+    // Local network IP (iPad, phone, etc.)
+    return `http://${window.location.hostname}:10000/api`;
+  } else {
+    return "https://chuio.io/api";
   }
 })();
+
+let pin = "";
+let token = null;
+let restaurantId = null;
+
+// Get restaurantId from URL on page load
+(() => {
+  const params = new URLSearchParams(window.location.search);
+  restaurantId = params.get("restaurantId");
+  
+  if (!restaurantId) {
+    alert("No restaurant selected. Please login from admin panel.");
+    window.location.href = "/login";
+    return;
+  }
+})();
+
+// ============== PIN LOGIN ============== 
+function pressKey(num) {
+  if (pin.length < 6) {
+    pin += num;
+    updatePinDisplay();
+  }
+}
+
+function clearPin() {
+  pin = "";
+  updatePinDisplay();
+}
+
+function updatePinDisplay() {
+  const dots = document.querySelectorAll("#pin-dots span");
+  dots.forEach((dot, idx) => {
+    dot.classList.toggle("filled", idx < pin.length);
+  });
+}
+
+async function submitPin() {
+  if (pin.length !== 6) return;
+
+  const errorEl = document.getElementById("error-message");
+  errorEl.style.display = "none";
+
+  try {
+    const res = await fetch(`${API}/auth/staff-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin, restaurantId, role: "staff" })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.token) {
+      errorEl.textContent = data.error || "Invalid PIN";
+      errorEl.style.display = "block";
+      pin = "";
+      updatePinDisplay();
+      return;
+    }
+
+    // Check if user is table staff
+    if (data.role !== "staff") {
+      errorEl.textContent = "Access denied. Table staff only.";
+      errorEl.style.display = "block";
+      pin = "";
+      updatePinDisplay();
+      return;
+    }
+
+    token = data.token;
+    localStorage.setItem("token", token);
+    localStorage.setItem("role", "staff");
+    localStorage.setItem("restaurantId", restaurantId);
+
+    // Show staff dashboard
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("staff-app").style.display = "block";
+
+    // Start loading tables
+    loadTables();
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = "Connection error";
+    errorEl.style.display = "block";
+  }
+}
 
 /* ------------------------
    Utilities

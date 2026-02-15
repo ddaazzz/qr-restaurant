@@ -10,513 +10,214 @@
   <!-- QR code library -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
-  <!-- Admin CSS -->
+  <!-- Admin CSS (Core + Modules) -->
   <link rel="stylesheet" href="/admin.css" />
+  <link rel="stylesheet" href="/admin-orders.css" />
+  <link rel="stylesheet" href="/admin-tables.css" />
+  <link rel="stylesheet" href="/admin-menu.css" />
+  <link rel="stylesheet" href="/admin-staff.css" />
+  <link rel="stylesheet" href="/admin-reports.css" />
+  <link rel="stylesheet" href="/admin-settings.css" />
 </head>
 
 <body>
 
-  <!-- ================= STAFF LOGIN SCREEN ================= -->
-  <div id="login-screen" class="login-screen">
-    <div class="login-container">
-      <div class="login-header">
-        <img src="/uploads/chuio/chuio_logo.png" class="favicon-logo" alt="Chuio Logo" style="height: 80px;" />
-        <p>Staff Portal</p>
-      </div>
 
-      <div id="pin-login">
-        <h2>Enter PIN</h2>
-
-        <div id="pin-dots">
-          <span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-
-        <div class="keypad">
-          <button onclick="pressKey(1)">1</button>
-          <button onclick="pressKey(2)">2</button>
-          <button onclick="pressKey(3)">3</button>
-
-          <button onclick="pressKey(4)">4</button>
-          <button onclick="pressKey(5)">5</button>
-          <button onclick="pressKey(6)">6</button>
-
-          <button onclick="pressKey(7)">7</button>
-          <button onclick="pressKey(8)">8</button>
-          <button onclick="pressKey(9)">9</button>
-
-          <button class="clear" onclick="clearPin()">⌫</button>
-          <button onclick="pressKey(0)">0</button>
-          <button class="enter" onclick="submitPin()">⏎</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- ================= MAIN APP (hidden until login) ================= -->
   <div id="app-container" class="app-container" style="display: none;">
-    
-    <!-- HEADER -->
+    <!-- HEADER with collapsible menu toggle, section title, and admin dropdown -->
     <header class="app-header">
-      <div class="header-left">
-        <h1>🍽️ Restaurant Portal</h1>
-      </div>
-      <div class="header-right">
-        <div id="restaurant-selector" class="restaurant-selector" style="display: none;">
-          <button class="restaurant-name-btn" id="restaurant-name-btn" onclick="toggleRestaurantList()"></button>
-          <div id="restaurant-list" class="restaurant-list" style="display: none;">
-            <!-- Populated by JS -->
+        <div class="header-left">
+          <button id="sidebar-toggle" class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+        </div>
+        
+        <div class="header-center">
+        </div>
+        
+        <div class="header-right">
+          <button id="table-edit-btn" class="btn-primary" onclick="toggleTableEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
+          <button id="menu-edit-btn" class="btn-primary" onclick="toggleMenuEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
+          <button id="staff-edit-btn" class="btn-primary" onclick="toggleStaffEditMode('staff')" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
+          <button id="reports-btn" class="btn-primary" style="display: none;">∿ Reports</button>
+          <button id="edit-settings-header" class="btn-primary" onclick="enterEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
+          <button id="orders-history-header-btn" class="btn-tertiary" onclick="toggleOrdersHistoryMode()" style="display: none;"><img src="/uploads/website/history.png" alt="history" style="width: 16px; height: 16px; filter: brightness(0) invert(1);"/> History</button>
+          <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
+            <img src="/uploads/website/user.png" alt="admin" class="btn-icon"> Admin
+            <span class="dropdown-arrow">▼</span>
+          </button>
+          <div id="admin-dropdown" class="admin-dropdown hidden">
+            <div id="superadmin-restaurant-list" style="display: none; padding: 10px; border-bottom: 1px solid #ddd; max-height: 300px; overflow-y: auto;"></div>
+            <button class="dropdown-item" onclick="handleLogout()">🚪 Logout</button>
           </div>
         </div>
-        <button id="pin-login-btn" class="pin-login-btn" onclick="openPinLoginModal()">🔐 PIN</button>
-        <button id="logout-btn" class="logout-btn" onclick="handleLogout()">Logout</button>
-      </div>
-    </header>
+      </header>
 
-    <!-- SIDEBAR NAVIGATION -->
-    <div class="app-wrapper">
-      <nav class="sidebar">
+      <!-- SIDEBAR NAVIGATION (collapsible) -->
+      <nav class="sidebar" id="sidebar">
         <div class="sidebar-menu">
+          <button class="menu-btn" data-section="orders" onclick="switchSection('orders')">
+            <img src="/uploads/website/order.png" alt="orders" class="icon">
+            <span class="menu-text">Orders</span>
+          </button>
           <button class="menu-btn active" data-section="tables" onclick="switchSection('tables')">
-            <span class="icon">🍽️</span>
-            <span>Tables</span>
+            <img src="/uploads/website/table.png" alt="tables" class="icon">
+            <span class="menu-text">Tables</span>
           </button>
           <button class="menu-btn" data-section="menu" onclick="switchSection('menu')" id="menu-nav-btn">
-            <span class="icon">📋</span>
-            <span>Menu</span>
-          </button>
-          <button class="menu-btn" data-section="tables-mgmt" onclick="switchSection('tables-mgmt')" id="tables-mgmt-nav-btn">
-            <span class="icon">⚙️</span>
-            <span>Table Mgmt</span>
-          </button>
-          <button class="menu-btn" data-section="coupons" onclick="switchSection('coupons')" id="coupons-nav-btn">
-            <span class="icon">🎫</span>
-            <span>Coupons</span>
+            <img src="/uploads/website/menu.png" alt="menu" class="icon">
+            <span class="menu-text">Menu</span>
           </button>
           <button class="menu-btn" data-section="staff" onclick="switchSection('staff')" id="staff-nav-btn">
-            <span class="icon">👥</span>
-            <span>Staff</span>
+            <img src="/uploads/website/teamwork.png" alt="staff" class="icon">
+            <span class="menu-text">Staff</span>
           </button>
           <button class="menu-btn" data-section="reports" onclick="switchSection('reports')" id="reports-nav-btn">
-            <span class="icon">📊</span>
-            <span>Reports</span>
+            <img src="/uploads/website/report.png" alt="reports" class="icon">
+            <span class="menu-text">Reports</span>
           </button>
           <button class="menu-btn" data-section="settings" onclick="switchSection('settings')" id="settings-nav-btn">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
+            <img src="/uploads/website/settings.png" alt="settings" class="icon">
+            <span class="menu-text">More</span>
           </button>
+        </div>
+        
+        <div class="sidebar-footer">
+          <div class="sidebar-trademark">chuio.io</div>
         </div>
       </nav>
 
       <!-- MAIN CONTENT -->
       <main class="main-content">
 
+        <!-- ================= ORDERS SECTION ================= -->
+        <section id="section-orders" class="content-section admin-only">
+          <!-- Orders container will be loaded here -->
+          <div id="orders-section-content">
+            <!-- JS renders orders content here -->
+          </div>
+        </section>
+
         <!-- ================= TABLES SECTION (DEFAULT) ================= -->
         <section id="section-tables" class="content-section active">
-          <h2>🍽 Tables & Orders</h2>
-
-          <!-- Category Tabs -->
-          <div id="tables-category-tabs" class="table-tabs"></div>
-
-          <!-- Tables Grid + Session Panel -->
-          <div class="tables-container">
-            <div id="tables-grid" class="tables-grid">
-              <!-- JS renders table cards here -->
-            </div>
-
-            <div id="session-order-panel" class="session-panel">
-              <p>Select a session to view orders</p>
-            </div>
-          </div>
+          <!-- Tables content loaded dynamically from admin-tables.html -->
         </section>
 
         <!-- ================= MENU MANAGEMENT SECTION ================= -->
         <section id="section-menu" class="content-section admin-only">
-          <h2>📋 Menu Management</h2>
-
-          <div class="section-card">
-            <h3>
-              Add Menu Item
-              <button class="btn-secondary" onclick="startCreateItem()">➕ Add Item</button>
-            </h3>
-
-            <div id="create-item-form" style="display:none;">
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Item Name</label>
-                  <input id="new-item-name" placeholder="e.g., Caesar Salad" />
-                </div>
-                <div class="form-group">
-                  <label>Price (cents)</label>
-                  <input id="new-item-price" type="number" placeholder="e.g., 1200" />
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Category</label>
-                  <select id="new-item-category" required>
-                    <option value="">-- Select a category --</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-row">
-              <div class="form-group">
-                <label>Description</label>
-                <textarea id="new-item-desc" placeholder="Add a detailed description of the menu item..."></textarea>
-              </div>
-            </div>
-              <div class="form-group">
-                <label>Food Item Image <span class="info-hint">(Recommended: 400px × 300px)</span></label>
-                <div class="image-upload-input">
-                  <div id="new-item-image-preview" class="image-preview-box">
-                    <div class="upload-placeholder">📸 Click to upload image</div>
-                  </div>
-                  <input type="file" id="new-item-image" accept="image/*" onchange="previewItemImage(this)" class="hidden-file-input"/>
-                </div>
-              </div>
-              <div class="form-actions">
-                <button onclick="createMenuItem()" class="btn-primary">✓ Create Item</button>
-                <button onclick="cancelCreateItem()" class="btn-secondary">✕ Cancel</button>
-              </div>
-            </div>
-          </div>
-
-          <div id="menu-items">
-            <!-- JS renders categories + items here -->
-          </div>
+          <!-- Menu content loaded dynamically from admin-menu.html -->
         </section>
 
         <!-- ================= COUPONS MANAGEMENT SECTION ================= -->
         <section id="section-coupons" class="content-section admin-only">
-          <h2>🎫 Coupons & Discounts</h2>
-
-          <div class="section-card">
-            <h3>Create New Coupon</h3>
-            <div id="coupon-error" class="error-message" style="display: none;"></div>
-            <div id="coupon-success" class="success-message" style="display: none;"></div>
-            
-            <div class="form-row">
-              <div class="form-group">
-                <label>Coupon Code</label>
-                <input id="new-coupon-code" placeholder="e.g., SUMMER20" maxlength="50" style="text-transform: uppercase;" />
-              </div>
-              <div class="form-group">
-                <label>Discount Type</label>
-                <select id="new-coupon-type">
-                  <option value="percentage">Percentage (%)</option>
-                  <option value="fixed">Fixed Amount ($)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Discount Value</label>
-                <input id="new-coupon-value" type="number" placeholder="e.g., 20" step="0.01" />
-              </div>
-              <div class="form-group">
-                <label>Minimum Order Value ($)</label>
-                <input id="new-coupon-min-order" type="number" placeholder="e.g., 50" step="0.01" value="0" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Max Uses (leave blank for unlimited)</label>
-                <input id="new-coupon-max-uses" type="number" placeholder="e.g., 100" />
-              </div>
-              <div class="form-group">
-                <label>Valid Until</label>
-                <input id="new-coupon-valid-until" type="date" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group" style="grid-column: 1 / -1;">
-                <label>Description</label>
-                <textarea id="new-coupon-description" placeholder="e.g., Summer special - 20% off all items"></textarea>
-              </div>
-            </div>
-
-            <div class="form-actions">
-              <button onclick="createCoupon()" class="btn-primary">➕ Create Coupon</button>
-            </div>
-          </div>
-
-          <div id="coupons-list" class="section-card">
-            <!-- JS renders coupons here -->
-          </div>
+          <!-- Coupons content loaded dynamically from admin-coupons.html -->
         </section>
 
         <!-- ================= STAFF MANAGEMENT SECTION ================= -->
         <section id="section-staff" class="content-section admin-only">
-          <h2>👥 Staff Management</h2>
+          <!-- Staff content loaded dynamically from admin-staff.html -->
+        </section>
 
-          <div class="section-card">
-            <h3>Create New Staff</h3>
+        <!-- ================= STAFF FORM SLIDING PANEL ================= -->
+        <div id="staff-form-overlay" class="staff-form-overlay hidden" onclick="closeStaffForm()"></div>
+        <div id="staff-form-panel" class="staff-form-panel hidden">
+          <div class="staff-form-header">
+            <h3 id="staff-form-title">Create New Staff</h3>
+            <button onclick="closeStaffForm()" class="staff-form-close">✕</button>
+          </div>
+          <div id="staff-form-content" class="staff-form-content">
             <div id="staff-error" class="error-message" style="display: none;"></div>
             <div id="staff-success" class="success-message" style="display: none;"></div>
             
-            <form onsubmit="event.preventDefault(); createStaff();">
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Staff Name</label>
-                  <input id="staff-name" placeholder="e.g., John Smith" />
+            <form onsubmit="event.preventDefault(); createOrUpdateStaff();">
+              <div class="form-group">
+                <label data-i18n="admin.staff-name">Staff Name</label>
+                <input id="staff-name" placeholder="e.g., John Smith" required />
+              </div>
+
+              <div class="form-group">
+                <label data-i18n="admin.pin-6digits">PIN (6 digits)</label>
+                <input id="staff-pin" type="text" placeholder="e.g., 123456" maxlength="6" required />
+              </div>
+
+              <div class="form-group">
+                <label>Role</label>
+                <select id="staff-role" onchange="handleStaffRoleChange()" required>
+                  <option value="">-- Select Role --</option>
+                  <option value="staff">Staff</option>
+                  <option value="kitchen">Kitchen</option>
+                </select>
+              </div>
+
+              <!-- Access Rights Section (shows based on role) -->
+              <div id="staff-access-rights-section">
+                <!-- Tab Access for Staff Role -->
+                <div id="staff-tab-access" style="display: none;">
+                  <h4 style="margin-top: 0; margin-bottom: 10px;">Tab Access Permissions</h4>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-orders" class="staff-access-checkbox" value="orders" /> Orders
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-tables" class="staff-access-checkbox" value="tables" /> Tables
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-menu" class="staff-access-checkbox" value="menu" /> Menu
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-staff" class="staff-access-checkbox" value="staff" /> Staff
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-reports" class="staff-access-checkbox" value="reports" /> Reports
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="access-settings" class="staff-access-checkbox" value="settings" /> Settings
+                    </label>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label>Email Address</label>
-                  <input id="staff-email" type="email" autocomplete="email" placeholder="e.g., john@restaurant.com" />
+
+                <!-- Category Access for Kitchen Role -->
+                <div id="kitchen-category-access" style="display: none;">
+                  <h4 style="margin-top: 0; margin-bottom: 10px;">Food Categories Access</h4>
+                  <div id="kitchen-categories-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <!-- JS populates this with menu categories -->
+                  </div>
                 </div>
               </div>
 
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Password</label>
-                    <input id="staff-password" type="password" placeholder="Enter secure password" autocomplete="current-password" required>
-                </div>
-                <div class="form-group">
-                  <label>PIN (6 digits)</label>
-                  <input id="staff-pin" type="text" placeholder="e.g., 123456" maxlength="6" />
-                </div>
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Role</label>
-                  <select id="staff-role" required>
-                    <option value="staff">Staff</option>
-                    <option value="kitchen">Kitchen</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="form-actions">
-                <button type="submit" class="btn-primary">➕ Create Staff</button>
+              <div class="form-actions" style="margin-top: 20px;">
+                <button type="submit" class="btn-primary" id="staff-submit-btn" style="width: 100%;">➕ Add Staff</button>
+                <button type="button" class="btn-tertiary" onclick="closeStaffForm()" style="width: 100%; margin-top: 8px;">Cancel</button>
               </div>
             </form>
           </div>
-
-          <div id="staff-list">
-            <!-- JS renders staff here -->
-          </div>
-        </section>
-
-        <!-- ================= TABLE MANAGEMENT SECTION ================= -->
-        <section id="section-tables-mgmt" class="content-section admin-only">
-          <h2>⚙️ Table Management</h2>
-
-          <!-- QR Code Preference -->
-          <div class="section-card">
-            <h3>QR Code Settings</h3>
-            <div class="form-row">
-              <div class="form-group">
-                <label>
-                  <input type="checkbox" id="regenerate-qr-checkbox" onchange="toggleQRRegeneration()" />
-                  Generate New QR Code for Each Session
-                </label>
-                <p style="font-size: 0.9em; color: #666; margin-top: 8px;">
-                  <strong>Checked:</strong> A new QR code is generated each time a session starts (customer scans fresh code)<br>
-                  <strong>Unchecked:</strong> QR codes remain static - print once per seat (useful for permanent table setups)
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Create Category -->
-          <div class="section-card">
-            <h3>Create Table Category</h3>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Category Name</label>
-                <input id="new-tables-category-name" placeholder="e.g., VIP, Bar, Outdoor, Main Dining" />
-              </div>
-            </div>
-            <div class="form-actions">
-              <button onclick="createTablesCategory()" class="btn-primary">➕ Add Category</button>
-            </div>
-          </div>
-
-          <!-- List Table Categories -->
-          <div class="section-card">
-            <h3>Table Categories</h3>
-            <div id="table-categories-list" class="list-grid">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-
-          <!-- Add Table Form -->
-          <div class="section-card">
-            <h3>Add Table</h3>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Select Category</label>
-                <select id="new-table-category">
-                  <option value="">-- Select Category --</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Table Name</label>
-                <input id="new-table-name" placeholder="e.g., T1, T-Patio-01" />
-              </div>
-              <div class="form-group">
-                <label>Number of Seats</label>
-                <input id="new-table-seats" type="number" placeholder="1" value="1" />
-              </div>
-            </div>
-            <div class="form-actions">
-              <button onclick="createTable()" class="btn-primary">➕ Add Table</button>
-            </div>
-          </div>
-
-          <!-- List Tables -->
-          <div class="section-card">
-            <h3>Manage Tables</h3>
-            <div id="tables-list" class="list-grid">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-        </section>
+        </div>
 
         <!-- ================= REPORTS SECTION ================= -->
         <section id="section-reports" class="content-section admin-only">
-          <h2>📊 Orders & Bills Report</h2>
-
-          <div class="section-card">
-            <h3>Report Filters</h3>
-            <div class="form-row">
-              <div class="form-group">
-                <label>From Date</label>
-                <input id="report-from-date" type="date" />
-              </div>
-              <div class="form-group">
-                <label>To Date</label>
-                <input id="report-to-date" type="date" />
-              </div>
-              <div class="form-group">
-                <label>Status</label>
-                <select id="report-status">
-                  <option value="">All Orders</option>
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="ready">Ready</option>
-                  <option value="served">Served</option>
-                  <option value="paid">Paid</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <button onclick="loadReports()" class="btn-primary">🔍 Load Report</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="section-card">
-            <h3>Orders & Bills</h3>
-            <div id="reports-summary" style="display:none; margin-bottom: 20px; padding: 15px; background-color: #f0f9ff; border-radius: 8px; border-left: 4px solid #0284c7;">
-              <p><strong>Total Orders:</strong> <span id="summary-total-orders">0</span></p>
-              <p><strong>Total Revenue:</strong> <span id="summary-total-revenue">$0.00</span></p>
-              <p><strong>Average Bill:</strong> <span id="summary-avg-bill">$0.00</span></p>
-            </div>
-            <div id="reports-container" class="reports-container">
-              <p style="text-align: center; color: #999;">Select date range and click "Load Report" to view orders</p>
-            </div>
-          </div>
+          <!-- Reports dynamically loaded from admin-reports.html -->
         </section>
 
         <!-- ================= SETTINGS SECTION ================= -->
         <section id="section-settings" class="content-section admin-only">
-          <h2>⚙️ Admin Settings</h2>
-
-          <div class="section-card" id="restaurant-header">
-            <h3>Restaurant Information</h3>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Restaurant Name</label>
-                <span id="view-name" class="view-mode"></span>
-                <input id="restaurant-name" placeholder="e.g., The Italian Kitchen" style="display:none;" />
-              </div>
-              <div class="form-group">
-                <label>Phone</label>
-                <span id="view-phone" class="view-mode"></span>
-                <input id="restaurant-phone" placeholder="e.g., (555) 123-4567" style="display:none;" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Address</label>
-                <span id="view-address" class="view-mode"></span>
-                <input id="restaurant-address" placeholder="e.g., 123 Main St, City, State" style="display:none;" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Service Charge (%)</label>
-                <span id="view-service-charge" class="view-mode"></span>
-                <input id="serviceChargeInput" type="number" min="0" step="0.1" placeholder="e.g., 15" style="display:none;" />
-              </div>
-              <div class="form-group">
-                <label>Theme Color</label>
-                <span id="view-color" class="view-mode"></span>
-                <input type="color" id="colorInput" style="display:none;" />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Restaurant Logo</label>
-              <img id="restaurant-logo" class="logo-preview" style="display:none;" />
-              <input id="logoInput" type="file" accept="image/*" style="display:none;" 
-                onchange="uploadRestaurantLogo(this.files[0])" />
-            </div>
-
-            <div class="form-actions">
-              <button id="edit-settings-btn" onclick="enterEditMode()" class="btn-primary">✎ Edit Settings</button>
-              <button id="save-settings-btn" onclick="saveAdminSettings()" style="display:none;" class="btn-primary">✓ Save</button>
-              <button id="cancel-settings-btn" onclick="cancelEditMode()" style="display:none;" class="btn-secondary">Cancel</button>
-            </div>
-          </div>
+          <!-- Settings content loaded dynamically from admin-settings.html -->
         </section>
 
       </main>
     </div>
-  </div>
 
-  <!-- ================= PIN LOGIN MODAL ================= -->
-  <div id="pin-modal-overlay" class="modal-overlay" style="display: none;" onclick="closePinLoginModal()"></div>
-  <div id="pin-modal" class="pin-modal" style="display: none;">
-    <div class="pin-modal-content">
-      <h2>Enter PIN</h2>
-      <p>Switch user account</p>
-      
-      <div id="modal-pin-dots">
-        <span></span><span></span><span></span><span></span><span></span><span></span>
-      </div>
 
-      <div class="keypad">
-        <button onclick="pressKeyModal(1)">1</button>
-        <button onclick="pressKeyModal(2)">2</button>
-        <button onclick="pressKeyModal(3)">3</button>
-
-        <button onclick="pressKeyModal(4)">4</button>
-        <button onclick="pressKeyModal(5)">5</button>
-        <button onclick="pressKeyModal(6)">6</button>
-
-        <button onclick="pressKeyModal(7)">7</button>
-        <button onclick="pressKeyModal(8)">8</button>
-        <button onclick="pressKeyModal(9)">9</button>
-
-        <button class="clear" onclick="clearPinModal()">⌫</button>
-        <button onclick="pressKeyModal(0)">0</button>
-        <button class="enter" onclick="submitPinModal()">⏎</button>
-      </div>
-
-      <button class="close-btn" onclick="closePinLoginModal()">Close</button>
-    </div>
-  </div>
 
   <!-- ================= SCRIPTS ================= -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="/translations.js"></script>
   <script src="/admin.js"></script>
+  <!-- Modular admin functions -->
+  <script src="/admin-orders.js"></script>
+  <script src="/admin-tables.js"></script>
+  <script src="/admin-menu.js"></script>
+  <script src="/admin-staff.js"></script>
+  <script src="/admin-reports.js"></script>
+  <script src="/admin-settings.js"></script>
 </body>
 </html>

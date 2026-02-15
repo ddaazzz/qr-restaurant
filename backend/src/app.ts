@@ -11,6 +11,7 @@ import sessionsRoutes from "./routes/sessions.routes";
 import staffRoutes from "./routes/staff.routes";
 import authRoutes from "./routes/auth.routes";
 import couponsRoutes from "./routes/coupons.routes";
+import bookingsRoutes from "./routes/bookings.routes";
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use("/api", sessionsRoutes);
 app.use("/api", staffRoutes);
 app.use("/api", authRoutes);
 app.use("/api", couponsRoutes);
+app.use("/api", bookingsRoutes);
 
 /* ======================
    FRONTEND STATIC FILES

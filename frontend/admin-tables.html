@@ -1,0 +1,58 @@
+<!-- ================= ADMIN TABLES HTML ================= -->
+
+<!-- Tables Grid + Session Orders Panel -->
+<div class="tables-container">
+  <!-- Left + Right: Content Row -->
+  <div class="left-column-wrapper">
+    <div id="tables-grid" class="tables-grid">
+      <!-- JS renders table cards here -->
+    </div>
+  </div>
+
+  <!-- Right: Session Orders + Close Bill -->
+  <div id="session-order-panel" class="session-panel">
+    <div class="session-panel-header">
+      <div class="session-info">
+        <p data-i18n="admin.select-session">Select a session to view orders</p>
+      </div>
+      <div class="session-header-buttons">
+        <!-- Buttons populated by JS -->
+      </div>
+    </div>
+    
+    <div id="session-orders-mini" class="hidden" style="height: 200px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; padding: 8px;">
+      <!-- Mini preview of orders here -->
+    </div>
+    
+    <button id="view-orders-btn" class="hidden" style="width: 100%; margin-bottom: 8px; padding: 8px; background: var(--secondary-color); color: var(--bg-white); border: none; border-radius: 6px; cursor: pointer; font-weight: 600;" data-i18n="admin.view-orders">📖 View Full Orders</button>
+    
+    <!-- Close Bill Button -->
+    <div id="close-bill-section" class="hidden">
+      <button class="btn-primary" onclick="openCloseBillModal()" data-i18n="admin.close-bill" style="width: 100%;">💰 Close Bill</button>
+    </div>
+  </div>
+</div>
+
+<!-- Full Orders Modal -->
+<div id="orders-modal" class="modal hidden">
+  <div class="modal-overlay"></div>
+  <div class="modal-content orders-modal-content">
+    <div class="modal-header">
+      <h3 id="orders-modal-title" data-i18n="admin.all-orders">📋 All Orders</h3>
+      <button class="modal-close" onclick="closeOrdersModal()">✕</button>
+    </div>
+    <div id="session-orders" class="modal-body">
+      <!-- JS renders full orders here -->
+    </div>
+    <div class="modal-footer">
+      <div id="modal-session-total" style="padding: 8px 0; font-weight: bold; border-top: 1px solid #ddd; margin-bottom: 12px; width: 100%;">
+        Total: —
+      </div>
+      <button class="btn-secondary" onclick="closeOrdersModal()" data-i18n="admin.close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Tabs Bar (Bottom) -->
+<div id="tables-category-tabs" class="table-tabs-bottom"></div>
+</div>

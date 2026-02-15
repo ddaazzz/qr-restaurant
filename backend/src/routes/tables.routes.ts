@@ -463,10 +463,25 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
   }
 });
 
-// Regenerate QR token (staff)
+// Regenerate QR token (staff) - ✅ MULTI-RESTAURANT SUPPORT
 router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
   try {
     const { tableId } = req.params;
+    const { restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    // Verify table belongs to the restaurant
+    const tableCheck = await pool.query(
+      `SELECT id FROM tables WHERE id = $1 AND restaurant_id = $2`,
+      [tableId, restaurantId]
+    );
+
+    if (tableCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Table not found or doesn't belong to this restaurant" });
+    }
 
     const newToken = crypto.randomBytes(16).toString("hex");
 
@@ -474,10 +489,10 @@ router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
       `
       UPDATE tables
       SET qr_token = $1
-      WHERE id = $2
+      WHERE id = $2 AND restaurant_id = $3
       RETURNING id, name, qr_token
       `,
-      [newToken, tableId]
+      [newToken, tableId, restaurantId]
     );
 
     res.json(result.rows[0]);
@@ -488,19 +503,30 @@ router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
 });
 
 /**
- * UPDATE table name
- * (Admin / Staff)
-/**
  * PATCH /tables/:tableId
- * Update table name and/or seat_count
+ * Update table name and/or seat_count - ✅ MULTI-RESTAURANT SUPPORT
  */
 router.patch("/tables/:tableId", async (req, res) => {
   try {
     const { tableId } = req.params;
-    const { name, seat_count } = req.body;
+    const { name, seat_count, restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
 
     if (!name && !seat_count) {
       return res.status(400).json({ error: "Nothing to update" });
+    }
+
+    // Verify table belongs to the restaurant
+    const tableCheck = await pool.query(
+      `SELECT id FROM tables WHERE id = $1 AND restaurant_id = $2`,
+      [tableId, restaurantId]
+    );
+
+    if (tableCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Table not found or doesn't belong to this restaurant" });
     }
 
     // Build dynamic SET clause
@@ -521,12 +547,13 @@ router.patch("/tables/:tableId", async (req, res) => {
       values.push(seat_count);
     }
 
-    values.push(tableId); // last param = tableId
+    values.push(tableId); // table ID
+    values.push(restaurantId); // restaurant ID for validation
 
     const result = await pool.query(
       `UPDATE tables
        SET ${fields.join(", ")}
-       WHERE id = $${idx}
+       WHERE id = $${idx} AND restaurant_id = $${idx + 1}
        RETURNING *`,
       values
     );
@@ -543,7 +570,7 @@ router.patch("/tables/:tableId", async (req, res) => {
 });
 
 /**
- * DELETE table
+ * DELETE table - ✅ MULTI-RESTAURANT SUPPORT
  * (Admin only)
  */
 router.delete("/tables/:tableId", async (req, res) => {
@@ -551,8 +578,24 @@ router.delete("/tables/:tableId", async (req, res) => {
 
   try {
     const { tableId } = req.params;
+    const { restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
 
     await client.query("BEGIN");
+
+    // Verify table belongs to this restaurant
+    const tableCheck = await client.query(
+      `SELECT id FROM tables WHERE id = $1 AND restaurant_id = $2`,
+      [tableId, restaurantId]
+    );
+
+    if (tableCheck.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Table not found or doesn't belong to this restaurant" });
+    }
 
     // Block delete if active session exists
     const activeSession = await client.query(
@@ -575,10 +618,10 @@ router.delete("/tables/:tableId", async (req, res) => {
     const result = await client.query(
       `
       DELETE FROM tables
-      WHERE id = $1
+      WHERE id = $1 AND restaurant_id = $2
       RETURNING *
       `,
-      [tableId]
+      [tableId, restaurantId]
     );
 
     if (result.rowCount === 0) {

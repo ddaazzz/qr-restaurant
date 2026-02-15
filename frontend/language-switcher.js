@@ -2,7 +2,6 @@
 class LanguageSwitcher {
   constructor() {
     this.currentLang = getCurrentLanguage();
-    console.log('[LanguageSwitcher] Initialized with language:', this.currentLang);
     this.init();
   }
 
@@ -13,7 +12,6 @@ class LanguageSwitcher {
     // Create language picker HTML
     const picker = document.querySelector('[data-language-picker]');
     if (picker) {
-      console.log('[LanguageSwitcher] Language picker element found');
       this.setupPicker(picker);
     } else {
       console.warn('[LanguageSwitcher] Language picker element not found');
@@ -25,15 +23,31 @@ class LanguageSwitcher {
     // Listen for language changes
     window.addEventListener('languageChanged', (e) => {
       this.currentLang = e.detail.language;
-      console.log('[LanguageSwitcher] Language changed to:', this.currentLang);
       this.updatePageContent();
     });
   }
 
   setupPicker(pickerElement) {
     const currentLang = getCurrentLanguage();
-    console.log('[LanguageSwitcher] Setting up picker for language:', currentLang);
     
+    // Check if picker already has button elements (like in admin.html)
+    const existingButtons = pickerElement.querySelectorAll('button');
+    if (existingButtons.length > 0) {
+      // Just add event listeners to existing buttons
+      existingButtons.forEach(btn => {
+        const lang = btn.id.replace('lang-', '');
+        if (lang === currentLang) {
+          btn.classList.add('active');
+        }
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          setLanguage(lang);
+        });
+      });
+      return;
+    }
+    
+    // Otherwise create dropdown menu (for other pages)
     const html = `
       <div class="language-selector">
         <button class="lang-toggle" aria-label="Toggle language menu">
@@ -61,8 +75,6 @@ class LanguageSwitcher {
       return;
     }
     
-    console.log('[LanguageSwitcher] Found', options.length, 'language options');
-    
     // Set initial active state
     options.forEach(option => {
       if (option.getAttribute('data-lang') === currentLang) {
@@ -77,7 +89,6 @@ class LanguageSwitcher {
       const dropdown = pickerElement.querySelector('.lang-dropdown');
       if (dropdown) {
         dropdown.classList.toggle('show');
-        console.log('[LanguageSwitcher] Dropdown toggled');
       }
     });
     
@@ -85,7 +96,6 @@ class LanguageSwitcher {
       option.addEventListener('click', (e) => {
         e.preventDefault();
         const lang = option.getAttribute('data-lang');
-        console.log('[LanguageSwitcher] Language option clicked:', lang);
         setLanguage(lang);
         
         // Update active state
@@ -122,7 +132,7 @@ class LanguageSwitcher {
   updatePickerDisplay(pickerElement) {
     const currentLang = getCurrentLanguage();
     const toggle = pickerElement.querySelector('.lang-toggle');
-    const langText = toggle?.querySelector('.lang-text');
+    const langText = toggle ? toggle.querySelector('.lang-text') : null;
     
     if (langText) {
       langText.textContent = currentLang === 'en' ? t('lang.english') : t('lang.chinese');

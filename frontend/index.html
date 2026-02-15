@@ -12,10 +12,14 @@
   <meta property="og:description" content="Streamline your restaurant with QR code ordering, real-time kitchen management, and complete menu control." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://chuio.io" />
-  <meta name="theme-color" content="#f97316">
+  <meta name="theme-color" content="#4a90e2">
   <link rel="canonical" href="https://chuio.io/menu">
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
   <link rel="stylesheet" href="menu.css" />
+  
+  <!-- Translations -->
+  <script src="/translations.js"></script>
+  <script src="/language-switcher.js"></script>
 </head>
 <body>
 
@@ -26,8 +30,8 @@
   <p id="landing-table"></p>
   <p id="landing-info"></p>
 
-  <button id="start-order-btn">Start Ordering</button>
-  <button id="check-orders-btn">Check Orders</button>
+  <button id="start-order-btn" data-i18n="menu.start-ordering">Start Ordering</button>
+  <button id="check-orders-btn" data-i18n="menu.check-orders">Check Orders</button>
 </div>
 
 <!-- 🔥 MAIN APP (hidden initially) -->
@@ -44,7 +48,7 @@
     </div>
 
     <div class="header-right">
-      <button id="orders-btn">🧾 Orders</button>
+      <button id="orders-btn" data-i18n="menu.check-orders">🧾 Check Orders</button>
     </div>
   </header>
 
@@ -85,6 +89,12 @@
 
 </div>
 
+<script>
+  // Initialize translations and language switcher for menu
+  document.addEventListener('DOMContentLoaded', () => {
+    new LanguageSwitcher();
+  });
+</script>
 <script src="menu.js"></script>
 </body>
 </html>

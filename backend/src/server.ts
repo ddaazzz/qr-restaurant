@@ -1,12 +1,30 @@
 import app from "./app";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
+import os from "os";
 dotenv.config();
 
 const PORT = Number(process.env.PORT) || 10000;
 
-app.listen(PORT, () => {
+// Get local IP address for local network access
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]!) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return "localhost";
+}
+
+const localIP = getLocalIP();
+
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Backend running on http://localhost:${PORT}`);
+  console.log(`📱 Local Network: http://${localIP}:${PORT}`);
+  console.log(`   (Access from iPad/phone on same WiFi network)`);
 });
 
 if (process.env.NODE_ENV !== "production") {

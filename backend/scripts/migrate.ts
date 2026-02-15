@@ -20,7 +20,7 @@ async function runMigration() {
     `);
     await pool.query(`
       ALTER TABLE public.users
-      ADD CONSTRAINT users_role_check CHECK (role = ANY (ARRAY['admin'::text, 'staff'::text, 'kitchen'::text]));
+      ADD CONSTRAINT users_role_check CHECK (role = ANY (ARRAY['admin'::text, 'staff'::text, 'kitchen'::text, 'superadmin'::text]));
     `);
     console.log("✅ Role constraint updated\n");
 

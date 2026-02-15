@@ -145,10 +145,25 @@ router.patch("/menu_categories/:id", async (req, res) => {
   }
 });
 
-//Delete Category name
+//Delete Category name - ✅ MULTI-RESTAURANT SUPPORT
 router.delete("/menu_categories/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    const { restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    // Verify category belongs to restaurant
+    const categoryCheck = await pool.query(
+      `SELECT id FROM menu_categories WHERE id = $1 AND restaurant_id = $2`,
+      [id, restaurantId]
+    );
+
+    if (categoryCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Category not found or doesn't belong to this restaurant" });
+    }
 
     const used = await pool.query(
       `
@@ -167,8 +182,8 @@ router.delete("/menu_categories/:id", async (req, res) => {
     }
 
     const result = await pool.query(
-      "DELETE FROM menu_categories WHERE id = $1",
-      [id]
+      "DELETE FROM menu_categories WHERE id = $1 AND restaurant_id = $2",
+      [id, restaurantId]
     );
 
     if (result.rowCount === 0) {
@@ -367,15 +382,31 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       }
     });
 
-// STAFF toggle menu availability
+// STAFF toggle menu availability - ✅ MULTI-RESTAURANT SUPPORT
 router.patch("/menu-items/:id/availability", async (req, res) => {
   try {
     const { id } = req.params;
-    const { available } = req.body;
+    const { available, restaurantId } = req.body;
 
-if (typeof available !== "boolean") {
-  return res.status(400).json({ error: "available must be boolean" });
-}
+    if (typeof available !== "boolean") {
+      return res.status(400).json({ error: "available must be boolean" });
+    }
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    // Verify item belongs to restaurant
+    const itemCheck = await pool.query(
+      `SELECT mi.id FROM menu_items mi
+       JOIN menu_categories mc ON mi.category_id = mc.id
+       WHERE mi.id = $1 AND mc.restaurant_id = $2`,
+      [id, restaurantId]
+    );
+
+    if (itemCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Menu item not found or doesn't belong to this restaurant" });
+    }
 
     const result = await pool.query(
       `
@@ -415,7 +446,7 @@ router.patch("/menu-item-variant-options/:id/availability",
 
 
 /**
- * CREATE menu item
+ * CREATE menu item - ✅ MULTI-RESTAURANT SUPPORT
  * (Admin)
  */
 router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
@@ -430,6 +461,16 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
 
     if (!category_id || !name || price_cents == null) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Verify category belongs to restaurant
+    const categoryCheck = await pool.query(
+      `SELECT id FROM menu_categories WHERE id = $1 AND restaurant_id = $2`,
+      [category_id, restaurantId]
+    );
+
+    if (categoryCheck.rowCount === 0) {
+      return res.status(400).json({ error: "Category not found or doesn't belong to this restaurant" });
     }
 
     const result = await pool.query(
@@ -457,7 +498,7 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
 
 
 /**
- * UPDATE menu item
+ * UPDATE menu item - ✅ MULTI-RESTAURANT SUPPORT
  * (Admin)
  */
 router.patch("/menu-items/:itemId", async (req, res) => {
@@ -467,8 +508,37 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       name,
       price_cents,
       description,
-      category_id
+      category_id,
+      restaurantId
     } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    // Verify item belongs to restaurant (via category)
+    const itemCheck = await pool.query(
+      `SELECT mi.id FROM menu_items mi
+       JOIN menu_categories mc ON mi.category_id = mc.id
+       WHERE mi.id = $1 AND mc.restaurant_id = $2`,
+      [itemId, restaurantId]
+    );
+
+    if (itemCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Menu item not found or doesn't belong to this restaurant" });
+    }
+
+    // If updating category, verify new category belongs to same restaurant
+    if (category_id) {
+      const catCheck = await pool.query(
+        `SELECT id FROM menu_categories WHERE id = $1 AND restaurant_id = $2`,
+        [category_id, restaurantId]
+      );
+
+      if (catCheck.rowCount === 0) {
+        return res.status(400).json({ error: "Category not found or doesn't belong to this restaurant" });
+      }
+    }
 
     const result = await pool.query(
       `
@@ -502,12 +572,29 @@ router.patch("/menu-items/:itemId", async (req, res) => {
 });
 
 /**
- * DELETE menu item
+ * DELETE menu item - ✅ MULTI-RESTAURANT SUPPORT
  * (Admin – safe)
  */
 router.delete("/menu-items/:itemId", async (req, res) => {
   try {
     const { itemId } = req.params;
+    const { restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID is required" });
+    }
+
+    // Verify item belongs to restaurant
+    const itemCheck = await pool.query(
+      `SELECT mi.id FROM menu_items mi
+       JOIN menu_categories mc ON mi.category_id = mc.id
+       WHERE mi.id = $1 AND mc.restaurant_id = $2`,
+      [itemId, restaurantId]
+    );
+
+    if (itemCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Menu item not found or doesn't belong to this restaurant" });
+    }
 
     // Prevent delete if item exists in orders
     const used = await pool.query(
@@ -891,5 +978,31 @@ router.post("/menu-items/:menuItemId/image",
     }
   }
 );
+
+// Endpoint for admin to fetch only items (without categories)
+router.get("/restaurants/:restaurantId/menu/items", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  
+  if (!restaurantId || Number.isNaN(restaurantId)) {
+    return res.status(400).json({
+      error: "Invalid restaurant ID"
+    });
+  }
+
+  try {
+    const itemsResult = await pool.query(
+      `SELECT mi.*
+       FROM menu_items mi
+       JOIN menu_categories mc ON mi.category_id = mc.id
+       WHERE mc.restaurant_id = $1`,
+      [restaurantId]
+    );
+
+    res.json(itemsResult.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 export default router;

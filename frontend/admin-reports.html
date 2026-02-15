@@ -1,0 +1,66 @@
+<!-- ================= ADMIN REPORTS HTML ================= -->
+
+<!-- Analytics Content -->
+<div id="reports-dashboard" style="display: none;">
+  <!-- Metrics Row -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+    <div class="metric-card">
+      <div class="metric-label">Total Orders</div>
+      <div class="metric-value" id="metric-total-orders">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Revenue</div>
+      <div class="metric-value" id="metric-total-revenue">$0.00</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Average Bill</div>
+      <div class="metric-value" id="metric-avg-bill">$0.00</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Active Sessions</div>
+      <div class="metric-value" id="metric-active-sessions">0</div>
+    </div>
+  </div>
+
+  <!-- Status Distribution -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3>Order Status Distribution</h3>
+    <div id="chart-status-distribution" style="height: 300px;"></div>
+  </div>
+
+  <!-- Busiest Tables -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3>Busiest Tables</h3>
+    <div id="chart-busiest-tables" style="height: 250px;"></div>
+  </div>
+
+  <!-- Hourly Revenue -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3>Hourly Revenue</h3>
+    <div id="chart-hourly-revenue" style="height: 300px;"></div>
+  </div>
+
+  <!-- Top Items -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3>Top Items</h3>
+    <div id="chart-top-items" style="height: 300px;"></div>
+  </div>
+
+  <!-- Daily Trends Table -->
+  <div class="section-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 style="margin: 0;">Daily Trends</h3>
+      <div style="display: flex; gap: 8px;">
+        <button id="trends-daily-btn" style="padding: 8px 12px; background: #4a90e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'daily')">Daily</button>
+        <button id="trends-weekly-btn" style="padding: 8px 12px; background: transparent; color: #4a90e2; border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'weekly')">Weekly</button>
+        <button id="trends-monthly-btn" style="padding: 8px 12px; background: transparent; color: #4a90e2; border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'monthly')">Monthly</button>
+      </div>
+    </div>
+    <div id="table-daily-trends" style="overflow-x: auto;"></div>
+  </div>
+</div>
+
+<!-- Loading Message -->
+<div id="reports-loading" style="text-align: center; padding: 40px; color: #999;">
+  <p style="font-size: 16px;">Loading analytics dashboard...</p>
+</div>
