@@ -248,11 +248,17 @@ function filterRevenueReport() {
     return;
   }
 
-  var dateRange = document.getElementById("revenue-filter-daterange")?.value || "month";
-  var categoryFilter = document.getElementById("revenue-filter-category")?.value || "";
-  var waiterFilter = document.getElementById("revenue-filter-waiter")?.value || "";
-  var tableFilter = document.getElementById("revenue-filter-table")?.value || "";
-  var productFilter = document.getElementById("revenue-filter-product")?.value || "";
+  var dateRangeEl = document.getElementById("revenue-filter-daterange");
+  var categoryFilterEl = document.getElementById("revenue-filter-category");
+  var waiterFilterEl = document.getElementById("revenue-filter-waiter");
+  var tableFilterEl = document.getElementById("revenue-filter-table");
+  var productFilterEl = document.getElementById("revenue-filter-product");
+
+  var dateRange = (dateRangeEl && dateRangeEl.value) ? dateRangeEl.value : "month";
+  var categoryFilter = (categoryFilterEl && categoryFilterEl.value) ? categoryFilterEl.value : "";
+  var waiterFilter = (waiterFilterEl && waiterFilterEl.value) ? waiterFilterEl.value : "";
+  var tableFilter = (tableFilterEl && tableFilterEl.value) ? tableFilterEl.value : "";
+  var productFilter = (productFilterEl && productFilterEl.value) ? productFilterEl.value : "";
 
   // Filter orders based on criteria
   var filteredOrders = window.allOrders.filter(function(order) {

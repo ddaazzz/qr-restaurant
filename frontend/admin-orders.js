@@ -173,9 +173,13 @@ function renderOrdersCategoryBar() {
 function toggleCartPanel() {
   const cartPanel = document.getElementById('orders-cart-view-container');
   const cartBtn = document.getElementById('cart-toggle-btn');
+  const mainWrapper = document.querySelector('.orders-main-wrapper');
   
   if (cartPanel) {
     cartPanel.classList.toggle('visible');
+    if (mainWrapper) {
+      mainWrapper.classList.toggle('with-cart-open');
+    }
     if (cartBtn) {
       cartBtn.classList.toggle('active');
     }

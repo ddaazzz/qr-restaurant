@@ -39,6 +39,11 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  padding-bottom: 0;
+}
+
+.orders-main-wrapper.with-cart-open {
+  padding-bottom: 50vh;
 }
 
 .orders-right-panel {
@@ -49,18 +54,19 @@
   overflow-y: auto;
   padding: 16px;
   border-top: 2px solid var(--border-color);
-  width: 100%;
+  width: calc(100% - 100px);
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
+  left: 100px;
   background: white;
   z-index: 30;
   transition: all 0.3s ease;
+  pointer-events: none;
 }
 
 .orders-right-panel.visible {
   display: flex;
+  pointer-events: auto;
 }
 
 /* ============== ORDERS MENU VIEW ============== */
@@ -176,6 +182,8 @@
   width: 100%;
   height: 120px;
   background: #f5f5f5;
+  object-fit: cover;
+  display: block;
 }
 
 .orders-item-info {
@@ -825,6 +833,11 @@
   .orders-main-wrapper {
     flex: 1;
     margin-left: 0;
+    padding-bottom: 0;
+  }
+
+  .orders-main-wrapper.with-cart-open {
+    padding-bottom: 50vh;
   }
 
   .orders-cart-bar {
@@ -832,11 +845,12 @@
   }
 
   .orders-right-panel {
-    position: static;
+    position: fixed;
     width: 100%;
     height: auto;
     max-height: 50vh;
-    bottom: auto;
+    bottom: 0;
+    left: 0;
   }
 
   .orders-right-panel.visible {
@@ -888,14 +902,21 @@
     flex: 1;
     margin-left: 0;
     padding: 12px;
+    padding-bottom: 0;
+  }
+
+  .orders-main-wrapper.with-cart-open {
+    padding-bottom: 50vh;
   }
 
   .orders-right-panel {
-    position: static;
+    position: fixed;
     width: 100%;
     height: auto;
     max-height: 60vh;
     padding: 12px;
+    bottom: 0;
+    left: 0;
   }
 
   .orders-right-panel.visible {

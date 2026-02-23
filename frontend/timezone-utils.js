@@ -42,30 +42,40 @@ function formatTimeWithTimezone(utcTime, timezone = 'UTC', format = 'datetime') 
     if (format === 'time') {
       // Return only time portion
       const parts = formatter.formatToParts(date);
-      const hour = parts.find(p => p.type === 'hour')?.value || '00';
-      const minute = parts.find(p => p.type === 'minute')?.value || '00';
+      const hourPart = parts.find(p => p.type === 'hour');
+      const minutePart = parts.find(p => p.type === 'minute');
+      const hour = (hourPart && hourPart.value) ? hourPart.value : '00';
+      const minute = (minutePart && minutePart.value) ? minutePart.value : '00';
       return `${hour}:${minute}`;
     } else if (format === 'date') {
       // Return only date portion (short format)
       const parts = formatter.formatToParts(date);
-      const monthNum = parseInt(parts.find(p => p.type === 'month')?.value || '01');
-      const dayNum = parseInt(parts.find(p => p.type === 'day')?.value || '01');
+      const monthPart = parts.find(p => p.type === 'month');
+      const dayPart = parts.find(p => p.type === 'day');
+      const monthNum = parseInt((monthPart && monthPart.value) ? monthPart.value : '01');
+      const dayNum = parseInt((dayPart && dayPart.value) ? dayPart.value : '01');
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${monthNames[monthNum - 1]} ${dayNum}`;
     } else if (format === 'month') {
       // Return only month and year
       const parts = formatter.formatToParts(date);
-      const monthNum = parseInt(parts.find(p => p.type === 'month')?.value || '01');
-      const year = parts.find(p => p.type === 'year')?.value || '2024';
+      const monthPart = parts.find(p => p.type === 'month');
+      const yearPart = parts.find(p => p.type === 'year');
+      const monthNum = parseInt((monthPart && monthPart.value) ? monthPart.value : '01');
+      const year = (yearPart && yearPart.value) ? yearPart.value : '2024';
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       return `${monthNames[monthNum - 1]} ${year}`;
     } else if (format === 'datetime') {
       // Return date and time
       const parts = formatter.formatToParts(date);
-      const month = parts.find(p => p.type === 'month')?.value || '01';
-      const day = parts.find(p => p.type === 'day')?.value || '01';
-      const hour = parts.find(p => p.type === 'hour')?.value || '00';
-      const minute = parts.find(p => p.type === 'minute')?.value || '00';
+      const monthPart = parts.find(p => p.type === 'month');
+      const dayPart = parts.find(p => p.type === 'day');
+      const hourPart = parts.find(p => p.type === 'hour');
+      const minutePart = parts.find(p => p.type === 'minute');
+      const month = (monthPart && monthPart.value) ? monthPart.value : '01';
+      const day = (dayPart && dayPart.value) ? dayPart.value : '01';
+      const hour = (hourPart && hourPart.value) ? hourPart.value : '00';
+      const minute = (minutePart && minutePart.value) ? minutePart.value : '00';
       return `${month}/${day} ${hour}:${minute}`;
     } else {
       // Return full datetime string
