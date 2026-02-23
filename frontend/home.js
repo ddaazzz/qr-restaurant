@@ -146,26 +146,52 @@ document.addEventListener('DOMContentLoaded', function() {
   // Waitlist form handler
   const waitlistForm = document.getElementById('waitlist-form');
   if (waitlistForm) {
-    waitlistForm.addEventListener('submit', function(e) {
+    waitlistForm.addEventListener('submit', async function(e) {
       e.preventDefault();
       
-      const formData = new FormData(this);
       const restaurantName = this.querySelector('input[placeholder="Restaurant Name"]').value;
       const email = this.querySelector('input[placeholder="Email Address"]').value;
       const phone = this.querySelector('input[placeholder="Phone Number"]').value;
       
-      // Send to WhatsApp with waitlist info
-      const phoneNumber = '85267455358';
-      const message = `Hello! I'd like to join the Chuio waitlist.\n\nRestaurant Name: ${restaurantName}\nEmail: ${email}\nPhone: ${phone}`;
-      const encodedMessage = encodeURIComponent(message);
-      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
-      
-      // Show confirmation and redirect
-      alert('Thank you for joining our waitlist! We\'ll be in touch soon.');
-      window.open(whatsappUrl, '_blank');
-      
-      // Reset form
-      this.reset();
+      try {
+        // Submit to backend for email notification
+        const response = await fetch('/api/waitlist', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            restaurantName,
+            email,
+            phone,
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to submit waitlist form');
+        }
+        
+        const result = await response.json();
+        console.log('✅ Waitlist submission successful:', result);
+        
+        // Show success message
+        alert('Thank you for joining our waitlist! Check your email for confirmation.');
+        
+      } catch (error) {
+        console.error('❌ Error submitting waitlist:', error);
+        alert('There was an error submitting your information. Please try again or contact us via WhatsApp.');
+      } finally {
+        // Also send to WhatsApp for immediate contact
+        const phoneNumber = '85267455358';
+        const message = `Hello! I'd like to join the Chuio waitlist.\n\nRestaurant Name: ${restaurantName}\nEmail: ${email}\nPhone: ${phone}`;
+        const encodedMessage = encodeURIComponent(message);
+        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+        window.open(whatsappUrl, '_blank');
+        
+        // Reset form
+        this.reset();
+      }
     });
   }
 });
