@@ -242,7 +242,7 @@
   flex: 1 1 100%;
   background: var(--bg-light);
   border-radius: 0;
-  padding: 12px 8px;
+  padding: 12px 12px 12px 0;
   box-shadow: none;
   position: relative;
   justify-content: start;
@@ -255,8 +255,7 @@
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
-    padding: 12px;
-    width: 100%;
+    padding: 12px 12px 12px 0;
   }
 }
 
@@ -264,15 +263,8 @@
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
-    padding: 10px;
-    width: 100%;
+    padding: 10px 10px 10px 0;
   }
-}
-
-#tables-grid.menu-mode {
-  display: flex;
-  grid-template-columns: unset;
-  padding: 12px;
 }
 
 .table-card {
