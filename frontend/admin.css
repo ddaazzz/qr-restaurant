@@ -1741,3 +1741,34 @@ button.btn-icon.danger:hover {
     flex: 1;
   }
 }
+
+/* Mobile landscape orientation */
+@media (max-height: 500px) and (orientation: landscape) {
+  .app-header {
+    padding: 6px 10px;
+    gap: 5px;
+  }
+  
+  .header-title {
+    font-size: 16px;
+  }
+  
+  .sidebar {
+    width: 60px;
+    position: relative;
+  }
+  
+  .menu-btn {
+    padding: 8px;
+  }
+  
+  .menu-btn .icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .main-content {
+    flex: 1;
+    min-width: 0;
+  }
+}
