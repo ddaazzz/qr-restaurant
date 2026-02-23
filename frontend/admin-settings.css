@@ -418,3 +418,101 @@
   resize: vertical;
   min-height: 80px;
 }
+/* Mobile responsive styles for settings */
+@media (max-width: 768px) {
+  .settings-group {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+  }
+  
+  .settings-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  
+  .settings-actions button {
+    min-width: auto;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  
+  .settings-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    padding: 12px;
+  }
+  
+  .settings-card {
+    padding: 16px;
+    min-height: 120px;
+  }
+  
+  .settings-card h3 {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+  
+  .settings-card p {
+    font-size: 12px;
+  }
+  
+  .logo-preview {
+    max-width: 150px;
+    max-height: 150px;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-group {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+  
+  .settings-group label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  
+  .view-mode {
+    padding: 10px 12px;
+    min-height: 40px;
+    font-size: 13px;
+  }
+  
+  .settings-actions {
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  
+  .settings-actions button {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+  
+  .settings-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 10px;
+  }
+  
+  .settings-card {
+    padding: 12px;
+    min-height: 100px;
+  }
+  
+  .settings-card h3 {
+    font-size: 13px;
+  }
+  
+  .settings-card p {
+    font-size: 11px;
+  }
+  
+  .logo-preview {
+    max-width: 120px;
+    max-height: 120px;
+  }
+}

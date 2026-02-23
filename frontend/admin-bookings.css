@@ -250,6 +250,145 @@
   color: #9ca3af;
 }
 
+/* Mobile responsive styles for bookings */
+@media (max-width: 768px) {
+  .bookings-container {
+    padding: 12px;
+    overflow-x: hidden;
+  }
+  
+  .bookings-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+  }
+  
+  .bookings-header h1 {
+    font-size: 20px;
+    width: 100%;
+  }
+  
+  .calendar-nav {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+  
+  .calendar-nav h2 {
+    font-size: 18px;
+    min-width: 100%;
+  }
+  
+  .btn-month-nav {
+    font-size: 12px;
+    padding: 8px 12px;
+    flex: 1;
+    min-width: 70px;
+  }
+  
+  .calendar-view {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .weekdays {
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  
+  .weekday {
+    padding: 6px 2px;
+    font-size: 10px;
+  }
+  
+  .calendar-days {
+    gap: 4px;
+    grid-auto-rows: 70px;
+  }
+  
+  .calendar-day {
+    padding: 4px 2px;
+    font-size: 12px;
+  }
+  
+  .calendar-day-number {
+    font-size: 11px;
+  }
+  
+  .calendar-day-bookings {
+    font-size: 8px;
+  }
+  
+  .bookings-list-section {
+    padding: 12px;
+    min-height: 300px;
+    border-radius: 8px;
+  }
+  
+  .bookings-list-section h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+  
+  .bookings-list {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .booking-card {
+    min-height: 200px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .bookings-container {
+    padding: 8px;
+  }
+  
+  .bookings-header h1 {
+    font-size: 18px;
+  }
+  
+  .btn-new-booking {
+    width: 100%;
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  
+  .calendar-nav {
+    flex-direction: column;
+  }
+  
+  .btn-month-nav {
+    flex: 1 1 auto;
+  }
+  
+  .weekday {
+    font-size: 9px;
+  }
+  
+  .calendar-day {
+    min-height: 50px;
+    font-size: 11px;
+  }
+  
+  .calendar-day-number {
+    font-size: 10px;
+  }
+  
+  .booking-guest {
+    font-size: 14px;
+  }
+  
+  .booking-card {
+    min-height: auto;
+  }
+}
+}
+
 .booking-status {
   display: inline-block;
   padding: 4px 8px;
