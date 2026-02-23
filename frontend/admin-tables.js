@@ -1,6 +1,18 @@
 // ============= TABLES MODULE =============
 // All table management functionality extracted from admin.js
 
+// Helper to get today's date in restaurant timezone (YYYY-MM-DD format)
+function getTodayDateString() {
+  const tz = typeof restaurantTimezone !== 'undefined' ? restaurantTimezone : 'UTC';
+  const formatter = new Intl.DateTimeFormat('en-CA', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit',
+    timeZone: tz 
+  });
+  return formatter.format(new Date());
+}
+
 async function loadTablesCategories() {
   var url = API + "/restaurants/" + restaurantId + "/table-categories";
   var res = await fetch(url);
@@ -21,6 +33,17 @@ function renderTableCategoryTabs() {
     return;
   }
   tabs.innerHTML = "";
+
+  // If no categories exist and in edit mode, show "Create Category" button
+  if (TABLE_CATEGORIES.length === 0 && document.body.classList.contains("edit-mode")) {
+    var createBtn = document.createElement("button");
+    createBtn.className = "tab active";
+    createBtn.textContent = "+ Create First Category";
+    createBtn.style.flex = "1";
+    createBtn.onclick = function() { addTableCategoryPrompt(); };
+    tabs.appendChild(createBtn);
+    return;
+  }
 
   for (var ci = 0; ci < TABLE_CATEGORIES.length; ci++) {
     var cat = TABLE_CATEGORIES[ci];
@@ -103,38 +126,89 @@ async function createTablesCategory() {
   loadTablesCategoryTable();
 }
 
-// Helper function to determine table card color based on session duration
+// Helper function to determine table card color based on session duration and status
 function getTableCardColor(table) {
   if (table.sessions.length === 0 && !table.reserved) {
     return "white"; // Empty table
   }
 
   if (table.reserved && table.sessions.length === 0) {
-    return "reserved"; // Reserved (yellow)
+    return "white"; // Reserved table - show as white card with yellow "Reserved" text
   }
 
   if (table.sessions.length > 0) {
-    // Table is dining - check duration
-    var session = table.sessions[0];
-    var startedAt;
-    if (session.started_at.indexOf('T') !== -1) {
-      startedAt = new Date(session.started_at);
-    } else {
-      startedAt = new Date(session.started_at + 'Z');
+    // If multiple sessions, always show light-blue
+    if (table.sessions.length > 1) {
+      return "light-blue"; // Multiple sessions = light-blue
     }
-    var now = new Date();
-    var durationMinutes = (now - startedAt) / (1000 * 60);
-
-    if (durationMinutes < 30) {
-      return "light-blue"; // Just started dining
-    } else if (durationMinutes > 120) {
-      return "red"; // Dining for over 2 hours
+    
+    // Single session - check if bill closure is requested
+    var session = table.sessions[0];
+    
+    // Check if bill closure has been requested by customer (defaults to false if column doesn't exist yet)
+    if (session.bill_closure_requested === true) {
+      return "yellow"; // Customer requested bill closure
+    }
+    
+    // Check duration using the same logic as session colors
+    var startedAt;
+    var dateStr = session.started_at.trim();
+    
+    if (dateStr.includes('T') && dateStr.includes('Z')) {
+      startedAt = new Date(dateStr);
+    } else if (dateStr.includes('T')) {
+      startedAt = new Date(dateStr + 'Z');
     } else {
-      return "light-blue"; // Default to light blue for dining < 2 hrs
+      startedAt = new Date(dateStr);
+    }
+    
+    var durationMinutes = Math.floor((Date.now() - startedAt.getTime()) / 60000);
+    
+    // Return color based on duration (matching session color logic)
+    if (durationMinutes < 30) {
+      return "light-blue"; // < 30 mins
+    } else if (durationMinutes >= 30 && durationMinutes < 60) {
+      return "purple"; // 30-60 mins
+    } else if (durationMinutes >= 60 && durationMinutes < 120) {
+      return "orange"; // 60-120 mins
+    } else if (durationMinutes >= 120) {
+      return "red"; // > 120 mins
     }
   }
 
   return "white";
+}
+
+// Helper function to get reservation time info
+function getReservationTimeInfo(table) {
+  if (!table.reserved || !table.booking_time) {
+    return null;
+  }
+  
+  var now = new Date();
+  var today = getTodayDateString();
+  var bookingTime = new Date(today + "T" + table.booking_time);
+  var timeRemaining = bookingTime.getTime() - now.getTime();
+  
+  if (timeRemaining <= 0) {
+    return { text: "Now", isNow: true };
+  }
+  
+  var minutesRemaining = Math.floor(timeRemaining / 60000);
+  
+  if (minutesRemaining < 1) {
+    return { text: "Now", isNow: true };
+  } else if (minutesRemaining < 60) {
+    return { text: "In " + minutesRemaining + " min" + (minutesRemaining !== 1 ? "s" : ""), isNow: false };
+  } else {
+    var hours = Math.floor(minutesRemaining / 60);
+    var mins = minutesRemaining % 60;
+    if (mins > 0) {
+      return { text: "In " + hours + "h " + mins + "m", isNow: false };
+    } else {
+      return { text: "In " + hours + "h", isNow: false };
+    }
+  }
 }
 
 function renderCategoryTablesGrid() {
@@ -152,7 +226,11 @@ function renderCategoryTablesGrid() {
   }
 
   if (!SELECTED_TABLE_CATEGORY) {
-    grid.innerHTML = `<div class="empty-state"><p>No categories available</p></div>`;
+    if (document.body.classList.contains("edit-mode")) {
+      grid.innerHTML = `<div class="empty-state"><p>Click "+ Create First Category" above to create a table category</p></div>`;
+    } else {
+      grid.innerHTML = `<div class="empty-state"><p>No categories available</p></div>`;
+    }
     return;
   }
 
@@ -194,21 +272,49 @@ function renderCategoryTablesGrid() {
     
     if (table.sessions.length > 0) {
       status = "dining";
-      // Check if fully seated - hide status text
-      if (usedSeats >= table.seat_count) {
-        statusText = "";
-      }
+      statusText = "Dining"; // Always show dining status when there are sessions
       // Build time display for each session
       for (var sj = 0; sj < table.sessions.length; sj++) {
         var session = table.sessions[sj];
         var startedAt;
-        if (session.started_at.indexOf('T') !== -1) {
-          startedAt = new Date(session.started_at);
+        // Handle ISO 8601 dates properly - parse as UTC
+        var dateStr = session.started_at.trim();
+        
+        // ISO 8601 with Z means UTC - parse it explicitly
+        if (dateStr.includes('T') && dateStr.includes('Z')) {
+          // Parse as UTC by using getTime() which is always in UTC milliseconds
+          startedAt = new Date(dateStr);
+        } else if (dateStr.includes('T')) {
+          // ISO format without Z - treat as UTC by adding Z
+          startedAt = new Date(dateStr + 'Z');
         } else {
-          startedAt = new Date(session.started_at + 'Z');
+          // Not in ISO format, try parsing as-is
+          startedAt = new Date(dateStr);
         }
-        var elapsed = Math.floor((Date.now() - startedAt.getTime()) / 60000);
-        sessionTimesHTML = sessionTimesHTML + "<div style=\"margin: 2px 0;\"><img src=\"/uploads/website/timer.png\" alt=\"timer\" style=\"width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;\"> " + elapsed + "m</div>";
+        
+        // Validate date parsing
+        if (isNaN(startedAt.getTime())) {
+          console.warn('Invalid date:', session.started_at);
+          sessionTimesHTML = sessionTimesHTML + "<div class=\"session-time-item\"><img src=\"/uploads/website/timer.png\" alt=\"timer\"> --m</div>";
+        } else {
+          // Both Date.now() and startedAt.getTime() are in UTC milliseconds
+          var elapsedMs = Date.now() - startedAt.getTime();
+          var elapsed = Math.floor(elapsedMs / 60000);
+          
+          // Format elapsed time: show hours if >= 60 minutes, else minutes
+          if (elapsed >= 60) {
+            var hours = Math.floor(elapsed / 60);
+            var mins = elapsed % 60;
+            if (mins > 0) {
+              elapsed = hours + "h " + mins + "m";
+            } else {
+              elapsed = hours + "h";
+            }
+          } else {
+            elapsed = elapsed + "m";
+          }
+          sessionTimesHTML = sessionTimesHTML + "<div class=\"session-time-item\"><img src=\"/uploads/website/timer.png\" alt=\"timer\"> " + elapsed + "</div>";
+        }
       }
     } else if (table.reserved) {
       status = "reserved";
@@ -220,27 +326,67 @@ function renderCategoryTablesGrid() {
 
     var card = document.createElement("div");
     card.className = "table-card table-card-" + cardColor;
+    card.setAttribute("data-table-id", table.id);
+
+    // Get reservation time info if reserved
+    var reservationTimeHTML = "";
+    var reservationStatusClass = "";
+    if (table.reserved && table.sessions.length === 0) {
+      var reservationInfo = getReservationTimeInfo(table);
+      if (reservationInfo) {
+        reservationStatusClass = reservationInfo.isNow ? "reservation-now" : "reservation-upcoming";
+        reservationTimeHTML = "<div class=\"table-card-reservation-time " + reservationStatusClass + "\">" + reservationInfo.text + "</div>";
+      }
+    }
 
     var sessionsCountHTML = table.sessions.length > 0 ? "○ " + table.sessions.length : "";
     var sessionsListHTML = sessionTimesHTML ? "<div class=\"table-card-sessions-list\">" + sessionTimesHTML + "</div>" : "";
-    var sessionsSpan = table.sessions.length > 0 ? "<span>" + table.sessions.length + " session(s)</span>" : "";
+    
+    // Build status and reservation info for bottom of card
+    var bottomInfoHTML = "";
+    var bottomItems = [];
+    
+    // Add Reserved status if reserved and no active sessions
+    if (table.reserved && table.sessions.length === 0) {
+      var reservationInfo = getReservationTimeInfo(table);
+      if (reservationInfo) {
+        reservationStatusClass = reservationInfo.isNow ? "reservation-now" : "reservation-upcoming";
+        bottomItems.push("<div class=\"table-card-status-badge " + reservationStatusClass + "\">" + reservationInfo.text + "</div>");
+      } else {
+        bottomItems.push("<div class=\"table-card-status-badge\">Reserved</div>");
+      }
+    }
+    
+    // Add active sessions/dining time at bottom
+    if (sessionTimesHTML) {
+      bottomItems.push("<div class=\"table-card-sessions-list\">" + sessionTimesHTML + "</div>");
+    }
+    
+    // Add Available status if available
+    if (status === "available") {
+      bottomItems.push("<div class=\"table-card-status " + status + "\">Available</div>");
+    }
+    
+    // Create bottom info section if we have items
+    if (bottomItems.length > 0) {
+      bottomInfoHTML = "<div class=\"table-card-bottom-info\">" + bottomItems.join("") + "</div>";
+    }
+    
+    // Clear sessionsListHTML since we moved it to bottom
+    sessionsListHTML = "";
     
     card.innerHTML = "<div class=\"table-card-sessions\">" + sessionsCountHTML + "</div>" +
       "<div class=\"table-card-name\">" + table.name + "</div>" +
       sessionsListHTML +
-      "<div class=\"table-card-status " + status + "\">" + statusText + "</div>" +
-      "<div class=\"table-card-info\">" +
-      "<span>" + usedSeats + "/" + table.seat_count + " seats</span>" +
-      sessionsSpan +
-      "</div>" +
+      bottomInfoHTML +
       "<div class=\"table-edit-controls\">" +
-      "<button onclick=\"event.stopPropagation(); renameTablePrompt(" + table.id + ", '" + table.name + "')\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\" style=\"width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;\"/>Rename</button>" +
-      "<button onclick=\"event.stopPropagation(); changeTableSeatsPrompt(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\" style=\"width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;\"/>Seats</button>" +
-      "<button onclick=\"event.stopPropagation(); deleteTable(" + table.id + ")\" style=\"background-color: #fee; color: #c33;\"><img src=\"/uploads/website/bin.png\" alt=\"delete\" style=\"width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;\"/>Delete</button>" +
+      "<button onclick=\"event.stopPropagation(); renameTablePrompt(" + table.id + ", '" + table.name + "')\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
+      "<button onclick=\"event.stopPropagation(); changeTableSeatsPrompt(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Seats</button>" +
+      "<button onclick=\"event.stopPropagation(); deleteTable(" + table.id + ")\" class=\"table-card-delete-btn\"><img src=\"/uploads/website/bin.png\" alt=\"delete\"/>Delete</button>" +
       "</div>" +
-      "<div class=\"table-card-seats\" style=\"position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 4px;\">" +
-      "<img src=\"/uploads/website/chair.png\" alt=\"seats\" style=\"width: 20px; height: 20px;\"/>" +
-      "<span style=\"font-size: 14px;\">" + usedSeats + "/" + table.seat_count + "</span>" +
+      "<div class=\"table-card-seats\">" +
+      "<img src=\"/uploads/website/chair.png\" alt=\"seats\"/>" +
+      "<span>" + usedSeats + "/" + table.seat_count + "</span>" +
       "</div>";
 
     // Clicking card = show session panel (unless in edit mode and clicking edit buttons)
@@ -258,6 +404,13 @@ function renderCategoryTablesGrid() {
 }
 
 async function addTablePrompt(categoryId) {
+  // Ensure categoryId is valid
+  if (!categoryId || categoryId <= 0) {
+    console.error("❌ Invalid categoryId:", categoryId);
+    alert("Error: No category selected. Please select a category tab first.");
+    return;
+  }
+
   const name = prompt("Enter table name (e.g., T01, Table 1):", "");
   if (!name || !name.trim()) return;
 
@@ -265,6 +418,8 @@ async function addTablePrompt(categoryId) {
   if (!seats || seats <= 0) return alert("Invalid seat count");
 
   try {
+    console.log(`📝 Creating table - categoryId: ${categoryId}, name: ${name}, seats: ${seats}`);
+    
     const res = await fetch(`${API}/restaurants/${restaurantId}/tables`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -277,11 +432,15 @@ async function addTablePrompt(categoryId) {
 
     if (!res.ok) {
       const err = await res.json();
-      return alert(err.error || "Failed to create table");
+      console.error("❌ Server error:", err);
+      return alert(err.error || err.details || "Failed to create table");
     }
 
+    const result = await res.json();
+    console.log("✅ Table created:", result);
     await loadTablesCategoryTable();
   } catch (err) {
+    console.error("❌ Error creating table:", err);
     alert("Error creating table: " + err.message);
   }
 }
@@ -295,15 +454,26 @@ function renameTablePrompt(tableId, currentName) {
   renameTable(tableId, newName);
 }
 
-function changeTableSeatsPrompt(tableId, currentSeats) {
+async function changeTableSeatsPrompt(tableId, currentSeats) {
   const newSeats = Number(prompt("Enter new seat count:", currentSeats));
   if (!newSeats || newSeats <= 0) return alert("Invalid seat count");
 
-  fetch(`${API}/tables/${tableId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ seat_count: newSeats })
-  }).then(loadTablesCategoryTable);
+  try {
+    const res = await fetch(`${API}/tables/${tableId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seat_count: newSeats })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      return alert("Error updating seats: " + (err.error || err.message || "Unknown error"));
+    }
+
+    await loadTablesCategoryTable();
+  } catch (err) {
+    alert("Error updating seats: " + err.message);
+  }
 }
 
 async function loadTablesCategoryTable() {
@@ -327,7 +497,8 @@ async function loadTablesCategoryTable() {
         category_id: r.category_id,
         units: [],
         sessions: [],
-        reserved: false
+        reserved: false,
+        booking_time: r.booking_time || null
       };
     }
 
@@ -345,7 +516,8 @@ async function loadTablesCategoryTable() {
         id: r.session_id,
         table_unit_id: r.table_unit_id,
         pax: Number(r.pax),
-        started_at: r.started_at
+        started_at: r.started_at,
+        bill_closure_requested: r.bill_closure_requested
       });
     }
   }
@@ -353,13 +525,15 @@ async function loadTablesCategoryTable() {
   TABLES = [];
   for (var key in tableMap) {
     if (tableMap.hasOwnProperty(key)) {
-      TABLES.push(tableMap[key]);
+      var table = tableMap[key];
+      // booking_time will be set from bookings API
+      TABLES.push(table);
     }
   }
 
-  // Load bookings for today to set reserved flag
+  // Load bookings for today to set reserved flag and booking_time
   try {
-    var today = new Date().toISOString().split('T')[0];
+    var today = getTodayDateString();
     var bookingsUrl = API + "/restaurants/" + restaurantId + "/bookings?date=" + today;
     var bookingsRes = await fetch(bookingsUrl);
     if (bookingsRes.ok) {
@@ -370,7 +544,7 @@ async function loadTablesCategoryTable() {
       }
       var now = new Date();
       
-      // Mark tables that have active bookings (not expired)
+      // Mark tables that have active bookings (not expired) and set booking_time
       for (var bi = 0; bi < bookings.length; bi++) {
         var booking = bookings[bi];
         var table = null;
@@ -380,13 +554,14 @@ async function loadTablesCategoryTable() {
             break;
           }
         }
-        if (table && booking.status !== 'cancelled' && booking.status !== 'no-show') {
+        if (table && booking.status === 'confirmed') {
           // Check if booking has expired (past booking time + allowance)
           var bookingTime = new Date(today + "T" + booking.booking_time);
           var expirationTime = new Date(bookingTime.getTime() + timeAllowance * 60000);
           
           if (now < expirationTime) {
             table.reserved = true;
+            table.booking_time = booking.booking_time;
           }
         }
       }
@@ -425,12 +600,17 @@ function renderTableSessions(table) {
 function formatDiningDuration(startedAt) {
   // Parse timestamp - handle both ISO format and plain datetime strings
   let start;
-  if (startedAt.includes('T')) {
-    // Already in ISO format or contains T
-    start = new Date(startedAt);
+  var dateStr = startedAt.trim();
+  
+  if (dateStr.includes('T') && dateStr.includes('Z')) {
+    // ISO 8601 with Z - parse as UTC
+    start = new Date(dateStr);
+  } else if (dateStr.includes('T')) {
+    // ISO format without Z - treat as UTC by adding Z
+    start = new Date(dateStr + 'Z');
   } else {
     // Plain datetime string, assume UTC
-    start = new Date(startedAt + 'Z');
+    start = new Date(dateStr + 'Z');
   }
   
   // Check if date is valid
@@ -438,8 +618,8 @@ function formatDiningDuration(startedAt) {
     return "—";
   }
   
-  const now = new Date();
-  const diffMs = now - start;
+  // Use Date.now() - start.getTime() for timezone-agnostic calculation (both in UTC milliseconds)
+  const diffMs = Date.now() - start.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   
   if (diffMins < 1) return "just started";
@@ -506,7 +686,7 @@ async function renderSessionsList(table) {
   // Get next reservation for this table
   let nextReservation = null;
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     const bookingsRes = await fetch(`${API}/restaurants/${restaurantId}/bookings?date=${today}`);
     if (bookingsRes.ok) {
       const bookings = await bookingsRes.json();
@@ -522,19 +702,33 @@ async function renderSessionsList(table) {
   let sessionsHTML = table.sessions.map(session => {
     const duration = formatDiningDuration(session.started_at);
     let startedAt;
-    if (session.started_at.includes('T')) {
-      startedAt = new Date(session.started_at);
+    var dateStr = session.started_at.trim();
+    
+    if (dateStr.includes('T') && dateStr.includes('Z')) {
+      // ISO 8601 with Z - parse as UTC
+      startedAt = new Date(dateStr);
+    } else if (dateStr.includes('T')) {
+      // ISO format without Z - treat as UTC by adding Z
+      startedAt = new Date(dateStr + 'Z');
     } else {
-      startedAt = new Date(session.started_at + 'Z');
+      // Not ISO format
+      startedAt = new Date(dateStr);
     }
+    
     const durationMinutes = Math.floor((Date.now() - startedAt.getTime()) / 60000);
     
-    // Determine color based on dining duration
+    // Determine color based on dining duration with better consistency
     let sessionColor = "#0099ff"; // light blue < 30 mins
-    if (durationMinutes >= 30 && durationMinutes < 120) {
-      sessionColor = "#4a90e2"; // blue 30-120 mins
+    let sessionLabel = "< 30m";
+    if (durationMinutes >= 30 && durationMinutes < 60) {
+      sessionColor = "#2735b0"; // purple 30-60 mins
+      sessionLabel = "30-60m";
+    } else if (durationMinutes >= 60 && durationMinutes < 120) {
+      sessionColor = "#8d0303"; // orange 60-120 mins
+      sessionLabel = "60-120m";
     } else if (durationMinutes >= 120) {
       sessionColor = "#e74c3c"; // red > 120 mins
+      sessionLabel = "> 120m";
     }
     
     const billTotal = sessionBills[session.id] ? `$${(sessionBills[session.id] / 100).toFixed(2)}` : "—";
@@ -642,28 +836,35 @@ function renderTableOptionsPanel(table) {
 
 async function loadTableReservations(tableId) {
   try {
-    const bookingsRes = await fetch(`${API}/restaurants/${restaurantId}/bookings`);
-    if (!bookingsRes.ok) return;
+    const reservationsEl = document.getElementById("table-reservations-list");
+    if (!reservationsEl) {
+      // Element doesn't exist yet - will be called again when panel is rendered
+      return;
+    }
+
+    const today = getTodayDateString();
+    const bookingsRes = await fetch(`${API}/restaurants/${restaurantId}/bookings?date=${today}`);
+    if (!bookingsRes.ok) {
+      reservationsEl.innerHTML = '<p style="font-size: 12px; color: var(--text-light);">Could not load reservations</p>';
+      return;
+    }
 
     const bookings = await bookingsRes.json();
     const tableBookings = bookings.filter(b => b.table_id === tableId && b.status === 'confirmed');
 
-    const reservationsEl = document.getElementById("table-reservations-list");
     if (!tableBookings.length) {
       reservationsEl.innerHTML = '<p style="font-size: 12px; color: var(--text-light);">No upcoming reservations</p>';
       return;
     }
 
     const reservationsHTML = tableBookings.map(booking => {
-      const bookingDate = new Date(booking.booking_date);
-      const dayStr = bookingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       return `
         <div style="padding: 10px; background: #f5f5f5; border-left: 3px solid #4a90e2; border-radius: 4px; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <strong style="display: block; margin-bottom: 2px;">${booking.guest_name}</strong>
+              <strong style="display: block; margin-bottom: 2px;">#${booking.id} - ${booking.guest_name}</strong>
               <div style="font-size: 12px; color: var(--text-light);">
-                📅 ${dayStr} at ${booking.booking_time}
+                🕒 ${booking.booking_time} • 📞 ${booking.phone || 'N/A'}
               </div>
             </div>
             <div style="text-align: right; font-weight: 600; color: #4a90e2;">
@@ -675,11 +876,15 @@ async function loadTableReservations(tableId) {
     }).join('');
 
     reservationsEl.innerHTML = `
-      <strong style="display: block; margin-bottom: 8px; font-size: 12px;">Upcoming Reservations:</strong>
+      <strong style="display: block; margin-bottom: 8px; font-size: 12px;">Upcoming Reservations (Today):</strong>
       ${reservationsHTML}
     `;
   } catch (err) {
     console.error("Error loading reservations:", err);
+    const reservationsEl = document.getElementById("table-reservations-list");
+    if (reservationsEl) {
+      reservationsEl.innerHTML = '<p style="font-size: 12px; color: var(--text-light);">Error loading reservations</p>';
+    }
   }
 }
 
@@ -704,13 +909,13 @@ function startNewSessionModal(tableId) {
       <p style="color: var(--text-light); margin: 0 0 16px 0;">${remaining} seats available</p>
       
       <label style="display: block; margin-bottom: 16px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 8px;">Number of Guests (Pax)</span>
-        <input type="number" id="session-pax-input" min="1" max="${remaining}" value="1" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+        <span class="modal-content-label">Number of Guests (Pax)</span>
+        <input type="number" id="session-pax-input" min="1" max="${remaining}" value="1" class="modal-input">
       </label>
 
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button onclick="this.closest('.modal-overlay').remove()" style="padding: 10px 20px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">Cancel</button>
-        <button onclick="submitStartSession(${tableId})" style="padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">Start Session</button>
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">Cancel</button>
+        <button onclick="submitStartSession(${tableId})" class="modal-btn-primary">Start Session</button>
       </div>
     </div>
   `;
@@ -777,12 +982,12 @@ function bookTableModal(tableId) {
 
       <label style="display: block; margin-bottom: 16px;">
         <span style="font-weight: 600; display: block; margin-bottom: 8px;">Reservation Time</span>
-        <input type="time" id="booking-time-input" value="18:00" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+        <input type="time" id="booking-time-input" value="18:00" class="modal-input">
       </label>
 
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button onclick="this.closest('.modal-overlay').remove()" style="padding: 10px 20px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">Cancel</button>
-        <button onclick="submitBookTable(${tableId})" style="padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">Book Table</button>
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">Cancel</button>
+        <button onclick="submitBookTable(${tableId})" class="modal-btn-primary">Book Table</button>
       </div>
     </div>
   `;
@@ -828,6 +1033,10 @@ async function submitBookTable(tableId) {
     const overlay = document.querySelector(".modal-overlay");
     if (overlay) overlay.remove();
     alert("Table booked successfully!");
+    // Sync bookings tab
+    if (typeof loadBookings === 'function') {
+      loadBookings();
+    }
     await loadTablesCategoryTable();
   } catch (err) {
     alert("Error booking table: " + err.message);
@@ -1001,6 +1210,9 @@ async function printBill(sessionId) {
   if (!res.ok) return alert("Failed to load bill");
 
   const bill = await res.json();
+  const sessionRes = await fetch(`${API}/sessions/${sessionId}`);
+  const session = sessionRes.ok ? await sessionRes.json() : null;
+  
   const win = window.open("", "_blank");
   
   let itemsHTML = '';
@@ -1010,6 +1222,23 @@ async function printBill(sessionId) {
   });
   
   const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>Service Charge:</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';
+  
+  // Format session start time and order type
+  let sessionInfoHTML = '';
+  if (session) {
+    const startTime = session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A';
+    let orderType = 'Table';
+    let tableInfo = '';
+    
+    if (session.order_type === 'to-go') orderType = 'To Go';
+    else if (session.order_type === 'pay-now') orderType = 'Counter/Pay Now';
+    else if (session.table_id) tableInfo = ` - Table ${session.table_name || '#' + session.table_id}`;
+    
+    sessionInfoHTML = `
+      <div style="font-size: 11px; color: #666; margin-bottom: 2px;">Order Type: ${orderType}${tableInfo}</div>
+      <div style="font-size: 11px; color: #666; margin-bottom: 6px;">Time: ${startTime}</div>
+    `;
+  }
   
   const billHTML = `<!DOCTYPE html>
 <html>
@@ -1048,6 +1277,7 @@ async function printBill(sessionId) {
         <div class="restaurant-info">${bill.restaurant ? bill.restaurant.phone || '' : ''}</div>
       </div>
       <div class="divider"></div>
+      ${sessionInfoHTML}
       <div class="items">${itemsHTML}</div>
       <div class="summary">
         <div class="summary-row subtotal">
@@ -1264,6 +1494,34 @@ async function changeSessionPaxModal(sessionId, currentPax) {
   await loadTablesCategoryTable();
 }
 
+function updateBillTotal(grandTotal) {
+  const couponSelect = document.getElementById('discount-coupon');
+  const selectedOption = couponSelect && couponSelect.options ? couponSelect.options[couponSelect.selectedIndex] : null;
+  
+  let discountAmount = 0;
+  if (selectedOption && selectedOption.value) {
+    const couponType = selectedOption.getAttribute('data-type');
+    const couponValue = Number(selectedOption.getAttribute('data-value'));
+    
+    if (couponType === 'percentage') {
+      discountAmount = Math.round(grandTotal * couponValue / 100);
+    } else {
+      discountAmount = couponValue;
+    }
+  }
+  
+  const finalTotal = grandTotal - discountAmount;
+  
+  // Update the total display in the modal
+  const billSummary = document.querySelector('[style*="Bill Summary"]');
+  if (billSummary) {
+    const totalLine = billSummary.querySelector('[style*="font-weight: bold"]');
+    if (totalLine) {
+      totalLine.innerHTML = `<p style="margin: 8px 0 0 0; font-size: 16px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 8px;">Total: <span style="color: ${discountAmount > 0 ? '#10b981' : '#000'};">$${(finalTotal / 100).toFixed(2)}</span>${discountAmount > 0 ? ` <span style="font-size: 12px; color: #666;">(-$${(discountAmount / 100).toFixed(2)})</span>` : ''}</p>`;
+    }
+  }
+}
+
 async function closeBillModal(sessionId) {
   const session = findSessionById(sessionId);
   if (!session) return alert("Session not found");
@@ -1320,14 +1578,12 @@ async function closeBillModal(sessionId) {
           <option value="cash">Cash</option>
           <option value="card">Card</option>
           <option value="online">Online Payment</option>
-          <option value="check">Check</option>
-          <option value="other">Other</option>
         </select>
       </label>
 
       <label style="display: block; margin-bottom: 15px;">
         <span style="font-weight: 600; display: block; margin-bottom: 5px;">Discount / Coupon</span>
-        <select id="discount-coupon" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        <select id="discount-coupon" onchange="updateBillTotal(${grandTotal})" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <option value="">No Discount</option>
           ${coupons.map(c => `<option value="${c.id}" data-type="${c.discount_type}" data-value="${c.discount_value}">${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}</option>`).join('')}
         </select>
@@ -1338,9 +1594,9 @@ async function closeBillModal(sessionId) {
         <textarea id="close-reason" placeholder="e.g., Customer satisfied, Complaint, etc." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; height: 60px;"></textarea>
       </label>
 
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button onclick="this.closest('.modal-overlay').remove()" style="padding: 10px 20px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">Cancel</button>
-        <button onclick="submitCloseBill(${sessionId}, ${grandTotal})" style="padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">Close Bill</button>
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">Cancel</button>
+        <button onclick="submitCloseBill(${sessionId}, ${grandTotal})" class="modal-btn-primary">Close Bill</button>
       </div>
     </div>
   `;
@@ -1370,6 +1626,19 @@ async function submitCloseBill(sessionId, grandTotal) {
 
   const finalAmount = grandTotal - discountApplied;
 
+  // First update session to mark bill closure requested (shows yellow on table card)
+  await fetch(`${API}/sessions/${sessionId}/request-bill-closure`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      bill_closure_requested: true,
+      restaurantId: restaurantId
+    })
+  }).catch(err => console.log("Note: Could not pre-mark bill closure", err));
+
+  // Immediately reload to show yellow card
+  await loadTablesCategoryTable();
+
   // Close the bill
   const closeBillRes = await fetch(`${API}/sessions/${sessionId}/close-bill`, {
     method: "POST",
@@ -1378,7 +1647,8 @@ async function submitCloseBill(sessionId, grandTotal) {
       payment_method: paymentMethod,
       amount_paid: finalAmount,
       discount_applied: discountApplied,
-      notes: reason
+      notes: reason,
+      restaurantId: restaurantId
     })
   });
 
@@ -1393,6 +1663,12 @@ async function submitCloseBill(sessionId, grandTotal) {
 
   alert("Bill closed successfully!");
   await loadTablesCategoryTable();
+  
+  // If called from orders panel, refresh orders history
+  if (typeof loadOrdersHistoryLeftPanel === 'function') {
+    await loadOrdersHistoryLeftPanel();
+  }
+  
   closeSessionPanel();
 }
 
@@ -1424,13 +1700,22 @@ async function createTable() {
 async function renameTable(tableId, name) {
   if (!name.trim()) return;
 
-  await fetch(`${API}/tables/${tableId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
-  });
+  try {
+    const res = await fetch(`${API}/tables/${tableId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() })
+    });
 
-  await loadTablesCategoryTable();
+    if (!res.ok) {
+      const err = await res.json();
+      return alert("Error renaming table: " + (err.error || err.message || "Unknown error"));
+    }
+
+    await loadTablesCategoryTable();
+  } catch (err) {
+    alert("Error renaming table: " + err.message);
+  }
 }
 
 async function regenQR(tableId) {
@@ -1444,12 +1729,23 @@ async function regenQR(tableId) {
 async function deleteTable(tableId) {
   if (!confirm("Delete this table permanently?")) return;
 
-  await fetch(`${API}/tables/${tableId}`, {
-    method: "DELETE"
-  });
+  try {
+    const res = await fetch(`${API}/tables/${tableId}`, {
+      method: "DELETE"
+    });
 
-  loadTablesCategoryTable();
+    if (!res.ok) {
+      const err = await res.json();
+      return alert("Error deleting table: " + (err.error || err.message || "Unknown error"));
+    }
+
+    await loadTablesCategoryTable();
+  } catch (err) {
+    alert("Error deleting table: " + err.message);
+  }
 }
+
+
 
 
 
@@ -1461,16 +1757,49 @@ function editTableCategory(catId, currentName) {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: newName })
-  }).then(() => loadTablesCategoryTable());
+  }).then(res => {
+    if (!res.ok) {
+      return res.json().then(err => {
+        throw new Error(err.error || err.message || "Failed to update category");
+      });
+    }
+    return res.json();
+  }).then(() => {
+    loadTablesCategoryTable();
+  }).catch(err => {
+    alert("Error updating category: " + err.message);
+  });
 }
 
 async function deleteTableCategory(catId) {
   if (!confirm("Delete this category? All tables in it will be affected.")) return;
 
-  await fetch(`${API}/restaurants/${restaurantId}/table-categories/${catId}`, {
-    method: "DELETE"
-  });
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/table-categories/${catId}`, {
+      method: "DELETE"
+    });
 
-  loadTablesCategoryTable();
+    if (!res.ok) {
+      const err = await res.json();
+      return alert("Error deleting category: " + (err.error || err.message || "Unknown error"));
+    }
+
+    await loadTablesCategoryTable();
+  } catch (err) {
+    alert("Error deleting category: " + err.message);
+  }
 }
+
+// Periodically reload table state to update card colors based on session elapsed time
+setInterval(function() {
+  if (TABLES && TABLES.length > 0) {
+    loadTablesCategoryTable();
+  }
+}, 5000); // Reload tables every 5 seconds to sync bookings and status changes
+
+// Listen for language changes to re-render category tabs
+window.addEventListener('languageChanged', () => {
+  console.log('[Tables] Language changed - re-rendering tabs');
+  renderTableCategoryTabs();
+});
 

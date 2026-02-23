@@ -68,6 +68,17 @@ function renderMenuCategoryTabs() {
   if (!tabs) return;
   tabs.innerHTML = "";
 
+  // If no categories exist and in edit mode, show "Create Category" button
+  if (MENU_CATEGORIES.length === 0 && IS_EDIT_MODE) {
+    const createBtn = document.createElement("button");
+    createBtn.className = "tab active";
+    createBtn.textContent = "+ Create First Category";
+    createBtn.style.flex = "1";
+    createBtn.onclick = () => addMenuCategoryPrompt();
+    tabs.appendChild(createBtn);
+    return;
+  }
+
   MENU_CATEGORIES.forEach(cat => {
     const btn = document.createElement("button");
     btn.className =
@@ -123,7 +134,12 @@ function renderMenuItemsGrid() {
   if (!grid) return;
   grid.innerHTML = "";
 
-  if (!SELECTED_MENU_CATEGORY) return;
+  if (!SELECTED_MENU_CATEGORY) {
+    if (IS_EDIT_MODE && MENU_CATEGORIES.length === 0) {
+      grid.innerHTML = `<div class="empty-state"><p>Click "+ Create First Category" above to create a menu category</p></div>`;
+    }
+    return;
+  }
 
   const items = MENU_ITEMS.filter(i => Number(i.category_id) === Number(SELECTED_MENU_CATEGORY.id));
 
@@ -157,12 +173,13 @@ function renderMenuItemsGrid() {
       <div class="menu-item-info">
         <div class="menu-item-name">${item.name}</div>
         <div class="menu-item-price">$${(item.price_cents / 100).toFixed(2)}</div>
-        ${!isAvailable ? '<span class="badge-sold-out">Sold Out</span>' : ''}
       </div>
+      ${IS_EDIT_MODE ? `
       <div class="menu-edit-controls">
-        <button onclick="event.stopPropagation(); editMenuItemModal(${item.id})"><img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"/>Edit</button>
-        <button onclick="event.stopPropagation(); deleteMenuItem(${item.id})" style="background-color: #fee; color: #c33;"><img src="/uploads/website/bin.png" alt="delete" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"/>Delete</button>
+        <button id="avail-btn-${item.id}" onclick="event.stopPropagation(); toggleMenuItemAvailability(${item.id}, ${!isAvailable})" style="background-color: ${isAvailable ? '#e7f5e7' : '#fee'}; color: ${isAvailable ? '#2d7a2d' : '#c33'}; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">${isAvailable ? '✓' : '✕'} ${isAvailable ? t('admin.available') : t('admin.sold-out')}</button>
+        <button onclick="event.stopPropagation(); deleteMenuItem(${item.id})" style="background-color: #fee; color: #c33; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">🗑️ ${t('admin.delete')}</button>
       </div>
+      ` : ''}
     `;
 
     grid.appendChild(card);
@@ -306,7 +323,8 @@ async function saveMenuItemEdit(itemId) {
         price_cents: price,
         category_id: categoryId,
         description,
-        available
+        available,
+        restaurantId: restaurantId
       })
     });
 
@@ -323,11 +341,77 @@ async function saveMenuItemEdit(itemId) {
   }
 }
 
+// Toggle menu item availability
+async function toggleMenuItemAvailability(itemId, isAvailable) {
+  try {
+    // Find the button element and update it immediately (optimistic update)
+    const availBtn = document.getElementById(`avail-btn-${itemId}`);
+    if (availBtn) {
+      const bgColor = isAvailable ? '#e7f5e7' : '#fee';
+      const textColor = isAvailable ? '#2d7a2d' : '#c33';
+      const icon = isAvailable ? '✓' : '✕';
+      const text = isAvailable ? 'Available' : 'Sold Out';
+      
+      availBtn.style.backgroundColor = bgColor;
+      availBtn.style.color = textColor;
+      availBtn.textContent = `${icon} ${text}`;
+      
+      // CRITICAL: Update the onclick handler to toggle the NEW state (opposite of isAvailable)
+      availBtn.onclick = function(e) {
+        e.stopPropagation();
+        toggleMenuItemAvailability(itemId, !isAvailable);
+      };
+    }
+
+    // Update card class
+    const card = document.querySelector(`[data-item-id="${itemId}"]`);
+    if (card) {
+      if (isAvailable) {
+        card.classList.remove('unavailable');
+      } else {
+        card.classList.add('unavailable');
+      }
+    }
+
+    // Update in memory IMMEDIATELY (before API call)
+    const item = MENU_ITEMS.find(i => i.id === itemId);
+    if (item) {
+      item.available = isAvailable;
+    }
+
+    // Make API call to dedicated availability endpoint
+    const res = await fetch(`${API}/menu-items/${itemId}/availability`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        available: isAvailable,
+        restaurantId: restaurantId
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || "Cannot update item availability");
+      // Revert changes on error
+      await loadMenuItems();
+      return;
+    }
+  } catch (err) {
+    alert("Error updating availability: " + err.message);
+    // Revert changes on error
+    await loadMenuItems();
+  }
+}
+
 async function deleteMenuItem(itemId) {
   if (!confirm("Delete this menu item permanently?")) return;
 
   try {
-    const res = await fetch(`${API}/menu-items/${itemId}`, { method: "DELETE" });
+    const res = await fetch(`${API}/menu-items/${itemId}`, { 
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restaurantId: restaurantId })
+    });
 
     if (!res.ok) {
       const err = await res.json();
@@ -346,6 +430,7 @@ async function uploadItemImage(itemId, file) {
   try {
     const form = new FormData();
     form.append("image", file);
+    form.append("restaurantId", localStorage.getItem("restaurantId"));
 
     await fetch(`${API}/menu-items/${itemId}/image`, {
       method: "POST",
@@ -642,21 +727,6 @@ async function saveFoodItemEdit() {
       restaurantId: restaurantId
     };
     
-    // If image was changed, upload it first
-    if (imageInput.files && imageInput.files[0]) {
-      const formData = new FormData();
-      formData.append('file', imageInput.files[0]);
-      
-      const uploadRes = await fetch(`${API}/upload/menu`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!uploadRes.ok) throw new Error('Failed to upload image');
-      const uploadData = await uploadRes.json();
-      updateData.image_url = uploadData.url;
-    }
-    
     const res = await fetch(`${API}/menu-items/${currentEditingItemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -665,25 +735,38 @@ async function saveFoodItemEdit() {
     
     if (!res.ok) throw new Error('Failed to save');
     
+    // If image was changed, upload it separately
+    if (imageInput.files && imageInput.files[0]) {
+      const formData = new FormData();
+      formData.append('image', imageInput.files[0]);
+      formData.append('restaurantId', localStorage.getItem('restaurantId'));
+      
+      const uploadRes = await fetch(`${API}/menu-items/${currentEditingItemId}/image`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!uploadRes.ok) {
+        console.warn('Failed to upload image, but item updated successfully');
+      }
+    }
+    
     // Update local item
     const item = MENU_ITEMS.find(function(i) { return i.id == currentEditingItemId; });
     if (item) {
       item.name = newName;
       item.price_cents = newPrice;
       item.description = newDesc;
-      if (updateData.image_url) item.image_url = updateData.image_url;
     }
     
     // Update display
     const nameSpan = document.getElementById('food-panel-name');
     const priceSpan = document.getElementById('food-panel-price');
     const descP = document.getElementById('food-panel-desc');
-    const panelImage = document.getElementById('food-panel-image');
     
     nameSpan.textContent = newName;
     priceSpan.textContent = '$' + (newPrice / 100).toFixed(2);
     descP.textContent = newDesc || 'No description available';
-    if (updateData.image_url) panelImage.src = updateData.image_url;
     
     // Clear image input
     imageInput.value = '';
@@ -1412,25 +1495,43 @@ async function createMenuItem() {
   }
   
   try {
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('price_cents', price);
-    formData.append('description', desc);
-    formData.append('category_id', categoryId);
-    formData.append('restaurant_id', restaurantId);
+    // Step 1: Create the menu item
+    const itemData = {
+      name,
+      price_cents: price,
+      description: desc,
+      category_id: categoryId
+    };
     
-    if (imageEl.files && imageEl.files[0]) {
-      formData.append('image', imageEl.files[0]);
-    }
-    
-    const res = await fetch(`${API}/menu-items`, {
+    const createRes = await fetch(`${API}/restaurants/${restaurantId}/menu-items`, {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(itemData)
     });
     
-    if (!res.ok) {
-      const err = await res.json();
+    if (!createRes.ok) {
+      const err = await createRes.json();
       throw new Error(err.error || 'Failed to create item');
+    }
+    
+    const newItem = await createRes.json();
+    
+    // Step 2: Upload image if provided
+    if (imageEl.files && imageEl.files[0]) {
+      const formData = new FormData();
+      formData.append('image', imageEl.files[0]);
+      formData.append('restaurantId', localStorage.getItem('restaurantId'));
+      
+      const imageRes = await fetch(`${API}/menu-items/${newItem.id}/image`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!imageRes.ok) {
+        console.warn('Failed to upload image, but item created successfully');
+      }
     }
     
     alert('Item created successfully!');
@@ -1453,3 +1554,19 @@ function previewItemImage(input) {
     reader.readAsDataURL(input.files[0]);
   }
 }
+
+// Listen for language changes to re-render category tabs
+window.addEventListener('languageChanged', () => {
+  console.log('[Menu] Language changed - re-rendering tabs');
+  renderMenuCategoryTabs();
+  
+  // Update form placeholders
+  const itemNameInput = document.getElementById('new-item-name');
+  const priceInput = document.getElementById('new-item-price');
+  const descInput = document.getElementById('new-item-desc');
+  const uploadDiv = document.querySelector('.upload-placeholder');
+  
+  if (itemNameInput) itemNameInput.placeholder = t('admin.item-name-placeholder');
+  if (priceInput) priceInput.placeholder = t('admin.price-placeholder');
+  if (descInput) descInput.placeholder = t('admin.description-placeholder');
+  if (uploadDiv) uploadDiv.textContent = t('admin.upload-image');});
