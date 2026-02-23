@@ -68,20 +68,26 @@
 /* Mobile responsive: Category buttons on left as vertical sidebar */
 @media (max-width: 768px) {
   .menu-container {
-    flex-direction: row;
+    flex-direction: column;
     gap: 0;
+    padding: 0;
+    height: calc(100vh - 140px);
   }
   
   .menu-tabs-bottom {
     flex-direction: column;
     width: 100px;
     margin-top: 0;
-    margin-right: 12px;
+    margin-right: 0;
     border-top: none;
     border-right: 2px solid var(--border-color);
     border-bottom: none;
     order: -1;
     flex-shrink: 0;
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
   }
   
   .menu-tabs-bottom button {
@@ -99,16 +105,16 @@
     border-bottom: none;
   }
   
-  #menu-items-grid {
-    flex: 1;
+  .menu-grid {
+    margin-left: 100px;
     padding: 12px;
+    flex: 1;
   }
 }
 
 @media (max-width: 480px) {
   .menu-tabs-bottom {
     width: 80px;
-    order: -1;
   }
   
   .menu-tabs-bottom button {
@@ -116,8 +122,9 @@
     padding: 10px 6px;
   }
   
-  #menu-items-grid {
+  .menu-grid {
     grid-template-columns: 1fr !important;
+    margin-left: 80px;
   }
 }
 
@@ -133,25 +140,18 @@
   align-items: stretch;
   position: relative;
   overflow: hidden;
-}
-
-@media (max-width: 768px) {
-  .menu-container {
-    flex-direction: row;
-    gap: 0;
-  }
+  padding: 16px;
 }
 
 /* MENU GRID */
-#menu-items-grid {
+.menu-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
   align-items: start;
   align-content: start;
-  overflow-y: auto;
-  overflow-x: hidden;
   flex: 1;
+  overflow-y: auto;
   background: var(--bg-light);
   border-radius: 0;
   padding: 12px;

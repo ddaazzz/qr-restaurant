@@ -5,6 +5,7 @@
 /* ============== ORDERS CONTAINER ============== */
 .orders-container {
   display: flex;
+  flex-direction: row;
   padding: 16px;
   margin-top: 0;
   height: calc(100vh - 200px);
@@ -12,15 +13,16 @@
   min-height: 0;
   width: 100%;
   box-sizing: border-box;
+  gap: 16px;
 }
 
 .orders-left-panel {
   flex: 1;
   max-height: 100%;
   overflow-y: auto;
-  padding-right: 20px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .orders-right-panel {
@@ -29,7 +31,6 @@
   height: 100%;
   max-height: 100%;
   flex-shrink: 0;
-  margin-left: 20px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -1142,6 +1143,13 @@
 
 /* Mobile responsive: Category bar remains accessible */
 @media (max-width: 768px) {
+  .orders-container {
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+    height: calc(100vh - 140px);
+  }
+
   .orders-right-panel {
     width: 100px;
     margin-left: 0;
@@ -1152,10 +1160,14 @@
     overflow-x: hidden;
     overflow-y: auto;
     order: -1;
+    padding: 0;
   }
   
   .orders-left-panel {
-    padding-right: 12px;
+    padding-right: 0;
+    padding: 12px;
+    flex: 1;
+    min-width: 0;
   }
   
   .orders-items-grid {
@@ -1165,9 +1177,20 @@
 }
 
 @media (max-width: 480px) {
+  .orders-container {
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+  }
+
   .orders-right-panel {
     width: 80px;
     order: -1;
+    padding: 0;
+  }
+  
+  .orders-left-panel {
+    padding: 8px;
   }
   
   .orders-items-grid {
