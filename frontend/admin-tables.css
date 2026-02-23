@@ -222,37 +222,39 @@
 .tables-container > .left-column-wrapper {
   display: flex;
   flex-direction: row;
-  gap: 12px;
+  gap: 0;
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   margin-top: 0;
+  position: relative;
 }
 
 .left-column-wrapper {
   display: flex;
   flex-direction: row;
-  gap: 12px;
+  gap: 0;
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   margin-top: 0;
+  position: relative;
 }
 
 #tables-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 28px;
-  align-items: stretch;
+  gap: 20px;
+  align-items: start;
   align-content: start;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1 1 100%;
   background: var(--bg-light);
   border-radius: 0;
-  padding: 20px;
+  padding: 16px;
   box-shadow: none;
   position: relative;
   justify-content: start;
@@ -264,16 +266,18 @@
 @media (max-width: 768px) {
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
+    gap: 12px;
     padding: 12px;
+    width: 100%;
   }
 }
 
 @media (max-width: 480px) {
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 10px;
     padding: 10px;
+    width: 100%;
   }
 }
 
@@ -896,6 +900,7 @@ body.edit-mode .table-edit-controls {
   transform: translateX(100%);
   transition: transform 0.3s ease;
   z-index: 100;
+  pointer-events: auto;
 }
 
 .session-panel.active {
@@ -905,12 +910,20 @@ body.edit-mode .table-edit-controls {
 /* Mobile responsive: Session panel full-width slide from right */
 @media (max-width: 768px) {
   .session-panel {
+    position: fixed;
     flex: 0 0 100%;
     min-width: 100%;
     max-width: 100%;
     width: 100%;
-    right: -100%;
+    height: 100vh;
+    right: 0;
+    top: 0;
+    left: auto;
     transform: translateX(100%);
+    border-left: none;
+    border-right: 2px solid var(--border-color);
+    z-index: 100;
+    border-radius: 0;
   }
 
   .session-panel.active {
@@ -920,13 +933,19 @@ body.edit-mode .table-edit-controls {
 
 @media (max-width: 480px) {
   .session-panel {
+    position: fixed;
     flex: 0 0 100%;
     min-width: 100%;
     max-width: 100%;
     width: 100%;
-    right: -100%;
+    height: 100vh;
+    right: 0;
+    top: 0;
+    left: auto;
     transform: translateX(100%);
     padding: 12px;
+    border-left: none;
+    border-right: none;
   }
 
   .session-panel.active {
