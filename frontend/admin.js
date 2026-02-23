@@ -297,8 +297,10 @@ function handleLogout() {
 }
 
 function toggleSidebar() {
-  // Sidebar toggle is now handled by CSS media queries
-  // No JavaScript manipulation needed for mobile
+  var sidebar = document.querySelector(".sidebar");
+  if (sidebar) {
+    sidebar.classList.toggle("collapsed");
+  }
 }
 
 // Update app header with section-specific content

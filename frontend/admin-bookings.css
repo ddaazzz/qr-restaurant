@@ -388,41 +388,6 @@
   }
 }
 
-/* Mobile landscape: Optimize for wide but short screen */
-@media (max-height: 500px) and (orientation: landscape) {
-  .bookings-container {
-    padding: 6px;
-  }
-  
-  .bookings-header h1 {
-    font-size: 16px;
-  }
-  
-  .btn-new-booking {
-    font-size: 11px;
-    padding: 6px 10px;
-  }
-  
-  .calendar-nav {
-    flex-direction: row;
-    gap: 6px;
-  }
-  
-  .weekday {
-    font-size: 8px;
-  }
-  
-  .calendar-day {
-    min-height: 40px;
-    font-size: 10px;
-  }
-  
-  .booking-card {
-    min-height: auto;
-    padding: 6px;
-  }
-}
-
 .booking-status {
   display: inline-block;
   padding: 4px 8px;

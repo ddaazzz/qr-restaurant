@@ -1176,21 +1176,3 @@
     padding: 8px;
   }
 }
-
-/* Mobile landscape: Optimize for wide but short screen */
-@media (max-height: 500px) and (orientation: landscape) {
-  .orders-right-panel {
-    width: 80px;
-    order: -1;
-  }
-  
-  .orders-items-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    padding: 6px;
-  }
-  
-  .orders-item {
-    padding: 6px;
-  }
-}

@@ -1704,9 +1704,15 @@ button.btn-icon.danger:hover {
   }
   
   .sidebar {
-    width: 60px;
+    width: 70px;
     position: relative;
     z-index: 100;
+    transition: width 0.3s ease;
+  }
+  
+  .sidebar.collapsed {
+    width: 0;
+    overflow: hidden;
   }
   
   .sidebar-toggle {
@@ -1739,36 +1745,6 @@ button.btn-icon.danger:hover {
     width: 100%;
     min-width: 0;
     flex: 1;
-  }
-}
-
-/* Mobile landscape orientation */
-@media (max-height: 500px) and (orientation: landscape) {
-  .app-header {
-    padding: 6px 10px;
-    gap: 5px;
-  }
-  
-  .header-title {
-    font-size: 16px;
-  }
-  
-  .sidebar {
-    width: 60px;
-    position: relative;
-  }
-  
-  .menu-btn {
-    padding: 8px;
-  }
-  
-  .menu-btn .icon {
-    width: 18px;
-    height: 18px;
-  }
-  
-  .main-content {
-    flex: 1;
-    min-width: 0;
+    transition: flex 0.3s ease;
   }
 }

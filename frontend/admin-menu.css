@@ -121,24 +121,6 @@
   }
 }
 
-/* Mobile landscape: Optimize for wide but short screen */
-@media (max-height: 500px) and (orientation: landscape) {
-  .menu-tabs-bottom {
-    width: 80px;
-    order: -1;
-  }
-  
-  .menu-tabs-bottom button {
-    font-size: 10px;
-    padding: 8px 6px;
-  }
-  
-  #menu-items-grid {
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 6px;
-  }
-}
-
 /* MENU CONTAINER */
 .menu-container {
   display: flex;
