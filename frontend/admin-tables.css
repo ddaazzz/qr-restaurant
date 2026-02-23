@@ -80,7 +80,7 @@
 /* Mobile responsive: Category buttons on left as vertical sidebar */
 @media (max-width: 768px) {
   .tables-container {
-    flex-direction: column;
+    flex-direction: row;
     gap: 0;
     padding: 0;
     height: calc(100vh - 140px);
@@ -96,11 +96,12 @@
     border-bottom: none;
     order: -1;
     flex-shrink: 0;
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
+    position: relative;
+    left: auto;
+    top: auto;
+    height: auto;
     align-items: stretch;
+    pointer-events: auto;
   }
   
   .table-tabs-bottom button {
@@ -112,6 +113,7 @@
     text-align: center;
     white-space: normal;
     word-break: break-word;
+    pointer-events: auto;
   }
   
   .table-tabs-bottom button:last-child {
@@ -123,9 +125,10 @@
     gap: 6px;
     padding: 12px;
     flex-wrap: wrap;
-    margin-left: 100px;
+    margin-left: 0;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+    overflow: auto;
   }
 }
 
@@ -141,8 +144,9 @@
   
   .table-tabs {
     flex-wrap: wrap;
-    margin-left: 80px;
+    margin-left: 0;
     grid-template-columns: repeat(2, 1fr);
+    overflow: auto;
   }
 }
 
@@ -246,6 +250,23 @@
   justify-content: start;
   width: 100%;
   min-height: 0;
+}
+
+/* Ensure table cards display in responsive grid on all screen sizes */
+@media (max-width: 768px) {
+  #tables-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  #tables-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 10px;
+  }
 }
 
 #tables-grid.menu-mode {
