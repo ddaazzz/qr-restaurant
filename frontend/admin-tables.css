@@ -233,11 +233,11 @@
 
 #tables-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 15px;
   align-items: start;
   align-content: start;
-  justify-items: start;
+  justify-items: stretch;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1 1 100%;
@@ -288,6 +288,8 @@
   position: relative;
   aspect-ratio: 1;
   min-height: 160px;
+  max-width: 100%;
+  width: 100%;
   gap: 0;
 }
 
