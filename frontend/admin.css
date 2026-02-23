@@ -103,6 +103,17 @@ h1, h2, h3, h4, h5, h6 {
   grid-template-columns: 0px 1fr;
 }
 
+/* Mobile responsive: Remove fixed sidebar column, let it overlap */
+@media (max-width: 768px) {
+  .app-container {
+    grid-template-columns: 1fr;
+  }
+
+  .app-container.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ============== HEADER ============== */
 .app-header {
   display: flex;
