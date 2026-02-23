@@ -45,16 +45,31 @@ function renderTableCategoryTabs() {
     return;
   }
 
+  var isEditMode = document.body.classList.contains("edit-mode");
+
   for (var ci = 0; ci < TABLE_CATEGORIES.length; ci++) {
     var cat = TABLE_CATEGORIES[ci];
+    
+    // Create wrapper container for category button with controls
+    var wrapper = document.createElement("div");
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.position = "relative";
+    wrapper.className = "category-button-wrapper";
+    
     var btn = document.createElement("button");
     var isActive = SELECTED_TABLE_CATEGORY && SELECTED_TABLE_CATEGORY.key === cat.key;
     btn.className = isActive ? "tab active" : "tab";
     btn.textContent = cat.key;
     btn.categoryKey = cat.key;
+    btn.categoryId = cat.id;
+    btn.style.flex = isEditMode ? "1" : "auto";
     btn.onclick = function(e) {
+      if (e.target.classList.contains('category-btn-delete') || e.target.classList.contains('category-btn-edit')) {
+        return; // Don't switch category if clicking edit/delete
+      }
       for (var i = 0; i < TABLE_CATEGORIES.length; i++) {
-        if (TABLE_CATEGORIES[i].key === e.target.categoryKey) {
+        if (TABLE_CATEGORIES[i].key === this.categoryKey) {
           SELECTED_TABLE_CATEGORY = TABLE_CATEGORIES[i];
           break;
         }
@@ -62,7 +77,46 @@ function renderTableCategoryTabs() {
       renderTableCategoryTabs();
       renderCategoryTablesGrid();
     };
-    tabs.appendChild(btn);
+    wrapper.appendChild(btn);
+    
+    // Add edit/delete buttons in edit mode
+    if (isEditMode) {
+      var editBtn = document.createElement("button");
+      editBtn.className = "category-btn-edit";
+      editBtn.textContent = "✏️";
+      editBtn.style.marginLeft = "4px";
+      editBtn.style.padding = "4px 8px";
+      editBtn.style.backgroundColor = "#3b82f6";
+      editBtn.style.color = "white";
+      editBtn.style.border = "none";
+      editBtn.style.borderRadius = "4px";
+      editBtn.style.cursor = "pointer";
+      editBtn.title = "Edit category name";
+      editBtn.onclick = function(e) {
+        e.stopPropagation();
+        editTableCategory(cat.id, cat.key);
+      };
+      wrapper.appendChild(editBtn);
+      
+      var deleteBtn = document.createElement("button");
+      deleteBtn.className = "category-btn-delete";
+      deleteBtn.textContent = "🗑️";
+      deleteBtn.style.marginLeft = "4px";
+      deleteBtn.style.padding = "4px 8px";
+      deleteBtn.style.backgroundColor = "#ef4444";
+      deleteBtn.style.color = "white";
+      deleteBtn.style.border = "none";
+      deleteBtn.style.borderRadius = "4px";
+      deleteBtn.style.cursor = "pointer";
+      deleteBtn.title = "Delete category";
+      deleteBtn.onclick = function(e) {
+        e.stopPropagation();
+        deleteTableCategory(cat.id, cat.key);
+      };
+      wrapper.appendChild(deleteBtn);
+    }
+    
+    tabs.appendChild(wrapper);
   }
 
   // Add category button (only in edit mode)
@@ -95,6 +149,50 @@ async function addTableCategoryPrompt() {
     await loadTablesCategories();
   } catch (err) {
     alert("Error creating category: " + err.message);
+  }
+}
+
+async function editTableCategory(categoryId, currentName) {
+  var newName = prompt("Edit table category name:", currentName);
+  if (!newName || !newName.trim() || newName === currentName) return;
+
+  try {
+    var url = API + "/restaurants/" + restaurantId + "/table-categories/" + categoryId;
+    var res = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() })
+    });
+
+    if (!res.ok) {
+      var err = await res.json();
+      return alert(err.error || "Failed to update category");
+    }
+
+    await loadTablesCategories();
+  } catch (err) {
+    alert("Error updating category: " + err.message);
+  }
+}
+
+async function deleteTableCategory(categoryId, categoryName) {
+  if (!confirm("Delete category \"" + categoryName + "\"? Any tables in this category will be orphaned.")) return;
+
+  try {
+    var url = API + "/restaurants/" + restaurantId + "/table-categories/" + categoryId;
+    var res = await fetch(url, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    if (!res.ok) {
+      var err = await res.json();
+      return alert(err.error || "Failed to delete category");
+    }
+
+    await loadTablesCategories();
+  } catch (err) {
+    alert("Error deleting category: " + err.message);
   }
 }
 

@@ -80,21 +80,69 @@ function renderMenuCategoryTabs() {
   }
 
   MENU_CATEGORIES.forEach(cat => {
+    // Create wrapper container for category button with controls
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.position = "relative";
+    wrapper.className = "category-button-wrapper";
+    
     const btn = document.createElement("button");
     btn.className =
       SELECTED_MENU_CATEGORY && SELECTED_MENU_CATEGORY.id === cat.id
         ? "tab active"
         : "tab";
-
     btn.textContent = cat.name;
-
-    btn.onclick = () => {
+    btn.categoryId = cat.id;
+    btn.style.flex = IS_EDIT_MODE ? "1" : "auto";
+    btn.onclick = (e) => {
+      if (e.target.classList.contains('category-btn-delete') || e.target.classList.contains('category-btn-edit')) {
+        return; // Don't switch category if clicking edit/delete
+      }
       SELECTED_MENU_CATEGORY = cat;
       renderMenuCategoryTabs();
       renderMenuItemsGrid();
     };
+    wrapper.appendChild(btn);
 
-    tabs.appendChild(btn);
+    // Add edit/delete buttons in edit mode
+    if (IS_EDIT_MODE) {
+      const editBtn = document.createElement("button");
+      editBtn.className = "category-btn-edit";
+      editBtn.textContent = "✏️";
+      editBtn.style.marginLeft = "4px";
+      editBtn.style.padding = "4px 8px";
+      editBtn.style.backgroundColor = "#3b82f6";
+      editBtn.style.color = "white";
+      editBtn.style.border = "none";
+      editBtn.style.borderRadius = "4px";
+      editBtn.style.cursor = "pointer";
+      editBtn.title = "Edit category name";
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        editMenuCategory(cat.id, cat.name);
+      };
+      wrapper.appendChild(editBtn);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "category-btn-delete";
+      deleteBtn.textContent = "🗑️";
+      deleteBtn.style.marginLeft = "4px";
+      deleteBtn.style.padding = "4px 8px";
+      deleteBtn.style.backgroundColor = "#ef4444";
+      deleteBtn.style.color = "white";
+      deleteBtn.style.border = "none";
+      deleteBtn.style.borderRadius = "4px";
+      deleteBtn.style.cursor = "pointer";
+      deleteBtn.title = "Delete category";
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        deleteMenuCategory(cat.id, cat.name);
+      };
+      wrapper.appendChild(deleteBtn);
+    }
+
+    tabs.appendChild(wrapper);
   });
 
   // Add category button (only in edit mode)
@@ -126,6 +174,48 @@ async function addMenuCategoryPrompt() {
     await loadMenuItems();
   } catch (err) {
     alert("Error creating category: " + err.message);
+  }
+}
+
+async function editMenuCategory(categoryId, currentName) {
+  const newName = prompt("Edit menu category name:", currentName);
+  if (!newName || !newName.trim() || newName === currentName) return;
+
+  try {
+    const res = await fetch(`${API}/menu_categories/${categoryId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      return alert(err.error || "Failed to update category");
+    }
+
+    await loadMenuItems();
+  } catch (err) {
+    alert("Error updating category: " + err.message);
+  }
+}
+
+async function deleteMenuCategory(categoryId, categoryName) {
+  if (!confirm(`Delete category "${categoryName}"? Any menu items in this category will be orphaned.`)) return;
+
+  try {
+    const res = await fetch(`${API}/menu_categories/${categoryId}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      return alert(err.error || "Failed to delete category");
+    }
+
+    await loadMenuItems();
+  } catch (err) {
+    alert("Error deleting category: " + err.message);
   }
 }
 
