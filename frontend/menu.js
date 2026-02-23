@@ -19,6 +19,8 @@ const qrToken = window.location.pathname.split("/").filter(Boolean)[0];
 let sessionId = null;
 let tableName = null;
 let restaurantId = null;
+let restaurantName = null;
+let pax = null;
 let serviceChargePct = 0;
 let orderPollerStarted = false;
 
@@ -36,26 +38,70 @@ async function initLanding() {
   const session = await res.json();
   sessionId = session.session_id;
   restaurantId = session.restaurant_id;
+  restaurantName = session.restaurant_name;
   tableName = session.table_name;
+  pax = session.pax;
   serviceChargePct = session.service_charge_percent || 0;
-console.log("Session data:", session);
+  
+  // Apply restaurant language preference if available
+  if (session.language_preference) {
+    console.log('[Menu] Applying restaurant language preference:', session.language_preference);
+    localStorage.setItem('restaurantLanguage', session.language_preference);
+    if (typeof setLanguage === 'function') {
+      setLanguage(session.language_preference);
+    }
+  } else {
+    // Fallback to saved language preference
+    const savedLanguage = localStorage.getItem('language') || 'zh';
+    if (typeof setLanguage === 'function') {
+      setLanguage(savedLanguage);
+    }
+  }
+  
+console.log("Session data:", session, "Pax value:", session.pax);
   // 🔥 Populate landing page
-  const logoEl = document.getElementById("landing-logo")
+  const logoEl = document.getElementById("logo")
   if (logoEl){
-    logoEl.src = session.logo_url || "https://via.placeholder.com/200";
+    // Use session.logo_url if available, fallback to placeholder
+    const logoUrl = session.logo_url || "https://via.placeholder.com/200";
+    logoEl.src = logoUrl;
+    // Add error handler in case URL is invalid
+    logoEl.onerror = () => { logoEl.src = "https://via.placeholder.com/200"; };
+    console.log("Logo URL set to:", logoUrl);
   }
 
-  const nameEl = document.getElementById("landing-restaurant")
+  // 🔥 Apply background image with dark overlay
+  const landingPage = document.getElementById("landing-page");
+  if (session.background_url) {
+    document.body.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('${session.background_url}')`;
+    document.body.style.backgroundSize = "430px 100vh";
+    document.body.style.backgroundPosition = "center";
+    document.body.style.backgroundAttachment = "fixed";
+    document.body.style.backgroundRepeat = "no-repeat";
+    if (landingPage) landingPage.classList.remove("no-background");
+    console.log("Background image set with 60% dark overlay and phone sizing:", session.background_url);
+  } else {
+    // No background: apply black text class for visibility
+    if (landingPage) landingPage.classList.add("no-background");
+    console.log("No background image, applied black text styling");
+  }
+
+  const nameEl = document.getElementById("restaurantName")
   if (nameEl){
     nameEl.textContent = session.restaurant_name;
   }
-  const tableNameEl = document.getElementById("landing-table")
+  const tableNameEl = document.getElementById("tableInfo")
   if (tableNameEl){
-    tableNameEl.textContent = `Table ${tableName}`;
+    tableNameEl.textContent = `${session.table_name} • Pax ${session.pax != null ? session.pax : "-"}`;
+    console.log("Table info set to:", tableNameEl.textContent, "with pax:", session.pax);
   }
-  const landingInfoEl = document.getElementById("landing-info")
-  if (landingInfoEl){
-    landingInfoEl.textContent = `${session.address || ""} ${session.phone || ""}`;
+  const addressEl = document.getElementById("address")
+  if (addressEl){
+    addressEl.textContent = session.address || "";
+  }
+  const phoneEl = document.getElementById("phone")
+  if (phoneEl){
+    phoneEl.textContent = session.phone || "";
   }
 
   // buttons
@@ -70,8 +116,8 @@ async function startOrdering() {
   document.getElementById("landing-page").style.display = "none";
   document.getElementById("app").style.display = "block";
 
-  document.getElementById("table-indicator").textContent = `Table ${tableName}`;
-  document.getElementById("restaurant").textContent = "Welcome";
+  document.getElementById("table-indicator").textContent = `Table ${tableName} • Pax ${pax || '-'}`;
+  document.getElementById("restaurant").textContent = restaurantName || "Welcome";
   document.getElementById("status").textContent = "";
 
   // Cart bar click handlers
@@ -105,6 +151,9 @@ async function startOrdering() {
 
   renderMenu(window.menu);
   renderCategories(window.menu.categories);
+
+  // Load cart from localStorage if exists
+  loadCartFromStorage();
 
   initDrawerSwipe();
   initOrdersDrawerSwipe();
@@ -163,7 +212,7 @@ function renderMenu(menu) {
     grid.className = "menu-grid";
 
     const categoryItems = items.filter(
-      item => item.category_id === category.id
+      item => item.category_id === category.id && (item.available !== false)
     );  
     console.log(menu);
 
@@ -181,8 +230,19 @@ function renderMenuItem(item) {
   const card = document.createElement("div");
   card.className = "menu-item";
 
+  // Log items without images for debugging
+  if (!item.image_url) {
+    console.warn(`[Menu] Item "${item.name}" (ID: ${item.id}) has no image_url`);
+  }
+
  card.innerHTML = `
-  <img src="${item.image_url || "https://via.placeholder.com/300"}" />
+  <img 
+    src="${item.image_url || "https://via.placeholder.com/300"}" 
+    data-item-id="${item.id}"
+    data-item-name="${item.name}"
+    onerror="console.warn('Image failed to load for:', this.dataset.itemName, 'URL:', this.src); this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22120%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22300%22 height=%22120%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2216%22 fill=%22%23999%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22%3ENo Image%3C/text%3E%3C/svg%3E';"
+    alt="${item.name}"
+  />
 
   <div class="menu-item-name">${item.name}</div>
 
@@ -209,8 +269,19 @@ function renderMenuItemWithVariants(item){
     const card = document.createElement("div");
     card.className = "drawer-item";
 
+    // Log items without images for debugging
+    if (!item.image_url) {
+      console.warn(`[Menu Drawer] Item "${item.name}" (ID: ${item.id}) has no image_url`);
+    }
+
     card.innerHTML = `
-    <img src="${item.image_url || "https://via.placeholder.com/300"}"/>
+    <img 
+      src="${item.image_url || "https://via.placeholder.com/300"}"
+      data-item-id="${item.id}"
+      data-item-name="${item.name}"
+      onerror="console.warn('Drawer image failed to load for:', this.dataset.itemName, 'URL:', this.src); this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22200%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22300%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2220%22 fill=%22%23999%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22%3ENo Image%3C/text%3E%3C/svg%3E';"
+      alt="${item.name}"
+    />
 
     <div class="menu-item-content">
       <div class="menu-item-name">${item.name}</div>
@@ -383,9 +454,33 @@ if (v.max_select && selectedIds.length > v.max_select) {
 
   }
   closeAllDrawers();
+  saveCartToStorage();
   updateCartBar();
 
 }
+
+// ============ CART PERSISTENCE ============
+function saveCartToStorage() {
+  try {
+    localStorage.setItem(`cart_${sessionId}`, JSON.stringify(cart));
+  } catch (e) {
+    console.error("Failed to save cart:", e);
+  }
+}
+
+function loadCartFromStorage() {
+  try {
+    const stored = localStorage.getItem(`cart_${sessionId}`);
+    if (stored) {
+      cart = JSON.parse(stored);
+      console.log("Loaded cart from storage:", cart);
+    }
+  } catch (e) {
+    console.error("Failed to load cart:", e);
+  }
+}
+
+
 
 function canAddToCart(item) {
   if (!item.variants || item.variants.length === 0) return true;
@@ -466,7 +561,7 @@ async function submitOrder() {
   };
 
   const res = await fetch(
-    `${API_BASE}/${sessionId}/orders`,
+    `${API_BASE}/sessions/${sessionId}/orders`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -481,6 +576,7 @@ async function submitOrder() {
   }
 
     cart.items = [];
+    saveCartToStorage();
     updateCartBar();
     closeAllDrawers();
     alert("Order sent to kitchen!");
@@ -563,21 +659,39 @@ if (variant.max_select) {
 }
 
 async function loadOrderStatus() {
-  if (!sessionId) return;
+  if (!sessionId) {
+    console.warn("❌ loadOrderStatus: No sessionId");
+    return;
+  }
 
-  const res = await fetch(
-    `${API_BASE}/${sessionId}/orders`
-  );
+  try {
+    const url = `${API_BASE}/sessions/${sessionId}/orders`;
+    console.log("📡 Fetching orders from:", url);
+    
+    const res = await fetch(url);
+    console.log("📥 Response status:", res.status);
 
-  if (!res.ok) return;
+    if (!res.ok) {
+      console.warn("❌ API returned:", res.status, res.statusText);
+      return;
+    }
 
-  const data = await res.json();
-  renderOrdersDrawer(data.items || [],tableName);
+    const data = await res.json();
+    console.log("✅ Orders loaded:", data);
+    renderOrdersDrawer(data.items || [], tableName);
+  } catch (error) {
+    console.error("❌ Error loading orders:", error);
+  }
 }
 
 function renderOrdersDrawer(orders, tableName) {
   const el = document.getElementById("orders-drawer-content");
-  if (!el) return;
+  if (!el) {
+    console.error("❌ orders-drawer-content element not found");
+    return;
+  }
+
+  console.log("✅ renderOrdersDrawer called with", orders.length, "orders for table:", tableName);
 
   let subtotal = 0;
 
@@ -592,9 +706,10 @@ function renderOrdersDrawer(orders, tableName) {
   `;
 
   if (!orders.length) {
-    html += `<p class="no-orders">No orders yet</p>`;
+    html += `<p class="no-orders">📋 No orders yet</p>`;
   } else {
-    orders.forEach(order => {
+    orders.forEach((order, oIdx) => {
+      console.log(`📦 Order ${oIdx}:`, order);
       order.items.forEach(item => {
         const line = item.total_price_cents;
         subtotal += line;
@@ -639,8 +754,8 @@ function renderOrdersDrawer(orders, tableName) {
       <div id="orders-coupon-display"></div>
     </div>
     <div class="orders-actions">
-      <button class="btn-primary" onclick="printMenuBill()">🖨 Print Bill</button>
-      <button class="btn-secondary" onclick="closeAllDrawers()">Close</button>
+      <button class="btn-primary" id="close-bill-btn" onclick="closeBill()">🔴 Close Bill</button>
+      <button class="btn-secondary" onclick="closeAllDrawers()">Back to Menu</button>
     </div>
   `;
 
@@ -685,11 +800,6 @@ function renderCartDrawer() {
 
   html += `
     <div class="cart-footer">
-      <div class="coupon-section">
-        <input type="text" id="cart-coupon-input" placeholder="Enter coupon code" />
-        <button onclick="applyCouponToCart()" class="btn-secondary">Apply Coupon</button>
-        <div id="cart-coupon-display"></div>
-      </div>
       <div class="cart-summary">
         <div class="summary-line">
           <span>Subtotal:</span>
@@ -724,12 +834,14 @@ function updateCartQty(index, delta) {
   }
 
   updateCartBar();
+  saveCartToStorage();
   renderCartDrawer();
 }
 
 function removeCartItem(index) {
   cart.items.splice(index, 1);
   updateCartBar();
+  saveCartToStorage();
   renderCartDrawer();
 }
 
@@ -813,7 +925,7 @@ function openOrdersDrawer() {
   const overlay = document.getElementById("drawer-overlay");
 
   activeDrawer.classList.add("open");
-  overlay.classList.add("open");
+  overlay.classList.remove("open"); // Don't show overlay for fullscreen orders
   document.body.style.overflow = "hidden";
 
   // 🔥 render immediately using latest polled data
@@ -1026,6 +1138,55 @@ async function removeCouponFromSession(sessionId) {
     }
   } catch (error) {
     console.error("Error removing coupon:", error);
+  }
+}
+
+async function closeBill() {
+  if (!sessionId) {
+    console.error("❌ No session ID for requesting bill closure");
+    return;
+  }
+
+  if (!restaurantId) {
+    console.error("❌ No restaurant ID for requesting bill closure");
+    return;
+  }
+
+  try {
+    console.log("📡 Requesting bill closure for session:", sessionId);
+    
+    // Update session to mark bill closure as requested (but don't close the session)
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}/request-bill-closure`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        restaurantId: restaurantId,
+        bill_closure_requested: true
+      })
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      console.error("❌ Failed to request bill closure:", error);
+      alert("Failed to request bill closure: " + (error.error || "Unknown error"));
+      return;
+    }
+
+    console.log("✅ Bill closure requested - admin will see orange table card");
+    
+    // Change button to show request sent
+    const btn = document.getElementById("close-bill-btn");
+    if (btn) {
+      btn.style.backgroundColor = "#fbbf24";
+      btn.style.color = "#000";
+      btn.textContent = "✓ Bill Request Sent";
+      btn.disabled = true;
+    }
+
+    alert("Bill closure requested. Staff will process it shortly.");
+  } catch (error) {
+    console.error("❌ Error closing bill:", error);
+    alert("Error requesting bill closure");
   }
 }
 
