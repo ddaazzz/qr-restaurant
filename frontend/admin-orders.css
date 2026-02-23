@@ -15,6 +15,7 @@
   box-sizing: border-box;
   gap: 0;
   position: relative;
+  background: white;
 }
 
 .orders-category-sidebar {
@@ -45,6 +46,7 @@
   width: calc(100% - 100px);
   position: relative;
   z-index: 1;
+  background: white;
 }
 
 .orders-main-wrapper.with-cart-open {
@@ -85,6 +87,7 @@
   padding: 12px;
   position: relative;
   visibility: visible;
+  background: white;
 }
 
 .orders-history-view {
@@ -96,6 +99,7 @@
   width: 100%;
   padding: 12px;
   position: relative;
+  background: white;
 }
 
 .orders-history-view.active {
@@ -109,6 +113,7 @@
   width: 100%;
   align-content: start;
   position: relative;
+  background: white;
 }
 
 #orders-history-left-view {
