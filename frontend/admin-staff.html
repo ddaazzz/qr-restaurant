@@ -20,59 +20,138 @@
           <label data-i18n="admin.pin-6digits">PIN (6 digits)</label>
           <input id="staff-pin" type="text" placeholder="e.g., 123456" maxlength="6" required />
         </div>
-                <div class="form-group">
-                  <label>Role</label>
-                  <select id="staff-role" onchange="handleStaffRoleChange()" required>
-                    <option value="staff">Staff</option>
-                    <option value="kitchen">Kitchen</option>
-                  </select>
-                </div>
-              </div>
+        <div class="form-group">
+          <label data-i18n="admin.role">Role</label>
+          <select id="staff-role" onchange="handleStaffRoleChange()" required>
+            <option value="staff" data-i18n="admin.staff-role">Staff</option>
+            <option value="kitchen" data-i18n="admin.kitchen-role">Kitchen</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label data-i18n="admin.password">Hourly Rate ($/hr)</label>
+          <input id="staff-hourly-rate" type="number" placeholder="e.g., 15.50" step="0.01" min="0" />
+        </div>
+      </div>
 
-              <!-- Access Rights Section (shows based on role) -->
-              <div id="staff-access-rights-section" style="margin-top: 15px;">
-                <!-- Tab Access for Staff Role -->
-                <div id="staff-tab-access" style="display: none;">
-                  <h4 style="margin-top: 0; margin-bottom: 10px;">Tab Access Permissions</h4>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-orders" class="staff-access-checkbox" value="orders" /> Orders
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-tables" class="staff-access-checkbox" value="tables" /> Tables
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-menu" class="staff-access-checkbox" value="menu" /> Menu
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-staff" class="staff-access-checkbox" value="staff" /> Staff
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-reports" class="staff-access-checkbox" value="reports" /> Reports
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-settings" class="staff-access-checkbox" value="settings" /> Settings
-                    </label>
-                  </div>
-                </div>
-
-                <!-- Category Access for Kitchen Role -->
-                <div id="kitchen-category-access" style="display: none;">
-                  <h4 style="margin-top: 0; margin-bottom: 10px;">Food Categories Access</h4>
-                  <div id="kitchen-categories-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <!-- JS populates this with menu categories -->
-                  </div>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 8px; margin-top: 15px;">
-                <button type="submit" id="staff-submit-btn" class="btn-primary">➕ Add Staff</button>
-                <button type="button" onclick="toggleStaffEditMode()" class="btn-secondary">Cancel</button>
-              </div>
-            </form>
+      <!-- Access Rights Section (shows based on role) -->
+      <div id="staff-access-rights-section" style="margin-top: 15px;">
+        <!-- Tab Access for Staff Role -->
+        <div id="staff-tab-access" style="display: none;">
+          <h4 style="margin-top: 0; margin-bottom: 10px;" data-i18n="admin.access-rights">Tab Access Permissions</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="access-orders" class="staff-access-checkbox" value="orders" /> <span data-i18n="admin.access-orders">Orders</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="access-tables" class="staff-access-checkbox" value="tables" /> <span data-i18n="admin.access-tables">Tables</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="access-menu" class="staff-access-checkbox" value="menu" /> <span data-i18n="admin.access-menu">Menu</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="access-staff" class="staff-access-checkbox" value="staff" /> <span data-i18n="admin.access-staff">Staff</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="access-settings" class="staff-access-checkbox" value="settings" /> <span data-i18n="admin.access-settings">Settings</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="access-bookings" class="staff-access-checkbox" value="bookings" /> <span data-i18n="admin.access-bookings">Bookings</span>
+            </label>
           </div>
+        </div>
+
+        <!-- Category Access for Kitchen Role -->
+        <div id="kitchen-category-access" style="display: none;">
+          <h4 style="margin-top: 0; margin-bottom: 10px;" data-i18n="admin.allowed-categories">Food Categories Access</h4>
+          <div id="kitchen-categories-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <!-- JS populates this with menu categories -->
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 15px;">
+        <button type="submit" id="staff-submit-btn" class="btn-primary" data-i18n="admin.add">➕ Add Staff</button>
+        <button type="button" onclick="toggleStaffEditMode()" class="btn-secondary" data-i18n="admin.cancel">Cancel</button>
+      </div>
+    </form>
+  </div>
 
   <div id="staff-grid" class="staff-grid">
     <!-- JS renders staff cards here -->
+  </div>
+</div>
+
+<!-- ================= STAFF DETAIL MODAL ================= -->
+<div id="staff-detail-modal" class="modal" style="display: none;">
+  <div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0;">
+      <h2 id="staff-detail-name" style="margin: 0; font-size: clamp(18px, 5vw, 24px);">Staff Name</h2>
+      <button onclick="closeStaffDetailModal()" style="font-size: 24px; background: none; border: none; cursor: pointer; color: #999; flex-shrink: 0;">✕</button>
+    </div>
+
+    <!-- Staff Info Section -->
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div>
+          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Role</label>
+          <p id="staff-detail-role" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">PIN</label>
+          <p id="staff-detail-pin" style="margin: 5px 0 0 0; font-size: 16px; font-family: monospace;">—</p>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Hourly Rate</label>
+          <p id="staff-detail-wage" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Status</label>
+          <p id="staff-detail-status" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Clock In/Out Section -->
+    <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <h3 style="margin: 0 0 15px 0; font-size: 16px;">Clock In/Out</h3>
+      <div style="display: flex; gap: 10px;">
+        <button id="staff-clock-in-btn" onclick="clockInStaff()" class="btn-primary" style="flex: 1; padding: 12px;">
+          ▶ Clock In
+        </button>
+        <button id="staff-clock-out-btn" onclick="clockOutStaff()" class="btn-danger" style="flex: 1; padding: 12px; display: none;">
+          ⏹ Clock Out
+        </button>
+      </div>
+      <div id="staff-clock-message" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
+    </div>
+
+    <!-- Work Hours Summary -->
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <h3 style="margin: 0 0 15px 0; font-size: 16px;">Work Hours (Last 30 Days)</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div>
+          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Days Worked</label>
+          <p id="staff-total-shifts" style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">0</p>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Total Hours</label>
+          <p id="staff-total-hours" style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">0</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Work Log -->
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <h3 style="margin: 0 0 15px 0; font-size: 16px;">Work Log (Last 30 Days)</h3>
+      <div id="staff-timekeeping-list" style="max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+        <p style="color: #999; font-size: 14px;">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Edit & Delete Buttons -->
+    <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+      <button onclick="if(CURRENT_STAFF_ID) { const id = CURRENT_STAFF_ID; closeStaffDetailModal(); editStaff(id); }" class="btn-secondary" style="flex: 1; min-width: 120px;">✏️ Edit Staff</button>
+      <button onclick="if(CURRENT_STAFF_ID && confirm('Delete this staff member?')) { const id = CURRENT_STAFF_ID; closeStaffDetailModal(); deleteStaff(id); }" class="btn-danger" style="flex: 1; min-width: 120px;">🗑️ Delete Staff</button>
+    </div>
   </div>
 </div>

@@ -58,8 +58,8 @@
         <div class="form-group" style="margin-bottom: 20px;">
           <label data-i18n="admin.language" style="display: block; margin-bottom: 12px; font-weight: 600;">Language</label>
           <div data-language-picker class="language-picker-settings" style="display: flex; gap: 12px;">
-            <button id="lang-zh-settings" class="lang-btn active" onclick="setLanguage('zh')" style="flex: 1; padding: 12px; border: 2px solid var(--primary-color); background: var(--primary-color); color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">中文</button>
-            <button id="lang-en-settings" class="lang-btn" onclick="setLanguage('en')" style="flex: 1; padding: 12px; border: 2px solid var(--border-color); background: white; color: var(--text-dark); border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">English</button>
+            <button id="lang-zh-settings" class="lang-btn active" onclick="setLanguage('zh'); saveLanguagePreference('zh');" style="flex: 1; padding: 12px; border: 2px solid var(--primary-color); background: var(--primary-color); color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">中文</button>
+            <button id="lang-en-settings" class="lang-btn" onclick="setLanguage('en'); saveLanguagePreference('en');" style="flex: 1; padding: 12px; border: 2px solid var(--border-color); background: white; color: var(--text-dark); border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">English</button>
           </div>
         </div>
 
@@ -102,10 +102,36 @@
 
         <div class="form-row">
           <div class="form-group">
+            <label data-i18n="admin.rest-timezone">Timezone</label>
+            <span id="view-timezone" class="view-mode"></span>
+            <select id="timezone-select" class="hidden">
+              <option value="UTC">UTC (Coordinated Universal Time)</option>
+              <option value="America/New_York">Eastern Time (US & Canada)</option>
+              <option value="America/Chicago">Central Time (US & Canada)</option>
+              <option value="America/Denver">Mountain Time (US & Canada)</option>
+              <option value="America/Los_Angeles">Pacific Time (US & Canada)</option>
+              <option value="Europe/London">London</option>
+              <option value="Europe/Paris">Paris</option>
+              <option value="Europe/Berlin">Berlin</option>
+              <option value="Asia/Tokyo">Tokyo</option>
+              <option value="Asia/Shanghai">Shanghai</option>
+              <option value="Asia/Hong_Kong">Hong Kong</option>
+              <option value="Asia/Singapore">Singapore</option>
+              <option value="Asia/Bangkok">Bangkok</option>
+              <option value="Asia/Kolkata">India Standard Time</option>
+              <option value="Australia/Sydney">Sydney</option>
+              <option value="Australia/Melbourne">Melbourne</option>
+              <option value="Pacific/Auckland">Auckland</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label data-i18n="admin.rest-service-charge">Service Charge (%)</label>
             <span id="view-service-charge" class="view-mode"></span>
             <input id="serviceChargeInput" type="number" min="0" step="0.1" placeholder="e.g., 15" class="hidden" />
           </div>
+        </div>
+
+        <div class="form-row">
           <div class="form-group">
             <label data-i18n="admin.rest-theme-color">Theme Color</label>
             <span id="view-color" class="view-mode"></span>
@@ -118,6 +144,14 @@
           <img id="restaurant-logo" class="logo-preview hidden" />
           <input id="logoInput" type="file" accept="image/*" class="hidden" 
             onchange="uploadRestaurantLogo(this.files[0])" />
+        </div>
+
+        <div class="form-group">
+          <label>Menu Background Image</label>
+          <img id="restaurant-background" class="logo-preview hidden" style="max-height: 150px; object-fit: cover;" />
+          <input id="backgroundInput" type="file" accept="image/*" class="hidden" 
+            onchange="uploadRestaurantBackground(this.files[0])" />
+          <button id="upload-background-btn" onclick="document.getElementById('backgroundInput').click()" class="btn-secondary hidden" style="width: 100%; margin-top: 10px;">📸 Upload Background</button>
         </div>
 
         <div class="form-actions">
@@ -279,7 +313,7 @@
             <!-- Coupons will be rendered here in edit mode -->
           </div>
           
-          <div class="form-row">
+          <div class="form-row two-col">
             <div class="form-group">
               <label data-i18n="admin.coupon-code">Coupon Code</label>
               <input id="new-coupon-code" placeholder="e.g., SUMMER20" maxlength="50" style="text-transform: uppercase;" />
@@ -293,7 +327,7 @@
             </div>
           </div>
 
-          <div class="form-row">
+          <div class="form-row two-col">
             <div class="form-group">
               <label data-i18n="admin.discount-value">Discount Value</label>
               <input id="new-coupon-value" type="number" placeholder="e.g., 20" step="0.01" />
@@ -304,7 +338,7 @@
             </div>
           </div>
 
-          <div class="form-row">
+          <div class="form-row two-col">
             <div class="form-group">
               <label data-i18n="admin.max-uses">Max Uses (leave blank for unlimited)</label>
               <input id="new-coupon-max-uses" type="number" placeholder="e.g., 100" />
@@ -316,7 +350,7 @@
           </div>
 
           <div class="form-row">
-            <div class="form-group" style="grid-column: 1 / -1;">
+            <div class="form-group">
               <label data-i18n="admin.coupon-description">Description</label>
               <textarea id="new-coupon-description" placeholder="e.g., Summer special - 20% off all items"></textarea>
             </div>

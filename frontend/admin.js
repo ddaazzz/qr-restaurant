@@ -14,10 +14,26 @@ var token = localStorage.getItem("token");
 var role = localStorage.getItem("role");
 var superadminRestaurants = [];
 
+// ✅ Timezone support
+var restaurantTimezone = localStorage.getItem("restaurantTimezone") || "UTC";
+
 var IS_ADMIN = role === "admin";
 var IS_STAFF = role === "staff";
 var IS_KITCHEN = role === "kitchen";
 var IS_SUPERADMIN = role === "superadmin";
+
+// ============= IMMEDIATE ROLE VALIDATION (admin.html only) ==============
+if (window.location.pathname.includes("admin.html")) {
+  if (!token) {
+    console.log("❌ No token found, redirecting to login");
+    window.location.href = "/login.html";
+  } else if (!IS_ADMIN && !IS_SUPERADMIN) {
+    console.warn("⚠️ User role is '" + role + "' but admin panel requires 'admin' or 'superadmin'");
+    console.warn("🔄 Clearing localStorage and redirecting to login...");
+    localStorage.clear();
+    window.location.href = "/login.html?reason=InvalidRole";
+  }
+}
 
 // Global state
 var CREATING_ITEM = false;
@@ -137,17 +153,50 @@ async function switchSection(sectionId) {
       await loadMenuItems();
       updateSectionHeader("Menu Management", "menu-edit-btn");
     } else if (sectionId === "staff") {
-      var staffSection = document.getElementById("section-staff");
-      if (staffSection && !staffSection.innerHTML.includes("staff-grid")) {
+      console.log("🔵 Loading STAFF section");
+      
+      // Check if user has access to staff management (admin/superadmin, or staff with feature 4)
+      var hasStaffAccess = IS_ADMIN || IS_SUPERADMIN || (IS_STAFF && typeof staffAccessRights !== 'undefined' && Array.isArray(staffAccessRights) && staffAccessRights.includes(4));
+      
+      if (hasStaffAccess) {
+        var staffSection = document.getElementById("section-staff");
+        console.log("📌 staffSection found:", !!staffSection);
+        console.log("📌 staffSection.innerHTML includes staff-grid:", staffSection ? staffSection.innerHTML.includes("staff-grid") : "N/A");
+        
+        if (staffSection && !staffSection.innerHTML.includes("staff-grid")) {
+          try {
+            console.log("📥 Fetching admin-staff.html...");
+            var staffResponse = await fetch('/admin-staff.html');
+            console.log("📦 Response status:", staffResponse.status);
+            var html = await staffResponse.text();
+            console.log("📝 HTML length:", html.length);
+            staffSection.innerHTML = html;
+            console.log("✅ HTML injected into staffSection");
+          } catch (err) {
+            console.error("❌ Error loading staff HTML:", err);
+          }
+        } else {
+          console.log("⏭️ Staff HTML already loaded, skipping fetch");
+        }
+        console.log("🔵 Calling loadStaff()...");
+        await loadStaff();
+        console.log("✅ loadStaff() completed");
+      } else {
+        console.log("❌ User does not have access to staff management (need admin/superadmin or staff feature 4)");
+      }
+      updateSectionHeader("Staff Management", "staff-edit-btn");
+    } else if (sectionId === "bookings") {
+      var bookingsSection = document.getElementById("section-bookings");
+      if (bookingsSection && !bookingsSection.innerHTML.includes("bookings-container")) {
         try {
-          var staffResponse = await fetch('/admin-staff.html');
-          staffSection.innerHTML = await staffResponse.text();
+          var bookingsResponse = await fetch('/admin-bookings.html');
+          bookingsSection.innerHTML = await bookingsResponse.text();
         } catch (err) {
-          console.error("Error loading staff HTML:", err);
+          console.error("Error loading bookings HTML:", err);
         }
       }
-      await loadStaff();
-      updateSectionHeader("Staff Management", "staff-edit-btn");
+      initializeBookings();
+      updateSectionHeader("Reservations", "");
     } else if (sectionId === "coupons") {
       var couponsSection = document.getElementById("section-coupons");
       if (couponsSection && !couponsSection.innerHTML.includes("coupon-code")) {
@@ -161,39 +210,67 @@ async function switchSection(sectionId) {
       await loadCoupons();
       updateSectionHeader("Coupons", "");
     } else if (sectionId === "reports") {
-      if (IS_ADMIN || IS_SUPERADMIN) {
+      console.log("🔵 Loading REPORTS section");
+      console.log("📌 IS_ADMIN:", IS_ADMIN, "IS_SUPERADMIN:", IS_SUPERADMIN, "IS_STAFF:", IS_STAFF);
+      
+      // Check if user has access to reports (admin/superadmin, or staff with feature 3)
+      var hasReportsAccess = IS_ADMIN || IS_SUPERADMIN || (IS_STAFF && typeof staffAccessRights !== 'undefined' && Array.isArray(staffAccessRights) && staffAccessRights.includes(3));
+      
+      if (hasReportsAccess) {
         var reportsSection = document.getElementById("section-reports");
+        console.log("📌 reportsSection found:", !!reportsSection);
+        console.log("📌 reportsSection.innerHTML includes reports-dashboard:", reportsSection ? reportsSection.innerHTML.includes("reports-dashboard") : "N/A");
+        
         if (reportsSection && !reportsSection.innerHTML.includes("reports-dashboard")) {
           try {
+            console.log("📥 Fetching admin-reports.html...");
             var reportsResponse = await fetch('/admin-reports.html');
+            console.log("📦 Response status:", reportsResponse.status);
             var reportsHTML = await reportsResponse.text();
+            console.log("📝 HTML length:", reportsHTML.length);
             reportsSection.innerHTML = reportsHTML;
+            console.log("✅ HTML injected into reportsSection");
           } catch (err) {
-            console.error("Error loading reports HTML:", err);
+            console.error("❌ Error loading reports HTML:", err);
           }
+        } else {
+          console.log("⏭️ Reports HTML already loaded, skipping fetch");
         }
+        console.log("🔵 Calling initializeAnalyticsDashboard()...");
         await initializeAnalyticsDashboard();
+        console.log("✅ initializeAnalyticsDashboard() completed");
+      } else {
+        console.log("❌ User does not have access to reports (need admin/superadmin or staff feature 3)");
       }
       updateSectionHeader("Reports & Analytics", "reports-btn");
     } else if (sectionId === "settings") {
-      var settingsSection = document.getElementById("section-settings");
-      if (settingsSection && !settingsSection.innerHTML.includes("settings-cards-grid")) {
+      console.log("🔵 Loading SETTINGS section");
+      
+      // Check if user has access to settings (admin/superadmin, or staff with feature 5)
+      var hasSettingsAccess = IS_ADMIN || IS_SUPERADMIN || (IS_STAFF && typeof staffAccessRights !== 'undefined' && Array.isArray(staffAccessRights) && staffAccessRights.includes(5));
+      
+      if (hasSettingsAccess) {
+        var settingsSection = document.getElementById("section-settings");
+        if (settingsSection && !settingsSection.innerHTML.includes("settings-cards-grid")) {
+          try {
+            var settingsResponse = await fetch('/admin-settings.html');
+            settingsSection.innerHTML = await settingsResponse.text();
+          } catch (err) {
+            console.error("Error loading settings HTML:", err);
+          }
+        }
+        // Initialize settings cache
         try {
-          var settingsResponse = await fetch('/admin-settings.html');
-          settingsSection.innerHTML = await settingsResponse.text();
+          const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+          if (res.ok) {
+            ADMIN_SETTINGS_CACHE = await res.json();
+            applyThemeColor(ADMIN_SETTINGS_CACHE.theme_color);
+          }
         } catch (err) {
-          console.error("Error loading settings HTML:", err);
+          console.error("Failed to initialize settings:", err);
         }
-      }
-      // Initialize settings cache
-      try {
-        const res = await fetch(`${API}/${restaurantId}/settings`);
-        if (res.ok) {
-          ADMIN_SETTINGS_CACHE = await res.json();
-          applyThemeColor(ADMIN_SETTINGS_CACHE.theme_color);
-        }
-      } catch (err) {
-        console.error("Failed to initialize settings:", err);
+      } else {
+        console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
       }
       updateSectionHeader("Settings", "edit-settings-header");
     }
@@ -315,11 +392,22 @@ function closeSessionPanel() {
 // ============= APP LOADING =============
 async function loadApp() {
   try {
+    // Load restaurant timezone from API
+    const settingsRes = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    if (settingsRes.ok) {
+      const settings = await settingsRes.json();
+      restaurantTimezone = settings.timezone || 'UTC';
+      localStorage.setItem('restaurantTimezone', restaurantTimezone);
+      console.log('✅ Restaurant timezone loaded:', restaurantTimezone);
+    }
+    
     // Load only tables on page load
     await loadTablesCategories();
     await loadTablesCategoryTable();
   } catch (err) {
     console.error("Error loading app:", err);
+    // Continue with UTC as fallback
+    restaurantTimezone = 'UTC';
   }
 }
 
@@ -708,17 +796,36 @@ async function switchRestaurant(newRestaurantId) {
 
 // ============= PAGE INITIALIZATION =============
 document.addEventListener("DOMContentLoaded", async () => {
+  // SKIP: Staff portal uses PIN-based login (handled in staff.js), not token-based
+  if (window.location.pathname.includes("staff.html")) {
+    console.log("📋 Staff portal detected - skipping admin.js initialization");
+    return;
+  }
+
   if (!token) {
     window.location.href = "/login.html";
     return;
   }
 
+  // Verify user has admin or superadmin role (for admin.html)
+  if (window.location.pathname.includes("admin.html")) {
+    if (!IS_ADMIN && !IS_SUPERADMIN) {
+      console.warn("⚠️ User role is '" + role + "' but admin panel requires 'admin' or 'superadmin'");
+      console.warn("🔄 Clearing localStorage and redirecting to login...");
+      localStorage.clear();
+      window.location.href = "/login.html?reason=InvalidRole";
+      return;
+    }
+  }
+
   // Show app container
   document.getElementById("app-container").style.display = "";
 
-  // Set up language system
-  if (typeof initializeLanguageSystem === "function") {
-    initializeLanguageSystem();
+  // Initialize language from localStorage (auto-apply saved preference)
+  const savedLanguage = localStorage.getItem('language') || 'zh';
+  if (typeof setLanguage === 'function') {
+    console.log('[Admin Init] Applying saved language:', savedLanguage);
+    setLanguage(savedLanguage);
   }
 
   // Load settings on page load (theme color, service charge)

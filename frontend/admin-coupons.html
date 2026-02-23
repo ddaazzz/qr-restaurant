@@ -1,58 +1,58 @@
 <!-- ================= ADMIN COUPONS HTML ================= -->
 
-<h2>🎫 Coupons & Discounts</h2>
+<h2 data-i18n="admin.coupons-title">🎫 Coupons & Discounts</h2>
 
 <div class="coupons-container">
   <div class="section-card">
-  <h3>Create New Coupon</h3>
+  <h3 data-i18n="admin.create-coupon">Create New Coupon</h3>
   <div id="coupon-error" class="error-message" style="display: none;"></div>
   <div id="coupon-success" class="success-message" style="display: none;"></div>
   
   <div class="form-row">
     <div class="form-group">
-      <label>Coupon Code</label>
+      <label data-i18n="admin.coupon-code">Coupon Code</label>
       <input id="new-coupon-code" placeholder="e.g., SUMMER20" maxlength="50" style="text-transform: uppercase;" />
     </div>
     <div class="form-group">
-      <label>Discount Type</label>
+      <label data-i18n="admin.discount-type">Discount Type</label>
       <select id="new-coupon-type">
-        <option value="percentage">Percentage (%)</option>
-        <option value="fixed">Fixed Amount ($)</option>
+        <option value="percentage" data-i18n="admin.percentage">Percentage (%)</option>
+        <option value="fixed" data-i18n="admin.fixed-amount">Fixed Amount ($)</option>
       </select>
     </div>
   </div>
 
   <div class="form-row">
     <div class="form-group">
-      <label>Discount Value</label>
+      <label data-i18n="admin.discount-value">Discount Value</label>
       <input id="new-coupon-value" type="number" placeholder="e.g., 20" step="0.01" />
     </div>
     <div class="form-group">
-      <label>Minimum Order Value ($)</label>
+      <label data-i18n="admin.min-order-value">Minimum Order Value ($)</label>
       <input id="new-coupon-min-order" type="number" placeholder="e.g., 50" step="0.01" value="0" />
     </div>
   </div>
 
   <div class="form-row">
     <div class="form-group">
-      <label>Max Uses (leave blank for unlimited)</label>
+      <label data-i18n="admin.max-uses">Max Uses <span data-i18n="admin.unlimited">(leave blank for unlimited)</span></label>
       <input id="new-coupon-max-uses" type="number" placeholder="e.g., 100" />
     </div>
     <div class="form-group">
-      <label>Valid Until</label>
+      <label data-i18n="admin.valid-until">Valid Until</label>
       <input id="new-coupon-valid-until" type="date" />
     </div>
   </div>
 
   <div class="form-row">
     <div class="form-group" style="grid-column: 1 / -1;">
-      <label>Description</label>
+      <label data-i18n="admin.coupon-desc">Description</label>
       <textarea id="new-coupon-description" placeholder="e.g., Summer special - 20% off all items"></textarea>
     </div>
   </div>
 
   <div class="form-actions">
-    <button onclick="createCoupon()" class="btn-primary">➕ Create Coupon</button>
+    <button onclick="createCoupon()" class="btn-primary" data-i18n="admin.create">➕ Create Coupon</button>
   </div>
 </div>
 

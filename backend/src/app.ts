@@ -73,12 +73,12 @@ app.use("/uploads", express.static("uploads"));
    API ROUTES (FIRST)
 ====================== */
 app.use("/api/restaurants", restaurantRoutes);
+app.use("/api/restaurants", staffRoutes);
 app.use("/api", tableRoutes);
 app.use("/api", scanRoutes);
 app.use("/api", menuRoutes);
 app.use("/api", ordersRoutes);
 app.use("/api", sessionsRoutes);
-app.use("/api", staffRoutes);
 app.use("/api", authRoutes);
 app.use("/api", couponsRoutes);
 app.use("/api", bookingsRoutes);

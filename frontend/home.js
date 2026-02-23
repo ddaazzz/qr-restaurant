@@ -168,3 +168,42 @@ document.addEventListener('DOMContentLoaded', function() {
       this.reset();
     });
   }
+});
+
+// Initialize translations on page load and when language changes
+window.addEventListener('pageTranslationUpdated', function() {
+  console.log('[Home] Language changed, re-translating...');
+  const lang = getCurrentLanguage();
+  const elements = document.querySelectorAll('[data-i18n]');
+  elements.forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (key) {
+      el.textContent = t(key, lang);
+    }
+  });
+});
+
+// Force initial translation when page loads
+if (typeof getCurrentLanguage === 'function' && typeof t === 'function') {
+  const initialLang = getCurrentLanguage();
+  const translateOnLoad = () => {
+    setTimeout(() => {
+      const elements = document.querySelectorAll('[data-i18n]');
+      elements.forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+          const translated = t(key, initialLang);
+          if (translated !== key) { // Only update if we got a translation
+            el.textContent = translated;
+          }
+        }
+      });
+    }, 100);
+  };
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', translateOnLoad);
+  } else {
+    translateOnLoad();
+  }
+}

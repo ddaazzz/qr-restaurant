@@ -6,12 +6,24 @@ import fs from "fs";
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
     let folder = "uploads";
+    let restaurantId: string | null = null;
 
-    // Route-based destination
-    if (req.originalUrl.includes("/menu-items")) {
-      folder = "uploads/menu";
-    } else if (req.originalUrl.includes("/logo")) {
-      folder = "uploads/restaurants";
+    // Extract restaurantId from URL path for restaurant-specific folders
+    if (req.originalUrl.includes("/logo")) {
+      // Pattern: /restaurants/:id/logo
+      const match = req.originalUrl.match(/\/restaurants\/(\d+)\/logo/);
+      restaurantId = match ? match[1] : null;
+      folder = restaurantId ? `uploads/restaurants/${restaurantId}` : "uploads/restaurants";
+    } else if (req.originalUrl.includes("/background")) {
+      // Pattern: /restaurants/:restaurantId/background
+      const match = req.originalUrl.match(/\/restaurants\/(\d+)\/background/);
+      restaurantId = match ? match[1] : null;
+      folder = restaurantId ? `uploads/restaurants/${restaurantId}` : "uploads/restaurants";
+    } else if (req.originalUrl.includes("/menu-items")) {
+      // Pattern: /restaurants/:restaurantId/menu/menu-items/:menuItemId/image
+      const match = req.originalUrl.match(/\/restaurants\/(\d+)\/menu\/menu-items/);
+      restaurantId = match ? match[1] : null;
+      folder = restaurantId ? `uploads/restaurants/${restaurantId}/menu` : "uploads/menu";
     }
 
     // Ensure folder exists

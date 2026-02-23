@@ -40,6 +40,7 @@ router.patch("/:id/settings", async (req, res) => {
     logo_url,
     address,
     phone,
+    timezone,
     theme_color,
     service_charge_percent,
     regenerate_qr_per_session,
@@ -56,19 +57,21 @@ router.patch("/:id/settings", async (req, res) => {
            logo_url = $2,
            address = $3,
            phone = $4,
-           theme_color = $5,
-           service_charge_percent = $6,
-           regenerate_qr_per_session = $7,
-           qr_mode = $8,
-           pos_webhook_url = $9,
-           pos_api_key = $10,
-           booking_time_allowance_mins = COALESCE($11, booking_time_allowance_mins)
-       WHERE id = $12`,
+           timezone = $5,
+           theme_color = $6,
+           service_charge_percent = $7,
+           regenerate_qr_per_session = $8,
+           qr_mode = $9,
+           pos_webhook_url = $10,
+           pos_api_key = $11,
+           booking_time_allowance_mins = COALESCE($12, booking_time_allowance_mins)
+       WHERE id = $13`,
       [
         name,
         logo_url,
         address,
         phone,
+        timezone || 'UTC',
         theme_color,
         service_charge_percent,
         regenerate_qr_per_session,
@@ -98,7 +101,7 @@ router.post("/:id/logo", upload.single("image"), async (req, res) => {
     return res.status(400).json({ error: "Logo upload failed" });
   }
 
-  const logoPath = `/uploads/restaurants/${req.file.filename}`;
+  const logoPath = `/uploads/restaurants/${id}/${req.file.filename}`;
   console.log(logoPath);
   console.log("Updating logo_url for restaurant ID:", id, "with path:", logoPath);
 
@@ -243,7 +246,7 @@ router.get("/:sessionId/bill", async (req, res) => {
         oi.quantity,
         oi.price_cents,
         mi.name AS item_name,
-        o.created_at,
+        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
         o.id AS order_id
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id

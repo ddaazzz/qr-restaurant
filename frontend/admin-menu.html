@@ -11,11 +11,11 @@
       <div class="form-row">
         <div class="form-group">
           <label data-i18n="admin.item-name">Item Name</label>
-          <input id="new-item-name" placeholder="e.g., Caesar Salad" />
+          <input id="new-item-name" data-i18n="admin.item-name-placeholder" placeholder="e.g., Caesar Salad" />
         </div>
         <div class="form-group">
           <label data-i18n="admin.price-cents">Price (cents)</label>
-          <input id="new-item-price" type="number" placeholder="e.g., 1200" />
+          <input id="new-item-price" type="number" data-i18n="admin.price-placeholder" placeholder="e.g., 1200" />
         </div>
       </div>
       <div class="form-row">
@@ -29,14 +29,14 @@
       <div class="form-row">
       <div class="form-group">
         <label data-i18n="admin.description">Description</label>
-        <textarea id="new-item-desc" placeholder="Add a detailed description of the menu item..."></textarea>
+        <textarea id="new-item-desc" data-i18n="admin.description-placeholder" placeholder="Add a detailed description of the menu item..."></textarea>
       </div>
       </div>
       <div class="form-group">
         <label data-i18n="admin.item-image">Food Item Image <span class="info-hint" data-i18n="admin.recommended-size">(Recommended: 400px × 300px)</span></label>
         <div class="image-upload-input">
-          <div id="new-item-image-preview" class="image-preview-box">
-            <div class="upload-placeholder">📸 Click to upload image</div>
+          <div id="new-item-image-preview" class="image-preview-box" style="cursor: pointer;" onclick="document.getElementById('new-item-image').click()">
+            <div class="upload-placeholder" data-i18n="admin.upload-image">📸 Click to upload image</div>
           </div>
           <input type="file" id="new-item-image" accept="image/*" onchange="previewItemImage(this)" class="hidden-file-input"/>
         </div>

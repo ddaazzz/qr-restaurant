@@ -95,9 +95,21 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
     const { restaurantId } = req.params;
     const { category_id, name, seat_count } = req.body;
 
+    console.log(`📝 Creating table - category_id: ${category_id}, name: ${name}, seat_count: ${seat_count}`);
+
     if (!name || !category_id || seat_count == null) {
       return res.status(400).json({ error: "Category, name, and seat_count required" });
     }
+
+    // Convert parameters to proper types
+    const categoryId = Number(category_id);
+    const seatCount = Number(seat_count);
+    
+    if (isNaN(categoryId) || isNaN(seatCount)) {
+      return res.status(400).json({ error: "Invalid category_id or seat_count - must be numbers" });
+    }
+
+    console.log(`✅ Converted - categoryId: ${categoryId} (type: ${typeof categoryId}), seatCount: ${seatCount}`);
 
     // 1️⃣ Check restaurant QR preference (static vs dynamic)
     const restaurantRes = await client.query(
@@ -107,6 +119,8 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
     const restaurantSettings = restaurantRes.rows[0];
     const isStaticQR = restaurantSettings?.regenerate_qr_per_session === false;
 
+    console.log(`📊 Restaurant QR settings - isStaticQR: ${isStaticQR}`);
+
     // 2️⃣ Insert table with user-provided name
     const tableRes = await client.query(
       `
@@ -114,18 +128,22 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
       VALUES ($1, $2, $3, $4)
       RETURNING *
       `,
-      [restaurantId, name.trim(), category_id, seat_count]
+      [restaurantId, name.trim(), categoryId, seatCount]
     );
 
     const table = tableRes.rows[0];
+    console.log(`✅ Table created with ID: ${table.id}`);
 
-    // 3️⃣ Create table units with static QR codes (if static mode) or null (if dynamic mode)
+    // 3️⃣ Create table units with QR codes
     const units = [];
 
-    for (let i = 0; i < seat_count; i++) {
-      const code = category_id === "BAR" ? `seat${i + 1}` : String.fromCharCode(97 + i);
-      // Generate QR token immediately if static mode, otherwise null (will be generated per session)
-      const qrToken = isStaticQR ? crypto.randomBytes(16).toString("hex") : null;
+    for (let i = 0; i < seatCount; i++) {
+      // Generate appropriate unit code (single letter A, B, C... or Seat1, Seat2...)
+      const unitCode = String.fromCharCode(65 + i); // A, B, C, D... (capital letters)
+      // Always generate a QR token for each unit
+      const qrToken = crypto.randomBytes(16).toString("hex");
+
+      console.log(`📦 Creating unit ${i + 1}/${seatCount} - unitCode: ${unitCode}, qrToken: ${qrToken.substring(0, 8)}...`);
 
       const unitRes = await client.query(
         `
@@ -135,8 +153,8 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
         `,
         [
           table.id,
-          code,
-          category_id === "BAR" ? `${name}-Seat${i + 1}` : `${name}${code}`,
+          unitCode,
+          `${name}${unitCode}`,
           qrToken
         ]
       );
@@ -146,11 +164,15 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
 
     await client.query("COMMIT");
 
+    console.log(`🎉 Table created successfully with ${units.length} units`);
     res.status(201).json({ table, units });
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ error: "Failed to create table" });
+    await client.query("ROLLBACK").catch(e => console.error("Rollback error:", e));
+    console.error("❌ Table creation error:", err);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    const errorStack = err instanceof Error ? err.stack : undefined;
+    console.error("Error stack:", errorStack);
+    res.status(500).json({ error: "Failed to create table", details: errorMsg });
   } finally {
     client.release();
   }
@@ -388,80 +410,6 @@ router.post("/restaurants/:restaurantId/table-categories",
     }
   }
 );
-
-/**
- * CREATE table + QR token
- * (Staff only)
- */
-router.post("/restaurants/:restaurantId/tables", async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const { restaurantId } = req.params;
-    const { category_id, name, seat_count } = req.body;
-
-    if (!name || !category_id || seat_count == null) {
-      return res.status(400).json({ error: "Category, name, and seat_count required" });
-    }
-
-    // 1️⃣ Check restaurant QR preference (static vs dynamic)
-    const restaurantRes = await client.query(
-      `SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`,
-      [restaurantId]
-    );
-    const restaurantSettings = restaurantRes.rows[0];
-    const isStaticQR = restaurantSettings?.regenerate_qr_per_session === false;
-
-    // 2️⃣ Insert table with user-provided name
-    const tableRes = await client.query(
-      `
-      INSERT INTO tables (restaurant_id, name, category_id, seat_count)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-      `,
-      [restaurantId, name.trim(), category_id, seat_count]
-    );
-
-    const table = tableRes.rows[0];
-
-    // 3️⃣ Create table units with static QR codes (if static mode) or null (if dynamic mode)
-    const units = [];
-
-    for (let i = 0; i < seat_count; i++) {
-      const code = category_id === "BAR" ? `seat${i + 1}` : String.fromCharCode(97 + i);
-      // Generate QR token immediately if static mode, otherwise null (will be generated per session)
-      const qrToken = isStaticQR ? crypto.randomBytes(16).toString("hex") : null;
-
-      const unitRes = await client.query(
-        `
-        INSERT INTO table_units (table_id, unit_code, display_name, qr_token)
-        VALUES ($1, $2, $3, $4)
-        RETURNING *
-        `,
-        [
-          table.id,
-          code,
-          category_id === "BAR" ? `${name}-Seat${i + 1}` : `${name}${code}`,
-          qrToken
-        ]
-      );
-
-      units.push(unitRes.rows[0]);
-    }
-
-    await client.query("COMMIT");
-
-    res.status(201).json({ table, units });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ error: "Failed to create table" });
-  } finally {
-    client.release();
-  }
-});
 
 // Regenerate QR token (staff) - ✅ MULTI-RESTAURANT SUPPORT
 router.post("/tables/:tableId/regenerate-qr", async (req, res) => {

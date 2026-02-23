@@ -1,0 +1,7 @@
+[dotenv@17.2.3] injecting env (13) from .env -- tip: ≡ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  write to custom object with { processEnv: myObject }
+ENV: { NODE_ENV: 'development', PORT: undefined }
+Γ£à Running in development mode
+≡ƒÜÇ Backend running on http://localhost:10000
+≡ƒô▒ Local Network: http://192.168.10.243:10000
+   (Access from iPad/phone on same WiFi network)

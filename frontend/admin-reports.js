@@ -74,7 +74,8 @@ function calculateAnalyticsStats(orders) {
     daily_order_counts: {},
     table_orders: {},
     item_sales: {},
-    orders_by_hour: {}
+    orders_by_hour: {},
+    allOrders: orders
   };
 
   if (orders.length === 0) {
@@ -94,9 +95,19 @@ function calculateAnalyticsStats(orders) {
     }
     stats.order_count_by_status[orderStatus]++;
 
-    // Revenue by day
+    // Revenue by day (in restaurant timezone)
     var createdDate = new Date(order.created_at);
-    var date = createdDate.toISOString().split('T')[0];
+    // Format date in restaurant's timezone
+    var dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: restaurantTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    var dateStr = dateFormatter.format(createdDate);
+    // Convert MM/DD/YYYY to YYYY-MM-DD
+    var [month, day, year] = dateStr.split('/');
+    var date = year + '-' + month + '-' + day;
     if (!stats.revenue_by_day[date]) {
       stats.revenue_by_day[date] = 0;
       stats.daily_order_counts[date] = 0;
@@ -104,9 +115,14 @@ function calculateAnalyticsStats(orders) {
     stats.revenue_by_day[date] += orderAmount;
     stats.daily_order_counts[date]++;
 
-    // Revenue by hour
-    var hour = createdDate.getHours();
-    var hourKey = (hour < 10 ? '0' : '') + hour + ':00';
+    // Revenue by hour (in restaurant timezone)
+    var hourFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: restaurantTimezone,
+      hour: '2-digit',
+      hour12: false
+    });
+    var hourStr = hourFormatter.format(createdDate);
+    var hourKey = hourStr + ':00';
     if (!stats.revenue_by_hour[hourKey]) {
       stats.revenue_by_hour[hourKey] = 0;
       stats.orders_by_hour[hourKey] = 0;
@@ -143,7 +159,7 @@ function renderAnalyticsDashboard(stats) {
     metricActiveSessions.textContent = stats.active_sessions;
   }
 
-  renderStatusDistribution(stats);
+  renderRevenueReport(stats);
 
   renderBusiestTables(stats);
 
@@ -154,39 +170,183 @@ function renderAnalyticsDashboard(stats) {
   renderDailyTrends(stats, 'daily');
 }
 
-function renderStatusDistribution(stats) {
-  var container = document.getElementById("chart-status-distribution");
+function renderRevenueReport(stats) {
+  var container = document.getElementById("revenue-report-content");
   if (!container) {
     return;
   }
 
-  var html = '';
-  for (var status in stats.order_count_by_status) {
-    if (stats.order_count_by_status.hasOwnProperty(status)) {
-      var count = stats.order_count_by_status[status];
-      var colors = {
-        pending: '#f59e0b',
-        confirmed: '#3b82f6',
-        ready: '#8b5cf6',
-        served: '#10b981',
-        paid: '#059669',
-        cancelled: '#ef4444'
-      };
-      var color = colors[status] || '#6b7280';
-      var percentage = ((count / stats.total_orders) * 100).toFixed(1);
-      html += '<div style="margin-bottom: 16px;">' +
-        '<div style="display: flex; justify-content: space-between; margin-bottom: 6px;">' +
-        '<span style="font-size: 13px; color: #666; text-transform: capitalize; font-weight: 500;">' + status + '</span>' +
-        '<span style="font-size: 13px; font-weight: 600; color: ' + color + ';">' + count + ' (' + percentage + '%)</span>' +
-        '</div>' +
-        '<div style="height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden;">' +
-        '<div style="height: 100%; background: ' + color + '; width: ' + percentage + '%;"></div>' +
-        '</div>' +
-        '</div>';
+  // Store stats for filtering
+  window.reportStats = stats;
+  window.allOrders = stats.allOrders || [];
+
+  // Populate filter dropdowns
+  var categorySelect = document.getElementById("revenue-filter-category");
+  var waiterSelect = document.getElementById("revenue-filter-waiter");
+  var tableSelect = document.getElementById("revenue-filter-table");
+  var productSelect = document.getElementById("revenue-filter-product");
+
+  // Collect unique values from orders
+  var categories = {};
+  var waiters = {};
+  var tables = {};
+  var products = {};
+
+  for (var oi = 0; oi < window.allOrders.length; oi++) {
+    var order = window.allOrders[oi];
+    if (order.category_name) categories[order.category_name] = true;
+    if (order.waiter_name) waiters[order.waiter_name] = true;
+    if (order.table_name) tables[order.table_name] = true;
+    if (order.items && order.items.length > 0) {
+      for (var it = 0; it < order.items.length; it++) {
+        if (order.items[it].name) products[order.items[it].name] = true;
+      }
     }
   }
 
-  container.innerHTML = html;
+  // Populate dropdowns
+  if (categorySelect) {
+    for (var cat in categories) {
+      var option = document.createElement("option");
+      option.value = cat;
+      option.textContent = cat;
+      categorySelect.appendChild(option);
+    }
+  }
+  if (waiterSelect) {
+    for (var waiter in waiters) {
+      var option = document.createElement("option");
+      option.value = waiter;
+      option.textContent = waiter;
+      waiterSelect.appendChild(option);
+    }
+  }
+  if (tableSelect) {
+    for (var tbl in tables) {
+      var option = document.createElement("option");
+      option.value = tbl;
+      option.textContent = tbl;
+      tableSelect.appendChild(option);
+    }
+  }
+  if (productSelect) {
+    for (var prod in products) {
+      var option = document.createElement("option");
+      option.value = prod;
+      option.textContent = prod;
+      productSelect.appendChild(option);
+    }
+  }
+
+  // Initial render
+  filterRevenueReport();
+}
+
+function filterRevenueReport() {
+  var container = document.getElementById("revenue-report-content");
+  if (!container || !window.allOrders) {
+    return;
+  }
+
+  var dateRange = document.getElementById("revenue-filter-daterange")?.value || "month";
+  var categoryFilter = document.getElementById("revenue-filter-category")?.value || "";
+  var waiterFilter = document.getElementById("revenue-filter-waiter")?.value || "";
+  var tableFilter = document.getElementById("revenue-filter-table")?.value || "";
+  var productFilter = document.getElementById("revenue-filter-product")?.value || "";
+
+  // Filter orders based on criteria
+  var filteredOrders = window.allOrders.filter(function(order) {
+    // Date filter
+    var orderDate = new Date(order.created_at);
+    var now = new Date();
+    var daysDiff = (now - orderDate) / (1000 * 60 * 60 * 24);
+    
+    var passedDateFilter = false;
+    if (dateRange === "today") {
+      passedDateFilter = daysDiff <= 1;
+    } else if (dateRange === "week") {
+      passedDateFilter = daysDiff <= 7;
+    } else if (dateRange === "month") {
+      passedDateFilter = daysDiff <= 30;
+    } else if (dateRange === "all") {
+      passedDateFilter = true;
+    }
+
+    if (!passedDateFilter) return false;
+
+    // Category filter
+    if (categoryFilter && order.category_name !== categoryFilter) return false;
+
+    // Waiter filter
+    if (waiterFilter && order.waiter_name !== waiterFilter) return false;
+
+    // Table filter
+    if (tableFilter && order.table_name !== tableFilter) return false;
+
+    // Product filter
+    if (productFilter && order.items) {
+      var hasProduct = order.items.some(function(item) {
+        return item.name === productFilter;
+      });
+      if (!hasProduct) return false;
+    }
+
+    return true;
+  });
+
+  // Calculate totals
+  var totalRevenue = 0;
+  var totalOrders = filteredOrders.length;
+  
+  for (var oi = 0; oi < filteredOrders.length; oi++) {
+    totalRevenue += parseInt(filteredOrders[oi].total_cents, 10) || 0;
+  }
+
+  var avgBill = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  // Build revenue table
+  var html = '<div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 6px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">' +
+    '<div><span style="font-size: 12px; color: #666;">Total Revenue:</span><div style="font-size: 18px; font-weight: 700; color: #059669;">$' + (totalRevenue / 100).toFixed(2) + '</div></div>' +
+    '<div><span style="font-size: 12px; color: #666;">Orders:</span><div style="font-size: 18px; font-weight: 700; color: #667eea;">' + totalOrders + '</div></div>' +
+    '<div><span style="font-size: 12px; color: #666;">Avg Bill:</span><div style="font-size: 18px; font-weight: 700; color: #6b7280;">$' + (avgBill / 100).toFixed(2) + '</div></div>' +
+    '</div>';
+
+  // Revenue breakdown table
+  html += '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">' +
+    '<thead>' +
+    '<tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">' +
+    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">Date</th>' +
+    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">Orders</th>' +
+    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">Revenue</th>' +
+    '</tr>' +
+    '</thead>' +
+    '<tbody>';
+
+  // Group by date
+  var revenueByDate = {};
+  for (var oi = 0; oi < filteredOrders.length; oi++) {
+    var order = filteredOrders[oi];
+    var dateStr = new Date(order.created_at).toLocaleDateString();
+    if (!revenueByDate[dateStr]) {
+      revenueByDate[dateStr] = { revenue: 0, count: 0 };
+    }
+    revenueByDate[dateStr].revenue += parseInt(order.total_cents, 10) || 0;
+    revenueByDate[dateStr].count++;
+  }
+
+  var dates = Object.keys(revenueByDate).sort().reverse();
+  for (var di = 0; di < dates.length; di++) {
+    var date = dates[di];
+    var data = revenueByDate[date];
+    html += '<tr style="border-bottom: 1px solid #f0f0f0;">' +
+      '<td style="padding: 12px; color: #1f2937; font-weight: 500;">' + date + '</td>' +
+      '<td style="padding: 12px; color: #667eea; font-weight: 600;">' + data.count + '</td>' +
+      '<td style="padding: 12px; text-align: right; color: #059669; font-weight: 600;">$' + (data.revenue / 100).toFixed(2) + '</td>' +
+      '</tr>';
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html || '<p style="color: #999; text-align: center;">No data found</p>';
 }
 
 function renderBusiestTables(stats) {
@@ -230,8 +390,13 @@ function renderBusiestTables(stats) {
   for (var ti = 0; ti < topDays.length; ti++) {
     var day = topDays[ti];
     var height = (day.orders / maxOrders) * 150;
-    var dateObj = new Date(day.date);
-    var dateLabel = (dateObj.getMonth() + 1) + '/' + dateObj.getDate();
+    // Format date in restaurant timezone
+    var dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: restaurantTimezone,
+      month: '2-digit',
+      day: '2-digit'
+    });
+    var dateLabel = dateFormatter.format(new Date(day.date));
 
     html += '<div style="flex: 1; display: flex; flex-direction: column; align-items: center;">' +
       '<div style="background: linear-gradient(to top, #667eea, #764ba2); width: 100%; height: ' + height + 'px; border-radius: 4px 4px 0 0; cursor: pointer; transition: opacity 0.3s;" title="' + day.orders + ' orders ($' + (day.revenue / 100).toFixed(2) + ')" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'1\'"></div>' +
@@ -248,6 +413,10 @@ function renderHourlyRevenue(stats) {
   var container = document.getElementById("chart-hourly-revenue");
   if (!container) return;
 
+  // Ensure revenue_by_hour and orders_by_hour exist
+  if (!stats.revenue_by_hour) stats.revenue_by_hour = {};
+  if (!stats.orders_by_hour) stats.orders_by_hour = {};
+  
   var revenueValues = [];
   for (var hour in stats.revenue_by_hour) {
     if (stats.revenue_by_hour.hasOwnProperty(hour)) {
@@ -299,8 +468,14 @@ function renderTopItems(stats) {
   
   for (var ti = 0; ti < topDays.length; ti++) {
     var entry = topDays[ti];
-    var dateObj = new Date(entry.date);
-    var dateStr = (dateObj.getMonth() + 1) + '/' + dateObj.getDate() + '/' + dateObj.getFullYear();
+    // Format date in restaurant timezone
+    var dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: restaurantTimezone,
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric'
+    });
+    var dateStr = dateFormatter.format(new Date(entry.date));
     
     html += '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px; border-radius: 12px; color: white;">' +
       '<div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">💰 ' + dateStr + '</div>' +
@@ -341,7 +516,7 @@ function renderDailyTrends(stats, mode) {
       if (stats.revenue_by_day.hasOwnProperty(date)) {
         entries.push({
           period: date,
-          label: new Date(date).toLocaleDateString(),
+          label: formatTimeWithTimezone(date, restaurantTimezone, 'date'),
           revenue: stats.revenue_by_day[date],
           count: stats.daily_order_counts[date] || 0
         });
@@ -378,9 +553,11 @@ function renderDailyTrends(stats, mode) {
         var weekStart2 = new Date(week);
         var weekEnd = new Date(weekStart2);
         weekEnd.setDate(weekEnd.getDate() + 6);
+        var weekStart2Str = formatTimeWithTimezone(week, restaurantTimezone, 'date');
+        var weekEndStr = formatTimeWithTimezone(weekEnd.toISOString().split('T')[0], restaurantTimezone, 'date');
         entries.push({
           period: week,
-          label: weekStart2.toLocaleDateString() + ' - ' + weekEnd.toLocaleDateString(),
+          label: weekStart2Str + ' - ' + weekEndStr,
           revenue: weekMap[week].revenue,
           count: weekMap[week].count
         });
@@ -408,10 +585,9 @@ function renderDailyTrends(stats, mode) {
     }
     for (var month in monthMap) {
       if (monthMap.hasOwnProperty(month)) {
-        var monthDate = new Date(month + '-01');
         entries.push({
           period: month,
-          label: monthDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
+          label: formatTimeWithTimezone(month + '-01', restaurantTimezone, 'month'),
           revenue: monthMap[month].revenue,
           count: monthMap[month].count
         });
@@ -447,4 +623,9 @@ function renderDailyTrends(stats, mode) {
   html += '</tbody></table>';
   container.innerHTML = html || '<p style="color: #999; text-align: center;">No data</p>';
 }
+
+// Listen for language changes and re-render reports
+document.addEventListener('languageChanged', () => {
+  initializeAnalyticsDashboard();
+});
 

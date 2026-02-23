@@ -125,7 +125,7 @@ router.get("/auth/admin-restaurants", async (req, res) => {
 });
 
 router.post("/restaurants/:restaurantId/staff", async (req, res) => {
-  const { name, pin, role = "staff", access_rights = [] } = req.body;
+  const { name, pin, role = "staff", access_rights = [], hourly_rate_cents } = req.body;
   const { restaurantId } = req.params;
 
   // Validate all required fields
@@ -136,6 +136,11 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
   // Ensure PIN is 6 digits
   if (!/^\d{6}$/.test(pin)) {
     return res.status(400).json({ error: "PIN must be 6 digits" });
+  }
+
+  // Validate hourly rate if provided
+  if (hourly_rate_cents !== undefined && hourly_rate_cents !== null && hourly_rate_cents < 0) {
+    return res.status(400).json({ error: "Hourly rate cannot be negative" });
   }
 
   // Default role is staff
@@ -163,9 +168,9 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO users (name, email, role, pin, restaurant_id, access_rights)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, role, pin, access_rights`,
-      [name, null, staffRole, pin, restaurantId, JSON.stringify(access_rights)]
+      `INSERT INTO users (name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, role, pin, access_rights, hourly_rate_cents`,
+      [name, null, staffRole, pin, restaurantId, JSON.stringify(access_rights), hourly_rate_cents || null]
     );
 
     console.log(`✅ Staff created for restaurant ${restaurantId}: ${name}`);
@@ -181,14 +186,19 @@ router.get("/restaurants/:restaurantId/staff", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, pin, access_rights FROM users WHERE restaurant_id = $1 AND (role = 'staff' OR role = 'kitchen')`,
+      `SELECT 
+        id, name, email, role, pin, access_rights, hourly_rate_cents,
+        (SELECT COUNT(*) FROM staff_timekeeping WHERE user_id = users.id AND clock_out_at IS NULL) as currently_clocked_in
+      FROM users 
+      WHERE restaurant_id = $1 AND (role = 'staff' OR role = 'kitchen')`,
       [restaurantId]
     );
 
     // Parse access_rights JSON
     const staff = result.rows.map(s => ({
       ...s,
-      access_rights: s.access_rights ? (typeof s.access_rights === 'string' ? JSON.parse(s.access_rights) : s.access_rights) : []
+      access_rights: s.access_rights ? (typeof s.access_rights === 'string' ? JSON.parse(s.access_rights) : s.access_rights) : [],
+      currently_clocked_in: s.currently_clocked_in > 0
     }));
 
     res.json(staff);
@@ -204,7 +214,10 @@ router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, pin, access_rights FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
+      `SELECT 
+        id, name, email, role, pin, access_rights, hourly_rate_cents,
+        (SELECT COUNT(*) FROM staff_timekeeping WHERE user_id = users.id AND clock_out_at IS NULL) > 0 as currently_clocked_in
+      FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
       [staffId, restaurantId]
     );
 
@@ -215,6 +228,35 @@ router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
     const staff = result.rows[0];
     // Parse access_rights JSON
     staff.access_rights = staff.access_rights ? (typeof staff.access_rights === 'string' ? JSON.parse(staff.access_rights) : staff.access_rights) : [];
+    
+    // Fetch recent timekeeping records (last 30 days)
+    const timekeepingResult = await pool.query(
+      `SELECT 
+        id, clock_in_at, clock_out_at, duration_minutes 
+      FROM staff_timekeeping 
+      WHERE user_id = $1 AND restaurant_id = $2 AND clock_in_at >= NOW() - INTERVAL '30 days'
+      ORDER BY clock_in_at DESC
+      LIMIT 30`,
+      [staffId, restaurantId]
+    );
+    
+    staff.timekeeping = timekeepingResult.rows;
+    
+    // Calculate stats
+    const statsResult = await pool.query(
+      `SELECT 
+        COUNT(*) as total_shifts,
+        COALESCE(SUM(duration_minutes), 0) as total_minutes
+      FROM staff_timekeeping 
+      WHERE user_id = $1 AND restaurant_id = $2 AND clock_in_at >= NOW() - INTERVAL '30 days' AND clock_out_at IS NOT NULL`,
+      [staffId, restaurantId]
+    );
+    
+    const stats = statsResult.rows[0];
+    staff.stats = {
+      total_shifts: parseInt(stats.total_shifts),
+      total_hours: Math.round((parseInt(stats.total_minutes) / 60) * 100) / 100
+    };
 
     res.json(staff);
   } catch (err) {
@@ -226,7 +268,7 @@ router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
 // ✅ PATCH staff member (update)
 router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
   const { restaurantId, staffId } = req.params;
-  const { name, pin, role, access_rights } = req.body;
+  const { name, pin, role, access_rights, hourly_rate_cents } = req.body;
 
   try {
     // Verify staff belongs to restaurant
@@ -241,8 +283,15 @@ router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
 
     const existingStaff = staffCheck.rows[0];
 
+    // Get current PIN from database
+    const currentPinResult = await pool.query(
+      `SELECT pin FROM users WHERE id = $1`,
+      [staffId]
+    );
+    const currentPin = currentPinResult.rows.length > 0 ? currentPinResult.rows[0].pin : null;
+
     // If PIN is being changed, verify uniqueness
-    if (pin && pin !== (await pool.query(`SELECT pin FROM users WHERE id = $1`, [staffId])).rows[0].pin) {
+    if (pin && pin !== currentPin) {
       if (!/^\d{6}$/.test(pin)) {
         return res.status(400).json({ error: "PIN must be 6 digits" });
       }
@@ -286,15 +335,24 @@ router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
       paramIndex++;
     }
 
+    if (hourly_rate_cents !== undefined) {
+      // Validate hourly rate
+      if (hourly_rate_cents !== null && hourly_rate_cents < 0) {
+        return res.status(400).json({ error: "Hourly rate cannot be negative" });
+      }
+      updates.push(`hourly_rate_cents = $${paramIndex}`);
+      params.push(hourly_rate_cents);
+      paramIndex++;
+    }
+
     if (updates.length === 0) {
       return res.status(400).json({ error: "No fields to update" });
     }
 
-    // Add WHERE clause
-    updates.push(`id = $${paramIndex}`);
+    // Add WHERE clause parameters (separate from SET updates)
     params.push(staffId);
 
-    const query = `UPDATE users SET ${updates.join(', ')} RETURNING id, name, role, pin, access_rights`;
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, name, role, pin, access_rights`;
     const result = await pool.query(query, params);
 
     console.log(`✅ Staff updated: ${staffId} in restaurant ${restaurantId}`);
@@ -509,6 +567,127 @@ router.post("/auth/logout", async (req, res) => {
   } catch (err) {
     console.error("Error logging out:", err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ✅ POST clock in
+router.post("/restaurants/:restaurantId/staff/:staffId/clock-in", async (req, res) => {
+  const { restaurantId, staffId } = req.params;
+  
+  try {
+    // Verify staff exists and belongs to restaurant
+    const staffCheck = await pool.query(
+      `SELECT id FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
+      [staffId, restaurantId]
+    );
+    
+    if (staffCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Staff member not found" });
+    }
+    
+    // Check if already clocked in
+    const activeCheck = await pool.query(
+      `SELECT id FROM staff_timekeeping WHERE user_id = $1 AND restaurant_id = $2 AND clock_out_at IS NULL`,
+      [staffId, restaurantId]
+    );
+    
+    if ((activeCheck.rowCount ?? 0) > 0) {
+      return res.status(400).json({ error: "Staff member already clocked in" });
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO staff_timekeeping (user_id, restaurant_id, clock_in_at) 
+       VALUES ($1, $2, NOW())
+       RETURNING id, clock_in_at`,
+      [staffId, restaurantId]
+    );
+    
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to clock in" });
+  }
+});
+
+// ✅ POST clock out
+router.post("/restaurants/:restaurantId/staff/:staffId/clock-out", async (req, res) => {
+  const { restaurantId, staffId } = req.params;
+  
+  try {
+    // Verify staff exists and belongs to restaurant
+    const staffCheck = await pool.query(
+      `SELECT id FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
+      [staffId, restaurantId]
+    );
+    
+    if (staffCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Staff member not found" });
+    }
+    
+    // Find active timekeeping record
+    const activeRecord = await pool.query(
+      `SELECT id, clock_in_at FROM staff_timekeeping 
+       WHERE user_id = $1 AND restaurant_id = $2 AND clock_out_at IS NULL
+       ORDER BY clock_in_at DESC LIMIT 1`,
+      [staffId, restaurantId]
+    );
+    
+    if (activeRecord.rowCount === 0) {
+      return res.status(400).json({ error: "No active clock-in found" });
+    }
+    
+    const recordId = activeRecord.rows[0].id;
+    const clockInTime = new Date(activeRecord.rows[0].clock_in_at);
+    const clockOutTime = new Date();
+    const durationMinutes = Math.round((clockOutTime.getTime() - clockInTime.getTime()) / 60000); // Convert ms to minutes
+    
+    const result = await pool.query(
+      `UPDATE staff_timekeeping 
+       SET clock_out_at = NOW(), duration_minutes = $1
+       WHERE id = $2 AND restaurant_id = $3
+       RETURNING id, clock_in_at, clock_out_at, duration_minutes`,
+      [Math.max(1, durationMinutes), recordId, restaurantId]
+    );
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to clock out" });
+  }
+});
+
+// ✅ GET staff timekeeping history
+router.get("/restaurants/:restaurantId/staff/:staffId/timekeeping", async (req, res) => {
+  const { restaurantId, staffId } = req.params;
+  const { limit = 30, offset = 0 } = req.query;
+  
+  try {
+    // Verify staff exists
+    const staffCheck = await pool.query(
+      `SELECT id FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`,
+      [staffId, restaurantId]
+    );
+    
+    if (staffCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Staff member not found" });
+    }
+    
+    // Fetch timekeeping records (only completed shifts)
+    const result = await pool.query(
+      `SELECT 
+        id, clock_in_at, clock_out_at, duration_minutes,
+        TO_CHAR(clock_in_at::date, 'YYYY-MM-DD') as work_date
+       FROM staff_timekeeping 
+       WHERE user_id = $1 AND restaurant_id = $2 AND clock_out_at IS NOT NULL
+       ORDER BY clock_in_at DESC
+       LIMIT $3 OFFSET $4`,
+      [staffId, restaurantId, limit, offset]
+    );
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch timekeeping history" });
   }
 });
 

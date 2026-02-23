@@ -40,44 +40,6 @@ html {
   background: var(--white);
 }
 
-.hero-section {
-  position: relative;
-  min-height: 360px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: linear-gradient(135deg, #4a90e2 0%, #2563eb 100%);
-}
-
-.hero-image {
-  display: none;
-}
-
-.hero-content {
-  position: relative;
-  z-index: 10;
-  text-align: left;
-  padding: 60px 20px;
-  width: 100%;
-}
-
-.hero-content h1 {
-  font-size: 48px;
-  font-weight: 800;
-  color: var(--white);
-  margin-bottom: 12px;
-  letter-spacing: -1px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.hero-content p {
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.95);
-  font-weight: 500;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-}
-
 .features-section {
   padding: 60px 20px;
   background: var(--bg-white);
@@ -544,5 +506,17 @@ html {
   .cta-button {
     padding: 14px 40px;
     font-size: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-content {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    text-align: center;
+  }
+
+  .hero-image {
+    padding: 20px 0;
   }
 }

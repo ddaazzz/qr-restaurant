@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookings - Admin</title>
+  <link rel="stylesheet" href="admin-bookings.css">
+</head>
+<body>
+  <div class="bookings-container">
+    <!-- Header -->
+    <div class="bookings-header">
+      <h1 data-i18n="admin.reservations">📅 Reservations</h1>
+      <button id="btn-new-booking" class="btn btn-primary btn-new-booking" data-i18n="admin.new-booking">+ New Booking</button>
+    </div>
+
+    <!-- Calendar Navigation -->
+    <div class="calendar-nav">
+      <button id="btn-prev-month" class="btn-month-nav" data-i18n="admin.prev-month">← Previous</button>
+      <h2 id="calendar-month-year"></h2>
+      <button id="btn-next-month" class="btn-month-nav" data-i18n="admin.next-month">Next →</button>
+      <button id="btn-today" class="btn btn-secondary" data-i18n="admin.today">Today</button>
+    </div>
+
+    <!-- Calendar View -->
+    <div class="calendar-view">
+      <div class="weekdays">
+        <div class="weekday">Sun</div>
+        <div class="weekday">Mon</div>
+        <div class="weekday">Tue</div>
+        <div class="weekday">Wed</div>
+        <div class="weekday">Thu</div>
+        <div class="weekday">Fri</div>
+        <div class="weekday">Sat</div>
+      </div>
+      <div id="calendar-days" class="calendar-days"></div>
+    </div>
+
+    <!-- Bookings List for Selected Date -->
+    <div class="bookings-list-section">
+      <h3><span data-i18n="admin.bookings-for">Bookings for</span> <span id="selected-date-display">Today</span></h3>
+      <div id="bookings-list" class="bookings-list">
+        <p class="empty-state" data-i18n="admin.no-bookings">No bookings for this date</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- New/Edit Booking Modal -->
+  <div id="booking-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title">New Booking</h2>
+        <button id="btn-close-modal" class="btn-close">&times;</button>
+      </div>
+
+      <form id="booking-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="booking-guest-name" data-i18n="admin.guest-name">Guest Name *</label>
+            <input type="text" id="booking-guest-name" required placeholder="Enter guest name">
+          </div>
+          <div class="form-group">
+            <label for="booking-phone" data-i18n="admin.phone">Phone</label>
+            <input type="tel" id="booking-phone" placeholder="Enter phone number">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="booking-pax" data-i18n="admin.pax">Number of Guests *</label>
+            <input type="number" id="booking-pax" min="1" required placeholder="Pax">
+          </div>
+          <div class="form-group">
+            <label for="booking-table" data-i18n="admin.select-table">Table *</label>
+            <select id="booking-table" required>
+              <option value="">Select a table</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="booking-date" data-i18n="admin.booking-date">Date *</label>
+            <input type="date" id="booking-date" required>
+          </div>
+          <div class="form-group">
+            <label for="booking-time" data-i18n="admin.booking-time">Time *</label>
+            <input type="time" id="booking-time" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="booking-status" data-i18n="admin.booking-status">Status *</label>
+            <select id="booking-status" required>
+              <option value="confirmed" selected data-i18n="admin.confirmed">Confirmed</option>
+              <option value="completed" data-i18n="admin.completed">Completed</option>
+              <option value="cancelled" data-i18n="admin.cancelled">Cancelled</option>
+              <option value="no-show" data-i18n="admin.no-show">No Show</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="booking-notes" data-i18n="admin.notes">Notes</label>
+          <textarea id="booking-notes" placeholder="Add any special notes or requirements" rows="3"></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-form" class="btn btn-secondary" data-i18n="admin.cancel">Cancel</button>
+          <button type="button" id="btn-delete-booking" class="btn btn-danger hidden" data-i18n="admin.delete">Delete</button>
+          <button type="submit" class="btn btn-primary" data-i18n="admin.save">Save Booking</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-content modal-small">
+      <div class="modal-header">
+        <h2 data-i18n="admin.confirm-action">Confirm Action</h2>
+      </div>
+      <p id="confirm-message"></p>
+      <div class="modal-footer">
+        <button id="btn-confirm-no" class="btn btn-secondary" data-i18n="admin.cancel">Cancel</button>
+        <button id="btn-confirm-yes" class="btn btn-danger" data-i18n="admin.delete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div id="loading" class="loading hidden">
+    <div class="spinner"></div>
+  </div>
+
+  <script src="translations.js"></script>
+  <script src="timezone-utils.js"></script>
+  <script src="admin-bookings.js"></script>
+</body>
+</html>

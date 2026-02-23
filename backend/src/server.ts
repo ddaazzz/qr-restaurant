@@ -21,10 +21,20 @@ function getLocalIP() {
 
 const localIP = getLocalIP();
 
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Backend running on http://localhost:${PORT}`);
   console.log(`📱 Local Network: http://${localIP}:${PORT}`);
   console.log(`   (Access from iPad/phone on same WiFi network)`);
+});
+
+// Handle unhandled errors
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
+  process.exit(1);
 });
 
 if (process.env.NODE_ENV !== "production") {

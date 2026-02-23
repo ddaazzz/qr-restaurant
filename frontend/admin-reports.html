@@ -5,55 +5,90 @@
   <!-- Metrics Row -->
   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
     <div class="metric-card">
-      <div class="metric-label">Total Orders</div>
+      <div class="metric-label" data-i18n="admin.total-orders">Total Orders</div>
       <div class="metric-value" id="metric-total-orders">0</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">Total Revenue</div>
+      <div class="metric-label" data-i18n="admin.total-revenue">Total Revenue</div>
       <div class="metric-value" id="metric-total-revenue">$0.00</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">Average Bill</div>
+      <div class="metric-label" data-i18n="admin.avg-bill">Average Bill</div>
       <div class="metric-value" id="metric-avg-bill">$0.00</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">Active Sessions</div>
+      <div class="metric-label" data-i18n="admin.sessions">Active Sessions</div>
       <div class="metric-value" id="metric-active-sessions">0</div>
     </div>
   </div>
 
-  <!-- Status Distribution -->
+  <!-- Revenue Filters -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3>Order Status Distribution</h3>
-    <div id="chart-status-distribution" style="height: 300px;"></div>
+    <h3 style="margin-bottom: 16px;" data-i18n="admin.orders-bills">Revenue Report</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+      <div>
+        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter-date">Date Range</label>
+        <select id="revenue-filter-daterange" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="today" data-i18n="admin.today">Today</option>
+          <option value="week" data-i18n="admin.weekly-sales">Last 7 Days</option>
+          <option value="month" selected data-i18n="admin.monthly-sales">Last 30 Days</option>
+          <option value="all" data-i18n="admin.all-orders">All Time</option>
+        </select>
+      </div>
+      <div>
+        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter">Filter by Category</label>
+        <select id="revenue-filter-category" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+      <div>
+        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter">Filter by Waiter</label>
+        <select id="revenue-filter-waiter" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">All Waiters</option>
+        </select>
+      </div>
+      <div>
+        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter-by-table">Filter by Table</label>
+        <select id="revenue-filter-table" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">All Tables</option>
+        </select>
+      </div>
+      <div>
+        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter">Filter by Product</label>
+        <select id="revenue-filter-product" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">All Products</option>
+        </select>
+      </div>
+    </div>
+    <div id="revenue-report-content" style="overflow-x: auto;"></div>
   </div>
 
   <!-- Busiest Tables -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3>Busiest Tables</h3>
+    <h3 data-i18n="admin.report-tables">Busiest Tables</h3>
     <div id="chart-busiest-tables" style="height: 250px;"></div>
   </div>
 
   <!-- Hourly Revenue -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3>Hourly Revenue</h3>
+    <h3 data-i18n="admin.report-hourly">Hourly Revenue</h3>
     <div id="chart-hourly-revenue" style="height: 300px;"></div>
   </div>
 
   <!-- Top Items -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3>Top Items</h3>
+    <h3 data-i18n="admin.report-items">Top Items</h3>
     <div id="chart-top-items" style="height: 300px;"></div>
   </div>
 
   <!-- Daily Trends Table -->
   <div class="section-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 style="margin: 0;">Daily Trends</h3>
+      <h3 style="margin: 0;" data-i18n="admin.report-daily">Daily Trends</h3>
       <div style="display: flex; gap: 8px;">
-        <button id="trends-daily-btn" style="padding: 8px 12px; background: #4a90e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'daily')">Daily</button>
-        <button id="trends-weekly-btn" style="padding: 8px 12px; background: transparent; color: #4a90e2; border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'weekly')">Weekly</button>
-        <button id="trends-monthly-btn" style="padding: 8px 12px; background: transparent; color: #4a90e2; border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'monthly')">Monthly</button>
+        <button id="trends-daily-btn" style="padding: 8px 12px; background: #4a90e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'daily')" data-i18n="admin.daily-sales">Daily</button>
+        <button id="trends-weekly-btn" style="padding: 8px 12px; background: transparent; color: #4a90e2; border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'weekly')" data-i18n="admin.weekly-sales">Weekly</button>
+        <button id="trends-monthly-btn" style="padding: 8px 12px; background: transparent; color: #4a90e2; border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'monthly')" data-i18n="admin.monthly-sales">Monthly</button>
       </div>
     </div>
     <div id="table-daily-trends" style="overflow-x: auto;"></div>

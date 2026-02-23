@@ -9,7 +9,7 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // Render requires SSL
+  ssl: { rejectUnauthorized: false },
 });
 
 export default pool;

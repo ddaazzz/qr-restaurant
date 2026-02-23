@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="/admin-staff.css" />
   <link rel="stylesheet" href="/admin-reports.css" />
   <link rel="stylesheet" href="/admin-settings.css" />
+  <link rel="stylesheet" href="/admin-bookings.css" />
 </head>
 
 <body>
@@ -58,27 +59,31 @@
         <div class="sidebar-menu">
           <button class="menu-btn" data-section="orders" onclick="switchSection('orders')">
             <img src="/uploads/website/order.png" alt="orders" class="icon">
-            <span class="menu-text">Orders</span>
+            <span class="menu-text" data-i18n="admin.sidebar.orders">Orders</span>
           </button>
           <button class="menu-btn active" data-section="tables" onclick="switchSection('tables')">
             <img src="/uploads/website/table.png" alt="tables" class="icon">
-            <span class="menu-text">Tables</span>
+            <span class="menu-text" data-i18n="admin.sidebar.tables">Tables</span>
           </button>
           <button class="menu-btn" data-section="menu" onclick="switchSection('menu')" id="menu-nav-btn">
             <img src="/uploads/website/menu.png" alt="menu" class="icon">
-            <span class="menu-text">Menu</span>
+            <span class="menu-text" data-i18n="admin.sidebar.menu">Menu</span>
           </button>
           <button class="menu-btn" data-section="staff" onclick="switchSection('staff')" id="staff-nav-btn">
             <img src="/uploads/website/teamwork.png" alt="staff" class="icon">
-            <span class="menu-text">Staff</span>
+            <span class="menu-text" data-i18n="admin.sidebar.staff">Staff</span>
+          </button>
+          <button class="menu-btn" data-section="bookings" onclick="switchSection('bookings')" id="bookings-nav-btn">
+            <img src="/uploads/website/bookings.png" alt="bookings" class="icon">
+            <span class="menu-text" data-i18n="admin.sidebar.bookings">Bookings</span>
           </button>
           <button class="menu-btn" data-section="reports" onclick="switchSection('reports')" id="reports-nav-btn">
             <img src="/uploads/website/report.png" alt="reports" class="icon">
-            <span class="menu-text">Reports</span>
+            <span class="menu-text" data-i18n="admin.sidebar.reports">Reports</span>
           </button>
           <button class="menu-btn" data-section="settings" onclick="switchSection('settings')" id="settings-nav-btn">
             <img src="/uploads/website/settings.png" alt="settings" class="icon">
-            <span class="menu-text">More</span>
+            <span class="menu-text" data-i18n="admin.sidebar.settings">More</span>
           </button>
         </div>
         
@@ -116,6 +121,11 @@
         <!-- ================= STAFF MANAGEMENT SECTION ================= -->
         <section id="section-staff" class="content-section admin-only">
           <!-- Staff content loaded dynamically from admin-staff.html -->
+        </section>
+
+        <!-- ================= BOOKINGS MANAGEMENT SECTION ================= -->
+        <section id="section-bookings" class="content-section admin-only">
+          <!-- Bookings content loaded dynamically from admin-bookings.html -->
         </section>
 
         <!-- ================= STAFF FORM SLIDING PANEL ================= -->
@@ -211,6 +221,7 @@
   <!-- ================= SCRIPTS ================= -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="/translations.js"></script>
+  <script src="/timezone-utils.js"></script>
   <script src="/admin.js"></script>
   <!-- Modular admin functions -->
   <script src="/admin-orders.js"></script>
@@ -219,5 +230,6 @@
   <script src="/admin-staff.js"></script>
   <script src="/admin-reports.js"></script>
   <script src="/admin-settings.js"></script>
+  <script src="/admin-bookings.js"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pool from "../config/db";
+import { sendReceipt } from "../services/emailService";
 
 const router = Router();
 
@@ -14,10 +15,10 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
   }
 
   try {
-    // Ensure session is active
+    // Ensure session is active and get restaurant_id
     const sessionRes = await pool.query(
       `
-      SELECT 1 FROM table_sessions
+      SELECT restaurant_id FROM table_sessions
       WHERE id = $1 AND ended_at IS NULL
       `,
       [sessionId]
@@ -27,14 +28,16 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
       return res.status(400).json({ error: "Session is closed" });
     }
 
-    // Create order
+    const restaurantId = sessionRes.rows[0].restaurant_id;
+
+    // Create order with restaurant_id
     const orderRes = await pool.query(
       `
-      INSERT INTO orders (session_id)
-      VALUES ($1)
+      INSERT INTO orders (session_id, restaurant_id)
+      VALUES ($1, $2)
       RETURNING id
       `,
-      [sessionId]
+      [sessionId, restaurantId]
     );
 
     const orderId = orderRes.rows[0].id;
@@ -159,16 +162,17 @@ for (const v of variants) {
       const orderItemRes = await pool.query(
         `
         INSERT INTO order_items
-          (order_id, menu_item_id, quantity, price_cents, status)
+          (order_id, menu_item_id, quantity, price_cents, status, restaurant_id)
         VALUES
-          ($1, $2, $3, $4, 'pending')
+          ($1, $2, $3, $4, 'pending', $5)
         RETURNING id
         `,
         [
           orderId,
           item.menu_item_id,
           item.quantity,
-          finalUnitPrice
+          finalUnitPrice,
+          restaurantId
         ]
       );
 
@@ -211,8 +215,9 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
       `
       SELECT
         o.id AS order_id,
+        o.restaurant_order_number,
         oi.status AS item_status,
-        o.created_at,
+        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
 
         oi.id AS order_item_id,
         oi.quantity,
@@ -317,10 +322,12 @@ router.get("/kitchen/items", async (req, res) => {
         mi.category_id,
 
         COALESCE(tu.display_name, 'Unknown Table') AS table_name,
+        ts.order_type,
         o.id AS order_id,
+        o.restaurant_order_number,
         ts.id AS session_id,
         ts.restaurant_id,
-        o.created_at,
+        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
 
         COALESCE(
           STRING_AGG(
@@ -351,7 +358,9 @@ router.get("/kitchen/items", async (req, res) => {
         mi.name,
         mi.category_id,
         tu.display_name,
+        ts.order_type,
         o.id,
+        o.restaurant_order_number,
         ts.id,
         ts.restaurant_id,
         o.created_at
@@ -372,6 +381,7 @@ router.get("/kitchen/items", async (req, res) => {
         order_id: row.order_id,
         session_id: row.session_id,
         table_name: row.table_name,
+        order_type: row.order_type,
         item_name: row.item_name,
         quantity: row.quantity,
         status: row.status,
@@ -584,16 +594,23 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
       `
       SELECT
         o.id,
+        o.restaurant_order_number,
         o.session_id,
         o.status,
-        o.created_at,
+        o.restaurant_id,
+        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+        ts.order_type,
+        ts.table_id,
+        COALESCE(t.name, '') as table_name,
+        ts.pax,
         COUNT(oi.id) as item_count,
         SUM(oi.price_cents * oi.quantity) as total_cents
       FROM orders o
       JOIN table_sessions ts ON o.session_id = ts.id
+      LEFT JOIN tables t ON ts.table_id = t.id
       LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
-      WHERE ts.restaurant_id = $1
-      GROUP BY o.id, o.session_id, o.status, o.created_at
+      WHERE o.restaurant_id = $1
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.restaurant_id, o.created_at, ts.order_type, ts.table_id, t.name, ts.pax
       ORDER BY o.created_at DESC
       LIMIT $2
       `,
@@ -617,15 +634,16 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
       `
       SELECT
         o.id,
+        o.restaurant_order_number,
         o.session_id,
         o.status,
-        o.created_at,
+        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
         SUM(oi.price_cents * oi.quantity) as total_cents
       FROM orders o
       LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
       JOIN table_sessions ts ON o.session_id = ts.id
       WHERE o.id = $1 AND ts.restaurant_id = $2
-      GROUP BY o.id, o.session_id, o.status, o.created_at
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.created_at
       `,
       [orderId, restaurantId]
     );
@@ -670,6 +688,69 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
     order.items = itemsRes.rows;
 
     res.json(order);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Send receipt email
+router.post("/restaurants/:restaurantId/orders/:orderId/send-receipt", async (req, res) => {
+  const { restaurantId, orderId } = req.params;
+  const { email, content } = req.body;
+
+  // Validate input
+  if (!email || !content) {
+    return res.status(400).json({ error: "Email and content are required" });
+  }
+
+  // Basic email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  try {
+    // Verify order exists and belongs to restaurant
+    const orderRes = await pool.query(
+      `SELECT id, restaurant_order_number FROM orders WHERE id = $1 AND restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+
+    if (orderRes.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orderRes.rows[0];
+
+    // Get restaurant name for email
+    const restaurantRes = await pool.query(
+      `SELECT name FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+
+    const restaurantName = restaurantRes.rows[0]?.name || "Restaurant";
+
+    // Send receipt email
+    const result = await sendReceipt({
+      toEmail: email,
+      orderNumber: order.restaurant_order_number || orderId,
+      content: content,
+      restaurantName: restaurantName,
+    });
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: "Receipt sent successfully",
+        messageId: result.messageId,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error || "Failed to send receipt",
+      });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

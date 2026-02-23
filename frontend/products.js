@@ -92,3 +92,35 @@ const observer = new IntersectionObserver((entries) => {
 document.querySelectorAll('.step, .benefit, .feature-item').forEach(el => {
   observer.observe(el);
 });
+
+// Initialize translations on page load to ensure all data-i18n attributes are translated
+window.addEventListener('pageTranslationUpdated', function() {
+  console.log('[Products] Language changed, re-translating...');
+  const lang = getCurrentLanguage();
+  const elements = document.querySelectorAll('[data-i18n]');
+  elements.forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (key) {
+      el.textContent = t(key, lang);
+    }
+  });
+});
+
+// Also force initial translation when page loads
+if (typeof getCurrentLanguage === 'function') {
+  const initialLang = getCurrentLanguage();
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      const elements = document.querySelectorAll('[data-i18n]');
+      elements.forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+          const translated = t(key, initialLang);
+          if (translated !== key) { // Only update if we got a translation
+            el.textContent = translated;
+          }
+        }
+      });
+    }, 100);
+  });
+}

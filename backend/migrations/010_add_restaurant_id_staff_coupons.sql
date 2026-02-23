@@ -14,9 +14,14 @@ ALTER TABLE users
 ADD COLUMN IF NOT EXISTS restaurant_id INTEGER;
 
 -- Add FK constraint
-ALTER TABLE users
-ADD CONSTRAINT IF NOT EXISTS users_restaurant_id_fkey
-FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+DO $$ 
+BEGIN
+  ALTER TABLE users
+  ADD CONSTRAINT users_restaurant_id_fkey
+  FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
 -- Create index
 CREATE INDEX IF NOT EXISTS idx_users_restaurant_id ON users(restaurant_id);
@@ -35,9 +40,14 @@ SET restaurant_id = 1
 WHERE restaurant_id IS NULL;
 
 -- Add FK constraint
-ALTER TABLE coupons
-ADD CONSTRAINT IF NOT EXISTS coupons_restaurant_id_fkey
-FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+DO $$ 
+BEGIN
+  ALTER TABLE coupons
+  ADD CONSTRAINT coupons_restaurant_id_fkey
+  FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
 -- Set NOT NULL after population
 ALTER TABLE coupons
@@ -62,12 +72,20 @@ CREATE INDEX IF NOT EXISTS idx_coupons_restaurant_code ON coupons(restaurant_id,
 -- Ensure data isolation at DB level with composite keys
 
 -- For coupons: restaurant + code must be unique
-ALTER TABLE coupons
-DROP CONSTRAINT IF EXISTS coupons_code_key;
+DO $$ 
+BEGIN
+  ALTER TABLE coupons DROP CONSTRAINT coupons_code_key;
+EXCEPTION WHEN others THEN
+  NULL;
+END $$;
 
-ALTER TABLE coupons
-ADD CONSTRAINT coupons_restaurant_code_unique
-UNIQUE (restaurant_id, code);
+DO $$ 
+BEGIN
+  ALTER TABLE coupons ADD CONSTRAINT coupons_restaurant_code_unique
+    UNIQUE (restaurant_id, code);
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
 -- =====================================================
 -- SUMMARY OF ALL TABLES WITH MULTI-RESTAURANT SUPPORT

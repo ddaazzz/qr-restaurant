@@ -12,9 +12,9 @@
       
       <!-- History list view (when history button clicked) -->
       <div id="orders-history-left-view">
-        <h4>Order History</h4>
+        <h4 data-i18n="admin.order-history">Order History</h4>
         <div id="orders-history-list-left">
-          <p>Loading...</p>
+          <p data-i18n="admin.loading">Loading...</p>
         </div>
       </div>
 
@@ -27,22 +27,22 @@
       <!-- Cart Panel (default view) -->
       <div id="orders-cart-view" class="cart-panel">
         <div class="cart-header">
-          <h3>Cart</h3>
+          <h3 data-i18n="admin.orders">Cart</h3>
           <div>
-            <button id="cart-edit-btn" class="btn-tertiary" onclick="toggleCartEdit()"><img src="/uploads/website/pencil.png" alt="edit"/> Edit</button>
+            <button id="cart-edit-btn" class="btn-tertiary" onclick="toggleCartEdit()" data-i18n="admin.edit"><img src="/uploads/website/pencil.png" alt="edit"/> Edit</button>
           </div>
         </div>
 
         <div class="cart-items-container">
           <div id="cart-items-list">
-            <p>Cart is empty</p>
+            <p data-i18n="admin.loading">Cart is empty</p>
           </div>
         </div>
 
         <!-- Cart Total -->
         <div class="cart-footer">
           <div class="cart-total">
-            <span>Total:</span>
+            <span data-i18n="admin.total">Total:</span>
             <span id="cart-total-price">$0.00</span>
           </div>
 
@@ -56,28 +56,28 @@
           <div class="order-type-selector">
             <label class="order-type-option">
               <input type="radio" name="order-type" id="order-type-table" value="table" onchange="updateOrderTypeUI()">
-              <span>Add to Table</span>
+              <span data-i18n="admin.add-to-table">Add to Table</span>
             </label>
             <label class="order-type-option">
               <input type="radio" name="order-type" id="order-type-pay" value="pay-now" onchange="updateOrderTypeUI()">
-              <span>Order Now</span>
+              <span data-i18n="admin.order-now">Order Now</span>
             </label>
             <label class="order-type-option">
               <input type="radio" name="order-type" id="order-type-togo" value="to-go" onchange="updateOrderTypeUI()">
-              <span>To Go</span>
+              <span data-i18n="admin.to-go">To Go</span>
             </label>
           </div>
 
           <!-- Table Selection (for Add to Table) -->
           <div id="table-selection-ui">
-            <label>Select Table:</label>
+            <label data-i18n="admin.select-table">Select Table:</label>
             <select id="order-table-select">
-              <option value="">-- Select a table --</option>
+              <option value="" data-i18n="admin.select-table-placeholder">-- Select a table --</option>
             </select>
           </div>
 
           <!-- Main Action Button -->
-          <button id="order-submit-btn" onclick="submitOrder()" class="btn-primary">
+          <button id="order-submit-btn" onclick="submitOrder()" class="btn-primary" data-i18n="admin.submit-order">
             Submit Order
           </button>
         </div>
@@ -86,10 +86,10 @@
       <!-- Order Details View (when clicking order from history) -->
       <div id="orders-details-view">
         <div>
-          <h3 id="order-details-title">Order Details</h3>
+          <h3 id="order-details-title" data-i18n="admin.order-header">Order Details</h3>
         </div>
         <div id="order-details-content">
-          <p>Select an order to view details</p>
+          <p data-i18n="admin.select-an-order">Select an order to view details</p>
         </div>
       </div>
     </div>

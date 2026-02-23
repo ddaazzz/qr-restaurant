@@ -40,7 +40,6 @@
             <a href="#kitchen-dashboard" data-i18n="nav.kitchen-dashboard">Kitchen Dashboard</a>
           </div>
         </li>
-        <li><a href="features.html" data-i18n="nav.features">Features</a></li>
         <li><a href="home.html#pricing" data-i18n="nav.pricing">Pricing</a></li>
         <li><a href="login.html" class="login-btn" data-i18n="nav.login">Login</a></li>
       </ul>
@@ -55,48 +54,47 @@
     </div>
   </nav>
 
-  <!-- Products Page -->
-  <div class="products-container">
-    
-    <!-- Hero Section -->
-    <section class="hero-section" style="text-align: left;">
-      <div class="hero-content">
-        <div style="display: inline-block; background: rgba(255,255,255,0.3); padding: 10px 20px; border-radius: 6px; margin-bottom: 20px; color: white; font-size: 14px; font-weight: 700;">
-          ⏰ Coming Soon - Join the Waitlist
-        </div>
-        <h1 data-i18n="products.title" style="font-size: 48px; color: white; margin-bottom: 20px; font-weight: 800;">Complete Restaurant Management Suite</h1>
-        <p data-i18n="products.subtitle" style="font-size: 18px; color: rgba(255,255,255,0.95); max-width: 700px;">
-          Everything from QR ordering to kitchen operations to business intelligence. All features coming soon—completely free forever.
-        </p>
-        <div style="margin-top: 30px;">
-          <a href="home.html#waitlist" style="display: inline-block; background: white; color: var(--primary-color); padding: 12px 32px; border-radius: 6px; font-weight: 700; text-decoration: none;">Join Waitlist</a>
+  <!-- HERO SECTION -->
+  <section id="products" class="hero">
+    <div class="hero-content">
+      <div>
+        <div class="hero-badge" data-i18n="products.hero-badge">⏰ Coming Soon - Join the Waitlist</div>
+        <h1 data-i18n="products.hero-title">Complete Restaurant<br/>Management Suite</h1>
+        <p data-i18n="products.hero-description">Everything from QR ordering to kitchen operations to business intelligence. All features coming soon—completely free forever.</p>
+        <div class="hero-buttons">
+          <a href="home.html#waitlist" class="hero-cta" style="background: white; color: var(--primary-color);" data-i18n="products.hero-waitlist">Join Waitlist</a>
+          <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20learning%20more%20about%20your%20products" target="_blank" class="hero-cta hero-cta-whatsapp" data-i18n="products.hero-whatsapp">Chat on WhatsApp</a>
         </div>
       </div>
-    </section>
+      <div class="hero-image">
+        <img src="/uploads/chuio/New/multiple ipad.png" alt="Complete Restaurant Management Suite">
+      </div>
+    </div>
+  </section>
 
     <!-- Main Features Section - QR Scan & Order -->
     <section class="features-section" style="padding: 80px 20px; max-width: 1200px; margin: 0 auto;">
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: center; margin-bottom: 100px;">
         <div class="image-placeholder image-placeholder-lg">
-          QR Scan Screenshot
+          <img src="/uploads/chuio/New/QR scan.png" alt="QR Scan Screenshot">
         </div>
         <div>
-          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);">QR Scan & Order</h2>
-          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
+          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);" data-i18n="products.qr-order">QR Scan & Order</h2>
+          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;" data-i18n="products.qr-desc">
             Customers scan a QR code at their table and instantly access your digital menu. No app installation required, no friction—just frictionless ordering from any smartphone.
           </p>
           <ul style="list-style: none; padding: 0; margin: 0;">
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Works on any smartphone</strong> - iOS, Android, regardless of browser
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.works-any-phone">Works on any smartphone</strong> - <span data-i18n="products.ios-android">iOS, Android, regardless of browser</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>One-tap access</strong> - QR code instantly opens menu, no navigation needed
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.one-tap">One-tap access</strong> <span data-i18n="products.one-tap-desc">- QR code instantly opens menu, no navigation needed</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Table identification</strong> - Each QR is unique, system knows exactly which table ordered
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.table-id">Table identification</strong> <span data-i18n="products.table-id-desc">- Each QR is unique, system knows exactly which table ordered</span>
             </li>
             <li style="padding: 12px 0;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Customizable QR codes</strong> - Generate new QR codes anytime with one click
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.customize-qr">Customizable QR codes</strong> <span data-i18n="products.customize-qr-desc">- Generate new QR codes anytime with one click</span>
             </li>
           </ul>
         </div>
@@ -106,26 +104,26 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: center; margin-bottom: 100px; grid-auto-flow: dense;">
         <div style="grid-column: 2;">
           <div class="image-placeholder image-placeholder-lg">
-            Menu Management Screenshot
+            <img src="/uploads/chuio/New/Menu Management.png" alt="Menu Management Screenshot">
           </div>
         </div>
         <div style="grid-column: 1;">
-          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);">Smart Menu Management</h2>
-          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
+          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);" data-i18n="products.smart-menu">Smart Menu Management</h2>
+          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;" data-i18n="products.smart-menu-desc">
             Create and manage your entire menu with beautiful images, detailed descriptions, and flexible pricing. Add variants like size, toppings, and extra options. Update items in real-time without restarting anything.
           </p>
           <ul style="list-style: none; padding: 0; margin: 0;">
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Photo uploads</strong> - High-quality images for every menu item
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.photo-uploads">Photo uploads</strong> <span data-i18n="products.photo-uploads-desc">- High-quality images for every menu item</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Variant management</strong> - Size, toppings, sauces, and more with dynamic pricing
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.variant-mgmt">Variant management</strong> <span data-i18n="products.variant-mgmt-desc">- Size, toppings, sauces, and more with dynamic pricing</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Instant updates</strong> - Disable sold-out items immediately, no app refresh needed
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.instant-updates">Instant updates</strong> <span data-i18n="products.instant-updates-desc">- Disable sold-out items immediately, no app refresh needed</span>
             </li>
             <li style="padding: 12px 0;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Category organization</strong> - Group items logically for easy browsing
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.category-org">Category organization</strong> <span data-i18n="products.category-org-desc">- Group items logically for easy browsing</span>
             </li>
           </ul>
         </div>
@@ -134,25 +132,25 @@
       <!-- Table Management -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: center; margin-bottom: 100px;">
         <div class="image-placeholder image-placeholder-lg">
-          Table Management Screenshot
+          <img src="/uploads/chuio/New/Tables.png" alt="Table Management Screenshot">
         </div>
         <div>
-          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);">Table Management</h2>
-          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
+          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);" data-i18n="products.table-mgmt">Table Management</h2>
+          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;" data-i18n="products.table-mgmt-desc">
             Organize your restaurant layout, set table capacities, and track which tables are occupied. Monitor active dining sessions and generate unique QR codes for each table automatically.
           </p>
           <ul style="list-style: none; padding: 0; margin: 0;">
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Unlimited tables</strong> - Scale from 1 to 100+ tables
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.unlimited-tables">Unlimited tables</strong> <span data-i18n="products.unlimited-tables-desc">- Scale from 1 to 100+ tables</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Table categories</strong> - Indoor, patio, bar—organize by location
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.table-categories">Table categories</strong> <span data-i18n="products.table-categories-desc">- Indoor, patio, bar—organize by location</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Real-time occupancy</strong> - See which tables are active and how long they've been dining
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.real-time-occupancy">Real-time occupancy</strong> <span data-i18n="products.real-time-occupancy-desc">- See which tables are active and how long they've been dining</span>
             </li>
             <li style="padding: 12px 0;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Auto-generated QR codes</strong> - One click to create QR codes for all tables
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.auto-qr">Auto-generated QR codes</strong> <span data-i18n="products.auto-qr-desc">- One click to create QR codes for all tables</span>
             </li>
           </ul>
         </div>
@@ -162,26 +160,26 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: center; margin-bottom: 100px; grid-auto-flow: dense;">
         <div style="grid-column: 2;">
           <div class="image-placeholder image-placeholder-lg">
-            Staff Management Screenshot
+            <img src="/uploads/chuio/New/Staff management.png" alt="Staff Management Screenshot">
           </div>
         </div>
         <div style="grid-column: 1;">
-          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);">Staff & Role Management</h2>
-          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
+          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);" data-i18n="products.staff-mgmt">Staff & Role Management</h2>
+          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;" data-i18n="products.staff-mgmt-desc">
             Create staff accounts with role-based permissions. Admin, staff, and kitchen roles with PIN-based authentication for kitchen staff. Track activity and monitor performance.
           </p>
           <ul style="list-style: none; padding: 0; margin: 0;">
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Three role types</strong> - Admin, staff, kitchen with specific permissions
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.three-role-types">Three role types</strong> <span data-i18n="products.three-role-types-desc">- Admin, staff, kitchen with specific permissions</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>PIN authentication</strong> - 6-digit PIN for quick kitchen staff login
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.pin-auth">PIN authentication</strong> <span data-i18n="products.pin-auth-desc">- 6-digit PIN for quick kitchen staff login</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Activity logging</strong> - Track who did what and when
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.activity-logging">Activity logging</strong> <span data-i18n="products.activity-logging-desc">- Track who did what and when</span>
             </li>
             <li style="padding: 12px 0;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Performance analytics</strong> - See which staff members are most active
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.perf-analytics">Performance analytics</strong> <span data-i18n="products.perf-analytics-desc">- See which staff members are most active</span>
             </li>
           </ul>
         </div>
@@ -190,25 +188,25 @@
       <!-- Kitchen Dashboard -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: center;">
         <div class="image-placeholder image-placeholder-lg">
-          Kitchen Dashboard Screenshot
+          <img src="/uploads/chuio/New/kitchen dashboard.png" alt="Kitchen Dashboard Screenshot">
         </div>
         <div>
-          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);">Kitchen Display System</h2>
-          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
+          <h2 style="font-size: 36px; margin-bottom: 20px; color: var(--text-dark);" data-i18n="products.kitchen-display-system">Kitchen Display System</h2>
+          <p style="font-size: 16px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;" data-i18n="products.kds-desc">
             Powerful kitchen dashboard optimized for displaying orders. Kitchen staff sees incoming orders in real-time, can update order status, and manage cooking workflow efficiently.
           </p>
           <ul style="list-style: none; padding: 0; margin: 0;">
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Real-time order queue</strong> - Orders appear instantly as they're placed
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.realtime-order-queue">Real-time order queue</strong> <span data-i18n="products.realtime-order-queue-desc">- Orders appear instantly as they're placed</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Full item details</strong> - View all customizations, variants, and special requests
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.full-item-details">Full item details</strong> <span data-i18n="products.full-item-details-desc">- View all customizations, variants, and special requests</span>
             </li>
             <li style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>Status management</strong> - Update orders as pending, preparing, ready, or completed
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.status-management">Status management</strong> <span data-i18n="products.status-management-desc">- Update orders as pending, preparing, ready, or completed</span>
             </li>
             <li style="padding: 12px 0;">
-              <strong style="color: var(--primary-color);">✓</strong> <strong>PIN login</strong> - Quick access without password hassle
+              <strong style="color: var(--primary-color);">✓</strong> <strong style="color: var(--text-dark);" data-i18n="products.pin-login-kds">PIN login</strong> <span data-i18n="products.pin-login-kds-desc">- Quick access without password hassle</span>
             </li>
           </ul>
         </div>
@@ -218,142 +216,114 @@
     <!-- Business Analytics Section -->
     <section style="background: var(--primary-light); padding: 80px 20px; margin-top: 100px;">
       <div style="max-width: 1200px; margin: 0 auto;">
-        <h2 style="text-align: center; font-size: 36px; margin-bottom: 60px; color: var(--text-dark);">Business Analytics & Insights</h2>
+        <h2 style="text-align: center; font-size: 36px; margin-bottom: 60px; color: var(--text-dark);" data-i18n="products.business-analytics">Business Analytics & Insights</h2>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px;">
           <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">📊 Revenue Tracking</h3>
-            <p style="color: var(--text-light); line-height: 1.6;">Track daily revenue, peak hours, average bill size, and revenue by table to identify your top performers.</p>
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.analytics-revenue-title">📊 Revenue Tracking</h3>
+            <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.analytics-revenue-desc">Track daily revenue, peak hours, average bill size, and revenue by table to identify your top performers.</p>
           </div>
           <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">🍽️ Menu Insights</h3>
-            <p style="color: var(--text-light); line-height: 1.6;">See which items are bestsellers, which variants are most popular, and optimize your menu for profitability.</p>
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.analytics-menu-title">🍽️ Menu Insights</h3>
+            <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.analytics-menu-desc">See which items are bestsellers, which variants are most popular, and optimize your menu for profitability.</p>
           </div>
           <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">⏱️ Performance Metrics</h3>
-            <p style="color: var(--text-light); line-height: 1.6;">Average table duration, ordering time, kitchen prep time, and table turnover rates to optimize operations.</p>
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.analytics-perf-title">⏱️ Performance Metrics</h3>
+            <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.analytics-perf-desc">Average table duration, ordering time, kitchen prep time, and table turnover rates to optimize operations.</p>
           </div>
           <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">👥 Customer Trends</h3>
-            <p style="color: var(--text-light); line-height: 1.6;">Understand customer preferences, ordering patterns, and identify opportunities to increase order value.</p>
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.analytics-customer-title">👥 Customer Trends</h3>
+            <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.analytics-customer-desc">Understand customer preferences, ordering patterns, and identify opportunities to increase order value.</p>
           </div>
           <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">📈 Customizable Reports</h3>
-            <p style="color: var(--text-light); line-height: 1.6;">Generate reports by date range, filter by table or menu category, export data for further analysis.</p>
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.analytics-reports-title">📈 Customizable Reports</h3>
+            <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.analytics-reports-desc">Generate reports by date range, filter by table or menu category, export data for further analysis.</p>
           </div>
           <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">🎯 Promotion Tracking</h3>
-            <p style="color: var(--text-light); line-height: 1.6;">Track coupon usage, measure effectiveness, and see which promotions drive the most orders.</p>
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.analytics-promo-title">🎯 Promotion Tracking</h3>
+            <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.analytics-promo-desc">Track coupon usage, measure effectiveness, and see which promotions drive the most orders.</p>
           </div>
         </div>
         <div style="text-align: center; margin-top: 50px;">
           <div class="image-placeholder image-placeholder-lg" style="background: white; max-width: 800px; margin: 0 auto;">
-            Analytics Dashboard Screenshot
+            <img src="/uploads/chuio/New/reports.png" alt="Analytics Dashboard Screenshot">
           </div>
         </div>
       </div>
     </section>
     <!-- How It Works Section -->
     <section style="padding: 80px 20px; background: white;">
-      <h2 style="text-align: center; font-size: 36px; margin-bottom: 60px; color: var(--text-dark);">The Complete Flow</h2>
+      <h2 style="text-align: center; font-size: 36px; margin-bottom: 60px; color: var(--text-dark);" data-i18n="products.complete-flow">The Complete Flow</h2>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto;">
         <div style="text-align: center;">
           <div style="background: var(--primary-color); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; font-weight: bold;">1</div>
-          <h4 style="margin-bottom: 10px;">Customer Scans</h4>
-          <p style="font-size: 14px; color: var(--text-light);">Scan QR code at table</p>
+          <h4 style="margin-bottom: 10px;" data-i18n="products.flow-step1-title">Customer Scans</h4>
+          <p style="font-size: 14px; color: var(--text-light);" data-i18n="products.flow-step1-desc">Scan QR code at table</p>
         </div>
         <div style="text-align: center;">
           <div style="background: var(--primary-color); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; font-weight: bold;">2</div>
-          <h4 style="margin-bottom: 10px;">Browse Menu</h4>
-          <p style="font-size: 14px; color: var(--text-light);">View items with photos</p>
+          <h4 style="margin-bottom: 10px;" data-i18n="products.flow-step2-title">Browse Menu</h4>
+          <p style="font-size: 14px; color: var(--text-light);" data-i18n="products.flow-step2-desc">View items with photos</p>
         </div>
         <div style="text-align: center;">
           <div style="background: var(--primary-color); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; font-weight: bold;">3</div>
-          <h4 style="margin-bottom: 10px;">Customize & Order</h4>
-          <p style="font-size: 14px; color: var(--text-light);">Add variants and pay</p>
+          <h4 style="margin-bottom: 10px;" data-i18n="products.flow-step3-title">Customize & Order</h4>
+          <p style="font-size: 14px; color: var(--text-light);" data-i18n="products.flow-step3-desc">Add variants and pay</p>
         </div>
         <div style="text-align: center;">
           <div style="background: var(--primary-color); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; font-weight: bold;">4</div>
-          <h4 style="margin-bottom: 10px;">Kitchen Receives</h4>
-          <p style="font-size: 14px; color: var(--text-light);">Orders print instantly</p>
+          <h4 style="margin-bottom: 10px;" data-i18n="products.flow-step4-title">Kitchen Receives</h4>
+          <p style="font-size: 14px; color: var(--text-light);" data-i18n="products.flow-step4-desc">Orders print instantly</p>
         </div>
         <div style="text-align: center;">
           <div style="background: var(--primary-color); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; font-weight: bold;">5</div>
-          <h4 style="margin-bottom: 10px;">Track Status</h4>
-          <p style="font-size: 14px; color: var(--text-light);">Real-time updates</p>
+          <h4 style="margin-bottom: 10px;" data-i18n="products.flow-step5-title">Track Status</h4>
+          <p style="font-size: 14px; color: var(--text-light);" data-i18n="products.flow-step5-desc">Real-time updates</p>
         </div>
         <div style="text-align: center;">
           <div style="background: var(--primary-color); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; font-weight: bold;">6</div>
-          <h4 style="margin-bottom: 10px;">Serve & Enjoy</h4>
-          <p style="font-size: 14px; color: var(--text-light);">Perfect meal experience</p>
+          <h4 style="margin-bottom: 10px;" data-i18n="products.flow-step6-title">Serve & Enjoy</h4>
+          <p style="font-size: 14px; color: var(--text-light);" data-i18n="products.flow-step6-desc">Perfect meal experience</p>
         </div>
       </div>
     </section>
 
     <!-- Benefits Section -->
     <section style="background: var(--bg-light); padding: 80px 20px;">
-      <h2 style="text-align: center; font-size: 36px; margin-bottom: 60px; color: var(--text-dark);">Why Restaurants Choose Chuio</h2>
+      <h2 style="text-align: center; font-size: 36px; margin-bottom: 60px; color: var(--text-dark);" data-i18n="products.why-choose-chuio">Why Restaurants Choose Chuio</h2>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; max-width: 1200px; margin: 0 auto;">
         <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-          <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">⚡ Faster Operations</h3>
-          <p style="color: var(--text-light); line-height: 1.6;">Reduce order time from 5-10 minutes to under 2 minutes. More orders per table, higher revenue.</p>
+          <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.benefit-faster-title">⚡ Faster Operations</h3>
+          <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.benefit-faster-desc">Reduce order time from 5-10 minutes to under 2 minutes. More orders per table, higher revenue.</p>
         </div>
         <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid var(--primary-color);">
-          <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;">💰 Increase Revenue</h3>
-          <p style="color: var(--text-light); line-height: 1.6;">Customers spend more time browsing and tend to order more. Analytics show 15-30% revenue increase.</p>
+          <h3 style="color: var(--primary-color); margin-bottom: 15px; font-weight: 700;" data-i18n="products.benefit-revenue-title">💰 Increase Revenue</h3>
+          <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.benefit-revenue-desc">Customers spend more time browsing and tend to order more. Analytics show 15-30% revenue increase.</p>
         </div>
         <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-          <h3 style="color: var(--primary-color); margin-bottom: 15px;">👥 Happy Staff</h3>
-          <p style="color: var(--text-light); line-height: 1.6;">Staff spends less time taking orders, more time providing exceptional service and building relationships.</p>
+          <h3 style="color: var(--primary-color); margin-bottom: 15px;" data-i18n="products.benefit-staff-title">👥 Happy Staff</h3>
+          <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.benefit-staff-desc">Staff spends less time taking orders, more time providing exceptional service and building relationships.</p>
         </div>
         <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-          <h3 style="color: var(--primary-color); margin-bottom: 15px;">📊 Data-Driven Decisions</h3>
-          <p style="color: var(--text-light); line-height: 1.6;">Real-time analytics on what sells, when peaks occur, and which items to promote.</p>
+          <h3 style="color: var(--primary-color); margin-bottom: 15px;" data-i18n="products.benefit-data-title">📊 Data-Driven Decisions</h3>
+          <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.benefit-data-desc">Real-time analytics on what sells, when peaks occur, and which items to promote.</p>
         </div>
         <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-          <h3 style="color: var(--primary-color); margin-bottom: 15px;">🎯 Marketing Ready</h3>
-          <p style="color: var(--text-light); line-height: 1.6;">Promote items, run seasonal specials, and manage coupons all from one dashboard.</p>
+          <h3 style="color: var(--primary-color); margin-bottom: 15px;" data-i18n="products.benefit-marketing-title">🎯 Marketing Ready</h3>
+          <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.benefit-marketing-desc">Promote items, run seasonal specials, and manage coupons all from one dashboard.</p>
         </div>
         <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-          <h3 style="color: var(--primary-color); margin-bottom: 15px;">🛡️ Secure & Reliable</h3>
-          <p style="color: var(--text-light); line-height: 1.6;">Bank-level security, automatic backups, and 99.9% uptime guarantee.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Success Stories / Case Studies -->
-    <section style="padding: 80px 20px;">
-      <h2 style="text-align: center; font-size: 36px; margin-bottom: 60px; color: var(--text-dark);">Success Stories</h2>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; max-width: 1200px; margin: 0 auto;">
-        <div style="background: #f8f9fb; padding: 30px; border-left: 4px solid var(--primary-color); border-radius: 8px;">
-          <p style="font-size: 14px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
-            "Chuio helped us reduce table wait time by 50% and increased our average bill by 25%. Our customers love the experience!"
-          </p>
-          <p style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Restaurant Name</p>
-          <p style="font-size: 12px; color: var(--text-light);">Hong Kong</p>
-        </div>
-        <div style="background: #f8f9fb; padding: 30px; border-left: 4px solid var(--primary-color); border-radius: 8px;">
-          <p style="font-size: 14px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
-            "The setup was incredibly easy. Within 45 minutes we had our menu live. The support team is amazing and responsive."
-          </p>
-          <p style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Restaurant Name</p>
-          <p style="font-size: 12px; color: var(--text-light);">Hong Kong</p>
-        </div>
-        <div style="background: #f8f9fb; padding: 30px; border-left: 4px solid var(--primary-color); border-radius: 8px;">
-          <p style="font-size: 14px; color: var(--text-light); margin-bottom: 20px; line-height: 1.7;">
-            "We went from paper menus and manual orders to a completely digital system. Best decision we made this year."
-          </p>
-          <p style="font-weight: 600; color: var(--text-dark); margin-bottom: 5px;">Restaurant Name</p>
-          <p style="font-size: 12px; color: var(--text-light);">Hong Kong</p>
+          <h3 style="color: var(--primary-color); margin-bottom: 15px;" data-i18n="products.benefit-secure-title">🛡️ Secure & Reliable</h3>
+          <p style="color: var(--text-light); line-height: 1.6;" data-i18n="products.benefit-secure-desc">Bank-level security, automatic backups, and 99.9% uptime guarantee.</p>
         </div>
       </div>
     </section>
 
     <!-- CTA Section -->
     <section style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%); padding: 80px 20px; color: white; text-align: center;">
-      <h2 style="font-size: 36px; margin-bottom: 20px;">Ready to Transform Your Restaurant?</h2>
-      <p style="font-size: 18px; margin-bottom: 40px; opacity: 0.95;">Join hundreds of restaurants already using Chuio to streamline operations and delight customers.</p>
+      <h2 style="font-size: 36px; margin-bottom: 20px;" data-i18n="products.ready-transform">Ready to Transform Your Restaurant?</h2>
+      <p style="font-size: 18px; margin-bottom: 40px; opacity: 0.95;" data-i18n="products.ready-transform-desc">Join hundreds of restaurants already using Chuio to streamline operations and delight customers.</p>
       <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
-        <button onclick="contactWhatsApp('Demo')" style="
+        <a href="home.html#waitlist" style="
           padding: 16px 48px;
           background: white;
           color: var(--primary-color);
@@ -363,9 +333,11 @@
           font-size: 16px;
           cursor: pointer;
           transition: transform 0.3s ease;
-        " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-          Schedule Free Demo
-        </button>
+          text-decoration: none;
+          display: inline-block;
+        " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'" data-i18n="products.join-waitlist">
+          Join Waitlist
+        </a>
         <a href="home.html#pricing" style="
           padding: 16px 48px;
           background: transparent;
@@ -377,7 +349,7 @@
           text-decoration: none;
           display: inline-block;
           transition: all 0.3s ease;
-        " onmouseover="this.style.background='white'; this.style.color='var(--primary-color)'" onmouseout="this.style.background='transparent'; this.style.color='white'">
+        " onmouseover="this.style.background='white'; this.style.color='var(--primary-color)'" onmouseout="this.style.background='transparent'; this.style.color='white'" data-i18n="products.see-features">
           See Features (100% Free)
         </a>
       </div>

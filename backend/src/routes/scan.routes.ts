@@ -47,13 +47,27 @@ router.post("/scan/:qrToken", async (req, res) => {
     let session = sessionResult.rowCount > 0 ? sessionResult.rows[0] : null;
     console.log("Restaurant ID:", unit.restaurant_id);
 
-    // 3️⃣ Return table info and session (if exists)
+    // 3️⃣ Get restaurant details (logo, address, phone, etc)
+    const restaurantResult = await pool.query(
+      `SELECT id, name, address, phone, logo_url, background_url, service_charge_percent FROM restaurants WHERE id = $1`,
+      [unit.restaurant_id]
+    );
+    const restaurant = restaurantResult.rows[0];
+
+    // 4️⃣ Return table info, restaurant info, and session (if exists)
     res.json({
       table_unit_id: unit.table_unit_id,
       table_id: unit.table_id,
       table_name: unit.display_name,
       restaurant_id: unit.restaurant_id,
-      session_id: session?.id || null, // null if no session active
+      restaurant_name: restaurant?.name || "",
+      logo_url: restaurant?.logo_url || "",
+      background_url: restaurant?.background_url || "",
+      address: restaurant?.address || "",
+      phone: restaurant?.phone || "",
+      service_charge_percent: restaurant?.service_charge_percent || 0,
+      session_id: session?.id || null,
+      pax: session?.pax || null,
     });
 
   } catch (err) {

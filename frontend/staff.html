@@ -2,22 +2,140 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Chuio Staff Portal">
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
-  <title>Staff Dashboard | Chuio</title>
-  <link rel="stylesheet" href="staff.css" />
-  
-  <!-- Translations -->
-  <script src="/translations.js"></script>
-  <script src="/language-switcher.js"></script>
+  <title>Staff Portal | Chuio</title>
+
+  <!-- QR code library -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+  <!-- Admin CSS (Core + Modules) -->
+  <link rel="stylesheet" href="/admin.css" />
+  <link rel="stylesheet" href="/admin-orders.css" />
+  <link rel="stylesheet" href="/admin-tables.css" />
+  <link rel="stylesheet" href="/admin-menu.css" />
+  <link rel="stylesheet" href="/admin-staff.css" />
+  <link rel="stylesheet" href="/admin-reports.css" />
+  <link rel="stylesheet" href="/admin-settings.css" />
+  <link rel="stylesheet" href="/admin-bookings.css" />
+
+  <!-- Staff CSS (PIN entry + staff app styling - must load LAST to override admin styles) -->
+  <link rel="stylesheet" href="/staff.css" />
 </head>
+
 <body>
+
+
+
+  <!-- ================= MAIN APP (hidden until login) ================= -->
+  <div id="app-container" class="app-container" style="display: none;">
+    <!-- HEADER with collapsible menu toggle, section title, and staff dropdown -->
+    <header class="app-header">
+        <div class="header-left">
+          <button id="sidebar-toggle" class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+        </div>
+        
+        <div class="header-center">
+        </div>
+        
+        <div class="header-right">
+          <button id="table-edit-btn" class="btn-primary" onclick="toggleTableEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
+          <button id="menu-edit-btn" class="btn-primary" onclick="toggleMenuEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
+          <button id="orders-history-header-btn" class="btn-tertiary" onclick="toggleOrdersHistoryMode()" style="display: none;"><img src="/uploads/website/history.png" alt="history" style="width: 16px; height: 16px; filter: brightness(0) invert(1);"/> History</button>
+          <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
+            <img src="/uploads/website/user.png" alt="staff" class="btn-icon"> Staff
+            <span class="dropdown-arrow">▼</span>
+          </button>
+          <div id="admin-dropdown" class="admin-dropdown hidden">
+            <div class="dropdown-item lang-selector-dropdown">
+              <label style="display: block; padding: 10px 15px; font-weight: 500; border-bottom: 1px solid #ddd;">Language</label>
+              <button id="lang-en" class="lang-btn" onclick="setLanguage('en'); toggleAdminDropdown()">English</button>
+              <button id="lang-zh" class="lang-btn" onclick="setLanguage('zh'); toggleAdminDropdown()">中文</button>
+            </div>
+            <button onclick="logout()" style="width: 100%; text-align: left; padding: 10px 15px; border: none; background: none; cursor: pointer; font-size: 14px;">🚪 Logout</button>
+          </div>
+        </div>
+    </header>
+
+    <!-- SIDEBAR NAVIGATION (collapsible) -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-menu">
+        <button class="menu-btn active" data-section="orders" onclick="switchSection('orders')" id="orders-nav-btn" data-feature="1">
+          <img src="/uploads/website/order.png" alt="orders" class="icon">
+          <span class="menu-text">Orders</span>
+        </button>
+        <button class="menu-btn" data-section="tables" onclick="switchSection('tables')" id="tables-nav-btn" data-feature="2">
+          <img src="/uploads/website/table.png" alt="tables" class="icon">
+          <span class="menu-text">Tables</span>
+        </button>
+        <button class="menu-btn" data-section="menu" onclick="switchSection('menu')" id="menu-nav-btn" data-feature="3">
+          <img src="/uploads/website/order.png" alt="menu" class="icon">
+          <span class="menu-text">Menu</span>
+        </button>
+        <button class="menu-btn" data-section="staff" onclick="switchSection('staff')" id="staff-nav-btn" data-feature="4">
+          <img src="/uploads/website/teamwork.png" alt="staff" class="icon">
+          <span class="menu-text">Staff</span>
+        </button>
+        <button class="menu-btn" data-section="bookings" onclick="switchSection('bookings')" id="bookings-nav-btn" data-feature="6">
+          <img src="/uploads/website/bookings.png" alt="bookings" class="icon">
+          <span class="menu-text">Bookings</span>
+        </button>
+        <button class="menu-btn" data-section="settings" onclick="switchSection('settings')" id="settings-nav-btn" data-feature="5">
+          <img src="/uploads/website/settings.png" alt="settings" class="icon">
+          <span class="menu-text">Settings</span>
+        </button>
+      </div>
+      
+      <div class="sidebar-footer">
+        <div class="sidebar-trademark">chuio.io</div>
+      </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <!-- ================= TABLES SECTION (DEFAULT) ================= -->
+      <section id="section-tables" class="content-section active">
+        <!-- Tables content loaded dynamically from admin-tables.html -->
+      </section>
+
+      <!-- ================= ORDERS SECTION ================= -->
+      <section id="section-orders" class="content-section">
+        <!-- Orders container will be loaded here -->
+        <div id="orders-section-content">
+          <!-- JS renders orders content here -->
+        </div>
+      </section>
+
+      <!-- ================= MENU SECTION ================= -->
+      <section id="section-menu" class="content-section">
+        <!-- Menu content loaded dynamically from admin-menu.html -->
+      </section>
+
+      <!-- ================= STAFF MANAGEMENT SECTION ================= -->
+      <section id="section-staff" class="content-section">
+        <!-- Staff content loaded dynamically from admin-staff.html -->
+      </section>
+
+      <!-- ================= SETTINGS SECTION ================= -->
+      <section id="section-settings" class="content-section">
+        <!-- Settings content loaded dynamically from admin-settings.html -->
+      </section>
+
+      <!-- ================= BOOKINGS MANAGEMENT SECTION ================= -->
+      <section id="section-bookings" class="content-section">
+        <!-- Bookings content loaded dynamically from admin-bookings.html -->
+      </section>
+
+    </main>
+  </div>
 
   <!-- ================= LOGIN SCREEN ================= -->
   <div id="login-screen" class="login-screen">
     <div class="login-container">
       <div class="login-header">
-        <img src="/uploads/chuio/chuio_logo.png" alt="Chuio Logo" />
+        <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" />
         <h1 data-i18n="staff.title">👨‍💼 Staff Dashboard</h1>
         <p data-i18n="staff.enter-pin">Enter PIN to continue</p>
       </div>
@@ -50,22 +168,20 @@
     </div>
   </div>
 
-  <!-- ================= STAFF APP ================= -->
-  <div id="staff-app">
-    <h1>Staff Dashboard</h1>
-
-    <section>
-      <h2>Tables & QR Codes</h2>
-      <div id="tables-list">Loading tables...</div>
-    </section>
-
-    <section>
-      <h2>Menu Management</h2>
-      <div id="menu-list">Loading menu...</div>
-    </section>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script src="staff.js"></script>
+  <!-- Load Admin CSS & core modules for staff (same as admin.html) -->
+  <script src="/translations.js"></script>
+  <script src="/language-switcher.js"></script>
+  <script src="/timezone-utils.js"></script>
+  <script src="/admin.js"></script>
+  <script src="/admin-tables.js"></script>
+  <script src="/admin-orders.js"></script>
+  <script src="/admin-menu.js"></script>
+  <script src="/admin-reports.js"></script>
+  <script src="/admin-settings.js"></script>
+  <script src="/admin-staff.js"></script>
+  <script src="/admin-bookings.js"></script>
+  
+  <!-- Staff-specific initialization -->
+  <script src="/staff.js"></script>
 </body>
 </html>

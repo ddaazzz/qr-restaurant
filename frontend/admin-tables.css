@@ -29,18 +29,23 @@
 }
 
 .table-tabs-bottom button {
-  padding: 12px 16px;
+  padding: 16px 16px;
   border-radius: 0;
   border: none;
   border-right: 1px solid var(--border-color);
   background: var(--bg-white);
   color: var(--text-dark);
   font-weight: 600;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 13px;
   flex: 1;
   text-align: center;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .table-tabs-bottom button:last-child {
@@ -163,14 +168,15 @@
   align-content: start;
   overflow-y: auto;
   overflow-x: hidden;
-  flex: 1;
+  flex: 1 1 100%;
   background: var(--bg-light);
   border-radius: 0;
   padding: 20px;
   box-shadow: none;
   position: relative;
   justify-content: start;
-  max-height: calc(100vh - 300px);
+  width: 100%;
+  min-height: 0;
 }
 
 #tables-grid.menu-mode {
@@ -181,22 +187,30 @@
 
 .table-card {
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 2px solid #e0e0e0;
   border-radius: 12px;
-  padding: 16px;
+  padding: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  overflow: visible;
+  overflow: hidden;
   flex-shrink: 0;
   touch-action: manipulation;
   position: relative;
   aspect-ratio: 1;
   min-height: 160px;
+  gap: 0;
+}
+
+body.edit-mode .table-card {
+  border: 2px solid #4a90e2;
+  background: #f0f7ff;
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.15);
+  min-height: 220px;
 }
 
 .table-card:hover {
@@ -215,7 +229,7 @@
 }
 
 .table-card-light-blue {
-  background: #1976d2;
+  background: #0099ff;
   border: none;
   color: white;
 }
@@ -226,6 +240,24 @@
   color: white;
 }
 
+.table-card-purple {
+  background: #2735b0;
+  border: none;
+  color: white;
+}
+
+.table-card-orange {
+  background: #ea6317;
+  border: none;
+  color: white;
+}
+
+.table-card-yellow {
+  background: #ffeb3b !important;
+  border: 2px solid #ffd700 !important;
+  color: #333 !important;
+}
+
 .table-card-reserved {
   background: #ffd700;
   border: none;
@@ -233,11 +265,11 @@
 }
 
 .table-card-status {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 13px;
+  position: relative;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  font-size: 14px;
   font-weight: 600;
   padding: 4px 8px;
   background: transparent;
@@ -245,10 +277,21 @@
   text-shadow: none;
   text-transform: capitalize;
   letter-spacing: 0.5px;
+  margin-top: 4px;
+  flex: 0 0 auto;
 }
 
 .table-card-status.available {
   color: #27ae60;
+}
+
+.table-card-status.reserved {
+  color: #ffc107 !important;
+  font-weight: 700 !important;
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .table-card-white .table-card-status.available {
@@ -259,16 +302,91 @@
   color: #666;
 }
 
-.table-card-sessions-list {
+.table-card-white .table-card-status.reserved {
+  color: #ffc107 !important;
+  font-weight: 700 !important;
+}
+
+.table-card-bottom-info {
   position: absolute;
-  bottom: 40px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 16px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 4;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.table-card-status-badge {
+  background: #fbbf24;
+  color: #333;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  text-align: center;
+  width: 100%;
+}
+
+.table-card-reservation-time {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  background: transparent;
+  text-transform: capitalize;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.table-card-reservation-time.reservation-upcoming {
+  color: #ffc107;
+}
+
+.table-card-reservation-time.reservation-now {
+  color: #d32f2f;
+}
+
+.table-card-sessions-list {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  font-size: 12px;
   max-height: 60px;
   overflow-y: auto;
   text-align: center;
   z-index: 5;
+  margin: 0;
+  width: 100%;
+}
+
+body.edit-mode .table-card-sessions-list {
+  display: none;
+}
+
+.session-time-item {
+  margin: 2px 0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.session-time-item img {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
 }
 
 .table-card-sessions {
@@ -282,15 +400,26 @@
   z-index: 10;
 }
 
+body.edit-mode .table-card-sessions {
+  font-size: 12px;
+  color: #666;
+}
+
 .table-card-seats {
   position: absolute;
   top: 8px;
   right: 8px;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  text-shadow: none;
   z-index: 10;
+  margin: 2px 0;
+}
+
+body.edit-mode .table-card-seats {
+  font-size: 12px;
+  color: #666;
 }
 
 .table-card-name {
@@ -298,13 +427,20 @@
   font-weight: 700;
   color: #1a1a1a;
   text-align: center;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
-  line-height: 1;
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
   z-index: 20;
+  line-height: 1.1;
+  margin: 0;
+  width: 90%;
+  flex: 0 0 auto;
+}
+
+body.edit-mode .table-card-name {
+  font-size: 28px;
+  margin: 4px 0 2px 0;
 }
 
 .table-card-white .table-card-name {
@@ -315,8 +451,18 @@
   color: white;
 }
 
+.table-card-purple .table-card-name {
+  color: white;
+}
+
+.table-card-orange .table-card-name {
+  color: white;
+}
+
 .table-card-light-blue img,
-.table-card-red img {
+.table-card-red img,
+.table-card-purple img,
+.table-card-orange img {
   filter: brightness(0) invert(1);
 }
 
@@ -345,6 +491,36 @@
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
 }
 
+.table-card-light-blue .table-card-sessions,
+.table-card-light-blue .table-card-seats {
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.table-card-purple .table-card-sessions,
+.table-card-purple .table-card-seats {
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.table-card-orange .table-card-sessions,
+.table-card-orange .table-card-seats {
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.table-card-red .table-card-sessions,
+.table-card-red .table-card-seats {
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.table-card-yellow .table-card-sessions,
+.table-card-yellow .table-card-seats {
+  color: #000000 !important;
+  text-shadow: none !important;
+}
+
 .table-card-status.available {
   background: transparent;
   color: #666;
@@ -367,6 +543,44 @@
   text-align: center;
   margin-bottom: 0;
  
+}
+
+.table-card-edit-controls button img {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.table-edit-controls button img {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin: 0;
+}
+
+.table-edit-controls button .table-card-delete-btn {
+  background-color: #fee !important;
+  color: #c33 !important;
+}
+
+.table-card-seats {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.table-card-seats img {
+  width: 20px;
+  height: 20px;
+}
+
+.table-card-seats span {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .table-card-info {
@@ -395,41 +609,54 @@
 /* EDIT MODE STYLES */
 .table-edit-controls {
   display: none;
-  gap: 4px;
+  gap: 6px;
   flex-direction: column;
-  margin-top: 8px;
-  border-top: 1px solid var(--border-color);
-  padding-top: 8px;
+  width: 100%;
+  margin-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding-top: 10px;
 }
 
 .table-edit-controls button {
-  padding: 6px 10px;
-  font-size: 11px;
-  font-weight: 700;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  background: var(--bg-light);
-  color: var(--text-dark);
+  background: #f0f0f0;
+  color: #333;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .table-edit-controls button:hover {
   background: var(--primary-color);
   color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.table-edit-controls button:active {
+  transform: translateY(0);
 }
 
 body.edit-mode .table-edit-controls {
-  display: flex;
+  display: flex !important;
 }
 
 .add-table-card {
-  background: white;
+  background: rgba(var(--primary-color-rgb), 0.08);
   border: 2px dashed var(--primary-color);
   border-radius: 16px;
   padding: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -438,16 +665,22 @@ body.edit-mode .table-edit-controls {
   position: relative;
   aspect-ratio: 1;
   min-height: 160px;
-  font-size: 48px;
+  font-size: 56px;
   color: var(--primary-color);
   font-weight: bold;
-  background: rgba(var(--primary-color-rgb), 0.05);
+  line-height: 1;
+  user-select: none;
 }
 
 .add-table-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
   border-color: var(--primary-color);
+  background: rgba(var(--primary-color-rgb), 0.12);
+}
+
+.add-table-card:active {
+  transform: scale(0.96);
 }
 
 .table-card .card-header {
@@ -925,6 +1158,88 @@ body.edit-mode .table-edit-controls {
 
 #view-orders-btn:hover {
   background: var(--primary-color) !important;
+  transform: scale(1.02);
+}
+
+/* ============== MODAL OVERLAY STYLES ============== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-overlay > div {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-cancel-btn {
+  padding: 10px 20px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.modal-cancel-btn:hover {
+  background: #e0e0e0;
+  border-color: #999;
+}
+
+.modal-content-label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.modal-button-group {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.modal-btn-primary {
+  padding: 10px 20px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.modal-btn-primary:hover {
+  background: #5568d3;
   transform: scale(1.02);
 }
 

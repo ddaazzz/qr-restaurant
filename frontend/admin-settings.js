@@ -13,7 +13,7 @@ async function loadAdminSettings() {
 // Fetch and cache settings (called from admin.js)
 async function initializeSettingsOnPageLoad() {
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
     const settings = await res.json();
     ADMIN_SETTINGS_CACHE = { ...settings };
     
@@ -21,6 +21,15 @@ async function initializeSettingsOnPageLoad() {
       serviceChargeFee = settings.service_charge_percent;
     }
     applyThemeColor(settings.theme_color);
+    
+    // Apply language preference if stored in backend
+    if (settings.language_preference) {
+      console.log('[Settings] Applying restaurant language preference:', settings.language_preference);
+      localStorage.setItem('restaurantLanguage', settings.language_preference);
+      if (typeof setLanguage === 'function') {
+        setLanguage(settings.language_preference);
+      }
+    }
   } catch (err) {
     console.error("Failed to initialize settings on page load:", err);
   }
@@ -29,6 +38,38 @@ async function initializeSettingsOnPageLoad() {
 function applyThemeColor(color) {
   if (!color) return;
   document.documentElement.style.setProperty("--primary-color", color);
+}
+
+// Save language preference (called when language buttons are clicked)
+function saveLanguagePreference(language) {
+  try {
+    // Always save to localStorage first
+    localStorage.setItem('language', language);
+    localStorage.setItem('restaurantLanguage', language);
+    console.log('[Settings] Language preference saved locally:', language);
+    
+    // Try to save to backend (optional - graceful fallback if fails)
+    fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language_preference: language })
+    }).then(res => {
+      if (res.ok) {
+        return res.json();
+      } else {
+        console.warn('[Settings] Backend language save failed (code ' + res.status + ') - local setting preserved');
+      }
+    }).then(updated => {
+      if (updated) {
+        console.log('[Settings] Language preference saved to backend:', language);
+        ADMIN_SETTINGS_CACHE = { ...ADMIN_SETTINGS_CACHE, ...updated };
+      }
+    }).catch(err => {
+      console.warn('[Settings] Backend language save error (graceful fallback):', err.message);
+    });
+  } catch (err) {
+    console.error('Failed to save language preference:', err);
+  }
 }
 
 // Load coupons (stub - modals load coupons when opened)
@@ -79,12 +120,13 @@ function closeSettingsModal(modalName) {
 // Load Restaurant Information Modal
 async function loadRestaurantInfoModal() {
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
     const settings = await res.json();
     
     document.getElementById('view-name').textContent = settings.name || 'Not set';
     document.getElementById('view-phone').textContent = settings.phone || 'Not set';
     document.getElementById('view-address').textContent = settings.address || 'Not set';
+    document.getElementById('view-timezone').textContent = settings.timezone || 'UTC';
     document.getElementById('view-service-charge').textContent = (settings.service_charge_percent || 0) + '%';
     document.getElementById('view-color').innerHTML = `<div style="width: 40px; height: 40px; background: ${settings.theme_color || '#000'}; border-radius: 4px;"></div>`;
     
@@ -92,12 +134,18 @@ async function loadRestaurantInfoModal() {
     document.getElementById('restaurant-name').value = settings.name || '';
     document.getElementById('restaurant-phone').value = settings.phone || '';
     document.getElementById('restaurant-address').value = settings.address || '';
+    document.getElementById('timezone-select').value = settings.timezone || 'UTC';
     document.getElementById('serviceChargeInput').value = settings.service_charge_percent || 0;
     document.getElementById('colorInput').value = settings.theme_color || '#4a90e2';
     
     if (settings.logo_url) {
       document.getElementById('restaurant-logo').src = settings.logo_url;
       document.getElementById('restaurant-logo').classList.remove('hidden');
+    }
+
+    if (settings.background_url) {
+      document.getElementById('restaurant-background').src = settings.background_url;
+      document.getElementById('restaurant-background').classList.remove('hidden');
     }
   } catch (err) {
     console.error("Failed to load restaurant info:", err);
@@ -230,15 +278,18 @@ function enterEditMode() {
   document.getElementById('view-name').classList.add('hidden');
   document.getElementById('view-phone').classList.add('hidden');
   document.getElementById('view-address').classList.add('hidden');
+  document.getElementById('view-timezone').classList.add('hidden');
   document.getElementById('view-service-charge').classList.add('hidden');
   document.getElementById('view-color').classList.add('hidden');
   
   document.getElementById('restaurant-name').classList.remove('hidden');
   document.getElementById('restaurant-phone').classList.remove('hidden');
   document.getElementById('restaurant-address').classList.remove('hidden');
+  document.getElementById('timezone-select').classList.remove('hidden');
   document.getElementById('serviceChargeInput').classList.remove('hidden');
   document.getElementById('colorInput').classList.remove('hidden');
   document.getElementById('logoInput').classList.remove('hidden');
+  document.getElementById('upload-background-btn').classList.remove('hidden');
   
   document.getElementById('edit-settings-btn').classList.add('hidden');
   document.getElementById('save-settings-btn').classList.remove('hidden');
@@ -249,15 +300,18 @@ function cancelEditMode() {
   document.getElementById('view-name').classList.remove('hidden');
   document.getElementById('view-phone').classList.remove('hidden');
   document.getElementById('view-address').classList.remove('hidden');
+  document.getElementById('view-timezone').classList.remove('hidden');
   document.getElementById('view-service-charge').classList.remove('hidden');
   document.getElementById('view-color').classList.remove('hidden');
   
   document.getElementById('restaurant-name').classList.add('hidden');
   document.getElementById('restaurant-phone').classList.add('hidden');
   document.getElementById('restaurant-address').classList.add('hidden');
+  document.getElementById('timezone-select').classList.add('hidden');
   document.getElementById('serviceChargeInput').classList.add('hidden');
   document.getElementById('colorInput').classList.add('hidden');
   document.getElementById('logoInput').classList.add('hidden');
+  document.getElementById('upload-background-btn').classList.add('hidden');
   
   document.getElementById('edit-settings-btn').classList.remove('hidden');
   document.getElementById('save-settings-btn').classList.add('hidden');
@@ -266,21 +320,33 @@ function cancelEditMode() {
 
 // Toggle Coupon Edit/Add Mode
 function toggleCouponEditMode() {
-  const addForm = document.getElementById('add-coupon-form');
+  const editView = document.getElementById('coupon-edit-view');
   const editBtn = document.getElementById('coupon-edit-btn');
   
-  if (!addForm) {
-    console.warn('add-coupon-form not found');
+  if (!editView) {
+    console.warn('coupon-edit-view not found');
     return;
   }
   
-  if (addForm.classList.contains('hidden')) {
-    addForm.classList.remove('hidden');
-    editBtn.classList.add('hidden');
+  if (editView.style.display === 'none' || !editView.style.display) {
+    editView.style.display = 'flex';
+    editBtn.style.display = 'none';
+    document.getElementById('new-coupon-code').focus();
   } else {
-    addForm.classList.add('hidden');
-    editBtn.classList.remove('hidden');
+    editView.style.display = 'none';
+    editBtn.style.display = 'block';
   }
+}
+
+// Clear coupon form
+function clearCouponForm() {
+  document.getElementById('new-coupon-code').value = '';
+  document.getElementById('new-coupon-type').value = 'percentage';
+  document.getElementById('new-coupon-value').value = '';
+  document.getElementById('new-coupon-min-order').value = '0';
+  document.getElementById('new-coupon-max-uses').value = '';
+  document.getElementById('new-coupon-valid-until').value = '';
+  document.getElementById('new-coupon-description').value = '';
 }
 
 // Save Restaurant Settings
@@ -289,12 +355,13 @@ async function saveAdminSettings() {
     name: document.getElementById('restaurant-name').value,
     phone: document.getElementById('restaurant-phone').value,
     address: document.getElementById('restaurant-address').value,
+    timezone: document.getElementById('timezone-select').value || 'UTC',
     service_charge_percent: parseFloat(document.getElementById('serviceChargeInput').value) || 0,
     theme_color: document.getElementById('colorInput').value
   };
   
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`, {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -318,7 +385,7 @@ function uploadRestaurantLogo(file) {
   const formData = new FormData();
   formData.append('image', file);
   
-  fetch(`${API}/${restaurantId}/logo`, {
+  fetch(`${API}/restaurants/${restaurantId}/logo`, {
     method: 'POST',
     body: formData
   })
@@ -333,6 +400,30 @@ function uploadRestaurantLogo(file) {
   .catch(err => {
     console.error("Logo upload error:", err);
     alert('Failed to upload logo');
+  });
+}
+
+function uploadRestaurantBackground(file) {
+  if (!file) return;
+  
+  const formData = new FormData();
+  formData.append('image', file);
+  
+  fetch(`${API}/restaurants/${restaurantId}/background`, {
+    method: 'POST',
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.background_url) {
+      document.getElementById('restaurant-background').src = data.background_url;
+      document.getElementById('restaurant-background').classList.remove('hidden');
+      alert('Background image uploaded successfully!');
+    }
+  })
+  .catch(err => {
+    console.error("Background upload error:", err);
+    alert('Failed to upload background image');
   });
 }
 
@@ -471,7 +562,7 @@ async function deleteCoupon(couponId) {
 }
 
 async function createCoupon() {
-  const code = document.getElementById('new-coupon-code').value.toUpperCase();
+  const code = document.getElementById('new-coupon-code').value.toUpperCase().trim();
   const type = document.getElementById('new-coupon-type').value;
   const value = parseFloat(document.getElementById('new-coupon-value').value);
   const minOrder = parseFloat(document.getElementById('new-coupon-min-order').value) || 0;
@@ -479,8 +570,8 @@ async function createCoupon() {
   const validUntil = document.getElementById('new-coupon-valid-until').value;
   const description = document.getElementById('new-coupon-description').value;
   
-  if (!code || !type || !value) {
-    alert('Please fill in all required fields');
+  if (!code || !type || isNaN(value)) {
+    alert('Please fill in all required fields (code, type, value)');
     return;
   }
   
@@ -494,7 +585,7 @@ async function createCoupon() {
         discount_value: value,
         minimum_order_value: minOrder,
         max_uses: maxUses,
-        valid_until: validUntil,
+        valid_until: validUntil || null,
         description
       })
     });
@@ -505,10 +596,8 @@ async function createCoupon() {
     }
     
     alert('Coupon created successfully!');
-    document.getElementById('new-coupon-code').value = '';
-    document.getElementById('new-coupon-value').value = '';
-    document.getElementById('new-coupon-description').value = '';
-    document.getElementById('new-coupon-valid-until').value = '';
+    clearCouponForm();
+    toggleCouponEditMode(); // Hide the form after successful creation
     await loadCouponsModal();
   } catch (err) {
     console.error("Error creating coupon:", err);

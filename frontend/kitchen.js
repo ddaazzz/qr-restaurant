@@ -13,16 +13,19 @@ let pin = "";
 let token = null;
 let restaurantId = null;
 let allowedCategoryIds = []; // Categories this kitchen staff can view
+let orderMap = {}; // Maps orderId to order details
 
-// Get restaurantId from URL on page load
+// Get restaurantId from URL on page load, fallback to sessionStorage/localStorage
 (() => {
   const params = new URLSearchParams(window.location.search);
-  restaurantId = params.get("restaurantId");
+  // Check both 'rid' (from admin-settings.js) and 'restaurantId' for compatibility
+  restaurantId = params.get("rid") || params.get("restaurantId") || sessionStorage.getItem("restaurantId") || localStorage.getItem("restaurantId");
+  
+  console.log("🍳 Kitchen initialized with restaurantId:", restaurantId, "type:", typeof restaurantId);
   
   if (!restaurantId) {
-    alert("No restaurant selected. Please login from admin panel.");
-    window.location.href = "/login";
-    return;
+    console.warn("⚠️ No restaurantId found in URL params or storage");
+    // Don't redirect yet - they might be coming from login.html
   }
 })();
 
@@ -105,18 +108,28 @@ async function submitPin() {
 // ============== KITCHEN DASHBOARD ============== 
 async function loadKitchenOrders() {
   if (!restaurantId) {
+    console.warn("⚠️ restaurantId is not set, skipping order load");
     return;
   }
 
   try {
-    const res = await fetch(`${API_BASE}/kitchen/items`);
+    const url = `${API_BASE}/kitchen/items?restaurantId=${encodeURIComponent(restaurantId)}`;
+    console.log("📡 Fetching kitchen orders from:", url);
+    
+    const res = await fetch(url);
+    console.log("📊 Response status:", res.status, res.statusText);
+    
     if (!res.ok) {
+      const errorText = await res.text();
+      console.error("❌ Failed to load kitchen orders:", res.status, errorText);
       return;
     }
 
     const items = await res.json();
+    console.log("✅ Loaded", items.length, "kitchen items");
 
-
+    // Reset orderMap for fresh load
+    orderMap = {};
     items.forEach(item => {
       if (item.restaurant_id != restaurantId) return;
 
@@ -132,6 +145,7 @@ async function loadKitchenOrders() {
         orderMap[orderId] = {
           orderId,
           table: item.table_name,
+          orderType: item.order_type,
           items: [],
           createdAt: item.created_at
         };
@@ -156,12 +170,26 @@ function renderKitchenOrders(orders) {
   container.innerHTML = orders.map(order => {
     const hasAllServed = order.items.every(item => item.status === "served");
     const statusClass = hasAllServed ? "ready" : (order.items.some(item => item.status === "preparing") ? "preparing" : "pending");
+    
+    // Determine display label: use table name if available and order type is 'table', otherwise use order type
+    let displayLabel = order.table;
+    if (order.table === 'Unknown Table' || order.orderType !== 'table') {
+      // Format order type nicely: 'to-go' -> 'To Go', 'counter' -> 'Counter', 'order-now' -> 'Order Now'
+      if (order.orderType) {
+        displayLabel = order.orderType
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      } else {
+        displayLabel = 'Order';
+      }
+    }
 
     return `
       <div class="order-card ${statusClass}">
         <div class="card-header">
           <div>
-            <div class="card-title">Table ${order.table}</div>
+            <div class="card-title">${displayLabel}</div>
             <div class="card-time">#${order.orderId}</div>
           </div>
           <div class="card-time">${getTimeAgo(order.createdAt)}</div>
@@ -179,20 +207,48 @@ function renderKitchenOrders(orders) {
           `).join("")}
           
           <div class="card-actions">
-            ${order.items.map(item => {
-              if (item.status === "pending") {
-                return `<button class="btn-action btn-start" onclick="updateItemStatus(${item.order_item_id}, 'preparing')">Start Preparing</button>`;
-              } else if (item.status === "preparing") {
-                return `<button class="btn-action btn-serve" onclick="updateItemStatus(${item.order_item_id}, 'served')">Serve</button>`;
-              } else {
-                return `<button class="btn-action btn-ready" disabled>Served</button>`;
-              }
-            }).join("")}
+            ${order.items.some(item => item.status === "pending") ? 
+              `<button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'pending').map(i => i.order_item_id))}, 'preparing')">Start Preparing</button>` 
+              : (order.items.some(item => item.status === "preparing") ? 
+              `<button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'preparing').map(i => i.order_item_id))}, 'served')">Serve</button>` 
+              : `<button class="btn-action btn-ready" disabled>All Served</button>`)}
           </div>
         </div>
       </div>
     `;
   }).join("");
+}
+
+async function updateAllItemStatus(itemIds, status) {
+  try {
+    // Ensure itemIds is an array
+    let ids = Array.isArray(itemIds) ? itemIds : [];
+    
+    if (ids.length === 0) {
+      return alert("No items to update");
+    }
+    
+    // Update all items in parallel
+    const restaurantId = localStorage.getItem("restaurantId");
+    const promises = ids.map(id => 
+      fetch(`${API_BASE}/order-items/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, restaurantId })
+      })
+    );
+    
+    const results = await Promise.all(promises);
+    
+    if (results.every(res => res.ok)) {
+      loadKitchenOrders();
+    } else {
+      alert("Some items failed to update");
+    }
+  } catch (err) {
+    console.error("Failed to update item status:", err);
+    alert("Error updating items: " + err.message);
+  }
 }
 
 async function updateItemStatus(orderItemId, status) {
@@ -249,7 +305,11 @@ function handleLogout() {
 window.addEventListener("DOMContentLoaded", () => {
   // Check if user came from login.html with email/password
   const emailLoginFlag = sessionStorage.getItem("kitchenStaffLogged");
-  restaurantId = sessionStorage.getItem("restaurantId");
+  
+  // Use stored restaurantId from sessionStorage if available, otherwise use URL param
+  if (!restaurantId && sessionStorage.getItem("restaurantId")) {
+    restaurantId = sessionStorage.getItem("restaurantId");
+  }
 
   console.log("Kitchen.html DOMContentLoaded - emailLoginFlag:", emailLoginFlag, "restaurantId:", restaurantId);
 
@@ -277,4 +337,43 @@ window.addEventListener("DOMContentLoaded", () => {
     // Not logged in, show login screen
     document.getElementById("login-screen").style.display = "flex";
   }
+
+  // Initialize language buttons
+  updateLanguageButtonStates();
+});
+
+// ============== ADMIN MENU DROPDOWN ============== 
+function toggleAdminDropdown() {
+  const dropdown = document.getElementById("admin-dropdown");
+  if (dropdown) {
+    dropdown.classList.toggle("hidden");
+  }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener("click", (e) => {
+  const btn = document.getElementById("admin-menu-btn");
+  const dropdown = document.getElementById("admin-dropdown");
+  if (btn && dropdown && !btn.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.classList.add("hidden");
+  }
+});
+
+// ============== LANGUAGE SWITCHING ============== 
+function updateLanguageButtonStates() {
+  const currentLang = getCurrentLanguage();
+  const enBtn = document.getElementById("lang-en");
+  const zhBtn = document.getElementById("lang-zh");
+  
+  if (enBtn) {
+    enBtn.classList.toggle("active", currentLang === "en");
+  }
+  if (zhBtn) {
+    zhBtn.classList.toggle("active", currentLang === "zh");
+  }
+}
+
+// Listen for language changes
+window.addEventListener("languageChanged", (e) => {
+  updateLanguageButtonStates();
 });

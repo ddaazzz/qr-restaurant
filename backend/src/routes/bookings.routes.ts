@@ -10,13 +10,17 @@ router.get("/restaurants/:restaurantId/bookings", async (req, res) => {
 
   try {
     let query = `
-      SELECT b.* FROM bookings b
+      SELECT 
+        b.*,
+        b.restaurant_booking_number,
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as booking_date_formatted
+      FROM bookings b
       WHERE b.restaurant_id = $1
     `;
     const params: any[] = [restaurantId];
 
     if (date) {
-      query += ` AND b.booking_date = $${params.length + 1}`;
+      query += ` AND b.booking_date = $${params.length + 1}::DATE`;
       params.push(date as string);
     }
 
@@ -28,7 +32,17 @@ router.get("/restaurants/:restaurantId/bookings", async (req, res) => {
     query += ` ORDER BY b.booking_date DESC, b.booking_time DESC`;
 
     const res_data = await pool.query(query, params);
-    res.json(res_data.rows);
+    
+    // Format response to use the formatted date string and remove the temporary formatted field
+    const formattedRows = res_data.rows.map(row => {
+      const { booking_date_formatted, ...rest } = row;
+      return {
+        ...rest,
+        booking_date: booking_date_formatted
+      };
+    });
+    
+    res.json(formattedRows);
   } catch (err) {
     console.error("Error fetching bookings:", err);
     res.status(500).json({ error: "Failed to fetch bookings" });
@@ -60,6 +74,12 @@ router.get("/bookings/:bookingId", async (req, res) => {
 router.post("/restaurants/:restaurantId/bookings", async (req, res) => {
   const { restaurantId } = req.params;
   const { table_id, guest_name, pax, booking_date, booking_time, status = "confirmed", notes = "" } = req.body;
+
+  // Validate status
+  const validStatuses = ['confirmed', 'completed', 'cancelled', 'no-show'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  }
 
   // Validate input
   if (!table_id || !guest_name || !pax || !booking_date || !booking_time) {
@@ -127,14 +147,18 @@ router.post("/restaurants/:restaurantId/bookings", async (req, res) => {
 // PATCH update booking status - ✅ MULTI-RESTAURANT SUPPORT
 router.patch("/bookings/:bookingId", async (req, res) => {
   const { bookingId } = req.params;
-  const { status, notes, restaurantId } = req.body;
-
-  if (!status) {
-    return res.status(400).json({ error: "Status is required" });
-  }
+  const { guest_name, phone, pax, table_id, booking_date, booking_time, status, notes, restaurantId } = req.body;
 
   if (!restaurantId) {
     return res.status(400).json({ error: "Restaurant ID is required" });
+  }
+
+  // Validate status if provided
+  if (status) {
+    const validStatuses = ['confirmed', 'completed', 'cancelled', 'no-show'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    }
   }
 
   try {
@@ -148,12 +172,62 @@ router.patch("/bookings/:bookingId", async (req, res) => {
       return res.status(404).json({ error: "Booking not found or doesn't belong to this restaurant" });
     }
 
-    const res_data = await pool.query(
-      `UPDATE bookings SET status = $1, notes = COALESCE($2, notes), updated_at = NOW()
-       WHERE id = $3 AND restaurant_id = $4
-       RETURNING *`,
-      [status, notes || null, bookingId, restaurantId]
-    );
+    // Build dynamic UPDATE query
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (guest_name !== undefined) {
+      updates.push(`guest_name = $${paramCount++}`);
+      values.push(guest_name);
+    }
+    if (phone !== undefined) {
+      updates.push(`phone = $${paramCount++}`);
+      values.push(phone);
+    }
+    if (pax !== undefined) {
+      updates.push(`pax = $${paramCount++}`);
+      values.push(pax);
+    }
+    if (table_id !== undefined) {
+      updates.push(`table_id = $${paramCount++}`);
+      values.push(table_id);
+    }
+    if (booking_date !== undefined) {
+      updates.push(`booking_date = $${paramCount++}`);
+      values.push(booking_date);
+    }
+    if (booking_time !== undefined) {
+      updates.push(`booking_time = $${paramCount++}`);
+      values.push(booking_time);
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${paramCount++}`);
+      values.push(status);
+    }
+    if (notes !== undefined) {
+      updates.push(`notes = $${paramCount++}`);
+      values.push(notes);
+    }
+
+    updates.push(`updated_at = NOW()`);
+
+    if (updates.length === 1) {
+      // Only updated_at was set
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    values.push(bookingId);
+    values.push(restaurantId);
+
+    const query = `
+      UPDATE bookings 
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount} AND restaurant_id = $${paramCount + 1}
+      RETURNING *
+    `;
+
+    const res_data = await pool.query(query, values);
 
     if (res_data.rowCount === 0) {
       return res.status(404).json({ error: "Booking not found" });
@@ -165,7 +239,9 @@ router.patch("/bookings/:bookingId", async (req, res) => {
     });
   } catch (err) {
     console.error("Error updating booking:", err);
-    res.status(500).json({ error: "Failed to update booking" });
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("Error message:", errorMsg);
+    res.status(500).json({ error: "Failed to update booking", details: errorMsg });
   }
 });
 
@@ -175,7 +251,7 @@ router.delete("/bookings/:bookingId", async (req, res) => {
   const { restaurantId } = req.body;
 
   if (!restaurantId) {
-    return res.status(400).json({ error: "Restaurant ID is required" });
+    return res.status(400).json({ error: "Restaurant ID is required in request body" });
   }
 
   try {

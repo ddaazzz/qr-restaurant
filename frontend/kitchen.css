@@ -5,17 +5,17 @@
 }
 
 :root {
-  --primary-color: #4a90e2;
-  --secondary-color: #ea6317;
+  --primary-color: #2c3e50;
+  --secondary-color: #1a252f;
   --text-dark: #1f2937;
   --text-light: #6b7280;
-  --bg-dark: #111827;
+  --bg-dark: #f9fafb;
   --bg-light: #f9fafb;
   --bg-white: #ffffff;
   --border-color: #e5e7eb;
   --success-color: #059669;
-  --warning-color: #f59e0b;
-  --pending-color: #ef4444;
+  --warning-color: #d97706;
+  --pending-color: #dc2626;
 }
 
 html, body {
@@ -25,7 +25,7 @@ html, body {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: var(--bg-dark);
+  background: var(--bg-light);
   color: var(--text-dark);
   overflow: hidden;
 }
@@ -151,6 +151,22 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.kitchen-header h1 {
+  font-size: 28px;
+  color: var(--primary-color);
+}
+
+.kitchen-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
@@ -162,7 +178,7 @@ body {
 
 .logout-btn {
   padding: 10px 20px;
-  background: var(--pending-color);
+  background: var(--error-color);
   color: var(--bg-white);
   border: none;
   border-radius: 6px;
@@ -172,7 +188,7 @@ body {
 }
 
 .logout-btn:hover {
-  background: #dc2626;
+  background: #b91c1c;
   transform: translateY(-2px);
 }
 
@@ -180,7 +196,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  background: var(--bg-dark);
+  background: var(--bg-light);
 }
 
 .orders-container {
@@ -341,7 +357,7 @@ body {
 }
 
 .btn-start:hover {
-  background: #d97706;
+  background: #b45309;
   transform: translateY(-2px);
 }
 
@@ -387,3 +403,95 @@ body {
     font-size: 16px;
   }
 }
+
+/* ============== ADMIN MENU BUTTON ============== */
+.admin-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: var(--bg-white);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.admin-menu-btn:hover {
+  background: var(--secondary-color);
+  transform: translateY(-1px);
+}
+
+.admin-menu-btn .btn-icon {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) invert(1);
+}
+
+.dropdown-arrow {
+  font-size: 12px;
+}
+
+.admin-dropdown {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  z-index: 100;
+}
+
+.admin-dropdown.hidden {
+  display: none;
+}
+
+.dropdown-item {
+  padding: 10px 15px;
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-dark);
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-light);
+}
+
+/* Language selector dropdown */
+.lang-selector-dropdown {
+  padding: 0;
+}
+
+.lang-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 15px;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-dark);
+  transition: background 0.2s;
+}
+
+.lang-btn:hover {
+  background: var(--bg-light);
+}
+
+.lang-btn.active {
+  background: var(--primary-color);
+  color: var(--bg-white);
+}
+

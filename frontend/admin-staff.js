@@ -5,7 +5,12 @@ let STAFF_EDIT_ID = null; // Track which staff is being edited
 // MENU_CATEGORIES is declared globally in admin.js
 
 async function loadStaff() {
-  if (!adminOnly("MANAGE_STAFF")) return;
+  // Allow admin/superadmin, or staff with feature 4 access
+  const hasAccess = IS_ADMIN || IS_SUPERADMIN || (IS_STAFF && typeof staffAccessRights !== 'undefined' && Array.isArray(staffAccessRights) && staffAccessRights.includes(4));
+  if (!hasAccess) {
+    console.log("User does not have access to staff management");
+    return;
+  }
 
   // Load menu categories for kitchen role
   await loadMenuCategories();
@@ -29,34 +34,52 @@ async function loadStaff() {
       return;
     }
 
+    // Access rights mapping - matches staff.js
+    const ACCESS_MAP = {
+      1: t('admin.access-orders'),
+      2: t('admin.access-tables'),
+      3: t('admin.access-menu'),
+      4: t('admin.access-staff'),
+      5: t('admin.access-settings'),
+      6: t('admin.access-bookings')
+    };
+
     // Render staff as cards
     staff.forEach(s => {
-      const roleLabel = s.role === 'kitchen' ? 'Kitchen' : 'Staff';
+      const roleLabel = s.role === 'kitchen' ? t('admin.kitchen-role') : t('admin.staff-role');
       const roleColor = s.role === 'kitchen' ? '#ff6b6b' : '#3b82f6';
       
-      // Format access rights display
-      let accessDisplay = '';
+      // Format access rights display with feature names
+      let accessDisplay = t('admin.no-access');
       if (s.access_rights) {
         try {
           const rights = typeof s.access_rights === 'string' ? JSON.parse(s.access_rights) : s.access_rights;
-          if (Array.isArray(rights)) {
-            accessDisplay = rights.join(', ');
+          if (Array.isArray(rights) && rights.length > 0) {
+            // Convert numbers to feature names
+            const featureNames = rights.map(id => ACCESS_MAP[id] || `Feature ${id}`);
+            accessDisplay = featureNames.join(', ');
+          } else if (typeof rights === 'object' && Object.keys(rights).length > 0) {
+            accessDisplay = Object.keys(rights).join(', ');
           }
         } catch (e) {
-          accessDisplay = '';
+          accessDisplay = t('admin.no-access');
         }
       }
       
       const card = document.createElement('div');
       card.className = 'staff-card';
+      card.style.cursor = STAFF_EDIT_MODE ? 'default' : 'pointer';
+      if (!STAFF_EDIT_MODE) {
+        card.onclick = () => openStaffDetailModal(s.id);
+      }
       card.innerHTML = `
         <div class="staff-card-name">${s.name}</div>
-        <div class="staff-card-role" style="background: ${roleColor}20; color: ${roleColor}; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px; margin-bottom: 8px;">${roleLabel}</div>
-        <div class="staff-card-pin">PIN: ${s.pin || '-'}</div>
-        ${accessDisplay ? `<div class="staff-card-access">${accessDisplay}</div>` : ''}
+        <div class="staff-card-role" style="background: ${roleColor}20; color: ${roleColor}; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px;">${roleLabel}</div>
+        <div class="staff-card-access" style="color: var(--text-light); font-size: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+          <strong>${t('admin.access')}:</strong> ${accessDisplay}
+        </div>
         <div class="staff-card-actions" style="display: ${STAFF_EDIT_MODE ? 'flex' : 'none'};">
-          <button class="btn-edit" onclick="editStaff(${s.id}, event)">✏️ Edit</button>
-          <button class="btn-delete" onclick="deleteStaff(${s.id}, event)">🗑 Delete</button>
+          <button class="btn-delete" onclick="deleteStaff(${s.id}, event)" style="flex: 1;">🗑 ${t('admin.delete')}</button>
         </div>
       `;
       container.appendChild(card);
@@ -72,7 +95,7 @@ async function loadStaff() {
     addStaffCard.onclick = () => openStaffForm();
     addStaffCard.innerHTML = `
       <div style="font-size: 40px; margin-bottom: 8px;">➕</div>
-      <div class="staff-card-name">Add Staff</div>
+      <div class="staff-card-name">${t('admin.add-staff')}</div>
     `;
     container.appendChild(addStaffCard);
   } catch (err) {
@@ -100,10 +123,10 @@ function toggleStaffEditMode(section) {
   // Update button text
   if (editBtn) {
     if (STAFF_EDIT_MODE) {
-      editBtn.innerHTML = '<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Done';
+      editBtn.innerHTML = `<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> ${t('admin.done')}`;
       editBtn.classList.add("active");
     } else {
-      editBtn.innerHTML = '<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit';
+      editBtn.innerHTML = `<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> ${t('admin.edit')}`;
       editBtn.classList.remove("active");
     }
   }
@@ -172,6 +195,7 @@ function resetStaffForm() {
   document.getElementById("staff-name").value = "";
   document.getElementById("staff-pin").value = "";
   document.getElementById("staff-role").value = "";
+  document.getElementById("staff-hourly-rate").value = "";
   document.getElementById("staff-error").style.display = "none";
   document.getElementById("staff-success").style.display = "none";
   document.getElementById("staff-submit-btn").textContent = "➕ Add Staff";
@@ -190,18 +214,44 @@ function resetStaffForm() {
 
 async function editStaff(staffId, event) {
   if (event) event.stopPropagation();
-  if (!STAFF_EDIT_MODE) return;
+  
+  // Parse staffId in case it's passed as string
+  const parsedId = parseInt(staffId, 10);
+  
+  if (!parsedId || isNaN(parsedId)) {
+    console.error("❌ Invalid staff ID:", staffId);
+    alert('Error: Invalid staff ID');
+    return;
+  }
+  
+  // Allow edit from modal even if not in STAFF_EDIT_MODE
   
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${staffId}`);
-    if (!res.ok) throw new Error("Failed to load staff");
+    console.log(`📝 Editing staff ${parsedId} for restaurant ${restaurantId}`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${parsedId}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to load staff: ${res.status} ${errData.error || res.statusText}`);
+    }
     
     const staff = await res.json();
+    console.log("✅ Staff data loaded:", staff);
+    
+    // Set the edit ID
+    STAFF_EDIT_ID = parsedId;
     
     // Populate form
     document.getElementById("staff-name").value = staff.name;
     document.getElementById("staff-pin").value = staff.pin || "";
     document.getElementById("staff-role").value = staff.role || "staff";
+    
+    // Populate hourly rate (convert from cents to dollars)
+    if (staff.hourly_rate_cents) {
+      document.getElementById("staff-hourly-rate").value = (staff.hourly_rate_cents / 100).toFixed(2);
+    } else {
+      document.getElementById("staff-hourly-rate").value = "";
+    }
+    
     document.getElementById("staff-submit-btn").textContent = "💾 Update";
     
     // Clear all checkboxes first
@@ -230,7 +280,6 @@ async function editStaff(staffId, event) {
     
     // Update display
     handleStaffRoleChange();
-    STAFF_EDIT_ID = staffId;
     
     // Set title and open panel
     const title = document.getElementById("staff-form-title");
@@ -238,7 +287,7 @@ async function editStaff(staffId, event) {
     openStaffForm();
     
   } catch (err) {
-    console.error("Error loading staff:", err);
+    console.error("❌ Error loading staff:", err);
     alert("Error loading staff: " + err.message);
   }
 }
@@ -252,6 +301,7 @@ async function createOrUpdateStaff() {
   const name = document.getElementById("staff-name").value.trim();
   const pin = document.getElementById("staff-pin").value.trim();
   const role = document.getElementById("staff-role").value;
+  const hourlyRateInput = document.getElementById("staff-hourly-rate").value.trim();
 
   if (!name || !pin) {
     errorEl.textContent = "Name and PIN are required";
@@ -263,6 +313,18 @@ async function createOrUpdateStaff() {
     errorEl.textContent = "PIN must be exactly 6 digits";
     errorEl.style.display = "flex";
     return;
+  }
+
+  // Convert hourly rate to cents (handle decimal format)
+  let hourly_rate_cents = null;
+  if (hourlyRateInput) {
+    const rate = parseFloat(hourlyRateInput);
+    if (isNaN(rate) || rate < 0) {
+      errorEl.textContent = "Hourly rate must be a positive number";
+      errorEl.style.display = "flex";
+      return;
+    }
+    hourly_rate_cents = Math.round(rate * 100); // Convert dollars to cents
   }
 
   // Collect access rights based on role
@@ -278,7 +340,7 @@ async function createOrUpdateStaff() {
   }
 
   try {
-    const payload = { name, pin, role, access_rights };
+    const payload = { name, pin, role, access_rights, hourly_rate_cents };
     
     const url = STAFF_EDIT_ID 
       ? `${API}/restaurants/${restaurantId}/staff/${STAFF_EDIT_ID}`
@@ -353,24 +415,27 @@ async function deleteStaff(staffId, event) {
   }
 }
 function openStaffForm() {
-  const panel = document.getElementById("staff-form-panel");
-  const overlay = document.getElementById("staff-form-overlay");
-  if (!panel || !overlay) {
-    console.error("Staff form panel or overlay not found");
+  const panel = document.getElementById("staff-create-section");
+  if (!panel) {
+    console.error("Staff form panel not found");
     return;
   }
   
   // Only reset if not editing
   if (!STAFF_EDIT_ID) {
-    const title = document.getElementById("staff-form-title");
+    const title = panel.querySelector('h3');
     if (title) {
       title.textContent = "Create New Staff";
     }
     resetStaffForm();
+  } else {
+    const title = panel.querySelector('h3');
+    if (title) {
+      title.textContent = "Edit Staff";
+    }
   }
   
   panel.classList.remove("hidden");
-  overlay.classList.remove("hidden");
   
   // Focus on first input
   setTimeout(() => {
@@ -380,12 +445,199 @@ function openStaffForm() {
 }
 
 function closeStaffForm() {
-  const panel = document.getElementById("staff-form-panel");
-  const overlay = document.getElementById("staff-form-overlay");
-  if (!panel || !overlay) return;
+  const panel = document.getElementById("staff-create-section");
+  if (!panel) return;
   
   panel.classList.add("hidden");
-  overlay.classList.add("hidden");
   STAFF_EDIT_ID = null;
   resetStaffForm();
 }
+
+// ============= STAFF DETAIL MODAL FUNCTIONS =============
+
+let CURRENT_STAFF_ID = null; // Track which staff is shown in modal
+
+function openStaffDetailModal(staffId) {
+  CURRENT_STAFF_ID = staffId;
+  const modal = document.getElementById("staff-detail-modal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  loadStaffDetailData();
+}
+
+function closeStaffDetailModal() {
+  const modal = document.getElementById("staff-detail-modal");
+  if (!modal) return;
+  modal.style.display = "none";
+  CURRENT_STAFF_ID = null;
+}
+
+// Close modal when clicking outside (on backdrop)
+document.addEventListener("click", function(event) {
+  const modal = document.getElementById("staff-detail-modal");
+  if (!modal) return;
+  if (event.target === modal) {
+    closeStaffDetailModal();
+  }
+});
+
+async function loadStaffDetailData() {
+  if (!CURRENT_STAFF_ID) return;
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${CURRENT_STAFF_ID}`);
+    if (!res.ok) throw new Error('Failed to load staff details');
+    
+    const staff = await res.json();
+    
+    // Update staff info
+    document.getElementById("staff-detail-name").textContent = staff.name;
+    document.getElementById("staff-detail-role").textContent = staff.role === 'kitchen' ? t('admin.kitchen-role') : t('admin.staff-role');
+    document.getElementById("staff-detail-pin").textContent = staff.pin || '-';
+    
+    // Format hourly rate
+    if (staff.hourly_rate_cents) {
+      const rate = (staff.hourly_rate_cents / 100).toFixed(2);
+      document.getElementById("staff-detail-wage").textContent = `$${rate}/hr`;
+    } else {
+      document.getElementById("staff-detail-wage").textContent = 'Not set';
+    }
+    
+    // Update clock status
+    const statusEl = document.getElementById("staff-detail-status");
+    const clockInBtn = document.getElementById("staff-clock-in-btn");
+    const clockOutBtn = document.getElementById("staff-clock-out-btn");
+    
+    if (staff.currently_clocked_in) {
+      statusEl.textContent = '🟢 Clocked In';
+      statusEl.style.color = '#10b981';
+      clockInBtn.style.display = "none";
+      clockOutBtn.style.display = "block";
+    } else {
+      statusEl.textContent = '⚪ Clocked Out';
+      statusEl.style.color = '#999';
+      clockInBtn.style.display = "block";
+      clockOutBtn.style.display = "none";
+    }
+    
+    // Update work hours summary
+    if (staff.stats) {
+      document.getElementById("staff-total-shifts").textContent = staff.stats.total_shifts;
+      document.getElementById("staff-total-hours").textContent = staff.stats.total_hours.toFixed(1);
+    }
+    
+    // Display timekeeping list
+    displayTimekeepingList(staff.timekeeping || []);
+  } catch (err) {
+    console.error("Error loading staff details:", err);
+  }
+}
+
+function displayTimekeepingList(records) {
+  const container = document.getElementById("staff-timekeeping-list");
+  if (!container) return;
+  
+  if (!records || records.length === 0) {
+    container.innerHTML = '<p style="color: #999; font-size: 14px;">No work history in the last 30 days</p>';
+    return;
+  }
+  
+  let html = '';
+  records.forEach(record => {
+    const clockIn = new Date(record.clock_in_at);
+    const clockOut = record.clock_out_at ? new Date(record.clock_out_at) : null;
+    const hours = record.duration_minutes ? (record.duration_minutes / 60).toFixed(1) : '—';
+    
+    const dateStr = clockIn.toLocaleDateString();
+    const timeInStr = clockIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timeOutStr = clockOut ? clockOut.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Still working';
+    
+    html += `
+      <div style="padding: 10px; background: white; border-bottom: 1px solid #eee; font-size: 13px;">
+        <div style="font-weight: 600; margin-bottom: 4px;">${dateStr}</div>
+        <div style="color: #666;">
+          <strong>${timeInStr}</strong> - <strong>${timeOutStr}</strong>
+          <span style="float: right; color: #3b82f6; font-weight: 600;">${hours}h</span>
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+async function clockInStaff() {
+  if (!CURRENT_STAFF_ID) return;
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${CURRENT_STAFF_ID}/clock-in`, {
+      method: 'POST'
+    });
+    
+    if (!res.ok) throw new Error('Failed to clock in');
+    
+    const messageEl = document.getElementById("staff-clock-message");
+    messageEl.textContent = '✓ Clocked in successfully';
+    messageEl.style.color = '#10b981';
+    
+    setTimeout(() => {
+      loadStaffDetailData();
+      messageEl.textContent = '';
+    }, 1500);
+  } catch (err) {
+    console.error("Error clocking in:", err);
+    const messageEl = document.getElementById("staff-clock-message");
+    messageEl.textContent = '✗ Error: ' + (err.message || 'Failed to clock in');
+    messageEl.style.color = '#ef4444';
+  }
+}
+
+async function clockOutStaff() {
+  if (!CURRENT_STAFF_ID) return;
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${CURRENT_STAFF_ID}/clock-out`, {
+      method: 'POST'
+    });
+    
+    if (!res.ok) throw new Error('Failed to clock out');
+    
+    const messageEl = document.getElementById("staff-clock-message");
+    messageEl.textContent = '✓ Clocked out successfully';
+    messageEl.style.color = '#10b981';
+    
+    setTimeout(() => {
+      loadStaffDetailData();
+      messageEl.textContent = '';
+    }, 1500);
+  } catch (err) {
+    console.error("Error clocking out:", err);
+    const messageEl = document.getElementById("staff-clock-message");
+    messageEl.textContent = '✗ Error: ' + (err.message || 'Failed to clock out');
+    messageEl.style.color = '#ef4444';
+  }
+}
+
+function editStaffFromModal() {
+  if (!CURRENT_STAFF_ID) {
+    console.error("❌ No staff ID available for editing");
+    alert("Error: No staff member selected. Please close and reopen the details.");
+    return;
+  }
+  console.log("📝 Editing staff ID:", CURRENT_STAFF_ID);
+  closeStaffDetailModal();
+  editStaff(CURRENT_STAFF_ID);
+}
+
+function deleteStaffFromModal() {
+  if (!CURRENT_STAFF_ID) return;
+  if (confirm('Are you sure you want to delete this staff member?')) {
+    deleteStaff(CURRENT_STAFF_ID);
+    closeStaffDetailModal();
+  }
+}
+
+// Listen for language changes and re-render staff cards
+document.addEventListener('languageChanged', () => {
+  loadStaff();
+});

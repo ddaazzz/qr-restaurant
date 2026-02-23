@@ -950,12 +950,17 @@ router.post("/menu-items/:menuItemId/image",
   async (req, res) => {
     try {
       const { menuItemId } = req.params;
+      const restaurantId = req.body.restaurantId;
 
       if (!req.file) {
         return res.status(400).json({ error: "Image required" });
       }
 
-      const imageUrl = `/uploads/menu/${req.file.filename}`;
+      if (!restaurantId) {
+        return res.status(400).json({ error: "restaurantId required" });
+      }
+
+      const imageUrl = `/uploads/restaurants/${restaurantId}/menu/${req.file.filename}`;
 
       const result = await pool.query(
         `

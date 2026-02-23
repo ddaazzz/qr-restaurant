@@ -1,0 +1,23 @@
+
+> qr-restaurant@1.0.0 dev
+> npx ts-node-dev --respawn --transpile-only src/server.ts
+
+C:\Users\DT\AppData\Local\npm-cache\_npx\2351b2a15f5189cb\node_modules\resolve\lib\sync.js:117
+    throw err;
+    ^
+
+Error: Cannot find module 'src/server.ts' from 'C:\Users\DT\Documents\qr-restaurant-ai'
+    at Function.resolveSync [as sync] (C:\Users\DT\AppData\Local\npm-cache\_npx\2351b2a15f5189cb\node_modules\resolve\lib\sync.js:115:15)
+    at resolveRequest (C:\Users\DT\AppData\Local\npm-cache\_npx\2351b2a15f5189cb\node_modules\ts-node-dev\lib\resolveMain.js:18:24)
+    at exports.resolveMain (C:\Users\DT\AppData\Local\npm-cache\_npx\2351b2a15f5189cb\node_modules\ts-node-dev\lib\resolveMain.js:30:20)
+    at exports.runDev (C:\Users\DT\AppData\Local\npm-cache\_npx\2351b2a15f5189cb\node_modules\ts-node-dev\lib\index.js:53:30)
+    at Object.<anonymous> (C:\Users\DT\AppData\Local\npm-cache\_npx\2351b2a15f5189cb\node_modules\ts-node-dev\lib\bin.js:136:4)
+    at Module._compile (node:internal/modules/cjs/loader:1562:14)
+    at Object..js (node:internal/modules/cjs/loader:1699:10)
+    at Module.load (node:internal/modules/cjs/loader:1313:32)
+    at Function._load (node:internal/modules/cjs/loader:1123:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14) {
+  code: 'MODULE_NOT_FOUND'
+}
+
+Node.js v22.13.1

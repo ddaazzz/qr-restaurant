@@ -65,33 +65,49 @@ SET restaurant_id = (
 WHERE mivo.restaurant_id IS NULL;
 
 -- =====================================================
--- ADD FOREIGN KEY CONSTRAINTS
+-- ADD FOREIGN KEY CONSTRAINTS (with error handling)
 -- =====================================================
 
--- Add FK constraints for orders.restaurant_id
-ALTER TABLE orders
-ADD CONSTRAINT IF NOT EXISTS orders_restaurant_id_fkey
-FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+-- Note: Constraints are idempotent - if they already exist, ignore the error
+DO $$ 
+BEGIN
+  ALTER TABLE orders ADD CONSTRAINT orders_restaurant_id_fkey 
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
--- Add FK constraints for order_items.restaurant_id  
-ALTER TABLE order_items
-ADD CONSTRAINT IF NOT EXISTS order_items_restaurant_id_fkey
-FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+DO $$ 
+BEGIN
+  ALTER TABLE order_items ADD CONSTRAINT order_items_restaurant_id_fkey 
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
--- Add FK constraints for table_sessions.restaurant_id
-ALTER TABLE table_sessions
-ADD CONSTRAINT IF NOT EXISTS table_sessions_restaurant_id_fkey
-FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+DO $$ 
+BEGIN
+  ALTER TABLE table_sessions ADD CONSTRAINT table_sessions_restaurant_id_fkey 
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
--- Add FK constraints for menu_item_variants.restaurant_id
-ALTER TABLE menu_item_variants
-ADD CONSTRAINT IF NOT EXISTS menu_item_variants_restaurant_id_fkey
-FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+DO $$ 
+BEGIN
+  ALTER TABLE menu_item_variants ADD CONSTRAINT menu_item_variants_restaurant_id_fkey 
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
--- Add FK constraints for menu_item_variant_options.restaurant_id
-ALTER TABLE menu_item_variant_options
-ADD CONSTRAINT IF NOT EXISTS menu_item_variant_options_restaurant_id_fkey
-FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+DO $$ 
+BEGIN
+  ALTER TABLE menu_item_variant_options ADD CONSTRAINT menu_item_variant_options_restaurant_id_fkey 
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN
+  NULL;
+END $$;
 
 -- =====================================================
 -- CREATE INDEXES FOR PERFORMANCE

@@ -273,3 +273,59 @@
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
 }
+
+/* ============== RESPONSIVE DESIGN FOR MODALS ============== */
+@media (max-width: 1024px) {
+  .staff-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+  }
+
+  .staff-card {
+    aspect-ratio: auto;
+    min-height: 120px;
+  }
+
+  .staff-card-name {
+    font-size: 14px;
+  }
+
+  .staff-form-panel {
+    width: 90%;
+    right: -90%;
+    max-height: 90vh;
+  }
+
+  .staff-form-panel:not(.hidden) {
+    right: 0;
+  }
+
+  .staff-form-content {
+    padding: 16px;
+  }
+
+  .staff-form-content .form-group {
+    margin-bottom: 12px;
+  }
+
+  /* Staff detail modal responsiveness */
+  #staff-detail-modal .modal-content {
+    max-height: 85vh;
+    max-width: 95vw;
+    width: 95vw;
+  }
+}
+
+@media (max-height: 800px) {
+  #staff-detail-modal .modal-content {
+    max-height: 90vh;
+  }
+
+  #staff-detail-modal .modal-content > div {
+    margin-bottom: 12px !important;
+  }
+
+  #staff-timekeeping-list {
+    max-height: 200px !important;
+  }
+}
