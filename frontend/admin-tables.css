@@ -256,8 +256,9 @@
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
-    padding: 12px 12px 12px 0;
-    margin-left: 100px;
+    padding: 12px 12px 12px 100px;
+    margin-left: 0;
+    width: 100%;
   }
 }
 
@@ -265,8 +266,9 @@
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
-    padding: 10px 10px 10px 0;
-    margin-left: 80px;
+    padding: 10px 10px 10px 80px;
+    margin-left: 0;
+    width: 100%;
   }
 }
 
