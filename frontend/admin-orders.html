@@ -1,37 +1,43 @@
 <!-- ================= ADMIN ORDERS HTML ================= -->
 
 <div class="orders-container">
-    <!-- Left side: Menu items view -->
-    <div class="orders-left-panel">
+    <!-- Category Sidebar (Left) -->
+    <div id="orders-category-tabs" class="orders-category-sidebar">
+      <!-- Categories rendered by JS -->
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="orders-main-wrapper">
       <!-- Menu items view (default) -->
-      <div id="orders-menu-items-view">
+      <div id="orders-menu-items-view" class="orders-menu-view">
         <div id="orders-menu-items">
           <!-- JS renders menu items here -->
         </div>
       </div>
       
       <!-- History list view (when history button clicked) -->
-      <div id="orders-history-left-view">
+      <div id="orders-history-left-view" class="orders-history-view">
         <h4 data-i18n="admin.order-history">Order History</h4>
         <div id="orders-history-list-left">
           <p data-i18n="admin.loading">Loading...</p>
         </div>
       </div>
 
-      <!-- Category Tabs Bar (Bottom of left panel) + Cart Toggle -->
-      <div id="orders-category-tabs" class="orders-category-bar">
-        <!-- Categories rendered by JS, with cart button appended -->
+      <!-- Cart Bar (Bottom of main content) -->
+      <div class="orders-cart-bar">
+        <button id="cart-toggle-btn" class="cart-toggle-btn" onclick="toggleCartPanel()">
+          <span data-i18n="admin.cart">Cart</span> (<span id="cart-item-count">0</span>)
+        </button>
       </div>
     </div>
 
-    <!-- Bottom: Cart panel (hidden by default, shown on cart button click) -->
+    <!-- Cart Panel (Hidden by default, shown on cart button click) -->
     <div class="orders-right-panel" id="orders-cart-view-container">
-      <!-- Cart Panel -->
       <div id="orders-cart-view" class="cart-panel">
         <div class="cart-header">
           <h3 data-i18n="admin.cart">Cart</h3>
           <div>
-            <button id="cart-edit-btn" class="btn-tertiary" onclick="toggleCartEdit()" data-i18n="admin.edit"><img src="/uploads/website/pencil.png" alt="edit"/> Edit</button>
+            <button id="cart-edit-btn" class="btn-tertiary" onclick="toggleCartEdit()"><img src="/uploads/website/pencil.png" alt="edit"/> <span data-i18n="admin.edit">Edit</span></button>
           </div>
         </div>
 
@@ -41,20 +47,17 @@
           </div>
         </div>
 
-        <!-- Cart Total -->
         <div class="cart-footer">
           <div class="cart-total">
             <span data-i18n="admin.total">Total:</span>
             <span id="cart-total-price">$0.00</span>
           </div>
 
-          <!-- Order Status (shown when viewing historical order) -->
           <div id="order-status-display">
             <span>Status: </span>
             <span id="order-status-value"></span>
           </div>
 
-          <!-- Order Type Selection (Radio buttons) -->
           <div class="order-type-selector">
             <label class="order-type-option">
               <input type="radio" name="order-type" id="order-type-table" value="table" onchange="updateOrderTypeUI()">
@@ -70,7 +73,6 @@
             </label>
           </div>
 
-          <!-- Table Selection (for Add to Table) -->
           <div id="table-selection-ui">
             <label data-i18n="admin.select-table">Select Table:</label>
             <select id="order-table-select">
@@ -78,18 +80,14 @@
             </select>
           </div>
 
-          <!-- Main Action Button -->
           <button id="order-submit-btn" onclick="submitOrder()" class="btn-primary" data-i18n="admin.submit-order">
             Submit Order
           </button>
         </div>
       </div>
 
-      <!-- Order Details View (when clicking order from history) -->
-      <div id="orders-details-view">
-        <div>
-          <h3 id="order-details-title" data-i18n="admin.order-header">Order Details</h3>
-        </div>
+      <div id="orders-details-view" class="orders-details-view">
+        <h3 id="order-details-title" data-i18n="admin.order-header">Order Details</h3>
         <div id="order-details-content">
           <p data-i18n="admin.select-an-order">Select an order to view details</p>
         </div>
