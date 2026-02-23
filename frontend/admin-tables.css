@@ -124,6 +124,8 @@
     padding: 12px;
     flex-wrap: wrap;
     margin-left: 100px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -140,6 +142,7 @@
   .table-tabs {
     flex-wrap: wrap;
     margin-left: 80px;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -870,6 +873,38 @@ body.edit-mode .table-edit-controls {
   transform: translateX(0);
 }
 
+/* Mobile responsive: Session panel full-width slide from right */
+@media (max-width: 768px) {
+  .session-panel {
+    flex: 0 0 100%;
+    min-width: 100%;
+    max-width: 100%;
+    width: 100%;
+    right: -100%;
+    transform: translateX(100%);
+  }
+
+  .session-panel.active {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .session-panel {
+    flex: 0 0 100%;
+    min-width: 100%;
+    max-width: 100%;
+    width: 100%;
+    right: -100%;
+    transform: translateX(100%);
+    padding: 12px;
+  }
+
+  .session-panel.active {
+    transform: translateX(0);
+  }
+}
+
 .panel-close-btn {
   align-self: flex-end;
   background: none;
@@ -1447,13 +1482,13 @@ body.edit-mode .table-edit-controls {
   }
 
   #tables-grid {
-    grid-template-columns: repeat(auto-fill, 100px);
-    gap: 16px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
 
   .table-card {
-    width: 100px;
-    height: 100px;
+    width: auto;
+    height: 120px;
     padding: 8px 6px;
   }
 
@@ -1490,13 +1525,13 @@ body.edit-mode .table-edit-controls {
   }
 
   #tables-grid {
-    grid-template-columns: repeat(auto-fill, 150px);
-    gap: 20px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 
   .table-card {
-    width: 150px;
-    height: 150px;
+    width: auto;
+    height: 140px;
     padding: 9px 7px;
   }
 
