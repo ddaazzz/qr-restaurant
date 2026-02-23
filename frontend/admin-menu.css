@@ -106,25 +106,43 @@
   }
   
   .menu-grid {
-    margin-left: 100px;
-    padding: 12px;
+    padding: 12px 12px 12px 100px;
+    margin: 0;
     flex: 1;
+    width: 100%;
+    box-sizing: border-box;
+    gap: 12px;
+    grid-template-columns: repeat(2, 1fr);
+    align-content: start;
   }
 }
 
 @media (max-width: 480px) {
   .menu-tabs-bottom {
     width: 80px;
+    position: fixed;
+    left: 0;
+    top: 60px;
+    height: calc(100vh - 60px);
+    z-index: 40;
+    overflow-y: auto;
   }
   
   .menu-tabs-bottom button {
     font-size: 10px;
     padding: 10px 6px;
+    flex-shrink: 0;
   }
   
   .menu-grid {
-    grid-template-columns: 1fr !important;
-    margin-left: 80px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 10px 10px 10px 80px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    margin-left: 0;
+    align-content: start;
   }
 }
 

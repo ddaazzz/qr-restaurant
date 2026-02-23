@@ -1181,21 +1181,35 @@
     flex-direction: row;
     gap: 0;
     padding: 0;
+    width: 100%;
+    overflow: hidden;
   }
 
   .orders-right-panel {
     width: 80px;
     order: -1;
     padding: 0;
+    flex-shrink: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   
   .orders-left-panel {
-    padding: 8px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0;
+    width: calc(100% - 80px);
   }
   
   .orders-items-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 8px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 10px 10px 10px 80px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    align-content: start;
   }
 }
