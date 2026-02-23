@@ -1,7 +1,7 @@
 <!-- ================= ADMIN ORDERS HTML ================= -->
 
 <div class="orders-container">
-    <!-- Left side: Menu items or History list -->
+    <!-- Left side: Menu items view -->
     <div class="orders-left-panel">
       <!-- Menu items view (default) -->
       <div id="orders-menu-items-view">
@@ -18,16 +18,18 @@
         </div>
       </div>
 
-      <!-- Category Tabs Bar (Bottom of left panel) -->
-      <div id="orders-category-tabs" class="orders-category-bar"></div>
+      <!-- Category Tabs Bar (Bottom of left panel) + Cart Toggle -->
+      <div id="orders-category-tabs" class="orders-category-bar">
+        <!-- Categories rendered by JS, with cart button appended -->
+      </div>
     </div>
 
-    <!-- Center/Right side: Orders list view or Cart -->
-    <div class="orders-right-panel">
-      <!-- Cart Panel (default view) -->
+    <!-- Bottom: Cart panel (hidden by default, shown on cart button click) -->
+    <div class="orders-right-panel" id="orders-cart-view-container">
+      <!-- Cart Panel -->
       <div id="orders-cart-view" class="cart-panel">
         <div class="cart-header">
-          <h3 data-i18n="admin.orders">Cart</h3>
+          <h3 data-i18n="admin.cart">Cart</h3>
           <div>
             <button id="cart-edit-btn" class="btn-tertiary" onclick="toggleCartEdit()" data-i18n="admin.edit"><img src="/uploads/website/pencil.png" alt="edit"/> Edit</button>
           </div>

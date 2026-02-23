@@ -167,6 +167,28 @@ function renderOrdersCategoryBar() {
     
     categoryTabsContainer.appendChild(btn);
   });
+  
+  // Add cart toggle button at the end
+  const cartBtn = document.createElement('button');
+  cartBtn.className = 'cart-toggle-btn';
+  cartBtn.id = 'cart-toggle-btn';
+  cartBtn.textContent = 'Cart (' + ORDERS_CART.length + ')';
+  cartBtn.onclick = () => toggleCartPanel();
+  
+  categoryTabsContainer.appendChild(cartBtn);
+}
+
+// Toggle cart panel visibility
+function toggleCartPanel() {
+  const cartPanel = document.getElementById('orders-cart-view-container');
+  const cartBtn = document.getElementById('cart-toggle-btn');
+  
+  if (cartPanel) {
+    cartPanel.classList.toggle('visible');
+    if (cartBtn) {
+      cartBtn.classList.toggle('active');
+    }
+  }
 }
 
 // ========== CART MANAGEMENT ==========
@@ -336,8 +358,14 @@ function submitItemWithVariants(itemId, formContainer) {
 function updateOrdersCartDisplay() {
   const cartList = document.getElementById('cart-items-list');
   const totalPrice = document.getElementById('cart-total-price');
+  const cartBtn = document.getElementById('cart-toggle-btn');
   
   if (!cartList) return;
+  
+  // Update cart button count
+  if (cartBtn) {
+    cartBtn.textContent = 'Cart (' + ORDERS_CART.length + ')';
+  }
   
   if (ORDERS_CART.length === 0) {
     cartList.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">Cart is empty</p>';
