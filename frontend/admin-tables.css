@@ -80,28 +80,44 @@
 /* Mobile responsive: Category buttons on left as vertical sidebar */
 @media (max-width: 768px) {
   .tables-container {
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    grid-template-rows: auto 1fr;
     gap: 0;
     padding: 0;
     height: calc(100vh - 140px);
   }
   
+  .tables-container > .tables-top-bar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  
+  .tables-container > .left-column-wrapper {
+    grid-column: 2;
+    grid-row: 2;
+    width: 100%;
+    flex: 1;
+    overflow: hidden;
+  }
+  
   .table-tabs-bottom {
+    grid-column: 1;
+    grid-row: 2;
     flex-direction: column;
     width: 100px;
-    margin-top: 0;
-    margin-right: 0;
+    margin: 0;
     border-top: none;
     border-right: 2px solid var(--border-color);
     border-bottom: none;
-    order: -1;
     flex-shrink: 0;
     position: relative;
     left: auto;
     top: auto;
-    height: auto;
+    height: 100%;
     align-items: stretch;
     pointer-events: auto;
+    overflow-y: auto;
   }
   
   .table-tabs-bottom button {
@@ -114,25 +130,23 @@
     white-space: normal;
     word-break: break-word;
     pointer-events: auto;
+    flex: 1;
+    max-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   
   .table-tabs-bottom button:last-child {
     border-bottom: none;
   }
-  
-  .table-tabs {
-    flex: 1;
-    gap: 6px;
-    padding: 12px;
-    flex-wrap: wrap;
-    margin-left: 0;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    overflow: auto;
-  }
 }
 
 @media (max-width: 480px) {
+  .tables-container {
+    grid-template-columns: 80px 1fr;
+  }
+  
   .table-tabs-bottom {
     width: 80px;
   }
@@ -140,13 +154,7 @@
   .table-tabs-bottom button {
     font-size: 10px;
     padding: 10px 6px;
-  }
-  
-  .table-tabs {
-    flex-wrap: wrap;
-    margin-left: 0;
-    grid-template-columns: repeat(2, 1fr);
-    overflow: auto;
+    max-height: 70px;
   }
 }
 
@@ -209,6 +217,8 @@
   z-index: 50;
   margin-bottom: 8px;
   padding-bottom: 8px;
+  width: 100%;
+  display: flex;
 }
 
 .tables-container > .left-column-wrapper {
