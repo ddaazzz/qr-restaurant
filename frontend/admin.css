@@ -91,26 +91,38 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ============== CSS GRID LAYOUT ============== */
 .app-container {
-  display: grid;
-  grid-template-rows: 60px 1fr;
-  grid-template-columns: 120px 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100%;
-  transition: grid-template-columns 0.3s ease;
 }
 
-.app-container.sidebar-collapsed {
-  grid-template-columns: 0px 1fr;
+.app-container > .app-header {
+  flex-shrink: 0;
+  z-index: 500;
 }
 
-/* Mobile responsive: Remove fixed sidebar column, let it overlap */
+.app-container > .sidebar {
+  position: fixed;
+  left: 0;
+  top: 60px;
+  height: calc(100vh - 60px);
+  z-index: 200;
+}
+
+.app-container > .main-content {
+  flex: 1;
+  overflow: hidden;
+  margin-left: 120px;
+}
+
 @media (max-width: 768px) {
-  .app-container {
-    grid-template-columns: 1fr;
+  .app-container > .sidebar {
+    width: 100px;
   }
 
-  .app-container.sidebar-collapsed {
-    grid-template-columns: 1fr;
+  .app-container > .main-content {
+    margin-left: 0;
   }
 }
 
@@ -125,15 +137,9 @@ h1, h2, h3, h4, h5, h6 {
   gap: 16px;
   flex-shrink: 0;
   height: 60px;
-  grid-column: 1 / -1;
-  grid-row: 1;
   z-index: 500;
   position: relative;
   transition: none;
-}
-
-.app-container.sidebar-collapsed .app-header {
-  grid-column: 1 / -1;
 }
 
 .header-left {
@@ -339,13 +345,10 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   overflow: hidden;
   transition: margin-left 0.3s ease;
-  z-index: 200;
-  grid-column: 1;
-  grid-row: 2;
-  position: relative;
-  margin-left: 0;
+  position: fixed;
   left: 0;
-  top: 0;
+  top: 60px;
+  height: calc(100vh - 60px);
 }
 
 .sidebar.collapsed {
@@ -452,19 +455,12 @@ h1, h2, h3, h4, h5, h6 {
   flex: 1;
   overflow: hidden;
   background: var(--bg-light);
-  height: 100%;
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 0;
   width: 100%;
-  grid-column: 2;
-  grid-row: 2;
   transition: none;
-}
-
-.app-container.sidebar-collapsed .main-content {
-  grid-column: 1 / -1;
 }
 
 .main-content h2 {
