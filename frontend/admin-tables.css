@@ -80,44 +80,31 @@
 /* Mobile responsive: Category buttons on left as vertical sidebar */
 @media (max-width: 768px) {
   .tables-container {
-    display: grid;
-    grid-template-columns: 100px 1fr;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 0;
     padding: 0;
     height: calc(100vh - 140px);
-  }
-  
-  .tables-container > .tables-top-bar {
-    grid-column: 1 / -1;
-    grid-row: 1;
-  }
-  
-  .tables-container > .left-column-wrapper {
-    grid-column: 2;
-    grid-row: 2;
-    width: 100%;
-    flex: 1;
-    overflow: hidden;
+    margin-left: 100px;
+    position: relative;
   }
   
   .table-tabs-bottom {
-    grid-column: 1;
-    grid-row: 2;
-    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 70px;
     width: 100px;
+    height: calc(100vh - 70px);
+    flex-direction: column;
     margin: 0;
     border-top: none;
     border-right: 2px solid var(--border-color);
     border-bottom: none;
     flex-shrink: 0;
-    position: relative;
-    left: auto;
-    top: auto;
-    height: 100%;
-    align-items: stretch;
-    pointer-events: auto;
+    background: var(--bg-white);
+    z-index: 40;
     overflow-y: auto;
+    pointer-events: auto;
   }
   
   .table-tabs-bottom button {
@@ -130,11 +117,6 @@
     white-space: normal;
     word-break: break-word;
     pointer-events: auto;
-    flex: 1;
-    max-height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   
   .table-tabs-bottom button:last-child {
@@ -144,17 +126,18 @@
 
 @media (max-width: 480px) {
   .tables-container {
-    grid-template-columns: 80px 1fr;
+    margin-left: 80px;
   }
   
   .table-tabs-bottom {
     width: 80px;
+    top: 60px;
+    height: calc(100vh - 60px);
   }
   
   .table-tabs-bottom button {
     font-size: 10px;
     padding: 10px 6px;
-    max-height: 70px;
   }
 }
 
@@ -186,13 +169,28 @@
   color: var(--bg-white);
 }
 
-/* TABLES TOP BAR */
 .tables-top-bar {
   display: flex;
   gap: 12px;
   align-items: center;
   width: 100%;
   min-height: 50px;
+}
+
+@media (max-width: 768px) {
+  .tables-top-bar {
+    margin-left: -100px;
+    width: calc(100% + 100px);
+    padding-left: 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tables-top-bar {
+    margin-left: -80px;
+    width: calc(100% + 80px);
+    padding-left: 80px;
+  }
 }
 
 /* TABLES CONTAINER */
