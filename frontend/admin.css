@@ -1660,11 +1660,8 @@ button.btn-icon.danger:hover {
   
   .sidebar {
     width: 70px;
-    transition: width 0.3s ease;
-  }
-  
-  .sidebar.expanded {
-    width: 250px;
+    position: relative;
+    z-index: 100;
   }
   
   .sidebar-menu {
@@ -1675,12 +1672,10 @@ button.btn-icon.danger:hover {
     display: none;
   }
   
-  .sidebar.expanded .menu-text {
-    display: inline;
-  }
-  
   .main-content {
     overflow-x: hidden;
+    flex: 1;
+    min-width: 0;
   }
   
   .btn-primary,
@@ -1697,10 +1692,6 @@ button.btn-icon.danger:hover {
 
 /* Mobile phone */
 @media (max-width: 480px) {
-  .app-container {
-    flex-direction: column;
-  }
-  
   .app-header {
     padding: 8px 10px;
     gap: 5px;
@@ -1709,13 +1700,13 @@ button.btn-icon.danger:hover {
   .header-left,
   .header-center,
   .header-right {
-    flex: 1;
-    min-width: 0;
+    flex: 0 0 auto;
   }
   
   .sidebar {
     width: 60px;
-    order: -1;
+    position: relative;
+    z-index: 100;
   }
   
   .sidebar-toggle {
@@ -1747,5 +1738,6 @@ button.btn-icon.danger:hover {
   .main-content {
     width: 100%;
     min-width: 0;
+    flex: 1;
   }
 }

@@ -1140,48 +1140,39 @@
   padding: 16px;
 }
 
-/* Mobile responsive: Move category bar to left side */
+/* Mobile responsive: Category bar remains accessible */
 @media (max-width: 768px) {
-  .orders-container {
+  .orders-right-panel {
+    width: 100px;
+    margin-left: 0;
+    flex-shrink: 0;
     flex-direction: column;
-    height: auto;
+    border-right: 2px solid var(--border-color);
+    border-left: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    order: -1;
   }
   
   .orders-left-panel {
-    flex-direction: row;
-    padding-right: 0;
-    gap: 12px;
-  }
-  
-  .orders-right-panel {
-    width: 100%;
-    margin-left: 0;
-    max-height: none;
-    flex-direction: row;
-    order: -1;
-    margin-bottom: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-right: 2px solid var(--border-color);
+    padding-right: 12px;
   }
   
   .orders-items-grid {
     grid-template-columns: repeat(2, 1fr);
+    flex: 1;
   }
 }
 
 @media (max-width: 480px) {
-  .orders-container {
-    padding: 12px;
+  .orders-right-panel {
+    width: 80px;
+    order: -1;
   }
   
   .orders-items-grid {
     grid-template-columns: 1fr;
     gap: 8px;
     padding: 8px;
-  }
-  
-  .orders-right-panel {
-    min-height: 120px;
   }
 }

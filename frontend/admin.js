@@ -297,33 +297,9 @@ function handleLogout() {
 }
 
 function toggleSidebar() {
-  var sidebar = document.getElementById("sidebar");
-  var container = document.getElementById("app-container");
-  if (sidebar) {
-    sidebar.classList.toggle("collapsed");
-    if (container) {
-      container.classList.toggle("sidebar-collapsed");
-    }
-  }
+  // Sidebar toggle is now handled by CSS media queries
+  // No JavaScript manipulation needed for mobile
 }
-
-// Close sidebar when clicking outside of it
-document.addEventListener("click", function(event) {
-  var sidebar = document.getElementById("sidebar");
-  var toggleBtn = document.getElementById("sidebar-toggle");
-  var container = document.getElementById("app-container");
-  
-  // If sidebar exists and is not collapsed
-  if (sidebar && !sidebar.classList.contains("collapsed")) {
-    // Check if click is outside sidebar and not on toggle button
-    if (!sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
-      sidebar.classList.add("collapsed");
-      if (container) {
-        container.classList.add("sidebar-collapsed");
-      }
-    }
-  }
-});
 
 // Update app header with section-specific content
 function updateSectionHeader(title, actionButtonId) {

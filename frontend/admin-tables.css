@@ -77,25 +77,32 @@
   opacity: 1;
 }
 
-/* Mobile responsive: Move category bar to left side */
+/* Mobile responsive: Category buttons on left as vertical sidebar */
 @media (max-width: 768px) {
+  .tables-container {
+    flex-direction: row;
+    gap: 0;
+  }
+  
   .table-tabs-bottom {
     flex-direction: column;
-    align-items: stretch;
-    width: auto;
-    min-width: 100px;
+    width: 100px;
     margin-top: 0;
     margin-right: 12px;
     border-top: none;
     border-right: 2px solid var(--border-color);
+    border-bottom: none;
     order: -1;
+    flex-shrink: 0;
+    align-items: stretch;
   }
   
   .table-tabs-bottom button {
     padding: 12px 8px;
-    font-size: 12px;
+    font-size: 11px;
     border-right: none;
     border-bottom: 1px solid var(--border-color);
+    border-top: none;
     text-align: center;
     white-space: normal;
     word-break: break-word;
@@ -105,21 +112,26 @@
     border-bottom: none;
   }
   
-  .tables-container {
-    flex-direction: row;
-    gap: 0;
+  .table-tabs {
+    flex: 1;
+    gap: 6px;
+    padding: 12px;
+    flex-wrap: wrap;
   }
 }
 
 @media (max-width: 480px) {
   .table-tabs-bottom {
-    min-width: 80px;
+    width: 80px;
+  }
+  
+  .table-tabs-bottom button {
+    font-size: 10px;
+    padding: 10px 6px;
   }
   
   .table-tabs {
-    grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 8px;
+    flex-wrap: wrap;
   }
 }
 

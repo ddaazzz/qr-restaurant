@@ -65,43 +65,54 @@
   opacity: 0.9;
 }
 
-/* Mobile responsive: Move category bar to left side */
+/* Mobile responsive: Category buttons on left as vertical sidebar */
 @media (max-width: 768px) {
+  .menu-container {
+    flex-direction: row;
+    gap: 0;
+  }
+  
   .menu-tabs-bottom {
     flex-direction: column;
-    align-items: stretch;
-    width: auto;
-    min-width: 100px;
+    width: 100px;
     margin-top: 0;
     margin-right: 12px;
     border-top: none;
     border-right: 2px solid var(--border-color);
+    border-bottom: none;
     order: -1;
+    flex-shrink: 0;
   }
   
   .menu-tabs-bottom button {
-    writing-mode: horizontal-tb;
     padding: 12px 8px;
-    font-size: 12px;
+    font-size: 11px;
     border-right: none;
     border-bottom: 1px solid var(--border-color);
+    border-top: none;
     white-space: normal;
     word-break: break-word;
+    text-align: center;
   }
   
   .menu-tabs-bottom button:last-child {
     border-bottom: none;
   }
   
-  .menu-container {
-    flex-direction: row;
-    gap: 0;
+  #menu-items-grid {
+    flex: 1;
+    padding: 12px;
   }
 }
 
 @media (max-width: 480px) {
   .menu-tabs-bottom {
-    min-width: 80px;
+    width: 80px;
+  }
+  
+  .menu-tabs-bottom button {
+    font-size: 10px;
+    padding: 10px 6px;
   }
   
   #menu-items-grid {
@@ -121,6 +132,13 @@
   align-items: stretch;
   position: relative;
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .menu-container {
+    flex-direction: row;
+    gap: 0;
+  }
 }
 
 /* MENU GRID */
