@@ -1459,8 +1459,6 @@ const translations = {
     'admin.header-history': 'History',
     'admin.header-admin': 'Admin',
     'admin.header-logout': '🚪 Logout',
-    'admin.scan-qr': 'Scan Table',
-    'admin.scan-table-qr': 'Scan Table QR Code',
 
     // Session List
     'admin.session-label': 'Session #{0}',
@@ -3410,8 +3408,6 @@ const translations = {
     'admin.header-history': '歷史',
     'admin.header-admin': '管理員',
     'admin.header-logout': '🚪 登出',
-    'admin.scan-qr': '掃描桌子',
-    'admin.scan-table-qr': '掃描桌子二維碼',
 
     // Session List (Chinese)
     'admin.session-label': '餐次 #{0}',

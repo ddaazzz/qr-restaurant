@@ -7,10 +7,8 @@
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
   <title>Admin Portal | Chuio</title>
 
-  <!-- QR code library (generate QRs) -->
+  <!-- QR code library -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <!-- QR code scanner library (scan QRs) - UMD version -->
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.5/dist/html5-qrcode.min.js"></script>
 
   <!-- Admin CSS (Core + Modules) -->
   <link rel="stylesheet" href="/admin.css" />
@@ -21,17 +19,6 @@
   <link rel="stylesheet" href="/admin-reports.css" />
   <link rel="stylesheet" href="/admin-settings.css" />
   <link rel="stylesheet" href="/admin-bookings.css" />
-
-  <!-- Modular admin functions -->
-  <script src="/admin-orders.js"></script>
-  <script src="/admin-tables.js"></script>
-  <script src="/admin-menu.js"></script>
-  <script src="/admin-staff.js"></script>
-  <script src="/admin-reports.js"></script>
-  <script src="/admin-settings.js"></script>
-  <script src="/admin-bookings.js"></script>
-  <!-- QR scanning functionality -->
-  <script src="/qr-scanner.js"></script>
 </head>
 
 <body>
@@ -56,13 +43,12 @@
         </div>
         
         <div class="header-right">
-          <button id="table-edit-btn" class="header-icon-btn" onclick="toggleTableEditMode()" title="Edit" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"></button>
-          <button id="menu-edit-btn" class="header-icon-btn" onclick="toggleMenuEditMode()" title="Edit" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"></button>
-          <button id="staff-edit-btn" class="header-icon-btn" onclick="toggleStaffEditMode('staff')" title="Edit" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"></button>
+          <button id="table-edit-btn" class="btn-primary" onclick="toggleTableEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
+          <button id="menu-edit-btn" class="btn-primary" onclick="toggleMenuEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
+          <button id="staff-edit-btn" class="btn-primary" onclick="toggleStaffEditMode('staff')" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
           <button id="reports-btn" class="btn-primary" style="display: none;" data-i18n="admin.header-reports">∿ Reports</button>
-          <button id="edit-settings-header" class="header-icon-btn" onclick="enterEditMode()" title="Edit" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"></button>
-          <button id="orders-history-header-btn" class="header-icon-btn" onclick="toggleOrdersHistoryMode()" title="History" style="display: none;"><img src="/uploads/website/history.png" alt="history" class="btn-icon"/></button>
-          <button id="scan-qr-btn" class="header-icon-btn" onclick="openScanQRModal()" title="Scan Table QR" style="display: none;">📱</button>
+          <button id="edit-settings-header" class="btn-primary" onclick="enterEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
+          <button id="orders-history-header-btn" class="btn-tertiary" onclick="toggleOrdersHistoryMode()" style="display: none;"><img src="/uploads/website/history.png" alt="history" style="width: 16px; height: 16px; filter: brightness(0) invert(1);"/> <span data-i18n="admin.header-history">History</span></button>
           <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
             <img src="/uploads/website/user.png" alt="admin" class="btn-icon"> <span data-i18n="admin.header-admin">Admin</span>
             <span class="dropdown-arrow">▼</span>
@@ -233,29 +219,14 @@
       </main>
     </div>
 
-    <!-- QR Scanner Modal -->
-    <div id="scan-qr-modal" class="modal hidden">
-      <div class="modal-overlay" onclick="closeScanQRModal()"></div>
-      <div class="modal-content qr-scanner-modal">
-        <div class="modal-header">
-          <h3 data-i18n="admin.scan-table-qr">Scan Table QR Code</h3>
-          <button class="modal-close" onclick="closeScanQRModal()">✕</button>
-        </div>
-        <div class="qr-scanner-container">
-          <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden;"></div>
-          <div id="qr-scanner-error" class="qr-scanner-error hidden" style="color: #ef4444; margin-top: 10px; text-align: center;"></div>
-          <div id="qr-scanner-loading" class="qr-scanner-loading hidden" style="color: #666; margin-top: 10px; text-align: center;">Initializing camera...</div>
-        </div>
-        <div class="modal-footer" style="margin-top: 20px;">
-          <button class="btn-secondary" onclick="closeScanQRModal()" data-i18n="admin.close">Close</button>
-        </div>
-      </div>
-    </div>
+
 
   <!-- ================= SCRIPTS ================= -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="/translations.js"></script>
   <script src="/timezone-utils.js"></script>
   <script src="/admin.js"></script>
+  <!-- Modular admin functions -->
   <script src="/admin-orders.js"></script>
   <script src="/admin-tables.js"></script>
   <script src="/admin-menu.js"></script>
@@ -263,6 +234,5 @@
   <script src="/admin-reports.js"></script>
   <script src="/admin-settings.js"></script>
   <script src="/admin-bookings.js"></script>
-  <script src="/qr-scanner.js"></script>
 </body>
 </html>

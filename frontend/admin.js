@@ -374,7 +374,7 @@ function updateSectionHeader(titleKey, actionButtonId) {
   var headerRightBtns = document.querySelectorAll(".header-right [id$='-btn'], .header-right [id$='-header']");
   for (var i = 0; i < headerRightBtns.length; i++) {
     var btn = headerRightBtns[i];
-    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown" && btn.id !== "scan-qr-btn") {
+    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown") {
       btn.style.display = "none";
     }
   }
@@ -384,16 +384,6 @@ function updateSectionHeader(titleKey, actionButtonId) {
     var btn = document.getElementById(actionButtonId);
     if (btn) {
       btn.style.display = "inline-block";
-    }
-  }
-
-  // Show scan QR button only for tables section
-  var scanBtn = document.getElementById("scan-qr-btn");
-  if (scanBtn) {
-    if (CURRENT_SECTION === "tables") {
-      scanBtn.style.display = "inline-block";
-    } else {
-      scanBtn.style.display = "none";
     }
   }
 }

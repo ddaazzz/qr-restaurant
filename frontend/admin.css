@@ -755,33 +755,6 @@ button {
   letter-spacing: -0.2px;
 }
 
-/* ============== HEADER ICON BUTTONS ============== */
-.header-icon-btn {
-  background: #f0f0f0;
-  border: 1px solid #d0d0d0;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  gap: 0;
-}
-
-.header-icon-btn:hover {
-  background: #e0e0e0;
-  border-color: #b0b0b0;
-}
-
-.header-icon-btn:active {
-  transform: scale(0.95);
-}
-
-.header-icon-btn .btn-icon {
-  filter: none;
-}
-
 .btn-icon {
   width: 16px;
   height: 16px;
@@ -1083,44 +1056,7 @@ button.btn-icon.danger:hover {
   transition: all 0.2s ease;
 }
 
-/* ============== QR SCANNER MODAL ============== */
-.qr-scanner-modal {
-  max-width: 500px;
-}
 
-.qr-scanner-container {
-  padding: 20px;
-  text-align: center;
-}
-
-#qr-reader {
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.qr-scanner-error {
-  padding: 12px;
-  background: #fee;
-  border: 1px solid #fcc;
-  border-radius: 6px;
-  color: #c33;
-  font-size: 0.9em;
-}
-
-.qr-scanner-error.hidden {
-  display: none;
-}
-
-.qr-scanner-loading {
-  padding: 12px;
-  color: var(--text-light);
-  font-size: 0.9em;
-}
-
-.qr-scanner-loading.hidden {
-  display: none;
-}
 
 /* ============== LOGIN SCREEN ============== */
 .login-screen {

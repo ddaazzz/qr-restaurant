@@ -596,7 +596,39 @@ async function uploadItemImage(itemId, file) {
   }
 }
 
-// Removed: editMenuCategoryName - unused function (category editing happens via inline workflow)
+// Category edit/delete
+async function editMenuCategoryName(categoryId, oldName) {
+  const newName = prompt("Edit category name:", oldName);
+  if (!newName || !newName.trim()) return;
+
+  try {
+    await fetch(`${API}/menu-categories/${categoryId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() })
+    });
+    await loadMenuItems();
+  } catch (err) {
+    alert("Error updating category: " + err.message);
+  }
+}
+
+async function deleteMenuCategory(categoryId) {
+  if (!confirm("Delete this category? All items inside will also be deleted.")) return;
+
+  try {
+    const res = await fetch(`${API}/menu-categories/${categoryId}`, { method: "DELETE" });
+
+    if (!res.ok) {
+      const err = await res.json();
+      return alert(err.error || "Cannot delete category");
+    }
+
+    await loadMenuItems();
+  } catch (err) {
+    alert("Error deleting category: " + err.message);
+  }
+}
 
 // ============= FOOD ITEM DETAIL PANEL =============
 
@@ -1358,7 +1390,43 @@ async function saveInlineVariantOption() {
   }
 }
 
-// Removed: renderVariantOptions - unused function (variant rendering handled by renderFoodPanelVariantsForView/Edit)
+function renderVariantOptions(variant) {
+  const optionsList = document.getElementById('food-panel-variant-options-list');
+  if (!optionsList) return;
+  
+  optionsList.innerHTML = '';
+  
+  if (variant.options && variant.options.length > 0) {
+    variant.options.forEach(function(option) {
+      const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+      const optionHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: white; border: 1px solid #ddd; border-radius: 3px;">
+          <span style="font-size: 12px;">${option.name}${priceLabel}</span>
+          <div style="display: flex; gap: 4px;">
+            <button onclick="editVariantOption(${option.id})" style="padding: 2px 6px; background: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Edit</button>
+            <button onclick="deleteVariantOption(${option.id})" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Delete</button>
+          </div>
+        </div>
+      `;
+      optionsList.innerHTML += optionHTML;
+    });
+  } else {
+    optionsList.innerHTML = '<p style="font-size: 12px; color: #999; margin: 0;">No options yet</p>';
+  }
+}
+
+function startAddVariantOption() {
+  const form = document.getElementById('variant-option-form-inline');
+  const nameInput = document.getElementById('inline-option-name');
+  const priceInput = document.getElementById('inline-option-price');
+  
+  if (form && nameInput && priceInput) {
+    currentEditingOptionId = null;
+    nameInput.value = '';
+    priceInput.value = '';
+    form.style.display = 'block';
+  }
+}
 
 function cancelVariantOptionForm() {
   const form = document.getElementById('food-panel-variant-option-form');
