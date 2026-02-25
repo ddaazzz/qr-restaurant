@@ -1,96 +1,123 @@
 <!-- ================= ADMIN ORDERS HTML ================= -->
 
 <div class="orders-container">
-    <!-- Category Sidebar (Left) -->
-    <div id="orders-category-tabs" class="orders-category-sidebar">
+    <!-- Category Sidebar (Left on mobile, hidden on desktop) -->
+    <div id="orders-category-sidebar" class="orders-category-sidebar">
       <!-- Categories rendered by JS -->
     </div>
-
-    <!-- Main Content Area -->
-    <div class="orders-main-wrapper">
-      <!-- Menu items view (default) -->
-      <div id="orders-menu-items-view" class="orders-menu-view">
-        <div id="orders-menu-items">
-          <!-- JS renders menu items here -->
-        </div>
-      </div>
-      
-      <!-- History list view (when history button clicked) -->
-      <div id="orders-history-left-view" class="orders-history-view">
-        <h4 data-i18n="admin.order-history">Order History</h4>
-        <div id="orders-history-list-left">
-          <p data-i18n="admin.loading">Loading...</p>
-        </div>
-      </div>
-
-      <!-- Cart Bar (Bottom of main content) -->
-      <div class="orders-cart-bar">
-        <button id="cart-toggle-btn" class="cart-toggle-btn" onclick="toggleCartPanel()">
-          <span data-i18n="admin.cart">Cart</span> (<span id="cart-item-count">0</span>)
-        </button>
-      </div>
-    </div>
-
-    <!-- Cart Panel (Hidden by default, shown on cart button click) -->
-    <div class="orders-right-panel" id="orders-cart-view-container">
-      <div id="orders-cart-view" class="cart-panel">
-        <div class="cart-header">
-          <h3 data-i18n="admin.cart">Cart</h3>
-          <div>
-            <button id="cart-edit-btn" class="btn-tertiary" onclick="toggleCartEdit()"><img src="/uploads/website/pencil.png" alt="edit"/> <span data-i18n="admin.edit">Edit</span></button>
+            <!-- History list view (when history button clicked) -->
+        <div id="orders-history-left-view" class="orders-history-view">
+          <h4 data-i18n="admin.order-history">Order History</h4>
+          <div id="orders-history-list-left">
+            <p data-i18n="admin.loading">Loading...</p>
           </div>
         </div>
-
-        <div class="cart-items-container">
-          <div id="cart-items-list">
-            <p data-i18n="admin.loading">Cart is empty</p>
+    <!-- Main Content + Right Panel Wrapper (Flex Row) -->
+    <div class="left-column-wrapper">
+      <!-- Main Content Area -->
+      <div class="orders-main-wrapper">
+        <!-- Menu items view (default) -->
+        <div id="orders-menu-items-view" class="orders-menu-view">
+          <div id="orders-menu-items">
+            <!-- JS renders menu items here -->
           </div>
         </div>
+        
 
-        <div class="cart-footer">
-          <div class="cart-total">
-            <span data-i18n="admin.total">Total:</span>
-            <span id="cart-total-price">$0.00</span>
-          </div>
 
-          <div id="order-status-display">
-            <span>Status: </span>
-            <span id="order-status-value"></span>
-          </div>
-
-          <div class="order-type-selector">
-            <label class="order-type-option">
-              <input type="radio" name="order-type" id="order-type-table" value="table" onchange="updateOrderTypeUI()">
-              <span data-i18n="admin.add-to-table">Add to Table</span>
-            </label>
-            <label class="order-type-option">
-              <input type="radio" name="order-type" id="order-type-pay" value="pay-now" onchange="updateOrderTypeUI()">
-              <span data-i18n="admin.order-now">Order Now</span>
-            </label>
-            <label class="order-type-option">
-              <input type="radio" name="order-type" id="order-type-togo" value="to-go" onchange="updateOrderTypeUI()">
-              <span data-i18n="admin.to-go">To Go</span>
-            </label>
-          </div>
-
-          <div id="table-selection-ui">
-            <label data-i18n="admin.select-table">Select Table:</label>
-            <select id="order-table-select">
-              <option value="" data-i18n="admin.select-table-placeholder">-- Select a table --</option>
-            </select>
-          </div>
-
-          <button id="order-submit-btn" onclick="submitOrder()" class="btn-primary" data-i18n="admin.submit-order">
-            Submit Order
+        <!-- Cart Bar (Bottom of main content) -->
+        <div class="orders-cart-bar">
+          <button id="cart-toggle-btn" class="cart-toggle-btn" onclick="toggleCartPanel()">
+            <span data-i18n="admin.cart">Cart</span> (<span id="cart-item-count">0</span>)
           </button>
         </div>
+
+        <!-- Category Tabs (Bottom of main wrapper on desktop) -->
+        <div id="orders-category-tabs" class="orders-category-tabs-bottom">
+          <!-- Categories rendered by JS -->
+        </div>
       </div>
 
-      <div id="orders-details-view" class="orders-details-view">
-        <h3 id="order-details-title" data-i18n="admin.order-header">Order Details</h3>
-        <div id="order-details-content">
-          <p data-i18n="admin.select-an-order">Select an order to view details</p>
+      <!-- Cart Panel (Hidden by default, shown on cart button click) -->
+      <div class="orders-right-panel" id="orders-cart-view-container">
+        <div id="orders-cart-view" class="cart-panel">
+          <div class="cart-header">
+            <h3 data-i18n="admin.cart">Cart</h3>
+            <div style="display: flex; gap: 8px;">
+              <button id="cart-edit-btn" class="btn-tertiary" onclick="toggleCartEdit()"><img src="/uploads/website/pencil.png" alt="edit"/> <span data-i18n="admin.edit">Edit</span></button>
+              <button class="cart-close-btn" onclick="toggleCartPanel()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">✕</button>
+            </div>
+          </div>
+
+          <div class="cart-items-container">
+            <div id="cart-items-list">
+              <p data-i18n="admin.cart-is-empty">Cart is empty</p>
+            </div>
+          </div>
+
+          <div class="cart-footer">
+            <div class="cart-total">
+              <span data-i18n="admin.total">Total:</span>
+              <span id="cart-total-price">$0.00</span>
+            </div>
+
+            <div id="order-status-display">
+              <span data-i18n="admin.status-label">Status:</span>
+              <span id="order-status-value"></span>
+            </div>
+
+            <div class="order-type-selector">
+              <label class="order-type-option">
+                <input type="radio" name="order-type" id="order-type-table" value="table" onchange="updateOrderTypeUI()">
+                <span data-i18n="admin.add-to-table">Add to Table</span>
+              </label>
+              <label class="order-type-option">
+                <input type="radio" name="order-type" id="order-type-pay" value="pay-now" onchange="updateOrderTypeUI()">
+                <span data-i18n="admin.order-now">Order Now</span>
+              </label>
+              <label class="order-type-option">
+                <input type="radio" name="order-type" id="order-type-togo" value="to-go" onchange="updateOrderTypeUI()">
+                <span data-i18n="admin.to-go">To Go</span>
+              </label>
+            </div>
+
+            <div id="table-selection-ui">
+              <label data-i18n="admin.select-table">Select Table:</label>
+              <select id="order-table-select" data-i18n-placeholder="admin.select-table-placeholder">
+                <option value="" data-i18n="admin.select-table-placeholder">-- Select a table --</option>
+              </select>
+            </div>
+
+            <button id="order-submit-btn" onclick="submitOrder()" class="btn-primary" data-i18n="admin.submit-order">
+              Submit Order
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+    
+    <!-- Language initialization script -->
+    <script>
+      (function() {
+        console.log('[admin-orders.html] Module loaded - initializing language');
+        const currentLang = localStorage.getItem('language') || 'zh';
+        if (typeof setLanguage === 'function') {
+          setLanguage(currentLang);
+          console.log('[admin-orders.html] Language set to:', currentLang);
+        }
+        if (typeof reTranslateContent === 'function') {
+          reTranslateContent();
+          console.log('[admin-orders.html] Content re-translated');
+        }
+      })();
+    </script>
+
+    <!-- Order Details View (Shown when history order is selected) -->
+    <div id="orders-details-view" class="orders-details-view">
+      <div class="details-header">
+        <h3 id="order-details-title" data-i18n="admin.order-header">Order Details</h3>
+        <button id="details-close-btn" class="details-close-btn" onclick="closeDetailsView()" data-i18n="admin.back">← Back</button>
+      </div>
+      <div id="order-details-content">
+        <p data-i18n="admin.select-an-order">Select an order to view details</p>
+      </div>

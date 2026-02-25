@@ -59,6 +59,37 @@ var CURRENT_SECTION = "tables";
 // Settings / Restaurant config
 var serviceChargeFee = 0;
 
+// ============= LANGUAGE & TRANSLATION UTILITIES =============
+// Re-apply translations to newly added DOM content (for modular HTML files)
+function reTranslateContent() {
+  const currentLang = localStorage.getItem('language') || 'zh';
+  const elements = document.querySelectorAll('[data-i18n]');
+  
+  elements.forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const translation = t(key, currentLang);
+    
+    // Only update if translation exists and is different
+    if (translation && translation !== key) {
+      el.textContent = translation;
+    }
+  });
+  
+  console.log('[admin.js] Re-translated', elements.length, 'elements in', currentLang);
+}
+
+// Ensure modular files apply language when they load
+function ensureLanguageOnModuleLoad() {
+  const currentLang = localStorage.getItem('language') || 'zh';
+  console.log('[admin.js] Module loaded - ensuring language is', currentLang);
+  
+  if (typeof setLanguage === 'function') {
+    setLanguage(currentLang);
+  } else {
+    console.warn('[admin.js] setLanguage function not available yet');
+  }
+}
+
 // ============= APP INITIALIZATION =============
 async function initializeApp() {
   
@@ -114,19 +145,22 @@ async function switchSection(sectionId) {
 
     // Load data for the section
     if (sectionId === "orders") {
-      var ordersContent = document.getElementById("orders-section-content");
+      var ordersSection = document.getElementById("section-orders");
       if (!document.getElementById('orders-menu-items')) {
         var response = await fetch('/admin-orders.html');
-        ordersContent.innerHTML = await response.text();
+        ordersSection.innerHTML = await response.text();
+        reTranslateContent();
       }
       await initializeOrders();
-      updateSectionHeader("Orders Management", "orders-history-header-btn");
+      reTranslateContent();
+      updateSectionHeader('admin.section-orders', 'orders-history-header-btn');
     } else if (sectionId === "tables") {
       var tablesSection = document.getElementById("section-tables");
       if (tablesSection && !tablesSection.innerHTML.includes("tables-container")) {
         try {
           var tablesResponse = await fetch('/admin-tables.html');
           tablesSection.innerHTML = await tablesResponse.text();
+          reTranslateContent();
         } catch (err) {
           console.error("Error loading tables HTML:", err);
         }
@@ -135,23 +169,26 @@ async function switchSection(sectionId) {
         await loadTablesCategories();
       }
       await loadTablesCategoryTable();
+      reTranslateContent();
       var grid = document.getElementById("tables-grid");
       if (grid && !grid.innerHTML) {
         renderCategoryTablesGrid();
       }
-      updateSectionHeader("Tables", "table-edit-btn");
+      updateSectionHeader('admin.section-tables', 'table-edit-btn');
     } else if (sectionId === "menu") {
       var menuSection = document.getElementById("section-menu");
       if (menuSection && !menuSection.innerHTML.includes("menu-container")) {
         try {
           var menuResponse = await fetch('/admin-menu.html');
           menuSection.innerHTML = await menuResponse.text();
+          reTranslateContent();
         } catch (err) {
           console.error("Error loading menu HTML:", err);
         }
       }
       await loadMenuItems();
-      updateSectionHeader("Menu Management", "menu-edit-btn");
+      reTranslateContent();
+      updateSectionHeader('admin.section-menu', 'menu-edit-btn');
     } else if (sectionId === "staff") {
       console.log("🔵 Loading STAFF section");
       
@@ -172,6 +209,7 @@ async function switchSection(sectionId) {
             console.log("📝 HTML length:", html.length);
             staffSection.innerHTML = html;
             console.log("✅ HTML injected into staffSection");
+            reTranslateContent();
           } catch (err) {
             console.error("❌ Error loading staff HTML:", err);
           }
@@ -181,34 +219,39 @@ async function switchSection(sectionId) {
         console.log("🔵 Calling loadStaff()...");
         await loadStaff();
         console.log("✅ loadStaff() completed");
+        reTranslateContent();
       } else {
         console.log("❌ User does not have access to staff management (need admin/superadmin or staff feature 4)");
       }
-      updateSectionHeader("Staff Management", "staff-edit-btn");
+      updateSectionHeader('admin.section-staff', 'staff-edit-btn');
     } else if (sectionId === "bookings") {
       var bookingsSection = document.getElementById("section-bookings");
       if (bookingsSection && !bookingsSection.innerHTML.includes("bookings-container")) {
         try {
           var bookingsResponse = await fetch('/admin-bookings.html');
           bookingsSection.innerHTML = await bookingsResponse.text();
+          reTranslateContent();
         } catch (err) {
           console.error("Error loading bookings HTML:", err);
         }
       }
       initializeBookings();
-      updateSectionHeader("Reservations", "");
+      reTranslateContent();
+      updateSectionHeader('admin.section-reservations', '');
     } else if (sectionId === "coupons") {
       var couponsSection = document.getElementById("section-coupons");
       if (couponsSection && !couponsSection.innerHTML.includes("coupon-code")) {
         try {
           var couponsResponse = await fetch('/admin-coupons.html');
           couponsSection.innerHTML = await couponsResponse.text();
+          reTranslateContent();
         } catch (err) {
           console.error("Error loading coupons HTML:", err);
         }
       }
       await loadCoupons();
-      updateSectionHeader("Coupons", "");
+      reTranslateContent();
+      updateSectionHeader('admin.section-coupons', '');
     } else if (sectionId === "reports") {
       console.log("🔵 Loading REPORTS section");
       console.log("📌 IS_ADMIN:", IS_ADMIN, "IS_SUPERADMIN:", IS_SUPERADMIN, "IS_STAFF:", IS_STAFF);
@@ -230,6 +273,7 @@ async function switchSection(sectionId) {
             console.log("📝 HTML length:", reportsHTML.length);
             reportsSection.innerHTML = reportsHTML;
             console.log("✅ HTML injected into reportsSection");
+            reTranslateContent();
           } catch (err) {
             console.error("❌ Error loading reports HTML:", err);
           }
@@ -239,10 +283,11 @@ async function switchSection(sectionId) {
         console.log("🔵 Calling initializeAnalyticsDashboard()...");
         await initializeAnalyticsDashboard();
         console.log("✅ initializeAnalyticsDashboard() completed");
+        reTranslateContent();
       } else {
         console.log("❌ User does not have access to reports (need admin/superadmin or staff feature 3)");
       }
-      updateSectionHeader("Reports & Analytics", "reports-btn");
+      updateSectionHeader('admin.section-analytics', 'reports-btn');
     } else if (sectionId === "settings") {
       console.log("🔵 Loading SETTINGS section");
       
@@ -255,6 +300,7 @@ async function switchSection(sectionId) {
           try {
             var settingsResponse = await fetch('/admin-settings.html');
             settingsSection.innerHTML = await settingsResponse.text();
+            reTranslateContent();
           } catch (err) {
             console.error("Error loading settings HTML:", err);
           }
@@ -269,10 +315,11 @@ async function switchSection(sectionId) {
         } catch (err) {
           console.error("Failed to initialize settings:", err);
         }
+        reTranslateContent();
       } else {
         console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
       }
-      updateSectionHeader("Settings", "edit-settings-header");
+      updateSectionHeader('admin.section-settings', 'edit-settings-header');
     }
 
     IS_EDIT_MODE = false;
@@ -304,7 +351,10 @@ function toggleSidebar() {
 }
 
 // Update app header with section-specific content
-function updateSectionHeader(title, actionButtonId) {
+function updateSectionHeader(titleKey, actionButtonId) {
+  // Translate the title using the translation key
+  const title = typeof titleKey === 'string' && titleKey.includes('admin.') ? t(titleKey) : titleKey;
+  
   // Update header-left with section title (replace the static div)
   var headerLeft = document.querySelector(".header-left");
   if (headerLeft) {
@@ -324,7 +374,7 @@ function updateSectionHeader(title, actionButtonId) {
   var headerRightBtns = document.querySelectorAll(".header-right [id$='-btn'], .header-right [id$='-header']");
   for (var i = 0; i < headerRightBtns.length; i++) {
     var btn = headerRightBtns[i];
-    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown") {
+    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown" && btn.id !== "scan-qr-btn") {
       btn.style.display = "none";
     }
   }
@@ -334,6 +384,16 @@ function updateSectionHeader(title, actionButtonId) {
     var btn = document.getElementById(actionButtonId);
     if (btn) {
       btn.style.display = "inline-block";
+    }
+  }
+
+  // Show scan QR button only for tables section
+  var scanBtn = document.getElementById("scan-qr-btn");
+  if (scanBtn) {
+    if (CURRENT_SECTION === "tables") {
+      scanBtn.style.display = "inline-block";
+    } else {
+      scanBtn.style.display = "none";
     }
   }
 }
@@ -774,6 +834,11 @@ async function switchRestaurant(newRestaurantId) {
 
 // ============= PAGE INITIALIZATION =============
 document.addEventListener("DOMContentLoaded", async () => {
+  // Reset menu background when entering admin panel
+  if (window.resetMenuBackground) {
+    window.resetMenuBackground();
+  }
+
   // SKIP: Staff portal uses PIN-based login (handled in staff.js), not token-based
   if (window.location.pathname.includes("staff.html")) {
     console.log("📋 Staff portal detected - skipping admin.js initialization");
@@ -796,14 +861,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Show app container
-  document.getElementById("app-container").style.display = "";
-
-  // Initialize language from localStorage (auto-apply saved preference)
-  const savedLanguage = localStorage.getItem('language') || 'zh';
+  // ========== STEP 1: LOAD LANGUAGE PREFERENCE FIRST (before showing content) ==========
+  const restaurantId = localStorage.getItem('restaurantId');
+  let languageToUse = localStorage.getItem('language') || 'zh';
+  
+  // Try to fetch language preference from database
+  if (restaurantId) {
+    try {
+      const settingsRes = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+      if (settingsRes.ok) {
+        const settings = await settingsRes.json();
+        if (settings.language_preference) {
+          languageToUse = settings.language_preference;
+          console.log('[Admin Init] Loaded language from database:', languageToUse);
+        }
+      }
+    } catch (err) {
+      console.warn('[Admin Init] Failed to load language from database:', err);
+    }
+  }
+  
   if (typeof setLanguage === 'function') {
-    console.log('[Admin Init] Applying saved language:', savedLanguage);
-    setLanguage(savedLanguage);
+    console.log('[Admin Init] Applying language:', languageToUse);
+    setLanguage(languageToUse);
+  }
+
+  // ========== STEP 2: NOW show app container after language is set ==========
+  document.getElementById("app-container").style.display = "";
+  
+  // Hide loading splash screen
+  const loadingSplash = document.getElementById("loading-splash");
+  if (loadingSplash) {
+    loadingSplash.style.display = "none";
   }
 
   // Load settings on page load (theme color, service charge)

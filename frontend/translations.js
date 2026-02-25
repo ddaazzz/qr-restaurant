@@ -1098,6 +1098,13 @@ const translations = {
     'admin.manager-role': 'Manager',
     'admin.kitchen-role': 'Kitchen',
     'admin.hourly-rate': 'Hourly Rate',
+    'admin.edit-staff': '✏️ Edit Staff',
+    'admin.delete-staff': '🗑️ Delete Staff',
+    'admin.clock-in-out': 'Clock In/Out',
+    'admin.work-hours': 'Work Hours (Last 30 Days)',
+    'admin.days-worked': 'Days Worked',
+    'admin.total-hours': 'Total Hours',
+    'admin.work-log': 'Work Log (Last 30 Days)',
     'admin.access-rights': 'Access Rights',
     'admin.select-permissions': 'Select permissions for this staff',
     'admin.create-staff': '✓ Create Staff',
@@ -1119,10 +1126,16 @@ const translations = {
     'admin.e-g-9-99': 'e.g., 9.99',
     'admin.variants-label': 'Variants (sizes, sides, etc.)',
     'admin.add-variant-btn': '➕ Add Variant',
+    'admin.variant-form-title': 'Add/Edit Variant',
+    'admin.variant-name': 'Variant Name',
+    'admin.min-select': 'Min Select',
+    'admin.max-select': 'Max Select',
+    'admin.required': 'Required',
     'admin.variant-options': 'Variant Options',
     'admin.add-option': '➕ Add Option',
     'admin.option-name': 'Option Name',
     'admin.option-price': 'Price (+)',
+    'admin.save-variant': 'Save Variant',
     'admin.create-item-btn': '✓ Create Item',
     'admin.cancel-btn': '✕ Cancel',
     'admin.edit-item-btn': 'Edit Item',
@@ -1185,6 +1198,7 @@ const translations = {
     'admin.unlimited': 'Unlimited',
 
     // Admin Orders Management - Order Type & Session Details
+    'admin.cart': 'Cart',
     'admin.order-type-selector': 'Order Type',
     'admin.add-to-table': 'Add to Table',
     'admin.order-now': 'Order Now',
@@ -1224,6 +1238,267 @@ const translations = {
     'admin.subtotal-label': 'Subtotal:',
     'admin.variants-label': 'Variants:',
     'admin.total-price': 'Total',
+    
+    // Order History & Navigation
+    'admin.order-history': 'Order History',
+    'admin.back': '← Back',
+    'admin.order-header': 'Order Details',
+    'admin.session-label': 'Session',
+    'admin.session-id': 'ID:',
+    'admin.session-started': 'Started',
+    'admin.session-duration': 'Duration',
+    'admin.session-people': 'people',
+    'admin.items-in-session': 'Items in Session:',
+    'admin.session-total': 'Session Total:',
+    'admin.no-items-session': 'No items in this session',
+    'admin.orders-count': 'order(s) in this session',
+    'admin.items': 'item',
+    'admin.minutes': 'minutes',
+    'admin.print-button': '🖨️ Print',
+    'admin.email-button': '📧 Email',
+
+    // Menu Management - Variants (11 keys)
+    'admin.add-variant': 'Add Variant',
+    'admin.variant-form-title': 'Add/Edit Variant',
+    'admin.variant-name': 'Variant Name',
+    'admin.variant-name-placeholder': 'e.g., Size, Extras',
+    'admin.variant-min-select': 'Min Select',
+    'admin.variant-max-select': 'Max Select',
+    'admin.variant-required': 'Required',
+    'admin.variant-options': 'Options',
+    'admin.add-option': 'Add Option',
+    'admin.add-option-title': 'Add Option',
+    'admin.option-name': 'Option Name',
+
+    // Menu Management - Variant Options (6 keys)
+    'admin.option-name-placeholder': 'e.g., Small, Extra Cheese',
+    'admin.option-price-label': 'Price (cents) - optional',
+    'admin.save-option': 'Save',
+    'admin.cancel-option': 'Cancel',
+    'admin.save-variant': 'Save Variant',
+    'admin.cancel-variant': 'Cancel',
+
+    // Order Management (2 keys)
+    'admin.cart-is-empty': 'Cart is empty',
+    'admin.status-label': 'Status',
+
+    // Tables (1 key)
+    'admin.modal-session-total': 'Total',
+
+    // Staff Management - Form (3 keys)
+    'admin.staff-name-placeholder': 'e.g., John Smith',
+    'admin.pin-placeholder': 'e.g., 123456',
+    'admin.hourly-rate-placeholder': 'e.g., 15.50',
+
+    // Staff Management - Modal (4 keys)
+    'admin.detail-role': 'Role',
+    'admin.detail-pin': 'PIN',
+    'admin.detail-hourly-rate': 'Hourly Rate',
+    'admin.detail-status': 'Status',
+
+    // Staff Management - Clock & Work (7 keys)
+    'admin.clock-section-title': 'Clock In/Out',
+    'admin.clock-in': 'Clock In',
+    'admin.clock-out': 'Clock Out',
+    'admin.work-hours-title': 'Work Hours (Last 30 Days)',
+    'admin.days-worked': 'Days Worked',
+    'admin.total-hours': 'Total Hours',
+    'admin.work-log-title': 'Work Log (Last 30 Days)',
+
+    // Staff Management - Actions (3 keys)
+    'admin.edit-staff': 'Edit Staff',
+    'admin.delete-staff': 'Delete Staff',
+    'admin.confirm-delete-staff': 'Delete this staff member?',
+
+    // Coupons (5 keys)
+    'admin.coupon-code-placeholder': 'e.g., SUMMER20',
+    'admin.discount-value-placeholder': 'e.g., 20',
+    'admin.min-order-value-placeholder': 'e.g., 50',
+    'admin.max-uses-placeholder': 'e.g., 100',
+    'admin.coupon-desc-placeholder': 'e.g., Summer special - 20% off all items',
+
+    // Orders - Variant Slide Panel (5 keys)
+    'admin.price-label': 'Price:',
+    'admin.description-label': 'Description',
+    'admin.select-options': 'Select Options',
+    'admin.add-to-cart-variant': 'Add to Cart',
+    'admin.cancel-variant': 'Cancel',
+
+    // Orders - Cart Actions (3 keys)
+    'admin.edit-mode-done': 'Done',
+    'admin.edit-button': 'Edit',
+    'admin.remove-button': 'Remove',
+
+    // Orders - Empty States & Errors (6 keys)
+    'admin.no-items-category': 'No items in this category',
+    'admin.select-table-placeholder': '-- Select a table --',
+    'admin.cart-empty-alert': 'Cart is empty',
+    'admin.select-order-type': 'Please select an order type',
+    'admin.no-tables-available': 'No tables available',
+    'admin.table-cancelled': 'Table selection cancelled',
+
+    // Orders - History Tabs/Filters (4 keys)
+    'admin.all-orders': '📋 All Orders',
+    'admin.order-now-tab': '🛒 Order Now',
+    'admin.to-go-tab': '🎁 To-Go',
+    'admin.sessions-tab': '🪑 Sessions',
+
+    // Orders - Session Panel (12 keys)
+    'admin.session-label': 'Session',
+    'admin.session-id': 'ID:',
+    'admin.session-people': 'people',
+    'admin.session-started': 'Started',
+    'admin.session-duration': 'Duration',
+    'admin.minutes': 'minutes',
+    'admin.orders-count': 'order(s) in this session',
+    'admin.items-total': 'items',
+    'admin.items-in-session': 'Items in Session:',
+    'admin.no-items-session': 'No items in this session',
+    'admin.session-total': 'Session Total:',
+    'admin.session-closed': '✓ Session Closed',
+
+    // Orders - Order Details (13 keys)
+    'admin.order-number': 'Order Number',
+    'admin.order-time-label': 'Order Time',
+    'admin.order-total-items': 'Total Items',
+    'admin.items': 'item(s)',
+    'admin.order-items-label': 'Order Items',
+    'admin.qty-label': 'Qty:',
+    'admin.subtotal-label': 'Subtotal:',
+    'admin.variants-label': 'Variants:',
+    'admin.order-summary': 'Order Summary',
+    'admin.subtotal': 'Subtotal',
+    'admin.service-charge': 'Service Charge',
+    'admin.order-total': 'Total',
+    'admin.no-orders-yet': 'No orders yet',
+
+    // Orders - Buttons (3 keys)
+    'admin.print-button': '🖨️ Print',
+    'admin.email-button': '📧 Email',
+    'admin.close-bill-button': '💰 Close Bill',
+
+    // Orders - Error/Empty States (2 keys)
+    'admin.no-orders-category': 'No orders in this category',
+    'admin.no-sessions-yet': 'No sessions yet',
+
+    // Section Headers (8 keys)
+    'admin.section-orders': 'Orders',
+    'admin.section-tables': 'Tables',
+    'admin.section-menu': 'Menu',
+    'admin.section-staff': 'Staff',
+    'admin.section-reservations': 'Reservations',
+    'admin.section-coupons': 'Coupons',
+    'admin.section-analytics': 'Analytics',
+    'admin.section-settings': 'Settings',
+
+    // Session Order Panel - Gear Menu (7 keys)
+    'admin.change-pax': 'Change Pax',
+    'admin.move-table': 'Move Table',
+    'admin.order-for-table': 'Order for Table',
+    'admin.print-qr': '📱 Print QR',
+    'admin.print-bill': '🖨 Print Bill',
+    'admin.split-bill': 'Split Bill',
+    'admin.delete-session': 'Delete Session',
+
+    // Session Order Panel - Order Section (3 keys)
+    'admin.dining': 'Dining',
+    'admin.loading-orders': 'Loading orders…',
+    'admin.pax-label': 'pax',
+
+    // Session Total & Close (2 keys)
+    'admin.total-label': 'Total:',
+    'admin.close-bill': '💳 Close Bill',
+
+    // Close Bill Modal (13 keys)
+    'admin.close-bill-title': 'Close Bill - {0}',
+    'admin.bill-summary': 'Bill Summary',
+    'admin.subtotal-amount': 'Subtotal',
+    'admin.service-charge-label': 'Service Charge',
+    'admin.total-amount': 'Total',
+    'admin.payment-method': 'Payment Method',
+    'admin.payment-cash': 'Cash',
+    'admin.payment-card': 'Card',
+    'admin.payment-online': 'Online Payment',
+    'admin.discount-section': 'Discount / Coupon',
+    'admin.discount-none': 'No Discount',
+    'admin.bill-close-reason': 'Reason (optional)',
+    'admin.bill-close-reason-placeholder': 'e.g., Customer satisfied, Complaint, etc.',
+    'admin.cancel-button': 'Cancel',
+    'admin.close-bill-confirm': 'Close Bill',
+
+    // Table Card & Session Panel (10 keys)
+    'admin.active-sessions': 'Active Sessions:',
+    'admin.start-new-session': '＋ Start New Session',
+    'admin.book-table': '⊞ Book Table',
+    'admin.all-seats-available': '○ All {0} seats available',
+    'admin.loading-reservations': 'Loading reservations...',
+    'admin.no-upcoming-reservations': 'No upcoming reservations',
+    'admin.start-session': '＋ Start Session',
+    'admin.book-table-title': 'Book Table - {0}',
+    'admin.no-orders': 'No orders yet',
+    'admin.seats': 'Seats',
+    'admin.start-session-modal-title': 'Start New Session - {0}',
+    'admin.seats-available': '{0} seats available',
+    'admin.number-of-guests': 'Number of Guests (Pax)',
+    'admin.guest-name': 'Guest Name',
+    'admin.guest-phone': 'Phone',
+    'admin.guest-email': 'Email',
+    'admin.booking-date': 'Booking Date',
+    'admin.reservation-time': 'Reservation Time',
+
+    // Report Table Headers (5 keys)
+    'admin.col-date': 'Date',
+    'admin.col-orders': 'Orders',
+    'admin.col-revenue': 'Revenue',
+    'admin.col-period': 'Period',
+    'admin.col-avg-bill': 'Avg Bill',
+
+    // Header Buttons (5 keys)
+    'admin.header-edit': 'Edit',
+    'admin.header-reports': '∿ Reports',
+    'admin.header-history': 'History',
+    'admin.header-admin': 'Admin',
+    'admin.header-logout': '🚪 Logout',
+    'admin.scan-qr': 'Scan Table',
+    'admin.scan-table-qr': 'Scan Table QR Code',
+
+    // Session List
+    'admin.session-label': 'Session #{0}',
+    'admin.table-status-available': 'Available',
+
+    // Customer Menu & Landing Page (30+ keys for full translation)
+    'menu.start-ordering': 'Start Ordering',
+    'menu.check-orders': 'Check Orders',
+    'menu.pax-label': 'Pax',
+    'menu.address-label': 'Address',
+    'menu.phone-label': 'Phone',
+    'menu.table-label': 'Table',
+    'menu.add-to-cart': 'Add to Cart',
+    'menu.confirm-order': 'Confirm Order',
+    'menu.cart-empty': 'Your cart is empty',
+    'menu.cart-count-label': 'items',
+    'menu.cart-total-label': 'Total',
+    'menu.subtotal-label': 'Subtotal',
+    'menu.service-charge-label': 'Service Charge',
+    'menu.total-label': 'Total',
+    'menu.apply-coupon': 'Apply Coupon',
+    'menu.enter-coupon-code': 'Enter coupon code',
+    'menu.close-bill': '🔴 Close Bill',
+    'menu.back-to-menu': 'Back to Menu',
+    'menu.bill-request-sent': '✓ Bill Request Sent',
+    'menu.close-bill-requested': 'Bill closure requested. Staff will process it shortly.',
+    'menu.coupon-will-apply': '✓ Coupon "{0}" will be applied at checkout',
+    'menu.coupon-applied': '✓ Coupon applied: {0}',
+    'menu.coupon-error': '✗ {0}',
+    'menu.coupon-failed': '✗ Failed to apply coupon',
+    'menu.variant-select-exact': 'select {0}',
+    'menu.variant-select-range': 'select {0}–{1}',
+    'menu.variant-select-min': 'select at least {0}',
+    'menu.variant-optional': 'optional',
+    'menu.variant-required': 'required',
+    'menu.enter-coupon': 'Please enter a coupon code',
+    'menu.session-not-found': 'Session not found',
+    'menu.change-language': 'Language',
   },
   zh: {
     // Navigation
@@ -2674,6 +2949,13 @@ const translations = {
     'admin.manager-role': '經理',
     'admin.kitchen-role': '廚房',
     'admin.hourly-rate': '時薪',
+    'admin.edit-staff': '✏️ 編輯員工',
+    'admin.delete-staff': '🗑️ 刪除員工',
+    'admin.clock-in-out': '打卡',
+    'admin.work-hours': '工作時間 (最近 30 天)',
+    'admin.days-worked': '工作天數',
+    'admin.total-hours': '總時數',
+    'admin.work-log': '工作日誌 (最近 30 天)',
     'admin.access-rights': '使用權限',
     'admin.select-permissions': '選擇此員工的權限',
     'admin.create-staff': '✓ 建立員工',
@@ -2711,10 +2993,16 @@ const translations = {
     'admin.e-g-9-99': '例如: 9.99',
     'admin.variants-label': '變體 (大小、配菜等)',
     'admin.add-variant-btn': '➕ 添加變體',
+    'admin.variant-form-title': '添加/編輯變體',
+    'admin.variant-name': '變體名稱',
+    'admin.min-select': '最小選擇',
+    'admin.max-select': '最大選擇',
+    'admin.required': '必需',
     'admin.variant-options': '變體選項',
     'admin.add-option': '➕ 添加選項',
     'admin.option-name': '選項名稱',
     'admin.option-price': '價格 (+)',
+    'admin.save-variant': '保存變體',
     'admin.create-item-btn': '✓ 建立項目',
     'admin.cancel-btn': '✕ 取消',
     'admin.edit-item-btn': '編輯項目',
@@ -2777,6 +3065,7 @@ const translations = {
     'admin.unlimited': '無限',
 
     // Admin Orders Management - Order Type & Session Details (Chinese)
+    'admin.cart': '購物車',
     'admin.order-type-selector': '訂單類型',
     'admin.add-to-table': '加到餐桌',
     'admin.order-now': '現在訂購',
@@ -2845,6 +3134,22 @@ const translations = {
     'admin.total-items': '項目',
     'admin.session-duration': '持續時間',
     'admin.order-history': '訂單歷史',
+    
+    // Order History & Navigation (Chinese)
+    'admin.back': '← 返回',
+    'admin.order-header': '訂單詳情',
+    'admin.session-label': '期間',
+    'admin.session-id': 'ID:',
+    'admin.session-started': '已開始',
+    'admin.session-people': '人',
+    'admin.items-in-session': '期間中的項目:',
+    'admin.session-total': '期間總計:',
+    'admin.no-items-session': '此期間無項目',
+    'admin.orders-count': '個訂單在此期間',
+    'admin.items': '項目',
+    'admin.minutes': '分鐘',
+    'admin.print-button': '🖨️ 打印',
+    'admin.email-button': '📧 電郵',
 
     // Staff Portal (Chinese)
     'staff.title': '👨‍💼 員工儀表板',
@@ -2902,6 +3207,249 @@ const translations = {
 
     'lang.english': 'English',
     'lang.chinese': '中文',
+
+    // Menu Management - Variants (Chinese)
+    'admin.add-variant': '添加變體',
+    'admin.variant-form-title': '添加/編輯變體',
+    'admin.variant-name': '變體名稱',
+    'admin.variant-name-placeholder': '例如：大小、配料',
+    'admin.variant-min-select': '最小選擇',
+    'admin.variant-max-select': '最大選擇',
+    'admin.variant-required': '必需',
+    'admin.variant-options': '選項',
+    'admin.add-option': '添加選項',
+    'admin.add-option-title': '添加選項',
+    'admin.option-name': '選項名稱',
+
+    // Menu Management - Variant Options (Chinese)
+    'admin.option-name-placeholder': '例如：小、額外起司',
+    'admin.option-price-label': '價格（美分）- 可選',
+    'admin.save-option': '保存',
+    'admin.cancel-option': '取消',
+    'admin.save-variant': '保存變體',
+    'admin.cancel-variant': '取消',
+
+    // Order Management (Chinese)
+    'admin.cart-is-empty': '購物車為空',
+    'admin.status-label': '狀態',
+
+    // Tables (Chinese)
+    'admin.modal-session-total': '總計',
+
+    // Staff Management - Form (Chinese)
+    'admin.staff-name-placeholder': '例如：John Smith',
+    'admin.pin-placeholder': '例如：123456',
+    'admin.hourly-rate-placeholder': '例如：15.50',
+
+    // Staff Management - Modal (Chinese)
+    'admin.detail-role': '角色',
+    'admin.detail-pin': 'PIN碼',
+    'admin.detail-hourly-rate': '時薪',
+    'admin.detail-status': '狀態',
+
+    // Staff Management - Clock & Work (Chinese)
+    'admin.clock-section-title': '打卡進/出',
+    'admin.clock-in': '▶ 打卡進',
+    'admin.clock-out': '⏹ 打卡出',
+    'admin.work-hours-title': '工作時間（過去30天）',
+    'admin.days-worked': '工作天數',
+    'admin.total-hours': '總時數',
+    'admin.work-log-title': '工作日誌（過去30天）',
+
+    // Staff Management - Actions (Chinese)
+    'admin.edit-staff': '✏️ 編輯員工',
+    'admin.delete-staff': '🗑️ 刪除員工',
+    'admin.confirm-delete-staff': '刪除此員工嗎？',
+
+    // Coupons (Chinese)
+    'admin.coupon-code-placeholder': '例如：SUMMER20',
+    'admin.discount-value-placeholder': '例如：20',
+    'admin.min-order-value-placeholder': '例如：50',
+    'admin.max-uses-placeholder': '例如：100',
+    'admin.coupon-desc-placeholder': '例如：夏季特價 - 所有商品8折',
+
+    // Orders - Variant Slide Panel (Chinese)
+    'admin.price-label': '價格：',
+    'admin.description-label': '描述',
+    'admin.select-options': '選擇選項',
+    'admin.add-to-cart-variant': '加入購物車',
+    'admin.cancel-variant': '取消',
+
+    // Orders - Cart Actions (Chinese)
+    'admin.edit-mode-done': '完成',
+    'admin.edit-button': '編輯',
+    'admin.remove-button': '移除',
+
+    // Orders - Empty States & Errors (Chinese)
+    'admin.no-items-category': '此類別中沒有商品',
+    'admin.select-table-placeholder': '-- 選擇一張桌子 --',
+    'admin.cart-empty-alert': '購物車為空',
+    'admin.select-order-type': '請選擇訂單類型',
+    'admin.no-tables-available': '沒有可用的桌子',
+    'admin.table-cancelled': '桌子選擇已取消',
+
+    // Orders - History Tabs/Filters (Chinese)
+    'admin.all-orders': '📋 所有訂單',
+    'admin.order-now-tab': '🛒 現場訂單',
+    'admin.to-go-tab': '🎁 外帶',
+    'admin.sessions-tab': '🪑 餐次',
+
+    // Orders - Session Panel (Chinese)
+    'admin.session-label': '餐次',
+    'admin.session-id': '編號：',
+    'admin.session-people': '人',
+    'admin.session-started': '開始時間',
+    'admin.session-duration': '時長',
+    'admin.minutes': '分鐘',
+    'admin.orders-count': '個訂單在此餐次',
+    'admin.items-total': '項商品',
+    'admin.items-in-session': '餐次中的商品：',
+    'admin.no-items-session': '此餐次中沒有商品',
+    'admin.session-total': '餐次總計：',
+    'admin.session-closed': '✓ 餐次已結束',
+
+    // Orders - Order Details (Chinese)
+    'admin.order-number': '訂單編號',
+    'admin.order-time-label': '訂單時間',
+    'admin.order-total-items': '商品總數',
+    'admin.items': '項',
+    'admin.order-items-label': '訂單商品',
+    'admin.qty-label': '數量：',
+    'admin.subtotal-label': '小計：',
+    'admin.variants-label': '選項：',
+    'admin.order-summary': '訂單概覽',
+    'admin.subtotal': '小計',
+    'admin.service-charge': '服務費',
+    'admin.order-total': '總計',
+    'admin.no-orders-yet': '還沒有訂單',
+
+    // Orders - Buttons (Chinese)
+    'admin.print-button': '🖨️ 列印',
+    'admin.email-button': '📧 發送郵件',
+    'admin.close-bill-button': '💰 結帳',
+
+    // Orders - Error/Empty States (Chinese)
+    'admin.no-orders-category': '此類別中沒有訂單',
+    'admin.no-sessions-yet': '還沒有餐次',
+
+    // Section Headers (Chinese)
+    'admin.section-orders': '訂單',
+    'admin.section-tables': '餐桌',
+    'admin.section-menu': '菜單',
+    'admin.section-staff': '員工',
+    'admin.section-reservations': '預訂',
+    'admin.section-coupons': '優惠券',
+    'admin.section-analytics': '分析',
+    'admin.section-settings': '設定',
+
+    // Session Order Panel - Gear Menu Options (Chinese)
+    'admin.change-pax': '更改人數',
+    'admin.move-table': '移動餐桌',
+    'admin.order-for-table': '為餐桌下單',
+    'admin.print-qr': '📱 列印 QR 碼',
+    'admin.print-bill': '🖨️ 列印帳單',
+    'admin.split-bill': '分帳',
+    'admin.delete-session': '刪除餐次',
+
+    // Session Order Panel - Display Labels (Chinese)
+    'admin.dining': '用餐中',
+    'admin.loading-orders': '載入訂單...',
+    'admin.pax-label': '人數',
+
+    // Session Total and Close (Chinese)
+    'admin.total-label': '總計：',
+    'admin.close-bill': '💳 結帳',
+
+    // Close Bill Modal (Chinese)
+    'admin.close-bill-title': '結帳 - {0}',
+    'admin.bill-summary': '帳單摘要',
+    'admin.subtotal-amount': '小計',
+    'admin.service-charge-label': '服務費',
+    'admin.total-amount': '總金額',
+    'admin.payment-method': '付款方式',
+    'admin.payment-cash': '現金',
+    'admin.payment-card': '卡片',
+    'admin.payment-online': '線上付款',
+    'admin.discount-section': '折扣',
+    'admin.discount-none': '無折扣',
+    'admin.bill-close-reason': '原因（選填）',
+    'admin.bill-close-reason-placeholder': '備註或原因...',
+    'admin.cancel-button': '取消',
+    'admin.close-bill-confirm': '結帳',
+
+    // Table Card & Session Panel (Chinese)
+    'admin.active-sessions': '活躍餐次：',
+    'admin.start-new-session': '＋ 開始新餐次',
+    'admin.book-table': '⊞ 預訂餐桌',
+    'admin.all-seats-available': '○ {0}個座位全部可用',
+    'admin.loading-reservations': '載入預約...',
+    'admin.no-upcoming-reservations': '沒有即將進行的預約',
+    'admin.start-session': '＋ 開始餐次',
+    'admin.book-table-title': '預訂餐桌 - {0}',
+    'admin.no-orders': '還沒有訂單',
+    'admin.seats': '座位',
+    'admin.start-session-modal-title': '開始新餐次 - {0}',
+    'admin.seats-available': '{0}個座位可用',
+    'admin.number-of-guests': '客人數量（人數）',
+    'admin.guest-name': '客人姓名',
+    'admin.guest-phone': '電話',
+    'admin.guest-email': '電郵',
+    'admin.booking-date': '預訂日期',
+    'admin.reservation-time': '預約時間',
+
+    // Report Table Headers (Chinese)
+    'admin.col-date': '日期',
+    'admin.col-orders': '訂單',
+    'admin.col-revenue': '收益',
+    'admin.col-period': '期間',
+    'admin.col-avg-bill': '平均帳單',
+
+    // Header Buttons (Chinese)
+    'admin.header-edit': '編輯',
+    'admin.header-reports': '∿ 報告',
+    'admin.header-history': '歷史',
+    'admin.header-admin': '管理員',
+    'admin.header-logout': '🚪 登出',
+    'admin.scan-qr': '掃描桌子',
+    'admin.scan-table-qr': '掃描桌子二維碼',
+
+    // Session List (Chinese)
+    'admin.session-label': '餐次 #{0}',
+    'admin.table-status-available': '可用',
+
+    // Customer Menu & Landing Page (Chinese)
+    'menu.start-ordering': '開始點餐',
+    'menu.check-orders': '查看訂單',
+    'menu.pax-label': '人數',
+    'menu.address-label': '地址',
+    'menu.phone-label': '電話',
+    'menu.table-label': '桌',
+    'menu.add-to-cart': '加入購物車',
+    'menu.confirm-order': '確認訂單',
+    'menu.cart-empty': '購物車是空的',
+    'menu.cart-count-label': '項',
+    'menu.cart-total-label': '總計',
+    'menu.subtotal-label': '小計',
+    'menu.service-charge-label': '服務費',
+    'menu.total-label': '總計',
+    'menu.apply-coupon': '套用優惠券',
+    'menu.enter-coupon-code': '輸入優惠券代碼',
+    'menu.close-bill': '🔴 結賬',
+    'menu.back-to-menu': '返回菜單',
+    'menu.bill-request-sent': '✓ 已發送結賬申請',
+    'menu.close-bill-requested': '已申請結賬。店員將儘快處理。',
+    'menu.coupon-will-apply': '✓ 優惠券"{0}"將在結賬時套用',
+    'menu.coupon-applied': '✓ 優惠券已套用：{0}',
+    'menu.coupon-error': '✗ {0}',
+    'menu.coupon-failed': '✗ 無法套用優惠券',
+    'menu.variant-select-exact': '選擇 {0}',
+    'menu.variant-select-range': '選擇 {0}–{1}',
+    'menu.variant-select-min': '至少選擇 {0}',
+    'menu.variant-optional': '可選',
+    'menu.variant-required': '必需',
+    'menu.enter-coupon': '請輸入優惠券代碼',
+    'menu.session-not-found': '找不到工作階段',
+    'menu.change-language': '語言',
   }
 };
 
@@ -2922,11 +3470,11 @@ function t(key, lang = null) {
   return result;
 }
 
-// Set language
+// Set language (applies UI changes only, does NOT save to database)
 window.setLanguage = function(lang) {
   console.log('[Translations] Setting language to:', lang);
   localStorage.setItem('language', lang);
-  // Also save as restaurant language preference
+  // Also save as restaurant language preference locally
   localStorage.setItem('restaurantLanguage', lang);
   document.documentElement.lang = lang;
   
@@ -2968,6 +3516,26 @@ window.setLanguage = function(lang) {
   // Dispatch custom event for other listeners
   window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
   console.log('[Translations] Language changed event dispatched');
+};
+
+// Save language preference to database (called ONLY when user changes language in settings)
+window.saveLanguageToDatabaseAsync = function(lang) {
+  const restaurantId = localStorage.getItem('restaurantId');
+  if (restaurantId) {
+    const API = window.API || 'http://localhost:10000/api';
+    fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language_preference: lang })
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log('[Translations] Language preference saved to database:', data);
+    })
+    .catch(err => {
+      console.warn('[Translations] Failed to save language preference to database:', err);
+    });
+  }
 };
 
 // Get current language

@@ -1,16 +1,79 @@
 /* ============== ADMIN TABLES CSS ============== */
 
-/* TABLES SECTION */
-.table-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 0;
-  flex-wrap: wrap;
-  background: var(--bg-white);
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  flex: 1;
+/* TABLE CARD COLOR VARIANTS */
+.table-card.table-card-white {
+  background: #ddd;
+  border: 2px solid #ddd;
+}
+
+.table-card.table-card-light-blue {
+  background: #2196F3;
+  border: 2px solid #2196F3;
+}
+
+.table-card.table-card-red {
+  background: #f44336;
+  border: 2px solid #f44336;
+}
+
+.table-card.table-card-purple {
+  background: #9c27b0;
+  border: 2px solid #9c27b0;
+}
+
+.table-card.table-card-orange {
+  background: #ff9800;
+  border: 2px solid #ff9800;
+}
+
+.table-card.table-card-yellow {
+  background: #ffeb3b;
+  border: 2px solid #ffeb3b;
+}
+
+/* Text color overrides by color variant */
+/* White and yellow cards: black text */
+.table-card.table-card-white .table-card-sessions,
+.table-card.table-card-white .table-card-seats,
+.table-card.table-card-white .table-card-name,
+.table-card.table-card-white .session-time-item,
+.table-card.table-card-yellow .table-card-sessions,
+.table-card.table-card-yellow .table-card-seats,
+.table-card.table-card-yellow .table-card-name,
+.table-card.table-card-yellow .session-time-item {
+  color: #000 !important;
+}
+
+/* All other colors: white text and white icons */
+.table-card.table-card-light-blue .table-card-sessions,
+.table-card.table-card-light-blue .table-card-seats,
+.table-card.table-card-light-blue .table-card-name,
+.table-card.table-card-light-blue .session-time-item,
+.table-card.table-card-red .table-card-sessions,
+.table-card.table-card-red .table-card-seats,
+.table-card.table-card-red .table-card-name,
+.table-card.table-card-red .session-time-item,
+.table-card.table-card-purple .table-card-sessions,
+.table-card.table-card-purple .table-card-seats,
+.table-card.table-card-purple .table-card-name,
+.table-card.table-card-purple .session-time-item,
+.table-card.table-card-orange .table-card-sessions,
+.table-card.table-card-orange .table-card-seats,
+.table-card.table-card-orange .table-card-name,
+.table-card.table-card-orange .session-time-item {
+  color: white !important;
+}
+
+/* Icon filters for colored cards (white icons) */
+.table-card.table-card-light-blue .table-card-seats img,
+.table-card.table-card-light-blue .session-time-item img,
+.table-card.table-card-red .table-card-seats img,
+.table-card.table-card-red .session-time-item img,
+.table-card.table-card-purple .table-card-seats img,
+.table-card.table-card-purple .session-time-item img,
+.table-card.table-card-orange .table-card-seats img,
+.table-card.table-card-orange .session-time-item img {
+  filter: invert(1) brightness(1.2);
 }
 
 /* BOTTOM CATEGORY TABS BAR */
@@ -77,6 +140,29 @@
   opacity: 1;
 }
 
+.table-tabs-bottom button.category-btn-edit,
+.table-tabs-bottom button.category-btn-delete {
+  font-size: 12px;
+  padding: 4px 8px;
+  min-height: auto;
+  background: transparent;
+  border: none;
+  flex: 0 0 auto;
+  width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.table-tabs-bottom button.category-btn-edit {
+  color: #3b82f6;
+}
+
+.table-tabs-bottom button.category-btn-delete {
+  color: #ef4444;
+}
+
 /* Mobile responsive: Category buttons on left as vertical sidebar */
 @media (max-width: 768px) {
   .tables-container {
@@ -90,83 +176,135 @@
   }
   
   .table-tabs-bottom {
-    position: fixed;
-    left: 0;
-    top: 70px;
+    display: flex;
     width: 100px;
     height: calc(100vh - 70px);
     flex-direction: column;
-    margin: 0;
-    border-top: none;
-    border-right: 2px solid var(--border-color);
-    border-bottom: none;
-    flex-shrink: 0;
+    position: fixed;
+    left: 0;
+    top: 70px;
     background: var(--bg-white);
-    z-index: 40;
+    border-right: 2px solid var(--border-color);
     overflow-y: auto;
-    pointer-events: auto;
+    overflow-x: hidden;
+    z-index: 40;
+    padding: 0;
+    gap: 0;
   }
   
   .table-tabs-bottom button {
     padding: 12px 8px;
-    font-size: 11px;
-    border-right: none;
+    border-radius: 0;
+    border: none;
     border-bottom: 1px solid var(--border-color);
-    border-top: none;
+    background: var(--bg-white);
+    color: var(--text-dark);
+    font-weight: 600;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 11px;
+    flex: 0 0 auto;
     text-align: center;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     white-space: normal;
     word-break: break-word;
-    pointer-events: auto;
+    width: 100%;
   }
   
   .table-tabs-bottom button:last-child {
     border-bottom: none;
+  }
+  
+  .table-tabs-bottom button:hover {
+    background: var(--bg-light);
+    color: #5a5a5a;
+  }
+  
+  .table-tabs-bottom button.active {
+    background: #5a5a5a;
+    color: var(--bg-white);
   }
 }
 
 @media (max-width: 480px) {
   .tables-container {
     margin-left: 80px;
+    padding: 0;
+    height: calc(100vh - 140px);
   }
   
   .table-tabs-bottom {
     width: 80px;
     top: 60px;
     height: calc(100vh - 60px);
+    padding: 0;
+    gap: 0;
+    flex-direction: column;
+    border-right: 2px solid var(--border-color);
+    border-top: none;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   
   .table-tabs-bottom button {
     font-size: 10px;
     padding: 10px 6px;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    width: 100%;
+    height: auto;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    word-break: break-word;
+    flex: 0 0 auto;
   }
-}
+  
+  .table-tabs-bottom button:last-child {
+    border-bottom: none;
+  }
+  
+  .table-tabs-bottom button.active {
+    background: #5a5a5a;
+    color: white;
+  }
+  
+  .table-tabs-bottom button.add-category-btn {
+    background: #5a5a5a;
+    color: white;
+    min-width: 80px;
+  }
 
-.table-tabs button {
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 2px solid var(--border-color);
-  background: var(--bg-white);
-  color: var(--text-dark);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 13px;
-}
+  .table-tabs-bottom button.category-btn-edit,
+  .table-tabs-bottom button.category-btn-delete {
+    font-size: 12px;
+    padding: 6px 4px;
+    min-height: auto;
+    background: transparent;
+    border: none;
+    border-bottom: none;
+    flex: 0 0 auto;
+    width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 4px;
+  }
 
-.table-tabs button:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-}
+  .table-tabs-bottom button.category-btn-edit {
+    color: #3b82f6;
+  }
 
-.table-tabs button.active {
-  background: var(--primary-color);
-  color: var(--bg-white);
-  border-color: var(--primary-color);
-}
-
-.table-tabs .add-tab {
-  background: var(--primary-color);
-  color: var(--bg-white);
+  .table-tabs-bottom button.category-btn-delete {
+    color: #ef4444;
+  }
 }
 
 .tables-top-bar {
@@ -190,6 +328,13 @@
     margin-left: 0;
     width: 100%;
     padding-left: 0;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  
+  .tables-container > .left-column-wrapper {
+    padding: 0;
+    margin-left: 0;
   }
 }
 
@@ -299,7 +444,10 @@ body.edit-mode .table-card {
   border: 2px solid #4a90e2;
   background: #f0f7ff;
   box-shadow: 0 4px 12px rgba(74, 144, 226, 0.15);
-  min-height: 220px;
+  min-height: auto;
+  aspect-ratio: auto;
+  overflow: visible;
+  justify-content: flex-start;
 }
 
 .table-card:hover {
@@ -312,90 +460,6 @@ body.edit-mode .table-card {
 }
 
 /* All table cards - with status indicators */
-.table-card-white {
-  background: white;
-  border: none;
-}
-
-.table-card-light-blue {
-  background: #0099ff;
-  border: none;
-  color: white;
-}
-
-.table-card-red {
-  background: #d32f2f;
-  border: none;
-  color: white;
-}
-
-.table-card-purple {
-  background: #2735b0;
-  border: none;
-  color: white;
-}
-
-.table-card-orange {
-  background: #ea6317;
-  border: none;
-  color: white;
-}
-
-.table-card-yellow {
-  background: #ffeb3b !important;
-  border: 2px solid #ffd700 !important;
-  color: #333 !important;
-}
-
-.table-card-reserved {
-  background: #ffd700;
-  border: none;
-  color: white;
-}
-
-.table-card-status {
-  position: relative;
-  bottom: auto;
-  left: auto;
-  transform: none;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 4px 8px;
-  background: transparent;
-  color: #666;
-  text-shadow: none;
-  text-transform: capitalize;
-  letter-spacing: 0.5px;
-  margin-top: 4px;
-  flex: 0 0 auto;
-}
-
-.table-card-status.available {
-  color: #27ae60;
-}
-
-.table-card-status.reserved {
-  color: #ffc107 !important;
-  font-weight: 700 !important;
-  position: absolute;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.table-card-white .table-card-status.available {
-  color: #27ae60;
-}
-
-.table-card-white .table-card-status {
-  color: #666;
-}
-
-.table-card-white .table-card-status.reserved {
-  color: #ffc107 !important;
-  font-weight: 700 !important;
-}
-
 .table-card-bottom-info {
   position: absolute;
   bottom: 8px;
@@ -532,99 +596,6 @@ body.edit-mode .table-card-name {
   margin: 4px 0 2px 0;
 }
 
-.table-card-white .table-card-name {
-  color: #1a1a1a;
-}
-
-.table-card-light-blue .table-card-name {
-  color: white;
-}
-
-.table-card-purple .table-card-name {
-  color: white;
-}
-
-.table-card-orange .table-card-name {
-  color: white;
-}
-
-.table-card-light-blue img,
-.table-card-red img,
-.table-card-purple img,
-.table-card-orange img {
-  filter: brightness(0) invert(1);
-}
-
-.table-card-reserved img {
-  filter: brightness(0.3);
-}
-
-.table-card-red .table-card-name {
-  color: white;
-}
-
-.table-card-reserved .table-card-name {
-  color: #000000;
-}
-
-.table-card-reserved .table-card-sessions,
-.table-card-reserved .table-card-seats,
-.table-card-reserved .table-card-info {
-  color: #000000;
-  text-shadow: none;
-}
-
-.table-card-white .table-card-sessions,
-.table-card-white .table-card-seats {
-  color: #1a1a1a;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
-}
-
-.table-card-light-blue .table-card-sessions,
-.table-card-light-blue .table-card-seats {
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.table-card-purple .table-card-sessions,
-.table-card-purple .table-card-seats {
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.table-card-orange .table-card-sessions,
-.table-card-orange .table-card-seats {
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.table-card-red .table-card-sessions,
-.table-card-red .table-card-seats {
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.table-card-yellow .table-card-sessions,
-.table-card-yellow .table-card-seats {
-  color: #000000 !important;
-  text-shadow: none !important;
-}
-
-.table-card-status.available {
-  background: transparent;
-  color: #666;
-}
-
-.table-card-status.dining {
-  background: transparent;
-  color: #666;
-}
-
-.table-card-status.reserved {
-  background: transparent;
-  color: #000000;
-}
-
 .table-card-name {
   font-size: 32px;
   font-weight: 900;
@@ -641,18 +612,11 @@ body.edit-mode .table-card-name {
   margin-right: 4px;
 }
 
-.table-edit-controls button img {
-  width: 16px;
-  height: 16px;
-  vertical-align: middle;
-  margin: 0;
+.table-card.open {
+  outline: none;
 }
 
-.table-edit-controls button .table-card-delete-btn {
-  background-color: #fee !important;
-  color: #c33 !important;
-}
-
+/* TABLE CARD SEATS */
 .table-card-seats {
   position: absolute;
   top: 8px;
@@ -672,20 +636,6 @@ body.edit-mode .table-card-name {
   font-weight: 600;
 }
 
-.table-card-info {
-  display: none;
-}
-
-.table-card.open {
-  /* No left border */
-  outline: none;
-}
-
-.table-card.closed {
-  /* No left border */
-  outline: none;
-}
-
 .table-card.collapsed {
   min-height: 240px;
   padding: 16px;
@@ -698,17 +648,18 @@ body.edit-mode .table-card-name {
 /* EDIT MODE STYLES */
 .table-edit-controls {
   display: none;
-  gap: 6px;
+  gap: 8px;
   flex-direction: column;
   width: 100%;
   margin-top: 10px;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   padding-top: 10px;
+  flex-shrink: 0;
 }
 
 .table-edit-controls button {
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 12px;
   font-size: 12px;
   font-weight: 600;
   border: none;
@@ -722,6 +673,14 @@ body.edit-mode .table-card-name {
   justify-content: center;
   gap: 6px;
   white-space: nowrap;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.table-edit-controls button img {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .table-edit-controls button:hover {
@@ -736,7 +695,7 @@ body.edit-mode .table-card-name {
 }
 
 body.edit-mode .table-edit-controls {
-  display: flex !important;
+  display: flex;
 }
 
 .add-table-card {
@@ -770,33 +729,6 @@ body.edit-mode .table-edit-controls {
 
 .add-table-card:active {
   transform: scale(0.96);
-}
-
-.table-card .card-header {
-  font-weight: bold;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-  width: 100%;
-  flex-shrink: 0;
-}
-
-.table-card .card-content {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  padding: 0 12px;
-}
-
-.table-card.expanded .card-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .table-actions {
@@ -941,18 +873,28 @@ body.edit-mode .table-edit-controls {
 }
 
 .panel-close-btn {
-  align-self: flex-end;
   background: none;
   border: none;
-  font-size: 20px;
+  font-size: 24px;
+  color: var(--text-dark);
   cursor: pointer;
-  color: var(--text-light);
-  padding: 4px 8px;
-  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background 0.2s ease, color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
 }
 
 .panel-close-btn:hover {
-  color: var(--text-dark);
+  background: var(--bg-light);
+  color: var(--primary-color);
+}
+
+.panel-close-btn:active {
+  background: var(--border-color);
 }
 
 .gear-icon-btn {
@@ -1016,38 +958,6 @@ body.edit-mode .table-edit-controls {
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
-}
-
-.session-panel-header {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #ddd;
-}
-
-.session-info {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.session-info > p {
-  margin: 0;
-  color: var(--text-light);
-  font-size: 14px;
-  font-weight: normal;
-}
-
-.session-header-buttons {
-  display: flex;
-  flex-direction: row;
-  gap: 6px;
-  flex-shrink: 0;
-  align-items: center;
 }
 
 .session-panel h3 {
@@ -1212,31 +1122,6 @@ body.edit-mode .table-edit-controls {
   border: 2px dashed var(--primary-color);
 }
 
-/* ============== SESSION DISCOUNT ============== */
-.session-discount-section {
-  margin-top: 16px;
-}
-
-.session-discount-section input[type="number"] {
-  min-width: 0;
-  max-width: 120px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.session-discount-section .btn-secondary {
-  max-width: 70px;
-  min-width: 0;
-  padding-left: 8px;
-  padding-right: 8px;
-  font-size: 13px;
-}
-
-/* ============== SESSION ACTIONS ============== */
-.session-actions {
-  display: none;
-}
-
 #session-orders {
   flex: 1;
   margin: 6px 0;
@@ -1298,28 +1183,6 @@ body.edit-mode .table-edit-controls {
 }
 
 /* ============== MODAL OVERLAY STYLES ============== */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-overlay > div {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-}
-
 .modal-cancel-btn {
   padding: 10px 20px;
   background: #f0f0f0;
@@ -1333,12 +1196,6 @@ body.edit-mode .table-edit-controls {
 .modal-cancel-btn:hover {
   background: #e0e0e0;
   border-color: #999;
-}
-
-.modal-content-label {
-  font-weight: 600;
-  display: block;
-  margin-bottom: 8px;
 }
 
 .modal-input {
@@ -1527,6 +1384,12 @@ body.edit-mode .table-edit-controls {
     padding: 8px 6px;
   }
 
+  body.edit-mode .table-card {
+    height: auto;
+    overflow: visible;
+    min-height: auto;
+  }
+
   .table-name {
     font-size: 14px;
     margin-bottom: 2px;
@@ -1568,6 +1431,12 @@ body.edit-mode .table-edit-controls {
     width: auto;
     height: 140px;
     padding: 9px 7px;
+  }
+
+  body.edit-mode .table-card {
+    height: auto;
+    overflow: visible;
+    min-height: auto;
   }
 
   .table-name {
@@ -1674,4 +1543,13 @@ body.edit-mode .table-edit-controls {
   min-height: 240px;
   height: 240px;
   width: 240px;
+}
+
+/* ============== MODAL SESSION TOTAL ============== */
+.modal-session-total {
+  padding: 8px 0;
+  font-weight: bold;
+  border-top: 1px solid #ddd;
+  margin-bottom: 12px;
+  width: 100%;
 }

@@ -244,53 +244,6 @@
 }
 
 /* Coupon Styles */
-.coupon-card {
-  background: var(--bg-light);
-  border-left: 4px solid var(--primary-color);
-  padding: 12px;
-  border-radius: 6px;
-  margin-bottom: 12px;
-}
-
-.coupon-code {
-  font-weight: 700;
-  color: var(--primary-color);
-  font-size: 16px;
-  margin-bottom: 4px;
-}
-
-.coupon-desc {
-  color: var(--text-light);
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.coupon-meta {
-  font-size: 12px;
-  color: var(--text-light);
-}
-
-.checkbox-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.checkbox-label span {
-  font-size: 14px;
-  color: var(--text-dark);
-}
 
 /* Restaurant Info Modal Styles */
 .form-row {

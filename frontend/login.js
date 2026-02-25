@@ -1,6 +1,11 @@
 const API_BASE = window.location.origin;
 let restaurantId;
 
+// Reset menu background when on login page
+if (window.resetMenuBackground) {
+  window.resetMenuBackground();
+}
+
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
 

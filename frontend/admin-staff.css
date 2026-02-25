@@ -94,16 +94,6 @@
   flex: 1;
 }
 
-.staff-card-actions .btn-edit {
-  background: #3b82f6;
-  color: white;
-}
-
-.staff-card-actions .btn-edit:hover {
-  background: #2563eb;
-  transform: scale(1.05);
-}
-
 .staff-card-actions .btn-delete {
   background: #ef4444;
   color: white;

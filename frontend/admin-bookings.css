@@ -388,15 +388,6 @@
   }
 }
 
-.booking-status {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
 .booking-status-badge {
   display: inline-block;
   padding: 4px 12px;
@@ -407,31 +398,6 @@
   background: #fef3c7;
   color: #92400e;
   width: fit-content;
-}
-
-.booking-status.confirmed {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.booking-status.pending {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.booking-status.completed {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.booking-status.no-show {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.booking-status.cancelled {
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 .booking-time-until {

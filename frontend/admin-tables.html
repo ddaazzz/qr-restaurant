@@ -20,15 +20,15 @@
       </div>
     </div>
     
-    <div id="session-orders-mini" class="hidden" style="height: 200px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; padding: 8px;">
+    <div id="session-orders-mini" class="hidden session-orders-mini">
       <!-- Mini preview of orders here -->
     </div>
     
-    <button id="view-orders-btn" class="hidden" style="width: 100%; margin-bottom: 8px; padding: 8px; background: var(--secondary-color); color: var(--bg-white); border: none; border-radius: 6px; cursor: pointer; font-weight: 600;" data-i18n="admin.view-orders">📖 View Full Orders</button>
+    <button id="view-orders-btn" class="hidden view-orders-btn" data-i18n="admin.view-orders">📖 View Full Orders</button>
   
     <!-- Close Bill Button -->
     <div id="close-bill-section" class="hidden">
-      <button class="btn-primary" onclick="openCloseBillModal()" data-i18n="admin.close-bill" style="width: 100%;">💰 Close Bill</button>
+      <button class="btn-primary" id="close-bill-btn" data-i18n="admin.close-bill" style="width: 100%;">💰 Close Bill</button>
     </div>
   </div>
 </div>
@@ -39,16 +39,16 @@
   <div class="modal-content orders-modal-content">
     <div class="modal-header">
       <h3 id="orders-modal-title" data-i18n="admin.all-orders">📋 All Orders</h3>
-      <button class="modal-close" onclick="closeOrdersModal()">✕</button>
+      <button class="modal-close" id="close-orders-modal">✕</button>
     </div>
     <div id="session-orders" class="modal-body">
       <!-- JS renders full orders here -->
     </div>
     <div class="modal-footer">
-      <div id="modal-session-total" style="padding: 8px 0; font-weight: bold; border-top: 1px solid #ddd; margin-bottom: 12px; width: 100%;">
-        Total: —
+      <div id="modal-session-total" class="modal-session-total">
+        <span data-i18n="admin.modal-session-total">Total:</span> —
       </div>
-      <button class="btn-secondary" onclick="closeOrdersModal()" data-i18n="admin.close">Close</button>
+      <button class="btn-secondary" id="modal-close-btn" data-i18n="admin.close">Close</button>
     </div>
   </div>
 </div>
@@ -56,3 +56,19 @@
 <!-- Category Tabs Bar (Bottom) -->
 <div id="tables-category-tabs" class="table-tabs-bottom"></div>
 </div>
+
+<!-- Language initialization script -->
+<script>
+  (function() {
+    console.log('[admin-tables.html] Module loaded - initializing language');
+    const currentLang = localStorage.getItem('language') || 'zh';
+    if (typeof setLanguage === 'function') {
+      setLanguage(currentLang);
+      console.log('[admin-tables.html] Language set to:', currentLang);
+    }
+    if (typeof reTranslateContent === 'function') {
+      reTranslateContent();
+      console.log('[admin-tables.html] Content re-translated');
+    }
+  })();
+</script>

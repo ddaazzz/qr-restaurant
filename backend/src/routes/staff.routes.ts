@@ -47,7 +47,8 @@ router.patch("/:id/settings", async (req, res) => {
     qr_mode,
     pos_webhook_url,
     pos_api_key,
-    booking_time_allowance_mins
+    booking_time_allowance_mins,
+    language_preference
   } = req.body;
 
   try {
@@ -64,8 +65,9 @@ router.patch("/:id/settings", async (req, res) => {
            qr_mode = $9,
            pos_webhook_url = $10,
            pos_api_key = $11,
-           booking_time_allowance_mins = COALESCE($12, booking_time_allowance_mins)
-       WHERE id = $13`,
+           booking_time_allowance_mins = COALESCE($12, booking_time_allowance_mins),
+           language_preference = COALESCE($13, language_preference)
+       WHERE id = $14`,
       [
         name,
         logo_url,
@@ -79,6 +81,7 @@ router.patch("/:id/settings", async (req, res) => {
         pos_webhook_url,
         pos_api_key,
         booking_time_allowance_mins,
+        language_preference,
         id
       ]
     );

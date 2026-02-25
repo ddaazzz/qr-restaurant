@@ -30,11 +30,14 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 // Handle unhandled errors
 process.on("unhandledRejection", (reason, promise) => {
   console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+  console.error(reason);
 });
 
 process.on("uncaughtException", (error) => {
   console.error("❌ Uncaught Exception:", error);
-  process.exit(1);
+  console.error("Stack:", error.stack);
+  // Don't exit - let the server keep running
+  // process.exit(1);
 });
 
 if (process.env.NODE_ENV !== "production") {

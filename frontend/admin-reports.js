@@ -321,9 +321,9 @@ function filterRevenueReport() {
   html += '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">' +
     '<thead>' +
     '<tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">' +
-    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">Date</th>' +
-    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">Orders</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">Revenue</th>' +
+    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">' + t('admin.col-date') + '</th>' +
+    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">' + t('admin.col-orders') + '</th>' +
+    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-revenue') + '</th>' +
     '</tr>' +
     '</thead>' +
     '<tbody>';
@@ -607,10 +607,10 @@ function renderDailyTrends(stats, mode) {
   var html = '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">' +
     '<thead>' +
     '<tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">' +
-    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">Period</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">Orders</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">Revenue</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">Avg Bill</th>' +
+    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">' + t('admin.col-period') + '</th>' +
+    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-orders') + '</th>' +
+    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-revenue') + '</th>' +
+    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-avg-bill') + '</th>' +
     '</tr>' +
     '</thead>' +
     '<tbody>';

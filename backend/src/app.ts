@@ -13,6 +13,7 @@ import authRoutes from "./routes/auth.routes";
 import couponsRoutes from "./routes/coupons.routes";
 import bookingsRoutes from "./routes/bookings.routes";
 import waitlistRoutes from "./routes/waitlist.routes";
+import settingsRoutes from "./routes/settings.routes";
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use("/uploads", express.static("uploads"));
 /* ======================
    API ROUTES (FIRST)
 ====================== */
+app.use("/api", settingsRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/restaurants", staffRoutes);
 app.use("/api", tableRoutes);

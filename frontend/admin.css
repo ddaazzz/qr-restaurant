@@ -36,7 +36,7 @@ html, body {
 body {
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--text-dark);
-  background: var(--bg-light);
+  background: #ffffff;
   overflow: hidden;
 }
 
@@ -113,7 +113,7 @@ h1, h2, h3, h4, h5, h6 {
 .app-container > .main-content {
   flex: 1;
   overflow: hidden;
-  margin-left: 120px;
+  margin-left: 0px;
 }
 
 @media (max-width: 768px) {
@@ -239,6 +239,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
   transition: background 0.2s ease;
 }
 
@@ -538,24 +539,22 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
   flex-direction: column;
   overflow: hidden;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #section-orders.active {
   display: flex !important;
 }
 
-#section-orders #orders-section-content {
-  flex: 1;
+#section-orders .orders-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  padding: 0;
-  margin: 0;
-}
-
-#section-orders .orders-category-bar {
-  flex-shrink: 0;
-  border-top: 2px solid var(--border-color);
+  height: 100%;
 }
 
 .admin-only {
@@ -754,6 +753,33 @@ button {
   align-items: center;
   gap: 8px;
   letter-spacing: -0.2px;
+}
+
+/* ============== HEADER ICON BUTTONS ============== */
+.header-icon-btn {
+  background: #f0f0f0;
+  border: 1px solid #d0d0d0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  gap: 0;
+}
+
+.header-icon-btn:hover {
+  background: #e0e0e0;
+  border-color: #b0b0b0;
+}
+
+.header-icon-btn:active {
+  transform: scale(0.95);
+}
+
+.header-icon-btn .btn-icon {
+  filter: none;
 }
 
 .btn-icon {
@@ -1057,7 +1083,44 @@ button.btn-icon.danger:hover {
   transition: all 0.2s ease;
 }
 
+/* ============== QR SCANNER MODAL ============== */
+.qr-scanner-modal {
+  max-width: 500px;
+}
 
+.qr-scanner-container {
+  padding: 20px;
+  text-align: center;
+}
+
+#qr-reader {
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.qr-scanner-error {
+  padding: 12px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 6px;
+  color: #c33;
+  font-size: 0.9em;
+}
+
+.qr-scanner-error.hidden {
+  display: none;
+}
+
+.qr-scanner-loading {
+  padding: 12px;
+  color: var(--text-light);
+  font-size: 0.9em;
+}
+
+.qr-scanner-loading.hidden {
+  display: none;
+}
 
 /* ============== LOGIN SCREEN ============== */
 .login-screen {
@@ -1504,22 +1567,22 @@ button.btn-icon.danger:hover {
   font-weight: 500;
 }
 
-.btn-primary {
+.form-actions .btn-primary {
   background: var(--primary-color);
   color: white;
 }
 
-.btn-primary:hover {
+.form-actions .btn-primary:hover {
   background: var(--secondary-color);
 }
 
-.btn-secondary {
+.form-actions .btn-secondary {
   background: var(--bg-light);
   color: var(--text-dark);
   border: 1px solid var(--border-color);
 }
 
-.btn-secondary:hover {
+.form-actions .btn-secondary:hover {
   background: #f0f0f0;
 }
 
@@ -1701,13 +1764,59 @@ button.btn-icon.danger:hover {
 @media (max-width: 480px) {
   .app-header {
     padding: 8px 10px;
-    gap: 5px;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    height: auto;
+    min-height: 60px;
   }
   
-  .header-left,
-  .header-center,
-  .header-right {
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex: 0 0 auto;
+    min-width: 0;
+  }
+  
+  .header-left .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+  }
+  
+  .header-center {
+    flex: 0 0 auto;
+    display: none;
+  }
+  
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+  
+  .header-right .btn-primary,
+  .header-right .btn-tertiary,
+  .header-right .admin-menu-btn {
+    padding: 8px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    min-width: fit-content;
+  }
+  
+  .header-right .btn-icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
   }
   
   .sidebar {
@@ -1716,17 +1825,23 @@ button.btn-icon.danger:hover {
     z-index: 100;
     transition: width 0.3s ease;
   }
-  
+
   .sidebar.collapsed {
     width: 0;
     overflow: hidden;
   }
-  
+
+  .menu-text {
+    display: block;
+    font-size: 9px;
+  }
+
   .sidebar-toggle {
-    width: 40px;
-    height: 40px;
-    padding: 8px;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
     font-size: 16px;
+    flex-shrink: 0;
   }
   
   .admin-menu-btn {

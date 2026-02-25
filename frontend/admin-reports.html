@@ -99,3 +99,19 @@
 <div id="reports-loading" style="text-align: center; padding: 40px; color: #999;">
   <p style="font-size: 16px;">Loading analytics dashboard...</p>
 </div>
+
+<!-- Language initialization script -->
+<script>
+  (function() {
+    console.log('[admin-reports.html] Module loaded - initializing language');
+    const currentLang = localStorage.getItem('language') || 'zh';
+    if (typeof setLanguage === 'function') {
+      setLanguage(currentLang);
+      console.log('[admin-reports.html] Language set to:', currentLang);
+    }
+    if (typeof reTranslateContent === 'function') {
+      reTranslateContent();
+      console.log('[admin-reports.html] Content re-translated');
+    }
+  })();
+</script>

@@ -28,6 +28,29 @@ let orderPollerStarted = false;
 let cart = { items: [], total: 0 };
 const variantSelections = {};
 
+// Language switching for customer menu
+function setLanguageFromMenu(lang) {
+  localStorage.setItem('language', lang);
+  
+  // Use existing setLanguage function to update all data-i18n elements
+  if (typeof setLanguage === 'function') {
+    setLanguage(lang);
+  }
+  
+  // Update table indicator
+  if (document.getElementById('table-indicator')) {
+    document.getElementById("table-indicator").textContent = `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
+  }
+  
+  // Re-render cart to update labels
+  updateCartBar();
+  
+  // Update menu items if they're visible
+  if (document.getElementById('menu') && document.getElementById('menu').innerHTML) {
+    renderMenuItems(window.menu.items);
+  }
+}
+
 async function initLanding() {
   if (!qrToken) {
     alert("Invalid QR code");
@@ -70,21 +93,31 @@ console.log("Session data:", session, "Pax value:", session.pax);
     console.log("Logo URL set to:", logoUrl);
   }
 
-  // 🔥 Apply background image with dark overlay
+  // 🔥 Apply background image with dark overlay (LANDING PAGE ONLY)
   const landingPage = document.getElementById("landing-page");
   if (session.background_url) {
-    document.body.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('${session.background_url}')`;
-    document.body.style.backgroundSize = "430px 100vh";
-    document.body.style.backgroundPosition = "center";
-    document.body.style.backgroundAttachment = "fixed";
-    document.body.style.backgroundRepeat = "no-repeat";
-    if (landingPage) landingPage.classList.remove("no-background");
+    landingPage.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('${session.background_url}')`;
+    landingPage.style.backgroundSize = "430px 100vh";
+    landingPage.style.backgroundPosition = "center";
+    landingPage.style.backgroundAttachment = "fixed";
+    landingPage.style.backgroundRepeat = "no-repeat";
+    landingPage.classList.remove("no-background");
     console.log("Background image set with 60% dark overlay and phone sizing:", session.background_url);
   } else {
     // No background: apply black text class for visibility
-    if (landingPage) landingPage.classList.add("no-background");
+    landingPage.classList.add("no-background");
     console.log("No background image, applied black text styling");
   }
+
+  // Store cleanup function to reset background when leaving menu
+  window.resetMenuBackground = function() {
+    if (landingPage) {
+      landingPage.style.backgroundImage = "none";
+      landingPage.style.backgroundColor = "#ffffff";
+    }
+    document.body.style.backgroundImage = "none";
+    document.body.style.backgroundColor = "#ffffff";
+  };
 
   const nameEl = document.getElementById("restaurantName")
   if (nameEl){
@@ -92,7 +125,7 @@ console.log("Session data:", session, "Pax value:", session.pax);
   }
   const tableNameEl = document.getElementById("tableInfo")
   if (tableNameEl){
-    tableNameEl.textContent = `${session.table_name} • Pax ${session.pax != null ? session.pax : "-"}`;
+    tableNameEl.textContent = `${session.table_name} • ${t('menu.pax-label')} ${session.pax != null ? session.pax : "-"}`;
     console.log("Table info set to:", tableNameEl.textContent, "with pax:", session.pax);
   }
   const addressEl = document.getElementById("address")
@@ -110,13 +143,21 @@ console.log("Session data:", session, "Pax value:", session.pax);
     startOrdering();
     openOrdersDrawer();
   };
+
+  // Initialize active language button for landing page
+  const currentLang = localStorage.getItem('language') || 'zh';
+  setLanguage(currentLang);
 }
 
 async function startOrdering() {
   document.getElementById("landing-page").style.display = "none";
   document.getElementById("app").style.display = "block";
 
-  document.getElementById("table-indicator").textContent = `Table ${tableName} • Pax ${pax || '-'}`;
+  // Initialize language button for menu page
+  const currentLang = localStorage.getItem('language') || 'zh';
+  setLanguage(currentLang);
+
+  document.getElementById("table-indicator").textContent = `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
   document.getElementById("restaurant").textContent = restaurantName || "Welcome";
   document.getElementById("status").textContent = "";
 
@@ -357,7 +398,7 @@ content.appendChild(vContainer);
  // ---------- ADD TO CART BUTTON ----------
   const addBtn = document.createElement("button");
   addBtn.className = "add-btn";
-  addBtn.textContent = "Add to Cart";
+  addBtn.textContent = t('menu.add-to-cart');
   addBtn.dataset.itemId = item.id;
   addBtn.disabled = !canAddToCart(item);
   addBtn.onclick = () => addToCart(item);
@@ -699,8 +740,8 @@ function renderOrdersDrawer(orders, tableName) {
   let html = `
     <div class="orders-drawer-header">
       <button class="hide-drawer" onclick="closeAllDrawers()">Hide</button>
-      <div class="orders-title">Active Orders</div>
-      <div class="table-name">Table ${tableName}</div>
+      <div class="orders-title">${t('menu.check-orders')}</div>
+      <div class="table-name">${t('menu.table-label')} ${tableName}</div>
     </div>
     <div class="orders-items">
   `;
@@ -736,26 +777,26 @@ function renderOrdersDrawer(orders, tableName) {
     <hr/>
     <div class="orders-summary">
       <div class="summary-line">
-        <span>Subtotal</span>
+        <span>${t('menu.subtotal-label')}</span>
         <span>$${(subtotal / 100).toFixed(2)}</span>
       </div>
       <div class="summary-line">
-        <span>Service Charge (${serviceChargePct}%)</span>
+        <span>${t('menu.service-charge-label')} (${serviceChargePct}%)</span>
         <span>$${(serviceCharge / 100).toFixed(2)}</span>
       </div>
       <div class="summary-line total">
-        <strong>Total</strong>
+        <strong>${t('menu.total-label')}</strong>
         <strong id="orders-total-display">$${(total / 100).toFixed(2)}</strong>
       </div>
     </div>
     <div class="coupon-section">
-      <input type="text" id="orders-coupon-input" placeholder="Enter coupon code" />
-      <button onclick="applyCouponToOrders()" class="btn-secondary">Apply Coupon</button>
+      <input type="text" id="orders-coupon-input" placeholder="${t('menu.enter-coupon-code')}" />
+      <button onclick="applyCouponToOrders()" class="btn-secondary">${t('menu.apply-coupon')}</button>
       <div id="orders-coupon-display"></div>
     </div>
     <div class="orders-actions">
-      <button class="btn-primary" id="close-bill-btn" onclick="closeBill()">🔴 Close Bill</button>
-      <button class="btn-secondary" onclick="closeAllDrawers()">Back to Menu</button>
+      <button class="btn-primary" id="close-bill-btn" onclick="closeBill()">${t('menu.close-bill')}</button>
+      <button class="btn-secondary" onclick="closeAllDrawers()">${t('menu.back-to-menu')}</button>
     </div>
   `;
 
@@ -766,7 +807,7 @@ function renderCartDrawer() {
   const el = document.getElementById("cart-drawer-content");
 
   if (!cart.items.length) {
-    el.innerHTML = '<div class="empty-cart"><p>Your cart is empty</p></div>';
+    el.innerHTML = '<div class="empty-cart"><p>' + t('menu.cart-empty') + '</p></div>';
     return;
   }
 
@@ -802,21 +843,21 @@ function renderCartDrawer() {
     <div class="cart-footer">
       <div class="cart-summary">
         <div class="summary-line">
-          <span>Subtotal:</span>
+          <span>${t('menu.subtotal-label')}:</span>
           <span>$${(subtotal / 100).toFixed(2)}</span>
         </div>
         ${serviceChargePct > 0 ? `
           <div class="summary-line">
-            <span>Service Charge (${serviceChargePct}%):</span>
+            <span>${t('menu.service-charge-label')} (${serviceChargePct}%):</span>
             <span>$${(serviceCharge / 100).toFixed(2)}</span>
           </div>
         ` : ''}
         <div class="cart-total">
-          <span>Total:</span>
+          <span>${t('menu.total-label')}:</span>
           <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
         </div>
       </div>
-      <button class="btn-primary cart-submit" onclick="submitOrder()">Confirm Order</button>
+      <button class="btn-primary cart-submit" onclick="submitOrder()">${t('menu.confirm-order')}</button>
     </div>
   `;
 
@@ -1071,7 +1112,7 @@ function startOrderPolling() {
 function applyCouponToCart() {
   const couponCode = document.getElementById("cart-coupon-input").value.trim().toUpperCase();
   if (!couponCode) {
-    alert("Please enter a coupon code");
+    alert(t('menu.enter-coupon'));
     return;
   }
   
@@ -1080,20 +1121,20 @@ function applyCouponToCart() {
   
   // Display applied coupon
   const displayEl = document.getElementById("cart-coupon-display");
-  displayEl.innerHTML = `<div class="coupon-applied">✓ Coupon "${couponCode}" will be applied at checkout</div>`;
+  displayEl.innerHTML = `<div class="coupon-applied">${t('menu.coupon-will-apply').replace('{0}', couponCode)}</div>`;
 }
 
 function applyCouponToOrders() {
   const couponCode = document.getElementById("orders-coupon-input").value.trim().toUpperCase();
   if (!couponCode) {
-    alert("Please enter a coupon code");
+    alert(t('menu.enter-coupon'));
     return;
   }
   
   // Get current session ID from somewhere (may need to modify based on your app structure)
   const sessionId = sessionStorage.getItem("sessionId");
   if (!sessionId) {
-    alert("Session not found");
+    alert(t('menu.session-not-found'));
     return;
   }
   
@@ -1112,15 +1153,15 @@ async function applyCouponToSession(sessionId, couponCode) {
     const displayEl = document.getElementById("orders-coupon-display");
     
     if (response.ok) {
-      displayEl.innerHTML = `<div class="coupon-applied">✓ Coupon applied: ${data.message}</div>`;
+      displayEl.innerHTML = `<div class="coupon-applied">${t('menu.coupon-applied').replace('{0}', data.message)}</div>`;
       // Refresh orders to show updated total
       loadOrdersDrawer();
     } else {
-      displayEl.innerHTML = `<div class="coupon-error">✗ ${data.error}</div>`;
+      displayEl.innerHTML = `<div class="coupon-error">${t('menu.coupon-error').replace('{0}', data.error)}</div>`;
     }
   } catch (error) {
     console.error("Error applying coupon:", error);
-    document.getElementById("orders-coupon-display").innerHTML = `<div class="coupon-error">✗ Failed to apply coupon</div>`;
+    document.getElementById("orders-coupon-display").innerHTML = `<div class="coupon-error">${t('menu.coupon-failed')}</div>`;
   }
 }
 
@@ -1179,11 +1220,11 @@ async function closeBill() {
     if (btn) {
       btn.style.backgroundColor = "#fbbf24";
       btn.style.color = "#000";
-      btn.textContent = "✓ Bill Request Sent";
+      btn.textContent = t('menu.bill-request-sent');
       btn.disabled = true;
     }
 
-    alert("Bill closure requested. Staff will process it shortly.");
+    alert(t('menu.close-bill-requested'));
   } catch (error) {
     console.error("❌ Error closing bill:", error);
     alert("Error requesting bill closure");

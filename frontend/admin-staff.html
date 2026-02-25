@@ -5,7 +5,7 @@
   <div class="section-card hidden" id="staff-create-section" style="margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
       <h3 data-i18n="admin.create-new-staff">Create/Edit Staff</h3>
-      <button onclick="toggleStaffEditMode()" style="font-size: 20px; background: none; border: none; cursor: pointer; color: #999;">✕</button>
+      <button onclick="closeStaffForm()" style="font-size: 20px; background: none; border: none; cursor: pointer; color: #999;">✕</button>
     </div>
     <div id="staff-error" class="error-message" style="display: none;"></div>
     <div id="staff-success" class="success-message" style="display: none;"></div>
@@ -14,11 +14,11 @@
       <div class="form-row">
         <div class="form-group">
           <label data-i18n="admin.staff-name">Staff Name</label>
-          <input id="staff-name" placeholder="e.g., John Smith" required />
+          <input id="staff-name" data-i18n="admin.staff-name-placeholder" placeholder="e.g., John Smith" required />
         </div>
         <div class="form-group">
           <label data-i18n="admin.pin-6digits">PIN (6 digits)</label>
-          <input id="staff-pin" type="text" placeholder="e.g., 123456" maxlength="6" required />
+          <input id="staff-pin" type="text" data-i18n="admin.pin-placeholder" placeholder="e.g., 123456" maxlength="6" required />
         </div>
         <div class="form-group">
           <label data-i18n="admin.role">Role</label>
@@ -28,8 +28,8 @@
           </select>
         </div>
         <div class="form-group">
-          <label data-i18n="admin.password">Hourly Rate ($/hr)</label>
-          <input id="staff-hourly-rate" type="number" placeholder="e.g., 15.50" step="0.01" min="0" />
+          <label data-i18n="admin.hourly-rate">Hourly Rate ($/hr)</label>
+          <input id="staff-hourly-rate" type="number" data-i18n="admin.hourly-rate-placeholder" placeholder="e.g., 15.50" step="0.01" min="0" />
         </div>
       </div>
 
@@ -93,19 +93,19 @@
     <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
         <div>
-          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Role</label>
+          <label data-i18n="admin.detail-role" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Role</label>
           <p id="staff-detail-role" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
         </div>
         <div>
-          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">PIN</label>
+          <label data-i18n="admin.detail-pin" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">PIN</label>
           <p id="staff-detail-pin" style="margin: 5px 0 0 0; font-size: 16px; font-family: monospace;">—</p>
         </div>
         <div>
-          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Hourly Rate</label>
+          <label data-i18n="admin.detail-hourly-rate" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Hourly Rate</label>
           <p id="staff-detail-wage" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
         </div>
         <div>
-          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Status</label>
+          <label data-i18n="admin.detail-status" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Status</label>
           <p id="staff-detail-status" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
         </div>
       </div>
@@ -113,12 +113,12 @@
 
     <!-- Clock In/Out Section -->
     <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-      <h3 style="margin: 0 0 15px 0; font-size: 16px;">Clock In/Out</h3>
+      <h3 data-i18n="admin.clock-section-title" style="margin: 0 0 15px 0; font-size: 16px;">Clock In/Out</h3>
       <div style="display: flex; gap: 10px;">
-        <button id="staff-clock-in-btn" onclick="clockInStaff()" class="btn-primary" style="flex: 1; padding: 12px;">
+        <button id="staff-clock-in-btn" onclick="clockInStaff()" data-i18n="admin.clock-in" class="btn-primary" style="flex: 1; padding: 12px;">
           ▶ Clock In
         </button>
-        <button id="staff-clock-out-btn" onclick="clockOutStaff()" class="btn-danger" style="flex: 1; padding: 12px; display: none;">
+        <button id="staff-clock-out-btn" onclick="clockOutStaff()" data-i18n="admin.clock-out" class="btn-danger" style="flex: 1; padding: 12px; display: none;">
           ⏹ Clock Out
         </button>
       </div>
@@ -127,14 +127,14 @@
 
     <!-- Work Hours Summary -->
     <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-      <h3 style="margin: 0 0 15px 0; font-size: 16px;">Work Hours (Last 30 Days)</h3>
+      <h3 data-i18n="admin.work-hours-title" style="margin: 0 0 15px 0; font-size: 16px;">Work Hours (Last 30 Days)</h3>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
         <div>
-          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Days Worked</label>
+          <label data-i18n="admin.days-worked" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Days Worked</label>
           <p id="staff-total-shifts" style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">0</p>
         </div>
         <div>
-          <label style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Total Hours</label>
+          <label data-i18n="admin.total-hours" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Total Hours</label>
           <p id="staff-total-hours" style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">0</p>
         </div>
       </div>
@@ -142,7 +142,7 @@
 
     <!-- Work Log -->
     <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-      <h3 style="margin: 0 0 15px 0; font-size: 16px;">Work Log (Last 30 Days)</h3>
+      <h3 data-i18n="admin.work-log-title" style="margin: 0 0 15px 0; font-size: 16px;">Work Log (Last 30 Days)</h3>
       <div id="staff-timekeeping-list" style="max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch;">
         <p style="color: #999; font-size: 14px;">Loading...</p>
       </div>
@@ -150,8 +150,24 @@
 
     <!-- Edit & Delete Buttons -->
     <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-      <button onclick="if(CURRENT_STAFF_ID) { const id = CURRENT_STAFF_ID; closeStaffDetailModal(); editStaff(id); }" class="btn-secondary" style="flex: 1; min-width: 120px;">✏️ Edit Staff</button>
-      <button onclick="if(CURRENT_STAFF_ID && confirm('Delete this staff member?')) { const id = CURRENT_STAFF_ID; closeStaffDetailModal(); deleteStaff(id); }" class="btn-danger" style="flex: 1; min-width: 120px;">🗑️ Delete Staff</button>
+      <button onclick="if(CURRENT_STAFF_ID) { const id = CURRENT_STAFF_ID; closeStaffDetailModal(); editStaff(id); }" data-i18n="admin.edit-staff" class="btn-secondary" style="flex: 1; min-width: 120px;">✏️ Edit Staff</button>
+      <button onclick="if(CURRENT_STAFF_ID && confirm(getTranslation('admin.confirm-delete-staff'))) { const id = CURRENT_STAFF_ID; closeStaffDetailModal(); deleteStaff(id); }" data-i18n="admin.delete-staff" class="btn-danger" style="flex: 1; min-width: 120px;">🗑️ Delete Staff</button>
     </div>
   </div>
 </div>
+
+<!-- Language initialization script -->
+<script>
+  (function() {
+    console.log('[admin-staff.html] Module loaded - initializing language');
+    const currentLang = localStorage.getItem('language') || 'zh';
+    if (typeof setLanguage === 'function') {
+      setLanguage(currentLang);
+      console.log('[admin-staff.html] Language set to:', currentLang);
+    }
+    if (typeof reTranslateContent === 'function') {
+      reTranslateContent();
+      console.log('[admin-staff.html] Content re-translated');
+    }
+  })();
+</script>

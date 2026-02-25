@@ -1,6 +1,39 @@
 // ============= TABLES MODULE =============
 // All table management functionality extracted from admin.js
 
+// Initialize event listeners for modal controls
+document.addEventListener('DOMContentLoaded', function() {
+  const closeOrdersModal = document.getElementById('close-orders-modal');
+  const modalCloseBtn = document.getElementById('modal-close-btn');
+  const viewOrdersBtn = document.getElementById('view-orders-btn');
+  const closeBillBtn = document.getElementById('close-bill-btn');
+  
+  if (closeOrdersModal) {
+    closeOrdersModal.addEventListener('click', () => {
+      const modal = document.getElementById('orders-modal');
+      if (modal) modal.classList.add('hidden');
+    });
+  }
+  
+  if (modalCloseBtn) {
+    modalCloseBtn.addEventListener('click', () => {
+      const modal = document.getElementById('orders-modal');
+      if (modal) modal.classList.add('hidden');
+    });
+  }
+  
+  if (viewOrdersBtn) {
+    viewOrdersBtn.addEventListener('click', () => {
+      const modal = document.getElementById('orders-modal');
+      if (modal) modal.classList.remove('hidden');
+    });
+  }
+  
+  if (closeBillBtn) {
+    closeBillBtn.addEventListener('click', openCloseBillModal);
+  }
+});
+
 // Helper to get today's date in restaurant timezone (YYYY-MM-DD format)
 function getTodayDateString() {
   const tz = typeof restaurantTimezone !== 'undefined' ? restaurantTimezone : 'UTC';
@@ -53,6 +86,7 @@ function renderTableCategoryTabs() {
     // Create wrapper container for category button with controls
     var wrapper = document.createElement("div");
     wrapper.style.display = "flex";
+    wrapper.style.flexDirection = "column";
     wrapper.style.alignItems = "center";
     wrapper.style.position = "relative";
     wrapper.className = "category-button-wrapper";
@@ -84,7 +118,7 @@ function renderTableCategoryTabs() {
       var editBtn = document.createElement("button");
       editBtn.className = "category-btn-edit";
       editBtn.textContent = "✏️";
-      editBtn.style.marginLeft = "4px";
+      editBtn.style.marginTop = "4px";
       editBtn.style.padding = "4px 8px";
       editBtn.style.backgroundColor = "#3b82f6";
       editBtn.style.color = "white";
@@ -101,7 +135,7 @@ function renderTableCategoryTabs() {
       var deleteBtn = document.createElement("button");
       deleteBtn.className = "category-btn-delete";
       deleteBtn.textContent = "🗑️";
-      deleteBtn.style.marginLeft = "4px";
+      deleteBtn.style.marginTop = "4px";
       deleteBtn.style.padding = "4px 8px";
       deleteBtn.style.backgroundColor = "#ef4444";
       deleteBtn.style.color = "white";
@@ -462,7 +496,7 @@ function renderCategoryTablesGrid() {
     
     // Add Available status if available
     if (status === "available") {
-      bottomItems.push("<div class=\"table-card-status " + status + "\">Available</div>");
+      bottomItems.push("<div class=\"table-card-status " + status + "\">" + t('admin.table-status-available') + "</div>");
     }
     
     // Create bottom info section if we have items
@@ -479,7 +513,7 @@ function renderCategoryTablesGrid() {
       bottomInfoHTML +
       "<div class=\"table-edit-controls\">" +
       "<button onclick=\"event.stopPropagation(); renameTablePrompt(" + table.id + ", '" + table.name + "')\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
-      "<button onclick=\"event.stopPropagation(); changeTableSeatsPrompt(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Seats</button>" +
+      "<button onclick=\"event.stopPropagation(); changeTableSeatsPrompt(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>" + t('admin.seats') + "</button>" +
       "<button onclick=\"event.stopPropagation(); deleteTable(" + table.id + ")\" class=\"table-card-delete-btn\"><img src=\"/uploads/website/bin.png\" alt=\"delete\"/>Delete</button>" +
       "</div>" +
       "<div class=\"table-card-seats\">" +
@@ -835,8 +869,8 @@ async function renderSessionsList(table) {
       <div class="session-list-item" style="padding: 12px; background: ${sessionColor}15; border: 2px solid ${sessionColor}; border-radius: 6px; margin-bottom: 8px; cursor: pointer;" onclick="selectSessionToView(${session.id})">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong>Session #${session.id}</strong>
-            <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">👥 ${session.pax} • Dining ${duration}</div>
+            <strong>${t('admin.session-label').replace('{0}', session.id)}</strong>
+            <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">👥 ${session.pax} • ${t('admin.dining')} ${duration}</div>
           </div>
           <div style="text-align: right; font-size: 14px; font-weight: 600; color: ${sessionColor};">
             ${billTotal}
@@ -865,22 +899,22 @@ async function renderSessionsList(table) {
     ${nextReservationHTML}
 
     <div style="margin-bottom: 16px;">
-      <strong style="display: block; margin-bottom: 8px;">Active Sessions:</strong>
+      <strong style="display: block; margin-bottom: 8px;">${t('admin.active-sessions')}</strong>
       ${sessionsHTML}
     </div>
 
     ${remaining > 0 ? `
       <button class="btn-primary" style="width: 100%; margin-bottom: 8px;" onclick="startNewSessionModal(${table.id})">
-        ＋ Start New Session (${remaining} seats)
+        ${t('admin.start-new-session')} (${remaining} seats)
       </button>
     ` : ''}
 
     <button class="btn-secondary" style="width: 100%; margin-bottom: 16px;" onclick="bookTableModal(${table.id})">
-      ⊞ Book Table
+      ${t('admin.book-table')}
     </button>
 
     <div id="table-reservations-list">
-      <p style="font-size: 12px; color: var(--text-light);">Loading reservations...</p>
+      <p style="font-size: 12px; color: var(--text-light);">${t('admin.loading-reservations')}</p>
     </div>
   `;
 
@@ -912,19 +946,19 @@ function renderTableOptionsPanel(table) {
     <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
     <h2 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 900; color: var(--text-dark);">${table.name}</h2>
     <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-light);">
-      ○ All ${table.seat_count} seats available
+      ${t('admin.all-seats-available').replace('{0}', table.seat_count)}
     </p>
 
     <button class="btn-primary" style="width: 100%; margin-bottom: 8px;" onclick="startNewSessionModal(${table.id})">
-      ＋ Start Session
+      ${t('admin.start-session')}
     </button>
 
     <button class="btn-secondary" style="width: 100%; margin-bottom: 16px;" onclick="bookTableModal(${table.id})">
-      ⊞ Book Table
+      ${t('admin.book-table')}
     </button>
 
     <div id="table-reservations-list">
-      <p style="font-size: 12px; color: var(--text-light);">Loading reservations...</p>
+      <p style="font-size: 12px; color: var(--text-light);">${t('admin.loading-reservations')}</p>
     </div>
   `;
 
@@ -951,7 +985,7 @@ async function loadTableReservations(tableId) {
     const tableBookings = bookings.filter(b => b.table_id === tableId && b.status === 'confirmed');
 
     if (!tableBookings.length) {
-      reservationsEl.innerHTML = '<p style="font-size: 12px; color: var(--text-light);">No upcoming reservations</p>';
+      reservationsEl.innerHTML = `<p style="font-size: 12px; color: var(--text-light);">${t('admin.no-upcoming-reservations')}</p>`;
       return;
     }
 
@@ -1003,17 +1037,17 @@ function startNewSessionModal(tableId) {
   modal.className = "modal-overlay";
   modal.innerHTML = `
     <div class="modal-content" style="width: 400px;">
-      <h3>Start New Session - ${table.name}</h3>
-      <p style="color: var(--text-light); margin: 0 0 16px 0;">${remaining} seats available</p>
+      <h3>${t('admin.start-session-modal-title').replace('{0}', table.name)}</h3>
+      <p style="color: var(--text-light); margin: 0 0 16px 0;">${t('admin.seats-available').replace('{0}', remaining)}</p>
       
       <label style="display: block; margin-bottom: 16px;">
-        <span class="modal-content-label">Number of Guests (Pax)</span>
+        <span class="modal-content-label">${t('admin.number-of-guests')}</span>
         <input type="number" id="session-pax-input" min="1" max="${remaining}" value="1" class="modal-input">
       </label>
 
       <div class="modal-button-group">
-        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">Cancel</button>
-        <button onclick="submitStartSession(${tableId})" class="modal-btn-primary">Start Session</button>
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitStartSession(${tableId})" class="modal-btn-primary">${t('admin.start-session')}</button>
       </div>
     </div>
   `;
@@ -1061,31 +1095,41 @@ function bookTableModal(tableId) {
   modal.className = "modal-overlay";
   modal.innerHTML = `
     <div class="modal-content" style="width: 450px;">
-      <h3>Book Table - ${table.name}</h3>
+      <h3>${t('admin.book-table-title').replace('{0}', table.name)}</h3>
       
       <label style="display: block; margin-bottom: 16px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 8px;">Guest Name</span>
+        <span style="font-weight: 600; display: block; margin-bottom: 8px;">${t('admin.guest-name')}</span>
         <input type="text" id="booking-name-input" placeholder="e.g., John Smith" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
       </label>
 
       <label style="display: block; margin-bottom: 16px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 8px;">Number of Guests (Pax)</span>
+        <span style="font-weight: 600; display: block; margin-bottom: 8px;">${t('admin.guest-phone')}</span>
+        <input type="tel" id="booking-phone-input" placeholder="e.g., +1 (555) 123-4567" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+      </label>
+
+      <label style="display: block; margin-bottom: 16px;">
+        <span style="font-weight: 600; display: block; margin-bottom: 8px;">${t('admin.guest-email')}</span>
+        <input type="email" id="booking-email-input" placeholder="e.g., john@example.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+      </label>
+
+      <label style="display: block; margin-bottom: 16px;">
+        <span style="font-weight: 600; display: block; margin-bottom: 8px;">${t('admin.number-of-guests')}</span>
         <input type="number" id="booking-pax-input" min="1" max="${table.seat_count}" value="2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
       </label>
 
       <label style="display: block; margin-bottom: 16px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 8px;">Booking Date</span>
+        <span style="font-weight: 600; display: block; margin-bottom: 8px;">${t('admin.booking-date')}</span>
         <input type="date" id="booking-date-input" value="${today}" min="${minDate}" max="${maxDate}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
       </label>
 
       <label style="display: block; margin-bottom: 16px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 8px;">Reservation Time</span>
+        <span style="font-weight: 600; display: block; margin-bottom: 8px;">${t('admin.reservation-time')}</span>
         <input type="time" id="booking-time-input" value="18:00" class="modal-input">
       </label>
 
       <div class="modal-button-group">
-        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">Cancel</button>
-        <button onclick="submitBookTable(${tableId})" class="modal-btn-primary">Book Table</button>
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitBookTable(${tableId})" class="modal-btn-primary">${t('admin.book-table')}</button>
       </div>
     </div>
   `;
@@ -1097,6 +1141,10 @@ function bookTableModal(tableId) {
 async function submitBookTable(tableId) {
   const nameInput = document.getElementById("booking-name-input");
   const name = nameInput ? nameInput.value.trim() : "";
+  const phoneInput = document.getElementById("booking-phone-input");
+  const phone = phoneInput ? phoneInput.value.trim() : "";
+  const emailInput = document.getElementById("booking-email-input");
+  const email = emailInput ? emailInput.value.trim() : "";
   const paxInput = document.getElementById("booking-pax-input");
   const pax = Number(paxInput ? paxInput.value : 0);
   const dateInput = document.getElementById("booking-date-input");
@@ -1105,6 +1153,8 @@ async function submitBookTable(tableId) {
   const time = timeInput ? timeInput.value : "";
 
   if (!name) return alert("Guest name required");
+  if (!phone) return alert("Phone number required");
+  if (!email) return alert("Email required");
   if (!pax || pax <= 0) return alert("Invalid number of guests");
   if (!date) return alert("Booking date required");
   if (!time) return alert("Reservation time required");
@@ -1116,6 +1166,8 @@ async function submitBookTable(tableId) {
       body: JSON.stringify({
         table_id: tableId,
         guest_name: name,
+        phone_number: phone,
+        email: email,
         pax,
         booking_date: date,
         booking_time: time,
@@ -1179,34 +1231,34 @@ async function renderSessionOrder(session) {
       <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
       <div style="flex: 1; text-align: center;">
         <h3 style="margin: 0; font-size: 18px;">${sessionLabel}</h3>
-        <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-light);">${pax} pax • Dining ${diningDuration}</p>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-light);">${pax} ${t('admin.pax-label')} • ${t('admin.dining')} ${diningDuration}</p>
       </div>
       <div style="position: relative;">
         <button class="gear-icon-btn" onclick="toggleSessionGearMenu(event)">⚙️</button>
         <div id="session-gear-menu" class="session-gear-menu hidden">
-          <button onclick="changeSessionPaxModal(${session.id}, ${pax})">Change Pax</button>
-          <button onclick="moveTableModal(${table.id})">Move Table</button>
-          <button onclick="orderForTable('${table.units[0] ? table.units[0].qr_token : ''}')">Order for Table</button>
-          <button onclick="printQR(${session.id})">📱 Print QR</button>
-          <button onclick="printBill(${session.id})">🖨 Print Bill</button>
-          <button onclick="splitBill(${session.id})">Split Bill</button>
-          <button onclick="endTableSession(${session.id})" style="color: #c33;">Delete Session</button>
+          <button onclick="changeSessionPaxModal(${session.id}, ${pax})">${t('admin.change-pax')}</button>
+          <button onclick="moveTableModal(${table.id})">${t('admin.move-table')}</button>
+          <button onclick="orderForTable('${table.units[0] ? table.units[0].qr_token : ''}')">📱 ${t('admin.order-for-table')}</button>
+          <button onclick="printQR(${session.id})">${t('admin.print-qr')}</button>
+          <button onclick="printBill(${session.id})">${t('admin.print-bill')}</button>
+          <button onclick="splitBill(${session.id})">${t('admin.split-bill')}</button>
+          <button onclick="endTableSession(${session.id})" style="color: #c33;">${t('admin.delete-session')}</button>
         </div>
       </div>
     </div>
 
     <!-- Orders Section -->
     <div id="session-orders" style="flex: 1; overflow-y: auto; border-top: 1px solid var(--border-color); padding-top: 12px; margin-bottom: 12px;">
-      <p>Loading orders…</p>
+      <p>${t('admin.loading-orders')}</p>
     </div>
 
     <!-- Total and Actions -->
     <div style="border-top: 2px solid var(--border-color); padding-top: 12px;">
       <div id="session-total" style="font-weight: bold; margin-bottom: 12px; font-size: 16px;">
-        Total: —
+        ${t('admin.total-label')} —
       </div>
       <button class="btn-primary" style="width: 100%;" onclick="closeBillModal(${session.id})">
-        💳 Close Bill
+        💳 ${t('admin.close-bill')}
       </button>
     </div>
   `;
@@ -1235,7 +1287,7 @@ async function loadAndRenderOrders(sessionId) {
     const totalEl = document.getElementById("session-total");
 
     if (!orders.length) {
-      container.innerHTML = "<p style='color: var(--text-light);'>No orders yet</p>";
+      container.innerHTML = `<p style='color: var(--text-light);'>${t('admin.no-orders')}</p>`;
       totalEl.textContent = "Total: $0.00";
       return;
     }
@@ -1659,42 +1711,49 @@ async function closeBillModal(sessionId) {
   // Create close bill modal with payment method, discount, and reason
   const closeBillWindow = document.createElement("div");
   closeBillWindow.className = "modal-overlay";
+  const billTitle = t('admin.close-bill-title').replace('{0}', table.name);
   closeBillWindow.innerHTML = `
     <div class="modal-content" style="width: 400px;">
-      <h3>Close Bill - ${table.name}</h3>
+      <h3>${billTitle}</h3>
       
       <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
-        <p style="margin: 0 0 8px 0; color: #666;">Bill Summary</p>
-        <p style="margin: 0 0 5px 0; font-size: 14px;">Subtotal: $${(totalCents / 100).toFixed(2)}</p>
-        <p style="margin: 0; font-size: 14px;">Service Charge (${serviceChargePercent}%): $${(serviceCharge / 100).toFixed(2)}</p>
-        <p style="margin: 8px 0 0 0; font-size: 16px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 8px;">Total: $${(grandTotal / 100).toFixed(2)}</p>
+        <p style="margin: 0 0 8px 0; color: #666;">${t('admin.bill-summary')}</p>
+        <p style="margin: 0 0 5px 0; font-size: 14px;">
+          ${t('admin.subtotal-amount')} $${(totalCents / 100).toFixed(2)}
+        </p>
+        <p style="margin: 0; font-size: 14px;">
+          ${t('admin.service-charge-label')} (${serviceChargePercent}%): $${(serviceCharge / 100).toFixed(2)}
+        </p>
+        <p style="margin: 8px 0 0 0; font-size: 16px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 8px;">
+          ${t('admin.total-amount')} $${(grandTotal / 100).toFixed(2)}
+        </p>
       </div>
 
       <label style="display: block; margin-bottom: 15px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 5px;">Payment Method</span>
+        <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.payment-method')}</span>
         <select id="payment-method" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="cash">Cash</option>
-          <option value="card">Card</option>
-          <option value="online">Online Payment</option>
+          <option value="cash">${t('admin.payment-cash')}</option>
+          <option value="card">${t('admin.payment-card')}</option>
+          <option value="online">${t('admin.payment-online')}</option>
         </select>
       </label>
 
       <label style="display: block; margin-bottom: 15px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 5px;">Discount / Coupon</span>
+        <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.discount-section')}</span>
         <select id="discount-coupon" onchange="updateBillTotal(${grandTotal})" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">No Discount</option>
+          <option value="">${t('admin.discount-none')}</option>
           ${coupons.map(c => `<option value="${c.id}" data-type="${c.discount_type}" data-value="${c.discount_value}">${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}</option>`).join('')}
         </select>
       </label>
 
       <label style="display: block; margin-bottom: 15px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 5px;">Reason (optional)</span>
-        <textarea id="close-reason" placeholder="e.g., Customer satisfied, Complaint, etc." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; height: 60px;"></textarea>
+        <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.bill-close-reason')}</span>
+        <textarea id="close-reason" placeholder="${t('admin.bill-close-reason-placeholder')}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; height: 60px;"></textarea>
       </label>
 
       <div class="modal-button-group">
-        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">Cancel</button>
-        <button onclick="submitCloseBill(${sessionId}, ${grandTotal})" class="modal-btn-primary">Close Bill</button>
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitCloseBill(${sessionId}, ${grandTotal})" class="modal-btn-primary">${t('admin.close-bill-confirm')}</button>
       </div>
     </div>
   `;

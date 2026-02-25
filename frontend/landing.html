@@ -9,7 +9,8 @@
   <script src="/translations.js"></script>
   <!-- Landing styles -->
   <link rel="stylesheet" href="landing.css" />
-
+  <!-- Language Switcher Styles -->
+  <link rel="stylesheet" href="language-switcher.css" />
   <!-- Menu styles -->
   <link rel="stylesheet" href="menu.css" />
 </head>
@@ -18,6 +19,12 @@
 
   <!-- ================= LANDING PAGE ================= -->
   <div id="landing-page" class="landing">
+    <!-- Language Switcher -->
+    <div class="language-switcher-landing">
+      <button class="lang-btn lang-btn-en" onclick="setLanguageFromMenu('en')" data-lang="en" title="English">EN</button>
+      <button class="lang-btn lang-btn-zh" onclick="setLanguageFromMenu('zh')" data-lang="zh" title="中文">中</button>
+    </div>
+
     <img id="logo" class="landing-logo" />
     <h2 id="restaurantName"></h2>
 
@@ -25,8 +32,8 @@
     <p id="address"></p>
     <p id="phone"></p>
 
-    <button id="start-order-btn">Start Ordering</button>
-    <button id="check-orders-btn">Check Orders</button>
+    <button id="start-order-btn" data-i18n="menu.start-ordering">Start Ordering</button>
+    <button id="check-orders-btn" data-i18n="menu.check-orders">Check Orders</button>
   </div>
 
   <!-- ================= MENU APP (HIDDEN INITIALLY) ================= -->
@@ -41,7 +48,13 @@
         <span id="status"></span>
       </div>
 
-      <button id="orders-btn">🧾</button>
+      <div class="header-right-menu">
+        <div class="language-switcher-menu">
+          <button class="lang-btn lang-btn-en" onclick="setLanguageFromMenu('en')" data-lang="en" title="English">EN</button>
+          <button class="lang-btn lang-btn-zh" onclick="setLanguageFromMenu('zh')" data-lang="zh" title="中文">中</button>
+        </div>
+        <button id="orders-btn" title="Check Orders">🧾</button>
+      </div>
     </div>
 
     <!-- Main layout -->
@@ -53,10 +66,10 @@
     <!-- Cart bar -->
     <div id="cart-bar">
       <div class="cart-info">
-        <span id="cart-count">0 items</span>
-        <span id="cart-total">$0.00</span>
+        <span id="cart-count" data-i18n="menu.cart-count-label">0 items</span>
+        <span id="cart-total" data-i18n="menu.cart-total-label">$0.00</span>
       </div>
-      <button id="confirm-order-btn" disabled>
+      <button id="confirm-order-btn" data-i18n="menu.confirm-order" disabled>
         Confirm Order
       </button>
     </div>

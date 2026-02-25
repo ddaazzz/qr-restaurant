@@ -71,8 +71,8 @@
             <input id="food-panel-name-input" type="text" style="display: none; font-size: 20px; font-weight: bold; padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 100%; margin-bottom: 8px;" />
           </div>
           <div>
-            <button id="food-panel-edit-btn" class="btn-secondary" onclick="toggleFoodItemEdit()"><img src="/uploads/website/pencil.png" alt="edit" style="width: 16px; height: 16px; vertical-align: middle;"> Edit</button>
-            <button id="food-panel-save-btn" class="btn-primary" onclick="saveFoodItemEdit()" style="display: none; margin-left: 8px;">✓ Save</button>
+            <button id="food-panel-edit-btn" class="btn-secondary" onclick="toggleFoodItemEdit()" data-i18n="admin.edit"><img src="/uploads/website/pencil.png" alt="edit" style="width: 16px; height: 16px; vertical-align: middle;"> Edit</button>
+            <button id="food-panel-save-btn" class="btn-primary" onclick="saveFoodItemEdit()" data-i18n="admin.save" style="display: none; margin-left: 8px;">✓ Save</button>
             <button id="food-panel-cancel-btn" class="btn-secondary" onclick="cancelFoodItemEdit()" style="display: none; margin-left: 8px;">✕ Cancel</button>
           </div>
         </div>
@@ -92,7 +92,7 @@
         <div class="food-item-panel-variants-section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h3 data-i18n="admin.variants">Variants</h3>
-            <button id="food-panel-add-variant-btn" onclick="startAddVariantFromPanel()" style="display: none; padding: 4px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add</button>
+            <button id="food-panel-add-variant-btn" onclick="startAddVariantFromPanel()" data-i18n="admin.add-variant" style="display: none; padding: 4px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add</button>
           </div>
           <div id="food-panel-variants" class="food-panel-variants-container">
             <!-- Variants rendered here -->
@@ -100,34 +100,34 @@
 
           <!-- Variant Edit Form (hidden by default, shown when adding/editing) -->
           <div id="food-panel-variant-form" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 6px; border: 1px solid #ddd;">
-            <h4 style="margin-top: 0;">Add/Edit Variant</h4>
+            <h4 data-i18n="admin.variant-form-title" style="margin-top: 0;">Add/Edit Variant</h4>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               <div>
-                <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Variant Name</label>
-                <input id="food-panel-variant-name" type="text" placeholder="e.g., Size, Extras" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+                <label data-i18n="admin.variant-name" style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Variant Name</label>
+                <input id="food-panel-variant-name" type="text" data-i18n="admin.variant-name-placeholder" placeholder="e.g., Size, Extras" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
               </div>
               <div style="display: flex; gap: 8px;">
                 <div style="flex: 1;">
-                  <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Min Select</label>
+                  <label data-i18n="admin.variant-min-select" style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Min Select</label>
                   <input id="food-panel-variant-min" type="number" min="0" placeholder="0" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
                 </div>
                 <div style="flex: 1;">
-                  <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Max Select</label>
+                  <label data-i18n="admin.variant-max-select" style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Max Select</label>
                   <input id="food-panel-variant-max" type="number" min="0" placeholder="0" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
                 </div>
               </div>
               <div>
                 <label style="display: flex; align-items: center; font-size: 12px;">
                   <input id="food-panel-variant-required" type="checkbox" style="margin-right: 6px;" />
-                  <span>Required</span>
+                  <span data-i18n="admin.variant-required">Required</span>
                 </label>
               </div>
 
               <!-- Variant Options Section (only shown when editing) -->
               <div id="food-panel-variant-options-section" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #ddd;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <label style="font-size: 12px; font-weight: 500;">Options</label>
-                  <button onclick="startAddVariantOption()" style="padding: 2px 8px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">+ Add Option</button>
+                  <label data-i18n="admin.variant-options" style="font-size: 12px; font-weight: 500;">Options</label>
+                  <button onclick="startAddVariantOption()" data-i18n="admin.add-option" style="padding: 2px 8px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">+ Add Option</button>
                 </div>
                 <div id="food-panel-variant-options-list" style="display: flex; flex-direction: column; gap: 6px;">
                   <!-- Options rendered here -->
@@ -139,23 +139,23 @@
                 <h5 style="margin: 0 0 8px 0; font-size: 12px;">Add Option</h5>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                   <div>
-                    <label style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;">Option Name</label>
-                    <input id="food-panel-option-name" type="text" placeholder="e.g., Small, Extra Cheese" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
+                    <label data-i18n="admin.option-name" style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;">Option Name</label>
+                    <input id="food-panel-option-name" type="text" data-i18n="admin.option-name-placeholder" placeholder="e.g., Small, Extra Cheese" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
                   </div>
                   <div>
-                    <label style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;">Price (cents) - optional</label>
+                    <label data-i18n="admin.option-price-label" style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;">Price (cents) - optional</label>
                     <input id="food-panel-option-price" type="number" placeholder="0" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
                   </div>
                   <div style="display: flex; gap: 4px;">
-                    <button onclick="saveVariantOption()" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Save</button>
-                    <button onclick="cancelVariantOptionForm()" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Cancel</button>
+                    <button onclick="saveVariantOption()" data-i18n="admin.save-option" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Save</button>
+                    <button onclick="cancelVariantOptionForm()" data-i18n="admin.cancel-option" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Cancel</button>
                   </div>
                 </div>
               </div>
 
               <div style="display: flex; gap: 6px;">
-                <button onclick="if (currentEditingVariantId) saveEditedVariantFromPanel(); else saveNewVariantFromPanel();" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Save Variant</button>
-                <button onclick="cancelVariantForm()" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Cancel</button>
+              <button onclick="if (currentEditingVariantId) saveEditedVariantFromPanel(); else saveNewVariantFromPanel();" data-i18n="admin.save-variant" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Save Variant</button>
+              <button onclick="cancelVariantForm()" data-i18n="admin.cancel-variant" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Cancel</button>
               </div>
             </div>
           </div>
@@ -164,11 +164,34 @@
     </div>
   </div>
 
-  <!-- Menu Items Grid -->
-  <div id="menu-items-grid" class="menu-grid">
-    <!-- JS renders menu item cards here -->
+  <!-- Left Column Wrapper (for mobile layout) -->
+  <div class="left-column-wrapper">
+    <!-- Menu Items Grid -->
+    <div id="menu-items-grid" class="menu-grid">
+      <!-- JS renders menu item cards here -->
+    </div>
   </div>
-
-  <!-- Category Tabs Bar (Bottom) -->
-  <div id="menu-category-tabs" class="menu-tabs-bottom"></div>
 </div>
+
+<!-- Category Tabs Bar (Bottom) - Outside menu-container -->
+<div id="menu-category-tabs" class="menu-tabs-bottom"></div>
+
+<!-- Category Sidebar (Mobile Only) - Outside menu-container -->
+<div class="menu-category-sidebar"></div>
+
+<!-- Language initialization script -->
+<script>
+  (function() {
+    console.log('[admin-menu.html] Module loaded - initializing language');
+    const currentLang = localStorage.getItem('language') || 'zh';
+    if (typeof setLanguage === 'function') {
+      setLanguage(currentLang);
+      console.log('[admin-menu.html] Language set to:', currentLang);
+    }
+    if (typeof reTranslateContent === 'function') {
+      reTranslateContent();
+      console.log('[admin-menu.html] Content re-translated');
+    }
+  })();
+</script>
+

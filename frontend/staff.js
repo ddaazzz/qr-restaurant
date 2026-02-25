@@ -10,6 +10,11 @@ const API_BASE = (() => {
   }
 })();
 
+// Reset menu background when on staff page
+if (window.resetMenuBackground) {
+  window.resetMenuBackground();
+}
+
 // Override global API variable from admin.js
 var API = API_BASE;
 

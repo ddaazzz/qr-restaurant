@@ -134,6 +134,22 @@
     <div class="spinner"></div>
   </div>
 
+  <!-- Language initialization script -->
+  <script>
+    (function() {
+      console.log('[admin-bookings.html] Module loaded - initializing language');
+      const currentLang = localStorage.getItem('language') || 'zh';
+      if (typeof setLanguage === 'function') {
+        setLanguage(currentLang);
+        console.log('[admin-bookings.html] Language set to:', currentLang);
+      }
+      if (typeof reTranslateContent === 'function') {
+        reTranslateContent();
+        console.log('[admin-bookings.html] Content re-translated');
+      }
+    })();
+  </script>
+
   <script src="translations.js"></script>
   <script src="timezone-utils.js"></script>
   <script src="admin-bookings.js"></script>

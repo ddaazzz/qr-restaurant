@@ -58,8 +58,8 @@
         <div class="form-group" style="margin-bottom: 20px;">
           <label data-i18n="admin.language" style="display: block; margin-bottom: 12px; font-weight: 600;">Language</label>
           <div data-language-picker class="language-picker-settings" style="display: flex; gap: 12px;">
-            <button id="lang-zh-settings" class="lang-btn active" onclick="setLanguage('zh'); saveLanguagePreference('zh');" style="flex: 1; padding: 12px; border: 2px solid var(--primary-color); background: var(--primary-color); color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">中文</button>
-            <button id="lang-en-settings" class="lang-btn" onclick="setLanguage('en'); saveLanguagePreference('en');" style="flex: 1; padding: 12px; border: 2px solid var(--border-color); background: white; color: var(--text-dark); border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">English</button>
+            <button id="lang-zh-settings" class="lang-btn active" onclick="setLanguage('zh'); saveLanguageToDatabaseAsync('zh'); saveLanguagePreference('zh');" style="flex: 1; padding: 12px; border: 2px solid var(--primary-color); background: var(--primary-color); color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">中文</button>
+            <button id="lang-en-settings" class="lang-btn" onclick="setLanguage('en'); saveLanguageToDatabaseAsync('en'); saveLanguagePreference('en');" style="flex: 1; padding: 12px; border: 2px solid var(--border-color); background: white; color: var(--text-dark); border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">English</button>
           </div>
         </div>
 
@@ -392,3 +392,19 @@
     </div>
   </div>
 </div>
+
+<!-- Language initialization script -->
+<script>
+  (function() {
+    console.log('[admin-settings.html] Module loaded - initializing language');
+    const currentLang = localStorage.getItem('language') || 'zh';
+    if (typeof setLanguage === 'function') {
+      setLanguage(currentLang);
+      console.log('[admin-settings.html] Language set to:', currentLang);
+    }
+    if (typeof reTranslateContent === 'function') {
+      reTranslateContent();
+      console.log('[admin-settings.html] Content re-translated');
+    }
+  })();
+</script>

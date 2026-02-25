@@ -85,13 +85,7 @@ function renderOrdersMenuItems() {
   });
   
   if (categoryItems.length > 0) {
-    // Create category wrapper
-    var categoryDiv = document.createElement('div');
-    categoryDiv.className = 'orders-category';
-    
-    // Create grid
-    var gridDiv = document.createElement('div');
-    gridDiv.className = 'orders-items-grid';
+    // Render items directly to grid (no wrapper divs)
     for (var i = 0; i < categoryItems.length; i++) {
       var item = categoryItems[i];
       var card = document.createElement('div');
@@ -125,16 +119,14 @@ function renderOrdersMenuItems() {
       infoDiv.appendChild(priceDiv);
       
       card.appendChild(infoDiv);
-      gridDiv.appendChild(card);
+      container.appendChild(card);
     }
-    
-    categoryDiv.appendChild(gridDiv);
-    container.appendChild(categoryDiv);
   } else {
     var emptyMsg = document.createElement('p');
     emptyMsg.style.padding = '20px';
     emptyMsg.style.textAlign = 'center';
     emptyMsg.style.color = '#999';
+    emptyMsg.setAttribute('data-i18n', 'admin.no-items-category');
     emptyMsg.textContent = 'No items in this category';
     container.appendChild(emptyMsg);
   }
@@ -144,10 +136,18 @@ function renderOrdersMenuItems() {
 }
 
 function renderOrdersCategoryBar() {
-  const categoryTabsContainer = document.getElementById('orders-category-tabs');
+  // Try to render to bottom tabs first (desktop), fallback to sidebar (mobile)
+  let categoryTabsContainer = document.getElementById('orders-category-tabs');
+  let categoryTabsBottomContainer = document.querySelector('.orders-category-tabs-bottom');
+  let categorySidebarContainer = document.getElementById('orders-category-sidebar');
   
-  if (!categoryTabsContainer) {
-    console.error("❌ orders-category-tabs not found!");
+  // Determine which container to use based on visibility
+  if (window.innerWidth > 768 && categoryTabsContainer) {
+    categoryTabsContainer = categoryTabsContainer;
+  } else if (categorySidebarContainer) {
+    categoryTabsContainer = categorySidebarContainer;
+  } else {
+    console.error("❌ No category container found!");
     return;
   }
   
@@ -173,18 +173,28 @@ function renderOrdersCategoryBar() {
 function toggleCartPanel() {
   const cartPanel = document.getElementById('orders-cart-view-container');
   const cartBtn = document.getElementById('cart-toggle-btn');
-  const mainWrapper = document.querySelector('.orders-main-wrapper');
+  const container = document.querySelector('.orders-container');
   
   if (cartPanel) {
-    cartPanel.classList.toggle('visible');
-    if (mainWrapper) {
-      mainWrapper.classList.toggle('with-cart-open');
+    cartPanel.classList.toggle('show-cart');
+    if (container) {
+      container.classList.toggle('cart-view-active');
     }
     if (cartBtn) {
       cartBtn.classList.toggle('active');
     }
   }
 }
+
+// ========== ESCAPE KEY HANDLER FOR CART ==========
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const cartPanel = document.getElementById('orders-cart-view-container');
+    if (cartPanel && cartPanel.classList.contains('show-cart')) {
+      toggleCartPanel();
+    }
+  }
+});
 
 // ========== CART MANAGEMENT ==========
 async function addItemToOrderCart(itemId) {
@@ -246,20 +256,20 @@ function showItemVariantModal(item, variants) {
         
         ${item.price_cents ? `
           <div class="variant-slide-price">
-            <span class="label">Price:</span>
+            <span class="label" data-i18n="admin.price-label">Price:</span>
             <span class="variant-slide-price-value">$${(item.price_cents / 100).toFixed(2)}</span>
           </div>
         ` : ''}
         
         ${item.description ? `
           <div class="variant-slide-description">
-            <label>Description</label>
+            <label data-i18n="admin.description-label">Description</label>
             <p>${item.description}</p>
           </div>
         ` : ''}
         
         <div class="variant-options-section">
-          <h3>Select Options</h3>
+          <h3 data-i18n="admin.select-options">Select Options</h3>
           <div id="variant-selection-form" class="variant-options-container">
             ${variants.map((variant, idx) => {
               const required = variant.required ? '<span style="color: red; margin-left: 4px;">*</span>' : '';
@@ -293,14 +303,15 @@ function showItemVariantModal(item, variants) {
       </div>
       
       <div class="variant-slide-footer">
-        <button onclick="submitItemWithVariants(${item.id}, this.closest('.variant-slide-panel'))" class="btn-primary">Add to Cart</button>
-        <button onclick="this.closest('.variant-slide-panel').remove()" class="btn-secondary">Cancel</button>
+        <button onclick="submitItemWithVariants(${item.id}, this.closest('.variant-slide-panel'))" class="btn-primary" data-i18n="admin.add-to-cart-variant">Add to Cart</button>
+        <button onclick="this.closest('.variant-slide-panel').remove()" class="btn-secondary" data-i18n="admin.cancel-variant">Cancel</button>
       </div>
     </div>
   `;
   
   panel.classList.add('active');
   document.body.appendChild(panel);
+  reTranslateContent();
 }
 
 function submitItemWithVariants(itemId, formContainer) {
@@ -389,8 +400,8 @@ function updateOrdersCartDisplay() {
           <div class="cart-item-price">$${(itemTotal / 100).toFixed(2)}</div>
         </div>
         <div class="cart-item-actions" ${ORDERS_CART_EDIT_MODE ? '' : 'style="display: none;"'}>
-          <button onclick="editCartItem('${item.cartItemId}')">Edit</button>
-          <button onclick="removeCartItem('${item.cartItemId}')">Remove</button>
+          <button onclick="editCartItem('${item.cartItemId}')" data-i18n="admin.edit-button">Edit</button>
+          <button onclick="removeCartItem('${item.cartItemId}')" data-i18n="admin.remove-button">Remove</button>
         </div>
       </div>
     `;
@@ -406,9 +417,10 @@ function toggleCartEdit() {
   
   const editBtn = document.getElementById('cart-edit-btn');
   if (editBtn) {
-    editBtn.innerHTML = ORDERS_CART_EDIT_MODE ? 
-      '<img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px;"/> Done' :
-      '<img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px;"/> Edit';
+    const buttonText = ORDERS_CART_EDIT_MODE ? 
+      t('admin.edit-mode-done') :
+      t('admin.edit-button');
+    editBtn.innerHTML = `<img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px;"/> ${buttonText}`;
   }
 }
 
@@ -498,14 +510,14 @@ function updateOrderTypeUI() {
 // ========== SUBMIT ORDERS ==========
 async function submitOrder() {
   if (ORDERS_CART.length === 0) {
-    alert('Cart is empty');
+    alert(t('admin.cart-empty-alert'));
     return;
   }
   
   const orderType = CURRENT_ORDER_TYPE;
   
   if (!orderType) {
-    alert('Please select an order type');
+    alert(t('admin.select-order-type'));
     return;
   }
   
@@ -525,7 +537,7 @@ async function submitTableOrder() {
   if (!tableId) {
     // Prompt user to select from available tables
     if (ORDERS_TABLES.length === 0) {
-      alert('No tables available');
+      alert(t('admin.no-tables-available'));
       return;
     }
     
@@ -535,7 +547,7 @@ async function submitTableOrder() {
     const selection = prompt(`Select table number:\n\n${tableOptions}`, defaultTableId);
     
     if (!selection) {
-      alert('Table selection cancelled');
+      alert(t('admin.table-cancelled'));
       return;
     }
     
@@ -751,38 +763,65 @@ function selectOrdersCategory(categoryId) {
 async function toggleOrdersHistoryMode() {
   ORDERS_HISTORY_MODE = !ORDERS_HISTORY_MODE;
   
-  const menuItemsView = document.getElementById('orders-menu-items-view');
   const historyView = document.getElementById('orders-history-left-view');
-  const cartView = document.getElementById('orders-cart-view');
   const detailsView = document.getElementById('orders-details-view');
-  const categoryTabs = document.getElementById('orders-category-tabs');
+  const leftColumnWrapper = document.querySelector('.orders-container > .left-column-wrapper');
+  const ordersContainer = document.querySelector('.orders-container');
   
   if (ORDERS_HISTORY_MODE) {
-    // Show history view - full width
-    menuItemsView.style.display = 'none';
-    if (categoryTabs) categoryTabs.style.display = 'none';
+    // Show history view
     historyView.classList.add('active');
-    cartView.style.display = 'none';
-    detailsView.style.display = 'flex';
     
-    // Load order history in left panel
+    // DO NOT auto-show details view - let user click on an order first
+    detailsView.classList.remove('active');
+    
+    // Hide the menu/cart section
+    if (leftColumnWrapper) {
+      leftColumnWrapper.style.display = 'none';
+    }
+    
+    // Add history mode class to container for CSS layout changes
+    if (ordersContainer) {
+      ordersContainer.classList.add('history-mode');
+    }
+    
     await loadOrdersHistoryLeftPanel();
     
-    // Clear details initially
     const detailsContent = document.getElementById('order-details-content');
     if (detailsContent) {
       detailsContent.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">Select an order to view details</p>';
     }
   } else {
-    // Back to cart view
-    menuItemsView.style.display = 'flex';
-    if (categoryTabs) categoryTabs.style.display = 'flex';
+    // Hide history view
     historyView.classList.remove('active');
-    cartView.style.display = 'flex';
-    detailsView.style.display = 'none';
+    
+    // Hide details view
+    detailsView.classList.remove('active');
+    
+    // Restore the menu/cart section
+    if (leftColumnWrapper) {
+      leftColumnWrapper.style.display = 'flex';
+    }
+    
+    // Remove history mode class from container
+    if (ordersContainer) {
+      ordersContainer.classList.remove('history-mode');
+    }
     
     VIEWING_HISTORICAL_ORDER = null;
-    clearOrderStatusDisplay();
+  }
+}
+
+function closeDetailsView() {
+  // Hide details and show history instead
+  const detailsView = document.getElementById('orders-details-view');
+  const historyView = document.getElementById('orders-history-left-view');
+  
+  if (detailsView) {
+    detailsView.classList.remove('active');
+  }
+  if (historyView) {
+    historyView.classList.add('active');
   }
 }
 
@@ -790,7 +829,7 @@ async function loadOrdersHistoryLeftPanel() {
   const historyListLeft = document.getElementById('orders-history-list-left');
   if (!historyListLeft) return;
   
-  historyListLeft.innerHTML = '<p style="color: #999; text-align: center; padding: 12px;">Loading...</p>';
+  historyListLeft.innerHTML = '<p class="history-loading-state">Loading...</p>';
   
   try {
     // If sessions tab is selected, load sessions instead
@@ -802,32 +841,20 @@ async function loadOrdersHistoryLeftPanel() {
       ALL_SESSIONS_DATA = sessions || [];
       
       // Create tabs for filtering (always show tabs, even if no sessions)
-      let html = '<div style="display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 8px; flex-wrap: wrap;">';
+      let html = '<div class="history-tabs-container">';
       
       const tabs = [
-        { id: 'all', label: '📋 All Orders', icon: '📋', count: ALL_ORDERS_DATA.length },
-        { id: 'counter', label: '🛒 Order Now', icon: '🛒', count: ALL_ORDERS_DATA.filter(o => o.order_type === 'counter').length },
-        { id: 'togo', label: '🎁 To-Go', icon: '🎁', count: ALL_ORDERS_DATA.filter(o => o.order_type === 'to-go').length },
-        { id: 'sessions', label: '🪑 Sessions', icon: '🪑', count: sessions.length }
+        { id: 'all', label: t('admin.all-orders'), icon: '📋', count: ALL_ORDERS_DATA.length },
+        { id: 'counter', label: t('admin.order-now-tab'), icon: '🛒', count: ALL_ORDERS_DATA.filter(o => o.order_type === 'counter').length },
+        { id: 'togo', label: t('admin.to-go-tab'), icon: '🎁', count: ALL_ORDERS_DATA.filter(o => o.order_type === 'to-go').length },
+        { id: 'sessions', label: t('admin.sessions-tab'), icon: '🪑', count: sessions.length }
       ];
       
       tabs.forEach(tab => {
         const isActive = ORDER_HISTORY_FILTER === tab.id;
-        const bgColor = isActive ? '#667eea' : '#f0f0f0';
-        const textColor = isActive ? 'white' : '#333';
-        const borderStyle = isActive ? '2px solid #667eea' : '1px solid #e0e0e0';
+        const activeClass = isActive ? 'active' : '';
         html += `
-          <button onclick="setOrderHistoryFilter('${tab.id}')" style="
-            padding: 8px 14px;
-            border: ${borderStyle};
-            border-radius: 6px;
-            background: ${bgColor};
-            color: ${textColor};
-            font-size: 12px;
-            font-weight: ${isActive ? '600' : '400'};
-            cursor: pointer;
-            transition: all 0.2s;
-          ">
+          <button onclick="setOrderHistoryFilter('${tab.id}')" class="history-filter-tab ${activeClass}">
             ${tab.label} (${tab.count})
           </button>
         `;
@@ -837,8 +864,9 @@ async function loadOrdersHistoryLeftPanel() {
       
       // Show empty state if no sessions
       if (!sessions || sessions.length === 0) {
-        html += '<p style="color: #999; text-align: center; padding: 12px;">No sessions yet</p>';
+        html += `<p class="history-empty-state" data-i18n="admin.no-sessions-yet">No sessions yet</p>`;
         historyListLeft.innerHTML = html;
+        reTranslateContent();
         return;
       }
       
@@ -861,15 +889,15 @@ async function loadOrdersHistoryLeftPanel() {
         const durationDisplay = elapsedTime.display;
         
         const isActive = !session.ended_at;
-        const statusColor = isActive ? '#10b981' : '#6b7280';
+        const statusClass = isActive ? 'active' : 'closed';
         const statusLabel = isActive ? 'Active' : 'Closed';
         
         html += `
-          <div class="session-history-item" onclick="selectSessionFromHistory(${session.session_id})" style="padding: 10px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s;">
-            <div style="font-weight: 600; font-size: 12px;">${sessionLabel}</div>
-            <div style="font-size: 11px; color: #666; margin-top: 2px;">${startDateStr} at ${startTime} • ${durationDisplay}</div>
-            <div style="font-size: 11px; color: #666; margin-top: 2px;">👥 ${session.pax} people</div>
-            <div style="font-size: 10px; padding: 2px 6px; border-radius: 2px; margin-top: 4px; display: inline-block; background-color: ${statusColor}; color: white;">
+          <div class="session-history-item" onclick="selectSessionFromHistory(${session.session_id})">
+            <div class="session-history-item-label">${sessionLabel}</div>
+            <div class="session-history-item-meta">${startDateStr} at ${startTime} • ${durationDisplay}</div>
+            <div class="session-history-item-pax">👥 ${session.pax} people</div>
+            <div class="session-status-badge ${statusClass}">
               ${statusLabel}
             </div>
           </div>
@@ -877,13 +905,7 @@ async function loadOrdersHistoryLeftPanel() {
       });
       
       historyListLeft.innerHTML = html;
-      
-      
-      // Add hover effect
-      document.querySelectorAll('.session-history-item').forEach(item => {
-        item.onmouseover = function() { this.style.backgroundColor = '#f5f5f5'; };
-        item.onmouseout = function() { this.style.backgroundColor = 'transparent'; };
-      });
+      reTranslateContent();
       
       return;
     }
@@ -908,10 +930,10 @@ async function loadOrdersHistoryLeftPanel() {
     const sessionCount = sessionsResponse.ok ? (await sessionsResponse.json()).length : 0;
     
     const tabs = [
-      { id: 'all', label: '📋 All Orders', icon: '📋', count: orders.length },
-      { id: 'counter', label: '🛒 Order Now', icon: '🛒', count: orders.filter(o => o.order_type === 'counter').length },
-      { id: 'togo', label: '🎁 To-Go', icon: '🎁', count: orders.filter(o => o.order_type === 'to-go').length },
-      { id: 'sessions', label: '🪑 Sessions', icon: '🪑', count: sessionCount }
+      { id: 'all', label: t('admin.all-orders'), icon: '📋', count: orders.length },
+      { id: 'counter', label: t('admin.order-now-tab'), icon: '🛒', count: orders.filter(o => o.order_type === 'counter').length },
+      { id: 'togo', label: t('admin.to-go-tab'), icon: '🎁', count: orders.filter(o => o.order_type === 'to-go').length },
+      { id: 'sessions', label: t('admin.sessions-tab'), icon: '🪑', count: sessionCount }
     ];
     
     tabs.forEach(tab => {
@@ -946,9 +968,9 @@ async function loadOrdersHistoryLeftPanel() {
     }
     
     if (filteredOrders.length === 0) {
-      html += '<p style="color: #999; text-align: center; padding: 12px;">No orders in this category</p>';
+      html += `<p style="color: #999; text-align: center; padding: 12px;" data-i18n="admin.no-orders-category">No orders in this category</p>`;
       historyListLeft.innerHTML = html;
-      return;
+      reTranslateContent();
     }
     
     // Render orders
@@ -988,6 +1010,7 @@ async function loadOrdersHistoryLeftPanel() {
     });
     
     historyListLeft.innerHTML = html;
+    reTranslateContent();
     
     // Add hover effect
     document.querySelectorAll('.order-history-item').forEach(item => {
@@ -1039,6 +1062,12 @@ async function selectSessionFromHistory(sessionId) {
     }
     
     console.log('Session orders fetched:', { sessionId, orderCount: orders.length, originalData: data });
+    
+    // Hide history view and show details view
+    const historyView = document.getElementById('orders-history-left-view');
+    const detailsView = document.getElementById('orders-details-view');
+    if (historyView) historyView.classList.remove('active');
+    if (detailsView) detailsView.classList.add('active');
     
     // Display session details with its orders
     displaySessionDetails(sessionId, orders);
@@ -1240,11 +1269,11 @@ function displaySessionDetails(sessionId, orders) {
             font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
-          " onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+          " onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'" data-i18n="admin.close-bill-button">
             💰 Close Bill
           </button>
         ` : `
-          <div style="padding: 12px; background: #d1d5db; border-radius: 6px; text-align: center; color: #666; font-weight: 600;">
+          <div style="padding: 12px; background: #d1d5db; border-radius: 6px; text-align: center; color: #666; font-weight: 600;" data-i18n="admin.session-closed">
             ✓ Session Closed
           </div>
         `}
@@ -1257,6 +1286,7 @@ function displaySessionDetails(sessionId, orders) {
   }
   
   detailsContent.innerHTML = html;
+  reTranslateContent();
 }
 
 
@@ -1268,6 +1298,12 @@ async function selectOrderFromHistory(orderId) {
     if (!response.ok) throw new Error('Failed to load order details');
     
     const order = await response.json();
+    
+    // Hide history view and show details view
+    const historyView = document.getElementById('orders-history-left-view');
+    const detailsView = document.getElementById('orders-details-view');
+    if (historyView) historyView.classList.remove('active');
+    if (detailsView) detailsView.classList.add('active');
     
     // Display order details in right panel
     displayOrderDetails(order);
@@ -1385,6 +1421,7 @@ function displayOrderDetails(order) {
   `;
   
   detailsContent.innerHTML = html;
+  reTranslateContent();
   detailsTitle.textContent = `Order #${order.id}`;
 }
 

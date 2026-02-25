@@ -1,0 +1,11 @@
+
+> qr-restaurant@1.0.0 dev
+> npx ts-node-dev --respawn --transpile-only backend/src/server.ts
+
+[INFO] 21:22:48 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ≡ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  write to custom object with { processEnv: myObject }
+ENV: { NODE_ENV: 'development', PORT: '10000' }
+≡ƒÜÇ Backend running on http://localhost:10000
+≡ƒô▒ Local Network: http://192.168.10.243:10000
+   (Access from iPad/phone on same WiFi network)

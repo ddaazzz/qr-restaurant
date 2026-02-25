@@ -55,6 +55,19 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   background-attachment: fixed;
+  position: relative;
+}
+
+.language-switcher-landing {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 6px;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
 }
 
 /* No background variant: black text for visibility */
@@ -186,6 +199,43 @@ body {
 
 #orders-btn:active {
   background: rgba(249, 115, 22, 0.2);
+}
+
+.header-right-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.language-switcher-menu {
+  display: flex;
+  gap: 4px;
+  background: rgba(249, 115, 22, 0.05);
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.lang-btn-en, .lang-btn-zh {
+  background: transparent;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  color: var(--restaurant-color);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lang-btn-en:hover, .lang-btn-zh:hover {
+  background: rgba(249, 115, 22, 0.1);
+  border-color: var(--restaurant-color);
+}
+
+.lang-btn-en.active, .lang-btn-zh.active {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: var(--restaurant-color);
+  font-weight: 700;
 }
 
 /* =========================================================
