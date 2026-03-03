@@ -740,19 +740,29 @@ button {
 }
 
 .btn-secondary {
-  background: #e8e8e8;
-  color: #333;
-  border: 1px solid #ddd;
-  padding: 14px 28px;
-  border-radius: 8px;
+  background: #5a5a5a;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.3s ease;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   letter-spacing: -0.2px;
+}
+
+.btn-secondary:hover {
+  background: #4a4a4a;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
 }
 
 .btn-icon {
@@ -788,17 +798,6 @@ img.heading-icon {
   vertical-align: middle;
   margin-right: 8px;
   display: inline-block;
-}
-
-.btn-secondary:hover {
-  background: #d8d8d8;
-  border-color: #c8c8c8;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.btn-secondary:active {
-  transform: translateY(0);
 }
 
 /* ============== TERTIARY BUTTONS (Header buttons) ============== */
@@ -973,6 +972,18 @@ button.btn-icon.danger:hover {
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
   z-index: -1;
+  pointer-events: none;
+}
+
+/* When modal-overlay is used as a container (for dynamic modals) */
+.modal-overlay[class~="modal-overlay"]:not(.modal > .modal-overlay) {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .modal-content {
@@ -985,6 +996,9 @@ button.btn-icon.danger:hover {
   max-height: 85vh;
   width: 90%;
   max-width: 600px;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1001;
 }
 
 @media (max-width: 1024px) {
@@ -1056,7 +1070,148 @@ button.btn-icon.danger:hover {
   transition: all 0.2s ease;
 }
 
+/* Modal Input and Button Group Styles */
+.modal-content-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dark);
+  margin-bottom: 6px;
+}
 
+.modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.modal-button-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.modal-btn-primary,
+.modal-cancel-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.modal-btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.modal-btn-primary:hover {
+  background: var(--primary-dark, #1976D2);
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+}
+
+.modal-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.modal-cancel-btn {
+  background: var(--bg-light);
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+}
+
+.modal-cancel-btn:hover {
+  background: var(--border-color);
+}
+
+/* ============== QR SCANNER MODAL ============== */
+.qr-scanner-modal {
+  max-width: 500px;
+}
+
+#scan-qr-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+#scan-qr-modal.hidden {
+  display: none !important;
+}
+
+#scan-qr-modal .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  z-index: -1;
+  pointer-events: auto;
+}
+
+#scan-qr-modal .modal-content {
+  position: relative;
+  z-index: 10001;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.qr-scanner-container {
+  padding: 20px;
+  text-align: center;
+}
+
+#qr-reader {
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.qr-scanner-error {
+  padding: 12px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 6px;
+  color: #c33;
+  font-size: 0.9em;
+}
+
+.qr-scanner-error.hidden {
+  display: none;
+}
+
+.qr-scanner-loading {
+  padding: 12px;
+  color: var(--text-light);
+  font-size: 0.9em;
+}
+
+.qr-scanner-loading.hidden {
+  display: none;
+}
 
 /* ============== LOGIN SCREEN ============== */
 .login-screen {
@@ -1685,9 +1840,22 @@ button.btn-icon.danger:hover {
   }
   
   .btn-primary,
-  .btn-tertiary {
+  .btn-secondary,
+  .btn-tertiary,
+  .admin-menu-btn {
     padding: 8px 12px;
     font-size: 12px;
+  }
+
+  .header-right .btn-primary span,
+  .header-right .btn-secondary span,
+  .header-right .btn-tertiary span,
+  .header-right .admin-menu-btn span:not(.dropdown-arrow) {
+    display: none;
+  }
+
+  .header-right .btn-icon {
+    margin-right: 0;
   }
   
   .btn-icon {
@@ -1740,19 +1908,28 @@ button.btn-icon.danger:hover {
   }
   
   .header-right .btn-primary,
+  .header-right .btn-secondary,
   .header-right .btn-tertiary,
   .header-right .admin-menu-btn {
-    padding: 8px 10px;
+    padding: 6px 8px;
     font-size: 11px;
     white-space: nowrap;
     flex: 0 0 auto;
     min-width: fit-content;
   }
+
+  .header-right .btn-primary span,
+  .header-right .btn-secondary span,
+  .header-right .btn-tertiary span,
+  .header-right .admin-menu-btn span:not(.dropdown-arrow) {
+    display: none;
+  }
   
   .header-right .btn-icon {
     width: 12px;
     height: 12px;
-    margin-right: 3px;
+    margin-right: 0;
+    filter: none;
   }
   
   .sidebar {
@@ -1781,7 +1958,7 @@ button.btn-icon.danger:hover {
   }
   
   .admin-menu-btn {
-    padding: 8px 8px;
+    padding: 8px 10px;
     font-size: 11px;
     white-space: nowrap;
   }

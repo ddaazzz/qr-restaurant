@@ -7,8 +7,10 @@
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
   <title>Staff Portal | Chuio</title>
 
-  <!-- QR code library -->
+  <!-- QR code library (generate QRs) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- QR code scanner library (scan QRs) - served locally from backend -->
+  <script src="/lib/html5-qrcode.min.js" onerror="console.error('Failed to load html5-qrcode from local server')"></script>
 
   <!-- Admin CSS (Core + Modules) -->
   <link rel="stylesheet" href="/admin.css" />
@@ -43,6 +45,7 @@
           <button id="table-edit-btn" class="btn-primary" onclick="toggleTableEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
           <button id="menu-edit-btn" class="btn-primary" onclick="toggleMenuEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> Edit</button>
           <button id="orders-history-header-btn" class="btn-tertiary" onclick="toggleOrdersHistoryMode()" style="display: none;"><img src="/uploads/website/history.png" alt="history" style="width: 16px; height: 16px; filter: brightness(0) invert(1);"/> History</button>
+          <button id="scan-qr-btn" class="btn-secondary" onclick="openScanQRModal()" style="display: none;"><img src="/uploads/website/qrcode.png" alt="scan" class="btn-icon" style="width: 16px; height: 16px;"> Scan Table</button>
           <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
             <img src="/uploads/website/user.png" alt="staff" class="btn-icon"> Staff
             <span class="dropdown-arrow">▼</span>
@@ -168,6 +171,28 @@
     </div>
   </div>
 
+  <!-- QR Scanner Modal -->
+  <div id="scan-qr-modal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeScanQRModal()"></div>
+    <div class="modal-content qr-scanner-modal">
+      <div class="modal-header">
+        <h3>Scan Table QR Code</h3>
+        <button class="modal-close" onclick="closeScanQRModal()">✕</button>
+      </div>
+      <div class="qr-scanner-container">
+        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden;"></div>
+        <div id="qr-scanner-error" class="qr-scanner-error hidden" style="color: #ef4444; margin-top: 10px; text-align: center; white-space: pre-wrap; font-size: 13px; line-height: 1.5; padding: 10px;"></div>
+        <div id="qr-scanner-retry" class="hidden" style="margin-top: 15px; text-align: center;">
+          <button class="btn-primary" onclick="startQRScanning()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">🔄 Retry Camera</button>
+        </div>
+        <div id="qr-scanner-loading" class="qr-scanner-loading hidden" style="color: #666; margin-top: 10px; text-align: center;">Initializing camera...</div>
+      </div>
+      <div class="modal-footer" style="margin-top: 20px;">
+        <button class="btn-secondary" onclick="closeScanQRModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Load Admin CSS & core modules for staff (same as admin.html) -->
   <script src="/translations.js"></script>
   <script src="/language-switcher.js"></script>
@@ -183,5 +208,7 @@
   
   <!-- Staff-specific initialization -->
   <script src="/staff.js"></script>
+  <!-- QR scanning functionality -->
+  <script src="/qr-scanner.js"></script>
 </body>
 </html>

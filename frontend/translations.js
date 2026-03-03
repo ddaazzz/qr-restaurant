@@ -674,6 +674,12 @@ const translations = {
     'admin.manage-tables': 'Manage Tables',
     'admin.category-name': 'Category Name',
     'admin.add-category': '➕ Add Category',
+    'admin.edit-category': 'Edit Category',
+    'admin.enter-category-name': 'Enter category name',
+    'admin.enter-table-details': 'Enter table details',
+    'admin.enter-new-table-name': 'Enter new table name',
+    'admin.enter-new-seat-count': 'Enter new seat count',
+    'admin.number-of-seats': 'Number of Seats',
     'admin.qr-settings': 'QR Code Settings',
     'admin.qr-code-mode': 'QR Code Mode',
     'admin.qr-mode-warning': 'QR Code Mode can only be changed when there are no active sessions. Please close all sessions before making changes.',
@@ -759,6 +765,7 @@ const translations = {
     'kitchen.title': '🍳 Kitchen Dashboard',
     'kitchen.enter-pin': 'Enter PIN to continue',
     'kitchen.logout': 'Logout',
+    'kitchen.print-order': '🖨️ Print',
 
     // Staff Portal
     'staff.title': '👨‍💼 Staff Dashboard',
@@ -1402,11 +1409,14 @@ const translations = {
 
     // Session Order Panel - Order Section (3 keys)
     'admin.dining': 'Dining',
+    'admin.started': 'Started',
+    'admin.order-label': 'Order',
     'admin.loading-orders': 'Loading orders…',
     'admin.pax-label': 'pax',
 
     // Session Total & Close (2 keys)
     'admin.total-label': 'Total:',
+    'admin.subtotal': 'Subtotal:',
     'admin.close-bill': '💳 Close Bill',
 
     // Close Bill Modal (13 keys)
@@ -1459,6 +1469,8 @@ const translations = {
     'admin.header-history': 'History',
     'admin.header-admin': 'Admin',
     'admin.header-logout': '🚪 Logout',
+    'admin.scan-qr': 'Scan Table',
+    'admin.scan-table-qr': 'Scan Table QR Code',
 
     // Session List
     'admin.session-label': 'Session #{0}',
@@ -2010,6 +2022,12 @@ const translations = {
     'admin.manage-tables': '管理餐桌',
     'admin.category-name': '分類名稱',
     'admin.add-category': '➕ 添加分類',
+    'admin.edit-category': '編輯分類',
+    'admin.enter-category-name': '輸入分類名稱',
+    'admin.enter-table-details': '輸入餐桌詳情',
+    'admin.enter-new-table-name': '輸入新餐桌名稱',
+    'admin.enter-new-seat-count': '輸入新座位數',
+    'admin.number-of-seats': '座位數',
     'admin.qr-settings': '二維碼設置',
     'admin.qr-code-mode': '二維碼模式',
     'admin.qr-regenerate-option': '每次期間重新生成二維碼',
@@ -2095,6 +2113,7 @@ const translations = {
     'kitchen.title': '🍳 廚房儀表板',
     'kitchen.enter-pin': '輸入 PIN 繼續',
     'kitchen.logout': '登出',
+    'kitchen.print-order': '🖨️ 打印',
 
     // Staff Portal
     'staff.title': '👨‍💼 員工儀表板',
@@ -2608,11 +2627,17 @@ const translations = {
     'admin.table-categories': '餐桌分類',
     'admin.category-name': '分類名稱 *',
     'admin.add-category-btn': '➕ 添加分類',
+    'admin.edit-category': '編輯分類',
+    'admin.enter-category-name': '輸入分類名稱',
+    'admin.enter-table-details': '輸入餐桌詳情',
     'admin.table-name': '餐桌名稱 *',
     'admin.enter-table-name': '輸入餐桌名稱',
+    'admin.enter-new-table-name': '輸入新餐桌名稱',
     'admin.table-number': '餐桌號碼',
     'admin.seat-count': '座位數 *',
     'admin.enter-seats': '輸入座位數',
+    'admin.enter-new-seat-count': '輸入新座位數',
+    'admin.number-of-seats': '座位數',
     'admin.table-location': '位置',
     'admin.select-category': '-- 選擇一個分類 --',
     'admin.add-table-btn': '➕ 添加餐桌',
@@ -3351,11 +3376,14 @@ const translations = {
 
     // Session Order Panel - Display Labels (Chinese)
     'admin.dining': '用餐中',
+    'admin.started': '開始時間',
+    'admin.order-label': '訂單',
     'admin.loading-orders': '載入訂單...',
     'admin.pax-label': '人數',
 
     // Session Total and Close (Chinese)
     'admin.total-label': '總計：',
+    'admin.subtotal': '小計：',
     'admin.close-bill': '💳 結帳',
 
     // Close Bill Modal (Chinese)
@@ -3408,6 +3436,8 @@ const translations = {
     'admin.header-history': '歷史',
     'admin.header-admin': '管理員',
     'admin.header-logout': '🚪 登出',
+    'admin.scan-qr': '掃描桌子',
+    'admin.scan-table-qr': '掃描桌子二維碼',
 
     // Session List (Chinese)
     'admin.session-label': '餐次 #{0}',

@@ -1,8 +1,37 @@
 // ============= SETTINGS MANAGEMENT =============
 
+// Initialization gate
+let settingsInitialized = false;
+
 let ADMIN_SETTINGS_CACHE = {};
 let SETTINGS_EDIT_MODE = {};
 let STAGED_LOGO = null;
+
+// ========== INITIALIZE SETTINGS ==========
+async function initializeSettings() {
+  // Always load and cache settings when section is switched to
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    if (res.ok) {
+      ADMIN_SETTINGS_CACHE = await res.json();
+      applyThemeColor(ADMIN_SETTINGS_CACHE.theme_color);
+    }
+  } catch (err) {
+    console.error("Failed to initialize settings:", err);
+  }
+  
+  // Attach event listeners only once
+  if (!settingsInitialized) {
+    settingsInitialized = true;
+    attachEventListeners();
+  }
+}
+
+// ========== ATTACH EVENT LISTENERS ==========
+function attachEventListeners() {
+  // Currently no module-specific event listeners for settings
+  // This function is placeholder for consistency with other modules
+}
 
 // Load and render settings (stub - modals are used now)
 async function loadAdminSettings() {
@@ -92,6 +121,9 @@ async function openSettingsModal(modalName) {
       case 'pos-integration':
         await loadPOSIntegrationModal();
         break;
+      case 'printer-settings':
+        await loadPrinterSettings();
+        break;
       case 'staff-login-links':
         await loadStaffLoginLinksModal();
         break;
@@ -128,7 +160,13 @@ async function loadRestaurantInfoModal() {
     document.getElementById('view-address').textContent = settings.address || 'Not set';
     document.getElementById('view-timezone').textContent = settings.timezone || 'UTC';
     document.getElementById('view-service-charge').textContent = (settings.service_charge_percent || 0) + '%';
-    document.getElementById('view-color').innerHTML = `<div style="width: 40px; height: 40px; background: ${settings.theme_color || '#000'}; border-radius: 4px;"></div>`;
+    
+    // Use color swatch template
+    const colorTemplate = document.getElementById('color-swatch-template');
+    const colorSwatch = colorTemplate.content.cloneNode(true).querySelector('div');
+    colorSwatch.style.backgroundColor = settings.theme_color || '#000';
+    document.getElementById('view-color').innerHTML = '';
+    document.getElementById('view-color').appendChild(colorSwatch);
     
     // Populate input fields for edit mode
     document.getElementById('restaurant-name').value = settings.name || '';
@@ -155,7 +193,7 @@ async function loadRestaurantInfoModal() {
 // Load POS Integration Modal
 async function loadPOSIntegrationModal() {
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
     const settings = await res.json();
     
     document.getElementById('view-webhook-url').textContent = settings.pos_webhook_url ? settings.pos_webhook_url.substring(0, 50) + '...' : 'Not configured';
@@ -168,15 +206,25 @@ async function loadPOSIntegrationModal() {
     
     // Update connection status
     const statusDiv = document.getElementById('pos-connection-status');
-    if (settings.pos_webhook_url && settings.pos_api_key) {
-      statusDiv.innerHTML = '🟢 Configured';
-      statusDiv.style.background = '#f0fdf4';
-      statusDiv.style.color = '#166534';
+    const hasConfig = settings.pos_webhook_url && settings.pos_api_key;
+    
+    // Use POS status template
+    const statusTemplate = document.getElementById('pos-status-template');
+    const statusElement = statusTemplate.content.cloneNode(true);
+    const statusContent = statusElement.querySelector('div');
+    
+    if (hasConfig) {
+      statusContent.textContent = '🟢 Configured';
+      statusContent.style.background = '#f0fdf4';
+      statusContent.style.color = '#166534';
     } else {
-      statusDiv.innerHTML = '🔴 Not Configured';
-      statusDiv.style.background = '#fef2f2';
-      statusDiv.style.color = '#991b1b';
+      statusContent.textContent = '🔴 Not Configured';
+      statusContent.style.background = '#fef2f2';
+      statusContent.style.color = '#991b1b';
     }
+    
+    statusDiv.innerHTML = '';
+    statusDiv.appendChild(statusElement);
   } catch (err) {
     console.error("Failed to load POS settings:", err);
   }
@@ -214,7 +262,7 @@ async function loadStaffLoginLinksModal() {
 // Load QR Settings Modal
 async function loadQRSettingsModal() {
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
     const settings = await res.json();
     
     const qrModeSelect = document.getElementById('qr-mode-select');
@@ -238,19 +286,19 @@ async function loadCouponsModal() {
       couponsList.innerHTML = '';
     } else {
       document.getElementById('no-coupons-msg').style.display = 'none';
-      couponsList.innerHTML = coupons.map(coupon => `
-        <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; border-left: 4px solid #4a90e2;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <strong>${coupon.code}</strong><br>
-              <small style="color: #666;">
-                ${coupon.discount_type === 'percentage' ? coupon.discount_value + '%' : '$' + coupon.discount_value} off
-              </small>
-            </div>
-            <button onclick="deleteCoupon(${coupon.id})" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
-          </div>
-        </div>
-      `).join('');
+      
+      // Use coupon list template
+      const couponTemplate = document.getElementById('coupon-list-template');
+      couponsList.innerHTML = '';
+      
+      coupons.forEach(coupon => {
+        const couponElement = couponTemplate.content.cloneNode(true);
+        couponElement.querySelector('[data-coupon-code]').textContent = coupon.code;
+        couponElement.querySelector('[data-coupon-discount]').textContent = 
+          coupon.discount_type === 'percentage' ? coupon.discount_value + '%' : '$' + coupon.discount_value + ' off';
+        couponElement.querySelector('[data-coupon-delete]').onclick = () => deleteCoupon(coupon.id);
+        couponsList.appendChild(couponElement);
+      });
     }
   } catch (err) {
     console.error("Failed to load coupons:", err);
@@ -260,7 +308,7 @@ async function loadCouponsModal() {
 // Load Booking Settings Modal
 async function loadBookingSettingsModal() {
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
     const settings = await res.json();
     
     const input = document.getElementById('booking-time-allowance');
@@ -466,7 +514,7 @@ async function savePOSSettings() {
   };
   
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`, {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -529,7 +577,7 @@ async function saveBookingSettings() {
   const allowanceMins = parseInt(document.getElementById('booking-time-allowance').value) || 15;
   
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`, {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ booking_time_allowance_mins: allowanceMins })
@@ -611,7 +659,7 @@ async function changeQRMode() {
   if (!newMode) return;
   
   try {
-    const res = await fetch(`${API}/${restaurantId}/settings`, {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ qr_mode: newMode })
@@ -624,4 +672,384 @@ async function changeQRMode() {
     console.error("Error changing QR mode:", err);
     alert('Failed to update QR mode');
   }
+}
+
+// ========== PRINTER SETTINGS ==========
+async function loadPrinterSettings() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/printer-settings`);
+    if (!res.ok) throw new Error('Failed to fetch printer settings');
+    
+    const settings = await res.json();
+    
+    // Display mode
+    document.getElementById('view-printer-type').textContent = settings.printer_type || 'None';
+    document.getElementById('view-printer-host').textContent = settings.printer_host || '—';
+    document.getElementById('view-printer-port').textContent = settings.printer_port || '9100';
+    document.getElementById('view-bluetooth-device').textContent = settings.bluetooth_device_name ? 
+      '📱 ' + settings.bluetooth_device_name : '—';
+    
+    const status = settings.printer_type && settings.printer_type !== 'none' ? '🟢 Configured' : '⚠️ Not Configured';
+    document.getElementById('printer-connection-status').textContent = status;
+    document.getElementById('printer-connection-status').style.background = settings.printer_type && settings.printer_type !== 'none' ? '#f0fdf4' : '#fef3c7';
+    document.getElementById('printer-connection-status').style.color = settings.printer_type && settings.printer_type !== 'none' ? '#166534' : '#92400e';
+    
+    // Edit mode
+    document.getElementById('printer-type').value = settings.printer_type || 'none';
+    document.getElementById('printer-host').value = settings.printer_host || '';
+    document.getElementById('printer-port').value = settings.printer_port || '9100';
+    document.getElementById('bluetooth-device-id').value = settings.bluetooth_device_id || '';
+    document.getElementById('kitchen-auto-print').checked = settings.kitchen_auto_print || false;
+    document.getElementById('bill-auto-print').checked = settings.bill_auto_print || false;
+    
+    // Customer receipts
+    if (settings.customer_receipt_type) {
+      const types = settings.customer_receipt_type.split(',').map(t => t.trim());
+      document.getElementById('receipt-email').checked = types.includes('email');
+      document.getElementById('receipt-printer').checked = types.includes('printer');
+      document.getElementById('receipt-qr').checked = types.includes('qr');
+    }
+    
+    // Update preview
+    const printerPreview = settings.printer_type && settings.printer_type !== 'none' ? 
+      '🟢 ' + (settings.printer_type.charAt(0).toUpperCase() + settings.printer_type.slice(1)) :
+      '⚠️ Not Configured';
+    document.getElementById('printer-status-preview').textContent = printerPreview;
+    
+    updatePrinterTypeFields();
+    
+    // Load Bluetooth devices if Bluetooth printer is selected
+    if (settings.printer_type === 'bluetooth') {
+      await refreshConnectedDevices();
+    }
+  } catch (err) {
+    console.error('Error loading printer settings:', err);
+  }
+}
+
+function updatePrinterTypeFields() {
+  const printerType = document.getElementById('printer-type').value;
+  const hostGroup = document.getElementById('printer-host-group');
+  const portGroup = document.getElementById('printer-port-group');
+  const bluetoothGroup = document.getElementById('bluetooth-device-group');
+  
+  // Show/hide fields based on printer type
+  if (printerType === 'thermal' || printerType === 'usb') {
+    hostGroup.style.display = 'block';
+    portGroup.style.display = 'block';
+    bluetoothGroup.style.display = 'none';
+  } else if (printerType === 'bluetooth') {
+    hostGroup.style.display = 'none';
+    portGroup.style.display = 'none';
+    bluetoothGroup.style.display = 'block';
+  } else {
+    hostGroup.style.display = 'none';
+    portGroup.style.display = 'none';
+    bluetoothGroup.style.display = 'none';
+  }
+}
+
+async function enterEditModePrinter() {
+  document.getElementById('view-printer-type').style.display = 'none';
+  document.getElementById('view-printer-host').style.display = 'none';
+  document.getElementById('view-printer-port').style.display = 'none';
+  document.getElementById('view-bluetooth-device').style.display = 'none';
+  
+  document.getElementById('printer-type').classList.remove('hidden');
+  document.getElementById('printer-host').classList.remove('hidden');
+  document.getElementById('printer-port').classList.remove('hidden');
+  
+  document.getElementById('edit-printer-btn').classList.add('hidden');
+  document.getElementById('save-printer-btn').classList.remove('hidden');
+  document.getElementById('test-printer-btn').classList.remove('hidden');
+  document.getElementById('cancel-printer-btn').classList.remove('hidden');
+  
+  updatePrinterTypeFields();
+  
+  // Load Bluetooth devices if available
+  if (document.getElementById('printer-type').value === 'bluetooth') {
+    await refreshConnectedDevices();
+  }
+}
+
+function cancelEditModePrinter() {
+  document.getElementById('view-printer-type').style.display = 'block';
+  document.getElementById('view-printer-host').style.display = 'block';
+  document.getElementById('view-printer-port').style.display = 'block';
+  document.getElementById('view-bluetooth-device').style.display = 'block';
+  
+  document.getElementById('printer-type').classList.add('hidden');
+  document.getElementById('printer-host').classList.add('hidden');
+  document.getElementById('printer-port').classList.add('hidden');
+  
+  document.getElementById('edit-printer-btn').classList.remove('hidden');
+  document.getElementById('save-printer-btn').classList.add('hidden');
+  document.getElementById('test-printer-btn').classList.add('hidden');
+  document.getElementById('cancel-printer-btn').classList.add('hidden');
+  
+  loadPrinterSettings(); // Reload to discard changes
+}
+
+async function savePrinterSettings() {
+  const printerType = document.getElementById('printer-type').value;
+  const printerHost = document.getElementById('printer-host').value;
+  const printerPort = parseInt(document.getElementById('printer-port').value) || 9100;
+  const bluetoothDeviceId = document.getElementById('bluetooth-device-id').value;
+  const kitchenAutoPrint = document.getElementById('kitchen-auto-print').checked;
+  const billAutoPrint = document.getElementById('bill-auto-print').checked;
+  
+  // Validate Bluetooth selection
+  if (printerType === 'bluetooth' && !bluetoothDeviceId) {
+    alert('⚠️ Please scan for and select a Bluetooth device first');
+    return;
+  }
+  
+  // Collect customer receipt types
+  const receiptTypes = [];
+  if (document.getElementById('receipt-email').checked) receiptTypes.push('email');
+  if (document.getElementById('receipt-printer').checked) receiptTypes.push('printer');
+  if (document.getElementById('receipt-qr').checked) receiptTypes.push('qr');
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/printer-settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        printer_type: printerType,
+        printer_host: printerHost || null,
+        printer_port: printerPort,
+        bluetooth_device_id: bluetoothDeviceId || null,
+        kitchen_auto_print: kitchenAutoPrint,
+        bill_auto_print: billAutoPrint,
+        customer_receipt_type: receiptTypes.join(', ')
+      })
+    });
+    
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to save settings');
+    }
+    
+    alert('✓ Printer settings saved successfully!');
+    await loadPrinterSettings();
+    cancelEditModePrinter();
+  } catch (err) {
+    console.error('Error saving printer settings:', err);
+    alert('Failed to save printer settings: ' + err.message);
+  }
+}
+
+async function testPrinterConnection() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/printer-test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const result = await res.json();
+    
+    if (result.success) {
+      alert('✓ Printer connection test passed!');
+      document.getElementById('printer-connection-status').textContent = '🟢 Connected';
+      document.getElementById('printer-connection-status').style.background = '#f0fdf4';
+      document.getElementById('printer-connection-status').style.color = '#166534';
+    } else {
+      alert('✗ Printer connection failed: ' + (result.error || 'Unknown error'));
+      document.getElementById('printer-connection-status').textContent = '❌ Connection Failed';
+      document.getElementById('printer-connection-status').style.background = '#fee2e2';
+      document.getElementById('printer-connection-status').style.color = '#991b1b';
+    }
+  } catch (err) {
+    console.error('Error testing printer:', err);
+    alert('Failed to test printer connection');
+  }
+}
+
+// ========== BLUETOOTH RECEIPT PRINTER SUPPORT ==========
+
+// Store bluetooth device history per restaurant
+let bluetoothDeviceHistory = [];
+let currentBluetoothDevice = null;
+
+/**
+ * Check if browser supports Web Bluetooth API
+ */
+function isBluetoothSupported() {
+  return !!(navigator.bluetooth && typeof navigator.bluetooth.requestDevice === 'function');
+}
+
+/**
+ * Get browser-specific Bluetooth support info
+ */
+function getBluetoothSupportInfo() {
+  const ua = navigator.userAgent.toLowerCase();
+  
+  if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod')) {
+    return {
+      supported: false,
+      device: 'iOS',
+      message: 'Web Bluetooth is not supported on iOS Safari. Use Chrome on Android or desktop browser instead.',
+      recommendation: 'Android Chrome, Desktop Chrome/Edge/Firefox'
+    };
+  }
+  
+  if (ua.includes('android')) {
+    const hasChrome = ua.includes('chrome') || ua.includes('crios');
+    return {
+      supported: hasChrome,
+      device: 'Android',
+      message: hasChrome ? 'Bluetooth supported (Chrome on Android)' : 'Use Chrome browser on Android for Bluetooth support.',
+      recommendation: 'Chrome, Edge, or Samsung Internet'
+    };
+  }
+  
+  // Desktop
+  const hasSupport = ua.includes('chrome') || ua.includes('edge') || ua.includes('firefox');
+  return {
+    supported: hasSupport,
+    device: 'Desktop',
+    message: hasSupport ? 'Bluetooth supported (Chrome/Edge/Firefox)' : 'Use Chrome, Edge, or Firefox for Bluetooth support.',
+    recommendation: 'Chrome, Edge, or Firefox'
+  };
+}
+
+/**
+ * Load and display connected/previously paired Bluetooth devices
+ */
+async function refreshConnectedDevices() {
+  const deviceList = document.getElementById('bluetooth-connected-devices');
+  deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #999; font-size: 13px;">🔄 Checking for connected devices...</div>';
+
+  try {
+    // Try to load saved devices for this restaurant
+    const res = await fetch(`${API}/restaurants/${restaurantId}/bluetooth-devices`);
+    if (!res.ok) {
+      bluetoothDeviceHistory = [];
+    } else {
+      bluetoothDeviceHistory = await res.json();
+    }
+
+    if (bluetoothDeviceHistory.length === 0) {
+      deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #999; font-size: 13px;">No paired devices yet.<br>Use "Scan New Device" to add a printer.</div>';
+      return;
+    }
+
+    // Display available devices
+    let html = '';
+    for (const device of bluetoothDeviceHistory) {
+      const isSelected = document.getElementById('bluetooth-device-id').value === device.deviceId;
+      const selectedClass = isSelected ? 'background: #dbeafe; border-left: 4px solid #0284c7;' : '';
+      const selectedBadge = isSelected ? '<span style="margin-left: 8px; background: #0284c7; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">✓ SELECTED</span>' : '';
+
+      html += `<div style="padding: 12px; border-bottom: 1px solid var(--border-color); cursor: pointer; ${selectedClass}" 
+                   onclick="selectBluetoothDeviceFromHistory('${device.deviceId}', '${device.deviceName}')">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <div style="font-weight: 600; color: #333; font-size: 14px;">📱 ${device.deviceName}</div>
+                    <div style="font-size: 12px; color: #666; margin-top: 2px;">ID: ${device.deviceId.substring(0, 16)}...</div>
+                    ${device.lastConnected ? '<div style="font-size: 11px; color: #999; margin-top: 2px;">Last used: ' + new Date(device.lastConnected).toLocaleDateString() + '</div>' : ''}
+                  </div>
+                  ${selectedBadge}
+                </div>
+              </div>`;
+    }
+
+    deviceList.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading Bluetooth devices:', err);
+    bluetoothDeviceHistory = [];
+    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666; font-size: 13px;">Could not load device list. Try scanning for a new device.</div>';
+  }
+}
+
+function selectBluetoothDeviceFromHistory(deviceId, deviceName) {
+  // Store selection
+  document.getElementById('bluetooth-device-id').value = deviceId;
+  document.getElementById('bluetooth-device-name').value = deviceName;
+  document.getElementById('view-bluetooth-device').textContent = '📱 ' + deviceName;
+
+  // Update UI - highlight selected device
+  refreshConnectedDevices();
+
+  console.log('[Bluetooth] Selected device from history:', deviceId, deviceName);
+}
+
+async function scanBluetoothDevices() {
+  // Check browser support
+  const support = getBluetoothSupportInfo();
+  
+  if (!isBluetoothSupported()) {
+    const msg = `❌ Web Bluetooth Not Supported\n\n${support.message}\n\nRecommended: ${support.recommendation}`;
+    alert(msg);
+    console.warn('[Bluetooth] Support check:', support);
+    return;
+  }
+
+  const scanBtn = document.getElementById('scan-bluetooth-btn');
+  const deviceList = document.getElementById('bluetooth-connected-devices');
+
+  scanBtn.disabled = true;
+  scanBtn.textContent = '⏳ Scanning...';
+  deviceList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">🔍 Searching for Bluetooth devices...</div>';
+
+  try {
+    // Request Bluetooth device - filter for generic devices
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['generic_attribute']
+    });
+
+    if (device) {
+      // Store device globally for later reference
+      currentBluetoothDevice = device;
+
+      // Display the newly found device
+      const deviceName = device.name || 'Unknown Device';
+      const deviceId = device.id;
+
+      // Add to history if not already there
+      if (!bluetoothDeviceHistory.find(d => d.deviceId === deviceId)) {
+        bluetoothDeviceHistory.push({
+          deviceId: deviceId,
+          deviceName: deviceName,
+          lastConnected: new Date().toISOString()
+        });
+
+        // Save to server
+        await fetch(`${API}/restaurants/${restaurantId}/bluetooth-devices`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deviceId: deviceId,
+            deviceName: deviceName
+          })
+        }).catch(err => console.warn('Could not save device to server:', err));
+      }
+
+      // Select this device
+      selectBluetoothDeviceFromHistory(deviceId, deviceName);
+      alert('Device found and added: ' + deviceName);
+
+      console.log('[Bluetooth] New device scanned and added:', deviceId, deviceName);
+    }
+  } catch (err) {
+    const deviceList = document.getElementById('bluetooth-connected-devices');
+    const support = getBluetoothSupportInfo();
+    
+    if (err.name === 'NotFoundError') {
+      deviceList.innerHTML = '<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">🔍 No Bluetooth devices found.<br><br>Make sure:<br>• Receipt printer is powered on<br>• Printer is in pairing/discovery mode<br>• Bluetooth is enabled on this device</div>';
+    } else if (err.name === 'NotSupportedError') {
+      deviceList.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">❌ ${support.message}<br><br>Recommended: ${support.recommendation}</div>`;
+    } else if (err.name === 'NotAllowedError') {
+      deviceList.innerHTML = '<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">🔒 Bluetooth permission denied.<br><br>Enable Bluetooth permissions in:<br>Settings → Browser → Permissions → Bluetooth</div>';
+    } else if (err.name === 'AbortError') {
+      // User cancelled - just refresh the list
+      await refreshConnectedDevices();
+    } else {
+      console.error('Bluetooth scan error:', err);
+      deviceList.innerHTML = '<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">❌ Error: ' + (err.message || 'Unknown error') + '</div>';
+    }
+  } finally {
+    scanBtn.disabled = false;
+    scanBtn.textContent = '🔍 Scan New Device';  }
 }

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import pool from "../config/db";
 import { sendReceipt } from "../services/emailService";
+import { getPrinterQueueInstance } from "./printer.routes";
+import { getPrinterZonesService } from "../services/printerZones";
 
 const router = Router();
 
@@ -193,6 +195,109 @@ for (const v of variants) {
       }
     }
 
+    // ✅ AUTO-PRINT: Check if kitchen auto-print is enabled
+    try {
+      const restaurantConfigRes = await pool.query(
+        `SELECT kitchen_auto_print, printer_type FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+
+      if (restaurantConfigRes.rowCount > 0) {
+        const config = restaurantConfigRes.rows[0];
+
+        if (config.kitchen_auto_print && config.printer_type && config.printer_type !== 'none') {
+          // Fetch order details for printing
+          const orderDetailsRes = await pool.query(
+            `SELECT oi.order_item_id, oi.order_id, oi.menu_item_id,
+                    oi.quantity, oi.price_cents, mi.name as item_name,
+                    ts.table_name, o.created_at
+             FROM order_items oi
+             JOIN orders o ON oi.order_id = o.id
+             JOIN menu_items mi ON oi.menu_item_id = mi.id
+             LEFT JOIN table_sessions ts ON o.session_id = ts.id
+             WHERE oi.order_id = $1 AND o.restaurant_id = $2
+             ORDER BY oi.order_item_id`,
+            [orderId, restaurantId]
+          );
+
+          if (orderDetailsRes.rowCount > 0) {
+            const items = orderDetailsRes.rows;
+            const tableNumber = items[0].table_name || "To-Go";
+            const zonesService = getPrinterZonesService(pool);
+            const queue = getPrinterQueueInstance();
+
+            // Check if multi-zone printing is configured
+            const zones = await zonesService.getZonesByRestaurant(restaurantId);
+
+            if (zones.length > 1) {
+              // Multi-zone: Group items by zone, print to each zone separately
+              const itemsByZone: { [zoneId: number]: typeof items } = {};
+
+              for (const item of items) {
+                const zone = await zonesService.getZoneForMenuItem(restaurantId, item.menu_item_id);
+                if (zone) {
+                  if (!itemsByZone[zone.id]) {
+                    itemsByZone[zone.id] = [];
+                  }
+                  itemsByZone[zone.id].push(item);
+                }
+              }
+
+              // Queue print job for each zone
+              for (const [zoneIdStr, zoneItems] of Object.entries(itemsByZone)) {
+                const zoneId = parseInt(zoneIdStr);
+                const printPayload = {
+                  orderNumber: String(orderId),
+                  tableNumber,
+                  items: zoneItems.map((i) => ({
+                    name: i.item_name,
+                    quantity: i.quantity,
+                  })),
+                  timestamp: new Date(zoneItems[0].created_at).toLocaleTimeString(),
+                  restaurantName: '',
+                  type: 'kitchen' as const,
+                };
+
+                await queue.addJob(restaurantId, printPayload, {
+                  orderId: String(orderId),
+                  printerZoneId: zoneId,
+                  priority: 10, // Highest priority for auto-print
+                  maxRetries: 3,
+                }).catch(err => {
+                  console.warn('[Orders] Failed to auto-print order to zone:', err.message);
+                });
+              }
+            } else {
+              // Single zone or no zones: Print all items to default
+              const printPayload = {
+                orderNumber: String(orderId),
+                tableNumber,
+                items: items.map((i) => ({
+                  name: i.item_name,
+                  quantity: i.quantity,
+                })),
+                timestamp: new Date(items[0].created_at).toLocaleTimeString(),
+                restaurantName: '',
+                type: 'kitchen' as const,
+              };
+
+              const zone = await zonesService.getDefaultZone(restaurantId);
+              await queue.addJob(restaurantId, printPayload, {
+                orderId: String(orderId),
+                printerZoneId: zone?.id,
+                priority: 10, // Highest priority for auto-print
+                maxRetries: 3,
+              }).catch(err => {
+                console.warn('[Orders] Failed to auto-print order:', err.message);
+              });
+            }
+          }
+        }
+      }
+    } catch (autoPrintErr: any) {
+      console.warn('[Orders] Auto-print error (non-blocking):', autoPrintErr.message);
+    }
+
     res.json({ success: true, order_id: orderId });
   } catch (err: any) {
     console.error("Order creation failed:", err);
@@ -280,11 +385,11 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
 
       ordersMap[row.order_id].items.push({
         order_item_id: row.order_item_id,
-        name: row.item_name,
+        menu_item_name: row.item_name,
         quantity: row.quantity,
         status: row.item_status,
         unit_price_cents: row.unit_price_cents,
-        total_price_cents: itemTotal,
+        item_total_cents: itemTotal,
         variants: row.variants
       });
 
@@ -382,7 +487,7 @@ router.get("/kitchen/items", async (req, res) => {
         session_id: row.session_id,
         table_name: row.table_name,
         order_type: row.order_type,
-        item_name: row.item_name,
+        menu_item_name: row.item_name,
         quantity: row.quantity,
         status: row.status,
         variants: row.variants,
@@ -663,8 +768,9 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         oi.menu_item_id,
         oi.quantity,
         oi.price_cents,
+        (oi.price_cents * oi.quantity) as item_total_cents,
         oi.status,
-        mi.name as item_name,
+        mi.name as menu_item_name,
         mi.image_url,
         STRING_AGG(
           DISTINCT vo.id::text,

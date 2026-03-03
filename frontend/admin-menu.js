@@ -2,6 +2,376 @@
 // All menu management functionality extracted from admin.js
 // Uses card-based layout similar to admin-tables.js
 
+// ========== MENU VARIANT GLOBAL STATE ==========
+let OPEN_VARIANTS_ITEM_ID = null;
+let EDITING_VARIANT_ID = null;
+let CURRENT_VARIANTS = [];
+
+// ========== INITIALIZE MENU ==========
+async function initializeMenu() {
+  console.log('[Menu] Initializing menu...');
+  await loadMenuItems();
+  attachEventListeners();
+  console.log('[Menu] Menu initialized');
+}
+
+// ========== ATTACH EVENT LISTENERS ==========
+function attachEventListeners() {
+  // Language change listener
+  window.addEventListener('languageChanged', () => {
+    console.log('[Menu] Language changed - re-rendering tabs');
+    renderMenuCategoryTabs();
+    
+    // Update form placeholders
+    const itemNameInput = document.getElementById('new-item-name');
+    const priceInput = document.getElementById('new-item-price');
+    const descInput = document.getElementById('new-item-desc');
+    const uploadDiv = document.querySelector('.upload-placeholder');
+    
+    if (itemNameInput) itemNameInput.placeholder = t('admin.item-name-placeholder');
+    if (priceInput) priceInput.placeholder = t('admin.price-placeholder');
+    if (descInput) descInput.placeholder = t('admin.description-placeholder');
+    if (uploadDiv) uploadDiv.textContent = t('admin.upload-image');
+  });
+}
+
+// ========== TEMPLATE HELPER FUNCTIONS ==========
+/**
+ * Clones a template and returns the content
+ * @param {string} templateId - ID of the template element
+ * @returns {DocumentFragment} The cloned template content
+ */
+function cloneTemplate(templateId) {
+  const template = document.getElementById(templateId);
+  if (!template) {
+    console.error(`Template not found: ${templateId}`);
+    return null;
+  }
+  return template.content.cloneNode(true);
+}
+
+/**
+ * Creates a menu item card using template
+ * @param {Object} item - Menu item object
+ * @param {boolean} isEditMode - Whether in edit mode
+ * @returns {HTMLElement} The card element
+ */
+function createMenuItemCardElement(item, isEditMode) {
+  const fragment = cloneTemplate('menu-item-card-template');
+  if (!fragment) return null;
+  
+  // Extract the wrapper div from the template fragment
+  const card = fragment.querySelector('.menu-item-card-wrapper');
+  if (!card) {
+    console.error('Could not find menu-item-card-wrapper in template');
+    return null;
+  }
+  
+  // Update content
+  const isAvailable = item.available !== false;
+  const imgEl = card.querySelector('.menu-item-img');
+  if (item.image_url) {
+    imgEl.src = item.image_url;
+  } else {
+    imgEl.style.display = 'none';
+    card.querySelector('.menu-item-image').innerHTML = '<div class="no-image">📸</div>';
+  }
+  
+  card.querySelector('.menu-item-name').textContent = item.name;
+  card.querySelector('.menu-item-price').textContent = '$' + (item.price_cents / 100).toFixed(2);
+  
+  // Add controls if in edit mode
+  if (isEditMode) {
+    const controlsDiv = card.querySelector('.menu-edit-controls');
+    controlsDiv.style.display = 'flex';
+    controlsDiv.innerHTML = `
+      <button id="avail-btn-${item.id}" onclick="event.stopPropagation(); toggleMenuItemAvailability(${item.id}, ${!isAvailable})" style="background-color: ${isAvailable ? '#e7f5e7' : '#fee'}; color: ${isAvailable ? '#2d7a2d' : '#c33'}; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">${isAvailable ? '✓' : '✕'} ${isAvailable ? t('admin.available') : t('admin.sold-out')}</button>
+      <button onclick="event.stopPropagation(); deleteMenuItem(${item.id})" style="background-color: #fee; color: #c33; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">🗑️ ${t('admin.delete')}</button>
+    `;
+  }
+  
+  return card;
+}
+
+/**
+ * Creates an add item card using template
+ * @returns {HTMLElement} The add card element
+ */
+function createAddItemCardElement() {
+  const fragment = cloneTemplate('add-item-card-template');
+  if (!fragment) return null;
+  
+  // The add-item-card-template has the content directly, wrap it
+  const card = document.createElement('div');
+  card.appendChild(fragment);
+  card.className = 'add-item-card';
+  return card;
+}
+
+/**
+ * Creates an edit modal using template
+ * @param {Object} item - Menu item object
+ * @param {Array} categories - Available categories
+ * @returns {HTMLElement} The modal element
+ */
+function createEditItemModalElement(item, categories) {
+  const fragment = cloneTemplate('edit-menu-item-modal-template');
+  if (!fragment) return null;
+  
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = `edit-item-modal-${item.id}`;
+  modal.appendChild(fragment);
+  
+  // Populate form fields
+  modal.querySelector('.edit-item-name').value = item.name;
+  modal.querySelector('.edit-item-price').value = item.price_cents;
+  modal.querySelector('.edit-item-desc').value = item.description || '';
+  
+  // Populate categories
+  const categorySelect = modal.querySelector('.edit-item-category');
+  categories.forEach(c => {
+    const option = document.createElement('option');
+    option.value = c.id;
+    option.textContent = c.name;
+    if (c.id === item.category_id) option.selected = true;
+    categorySelect.appendChild(option);
+  });
+  
+  // Populate available status
+  modal.querySelector('.edit-item-available').value = item.available !== false ? 'true' : 'false';
+  
+  // Set up image
+  const imagePreview = modal.querySelector('.edit-item-image-preview');
+  if (item.image_url) {
+    imagePreview.innerHTML = `<img src="${item.image_url}" style="max-width: 100%; border-radius: 8px;"/>`;
+  }
+  
+  // Set up event listeners
+  const imageInput = modal.querySelector('.edit-item-image-input');
+  imageInput.id = `edit-item-image-${item.id}`;
+  imageInput.onchange = function() {
+    previewEditItemImage(item.id, this);
+  };
+  
+  imagePreview.onclick = () => imageInput.click();
+  
+  // Button handlers
+  modal.querySelector('.modal-close').onclick = () => modal.remove();
+  modal.querySelector('.modal-save').onclick = () => saveMenuItemEdit(item.id);
+  modal.querySelector('.modal-cancel').onclick = () => modal.remove();
+  
+  return modal;
+}
+
+/**
+ * Creates a variant item element for view mode (read-only)
+ * @param {Object} variant - Variant object
+ * @returns {HTMLElement} The variant item element
+ */
+function createVariantViewElement(variant) {
+  const fragment = cloneTemplate('variant-view-template');
+  if (!fragment) return null;
+  
+  const variantItem = fragment.querySelector('.food-panel-variant-item');
+  if (!variantItem) return null;
+  
+  // Build variant name with required indicator and min/max
+  const reqLabel = variant.required ? '<span style="color: red;">*</span>' : '';
+  const minMax = (variant.min_select != null || variant.max_select != null) ? 
+    ` (${variant.min_select != null ? 'Min: ' + variant.min_select : ''}${variant.min_select != null && variant.max_select != null ? ', ' : ''}${variant.max_select != null ? 'Max: ' + variant.max_select : ''})` : '';
+  
+  const nameDiv = variantItem.querySelector('.food-panel-variant-name');
+  if (nameDiv) {
+    nameDiv.innerHTML = `${variant.name}${reqLabel} <span style="font-size: 12px; color: #666;">${minMax}</span>`;
+  }
+  
+  // Render options
+  const optionsDiv = variantItem.querySelector('.food-panel-variant-options');
+  if (optionsDiv) {
+    if (variant.options && variant.options.length > 0) {
+      optionsDiv.innerHTML = variant.options.map(function(opt) {
+        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+        return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`;
+      }).join('');
+    } else {
+      optionsDiv.innerHTML = '<span class="food-panel-variant-option">No options</span>';
+    }
+  }
+  
+  return variantItem;
+}
+
+/**
+ * Creates a variant item element for edit mode (with delete buttons)
+ * @param {Object} variant - Variant object
+ * @returns {HTMLElement} The variant item element
+ */
+function createVariantEditElement(variant) {
+  const fragment = cloneTemplate('variant-edit-template');
+  if (!fragment) return null;
+  
+  const variantCard = fragment.querySelector('.food-panel-variant-item');
+  if (!variantCard) return null;
+  
+  variantCard.id = `variant-card-${variant.id}`;
+  variantCard.dataset.variantId = variant.id;
+  
+  // Build variant name with required indicator and min/max
+  const reqLabel = variant.required ? '<span style="color: red;">*</span>' : '';
+  const minMax = (variant.min_select != null || variant.max_select != null) ? 
+    ` (${variant.min_select != null ? 'Min: ' + variant.min_select : ''}${variant.min_select != null && variant.max_select != null ? ', ' : ''}${variant.max_select != null ? 'Max: ' + variant.max_select : ''})` : '';
+  
+  const nameDiv = variantCard.querySelector('.food-panel-variant-name');
+  if (nameDiv) {
+    nameDiv.innerHTML = `${variant.name}${reqLabel} <span style="font-size: 12px; color: #666;">${minMax}</span>`;
+  }
+  
+  // Set up edit button
+  const editBtn = variantCard.querySelector('.variant-edit-btn');
+  if (editBtn) {
+    editBtn.onclick = () => editVariantInline(variant.id);
+  }
+  
+  // Set up delete button
+  const deleteBtn = variantCard.querySelector('.variant-delete-btn');
+  if (deleteBtn) {
+    deleteBtn.onclick = () => deleteVariantFromPanel(variant.id);
+  }
+  
+  // Render options
+  const optionsDiv = variantCard.querySelector('.food-panel-variant-options');
+  if (optionsDiv) {
+    if (variant.options && variant.options.length > 0) {
+      optionsDiv.innerHTML = variant.options.map(function(opt) {
+        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+        return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`;
+      }).join('');
+    } else {
+      optionsDiv.innerHTML = '<span class="food-panel-variant-option">No options</span>';
+    }
+  }
+  
+  return variantCard;
+}
+
+/**
+ * Creates a variant inline edit form element
+ * @param {Object} variant - Variant object
+ * @returns {HTMLElement} The edit form element
+ */
+function createVariantInlineEditElement(variant) {
+  const fragment = cloneTemplate('variant-inline-edit-template');
+  if (!fragment) return null;
+  
+  const editForm = fragment.firstElementChild;
+  if (!editForm) return null;
+  
+  // Set up event listeners
+  const saveBtn = editForm.querySelector('.variant-inline-save');
+  const cancelBtn = editForm.querySelector('.variant-inline-cancel');
+  const optionsBtn = editForm.querySelector('.variant-options-edit-btn');
+  
+  if (saveBtn) saveBtn.onclick = () => saveInlineVariant(variant.id);
+  if (cancelBtn) cancelBtn.onclick = () => cancelInlineVariant(variant.id);
+  if (optionsBtn) optionsBtn.onclick = () => openVariantOptionsEditor(variant.id);
+  
+  // Populate values
+  const nameInput = editForm.querySelector('.inline-variant-name');
+  const minInput = editForm.querySelector('.inline-variant-min');
+  const maxInput = editForm.querySelector('.inline-variant-max');
+  const requiredCheckbox = editForm.querySelector('.inline-variant-required');
+  
+  if (nameInput) nameInput.value = variant.name;
+  if (minInput) minInput.value = variant.min_select || '';
+  if (maxInput) maxInput.value = variant.max_select || '';
+  if (requiredCheckbox) requiredCheckbox.checked = variant.required || false;
+  
+  return editForm;
+}
+
+/**
+ * Creates a variant options editor element
+ * @param {Object} variant - Variant object
+ * @returns {HTMLElement} The options editor element
+ */
+function createVariantOptionsEditorElement(variant) {
+  const fragment = cloneTemplate('variant-options-editor-template');
+  if (!fragment) return null;
+  
+  const editorForm = fragment.firstElementChild;
+  if (!editorForm) return null;
+  
+  // Set title
+  const titleEl = editorForm.querySelector('.options-editor-title');
+  if (titleEl) titleEl.textContent = `Edit Options for "${variant.name}"`;
+  
+  // Render options list
+  const optionsList = editorForm.querySelector('.options-list');
+  if (optionsList) {
+    if (variant.options && variant.options.length > 0) {
+      optionsList.innerHTML = variant.options.map(function(option) {
+        const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+        return `
+          <div id="option-row-${option.id}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: white; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 4px;">
+            <span style="font-size: 12px;">${option.name}${priceLabel}</span>
+            <div style="display: flex; gap: 4px;">
+              <button onclick="editVariantOption(${option.id})" style="padding: 2px 6px; background: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Edit</button>
+              <button onclick="deleteVariantOption(${option.id})" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      optionsList.innerHTML = '<p style="font-size: 12px; color: #999; margin: 0;">No options yet</p>';
+    }
+  }
+  
+  // Set up buttons
+  const addBtn = editorForm.querySelector('.add-option-btn');
+  const backBtn = editorForm.querySelector('.back-to-variant-btn');
+  if (addBtn) addBtn.onclick = startAddVariantOption;
+  if (backBtn) backBtn.onclick = () => backToVariantEdit(variant.id);
+  
+  return editorForm;
+}
+
+/**
+ * Creates a variant option edit form element
+ * @param {Object} option - Option object
+ * @returns {HTMLElement} The edit form element
+ */
+function createVariantOptionEditFormElement(option) {
+  const fragment = cloneTemplate('variant-option-edit-form-template');
+  if (!fragment) return null;
+  
+  const editForm = fragment.firstElementChild;
+  if (!editForm) return null;
+  
+  // Populate values
+  const nameInput = editForm.querySelector('.option-name-input');
+  const priceInput = editForm.querySelector('.option-price-input');
+  
+  if (nameInput) {
+    nameInput.id = `edit-opt-name-${option.id}`;
+    nameInput.value = option.name;
+  }
+  
+  if (priceInput) {
+    priceInput.id = `edit-opt-price-${option.id}`;
+    priceInput.value = option.price_cents || 0;
+  }
+  
+  // Set up buttons
+  const saveBtn = editForm.querySelector('.option-save-btn');
+  const cancelBtn = editForm.querySelector('.option-cancel-btn');
+  
+  if (saveBtn) saveBtn.onclick = () => saveOptionEdit(option.id);
+  if (cancelBtn) cancelBtn.onclick = () => cancelOptionEdit(option.id);
+  
+  return editForm;
+}
+
 // ========== MENU EDIT MODE TOGGLE ==========
 function toggleMenuEditMode() {
   // Only allow edit mode when menu section is active
@@ -45,7 +415,6 @@ function toggleMenuEditMode() {
 }
 
 async function loadMenuItems() {
-
   // Load categories
   const catRes = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`);
   MENU_CATEGORIES = await catRes.json();
@@ -287,6 +656,7 @@ async function deleteMenuCategory(categoryId, categoryName) {
 function renderMenuItemsGrid() {
   const grid = document.getElementById("menu-items-grid");
   if (!grid) return;
+  
   grid.innerHTML = "";
 
   if (!SELECTED_MENU_CATEGORY) {
@@ -302,7 +672,8 @@ function renderMenuItemsGrid() {
   if (IS_EDIT_MODE) {
     const addCard = document.createElement("div");
     addCard.className = "menu-item-card add-item-card";
-    addCard.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 36px; cursor: pointer;">+</div>';
+    const fragment = cloneTemplate('add-item-card-template');
+    if (fragment) addCard.appendChild(fragment);
     addCard.onclick = () => startCreateItem();
     grid.appendChild(addCard);
   }
@@ -314,30 +685,24 @@ function renderMenuItemsGrid() {
     return;
   }
 
-  items.forEach(item => {
+  items.forEach((item, index) => {
     const isAvailable = item.available !== false;
 
-    const card = document.createElement("div");
-    card.className = `menu-item-card ${!isAvailable ? "unavailable" : ""}`;
-    card.dataset.itemId = item.id;
-
-    card.innerHTML = `
-      <div class="menu-item-image">
-        ${item.image_url ? `<img src="${item.image_url}" alt="${item.name}"/>` : '<div class="no-image">📸</div>'}
-      </div>
-      <div class="menu-item-info">
-        <div class="menu-item-name">${item.name}</div>
-        <div class="menu-item-price">$${(item.price_cents / 100).toFixed(2)}</div>
-      </div>
-      ${IS_EDIT_MODE ? `
-      <div class="menu-edit-controls">
-        <button id="avail-btn-${item.id}" onclick="event.stopPropagation(); toggleMenuItemAvailability(${item.id}, ${!isAvailable})" style="background-color: ${isAvailable ? '#e7f5e7' : '#fee'}; color: ${isAvailable ? '#2d7a2d' : '#c33'}; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">${isAvailable ? '✓' : '✕'} ${isAvailable ? t('admin.available') : t('admin.sold-out')}</button>
-        <button onclick="event.stopPropagation(); deleteMenuItem(${item.id})" style="background-color: #fee; color: #c33; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">🗑️ ${t('admin.delete')}</button>
-      </div>
-      ` : ''}
-    `;
-
-    grid.appendChild(card);
+    // Use template instead of buildMenuItemCardHTML
+    const cardContent = createMenuItemCardElement(item, IS_EDIT_MODE);
+    if (cardContent) {
+      cardContent.className = `menu-item-card ${!isAvailable ? "unavailable" : ""}`;
+      cardContent.dataset.itemId = item.id;
+      
+      // Direct click handler on each card
+      cardContent.addEventListener('click', function cardClickHandler(e) {
+        // Prevent event from bubbling if clicking controls
+        if (e.target.closest('.menu-edit-controls')) return;
+        openFoodItemPanel(item.id);
+      });
+      
+      grid.appendChild(cardContent);
+    }
   });
 }
 
@@ -377,73 +742,11 @@ function editMenuItemModal(itemId) {
   const item = MENU_ITEMS.find(i => i.id === itemId);
   if (!item) return;
 
-  const modal = document.createElement("div");
-  modal.className = "modal-overlay";
-  modal.id = `edit-item-modal-${itemId}`;
-
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Edit Menu Item</h2>
-        <button class="modal-close" onclick="document.getElementById('edit-item-modal-${itemId}').remove()">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Item Name</label>
-            <input type="text" id="edit-item-name-${itemId}" value="${item.name}" />
-          </div>
-          <div class="form-group">
-            <label>Price (cents)</label>
-            <input type="number" id="edit-item-price-${itemId}" value="${item.price_cents}" />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Category</label>
-            <select id="edit-item-category-${itemId}">
-              ${MENU_CATEGORIES.map(c => `<option value="${c.id}" ${c.id === item.category_id ? "selected" : ""}>${c.name}</option>`).join("")}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Available</label>
-            <select id="edit-item-available-${itemId}">
-              <option value="true" ${item.available !== false ? "selected" : ""}>Yes</option>
-              <option value="false" ${item.available === false ? "selected" : ""}>No (Sold Out)</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Description</label>
-            <textarea id="edit-item-desc-${itemId}" placeholder="Item description...">${item.description || ""}</textarea>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Image</label>
-            <div class="image-upload-input">
-              <div id="edit-item-image-preview-${itemId}" class="image-preview-box">
-                ${item.image_url ? `<img src="${item.image_url}" style="max-width: 100%; border-radius: 8px;"/>` : '<div class="upload-placeholder">📸 Click to upload image</div>'}
-              </div>
-              <input type="file" id="edit-item-image-${itemId}" accept="image/*" onchange="previewEditItemImage(${itemId}, this)" class="hidden-file-input"/>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-primary" onclick="saveMenuItemEdit(${itemId})">✓ Save</button>
-        <button class="btn-secondary" onclick="document.getElementById('edit-item-modal-${itemId}').remove()">Cancel</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-  
-  // Make image preview clickable
-  document.getElementById(`edit-item-image-preview-${itemId}`).onclick = () => {
-    document.getElementById(`edit-item-image-${itemId}`).click();
-  };
+  // Use template instead of buildEditItemModalHTML
+  const modal = createEditItemModalElement(item, MENU_CATEGORIES);
+  if (modal) {
+    document.body.appendChild(modal);
+  }
 }
 
 function previewEditItemImage(itemId, input) {
@@ -596,85 +899,22 @@ async function uploadItemImage(itemId, file) {
   }
 }
 
-// Category edit/delete
-async function editMenuCategoryName(categoryId, oldName) {
-  const newName = prompt("Edit category name:", oldName);
-  if (!newName || !newName.trim()) return;
-
-  try {
-    await fetch(`${API}/menu-categories/${categoryId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() })
-    });
-    await loadMenuItems();
-  } catch (err) {
-    alert("Error updating category: " + err.message);
-  }
-}
-
-async function deleteMenuCategory(categoryId) {
-  if (!confirm("Delete this category? All items inside will also be deleted.")) return;
-
-  try {
-    const res = await fetch(`${API}/menu-categories/${categoryId}`, { method: "DELETE" });
-
-    if (!res.ok) {
-      const err = await res.json();
-      return alert(err.error || "Cannot delete category");
-    }
-
-    await loadMenuItems();
-  } catch (err) {
-    alert("Error deleting category: " + err.message);
-  }
-}
+// Removed: editMenuCategoryName - unused function (category editing happens via inline workflow)
 
 // ============= FOOD ITEM DETAIL PANEL =============
 
-// Initialize panel - inject from admin-menu.html
-async function initializeFoodPanel() {
-  // Check if panel already exists
-  if (document.getElementById("food-item-panel")) {
-    return;
-  }
-  
-  try {
-    // Fetch the admin-menu.html file
-    const response = await fetch('/admin-menu.html');
-    const html = await response.text();
-    
-    // Parse the HTML and find the panel
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const panel = doc.getElementById('food-item-panel');
-    
-    // Get target section
-    const menuSection = document.getElementById('section-menu');
-    if (!menuSection) {
-      console.error("Menu section not found for panel injection");
-      return;
-    }
-    
-    if (panel) {
-      menuSection.appendChild(panel);
-    }
-  } catch (err) {
-    console.error("Failed to load food panel from admin-menu.html:", err);
-  }
-}
-
 async function openFoodItemPanel(itemId) {
   try {
-    // Ensure panel is loaded
-    if (!document.getElementById("food-item-panel")) {
-      await initializeFoodPanel();
+    // Panel is already loaded as part of admin-menu.html
+    let panel = document.getElementById("food-item-panel");
+    if (!panel) {
+      console.error("Food item panel not found");
+      return;
     }
     
     // Find item from already-loaded menu items
     const item = MENU_ITEMS.find(function(i) { return i.id == itemId; });
     if (!item) {
-      console.error("Item not found:", itemId);
       alert("Item not found");
       return;
     }
@@ -686,14 +926,6 @@ async function openFoodItemPanel(itemId) {
     // Store variants in global variable for edit mode
     CURRENT_VARIANTS = variants;
     currentEditingItemId = itemId;
-    
-    // Get panel
-    const panel = document.getElementById("food-item-panel");
-    if (!panel) {
-      console.error("Panel still not found after initialization");
-      alert("Food panel not found in page. Please refresh and try again.");
-      return;
-    }
     
     const panelImage = document.getElementById("food-panel-image");
     const panelName = document.getElementById("food-panel-name");
@@ -742,8 +974,6 @@ async function openFoodItemPanel(itemId) {
     // Open panel
     if (panel) {
       panel.classList.add("active");
-    } else {
-      console.error("Panel element could not be found!");
     }
   } catch (err) {
     console.error("Error opening food item panel:", err);
@@ -755,22 +985,6 @@ function closeFoodItemPanel() {
   const panel = document.getElementById("food-item-panel");
   if (panel) panel.classList.remove("active");
 }
-
-// Add click handler to menu item cards
-document.addEventListener('click', function(e) {
-  const card = e.target.closest('.menu-item-card');
-  if (!card) return;
-  
-  // Don't open panel if clicking on edit/delete buttons
-  if (e.target.closest('.menu-edit-controls')) {
-    return;
-  }
-  
-  const itemId = card.dataset.itemId;
-  if (itemId) {
-    openFoodItemPanel(itemId);
-  }
-});
 
 // ========== FOOD ITEM EDIT FUNCTIONS ==========
 
@@ -952,32 +1166,16 @@ function renderFoodPanelVariantsForView() {
   const variantsContainer = document.getElementById('food-panel-variants');
   if (!variantsContainer) return;
   
-  variantsContainer.innerHTML = '';
-  
-  if (CURRENT_VARIANTS && CURRENT_VARIANTS.length > 0) {
-    CURRENT_VARIANTS.forEach(function(variant) {
-      const reqLabel = variant.required ? '<span style="color: red;">*</span>' : '';
-      const minMax = (variant.min_select != null || variant.max_select != null) ? 
-        ` (${variant.min_select != null ? 'Min: ' + variant.min_select : ''}${variant.min_select != null && variant.max_select != null ? ', ' : ''}${variant.max_select != null ? 'Max: ' + variant.max_select : ''})` : '';
-      
-      const variantHTML = `
-        <div class="food-panel-variant-item">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div class="food-panel-variant-name">${variant.name}${reqLabel} <span style="font-size: 12px; color: #666;">${minMax}</span></div>
-          </div>
-          <div class="food-panel-variant-options">
-            ${variant.options && variant.options.length > 0 ? variant.options.map(function(opt) { 
-              const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
-              return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`; 
-            }).join('') : '<span class="food-panel-variant-option">No options</span>'}
-          </div>
-        </div>
-      `;
-      variantsContainer.innerHTML += variantHTML;
-    });
-  } else {
+  if (!CURRENT_VARIANTS || CURRENT_VARIANTS.length === 0) {
     variantsContainer.innerHTML = '<p style="color: #999; font-size: 13px;">No variants available</p>';
+    return;
   }
+  
+  variantsContainer.innerHTML = '';
+  CURRENT_VARIANTS.forEach(variant => {
+    const variantEl = createVariantViewElement(variant);
+    if (variantEl) variantsContainer.appendChild(variantEl);
+  });
 }
 
 function renderFoodPanelVariantsForEdit() {
@@ -988,38 +1186,16 @@ function renderFoodPanelVariantsForEdit() {
   const variantsContainer = document.getElementById('food-panel-variants');
   if (!variantsContainer) return;
   
-  variantsContainer.innerHTML = '';
-  
-  if (CURRENT_VARIANTS && CURRENT_VARIANTS.length > 0) {
-    CURRENT_VARIANTS.forEach(function(variant) {
-      const reqLabel = variant.required ? '<span style="color: red;">*</span>' : '';
-      const minMax = (variant.min_select != null || variant.max_select != null) ? 
-        ` (${variant.min_select != null ? 'Min: ' + variant.min_select : ''}${variant.min_select != null && variant.max_select != null ? ', ' : ''}${variant.max_select != null ? 'Max: ' + variant.max_select : ''})` : '';
-      
-      const variantHTML = `
-        <div id="variant-card-${variant.id}" class="food-panel-variant-item" data-variant-id="${variant.id}" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div style="flex: 1;">
-              <div class="food-panel-variant-name" style="cursor: pointer;" onclick="editVariantInline(${variant.id})">${variant.name}${reqLabel} <span style="font-size: 12px; color: #666;">${minMax}</span></div>
-            </div>
-            <div style="display: flex; gap: 4px;">
-              <button class="btn-tertiary" onclick="editVariantInline(${variant.id})" style="font-size: 12px; padding: 4px 8px;"><img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px;"/></button>
-              <button class="btn-danger" onclick="deleteVariantFromPanel(${variant.id})" style="padding: 4px 8px;"><img src="/uploads/website/bin.png" alt="delete" style="width: 14px; height: 14px;"/></button>
-            </div>
-          </div>
-          <div class="food-panel-variant-options">
-            ${variant.options && variant.options.length > 0 ? variant.options.map(function(opt) { 
-              const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
-              return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`; 
-            }).join('') : '<span class="food-panel-variant-option">No options</span>'}
-          </div>
-        </div>
-      `;
-      variantsContainer.innerHTML += variantHTML;
-    });
-  } else {
+  if (!CURRENT_VARIANTS || CURRENT_VARIANTS.length === 0) {
     variantsContainer.innerHTML = '<p style="color: #999; font-size: 13px;">No variants available</p>';
+    return;
   }
+  
+  variantsContainer.innerHTML = '';
+  CURRENT_VARIANTS.forEach(variant => {
+    const variantEl = createVariantEditElement(variant);
+    if (variantEl) variantsContainer.appendChild(variantEl);
+  });
 }
 
 async function deleteVariantFromPanel(variantId) {
@@ -1141,45 +1317,10 @@ function editVariantInline(variantId) {
   variantCard.dataset.originalMaxSelect = variant.max_select || '';
   variantCard.dataset.originalRequired = variant.required ? 'true' : 'false';
   
-  // Create inline edit form - simple form with basic values
-  const editHTML = `
-    <div style="padding: 8px; border: 2px solid #2196F3; border-radius: 4px; background: #f5f5f5;">
-      <div style="margin-bottom: 8px;">
-        <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Variant Name</label>
-        <input class="inline-variant-name" type="text" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
-      </div>
-      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-        <div style="flex: 1;">
-          <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Min Select</label>
-          <input class="inline-variant-min" type="number" min="0" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
-        </div>
-        <div style="flex: 1;">
-          <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Max Select</label>
-          <input class="inline-variant-max" type="number" min="0" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
-        </div>
-      </div>
-      <div style="margin-bottom: 8px;">
-        <label style="display: flex; align-items: center; font-size: 12px;">
-          <input class="inline-variant-required" type="checkbox" style="margin-right: 6px;" />
-          <span>Required</span>
-        </label>
-      </div>
-      <div style="display: flex; gap: 6px;">
-        <button onclick="saveInlineVariant(${variantId})" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Save</button>
-        <button onclick="cancelInlineVariant(${variantId})" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Cancel</button>
-        <button onclick="openVariantOptionsEditor(${variantId})" style="flex: 1; padding: 6px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Edit Options</button>
-      </div>
-    </div>
-  `;
-  
-  variantCard.innerHTML = editHTML;
+  // Use template instead of buildVariantInlineEditHTML
+  const editElement = createVariantInlineEditElement(variant);
+  variantCard.innerHTML = editElement.innerHTML;
   variantCard.style.background = '#fff9e6';
-  
-  // Populate the form with current values
-  variantCard.querySelector('.inline-variant-name').value = variant.name;
-  variantCard.querySelector('.inline-variant-min').value = variant.min_select || '';
-  variantCard.querySelector('.inline-variant-max').value = variant.max_select || '';
-  variantCard.querySelector('.inline-variant-required').checked = variant.required || false;
   
   currentEditingVariantId = variantId;
 }
@@ -1252,56 +1393,9 @@ function openVariantOptionsEditor(variantId) {
   const variantCard = document.getElementById(`variant-card-${variantId}`);
   if (!variantCard) return;
   
-  // Create options editor HTML
-  let optionsHTML = '';
-  if (variant.options && variant.options.length > 0) {
-    optionsHTML = variant.options.map(function(option) {
-      const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
-      return `
-        <div id="option-row-${option.id}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: white; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 4px;">
-          <span style="font-size: 12px;">${option.name}${priceLabel}</span>
-          <div style="display: flex; gap: 4px;">
-            <button onclick="editVariantOption(${option.id})" style="padding: 2px 6px; background: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Edit</button>
-            <button onclick="deleteVariantOption(${option.id})" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Delete</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } else {
-    optionsHTML = '<p style="font-size: 12px; color: #999; margin: 0;">No options yet</p>';
-  }
-  
-  const editHTML = `
-    <div style="padding: 8px; border: 2px solid #FF9800; border-radius: 4px; background: #fff3e0;">
-      <h4 style="margin: 0 0 8px 0; font-size: 13px;">Edit Options for "${variant.name}"</h4>
-      <div style="margin-bottom: 8px; max-height: 200px; overflow-y: auto;">
-        ${optionsHTML}
-      </div>
-      <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-        <button onclick="startAddVariantOption()" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add Option</button>
-        <button onclick="backToVariantEdit(${variantId})" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Back to Edit</button>
-      </div>
-      <div id="variant-option-form-inline" style="display: none; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-        <h5 style="margin: 0 0 8px 0; font-size: 12px;">Add Option</h5>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div>
-            <label style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;">Option Name</label>
-            <input id="inline-option-name" type="text" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
-          </div>
-          <div>
-            <label style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;">Price (cents) - optional</label>
-            <input id="inline-option-price" type="number" placeholder="0" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
-          </div>
-          <div style="display: flex; gap: 4px;">
-            <button onclick="saveInlineVariantOption()" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Save</button>
-            <button onclick="cancelInlineVariantOption()" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  
-  variantCard.innerHTML = editHTML;
+  // Use template instead of buildVariantOptionsEditorHTML
+  const editorElement = createVariantOptionsEditorElement(variant);
+  variantCard.innerHTML = editorElement.innerHTML;
 }
 
 function backToVariantEdit(variantId) {
@@ -1390,43 +1484,7 @@ async function saveInlineVariantOption() {
   }
 }
 
-function renderVariantOptions(variant) {
-  const optionsList = document.getElementById('food-panel-variant-options-list');
-  if (!optionsList) return;
-  
-  optionsList.innerHTML = '';
-  
-  if (variant.options && variant.options.length > 0) {
-    variant.options.forEach(function(option) {
-      const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
-      const optionHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: white; border: 1px solid #ddd; border-radius: 3px;">
-          <span style="font-size: 12px;">${option.name}${priceLabel}</span>
-          <div style="display: flex; gap: 4px;">
-            <button onclick="editVariantOption(${option.id})" style="padding: 2px 6px; background: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Edit</button>
-            <button onclick="deleteVariantOption(${option.id})" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Delete</button>
-          </div>
-        </div>
-      `;
-      optionsList.innerHTML += optionHTML;
-    });
-  } else {
-    optionsList.innerHTML = '<p style="font-size: 12px; color: #999; margin: 0;">No options yet</p>';
-  }
-}
-
-function startAddVariantOption() {
-  const form = document.getElementById('variant-option-form-inline');
-  const nameInput = document.getElementById('inline-option-name');
-  const priceInput = document.getElementById('inline-option-price');
-  
-  if (form && nameInput && priceInput) {
-    currentEditingOptionId = null;
-    nameInput.value = '';
-    priceInput.value = '';
-    form.style.display = 'block';
-  }
-}
+// Removed: renderVariantOptions - unused function (variant rendering handled by renderFoodPanelVariantsForView/Edit)
 
 function cancelVariantOptionForm() {
   const form = document.getElementById('food-panel-variant-option-form');
@@ -1500,27 +1558,9 @@ function editVariantOption(optionId) {
   const optionRow = document.getElementById(`option-row-${optionId}`);
   if (!optionRow) return;
   
-  // Replace option row with inline edit form
-  const editFormHTML = `
-    <div style="display: flex; flex-direction: column; gap: 6px; padding: 6px; background: #f5f5f5; border: 2px solid #2196F3; border-radius: 3px; margin-bottom: 4px;">
-      <div style="display: flex; gap: 6px;">
-        <div style="flex: 1;">
-          <label style="display: block; font-size: 10px; font-weight: 500; margin-bottom: 2px;">Name</label>
-          <input id="edit-opt-name-${optionId}" type="text" value="${option.name}" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; box-sizing: border-box;" />
-        </div>
-        <div style="flex: 0 0 80px;">
-          <label style="display: block; font-size: 10px; font-weight: 500; margin-bottom: 2px;">Price</label>
-          <input id="edit-opt-price-${optionId}" type="number" value="${option.price_cents || 0}" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; box-sizing: border-box;" />
-        </div>
-      </div>
-      <div style="display: flex; gap: 4px;">
-        <button onclick="saveOptionEdit(${optionId})" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Save</button>
-        <button onclick="cancelOptionEdit(${optionId})" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Cancel</button>
-      </div>
-    </div>
-  `;
-  
-  optionRow.innerHTML = editFormHTML;
+  // Use template instead of buildVariantOptionEditFormHTML
+  const editForm = createVariantOptionEditFormElement(option);
+  optionRow.innerHTML = editForm.innerHTML;
   currentEditingOptionId = optionId;
 }
 
@@ -1710,18 +1750,122 @@ function previewItemImage(input) {
   }
 }
 
-// Listen for language changes to re-render category tabs
-window.addEventListener('languageChanged', () => {
-  console.log('[Menu] Language changed - re-rendering tabs');
-  renderMenuCategoryTabs();
-  
-  // Update form placeholders
-  const itemNameInput = document.getElementById('new-item-name');
-  const priceInput = document.getElementById('new-item-price');
-  const descInput = document.getElementById('new-item-desc');
-  const uploadDiv = document.querySelector('.upload-placeholder');
-  
-  if (itemNameInput) itemNameInput.placeholder = t('admin.item-name-placeholder');
-  if (priceInput) priceInput.placeholder = t('admin.price-placeholder');
-  if (descInput) descInput.placeholder = t('admin.description-placeholder');
-  if (uploadDiv) uploadDiv.textContent = t('admin.upload-image');});
+// ============= MENU VARIANT MANAGEMENT =============
+async function manageVariants(itemId) {
+  OPEN_VARIANTS_ITEM_ID = OPEN_VARIANTS_ITEM_ID === itemId ? null : itemId;
+  await loadMenuItems();
+}
+
+async function fetchVariants(itemId) {
+  const res = await fetch(`${API}/menu-items/${itemId}/variants`);
+  return await res.json();
+}
+
+function renderVariants(itemId, variants) {
+  // Now deprecated - use renderFoodPanelVariantsForView or renderFoodPanelVariantsForEdit instead
+  return '';
+}
+
+
+async function addVariantGroup(itemId) {
+  const name = prompt("Variant group name (e.g., 'Size', 'Temperature'):");
+  if (!name) return;
+
+  const res = await fetch(`${API}/menu-items/${itemId}/variants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, required: true })
+  });
+
+  if (!res.ok) {
+    alert("Failed to add variant group");
+    return;
+  }
+
+  await loadMenuItems();
+}
+
+async function addVariantOption(itemId, groupId) {
+  const name = prompt("Option name:");
+  if (!name) return;
+
+  const res = await fetch(
+    `${API}/menu-items/${itemId}/variants/${groupId}/options`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, price_cents: 0 })
+    }
+  );
+
+  if (!res.ok) {
+    alert("Failed to add option");
+    return;
+  }
+
+  await loadMenuItems();
+}
+
+function sanitizeVariantChanges(changes) {
+  // Prevent injection
+  return {
+    ...changes,
+    name: changes.name ? changes.name.substring(0, 100) : ""
+  };
+}
+
+async function updateVariant(itemId, groupId, changes) {
+  const sanitized = sanitizeVariantChanges(changes);
+
+  await fetch(`${API}/menu-items/${itemId}/variants/${groupId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sanitized)
+  });
+
+  await loadMenuItems();
+}
+
+async function deleteVariant(itemId, groupId) {
+  if (!confirm("Delete this variant group?")) return;
+
+  const res = await fetch(`${API}/menu-items/${itemId}/variants/${groupId}`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    alert("Failed to delete variant");
+    return;
+  }
+
+  await loadMenuItems();
+}
+
+async function updateVariantOption(itemId, groupId, optionId, name, price) {
+  await fetch(
+    `${API}/menu-items/${itemId}/variants/${groupId}/options/${optionId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, price_cents: price })
+    }
+  );
+
+  await loadMenuItems();
+}
+
+async function deleteVariantOption(itemId, groupId, optionId) {
+  if (!confirm("Delete this option?")) return;
+
+  const res = await fetch(
+    `${API}/menu-items/${itemId}/variants/${groupId}/options/${optionId}`,
+    { method: "DELETE" }
+  );
+
+  if (!res.ok) {
+    alert("Failed to delete option");
+    return;
+  }
+
+  await loadMenuItems();
+}

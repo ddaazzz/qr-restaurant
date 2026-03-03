@@ -1,7 +1,13 @@
-const API =
-  window.location.hostname === "localhost"
-    ? "http://localhost:10000/api"
-    : "https://chuio.io/api";
+const API = (() => {
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+  const isLocalIP = hostname.startsWith("10.") || hostname.startsWith("192.") || hostname.startsWith("172.");
+  
+  if (isLocalhost || isLocalIP) {
+    return `http://${window.location.host}/api`;
+  }
+  return "https://chuio.io/api";
+})();
 
 const params = new URLSearchParams(window.location.search);
 const token = window.location.pathname.split("/").filter(Boolean)[0];

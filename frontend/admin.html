@@ -7,8 +7,10 @@
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
   <title>Admin Portal | Chuio</title>
 
-  <!-- QR code library -->
+  <!-- QR code library (generate QRs) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- QR code scanner library (scan QRs) - served locally from backend -->
+  <script src="/lib/html5-qrcode.min.js" onerror="console.error('Failed to load html5-qrcode from local server')"></script>
 
   <!-- Admin CSS (Core + Modules) -->
   <link rel="stylesheet" href="/admin.css" />
@@ -49,6 +51,7 @@
           <button id="reports-btn" class="btn-primary" style="display: none;" data-i18n="admin.header-reports">∿ Reports</button>
           <button id="edit-settings-header" class="btn-primary" onclick="enterEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
           <button id="orders-history-header-btn" class="btn-tertiary" onclick="toggleOrdersHistoryMode()" style="display: none;"><img src="/uploads/website/history.png" alt="history" style="width: 16px; height: 16px; filter: brightness(0) invert(1);"/> <span data-i18n="admin.header-history">History</span></button>
+          <button id="scan-qr-btn" class="btn-secondary" onclick="openScanQRModal()" style="display: none;"><img src="/uploads/website/qrcode.png" alt="scan" class="btn-icon" style="width: 16px; height: 16px;"> <span data-i18n="admin.scan-qr">Scan Table</span></button>
           <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
             <img src="/uploads/website/user.png" alt="admin" class="btn-icon"> <span data-i18n="admin.header-admin">Admin</span>
             <span class="dropdown-arrow">▼</span>
@@ -116,11 +119,6 @@
           <!-- Menu content loaded dynamically from admin-menu.html -->
         </section>
 
-        <!-- ================= COUPONS MANAGEMENT SECTION ================= -->
-        <section id="section-coupons" class="content-section admin-only">
-          <!-- Coupons content loaded dynamically from admin-coupons.html -->
-        </section>
-
         <!-- ================= STAFF MANAGEMENT SECTION ================= -->
         <section id="section-staff" class="content-section admin-only">
           <!-- Staff content loaded dynamically from admin-staff.html -->
@@ -130,81 +128,6 @@
         <section id="section-bookings" class="content-section admin-only">
           <!-- Bookings content loaded dynamically from admin-bookings.html -->
         </section>
-
-        <!-- ================= STAFF FORM SLIDING PANEL ================= -->
-        <div id="staff-form-overlay" class="staff-form-overlay hidden" onclick="closeStaffForm()"></div>
-        <div id="staff-form-panel" class="staff-form-panel hidden">
-          <div class="staff-form-header">
-            <h3 id="staff-form-title">Create New Staff</h3>
-            <button onclick="closeStaffForm()" class="staff-form-close">✕</button>
-          </div>
-          <div id="staff-form-content" class="staff-form-content">
-            <div id="staff-error" class="error-message" style="display: none;"></div>
-            <div id="staff-success" class="success-message" style="display: none;"></div>
-            
-            <form onsubmit="event.preventDefault(); createOrUpdateStaff();">
-              <div class="form-group">
-                <label data-i18n="admin.staff-name">Staff Name</label>
-                <input id="staff-name" placeholder="e.g., John Smith" required />
-              </div>
-
-              <div class="form-group">
-                <label data-i18n="admin.pin-6digits">PIN (6 digits)</label>
-                <input id="staff-pin" type="text" placeholder="e.g., 123456" maxlength="6" required />
-              </div>
-
-              <div class="form-group">
-                <label>Role</label>
-                <select id="staff-role" onchange="handleStaffRoleChange()" required>
-                  <option value="">-- Select Role --</option>
-                  <option value="staff">Staff</option>
-                  <option value="kitchen">Kitchen</option>
-                </select>
-              </div>
-
-              <!-- Access Rights Section (shows based on role) -->
-              <div id="staff-access-rights-section">
-                <!-- Tab Access for Staff Role -->
-                <div id="staff-tab-access" style="display: none;">
-                  <h4 style="margin-top: 0; margin-bottom: 10px;">Tab Access Permissions</h4>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-orders" class="staff-access-checkbox" value="orders" /> Orders
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-tables" class="staff-access-checkbox" value="tables" /> Tables
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-menu" class="staff-access-checkbox" value="menu" /> Menu
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-staff" class="staff-access-checkbox" value="staff" /> Staff
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-reports" class="staff-access-checkbox" value="reports" /> Reports
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                      <input type="checkbox" id="access-settings" class="staff-access-checkbox" value="settings" /> Settings
-                    </label>
-                  </div>
-                </div>
-
-                <!-- Category Access for Kitchen Role -->
-                <div id="kitchen-category-access" style="display: none;">
-                  <h4 style="margin-top: 0; margin-bottom: 10px;">Food Categories Access</h4>
-                  <div id="kitchen-categories-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <!-- JS populates this with menu categories -->
-                  </div>
-                </div>
-              </div>
-
-              <div class="form-actions" style="margin-top: 20px;">
-                <button type="submit" class="btn-primary" id="staff-submit-btn" style="width: 100%;">➕ Add Staff</button>
-                <button type="button" class="btn-tertiary" onclick="closeStaffForm()" style="width: 100%; margin-top: 8px;">Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
 
         <!-- ================= REPORTS SECTION ================= -->
         <section id="section-reports" class="content-section admin-only">
@@ -219,10 +142,29 @@
       </main>
     </div>
 
-
+    <!-- QR Scanner Modal -->
+    <div id="scan-qr-modal" class="modal hidden">
+      <div class="modal-overlay" onclick="closeScanQRModal()"></div>
+      <div class="modal-content qr-scanner-modal">
+        <div class="modal-header">
+          <h3 data-i18n="admin.scan-table-qr">Scan Table QR Code</h3>
+          <button class="modal-close" onclick="closeScanQRModal()">✕</button>
+        </div>
+        <div class="qr-scanner-container">
+          <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden;"></div>
+          <div id="qr-scanner-error" class="qr-scanner-error hidden" style="color: #ef4444; margin-top: 10px; text-align: center; white-space: pre-wrap; font-size: 13px; line-height: 1.5; padding: 10px;"></div>
+          <div id="qr-scanner-retry" class="hidden" style="margin-top: 15px; text-align: center;">
+            <button class="btn-primary" onclick="startQRScanning()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">🔄 Retry Camera</button>
+          </div>
+          <div id="qr-scanner-loading" class="qr-scanner-loading hidden" style="color: #666; margin-top: 10px; text-align: center;">Initializing camera...</div>
+        </div>
+        <div class="modal-footer" style="margin-top: 20px;">
+          <button class="btn-secondary" onclick="closeScanQRModal()" data-i18n="admin.close">Close</button>
+        </div>
+      </div>
+    </div>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="/translations.js"></script>
   <script src="/timezone-utils.js"></script>
   <script src="/admin.js"></script>
@@ -234,5 +176,7 @@
   <script src="/admin-reports.js"></script>
   <script src="/admin-settings.js"></script>
   <script src="/admin-bookings.js"></script>
+  <!-- QR scanning functionality -->
+  <script src="/qr-scanner.js"></script>
 </body>
 </html>

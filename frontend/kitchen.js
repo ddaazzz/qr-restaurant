@@ -1,12 +1,12 @@
 const API_BASE = (() => {
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    return "http://localhost:10000/api";
-  } else if (window.location.hostname.startsWith("192.") || window.location.hostname.startsWith("10.") || window.location.hostname.startsWith("172.")) {
-    // Local network IP (iPad, phone, etc.)
-    return `http://${window.location.hostname}:10000/api`;
-  } else {
-    return "https://chuio.io/api";
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+  const isLocalIP = hostname.startsWith("192.") || hostname.startsWith("10.") || hostname.startsWith("172.");
+  
+  if (isLocalhost || isLocalIP) {
+    return `http://${window.location.host}/api`;
   }
+  return "https://chuio.io/api";
 })();
 
 let pin = "";
@@ -198,7 +198,7 @@ function renderKitchenOrders(orders) {
           ${order.items.map(item => `
             <div class="order-item">
               <div class="item-header">
-                <span class="item-name">${item.item_name}</span>
+                <span class="item-name">${item.menu_item_name}</span>
                 <span class="item-qty">×${item.quantity}</span>
               </div>
               ${item.variants ? `<div class="item-variants">${item.variants}</div>` : ""}
@@ -208,7 +208,8 @@ function renderKitchenOrders(orders) {
           
           <div class="card-actions">
             ${order.items.some(item => item.status === "pending") ? 
-              `<button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'pending').map(i => i.order_item_id))}, 'preparing')">Start Preparing</button>` 
+              `<button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'pending').map(i => i.order_item_id))}, 'preparing')">Start Preparing</button>
+              <button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')" data-i18n="kitchen.print-order">🖨️ Print</button>` 
               : (order.items.some(item => item.status === "preparing") ? 
               `<button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'preparing').map(i => i.order_item_id))}, 'served')">Serve</button>` 
               : `<button class="btn-action btn-ready" disabled>All Served</button>`)}
@@ -358,6 +359,17 @@ document.addEventListener("click", (e) => {
     dropdown.classList.add("hidden");
   }
 });
+
+// ============== PRINTING ============== 
+function handlePrintOrder(orderId) {
+  const order = orderMap[orderId];
+  if (!order) {
+    console.error("Order not found:", orderId);
+    return;
+  }
+  const restaurantName = localStorage.getItem("restaurantName") || "Restaurant";
+  kitchenPrinting.print(order, restaurantName);
+}
 
 // ============== LANGUAGE SWITCHING ============== 
 function updateLanguageButtonStates() {

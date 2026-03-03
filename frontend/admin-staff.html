@@ -156,6 +156,45 @@
   </div>
 </div>
 
+<!-- ================= TEMPLATES ================= -->
+
+<!-- Staff Card Template - Individual staff member card -->
+<template id="staff-card-template">
+  <div class="staff-card-name"></div>
+  <div class="staff-card-role" style="background: var(--role-bg, #3b82f620); color: var(--role-color, #3b82f6); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px;"></div>
+  <div class="staff-card-access" style="color: var(--text-light); font-size: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+    <strong data-i18n="admin.access">Access:</strong> <span class="access-text"></span>
+  </div>
+  <div class="staff-card-actions" style="display: none;">
+    <button class="btn-delete" style="flex: 1;"><span data-i18n="admin.delete">🗑 Delete</span></button>
+  </div>
+</template>
+
+<!-- Add Staff Card Template - Button to add new staff -->
+<template id="add-staff-card-template">
+  <div style="font-size: 40px; margin-bottom: 8px;">➕</div>
+  <div class="staff-card-name" data-i18n="admin.add-staff">Add Staff</div>
+</template>
+
+<!-- Timekeeping Item Template - Individual work log entry -->
+<template id="timekeeping-item-template">
+  <div style="padding: 10px; background: white; border-bottom: 1px solid #eee; font-size: 13px;">
+    <div class="timekeeping-date" style="font-weight: 600; margin-bottom: 4px;"></div>
+    <div style="color: #666;">
+      <strong class="timekeeping-time-in"></strong> - <strong class="timekeeping-time-out"></strong>
+      <span class="timekeeping-hours" style="float: right; color: #3b82f6; font-weight: 600;"></span>
+    </div>
+  </div>
+</template>
+
+<!-- Kitchen Category Template - Checkbox for kitchen category access -->
+<template id="kitchen-category-template">
+  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+    <input type="checkbox" class="kitchen-category-checkbox" />
+    <span class="category-name"></span>
+  </label>
+</template>
+
 <!-- Language initialization script -->
 <script>
   (function() {

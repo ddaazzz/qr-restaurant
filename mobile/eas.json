@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "preview": {
+      "ios": {
+        "resourceClass": "large"
+      },
+      "android": {
+        "resourceClass": "large"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
+      },
+      "simulator": true
+    },
+    "preview2": {
+      "android": {
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
+      }
+    },
+    "preview3": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

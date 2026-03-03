@@ -121,3 +121,159 @@
       <div id="order-details-content">
         <p data-i18n="admin.select-an-order">Select an order to view details</p>
       </div>
+    </div>
+
+    <!-- ============= TEMPLATES FOR SESSION AND ORDER DETAILS ============= -->
+
+    <!-- Session Details Template -->
+    <template id="session-details-template">
+      <div style="margin-bottom: 20px;">
+        <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
+          <!-- Session Header -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+            <div>
+              <div style="font-size: 12px; color: #666;" data-i18n="admin.session-label">Session</div>
+              <div style="font-size: 18px; font-weight: 700; color: #2c3e50; margin-top: 2px;" class="session-label">Table 1</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 11px; color: #666;"><span data-i18n="admin.session-id">ID:</span> <span class="session-id">1</span></div>
+              <div style="font-size: 12px; font-weight: 600; color: #667eea; margin-top: 4px;">👥 <span class="session-pax">1</span> <span data-i18n="admin.session-people">people</span></div>
+            </div>
+          </div>
+          
+          <!-- Session Times -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; padding: 12px; background: #f9f9f9; border-radius: 6px;">
+            <div>
+              <div style="font-size: 11px; color: #666; margin-bottom: 2px;" data-i18n="admin.session-started">Started</div>
+              <div style="font-size: 12px; font-weight: 600; color: #333;" class="session-start-time">Now</div>
+            </div>
+            <div>
+              <div style="font-size: 11px; color: #666; margin-bottom: 2px;" data-i18n="admin.session-duration">Duration</div>
+              <div style="font-size: 12px; font-weight: 600; color: #333;"><span class="session-duration">0</span> <span data-i18n="admin.minutes">minutes</span></div>
+            </div>
+          </div>
+          
+          <!-- Orders Count -->
+          <div style="padding: 12px; background: #f0f7ff; border-left: 4px solid #667eea; border-radius: 4px; margin-bottom: 16px;">
+            <div style="font-size: 12px; font-weight: 600; color: #667eea;">📦 <span class="session-order-count">0</span> <span data-i18n="admin.orders-count">order(s) in this session</span></div>
+            <div style="font-size: 11px; color: #666; margin-top: 4px;"><span class="session-item-count">0</span> <span data-i18n="admin.items">items</span> • <span data-i18n="admin.total">Total:</span> $<span class="session-total-price">0.00</span></div>
+          </div>
+          
+          <!-- Items List -->
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 10px;" data-i18n="admin.items-in-session">Items in Session:</div>
+            <div style="max-height: 400px; overflow-y: auto;">
+              <div class="session-items-list">
+                <p style="color: #999; font-size: 12px;" data-i18n="admin.no-items-session">No items in this session</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Total -->
+          <div style="padding: 12px; background: #f0f0f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-weight: 600; color: #333;" data-i18n="admin.session-total">Session Total:</div>
+            <div style="font-size: 18px; font-weight: 700; color: #667eea;">$<span class="session-total-display">0.00</span></div>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button class="session-print-btn" style="
+              flex: 1;
+              padding: 10px;
+              background: #3b82f6;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              font-weight: 600;
+              font-size: 12px;
+              cursor: pointer;
+              transition: all 0.2s;
+            " onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#3b82f6'" data-i18n="admin.print-button">
+              🖨️ Print
+            </button>
+            <button class="session-email-btn" style="
+              flex: 1;
+              padding: 10px;
+              background: #8b5cf6;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              font-weight: 600;
+              font-size: 12px;
+              cursor: pointer;
+              transition: all 0.2s;
+            " onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#8b5cf6'" data-i18n="admin.email-button">
+              📧 Email
+            </button>
+          </div>
+          
+          <!-- Close Bill Button -->
+          <div class="session-button-container">
+            <!-- Will be populated with either close or closed button -->
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Order Details Template -->
+    <template id="order-details-template">
+      <div>
+        <!-- Order Header -->
+        <div style="margin-bottom: 20px;">
+          <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+              <div>
+                <div style="font-size: 12px; color: #666;" data-i18n="admin.order-number">Order Number</div>
+                <div style="font-size: 20px; font-weight: 700; color: #2c3e50; margin-top: 2px;">#<span class="order-id">1</span></div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 12px; padding: 6px 12px; border-radius: 4px; display: inline-block; font-weight: 600;" class="order-status-badge">Pending</div>
+              </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div>
+                <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;" data-i18n="admin.order-time-label">Order Time</div>
+                <div style="font-size: 14px; color: #333; margin-top: 4px;" class="order-time">Now</div>
+              </div>
+              <div>
+                <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;" data-i18n="admin.order-total-items">Total Items</div>
+                <div style="font-size: 14px; color: #333; margin-top: 4px;"><span class="order-item-count">0</span> <span data-i18n="admin.items">items</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Order Items -->
+        <div style="margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #333;" data-i18n="admin.order-items-label">Order Items</h4>
+          <div class="order-items-list">
+            <!-- Items will be inserted here -->
+          </div>
+        </div>
+        
+        <!-- Order Summary -->
+        <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #333;" data-i18n="admin.order-summary">Order Summary</h4>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;">
+            <div style="color: #666; font-size: 13px;" data-i18n="admin.subtotal">Subtotal</div>
+            <div style="color: #333; font-weight: 500; font-size: 13px;">$<span class="order-subtotal">0.00</span></div>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+            <div style="color: #666; font-size: 13px;" data-i18n="admin.service-charge">Service Charge (10%)</div>
+            <div style="color: #333; font-weight: 500; font-size: 13px;">$<span class="order-service-charge">0.00</span></div>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="color: #333; font-size: 14px; font-weight: 600;" data-i18n="admin.total">Total</div>
+            <div style="color: #2c3e50; font-size: 20px; font-weight: 700;">$<span class="order-total">0.00</span></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Close Containers -->
+    </div>
+    </div>

@@ -6,10 +6,16 @@
   let dragging = false;
   let activeDrawer = null;
 
-  const API_BASE =
-  window.location.hostname === "localhost"
-    ? "http://localhost:10000/api"
-    : "https://chuio.io/api";
+  const API_BASE = (() => {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+    const isLocalIP = hostname.startsWith("10.") || hostname.startsWith("192.") || hostname.startsWith("172.");
+    
+    if (isLocalhost || isLocalIP) {
+      return `http://${window.location.host}/api`;
+    }
+    return "https://chuio.io/api";
+  })();
 
 const urlParams = new URLSearchParams(window.location.search);
 const IS_STAFF = urlParams.get("staff") === "1";

@@ -57,6 +57,304 @@
 <div id="tables-category-tabs" class="table-tabs-bottom"></div>
 </div>
 
+<!-- ================= TEMPLATE ELEMENTS ================= -->
+
+<!-- Session Order Panel Template -->
+<template id="session-order-panel-template">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
+    <div style="flex: 1; text-align: center;">
+      <h3 style="margin: 0; font-size: 18px;" data-field="session-label">Table 1A</h3>
+      <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-light);" data-field="session-info">2 pax • Dining 15m</p>
+    </div>
+    <div style="position: relative;">
+      <button class="gear-icon-btn" onclick="toggleSessionGearMenu(event)">⚙️</button>
+      <div id="session-gear-menu" class="session-gear-menu hidden">
+        <button onclick="changeSessionPaxModal({SESSION_ID}, {PAX})" data-i18n="admin.change-pax">👥 Change Pax</button>
+        <button onclick="moveTableModal({TABLE_ID})" data-i18n="admin.move-table">↔️ Move Table</button>
+        <button onclick="orderForTable('{QR_TOKEN}')" data-i18n="admin.order-for-table">📱 Order for Table</button>
+        <button onclick="printQR({SESSION_ID})" data-i18n="admin.print-qr">📋 Print QR</button>
+        <button onclick="printBill({SESSION_ID})" data-i18n="admin.print-bill">🖨️ Print Bill</button>
+        <button onclick="splitBill({SESSION_ID})" data-i18n="admin.split-bill">💵 Split Bill</button>
+        <button onclick="endTableSession({SESSION_ID})" style="color: #c33;" data-i18n="admin.delete-session">🗑️ Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders Section -->
+  <div id="session-orders" style="flex: 1; overflow-y: auto; border-top: 1px solid var(--border-color); padding-top: 12px; margin-bottom: 12px;">
+    <p data-i18n="admin.loading-orders">Loading orders...</p>
+  </div>
+
+  <!-- Total and Actions -->
+  <div style="border-top: 2px solid var(--border-color); padding-top: 12px;">
+    <div id="session-total" style="font-weight: bold; margin-bottom: 12px; font-size: 16px;">
+      <span data-i18n="admin.total-label">Total:</span> —
+    </div>
+    <button class="btn-primary" style="width: 100%;" onclick="closeBillModal({SESSION_ID})" data-i18n="admin.close-bill">
+      💳 Close Bill
+    </button>
+  </div>
+</template>
+
+<!-- Session Details Panel Template -->
+<template id="session-details-panel-template">
+  <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
+  <h3 data-field="table-name">Table 1</h3>
+  <div class="table-card-info">
+    <p data-field="seats-info"><strong>2/4 seats occupied</strong></p>
+    <p data-field="remaining-seats">2 seats available</p>
+  </div>
+  <div class="session-actions" style="margin-top: 16px;">
+    <button class="btn-primary" onclick="startNewSessionModal({TABLE_ID})" data-i18n="admin.start-session">
+      ➕ Start New Session
+    </button>
+  </div>
+</template>
+
+<!-- Session Orders List Template -->
+<template id="session-orders-list-template">
+  <div class="order-card">
+    <strong data-field="order-id">Order #1</strong>
+    <div data-field="items-container">
+      <!-- Items filled dynamically -->
+    </div>
+  </div>
+</template>
+
+<!-- Session Order Item Template -->
+<template id="session-order-item-template">
+  <div class="order-item" style="display:flex;gap:6px;align-items:center;justify-content:space-between;margin:8px 0;">
+    <div style="flex:1;">
+      <div><strong data-field="item-name">Item Name</strong></div>
+      <div style="font-size:0.85em;color:#666;margin-top:2px;font-style:italic;" data-field="item-variants"></div>
+      <div style="color:#999;font-size:0.9em;" data-field="item-status">Status: pending</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: bold;" data-field="item-total">$10.00</div>
+      <div style="font-size: 0.9em; color: var(--text-light);" data-field="item-qty">x2</div>
+    </div>
+  </div>
+</template>
+
+<!-- Session Totals Template -->
+<template id="session-totals-template">
+  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+    <span data-i18n="admin.subtotal-amount">Subtotal:</span>
+    <span data-field="subtotal">$0.00</span>
+  </div>
+  <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;" data-field="service-charge-row">
+    <span data-i18n="admin.service-charge-label">Service ({PERCENT}%):</span>
+    <span data-field="service-charge">$0.00</span>
+  </div>
+  <div style="display: flex; justify-content: space-between; font-size: 18px; color: white; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; margin-top: 8px;">
+    <span data-i18n="admin.total-amount">Total:</span>
+    <span data-field="grand-total">$0.00</span>
+  </div>
+</template>
+
+<!-- Start Session Modal Template -->
+<template id="start-session-modal-template">
+  <div class="modal-content" style="width: 400px;">
+    <h3 data-i18n="admin.start-session-modal-title">Start Session for {TABLE_NAME}</h3>
+    <p style="color: var(--text-light); margin: 0 0 16px 0;" data-i18n="admin.seats-available" data-field="seats-text">4 seats available</p>
+    
+    <label style="display: block; margin-bottom: 16px;">
+      <span class="modal-content-label" data-i18n="admin.number-of-guests">Number of Guests</span>
+      <input type="number" id="session-pax-input" min="1" data-attr="max" value="1" class="modal-input">
+    </label>
+
+    <div class="modal-button-group">
+      <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn" data-i18n="admin.cancel-button">Cancel</button>
+      <button onclick="submitStartSession({TABLE_ID})" class="modal-btn-primary" data-i18n="admin.start-session">Start Session</button>
+    </div>
+  </div>
+</template>
+
+<!-- Book Table Modal Template -->
+<template id="book-table-modal-template">
+  <div class="modal-content" style="width: 450px;">
+    <h3 data-i18n="admin.book-table-title">Book Table {TABLE_NAME}</h3>
+    
+    <label style="display: block; margin-bottom: 16px;">
+      <span class="modal-content-label" data-i18n="admin.guest-name">Guest Name</span>
+      <input type="text" id="booking-guest-name" placeholder="Guest name" class="modal-input">
+    </label>
+
+    <label style="display: block; margin-bottom: 16px;">
+      <span class="modal-content-label" data-i18n="admin.booking-date">Date</span>
+      <input type="date" id="booking-date" data-attr="value" data-attr-min="minDate" data-attr-max="maxDate" class="modal-input">
+    </label>
+
+    <label style="display: block; margin-bottom: 16px;">
+      <span class="modal-content-label" data-i18n="admin.booking-time">Time</span>
+      <input type="time" id="booking-time" value="18:00" class="modal-input">
+    </label>
+
+    <label style="display: block; margin-bottom: 16px;">
+      <span class="modal-content-label" data-i18n="admin.number-of-guests">Number of Guests</span>
+      <input type="number" id="booking-pax" min="1" value="2" class="modal-input">
+    </label>
+
+    <div class="modal-button-group">
+      <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn" data-i18n="admin.cancel-button">Cancel</button>
+      <button onclick="submitTableBooking({TABLE_ID})" class="modal-btn-primary" data-i18n="admin.book-button">Book Table</button>
+    </div>
+  </div>
+</template>
+
+<!-- Close Bill Modal Template -->
+<template id="close-bill-modal-template">
+  <div class="modal-content" style="width: 400px;">
+    <h3 data-i18n="admin.close-bill-title">Close Bill for {TABLE_NAME}</h3>
+    
+    <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+      <p style="margin: 0 0 8px 0; color: #666;" data-i18n="admin.bill-summary">Bill Summary</p>
+      <p style="margin: 0 0 5px 0; font-size: 14px;">
+        <span data-i18n="admin.subtotal-amount">Subtotal:</span> <span data-field="subtotal">$0.00</span>
+      </p>
+      <p style="margin: 0; font-size: 14px;">
+        <span data-i18n="admin.service-charge-label">Service ({PERCENT}%):</span> <span data-field="service-charge">$0.00</span>
+      </p>
+      <p style="margin: 8px 0 0 0; font-size: 16px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 8px;">
+        <span data-i18n="admin.total-amount">Total:</span> <span data-field="total" style="color: #000;">$0.00</span>
+      </p>
+    </div>
+
+    <label style="display: block; margin-bottom: 15px;">
+      <span style="font-weight: 600; display: block; margin-bottom: 5px;" data-i18n="admin.payment-method">Payment Method</span>
+      <select id="payment-method" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        <option value="cash" data-i18n="admin.payment-cash">Cash</option>
+        <option value="card" data-i18n="admin.payment-card">Card</option>
+        <option value="online" data-i18n="admin.payment-online">Online</option>
+      </select>
+    </label>
+
+    <label style="display: block; margin-bottom: 15px;">
+      <span style="font-weight: 600; display: block; margin-bottom: 5px;" data-i18n="admin.discount-section">Discount / Coupon</span>
+      <select id="discount-coupon" onchange="updateBillTotal({GRAND_TOTAL})" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        <option value="" data-i18n="admin.discount-none">None</option>
+        <div data-field="coupon-options"></div>
+      </select>
+    </label>
+
+    <label style="display: block; margin-bottom: 15px;">
+      <span style="font-weight: 600; display: block; margin-bottom: 5px;" data-i18n="admin.bill-close-reason">Reason (Optional)</span>
+      <textarea id="close-reason" placeholder="Notes" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; height: 60px;"></textarea>
+    </label>
+
+    <div class="modal-button-group">
+      <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn" data-i18n="admin.cancel-button">Cancel</button>
+      <button onclick="submitCloseBill({SESSION_ID}, {GRAND_TOTAL})" class="modal-btn-primary" data-i18n="admin.close-bill-confirm">Close Bill</button>
+    </div>
+  </div>
+</template>
+
+<!-- Bill Print Template -->
+<template id="bill-print-template">
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Receipt</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; width: 300px; padding: 12px; background: #fff; }
+        .receipt { width: 100%; text-align: center; font-size: 13px; line-height: 1.4; }
+        .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+        .logo { max-width: 60px; margin: 0 auto 6px; height: auto; }
+        .restaurant-name { font-weight: bold; font-size: 16px; margin-bottom: 4px; }
+        .restaurant-info { font-size: 11px; color: #333; margin-bottom: 2px; }
+        .divider { border-bottom: 1px dashed #000; margin: 8px 0; }
+        .items { text-align: left; margin: 8px 0; }
+        .item-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+        .item-name { flex: 1; }
+        .item-qty { text-align: center; min-width: 30px; margin: 0 4px; }
+        .item-price { text-align: right; min-width: 50px; font-weight: bold; }
+        .summary { border-top: 2px dashed #000; padding-top: 6px; margin-top: 8px; }
+        .summary-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+        .summary-row.subtotal { border-bottom: 1px dashed #000; padding-bottom: 3px; }
+        .summary-row.total { font-size: 16px; font-weight: bold; margin-top: 3px; }
+        .footer { margin-top: 10px; font-size: 10px; color: #666; border-top: 1px dashed #000; padding-top: 6px; }
+        .thank-you { font-weight: bold; margin-top: 4px; }
+        @media print { body { margin: 0; padding: 0; } .receipt { width: 100%; } }
+      </style>
+    </head>
+    <body>
+      <div class="receipt">
+        <div class="header">
+          <img src="" class="logo" alt="Logo" data-field="logo"/>
+          <div class="restaurant-name" data-field="restaurant-name">Restaurant</div>
+          <div class="restaurant-info" data-field="restaurant-address"></div>
+          <div class="restaurant-info" data-field="restaurant-phone"></div>
+        </div>
+        <div class="divider"></div>
+        <div data-field="session-info"></div>
+        <div class="items" data-field="items-container"></div>
+        <div class="summary">
+          <div class="summary-row subtotal">
+            <span data-i18n="admin.subtotal-amount">Subtotal:</span>
+            <span data-field="bill-subtotal">$0.00</span>
+          </div>
+          <div class="summary-row service-charge" data-field="service-charge-row" style="display: none;">
+            <span data-i18n="admin.service-charge-label">Service:</span>
+            <span data-field="bill-service-charge">$0.00</span>
+          </div>
+          <div class="summary-row total">
+            <span data-i18n="admin.total-amount">TOTAL:</span>
+            <span data-field="bill-total">$0.00</span>
+          </div>
+        </div>
+        <div class="footer">
+          <div>Thank you for your visit!</div>
+          <div class="thank-you">Come Again!</div>
+        </div>
+      </div>
+      <script>
+        window.print();
+        window.onafterprint = () => window.close();
+      </script>
+    </body>
+  </html>
+</template>
+
+<!-- QR Print Template -->
+<template id="qr-print-template">
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>QR Code</title>
+      <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
+      <style>
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }
+        .title { font-size: 24px; font-weight: bold; margin-bottom: 8px; color: #333; }
+        .subtitle { font-size: 16px; color: #666; margin-bottom: 24px; }
+        #qrcode { display: inline-block; padding: 12px; background: white; border: 2px solid var(--primary-color); border-radius: 8px; margin-bottom: 20px; }
+        .instruction { font-size: 14px; color: #666; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee; }
+        .url { font-size: 12px; color: #999; margin-top: 12px; word-break: break-all; font-family: monospace; }
+        @media print { body { background: white; } .container { box-shadow: none; } .instruction { display: none; } }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="title">Order QR Code</div>
+        <div class="subtitle">Table <span data-field="session-label">1A</span></div>
+        <div id="qrcode"></div>
+        <div class="url" data-field="qr-url"></div>
+        <div class="instruction" data-i18n="admin.qr-instruction">Scan this QR code to view and order from the menu</div>
+      </div>
+      <script>
+        const qrUrl = document.querySelector('[data-field="qr-url"]').textContent;
+        new QRCode(document.getElementById("qrcode"), { text: qrUrl, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.H });
+        window.onload = () => { setTimeout(() => window.print(), 500); };
+        window.onafterprint = () => window.close();
+      <\/script>
+    </body>
+  </html>
+</template>
+
 <!-- Language initialization script -->
 <script>
   (function() {

@@ -1236,6 +1236,16 @@ body.edit-mode .table-edit-controls {
   transform: scale(1.02);
 }
 
+/* Fix for dynamic modals - ensure all children are clickable */
+.modal-overlay .modal-content,
+.modal-overlay .modal-input,
+.modal-overlay .modal-cancel-btn,
+.modal-overlay .modal-btn-primary,
+.modal-overlay input,
+.modal-overlay button {
+  pointer-events: auto !important;
+}
+
 /* ============== CLOSE BILL MODAL STYLES ============== */
 .close-bill-modal {
   min-width: 400px;

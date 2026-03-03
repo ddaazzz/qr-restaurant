@@ -1,6 +1,30 @@
 // ============= ANALYTICS DASHBOARD MODULE =============
 // New analytics dashboard - automatic on page load
 
+// Initialization gate
+let reportsInitialized = false;
+
+// ========== INITIALIZE REPORTS ==========
+async function initializeReports() {
+  // Always load and render analytics dashboard when section is switched to
+  await initializeAnalyticsDashboard();
+  
+  // Attach event listeners only once
+  if (!reportsInitialized) {
+    reportsInitialized = true;
+    attachEventListeners();
+  }
+}
+
+// ========== ATTACH EVENT LISTENERS ==========
+function attachEventListeners() {
+  // Language change listener
+  window.addEventListener('languageChanged', () => {
+    initializeAnalyticsDashboard();
+  });
+}
+
+// ========== ANALYTICS DASHBOARD ==========
 async function initializeAnalyticsDashboard() {
   try {
     // Get element references
@@ -310,25 +334,7 @@ function filterRevenueReport() {
 
   var avgBill = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // Build revenue table
-  var html = '<div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 6px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">' +
-    '<div><span style="font-size: 12px; color: #666;">Total Revenue:</span><div style="font-size: 18px; font-weight: 700; color: #059669;">$' + (totalRevenue / 100).toFixed(2) + '</div></div>' +
-    '<div><span style="font-size: 12px; color: #666;">Orders:</span><div style="font-size: 18px; font-weight: 700; color: #667eea;">' + totalOrders + '</div></div>' +
-    '<div><span style="font-size: 12px; color: #666;">Avg Bill:</span><div style="font-size: 18px; font-weight: 700; color: #6b7280;">$' + (avgBill / 100).toFixed(2) + '</div></div>' +
-    '</div>';
-
-  // Revenue breakdown table
-  html += '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">' +
-    '<thead>' +
-    '<tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">' +
-    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">' + t('admin.col-date') + '</th>' +
-    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">' + t('admin.col-orders') + '</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-revenue') + '</th>' +
-    '</tr>' +
-    '</thead>' +
-    '<tbody>';
-
-  // Group by date
+  // Group by date for template
   var revenueByDate = {};
   for (var oi = 0; oi < filteredOrders.length; oi++) {
     var order = filteredOrders[oi];
@@ -340,19 +346,34 @@ function filterRevenueReport() {
     revenueByDate[dateStr].count++;
   }
 
+  // Clone template and populate with data
+  var template = document.getElementById("revenue-report-template");
+  var rowTemplate = document.getElementById("revenue-report-row-template");
+  if (!template || !rowTemplate) return;
+
+  var fragment = template.content.cloneNode(true);
+  
+  // Update header metrics
+  fragment.querySelector('[data-field="total-revenue"]').textContent = '$' + (totalRevenue / 100).toFixed(2);
+  fragment.querySelector('[data-field="total-orders"]').textContent = totalOrders;
+  fragment.querySelector('[data-field="avg-bill"]').textContent = '$' + (avgBill / 100).toFixed(2);
+  
+  // Populate table rows
+  var tbody = fragment.querySelector('[data-rows-container]');
   var dates = Object.keys(revenueByDate).sort().reverse();
   for (var di = 0; di < dates.length; di++) {
     var date = dates[di];
     var data = revenueByDate[date];
-    html += '<tr style="border-bottom: 1px solid #f0f0f0;">' +
-      '<td style="padding: 12px; color: #1f2937; font-weight: 500;">' + date + '</td>' +
-      '<td style="padding: 12px; color: #667eea; font-weight: 600;">' + data.count + '</td>' +
-      '<td style="padding: 12px; text-align: right; color: #059669; font-weight: 600;">$' + (data.revenue / 100).toFixed(2) + '</td>' +
-      '</tr>';
+    var row = rowTemplate.content.cloneNode(true);
+    row.querySelector('[data-field="date"]').textContent = date;
+    row.querySelector('[data-field="orders"]').textContent = data.count;
+    row.querySelector('[data-field="revenue"]').textContent = '$' + (data.revenue / 100).toFixed(2);
+    tbody.appendChild(row);
   }
-
-  html += '</tbody></table>';
-  container.innerHTML = html || '<p style="color: #999; text-align: center;">No data found</p>';
+  
+  container.innerHTML = '';
+  container.appendChild(fragment);
+  reTranslateContent();
 }
 
 function renderBusiestTables(stats) {
@@ -391,11 +412,18 @@ function renderBusiestTables(stats) {
   var topDays = sortedDays.slice(0, 6);
   var maxOrders = topDays.length > 0 ? topDays[0].orders : 1;
 
-  var html = '<div style="display: flex; align-items: flex-end; gap: 12px; height: 200px;">';
+  // Clone template and populate with data
+  var template = document.getElementById("busiest-tables-chart-template");
+  var columnTemplate = document.getElementById("busiest-tables-column-template");
+  if (!template || !columnTemplate) return;
+
+  var fragment = template.content.cloneNode(true);
+  var columnsContainer = fragment.querySelector('[data-columns-container]');
 
   for (var ti = 0; ti < topDays.length; ti++) {
     var day = topDays[ti];
     var height = (day.orders / maxOrders) * 150;
+    
     // Format date in restaurant timezone
     var dateFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: restaurantTimezone,
@@ -404,15 +432,20 @@ function renderBusiestTables(stats) {
     });
     var dateLabel = dateFormatter.format(new Date(day.date));
 
-    html += '<div style="flex: 1; display: flex; flex-direction: column; align-items: center;">' +
-      '<div style="background: linear-gradient(to top, #667eea, #764ba2); width: 100%; height: ' + height + 'px; border-radius: 4px 4px 0 0; cursor: pointer; transition: opacity 0.3s;" title="' + day.orders + ' orders ($' + (day.revenue / 100).toFixed(2) + ')" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'1\'"></div>' +
-      '<div style="font-size: 11px; color: #666; margin-top: 8px; font-weight: 600; text-align: center;">' + dateLabel + '</div>' +
-      '<div style="font-size: 12px; color: #333; margin-top: 2px; font-weight: bold;">' + day.orders + '</div>' +
-      '</div>';
+    var column = columnTemplate.content.cloneNode(true);
+    var bar = column.querySelector('[data-field="bar"]');
+    bar.style.height = height + 'px';
+    bar.title = day.orders + ' orders ($' + (day.revenue / 100).toFixed(2) + ')';
+    
+    column.querySelector('[data-field="date"]').textContent = dateLabel;
+    column.querySelector('[data-field="orders"]').textContent = day.orders;
+    
+    columnsContainer.appendChild(column);
   }
 
-  html += '</div>';
-  container.innerHTML = html;
+  container.innerHTML = '';
+  container.appendChild(fragment);
+  reTranslateContent();
 }
 
 function renderHourlyRevenue(stats) {
@@ -431,8 +464,14 @@ function renderHourlyRevenue(stats) {
   }
   var maxRevenue = Math.max.apply(null, revenueValues.length > 0 ? revenueValues : [1000]);
   
-  var html = '<div style="display: flex; align-items: flex-end; gap: 6px; height: 250px;">';
-  
+  // Clone template and populate with data
+  var template = document.getElementById("hourly-revenue-chart-template");
+  var columnTemplate = document.getElementById("hourly-revenue-column-template");
+  if (!template || !columnTemplate) return;
+
+  var fragment = template.content.cloneNode(true);
+  var columnsContainer = fragment.querySelector('[data-columns-container]');
+
   for (var i = 0; i < 24; i++) {
     var hourKey = i + ':00';
     var revenue = stats.revenue_by_hour[hourKey] || 0;
@@ -440,14 +479,19 @@ function renderHourlyRevenue(stats) {
     var height = (revenue / maxRevenue) * 200;
     var tooltipText = 'Hour: ' + hourKey + ' | Revenue: $' + (revenue / 100).toFixed(2) + ' | Orders: ' + orderCount;
     
-    html += '<div style="flex: 1; display: flex; flex-direction: column; align-items: center; position: relative;">' +
-      '<div style="background: linear-gradient(to top, #667eea, #764ba2); width: 100%; height: ' + height + 'px; border-radius: 4px 4px 0 0; cursor: pointer; transition: all 0.3s; position: relative; group: hover;" title="' + tooltipText + '" onmouseover="this.style.opacity=\'0.8\'; this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.2)\';" onmouseout="this.style.opacity=\'1\'; this.style.boxShadow=\'none\';"></div>' +
-      '<div style="font-size: 10px; color: #999; margin-top: 4px;">' + i + '</div>' +
-      '</div>';
+    var column = columnTemplate.content.cloneNode(true);
+    var bar = column.querySelector('[data-field="bar"]');
+    bar.style.height = height + 'px';
+    bar.title = tooltipText;
+    
+    column.querySelector('[data-field="hour"]').textContent = i;
+    
+    columnsContainer.appendChild(column);
   }
-  
-  html += '</div>';
-  container.innerHTML = html;
+
+  container.innerHTML = '';
+  container.appendChild(fragment);
+  reTranslateContent();
 }
 
 function renderTopItems(stats) {
@@ -470,10 +514,21 @@ function renderTopItems(stats) {
   });
   
   var topDays = dayEntries.slice(0, 6);
-  var html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">';
-  
+
+  // Clone template and populate with data
+  var template = document.getElementById("top-items-cards-template");
+  var cardTemplate = document.getElementById("top-items-card-template");
+  if (!template || !cardTemplate) {
+    container.innerHTML = '<p style="color: #ccc; text-align: center;">No revenue data</p>';
+    return;
+  }
+
+  var fragment = template.content.cloneNode(true);
+  var cardsContainer = fragment.querySelector('[data-cards-container]');
+
   for (var ti = 0; ti < topDays.length; ti++) {
     var entry = topDays[ti];
+    
     // Format date in restaurant timezone
     var dateFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: restaurantTimezone,
@@ -482,16 +537,18 @@ function renderTopItems(stats) {
       year: 'numeric'
     });
     var dateStr = dateFormatter.format(new Date(entry.date));
+
+    var card = cardTemplate.content.cloneNode(true);
+    card.querySelector('[data-field="date"]').textContent = dateStr;
+    card.querySelector('[data-field="revenue"]').textContent = '$' + (entry.revenue / 100).toFixed(2);
+    card.querySelector('[data-field="orders"]').textContent = entry.orders + ' orders';
     
-    html += '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px; border-radius: 12px; color: white;">' +
-      '<div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">💰 ' + dateStr + '</div>' +
-      '<div style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">$' + (entry.revenue / 100).toFixed(2) + '</div>' +
-      '<div style="font-size: 12px; opacity: 0.8;">' + entry.orders + ' orders</div>' +
-      '</div>';
+    cardsContainer.appendChild(card);
   }
-  
-  html += '</div>';
-  container.innerHTML = html || '<p style="color: #ccc; text-align: center;">No revenue data</p>';
+
+  container.innerHTML = '';
+  container.appendChild(fragment);
+  reTranslateContent();
 }
 
 function renderDailyTrends(stats, mode) {
@@ -604,34 +661,32 @@ function renderDailyTrends(stats, mode) {
     });
   }
 
-  var html = '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">' +
-    '<thead>' +
-    '<tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">' +
-    '<th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;">' + t('admin.col-period') + '</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-orders') + '</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-revenue') + '</th>' +
-    '<th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;">' + t('admin.col-avg-bill') + '</th>' +
-    '</tr>' +
-    '</thead>' +
-    '<tbody>';
+  // Clone template and populate with data
+  var template = document.getElementById("daily-trends-table-template");
+  var rowTemplate = document.getElementById("daily-trends-row-template");
+  if (!template || !rowTemplate) {
+    container.innerHTML = '<p style="color: #999; text-align: center;">No data</p>';
+    return;
+  }
+
+  var fragment = template.content.cloneNode(true);
+  var tbody = fragment.querySelector('[data-rows-container]');
 
   for (var ei = 0; ei < entries.length; ei++) {
     var item = entries[ei];
     var avg = item.count > 0 ? item.revenue / item.count : 0;
-    html += '<tr style="border-bottom: 1px solid #f0f0f0;">' +
-      '<td style="padding: 12px; color: #1f2937; font-weight: 500;">' + item.label + '</td>' +
-      '<td style="padding: 12px; text-align: right; color: #667eea; font-weight: 600;">' + item.count + '</td>' +
-      '<td style="padding: 12px; text-align: right; color: #059669; font-weight: 600;">$' + (item.revenue / 100).toFixed(2) + '</td>' +
-      '<td style="padding: 12px; text-align: right; color: #6b7280;">$' + (avg / 100).toFixed(2) + '</td>' +
-      '</tr>';
+    
+    var row = rowTemplate.content.cloneNode(true);
+    row.querySelector('[data-field="label"]').textContent = item.label;
+    row.querySelector('[data-field="orders"]').textContent = item.count;
+    row.querySelector('[data-field="revenue"]').textContent = '$' + (item.revenue / 100).toFixed(2);
+    row.querySelector('[data-field="avg-bill"]').textContent = '$' + (avg / 100).toFixed(2);
+    
+    tbody.appendChild(row);
   }
 
-  html += '</tbody></table>';
-  container.innerHTML = html || '<p style="color: #999; text-align: center;">No data</p>';
+  container.innerHTML = '';
+  container.appendChild(fragment);
+  reTranslateContent();
 }
-
-// Listen for language changes and re-render reports
-document.addEventListener('languageChanged', () => {
-  initializeAnalyticsDashboard();
-});
 

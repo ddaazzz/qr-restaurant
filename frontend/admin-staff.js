@@ -2,7 +2,35 @@
 
 let STAFF_EDIT_MODE = false;
 let STAFF_EDIT_ID = null; // Track which staff is being edited
-// MENU_CATEGORIES is declared globally in admin.js
+let staffInitialized = false;
+
+// Initialize staff section
+function initializeStaff() {
+  // Always load staff data when section is switched to
+  loadStaff();
+  
+  // Attach event listeners only once
+  if (!staffInitialized) {
+    staffInitialized = true;
+    attachEventListeners();
+  }
+}
+
+function attachEventListeners() {
+  // Close modal when clicking outside (on backdrop)
+  document.addEventListener("click", function(event) {
+    const modal = document.getElementById("staff-detail-modal");
+    if (!modal) return;
+    if (event.target === modal) {
+      closeStaffDetailModal();
+    }
+  });
+  
+  // Language change listener
+  window.addEventListener('languageChanged', () => {
+    loadStaff();
+  });
+}
 
 async function loadStaff() {
   // Allow admin/superadmin, or staff with feature 4 access
@@ -27,82 +55,15 @@ async function loadStaff() {
       return;
     }
     
-    container.innerHTML = "";
-
-    if (!staff || staff.length === 0) {
-      container.innerHTML = "<p style='color: var(--text-light); grid-column: 1/-1;'>No staff members yet</p>";
-      return;
-    }
-
-    // Access rights mapping - matches staff.js
-    const ACCESS_MAP = {
-      1: t('admin.access-orders'),
-      2: t('admin.access-tables'),
-      3: t('admin.access-menu'),
-      4: t('admin.access-staff'),
-      5: t('admin.access-settings'),
-      6: t('admin.access-bookings')
-    };
-
-    // Render staff as cards
-    staff.forEach(s => {
-      const roleLabel = s.role === 'kitchen' ? t('admin.kitchen-role') : t('admin.staff-role');
-      const roleColor = s.role === 'kitchen' ? '#ff6b6b' : '#3b82f6';
-      
-      // Format access rights display with feature names
-      let accessDisplay = t('admin.no-access');
-      if (s.access_rights) {
-        try {
-          const rights = typeof s.access_rights === 'string' ? JSON.parse(s.access_rights) : s.access_rights;
-          if (Array.isArray(rights) && rights.length > 0) {
-            // Convert numbers to feature names
-            const featureNames = rights.map(id => ACCESS_MAP[id] || `Feature ${id}`);
-            accessDisplay = featureNames.join(', ');
-          } else if (typeof rights === 'object' && Object.keys(rights).length > 0) {
-            accessDisplay = Object.keys(rights).join(', ');
-          }
-        } catch (e) {
-          accessDisplay = t('admin.no-access');
-        }
-      }
-      
-      const card = document.createElement('div');
-      card.className = 'staff-card';
-      card.style.cursor = STAFF_EDIT_MODE ? 'default' : 'pointer';
-      if (!STAFF_EDIT_MODE) {
-        card.onclick = () => openStaffDetailModal(s.id);
-      }
-      card.innerHTML = `
-        <div class="staff-card-name">${s.name}</div>
-        <div class="staff-card-role" style="background: ${roleColor}20; color: ${roleColor}; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px;">${roleLabel}</div>
-        <div class="staff-card-access" style="color: var(--text-light); font-size: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
-          <strong>${t('admin.access')}:</strong> ${accessDisplay}
-        </div>
-        <div class="staff-card-actions" style="display: ${STAFF_EDIT_MODE ? 'flex' : 'none'};">
-          <button class="btn-delete" onclick="deleteStaff(${s.id}, event)" style="flex: 1;">🗑 ${t('admin.delete')}</button>
-        </div>
-      `;
-      container.appendChild(card);
-    });
-
-    // Add the "Add Staff" card at the end
-    const addStaffCard = document.createElement('div');
-    addStaffCard.id = 'add-staff-card';
-    addStaffCard.className = 'staff-card add-staff-card-style';
-    if (!STAFF_EDIT_MODE) {
-      addStaffCard.classList.add('hidden');
-    }
-    addStaffCard.onclick = () => openStaffForm();
-    addStaffCard.innerHTML = `
-      <div style="font-size: 40px; margin-bottom: 8px;">➕</div>
-      <div class="staff-card-name">${t('admin.add-staff')}</div>
-    `;
-    container.appendChild(addStaffCard);
+    // Render staff list using templates
+    renderStaffList(staff, STAFF_EDIT_MODE);
+    reTranslateContent();
+    
   } catch (err) {
     console.error("Error loading staff:", err);
     const container = document.getElementById("staff-grid");
     if (container) {
-      container.innerHTML = `<p style="color: #ef4444; grid-column: 1/-1;">Error loading staff</p>`;
+      container.innerHTML = '<p style="color: #ef4444; grid-column: 1/-1;">Error loading staff</p>';
     }
   }
 }
@@ -122,11 +83,12 @@ function toggleStaffEditMode(section) {
   
   // Update button text
   if (editBtn) {
+    editBtn.innerHTML = STAFF_EDIT_MODE 
+      ? `<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> ${t('admin.done')}`
+      : `<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> ${t('admin.edit')}`;
     if (STAFF_EDIT_MODE) {
-      editBtn.innerHTML = `<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> ${t('admin.done')}`;
       editBtn.classList.add("active");
     } else {
-      editBtn.innerHTML = `<img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> ${t('admin.edit')}`;
       editBtn.classList.remove("active");
     }
   }
@@ -162,19 +124,8 @@ async function loadMenuCategories() {
 }
 
 function populateKitchenCategories() {
-  const container = document.getElementById("kitchen-categories-list");
-  if (!container) return;
-  
-  container.innerHTML = "";
-  MENU_CATEGORIES.forEach(cat => {
-    const label = document.createElement("label");
-    label.style.cssText = "display: flex; align-items: center; gap: 8px; cursor: pointer;";
-    label.innerHTML = `
-      <input type="checkbox" class="kitchen-category-checkbox" value="${cat.id}" />
-      ${cat.name}
-    `;
-    container.appendChild(label);
-  });
+  // Render kitchen categories using template
+  renderKitchenCategories(MENU_CATEGORIES);
 }
 
 function handleStaffRoleChange() {
@@ -472,15 +423,6 @@ function closeStaffDetailModal() {
   CURRENT_STAFF_ID = null;
 }
 
-// Close modal when clicking outside (on backdrop)
-document.addEventListener("click", function(event) {
-  const modal = document.getElementById("staff-detail-modal");
-  if (!modal) return;
-  if (event.target === modal) {
-    closeStaffDetailModal();
-  }
-});
-
 async function loadStaffDetailData() {
   if (!CURRENT_STAFF_ID) return;
   
@@ -537,33 +479,8 @@ function displayTimekeepingList(records) {
   const container = document.getElementById("staff-timekeeping-list");
   if (!container) return;
   
-  if (!records || records.length === 0) {
-    container.innerHTML = '<p style="color: #999; font-size: 14px;">No work history in the last 30 days</p>';
-    return;
-  }
-  
-  let html = '';
-  records.forEach(record => {
-    const clockIn = new Date(record.clock_in_at);
-    const clockOut = record.clock_out_at ? new Date(record.clock_out_at) : null;
-    const hours = record.duration_minutes ? (record.duration_minutes / 60).toFixed(1) : '—';
-    
-    const dateStr = clockIn.toLocaleDateString();
-    const timeInStr = clockIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const timeOutStr = clockOut ? clockOut.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Still working';
-    
-    html += `
-      <div style="padding: 10px; background: white; border-bottom: 1px solid #eee; font-size: 13px;">
-        <div style="font-weight: 600; margin-bottom: 4px;">${dateStr}</div>
-        <div style="color: #666;">
-          <strong>${timeInStr}</strong> - <strong>${timeOutStr}</strong>
-          <span style="float: right; color: #3b82f6; font-weight: 600;">${hours}h</span>
-        </div>
-      </div>
-    `;
-  });
-  
-  container.innerHTML = html;
+  // Render timekeeping list using template
+  renderTimekeepingList(records);
 }
 
 async function clockInStaff() {
@@ -637,7 +554,167 @@ function deleteStaffFromModal() {
   }
 }
 
-// Listen for language changes and re-render staff cards
-document.addEventListener('languageChanged', () => {
-  loadStaff();
-});
+// ============= HTML TEMPLATE BUILDERS (consolidate all HTML generation) =============
+// These functions encapsulate HTML generation for display views
+// They handle all data transformation and return HTML strings
+// Display functions only: fetch data, validate, call template builder, assign to innerHTML
+
+// ============= TEMPLATE RENDERING FUNCTIONS =============
+
+/**
+ * Render staff list using templates
+ * @param {Array} staff - Array of staff objects
+ * @param {boolean} isEditMode - Whether edit mode is enabled
+ */
+function renderStaffList(staff, isEditMode) {
+  const container = document.getElementById("staff-grid");
+  if (!container) {
+    console.error("staff-grid container not found");
+    return;
+  }
+  
+  container.innerHTML = "";
+
+  // Show message if no staff
+  if (!staff || staff.length === 0) {
+    const noStaffMsg = document.createElement('p');
+    noStaffMsg.style.color = 'var(--text-light)';
+    noStaffMsg.style.fontSize = '14px';
+    noStaffMsg.style.textAlign = 'center';
+    noStaffMsg.style.padding = '20px';
+    noStaffMsg.style.gridColumn = '1/-1';
+    noStaffMsg.textContent = t('admin.no-staff') || 'No staff members yet - Use the Edit button to add one';
+    container.appendChild(noStaffMsg);
+  } else {
+    // Render staff cards only if there is staff
+    const cardTemplate = document.getElementById("staff-card-template");
+    const ACCESS_MAP = {
+      1: t('admin.access-orders'),
+      2: t('admin.access-tables'),
+      3: t('admin.access-menu'),
+      4: t('admin.access-staff'),
+      5: t('admin.access-settings'),
+      6: t('admin.access-bookings')
+    };
+
+    staff.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'staff-card';
+      card.style.cursor = isEditMode ? 'default' : 'pointer';
+      if (!isEditMode) {
+        card.onclick = () => openStaffDetailModal(s.id);
+      }
+      
+      // Clone template
+      const clone = cardTemplate.content.cloneNode(true);
+      
+      // Populate staff data
+      clone.querySelector('.staff-card-name').textContent = s.name;
+      const roleLabel = s.role === 'kitchen' ? t('admin.kitchen-role') : t('admin.staff-role');
+      const roleColor = s.role === 'kitchen' ? '#ff6b6b' : '#3b82f6';
+      const roleEl = clone.querySelector('.staff-card-role');
+      roleEl.textContent = roleLabel;
+      roleEl.style.background = `${roleColor}20`;
+      roleEl.style.color = roleColor;
+      
+      // Format access rights display
+      let accessDisplay = t('admin.no-access');
+      if (s.access_rights) {
+        try {
+          const rights = typeof s.access_rights === 'string' ? JSON.parse(s.access_rights) : s.access_rights;
+          if (Array.isArray(rights) && rights.length > 0) {
+            const featureNames = rights.map(id => ACCESS_MAP[id] || `Feature ${id}`);
+            accessDisplay = featureNames.join(', ');
+          } else if (typeof rights === 'object' && Object.keys(rights).length > 0) {
+            accessDisplay = Object.keys(rights).join(', ');
+          }
+        } catch (e) {
+          accessDisplay = t('admin.no-access');
+        }
+      }
+      clone.querySelector('.access-text').textContent = accessDisplay;
+      
+      // Setup delete button
+      const deleteBtn = clone.querySelector('.btn-delete');
+      deleteBtn.style.display = isEditMode ? 'block' : 'none';
+      deleteBtn.onclick = (e) => {
+        e.preventDefault();
+        deleteStaff(s.id, e);
+      };
+      
+      const actions = clone.querySelector('.staff-card-actions');
+      actions.style.display = isEditMode ? 'flex' : 'none';
+      
+      card.appendChild(clone);
+      container.appendChild(card);
+    });
+  }
+
+  // Always add the "Add Staff" card at the end (will be hidden unless in edit mode)
+  const addStaffCardTemplate = document.getElementById("add-staff-card-template");
+  const addStaffCard = document.createElement('div');
+  addStaffCard.id = 'add-staff-card';
+  addStaffCard.className = 'staff-card add-staff-card-style';
+  if (!isEditMode) {
+    addStaffCard.classList.add('hidden');
+  }
+  addStaffCard.onclick = () => openStaffForm();
+  
+  const addClone = addStaffCardTemplate.content.cloneNode(true);
+  addStaffCard.appendChild(addClone);
+  container.appendChild(addStaffCard);
+}
+
+/**
+ * Render kitchen categories using templates
+ * @param {Array} categories - Array of category objects with id and name
+ */
+function renderKitchenCategories(categories) {
+  const container = document.getElementById("kitchen-categories-list");
+  if (!container || !categories) return;
+  
+  container.innerHTML = "";
+  const template = document.getElementById("kitchen-category-template");
+  
+  categories.forEach(cat => {
+    const clone = template.content.cloneNode(true);
+    clone.querySelector('.kitchen-category-checkbox').value = cat.id;
+    clone.querySelector('.category-name').textContent = cat.name;
+    container.appendChild(clone);
+  });
+}
+
+/**
+ * Render timekeeping list using templates
+ * @param {Array} records - Array of timekeeping records with clock_in_at, clock_out_at, duration_minutes
+ */
+function renderTimekeepingList(records) {
+  const container = document.getElementById("staff-timekeeping-list");
+  if (!container) return;
+  
+  if (!records || records.length === 0) {
+    container.innerHTML = '<p style="color: #999; font-size: 14px;">No work history in the last 30 days</p>';
+    return;
+  }
+  
+  container.innerHTML = "";
+  const template = document.getElementById("timekeeping-item-template");
+  
+  records.forEach(record => {
+    const clockIn = new Date(record.clock_in_at);
+    const clockOut = record.clock_out_at ? new Date(record.clock_out_at) : null;
+    const hours = record.duration_minutes ? (record.duration_minutes / 60).toFixed(1) : '—';
+    
+    const dateStr = clockIn.toLocaleDateString();
+    const timeInStr = clockIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timeOutStr = clockOut ? clockOut.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Still working';
+    
+    const clone = template.content.cloneNode(true);
+    clone.querySelector('.timekeeping-date').textContent = dateStr;
+    clone.querySelector('.timekeeping-time-in').textContent = timeInStr;
+    clone.querySelector('.timekeeping-time-out').textContent = timeOutStr;
+    clone.querySelector('.timekeeping-hours').textContent = hours + 'h';
+    
+    container.appendChild(clone);
+  });
+}

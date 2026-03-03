@@ -1,5 +1,6 @@
 // ============= ORDERS MODULE =============
 // Order management for staff to place customer orders
+// HTML templates are organized in "HTML TEMPLATE BUILDERS" section at end of file
 
 // Global state for orders
 let ORDERS_CART = [];
@@ -14,19 +15,40 @@ let ALL_SESSIONS_DATA = []; // Store all sessions for display
 let ORDERS_MENU_ITEMS = [];
 let ORDERS_HISTORY_MODE = false;
 
+// Initialization gate
+let ordersInitialized = false;
+
 // ========== INITIALIZE ORDERS ==========
 async function initializeOrders() {
-  
-  // Load categories and menu items together using the combined /menu endpoint
+  // Always load categories and menu items together using the combined /menu endpoint
   await loadOrdersMenu();
   
-  // Load tables for table selection
+  // Always load tables for table selection
   await loadOrdersTables();
   
-  // Listen for language changes to re-render tabs
+  // Attach event listeners only once
+  if (!ordersInitialized) {
+    ordersInitialized = true;
+    attachEventListeners();
+  }
+}
+
+// ========== ATTACH EVENT LISTENERS ==========
+function attachEventListeners() {
+  // Language change listener
   window.addEventListener('languageChanged', () => {
     console.log('[Orders] Language changed - re-rendering tabs');
     renderOrdersCategoryBar();
+  });
+  
+  // Escape key handler for cart
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const cartPanel = document.getElementById('orders-cart-view-container');
+      if (cartPanel && cartPanel.classList.contains('show-cart')) {
+        toggleCartPanel();
+      }
+    }
   });
 }
 
@@ -185,16 +207,6 @@ function toggleCartPanel() {
     }
   }
 }
-
-// ========== ESCAPE KEY HANDLER FOR CART ==========
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    const cartPanel = document.getElementById('orders-cart-view-container');
-    if (cartPanel && cartPanel.classList.contains('show-cart')) {
-      toggleCartPanel();
-    }
-  }
-});
 
 // ========== CART MANAGEMENT ==========
 async function addItemToOrderCart(itemId) {
@@ -1038,25 +1050,11 @@ async function selectSessionFromHistory(sessionId) {
     
     let data = await response.json();
     
-    // Handle response format - API returns { items: [orders...] }
+    // API returns { items: [orders...] } where each order has nested items
     let orders = [];
     if (data.items && Array.isArray(data.items)) {
-      // Flatten orders: each item in data.items is an order with nested items
-      data.items.forEach(order => {
-        if (order.items && Array.isArray(order.items)) {
-          order.items.forEach(item => {
-            orders.push({
-              order_id: order.order_id,
-              item_name: item.name,
-              quantity: item.quantity,
-              unit_price_cents: item.unit_price_cents,
-              variants: item.variants,
-              status: item.status,
-              created_at: order.created_at
-            });
-          });
-        }
-      });
+      // Use orders as-is with their nested items structure
+      orders = data.items;
     } else if (Array.isArray(data)) {
       orders = data;
     }
@@ -1086,6 +1084,8 @@ function displaySessionDetails(sessionId, orders) {
   
   if (!detailsContent) return;
   
+  console.log('📋 displaySessionDetails called:', { sessionId, ordersCount: orders.length, orders });
+  
   // Ensure orders is an array
   if (!Array.isArray(orders)) {
     console.error('Orders is not an array:', orders);
@@ -1095,209 +1095,152 @@ function displaySessionDetails(sessionId, orders) {
   
   // Find session info from global data
   const session = ALL_SESSIONS_DATA.find(s => s.session_id === sessionId);
+  console.log('📋 Session found:', session);
   if (!session) {
     console.error('Session not found:', sessionId);
     detailsContent.innerHTML = `<p style="color: #ef4444; text-align: center; padding: 20px;">Session not found</p>`;
     return;
   }
   
-  // Format session times
-  const startDate = new Date(session.started_at);
-  const endDate = session.ended_at ? new Date(session.ended_at) : null;
-  const startTime = formatTimeWithTimezone(session.started_at, restaurantTimezone, 'datetime');
-  const endTime = session.ended_at ? formatTimeWithTimezone(session.ended_at, restaurantTimezone, 'datetime') : 'Active';
+  // Clear content and use template
+  detailsContent.innerHTML = '';
   
-  // Use timezone-aware duration calculation
-  const durationInfo = session.ended_at 
-    ? calculateElapsedTimeWithTimezone(session.ended_at, restaurantTimezone)
-    : calculateElapsedTimeWithTimezone(session.started_at, restaurantTimezone);
-  const durationMinutes = durationInfo.minutes;
-  
-  let sessionLabel = 'Session';
-  if (session.table_name) {
-    sessionLabel = `Table ${session.table_name}`;
+  // Clone template
+  const template = document.getElementById('session-details-template');
+  if (!template) {
+    console.error('Session details template not found');
+    detailsContent.innerHTML = `<p style="color: #ef4444;">Session details template not found</p>`;
+    return;
   }
   
-  // Group orders by order_id to show order structure
-  const orderMap = {};
-  if (orders.length > 0) {
-    orders.forEach(item => {
-      if (!orderMap[item.order_id]) {
-        orderMap[item.order_id] = {
-          order_id: item.order_id,
-          created_at: item.created_at,
-          items: []
-        };
-      }
-      orderMap[item.order_id].items.push(item);
-    });
-  }
-  
-  const orderList = Object.values(orderMap);
+  const sessionHTML = template.content.cloneNode(true);
   
   // Calculate totals
   let totalItems = 0;
   let totalPrice = 0;
-  orders.forEach(item => {
-    totalItems += (item.quantity || 0);
-    totalPrice += ((item.unit_price_cents || 0) * (item.quantity || 0));
+  const orderList = orders || [];
+  
+  orderList.forEach(order => {
+    if (order.items) {
+      totalItems += order.items.length;
+      order.items.forEach(item => {
+        totalPrice += item.item_total_cents || 0;
+      });
+    }
   });
   
-  // Build items HTML - group by order
-  const itemsHTML = orderList.length > 0
-    ? orderList.map(order => {
-      const orderTotal = order.items.reduce((sum, item) => sum + ((item.unit_price_cents || 0) * (item.quantity || 0)), 0);
-      const itemsInOrder = order.items.map(item => `
-        <div style="padding: 8px; background: white; border-radius: 3px; margin-bottom: 4px;">
-          <div style="display: flex; justify-content: space-between; align-items: start; gap: 6px;">
-            <div style="flex: 1;">
-              <div style="font-weight: 500; font-size: 11px; color: #333;">${item.item_name || 'Unknown Item'}</div>
-              <div style="font-size: 10px; color: #666; margin-top: 1px;">Qty: ${item.quantity || 0} × $${((item.unit_price_cents || 0) / 100).toFixed(2)}</div>
-              ${item.variants ? `<div style="font-size: 9px; color: #999; margin-top: 2px;">${item.variants}</div>` : ''}
+  // Format times
+  const startTime = new Date(session.started_at).toLocaleString();
+  const durationMinutes = Math.round((new Date() - new Date(session.started_at)) / 60000);
+  
+  // Populate template with data
+  sessionHTML.querySelector('.session-label').textContent = session.table_name ? `Table ${session.table_name}` : `Session ${session.session_id}`;
+  sessionHTML.querySelector('.session-id').textContent = session.table_id || session.session_id;
+  sessionHTML.querySelector('.session-pax').textContent = session.pax;
+  sessionHTML.querySelector('.session-start-time').textContent = startTime;
+  sessionHTML.querySelector('.session-duration').textContent = durationMinutes;
+  sessionHTML.querySelector('.session-order-count').textContent = orderList.length;
+  sessionHTML.querySelector('.session-item-count').textContent = totalItems;
+  sessionHTML.querySelector('.session-total-price').textContent = (totalPrice / 100).toFixed(2);
+  sessionHTML.querySelector('.session-total-display').textContent = (totalPrice / 100).toFixed(2);
+  
+  // Build items HTML
+  const itemsContainer = sessionHTML.querySelector('.session-items-list');
+  console.log('📋 OrderList:', orderList);
+  console.log('📋 Building HTML for', orderList.length, 'orders');
+  if (orderList.length > 0) {
+    itemsContainer.innerHTML = orderList.map(order => {
+      console.log('📋 Processing order:', order);
+      let orderTotal = 0;
+      const itemsHtml = (order.items || []).map(item => {
+        console.log('📋 Processing item:', item);
+        const itemTotal = item.item_total_cents || 0;
+        orderTotal += itemTotal;
+        const variantsText = item.variants ? `<small style="color: #999;">${item.variants}</small>` : '';
+        return `
+          <div style="padding: 8px; background: white; border-radius: 4px; margin-bottom: 6px; border-left: 3px solid #667eea;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div style="flex: 1;">
+                <div style="font-weight: 500; color: #333; font-size: 12px;">${item.menu_item_name} × ${item.quantity}</div>
+                ${variantsText}
+              </div>
+              <div style="text-align: right; font-weight: 600; color: #667eea; font-size: 12px;">$${(itemTotal / 100).toFixed(2)}</div>
             </div>
-            <div style="font-weight: 600; white-space: nowrap; font-size: 11px; color: #667eea;">$${(((item.unit_price_cents || 0) * (item.quantity || 0)) / 100).toFixed(2)}</div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
       
       return `
-        <div style="padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #667eea;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <div style="font-weight: 600; font-size: 11px; color: #333;">Order #${order.order_id}</div>
-            <div style="font-size: 10px; color: #666;">${formatTimeWithTimezone(order.created_at, restaurantTimezone, 'time')}</div>
-          </div>
-          ${itemsInOrder}
+        <div style="margin-bottom: 12px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+          <div style="font-weight: 600; color: #333; margin-bottom: 6px; font-size: 12px;">Order #${order.order_id}</div>
+          ${itemsHtml}
           <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
             <div style="font-size: 10px; color: #666;">Order Total:</div>
             <div style="font-weight: 700; color: #667eea;">$${(orderTotal / 100).toFixed(2)}</div>
           </div>
         </div>
       `;
-    }).join('')
-    : '<p style="color: #999; font-size: 12px;">No items in this session</p>';
-  
-  // Build full details HTML
-  const html = `
-    <div style="margin-bottom: 20px;">
-      <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-        <!-- Session Header -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
-          <div>
-            <div style="font-size: 12px; color: #666;" data-i18n="admin.session-label">Session</div>
-            <div style="font-size: 18px; font-weight: 700; color: #2c3e50; margin-top: 2px;">${sessionLabel}</div>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-size: 11px; color: #666;"><span data-i18n="admin.session-id">ID:</span> ${sessionId}</div>
-            <div style="font-size: 12px; font-weight: 600; color: #667eea; margin-top: 4px;">👥 ${session.pax} <span data-i18n="admin.session-people">people</span></div>
-          </div>
-        </div>
-        
-        <!-- Session Times -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; padding: 12px; background: #f9f9f9; border-radius: 6px;">
-          <div>
-            <div style="font-size: 11px; color: #666; margin-bottom: 2px;" data-i18n="admin.session-started">Started</div>
-            <div style="font-size: 12px; font-weight: 600; color: #333;">${startTime}</div>
-          </div>
-          <div>
-            <div style="font-size: 11px; color: #666; margin-bottom: 2px;" data-i18n="admin.session-duration">Duration</div>
-            <div style="font-size: 12px; font-weight: 600; color: #333;">${durationMinutes} <span data-i18n="admin.minutes">minutes</span></div>
-          </div>
-        </div>
-        
-        <!-- Orders Count -->
-        <div style="padding: 12px; background: #f0f7ff; border-left: 4px solid #667eea; border-radius: 4px; margin-bottom: 16px;">
-          <div style="font-size: 12px; font-weight: 600; color: #667eea;">📦 ${orderList.length} <span data-i18n="admin.orders-count">order(s) in this session</span></div>
-          <div style="font-size: 11px; color: #666; margin-top: 4px;"><span data-i18n="admin.items-total">${totalItems} items</span> • <span data-i18n="admin.total">Total:</span> $${(totalPrice / 100).toFixed(2)}</div>
-        </div>
-        
-        <!-- Items List -->
-        <div style="margin-bottom: 16px;">
-          <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 10px;" data-i18n="admin.items-in-session">Items in Session:</div>
-          <div style="max-height: 400px; overflow-y: auto;">
-            ${itemsHTML || '<p style="color: #999; font-size: 12px;" data-i18n="admin.no-items-session">No items in this session</p>'}
-          </div>
-        </div>
-        
-        <!-- Total -->
-        <div style="padding: 12px; background: #f0f0f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div style="font-weight: 600; color: #333;" data-i18n="admin.session-total">Session Total:</div>
-          <div style="font-size: 18px; font-weight: 700; color: #667eea;">$${(totalPrice / 100).toFixed(2)}</div>
-        </div>
-        
-        <!-- Action Buttons -->
-        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <button onclick="printBill(${sessionId})" style="
-            flex: 1;
-            padding: 10px;
-            background: #3b82f6;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-          " onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#3b82f6'" data-i18n="admin.print-button">
-            🖨️ Print
-          </button>
-          <button onclick="emailSessionOrder(${sessionId})" style="
-            flex: 1;
-            padding: 10px;
-            background: #8b5cf6;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-          " onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#8b5cf6'" data-i18n="admin.email-button">
-            📧 Email
-          </button>
-        </div>
-        
-        <!-- Close Bill Button -->
-        ${!session.ended_at ? `
-          <button onclick="closeBillModal(${sessionId})" style="
-            width: 100%;
-            padding: 12px;
-            background: #10b981;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-          " onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'" data-i18n="admin.close-bill-button">
-            💰 Close Bill
-          </button>
-        ` : `
-          <div style="padding: 12px; background: #d1d5db; border-radius: 6px; text-align: center; color: #666; font-weight: 600;" data-i18n="admin.session-closed">
-            ✓ Session Closed
-          </div>
-        `}
-      </div>
-    </div>
-  `;
-  
-  if (detailsTitle) {
-    detailsTitle.textContent = `Session: ${sessionLabel}`;
+    }).join('');
   }
   
-  detailsContent.innerHTML = html;
+  // Set up print and email buttons
+  const printBtn = sessionHTML.querySelector('.session-print-btn');
+  const emailBtn = sessionHTML.querySelector('.session-email-btn');
+  if (printBtn) printBtn.onclick = () => printBill(sessionId);
+  if (emailBtn) emailBtn.onclick = () => emailSessionOrder(sessionId);
+  
+  // Add close bill button or closed status
+  const buttonContainer = sessionHTML.querySelector('.session-button-container');
+  if (!session.ended_at) {
+    buttonContainer.innerHTML = `
+      <button onclick="closeBillModal(${sessionId})" style="
+        width: 100%;
+        padding: 12px;
+        background: #10b981;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+      " onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'" data-i18n="admin.close-bill-button">
+        💰 Close Bill
+      </button>
+    `;
+  } else {
+    buttonContainer.innerHTML = `
+      <div style="padding: 12px; background: #d1d5db; border-radius: 6px; text-align: center; color: #666; font-weight: 600;" data-i18n="admin.session-closed">
+        ✓ Session Closed
+      </div>
+    `;
+  }
+  
+  // Append to DOM
+  detailsContent.appendChild(sessionHTML);
+  
+  if (detailsTitle) {
+    detailsTitle.textContent = `Session: Table ${sessionId}`;
+  }
+  
   reTranslateContent();
 }
 
-
-
 async function selectOrderFromHistory(orderId) {
+  console.log('🎯 selectOrderFromHistory called with orderId:', orderId, 'restaurantId:', restaurantId);
   try {
     // Fetch order details
     const response = await fetch(`${API}/restaurants/${restaurantId}/orders/${orderId}`);
+    console.log('🎯 API Response status:', response.status);
     if (!response.ok) throw new Error('Failed to load order details');
     
     const order = await response.json();
+    console.log('🔍 API Response - Order object:', order);
+    console.log('🔍 Order items array:', order.items);
+    if (order.items && order.items.length > 0) {
+      console.log('🔍 First item fields:', Object.keys(order.items[0]));
+      console.log('🔍 First item data:', order.items[0]);
+    }
     
     // Hide history view and show details view
     const historyView = document.getElementById('orders-history-left-view');
@@ -1325,172 +1268,80 @@ function displayOrderDetails(order) {
   
   if (!detailsContent) return;
   
-  // Format order time - parse as UTC and display in local timezone
-  var dateStr = order.created_at.trim();
-  var createdDate;
+  console.log('📝 displayOrderDetails called with order:', order);
+  console.log('📝 Order items to display:', order.items);
   
-  if (dateStr.includes('T') && dateStr.includes('Z')) {
-    // ISO 8601 with Z - parse as UTC
-    createdDate = new Date(dateStr);
-  } else if (dateStr.includes('T')) {
-    // ISO format without Z - treat as UTC by adding Z
-    createdDate = new Date(dateStr + 'Z');
-  } else {
-    // Not ISO format
-    createdDate = new Date(dateStr);
+  // Clear content and use template
+  detailsContent.innerHTML = '';
+  
+  // Clone template
+  const template = document.getElementById('order-details-template');
+  if (!template) {
+    console.error('Order details template not found');
+    detailsContent.innerHTML = `<p style="color: #ef4444;">Order details template not found</p>`;
+    return;
   }
   
-  const orderTime = formatTimeWithTimezone(dateStr, restaurantTimezone, 'datetime');
+  const orderHTML = template.content.cloneNode(true);
+  
+  // Format order time
+  const dateStr = order.created_at.trim();
+  const createdDate = new Date(dateStr);
+  const orderTime = createdDate.toLocaleString();
   
   // Calculate totals
-  const itemsTotal = order.items.reduce((sum, item) => sum + (item.price_cents * item.quantity), 0);
-  const serviceCharge = Math.round(itemsTotal * 0.1); // 10% service charge (adjust as needed)
-  const grandTotal = itemsTotal + serviceCharge;
+  let itemsTotal = 0;
   
-  // Build items HTML
-  const itemsHTML = order.items.map(item => `
-    <div style="padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #2c3e50;">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-        <div style="font-weight: 600; color: #333;">${item.item_name}</div>
-        <div style="font-weight: 600; color: #2c3e50;">$${(item.price_cents / 100).toFixed(2)}</div>
-      </div>
-      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
-        <div><span data-i18n="admin.qty-label">Qty:</span> ${item.quantity}</div>
-        <div><span data-i18n="admin.subtotal-label">Subtotal:</span> $${(item.price_cents * item.quantity / 100).toFixed(2)}</div>
-      </div>
-      ${item.variants ? `<div style="font-size: 11px; color: #999; margin-top: 4px;"><span data-i18n="admin.variants-label">Variants:</span> ${item.variants}</div>` : ''}
-    </div>
-  `).join('');
+  // Populate template with data
+  orderHTML.querySelector('.order-id').textContent = order.id;
+  orderHTML.querySelector('.order-time').textContent = orderTime;
+  orderHTML.querySelector('.order-item-count').textContent = order.items.length;
   
-  // Format status
+  // Set order status
   const statusStyle = getStatusStyle(order.status);
   const statusText = formatOrderStatus(order.status);
+  const statusBadge = orderHTML.querySelector('.order-status-badge');
+  statusBadge.setAttribute('style', `font-size: 12px; padding: 6px 12px; border-radius: 4px; display: inline-block; font-weight: 600; ${statusStyle}`);
+  statusBadge.textContent = statusText;
   
-  // Build full details HTML
-  const html = `
-    <div style="margin-bottom: 20px;">
-      <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
-          <div>
-            <div style="font-size: 12px; color: #666;" data-i18n="admin.order-number">Order Number</div>
-            <div style="font-size: 20px; font-weight: 700; color: #2c3e50; margin-top: 2px;">#${order.id}</div>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-size: 12px; padding: 6px 12px; border-radius: 4px; display: inline-block; ${statusStyle}; font-weight: 600;">
-              ${statusText}
-            </div>
-          </div>
+  // Build items HTML
+  const itemsContainer = orderHTML.querySelector('.order-items-list');
+  console.log('📝 Processing', order.items.length, 'items');
+  const itemsHTML = (order.items || []).map((item, idx) => {
+    console.log(`📝 Item ${idx}:`, item, 'menu_item_name:', item.menu_item_name, 'item_total_cents:', item.item_total_cents);
+    itemsTotal += item.item_total_cents || 0;
+    return `
+      <div style="padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 4px;">
+          <div style="font-weight: 600; color: #333; font-size: 13px;">${item.menu_item_name} × ${item.quantity}</div>
+          <div style="font-weight: 600; color: #667eea;">$${(item.item_total_cents / 100).toFixed(2)}</div>
         </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-          <div>
-            <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;" data-i18n="admin.order-time-label">Order Time</div>
-            <div style="font-size: 14px; color: #333; margin-top: 4px;">${orderTime}</div>
-          </div>
-          <div>
-            <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;" data-i18n="admin.order-total-items">Total Items</div>
-            <div style="font-size: 14px; color: #333; margin-top: 4px;">${order.items.length} <span data-i18n="admin.items">item${order.items.length !== 1 ? 's' : ''}</span></div>
-          </div>
-        </div>
+        ${item.variants ? `<div style="font-size: 11px; color: #999; margin-top: 4px;"><span data-i18n="admin.variants-label">Variants:</span> ${item.variants}</div>` : ''}
       </div>
-    </div>
-    
-    <div style="margin-bottom: 20px;">
-      <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #333;" data-i18n="admin.order-items-label">Order Items</h4>
-      ${itemsHTML}
-    </div>
-    
-    <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-      <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #333;" data-i18n="admin.order-summary">Order Summary</h4>
-      
-      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;">
-        <div style="color: #666; font-size: 13px;" data-i18n="admin.subtotal">Subtotal</div>
-        <div style="color: #333; font-weight: 500; font-size: 13px;">$${(itemsTotal / 100).toFixed(2)}</div>
-      </div>
-      
-      <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
-        <div style="color: #666; font-size: 13px;" data-i18n="admin.service-charge">Service Charge (10%)</div>
-        <div style="color: #333; font-weight: 500; font-size: 13px;">$${(serviceCharge / 100).toFixed(2)}</div>
-      </div>
-      
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="color: #333; font-size: 14px; font-weight: 600;" data-i18n="admin.total">Total</div>
-        <div style="color: #2c3e50; font-size: 20px; font-weight: 700;">$${(grandTotal / 100).toFixed(2)}</div>
-      </div>
-    </div>
-  `;
+    `;
+  }).join('');
   
-  detailsContent.innerHTML = html;
+  console.log('📝 Generated items HTML:', itemsHTML);
+  itemsContainer.innerHTML = itemsHTML;
+  
+  // Service charge calculation
+  const serviceCharge = Math.round(itemsTotal * 0.1);
+  const grandTotal = itemsTotal + serviceCharge;
+  
+  // Populate totals
+  orderHTML.querySelector('.order-subtotal').textContent = (itemsTotal / 100).toFixed(2);
+  orderHTML.querySelector('.order-service-charge').textContent = (serviceCharge / 100).toFixed(2);
+  orderHTML.querySelector('.order-total').textContent = (grandTotal / 100).toFixed(2);
+  
+  // Append to DOM
+  detailsContent.appendChild(orderHTML);
+  
+  if (detailsTitle) {
+    detailsTitle.textContent = `Order #${order.id}`;
+  }
+  
   reTranslateContent();
-  detailsTitle.textContent = `Order #${order.id}`;
 }
-
-async function toggleOrdersHistory() {
-  const panel = document.getElementById('orders-history-panel');
-  if (!panel) return;
-  
-  if (panel.style.display === 'none') {
-    // Show history
-    panel.style.display = 'block';
-    await loadOrdersHistory();
-  } else {
-    // Hide history
-    panel.style.display = 'none';
-    VIEWING_HISTORICAL_ORDER = null;
-    clearOrderStatusDisplay();
-  }
-}
-
-async function loadOrdersHistory() {
-  const historyList = document.getElementById('orders-history-list');
-  if (!historyList) return;
-  
-  historyList.innerHTML = '<p style="color: #999; text-align: center; padding: 12px;">Loading...</p>';
-  
-  try {
-    // Fetch historical orders from API
-    const response = await fetch(`${API}/restaurants/${restaurantId}/orders?limit=20`);
-    if (!response.ok) throw new Error('Failed to load order history');
-    
-    const orders = await response.json();
-    
-    if (!orders || orders.length === 0) {
-      historyList.innerHTML = '<p style="color: #999; text-align: center; padding: 12px;">No orders yet</p>';
-      return;
-    }
-    
-    // Render order history list
-    historyList.innerHTML = orders.map(order => {
-      const statusStyle = getStatusStyle(order.status);
-      return `
-        <div class="order-history-item" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center;">
-          <div onclick="restoreOrderToCart(${order.id})" style="flex: 1;">
-            <div style="font-weight: 600; font-size: 13px;">Order #${order.id}</div>
-            <div style="font-size: 12px; color: #666; margin-top: 2px;">Total: $${(order.total_cents / 100).toFixed(2)}</div>
-          </div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <div style="font-size: 11px; padding: 4px 8px; border-radius: 3px; ${statusStyle}">
-              ${formatOrderStatus(order.status)}
-            </div>
-            <button onclick="event.stopPropagation(); printReceipt(${order.id})" title="Print Receipt" style="padding: 4px 8px; background: #2c3e50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 600;">🖨️</button>
-            <button onclick="event.stopPropagation(); emailReceipt(${order.id})" title="Email Receipt" style="padding: 4px 8px; background: #3498db; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 600;">✉️</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-    
-    // Add hover effect
-    document.querySelectorAll('.order-history-item').forEach(item => {
-      item.onmouseover = function() { this.style.backgroundColor = '#f5f5f5'; };
-      item.onmouseout = function() { this.style.backgroundColor = 'transparent'; };
-    });
-    
-  } catch (err) {
-    console.error('Error loading order history:', err);
-    historyList.innerHTML = `<p style="color: #ef4444; text-align: center; padding: 12px;">Error loading history</p>`;
-  }
-}
-
 
 async function restoreOrderToCart(orderId) {
   // Alias to selectOrderFromHistory for backward compatibility

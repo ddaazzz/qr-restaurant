@@ -1535,9 +1535,9 @@
   color: #333;
 }
 
-@media (min-width: 481px) {
+@media (max-width: 768px) and (orientation: landscape) {
   .details-close-btn {
-    display: none;
+    display: inline-block !important;
   }
 }
 

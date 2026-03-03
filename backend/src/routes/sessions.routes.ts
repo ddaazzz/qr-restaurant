@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../config/db";
 import crypto from "crypto";
+import { getCustomerReceiptService } from "../services/customerReceipt";
 
 const router = Router();
 
@@ -264,7 +265,7 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
     // Get session details to find restaurant_id
     const sessionRes = await pool.query(
       `
-      SELECT ts.table_id, t.restaurant_id
+      SELECT ts.table_id, ts.started_at, ts.order_type, t.restaurant_id, t.name as table_name
       FROM table_sessions ts
       JOIN tables t ON t.id = ts.table_id
       WHERE ts.id = $1
@@ -277,6 +278,7 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
     }
 
     const restaurantId = sessionRes.rows[0].restaurant_id;
+    const session = sessionRes.rows[0];
 
     // Get restaurant info
     const restaurantRes = await pool.query(
@@ -317,6 +319,7 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
 
     res.json({
       restaurant,
+      session,
       items: rows,
       subtotal_cents,
       service_charge_cents,
@@ -546,6 +549,35 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     }
 
     await client.query("COMMIT");
+
+    // Send customer receipt if enabled
+    try {
+      const receiptService = getCustomerReceiptService(pool);
+      const { customerEmail, customerPhone } = req.body;
+
+      const receiptPayload = {
+        customerEmail,
+        customerPhone,
+        items: orders
+          .filter((o: any) => o.item_id) // Only items
+          .map((o: any) => ({
+            name: o.item_id || 'Item',
+            quantity: o.quantity || 1,
+            price: o.price_cents || 0,
+          })),
+        subtotal,
+        serviceCharge: 0, // Could be added to dining programs
+        total,
+        tableNumber: tableName || session.order_type,
+      };
+
+      // Send receipt asynchronously (don't block the response)
+      receiptService.sendCustomerReceipt(restaurantId, parseInt(sessionId), receiptPayload).catch(err => {
+        console.warn('[Sessions] Error sending customer receipt:', err.message);
+      });
+    } catch (receiptErr: any) {
+      console.warn('[Sessions] Customer receipt disabled or error:', receiptErr.message);
+    }
 
     // Send to POS if requested
     let webhookSent = false;

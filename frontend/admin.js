@@ -7,7 +7,17 @@
 // - admin-reports.js (reports)
 // - admin-settings.js (settings, POS, QR preferences)
 
-var API = window.location.hostname === "localhost" ? "http://localhost:10000/api" : "https://chuio.io/api";
+// Determine API base URL - use ngrok for remote access, local backend for development
+var API = (() => {
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+  
+  if (isLocalhost) {
+    return `http://${window.location.host}/api`;
+  }
+  // Remote access via ngrok
+  return "https://herma-confined-deloris.ngrok-free.dev/api";
+})();
 
 var restaurantId = localStorage.getItem("restaurantId");
 var token = localStorage.getItem("token");
@@ -38,9 +48,6 @@ if (window.location.pathname.includes("admin.html")) {
 // Global state
 var CREATING_ITEM = false;
 var EDITING_ITEM_ID = null;
-var OPEN_VARIANTS_ITEM_ID = null;
-var EDITING_VARIANT_ID = null;
-var CURRENT_VARIANTS = [];
 
 var MENU_CATEGORIES = [];
 var MENU_ITEMS = [];
@@ -165,15 +172,8 @@ async function switchSection(sectionId) {
           console.error("Error loading tables HTML:", err);
         }
       }
-      if (!TABLE_CATEGORIES.length) {
-        await loadTablesCategories();
-      }
-      await loadTablesCategoryTable();
+      await initializeTables();
       reTranslateContent();
-      var grid = document.getElementById("tables-grid");
-      if (grid && !grid.innerHTML) {
-        renderCategoryTablesGrid();
-      }
       updateSectionHeader('admin.section-tables', 'table-edit-btn');
     } else if (sectionId === "menu") {
       var menuSection = document.getElementById("section-menu");
@@ -186,7 +186,7 @@ async function switchSection(sectionId) {
           console.error("Error loading menu HTML:", err);
         }
       }
-      await loadMenuItems();
+      await initializeMenu();
       reTranslateContent();
       updateSectionHeader('admin.section-menu', 'menu-edit-btn');
     } else if (sectionId === "staff") {
@@ -216,9 +216,9 @@ async function switchSection(sectionId) {
         } else {
           console.log("⏭️ Staff HTML already loaded, skipping fetch");
         }
-        console.log("🔵 Calling loadStaff()...");
-        await loadStaff();
-        console.log("✅ loadStaff() completed");
+        console.log("🔵 Calling initializeStaff()...");
+        await initializeStaff();
+        console.log("✅ initializeStaff() completed");
         reTranslateContent();
       } else {
         console.log("❌ User does not have access to staff management (need admin/superadmin or staff feature 4)");
@@ -238,20 +238,6 @@ async function switchSection(sectionId) {
       initializeBookings();
       reTranslateContent();
       updateSectionHeader('admin.section-reservations', '');
-    } else if (sectionId === "coupons") {
-      var couponsSection = document.getElementById("section-coupons");
-      if (couponsSection && !couponsSection.innerHTML.includes("coupon-code")) {
-        try {
-          var couponsResponse = await fetch('/admin-coupons.html');
-          couponsSection.innerHTML = await couponsResponse.text();
-          reTranslateContent();
-        } catch (err) {
-          console.error("Error loading coupons HTML:", err);
-        }
-      }
-      await loadCoupons();
-      reTranslateContent();
-      updateSectionHeader('admin.section-coupons', '');
     } else if (sectionId === "reports") {
       console.log("🔵 Loading REPORTS section");
       console.log("📌 IS_ADMIN:", IS_ADMIN, "IS_SUPERADMIN:", IS_SUPERADMIN, "IS_STAFF:", IS_STAFF);
@@ -280,9 +266,9 @@ async function switchSection(sectionId) {
         } else {
           console.log("⏭️ Reports HTML already loaded, skipping fetch");
         }
-        console.log("🔵 Calling initializeAnalyticsDashboard()...");
-        await initializeAnalyticsDashboard();
-        console.log("✅ initializeAnalyticsDashboard() completed");
+        console.log("🔵 Calling initializeReports()...");
+        await initializeReports();
+        console.log("✅ initializeReports() completed");
         reTranslateContent();
       } else {
         console.log("❌ User does not have access to reports (need admin/superadmin or staff feature 3)");
@@ -305,16 +291,7 @@ async function switchSection(sectionId) {
             console.error("Error loading settings HTML:", err);
           }
         }
-        // Initialize settings cache
-        try {
-          const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
-          if (res.ok) {
-            ADMIN_SETTINGS_CACHE = await res.json();
-            applyThemeColor(ADMIN_SETTINGS_CACHE.theme_color);
-          }
-        } catch (err) {
-          console.error("Failed to initialize settings:", err);
-        }
+        await initializeSettings();
         reTranslateContent();
       } else {
         console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
@@ -374,7 +351,7 @@ function updateSectionHeader(titleKey, actionButtonId) {
   var headerRightBtns = document.querySelectorAll(".header-right [id$='-btn'], .header-right [id$='-header']");
   for (var i = 0; i < headerRightBtns.length; i++) {
     var btn = headerRightBtns[i];
-    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown") {
+    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown" && btn.id !== "scan-qr-btn") {
       btn.style.display = "none";
     }
   }
@@ -384,6 +361,16 @@ function updateSectionHeader(titleKey, actionButtonId) {
     var btn = document.getElementById(actionButtonId);
     if (btn) {
       btn.style.display = "inline-block";
+    }
+  }
+
+  // Show scan QR button only for tables section
+  var scanBtn = document.getElementById("scan-qr-btn");
+  if (scanBtn) {
+    if (CURRENT_SECTION === "tables") {
+      scanBtn.style.display = "inline-block";
+    } else {
+      scanBtn.style.display = "none";
     }
   }
 }
@@ -475,257 +462,6 @@ async function removeOrderItem(orderItemId) {
   if (ACTIVE_SESSION_ID) {
     loadAndRenderOrders(ACTIVE_SESSION_ID);
   }
-}
-
-// ============= MENU VARIANTS (NOT in modular files) =============
-async function manageVariants(itemId) {
-  OPEN_VARIANTS_ITEM_ID = OPEN_VARIANTS_ITEM_ID === itemId ? null : itemId;
-  await loadMenuItems();
-}
-
-async function fetchVariants(itemId) {
-  const res = await fetch(`${API}/menu-items/${itemId}/variants`);
-  return await res.json();
-}
-
-function renderVariants(itemId, variants) {
-  if (!variants || variants.length === 0) {
-    return `<div style="padding: 10px; color: #999;">No variants yet</div>`;
-  }
-
-  return `
-    <div class="variants-container">
-      <h4>Variant Groups</h4>
-      ${variants.map(group => `
-        <div class="variant-group" style="margin-bottom: 12px; padding: 10px; background: #f5f5f5; border-radius: 6px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <strong>${group.name}</strong>
-            <div>
-              <button class="btn-icon" onclick="addVariantOption(${itemId}, ${group.id})">➕ Add Option</button>
-              <button class="btn-icon danger" onclick="deleteVariant(${itemId}, ${group.id})">🗑</button>
-            </div>
-          </div>
-          <div style="margin-left: 10px; border-left: 2px solid #ddd; padding-left: 10px;">
-            ${group.options.map(opt => `
-              <div style="display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px; background: white; border-radius: 4px;">
-                <div>
-                  <input value="${opt.name}" placeholder="Option name" style="width: 150px;" onchange="updateVariantOption(${itemId}, ${group.id}, ${opt.id}, this.value, ${opt.price_cents})"/>
-                  <span style="margin-left: 10px; color: #666;">+$${(opt.price_cents / 100).toFixed(2)}</span>
-                </div>
-                <button class="btn-icon danger" onclick="deleteVariantOption(${itemId}, ${group.id}, ${opt.id})">🗑</button>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-      `).join("")}
-      <button class="btn-secondary" onclick="addVariantGroup(${itemId})">➕ Add Variant Group</button>
-    </div>
-  `;
-}
-
-async function addVariantGroup(itemId) {
-  const name = prompt("Variant group name (e.g., 'Size', 'Temperature'):");
-  if (!name) return;
-
-  const res = await fetch(`${API}/menu-items/${itemId}/variants`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, required: true })
-  });
-
-  if (!res.ok) {
-    alert("Failed to add variant group");
-    return;
-  }
-
-  await loadMenuItems();
-}
-
-async function addVariantOption(itemId, groupId) {
-  const name = prompt("Option name:");
-  if (!name) return;
-
-  const res = await fetch(
-    `${API}/menu-items/${itemId}/variants/${groupId}/options`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, price_cents: 0 })
-    }
-  );
-
-  if (!res.ok) {
-    alert("Failed to add option");
-    return;
-  }
-
-  await loadMenuItems();
-}
-
-function sanitizeVariantChanges(changes) {
-  // Prevent injection
-  return {
-    ...changes,
-    name: changes.name ? changes.name.substring(0, 100) : ""
-  };
-}
-
-async function updateVariant(itemId, groupId, changes) {
-  const sanitized = sanitizeVariantChanges(changes);
-
-  await fetch(`${API}/menu-items/${itemId}/variants/${groupId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(sanitized)
-  });
-
-  await loadMenuItems();
-}
-
-async function deleteVariant(itemId, groupId) {
-  if (!confirm("Delete this variant group?")) return;
-
-  const res = await fetch(`${API}/menu-items/${itemId}/variants/${groupId}`, {
-    method: "DELETE"
-  });
-
-  if (!res.ok) {
-    alert("Failed to delete variant");
-    return;
-  }
-
-  await loadMenuItems();
-}
-
-async function updateVariantOption(itemId, groupId, optionId, name, price) {
-  await fetch(
-    `${API}/menu-items/${itemId}/variants/${groupId}/options/${optionId}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, price_cents: price })
-    }
-  );
-
-  await loadMenuItems();
-}
-
-async function deleteVariantOption(itemId, groupId, optionId) {
-  if (!confirm("Delete this option?")) return;
-
-  const res = await fetch(
-    `${API}/menu-items/${itemId}/variants/${groupId}/options/${optionId}`,
-    { method: "DELETE" }
-  );
-
-  if (!res.ok) {
-    alert("Failed to delete option");
-    return;
-  }
-
-  await loadMenuItems();
-}
-
-// ============= COUPONS & DISCOUNTS (NOT in modular files) =============
-async function loadCoupons() {
-  const res = await fetch(`${API}/restaurants/${restaurantId}/coupons`);
-  const coupons = await res.json();
-
-  const container = document.getElementById("coupons-list");
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  if (!coupons || coupons.length === 0) {
-    container.innerHTML = "<p>No coupons yet</p>";
-    return;
-  }
-
-  coupons.forEach(coupon => {
-    container.innerHTML += `
-      <div class="coupon-card">
-        <div>
-          <strong>${coupon.code}</strong> - ${coupon.discount_type === "percentage" ? coupon.discount_value + "%" : "$" + (coupon.discount_value / 100).toFixed(2)}
-        </div>
-        <button onclick="deleteCoupon(${coupon.id})">🗑</button>
-      </div>
-    `;
-  });
-}
-
-function renderCouponsList() {
-  loadCoupons();
-}
-
-async function createCoupon() {
-  const codeEl = document.getElementById("coupon-code");
-  const code = codeEl ? codeEl.value.trim() : "";
-  const typeEl = document.getElementById("coupon-type");
-  const type = typeEl ? typeEl.value : "";
-  const valueEl = document.getElementById("coupon-value");
-  const value = valueEl ? valueEl.value : "";
-
-  if (!code || !type || !value) {
-    return alert("All fields required");
-  }
-
-  const res = await fetch(`${API}/restaurants/${restaurantId}/coupons`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      code,
-      discount_type: type,
-      discount_value: type === "percentage" ? Number(value) : Number(value) * 100
-    })
-  });
-
-  if (!res.ok) {
-    alert("Failed to create coupon");
-    return;
-  }
-
-  document.getElementById("coupon-code").value = "";
-  document.getElementById("coupon-value").value = "";
-  loadCoupons();
-}
-
-async function deleteCoupon(couponId) {
-  if (!confirm("Delete this coupon?")) return;
-
-  const res = await fetch(
-    `${API}/restaurants/${restaurantId}/coupons/${couponId}`,
-    { method: "DELETE" }
-  );
-
-  if (!res.ok) {
-    alert("Failed to delete coupon");
-    return;
-  }
-
-  loadCoupons();
-}
-
-async function editCoupon(couponId) {
-  // TODO: Implement coupon editing
-  alert("Coupon editing not implemented yet");
-}
-
-async function applyManualDiscount() {
-  if (!ACTIVE_SESSION_ID) {
-    alert("Select a session first");
-    return;
-  }
-
-  const discount = prompt("Enter discount amount ($):");
-  if (!discount) return;
-
-  // TODO: Apply discount to session
-  alert("Manual discounts not yet implemented");
-}
-
-function clearManualDiscount() {
-  // TODO: Clear discount
-  alert("Discount clearing not implemented yet");
 }
 
 // ============= SUPERADMIN RESTAURANT MANAGEMENT =============

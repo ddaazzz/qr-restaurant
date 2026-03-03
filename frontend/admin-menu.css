@@ -12,6 +12,8 @@
   align-items: stretch;
   position: relative;
   overflow: hidden;
+  pointer-events: auto !important;
+  visibility: visible !important;
 }
 
 /* Left Column Wrapper - Desktop */
@@ -26,6 +28,8 @@
   margin-top: 0;
   margin-left: 0px;
   position: relative;
+  pointer-events: auto !important;
+  visibility: visible !important;
 }
 
 /* Hide sidebar on desktop */
@@ -365,6 +369,8 @@
   justify-content: start;
   max-height: 100%;
   width: 100%;
+  pointer-events: auto !important;
+  visibility: visible !important;
 }
 
 /* MENU ITEM CARD */
@@ -383,6 +389,8 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  pointer-events: auto !important;
+  visibility: visible !important;
 }
 
 .menu-item-card:hover {
@@ -785,6 +793,10 @@ body.edit-mode #menu-items-grid.menu-grid {
   left: 0;
   z-index: 1000;
   pointer-events: none;
+}
+
+.food-item-panel.active {
+  pointer-events: auto;
 }
 
 .food-item-panel-overlay {

@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "npx ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js"
+    "dev": "cd backend && npx ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "cd backend && tsc",
+    "start": "node backend/dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "html5-qrcode": "^2.3.8",
     "pg": "^8.16.3"
   }
 }

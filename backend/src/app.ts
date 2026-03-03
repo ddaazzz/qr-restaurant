@@ -14,6 +14,9 @@ import couponsRoutes from "./routes/coupons.routes";
 import bookingsRoutes from "./routes/bookings.routes";
 import waitlistRoutes from "./routes/waitlist.routes";
 import settingsRoutes from "./routes/settings.routes";
+import printerRoutes from "./routes/printer.routes";
+import printerZonesRoutes from "./routes/printerZones.routes";
+import customerReceiptsRoutes from "./routes/customerReceipts.routes";
 
 const app = express();
 
@@ -38,7 +41,8 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
-  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  // Allow camera access for local development (testing on phone via IP address)
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=*");
   next();
 });
 
@@ -72,9 +76,17 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use("/uploads", express.static("uploads"));
 
 /* ======================
+   NODE_MODULES LIBS (QR Scanner)
+====================== */
+app.use("/lib", express.static(path.join(__dirname, "../../node_modules/html5-qrcode")));
+
+/* ======================
    API ROUTES (FIRST)
 ====================== */
 app.use("/api", settingsRoutes);
+app.use("/api", printerRoutes);
+app.use("/api", printerZonesRoutes);
+app.use("/api", customerReceiptsRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/restaurants", staffRoutes);
 app.use("/api", tableRoutes);

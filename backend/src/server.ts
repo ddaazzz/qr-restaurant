@@ -2,6 +2,9 @@ import app from "./app";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
 import os from "os";
+import pool from "./config/db";
+import { initializePrinterQueue } from "./routes/printer.routes";
+
 dotenv.config();
 
 const PORT = Number(process.env.PORT) || 10000;
@@ -21,35 +24,74 @@ function getLocalIP() {
 
 const localIP = getLocalIP();
 
-const server = app.listen(PORT, "0.0.0.0", () => {
+// Create HTTP server
+const server = app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Backend running on http://localhost:${PORT}`);
   console.log(`📱 Local Network: http://${localIP}:${PORT}`);
-  console.log(`   (Access from iPad/phone on same WiFi network)`);
+  console.log(`   Open these URLs in your browser`);
+
+  // Initialize printer queue service
+  try {
+    const printerQueue = initializePrinterQueue();
+    console.log(`✅ Printer queue service started`);
+  } catch (err: any) {
+    console.warn(`⚠️  Printer queue initialization failed: ${err.message}`);
+  }
 });
 
-// Handle unhandled errors
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
-  console.error(reason);
+server.on("error", (err: any) => {
+  console.error("❌ Server error:", err.message);
+  if (err.code === "EADDRINUSE") {
+    console.error(`   Port ${PORT} is already in use. Kill existing process and try again.`);
+    setTimeout(() => process.exit(1), 100);
+  }
 });
 
-process.on("uncaughtException", (error) => {
-  console.error("❌ Uncaught Exception:", error);
-  console.error("Stack:", error.stack);
-  // Don't exit - let the server keep running
-  // process.exit(1);
+// Handle unhandled errors  
+process.on("unhandledRejection", (reason: any) => {
+  console.error("❌ Unhandled Rejection:", reason);
 });
 
-if (process.env.NODE_ENV !== "production") {
+process.on("uncaughtException", (error: any) => {
+  console.error("❌ Uncaught Exception:", error.message);
+});
+
+// Graceful shutdown
+process.on("SIGTERM", async () => {
+  console.log("📴 SIGTERM received, shutting down gracefully");
   
-  console.log("ENV:", {
-    NODE_ENV: process.env.NODE_ENV,
-    PORT: process.env.PORT
-  });
-}
+  // Stop printer queue
+  try {
+    const { getPrinterQueueInstance } = require("./routes/printer.routes");
+    const queue = getPrinterQueueInstance();
+    await queue.stop();
+    console.log("✅ Printer queue stopped");
+  } catch (err) {
+    console.warn("⚠️  Error stopping printer queue:", err);
+  }
 
-// Schema validation is only enforced during development
-if (process.env.APP_STAGE === "development") {
-  console.log("✅ Running in development mode");
-}
+  server?.close(() => {
+    console.log("Server closed");
+    process.exit(0);
+  });
+});
+
+process.on("SIGINT", async () => {
+  console.log("📴 SIGINT received, shutting down gracefully");
+  
+  // Stop printer queue
+  try {
+    const { getPrinterQueueInstance } = require("./routes/printer.routes");
+    const queue = getPrinterQueueInstance();
+    await queue.stop();
+    console.log("✅ Printer queue stopped");
+  } catch (err) {
+    console.warn("⚠️  Error stopping printer queue:", err);
+  }
+
+  server?.close(() => {
+    console.log("Server closed");
+    process.exit(0);
+  });
+});
 

@@ -134,6 +134,51 @@
     <div class="spinner"></div>
   </div>
 
+  <!-- Templates for Booking Cards -->
+  <template id="booking-card-template">
+    <div class="booking-card reserved">
+      <div class="booking-header">
+        <div>
+          <div class="booking-guest"></div>
+          <div class="booking-number"></div>
+        </div>
+        <div class="booking-status-badge">Reserved</div>
+      </div>
+      <div class="booking-time-until"></div>
+      <div class="booking-details">
+        <div class="booking-details-item">
+          <span>Guests:</span>
+          <strong class="booking-pax"></strong>
+        </div>
+        <div class="booking-details-item">
+          <span>Table:</span>
+          <strong class="booking-table"></strong>
+        </div>
+        <div class="booking-details-item">
+          <span>Time:</span>
+          <strong class="booking-time"></strong>
+        </div>
+        <div class="booking-details-item booking-phone" style="display: none;">
+          <span>Phone:</span>
+          <strong class="booking-phone-val"></strong>
+        </div>
+        <div class="booking-details-item booking-notes" style="display: none;">
+          <span>Notes:</span>
+          <strong class="booking-notes-val"></strong>
+        </div>
+      </div>
+      <div class="booking-actions">
+        <button class="btn-edit-booking">Edit</button>
+        <button class="btn-delete-booking-inline">Delete</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Template for Empty Bookings State -->
+  <template id="empty-bookings-template">
+    <p class="empty-state">No bookings for this date</p>
+  </template>
+
   <!-- Language initialization script -->
   <script>
     (function() {

@@ -1,8 +1,21 @@
 // ============= TABLES MODULE =============
 // All table management functionality extracted from admin.js
 
-// Initialize event listeners for modal controls
-document.addEventListener('DOMContentLoaded', function() {
+// Initialization state
+let tablesInitialized = false;
+
+function initializeTables() {
+  // Always load table categories and table data when section is switched to
+  loadTablesCategoryTable();
+  
+  // Attach event listeners only once
+  if (!tablesInitialized) {
+    tablesInitialized = true;
+    attachEventListeners();
+  }
+}
+
+function attachEventListeners() {
   const closeOrdersModal = document.getElementById('close-orders-modal');
   const modalCloseBtn = document.getElementById('modal-close-btn');
   const viewOrdersBtn = document.getElementById('view-orders-btn');
@@ -32,7 +45,12 @@ document.addEventListener('DOMContentLoaded', function() {
   if (closeBillBtn) {
     closeBillBtn.addEventListener('click', openCloseBillModal);
   }
-});
+  
+  // Language change listener
+  window.addEventListener('languageChanged', () => {
+    reTranslateContent();
+  });
+}
 
 // Helper to get today's date in restaurant timezone (YYYY-MM-DD format)
 function getTodayDateString() {
@@ -73,7 +91,7 @@ function renderTableCategoryTabs() {
     createBtn.className = "tab active";
     createBtn.textContent = "+ Create First Category";
     createBtn.style.flex = "1";
-    createBtn.onclick = function() { addTableCategoryPrompt(); };
+    createBtn.onclick = function() { addTableCategoryModal(); };
     tabs.appendChild(createBtn);
     return;
   }
@@ -128,7 +146,7 @@ function renderTableCategoryTabs() {
       editBtn.title = "Edit category name";
       editBtn.onclick = function(e) {
         e.stopPropagation();
-        editTableCategory(cat.id, cat.key);
+        editTableCategoryModal(cat.id, cat.key);
       };
       wrapper.appendChild(editBtn);
       
@@ -158,51 +176,105 @@ function renderTableCategoryTabs() {
     var addBtn = document.createElement("button");
     addBtn.className = "add-category-btn";
     addBtn.textContent = "+ Add";
-    addBtn.onclick = function() { addTableCategoryPrompt(); };
+    addBtn.onclick = function() { addTableCategoryModal(); };
     tabs.appendChild(addBtn);
   }
 }
 
-async function addTableCategoryPrompt() {
-  var categoryName = prompt("Enter new table category name (e.g., Main Floor, Patio):", "");
-  if (!categoryName || !categoryName.trim()) return;
+function addTableCategoryModal() {
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay";
+  modal.innerHTML = `
+    <div class="modal-content" style="width: 400px;">
+      <h3>${t('admin.add-category')}</h3>
+      <p style="color: var(--text-light); margin: 0 0 16px 0;">${t('admin.enter-category-name')}</p>
+      
+      <label style="display: block; margin-bottom: 16px;">
+        <span class="modal-content-label">${t('admin.category-name')}</span>
+        <input type="text" id="category-name-input" placeholder="Main Floor" class="modal-input">
+      </label>
+
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitAddTableCategory()" class="modal-btn-primary">${t('admin.create')}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.getElementById("category-name-input").focus();
+}
+
+async function submitAddTableCategory() {
+  const nameInput = document.getElementById("category-name-input");
+  const categoryName = nameInput ? nameInput.value.trim() : "";
+  if (!categoryName) return alert("Please enter a category name");
 
   try {
-    var url = API + "/restaurants/" + restaurantId + "/table-categories";
-    var res = await fetch(url, {
+    const url = API + "/restaurants/" + restaurantId + "/table-categories";
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: categoryName.trim() })
+      body: JSON.stringify({ name: categoryName })
     });
 
     if (!res.ok) {
-      var err = await res.json();
+      const err = await res.json();
       return alert(err.error || "Failed to create category");
     }
 
+    const overlay = document.querySelector(".modal-overlay");
+    if (overlay) overlay.remove();
     await loadTablesCategories();
   } catch (err) {
     alert("Error creating category: " + err.message);
   }
 }
 
-async function editTableCategory(categoryId, currentName) {
-  var newName = prompt("Edit table category name:", currentName);
-  if (!newName || !newName.trim() || newName === currentName) return;
+function editTableCategoryModal(categoryId, currentName) {
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay";
+  modal.innerHTML = `
+    <div class="modal-content" style="width: 400px;">
+      <h3>${t('admin.edit-category')}</h3>
+      <p style="color: var(--text-light); margin: 0 0 16px 0;">${t('admin.enter-category-name')}</p>
+      
+      <label style="display: block; margin-bottom: 16px;">
+        <span class="modal-content-label">${t('admin.category-name')}</span>
+        <input type="text" id="edit-category-name-input" value="${currentName}" class="modal-input">
+      </label>
+
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitEditTableCategory(${categoryId})" class="modal-btn-primary">${t('admin.save')}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.getElementById("edit-category-name-input").focus();
+}
+
+async function submitEditTableCategory(categoryId) {
+  const nameInput = document.getElementById("edit-category-name-input");
+  const newName = nameInput ? nameInput.value.trim() : "";
+  if (!newName) return alert("Please enter a category name");
 
   try {
-    var url = API + "/restaurants/" + restaurantId + "/table-categories/" + categoryId;
-    var res = await fetch(url, {
+    const url = API + "/restaurants/" + restaurantId + "/table-categories/" + categoryId;
+    const res = await fetch(url, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() })
+      body: JSON.stringify({ name: newName })
     });
 
     if (!res.ok) {
-      var err = await res.json();
+      const err = await res.json();
       return alert(err.error || "Failed to update category");
     }
 
+    const overlay = document.querySelector(".modal-overlay");
+    if (overlay) overlay.remove();
     await loadTablesCategories();
   } catch (err) {
     alert("Error updating category: " + err.message);
@@ -378,7 +450,7 @@ function renderCategoryTablesGrid() {
     var addCard = document.createElement("div");
     addCard.className = "add-table-card";
     addCard.textContent = "+";
-    addCard.onclick = function() { addTablePrompt(SELECTED_TABLE_CATEGORY.id); };
+    addCard.onclick = function() { addTableModal(SELECTED_TABLE_CATEGORY.id); };
     grid.appendChild(addCard);
   }
 
@@ -512,8 +584,8 @@ function renderCategoryTablesGrid() {
       sessionsListHTML +
       bottomInfoHTML +
       "<div class=\"table-edit-controls\">" +
-      "<button onclick=\"event.stopPropagation(); renameTablePrompt(" + table.id + ", '" + table.name + "')\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
-      "<button onclick=\"event.stopPropagation(); changeTableSeatsPrompt(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>" + t('admin.seats') + "</button>" +
+      "<button onclick=\"event.stopPropagation(); renameTableModal(" + table.id + ", '" + table.name + "')\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
+      "<button onclick=\"event.stopPropagation(); changeTableSeatsModal(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>" + t('admin.seats') + "</button>" +
       "<button onclick=\"event.stopPropagation(); deleteTable(" + table.id + ")\" class=\"table-card-delete-btn\"><img src=\"/uploads/website/bin.png\" alt=\"delete\"/>Delete</button>" +
       "</div>" +
       "<div class=\"table-card-seats\">" +
@@ -535,7 +607,7 @@ function renderCategoryTablesGrid() {
   }
 }
 
-async function addTablePrompt(categoryId) {
+function addTableModal(categoryId) {
   // Ensure categoryId is valid
   if (!categoryId || categoryId <= 0) {
     console.error("❌ Invalid categoryId:", categoryId);
@@ -543,10 +615,42 @@ async function addTablePrompt(categoryId) {
     return;
   }
 
-  const name = prompt("Enter table name (e.g., T01, Table 1):", "");
-  if (!name || !name.trim()) return;
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay";
+  modal.innerHTML = `
+    <div class="modal-content" style="width: 450px;">
+      <h3>${t('admin.add-table')}</h3>
+      <p style="color: var(--text-light); margin: 0 0 16px 0;">${t('admin.enter-table-details')}</p>
+      
+      <label style="display: block; margin-bottom: 16px;">
+        <span class="modal-content-label">${t('admin.table-name')}</span>
+        <input type="text" id="add-table-name-input" placeholder="T01, Table 1" class="modal-input">
+      </label>
 
-  const seats = Number(prompt("Enter number of seats:", "4"));
+      <label style="display: block; margin-bottom: 16px;">
+        <span class="modal-content-label">${t('admin.number-of-seats')}</span>
+        <input type="number" id="add-table-seats-input" min="1" value="4" class="modal-input">
+      </label>
+
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitAddTable(${categoryId})" class="modal-btn-primary">${t('admin.create-table')}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.getElementById("add-table-name-input").focus();
+}
+
+async function submitAddTable(categoryId) {
+  const nameInput = document.getElementById("add-table-name-input");
+  const seatsInput = document.getElementById("add-table-seats-input");
+  
+  const name = nameInput ? nameInput.value.trim() : "";
+  const seats = seatsInput ? Number(seatsInput.value) : 0;
+
+  if (!name) return alert("Please enter a table name");
   if (!seats || seats <= 0) return alert("Invalid seat count");
 
   try {
@@ -557,7 +661,7 @@ async function addTablePrompt(categoryId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         category_id: categoryId,
-        name: name.trim(),
+        name: name,
         seat_count: seats
       })
     });
@@ -570,6 +674,8 @@ async function addTablePrompt(categoryId) {
 
     const result = await res.json();
     console.log("✅ Table created:", result);
+    const overlay = document.querySelector(".modal-overlay");
+    if (overlay) overlay.remove();
     await loadTablesCategoryTable();
   } catch (err) {
     console.error("❌ Error creating table:", err);
@@ -579,15 +685,82 @@ async function addTablePrompt(categoryId) {
 
 
 
-function renameTablePrompt(tableId, currentName) {
-  const newName = prompt("Enter new table name:", currentName);
-  if (!newName || !newName.trim()) return;
+function renameTableModal(tableId, currentName) {
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay";
+  modal.innerHTML = `
+    <div class="modal-content" style="width: 400px;">
+      <h3>${t('admin.rename-table')}</h3>
+      <p style="color: var(--text-light); margin: 0 0 16px 0;">${t('admin.enter-new-table-name')}</p>
+      
+      <label style="display: block; margin-bottom: 16px;">
+        <span class="modal-content-label">${t('admin.table-name')}</span>
+        <input type="text" id="rename-table-input" value="${currentName}" class="modal-input">
+      </label>
 
-  renameTable(tableId, newName);
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitRenameTable(${tableId})" class="modal-btn-primary">${t('admin.save')}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.getElementById("rename-table-input").focus();
 }
 
-async function changeTableSeatsPrompt(tableId, currentSeats) {
-  const newSeats = Number(prompt("Enter new seat count:", currentSeats));
+async function submitRenameTable(tableId) {
+  const nameInput = document.getElementById("rename-table-input");
+  const newName = nameInput ? nameInput.value.trim() : "";
+  if (!newName) return alert("Please enter a table name");
+
+  try {
+    const res = await fetch(`${API}/tables/${tableId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      return alert(err.error || "Failed to rename table");
+    }
+
+    const overlay = document.querySelector(".modal-overlay");
+    if (overlay) overlay.remove();
+    await loadTablesCategoryTable();
+  } catch (err) {
+    alert("Error renaming table: " + err.message);
+  }
+}
+
+function changeTableSeatsModal(tableId, currentSeats) {
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay";
+  modal.innerHTML = `
+    <div class="modal-content" style="width: 400px;">
+      <h3>${t('admin.change-seats')}</h3>
+      <p style="color: var(--text-light); margin: 0 0 16px 0;">${t('admin.enter-new-seat-count')}</p>
+      
+      <label style="display: block; margin-bottom: 16px;">
+        <span class="modal-content-label">${t('admin.number-of-seats')}</span>
+        <input type="number" id="change-seats-input" min="1" value="${currentSeats}" class="modal-input">
+      </label>
+
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitChangeTableSeats(${tableId})" class="modal-btn-primary">${t('admin.save')}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.getElementById("change-seats-input").focus();
+}
+
+async function submitChangeTableSeats(tableId) {
+  const seatsInput = document.getElementById("change-seats-input");
+  const newSeats = seatsInput ? Number(seatsInput.value) : 0;
   if (!newSeats || newSeats <= 0) return alert("Invalid seat count");
 
   try {
@@ -602,6 +775,8 @@ async function changeTableSeatsPrompt(tableId, currentSeats) {
       return alert("Error updating seats: " + (err.error || err.message || "Unknown error"));
     }
 
+    const overlay = document.querySelector(".modal-overlay");
+    if (overlay) overlay.remove();
     await loadTablesCategoryTable();
   } catch (err) {
     alert("Error updating seats: " + err.message);
@@ -1075,8 +1250,15 @@ async function submitStartSession(tableId) {
 
     const overlay = document.querySelector(".modal-overlay");
     if (overlay) overlay.remove();
-    alert("Session started successfully!");
+    
+    // Reload table data and automatically display the session
     await loadTablesCategoryTable();
+    
+    // Find the table and display its session
+    const table = TABLES.find(t => t.id === tableId);
+    if (table) {
+      handleTableClick(table);
+    }
   } catch (err) {
     alert("Error starting session: " + err.message);
   }
@@ -1225,12 +1407,16 @@ async function renderSessionOrder(session) {
   const pax = session.pax;
   const diningDuration = formatDiningDuration(session.started_at);
 
+  // ADD THE ACTIVE CLASS TO SHOW THE PANEL
+  panel.classList.add("active");
+
   // Header with session info and gear dropdown
   panel.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
       <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
       <div style="flex: 1; text-align: center;">
         <h3 style="margin: 0; font-size: 18px;">${sessionLabel}</h3>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-light);">Table ${table.name} • ${t('admin.started')} ${new Date(session.started_at).toLocaleTimeString()}</p>
         <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-light);">${pax} ${t('admin.pax-label')} • ${t('admin.dining')} ${diningDuration}</p>
       </div>
       <div style="position: relative;">
@@ -1297,7 +1483,7 @@ async function loadAndRenderOrders(sessionId) {
     // Build order HTML + compute subtotal
     container.innerHTML = orders.map(order => `
       <div class="order-card">
-        <strong>Order #${order.order_id}</strong>
+        <strong>${t('admin.order-label')} #${order.order_id}</strong>
 
         ${order.items.map(i => {
           const itemTotal = i.quantity * i.unit_price_cents;
@@ -1308,7 +1494,7 @@ async function loadAndRenderOrders(sessionId) {
               <div style="flex:1;">
                 <div><strong>${i.name}</strong></div>
                 ${i.variants && i.variants.trim() ? `<div style="font-size:0.85em;color:#666;margin-top:2px;font-style:italic;">${i.variants}</div>` : ''}
-                <div style="color:#999;font-size:0.9em;">Status: ${i.status}</div>
+                <div style="color:#999;font-size:0.9em;">${t('admin.status-label')} ${i.status}</div>
               </div>
               <div style="text-align: right;">
                 <div style="font-weight: bold;">$${(itemTotal / 100).toFixed(2)}</div>
@@ -1328,17 +1514,17 @@ async function loadAndRenderOrders(sessionId) {
     // Render totals
     totalEl.innerHTML = `
       <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-        <span>Subtotal:</span>
+        <span>${t('admin.subtotal-label')}</span>
         <span>$${(totalCents / 100).toFixed(2)}</span>
       </div>
       ${serviceChargePercent > 0 ? `
         <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
-          <span>Service (${serviceChargePercent}%):</span>
+          <span>${t('admin.service-charge-label').replace('{0}', serviceChargePercent)}:</span>
           <span>$${(serviceCharge / 100).toFixed(2)}</span>
         </div>
       ` : ''}
       <div style="display: flex; justify-content: space-between; font-size: 18px; color: white; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; margin-top: 8px;">
-        <span>Total:</span>
+        <span>${t('admin.total-label')}</span>
         <span>$${(grandTotal / 100).toFixed(2)}</span>
       </div>
     `;
@@ -1360,8 +1546,19 @@ async function printBill(sessionId) {
   if (!res.ok) return alert("Failed to load bill");
 
   const bill = await res.json();
-  const sessionRes = await fetch(`${API}/sessions/${sessionId}`);
-  const session = sessionRes.ok ? await sessionRes.json() : null;
+  const lang = localStorage.getItem('language') || 'en';
+  
+  // Translation labels
+  const labels = {
+    'subtotal': lang === 'zh' ? '小計：' : 'Subtotal:',
+    'service': lang === 'zh' ? '服務費' : 'Service Charge',
+    'total': lang === 'zh' ? '總計：' : 'TOTAL:',
+    'order-type': lang === 'zh' ? '訂單類型' : 'Order Type',
+    'table': lang === 'zh' ? '座位' : 'Table',
+    'time': lang === 'zh' ? '時間' : 'Time',
+    'thank-you': lang === 'zh' ? '感謝蒞臨！' : 'Thank you for your visit!',
+    'come-again': lang === 'zh' ? '歡迎再來！' : 'Come Again!'
+  };
   
   const win = window.open("", "_blank");
   
@@ -1371,22 +1568,22 @@ async function printBill(sessionId) {
     itemsHTML += `<div class="item-row"><div class="item-name">${i.name}</div><div class="item-qty">x${i.quantity}</div><div class="item-price">$${lineTotal}</div></div>`;
   });
   
-  const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>Service Charge:</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';
+  const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>${labels.service} (%):</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';
   
-  // Format session start time and order type
+  // Format session start time and order type from bill response
   let sessionInfoHTML = '';
-  if (session) {
-    const startTime = session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A';
-    let orderType = 'Table';
+  if (bill.session) {
+    const startTime = bill.session.started_at ? new Date(bill.session.started_at).toLocaleString() : 'N/A';
+    let orderType = lang === 'zh' ? '座位' : 'Table';
     let tableInfo = '';
     
-    if (session.order_type === 'to-go') orderType = 'To Go';
-    else if (session.order_type === 'pay-now') orderType = 'Counter/Pay Now';
-    else if (session.table_id) tableInfo = ` - Table ${session.table_name || '#' + session.table_id}`;
+    if (bill.session.order_type === 'to-go') orderType = lang === 'zh' ? '外帶' : 'To Go';
+    else if (bill.session.order_type === 'pay-now') orderType = lang === 'zh' ? '現場結帳' : 'Counter/Pay Now';
+    else if (bill.session.table_id) tableInfo = ` - ${labels.table} ${bill.session.table_name || '#' + bill.session.table_id}`;
     
     sessionInfoHTML = `
-      <div style="font-size: 11px; color: #666; margin-bottom: 2px;">Order Type: ${orderType}${tableInfo}</div>
-      <div style="font-size: 11px; color: #666; margin-bottom: 6px;">Time: ${startTime}</div>
+      <div style="font-size: 11px; color: #666; margin-bottom: 2px;">${labels['order-type']}: ${orderType}${tableInfo}</div>
+      <div style="font-size: 11px; color: #666; margin-bottom: 6px;">${labels.time}: ${startTime}</div>
     `;
   }
   
@@ -1431,18 +1628,18 @@ async function printBill(sessionId) {
       <div class="items">${itemsHTML}</div>
       <div class="summary">
         <div class="summary-row subtotal">
-          <span>Subtotal:</span>
+          <span>${labels.subtotal}</span>
           <span>$${(bill.subtotal_cents / 100).toFixed(2)}</span>
         </div>
         ${serviceChargeHTML}
         <div class="summary-row total">
-          <span>TOTAL:</span>
+          <span>${labels.total}</span>
           <span>$${(bill.total_cents / 100).toFixed(2)}</span>
         </div>
       </div>
       <div class="footer">
-        <div>Thank you for your visit!</div>
-        <div class="thank-you">Come Again!</div>
+        <div>${labels['thank-you']}</div>
+        <div class="thank-you">${labels['come-again']}</div>
       </div>
     </div>
     <script>
@@ -1484,6 +1681,14 @@ async function printQR(sessionId) {
   const table = TABLES.find(t => t.sessions.some(s => s.id === sessionId));
   if (!table) return alert("Table not found");
 
+  const lang = localStorage.getItem('language') || 'en';
+  const labels = {
+    'table': lang === 'zh' ? '座位' : 'Table',
+    'pax': lang === 'zh' ? '人數' : 'Pax',
+    'started': lang === 'zh' ? '開始時間' : 'Started',
+    'scan-to-order': lang === 'zh' ? '掃描 QR Code 開始點餐' : 'Scan this QR code to order'
+  };
+
   const sessionLabel = getSessionLabel(table, sessionId);
   const tableUnit = table.units[0];
   const qrToken = tableUnit ? tableUnit.qr_token : null;
@@ -1491,6 +1696,9 @@ async function printQR(sessionId) {
   if (!qrToken) return alert("QR code not available");
 
   const qrURL = (window.location.hostname === "localhost" ? "http://localhost:10000/" : "https://chuio.io/") + qrToken;
+  const startTime = new Date(session.started_at).toLocaleString();
+  const pax = session.pax || 0;
+  const restaurantName = document.querySelector('[data-i18n="app.restaurant-name"]')?.textContent || 'Restaurant';
 
   const win = window.open("", "_blank");
   
@@ -1501,26 +1709,67 @@ async function printQR(sessionId) {
     <title>QR Code - ${sessionLabel}</title>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
     <style>
-      body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
-      .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }
-      .title { font-size: 24px; font-weight: bold; margin-bottom: 8px; color: #333; }
-      .subtitle { font-size: 16px; color: #666; margin-bottom: 24px; }
-      #qrcode { display: inline-block; padding: 12px; background: white; border: 2px solid var(--primary-color); border-radius: 8px; margin-bottom: 20px; }
-      .instruction { font-size: 14px; color: #666; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee; }
-      .url { font-size: 12px; color: #999; margin-top: 12px; word-break: break-all; font-family: monospace; }
-      @media print { body { background: white; } .container { box-shadow: none; } .instruction { display: none; } }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Courier New', monospace; padding: 12px; background: #fff; }
+      .receipt { width: 100%; text-align: center; font-size: 12px; line-height: 1.5; max-width: 80mm; margin: 0 auto; }
+      .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+      .restaurant-name { font-weight: bold; font-size: 18px; margin-bottom: 4px; }
+      .divider { border-bottom: 1px dashed #000; margin: 8px 0; }
+      .info-section { text-align: left; margin: 8px 0; font-size: 11px; }
+      .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+      .info-label { font-weight: bold; min-width: 60px; }
+      #qrcode { display: flex; justify-content: center; margin: 12px 0; }
+      #qrcode img { max-width: 200px; height: auto; }
+      .scan-instruction { font-weight: bold; font-size: 13px; margin: 8px 0; }
+      .footer { font-size: 10px; color: #666; margin-top: 8px; }
+      @media print { 
+        body { margin: 0; padding: 8px; } 
+        .receipt { width: 80mm; } 
+        .instruction { display: none; }
+      }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="title">Order QR Code</div>
-      <div class="subtitle">Table ${sessionLabel}</div>
+    <div class="receipt">
+      <div class="header">
+        <div class="restaurant-name">${restaurantName}</div>
+      </div>
+      
+      <div class="info-section">
+        <div class="info-row">
+          <span class="info-label">${labels.table}:</span>
+          <span>${table.name}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.pax}:</span>
+          <span>${pax} ${lang === 'zh' ? '人' : 'pax'}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.started}:</span>
+          <span>${startTime}</span>
+        </div>
+      </div>
+      
+      <div class="divider"></div>
+      
       <div id="qrcode"><\/div>
-      <div class="url">${qrURL}<\/div>
-      <div class="instruction">Scan this QR code to view and order from the menu<\/div>
+      
+      <div class="scan-instruction">${labels['scan-to-order']}</div>
+      
+      <div class="footer">
+        <p style="margin-top: 8px;">---</p>
+      </div>
     </div>
+    
     <script>
-      new QRCode(document.getElementById("qrcode"), { text: "${qrURL}", width: 280, height: 280, correctLevel: QRCode.CorrectLevel.H });
+      new QRCode(document.getElementById("qrcode"), { 
+        text: "${qrURL}", 
+        width: 200, 
+        height: 200, 
+        correctLevel: QRCode.CorrectLevel.H,
+        colorDark: "#000000",
+        colorLight: "#ffffff"
+      });
       window.onload = () => { setTimeout(() => window.print(), 500); };
       window.onafterprint = () => window.close();
     <\/script>
@@ -1854,27 +2103,6 @@ async function createTable() {
   await loadTablesCategoryTable();
 }
 
-async function renameTable(tableId, name) {
-  if (!name.trim()) return;
-
-  try {
-    const res = await fetch(`${API}/tables/${tableId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim() })
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      return alert("Error renaming table: " + (err.error || err.message || "Unknown error"));
-    }
-
-    await loadTablesCategoryTable();
-  } catch (err) {
-    alert("Error renaming table: " + err.message);
-  }
-}
-
 async function regenQR(tableId) {
   await fetch(
     `${API}/tables/${tableId}/regenerate-qr`,
@@ -1899,51 +2127,6 @@ async function deleteTable(tableId) {
     await loadTablesCategoryTable();
   } catch (err) {
     alert("Error deleting table: " + err.message);
-  }
-}
-
-
-
-
-
-function editTableCategory(catId, currentName) {
-  const newName = prompt("Enter new category name:", currentName);
-  if (!newName || !newName.trim()) return;
-
-  fetch(`${API}/restaurants/${restaurantId}/table-categories/${catId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: newName })
-  }).then(res => {
-    if (!res.ok) {
-      return res.json().then(err => {
-        throw new Error(err.error || err.message || "Failed to update category");
-      });
-    }
-    return res.json();
-  }).then(() => {
-    loadTablesCategoryTable();
-  }).catch(err => {
-    alert("Error updating category: " + err.message);
-  });
-}
-
-async function deleteTableCategory(catId) {
-  if (!confirm("Delete this category? All tables in it will be affected.")) return;
-
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/table-categories/${catId}`, {
-      method: "DELETE"
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      return alert("Error deleting category: " + (err.error || err.message || "Unknown error"));
-    }
-
-    await loadTablesCategoryTable();
-  } catch (err) {
-    alert("Error deleting category: " + err.message);
   }
 }
 

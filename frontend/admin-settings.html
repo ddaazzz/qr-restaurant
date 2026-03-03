@@ -21,6 +21,12 @@
       <p id="pos-status-preview">Not configured</p>
     </div>
 
+    <!-- Printer Settings Card -->
+    <div class="settings-card" onclick="openSettingsModal('printer-settings')">
+      <h3>🖨️ Printer Settings</h3>
+      <p id="printer-status-preview">Not configured</p>
+    </div>
+
     <!-- Staff Login Links Card -->
     <div class="settings-card" onclick="openSettingsModal('staff-login-links')">
       <h3 data-i18n="admin.staff-login-links">👥 Staff Login Links</h3>
@@ -217,6 +223,132 @@
     </div>
   </div>
 
+  <!-- HIDDEN: Printer Settings Modal -->
+  <div id="modal-printer-settings" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('printer-settings')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🖨️ Printer Settings</h3>
+        <button class="modal-close" onclick="closeSettingsModal('printer-settings')">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Printer Type -->
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Type</label>
+            <span id="view-printer-type" class="view-mode"></span>
+            <select id="printer-type" class="hidden" onchange="updatePrinterTypeFields()">
+              <option value="none">-- None (No Printer)</option>
+              <option value="browser">Browser Print</option>
+              <option value="thermal">Thermal Printer (Network)</option>
+              <option value="usb">USB Printer</option>
+              <option value="bluetooth">Bluetooth Receipt Printer</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Printer Host (Network only) -->
+        <div class="form-row">
+          <div class="form-group" id="printer-host-group" style="display: none;">
+            <label>Printer Host/IP</label>
+            <span id="view-printer-host" class="view-mode"></span>
+            <input id="printer-host" type="text" placeholder="e.g., 192.168.1.100" class="hidden" />
+          </div>
+          <div class="form-group" id="printer-port-group" style="display: none;">
+            <label>Printer Port</label>
+            <span id="view-printer-port" class="view-mode"></span>
+            <input id="printer-port" type="number" placeholder="e.g., 9100" value="9100" class="hidden" />
+          </div>
+        </div>
+
+        <!-- Bluetooth Device Selection -->
+        <div class="form-row" id="bluetooth-device-group" style="display: none;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bluetooth Device</label>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select from available Bluetooth devices or scan for new printers</p>
+            
+            <!-- Connected Devices List -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: #333;">Available Devices</label>
+              <div id="bluetooth-connected-devices" style="border: 1px solid var(--border-color); border-radius: 6px; max-height: 180px; overflow-y: auto; background: #f9fafb;">
+                <div style="padding: 16px; text-align: center; color: #999; font-size: 13px;">Loading connected devices...</div>
+              </div>
+            </div>
+            
+            <!-- Scan for New Device -->
+            <div style="display: flex; gap: 8px;">
+              <button id="scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 1;">🔍 Scan New Device</button>
+              <button id="refresh-devices-btn" onclick="refreshConnectedDevices()" class="btn-secondary" style="flex: 1;">🔄 Refresh List</button>
+            </div>
+            
+            <!-- Hidden inputs -->
+            <span id="view-bluetooth-device" class="view-mode" style="margin-top: 12px; display: block;"></span>
+            <input id="bluetooth-device-id" type="hidden" class="hidden" />
+            <input id="bluetooth-device-name" type="hidden" class="hidden" />
+          </div>
+        </div>
+
+        <!-- Auto-Print Options -->
+        <div class="form-row" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+              <input id="kitchen-auto-print" type="checkbox" class="hidden-checkbox" />
+              <span class="checkbox-display"></span>
+              <span>Auto-Print Orders to Kitchen</span>
+            </label>
+            <p style="font-size: 13px; color: #666; margin-top: 6px;">Automatically print orders to the kitchen when they're placed</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+              <input id="bill-auto-print" type="checkbox" class="hidden-checkbox" />
+              <span class="checkbox-display"></span>
+              <span>Auto-Print Bills</span>
+            </label>
+            <p style="font-size: 13px; color: #666; margin-top: 6px;">Automatically print bills when sessions are closed</p>
+          </div>
+        </div>
+
+        <!-- Customer Receipts -->
+        <div class="form-row" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Send Customer Receipts Via:</label>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select how customers should receive their receipts</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input id="receipt-email" type="checkbox" />Email
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input id="receipt-printer" type="checkbox" />Printer
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input id="receipt-qr" type="checkbox" />QR Code
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection Test -->
+        <div class="form-group" style="margin-top: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Connection Status</label>
+          <div id="printer-connection-status" style="padding: 10px; background: #fef3c7; border-radius: 6px; color: #92400e; border-left: 4px solid #f59e0b;">
+            ⚠️ Not Configured
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="form-actions" style="margin-top: 24px;">
+          <button id="edit-printer-btn" onclick="enterEditModePrinter()" class="btn-primary">✎ Edit</button>
+          <button id="save-printer-btn" onclick="savePrinterSettings()" class="btn-primary hidden">💾 Save</button>
+          <button id="test-printer-btn" onclick="testPrinterConnection()" class="btn-secondary hidden">🧪 Test</button>
+          <button id="cancel-printer-btn" onclick="cancelEditModePrinter()" class="btn-secondary hidden">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- HIDDEN: Staff Login Links Modal -->
   <div id="modal-staff-login-links" class="settings-modal hidden">
     <div class="modal-backdrop" onclick="closeSettingsModal('staff-login-links')"></div>
@@ -392,6 +524,32 @@
     </div>
   </div>
 </div>
+
+<!-- ============= HTML TEMPLATES ============= -->
+<!-- Color Swatch Template -->
+<template id="color-swatch-template">
+  <div style="width: 40px; height: 40px; background: #000; border-radius: 4px;"></div>
+</template>
+
+<!-- POS Status Template -->
+<template id="pos-status-template">
+  <div style="padding: 10px; background: #f0fdf4; border-radius: 6px; color: #166534; border-left: 4px solid #22c55e;">
+    🟢 Configured
+  </div>
+</template>
+
+<!-- Coupon List Item Template -->
+<template id="coupon-list-template">
+  <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; border-left: 4px solid #4a90e2;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong data-coupon-code>CODE</strong><br>
+        <small style="color: #666;" data-coupon-discount>Off</small>
+      </div>
+      <button data-coupon-delete class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
+    </div>
+  </div>
+</template>
 
 <!-- Language initialization script -->
 <script>

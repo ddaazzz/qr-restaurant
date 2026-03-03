@@ -377,6 +377,20 @@ body {
   cursor: default;
 }
 
+.btn-print {
+  background: #2563eb;
+  color: var(--bg-white);
+}
+
+.btn-print:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+}
+
+.btn-print:active {
+  transform: scale(0.98);
+}
+
 /* ============== RESPONSIVE ============== */
 @media (max-width: 768px) {
   .orders-container {

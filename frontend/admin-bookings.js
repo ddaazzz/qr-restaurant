@@ -277,52 +277,21 @@ function renderBookingsForDate(date) {
   const list = document.getElementById('bookings-list');
   
   if (bookings.length === 0) {
-    list.innerHTML = '<p class="empty-state">No bookings for this date</p>';
+    const emptyTemplate = document.getElementById('empty-bookings-template');
+    list.innerHTML = '';
+    list.appendChild(emptyTemplate.content.cloneNode(true));
     return;
   }
 
   // Sort by time
   bookings.sort((a, b) => a.booking_time.localeCompare(b.booking_time));
 
-  list.innerHTML = bookings.map(booking => {
-    const table = allTables.find(t => t.id === booking.table_id);
-    const tableName = table ? table.name : 'Unknown Table';
-    const bookingNum = booking.restaurant_booking_number || booking.id;
-    const timeUntil = getTimeUntilBooking(booking.booking_date, booking.booking_time);
-    
-    return `
-      <div class="booking-card ${booking.status === 'cancelled' ? 'cancelled' : 'reserved'}">
-        <div class="booking-header">
-          <div>
-            <div class="booking-guest">${escapeHtml(booking.guest_name)}</div>
-            <div class="booking-number">#${bookingNum}</div>
-          </div>
-          <div class="booking-status-badge">Reserved</div>
-        </div>
-        <div class="booking-time-until">in ${timeUntil}</div>
-        <div class="booking-details">
-          <div class="booking-details-item">
-            <span>Guests:</span>
-            <strong>${booking.pax}</strong>
-          </div>
-          <div class="booking-details-item">
-            <span>Table:</span>
-            <strong>${escapeHtml(tableName)}</strong>
-          </div>
-          <div class="booking-details-item">
-            <span>Time:</span>
-            <strong>${booking.booking_time}</strong>
-          </div>
-          ${booking.phone ? `<div class="booking-details-item"><span>Phone:</span><strong>${escapeHtml(booking.phone)}</strong></div>` : ''}
-          ${booking.notes ? `<div class="booking-details-item"><span>Notes:</span><strong>${escapeHtml(booking.notes)}</strong></div>` : ''}
-        </div>
-        <div class="booking-actions">
-          <button class="btn-edit-booking" onclick="editBooking(${booking.id})">Edit</button>
-          <button class="btn-delete-booking-inline" onclick="startDeleteBooking(${booking.id})">Delete</button>
-        </div>
-      </div>
-    `;
-  }).join('');
+  // Render all booking cards from template
+  list.innerHTML = '';
+  bookings.forEach(booking => {
+    const card = renderBookingCardFromTemplate(booking);
+    list.appendChild(card);
+  });
 }
 
 function openNewBookingModal() {
@@ -488,3 +457,108 @@ setInterval(function() {
     loadBookings();
   }
 }, 5000);
+
+// ============= HTML TEMPLATE RENDERING (consolidate all HTML generation) =============
+// These functions render templates for display views
+// They separate concerns: display functions handle data/logic, renderers populate templates
+
+/**
+ * Render booking card from template
+ * @param {Object} booking - Booking object with id, guest_name, status, pax, table_id, booking_time, booking_date, phone, notes, restaurant_booking_number
+ * @returns {Element} DOM element for one booking card
+ */
+function renderBookingCardFromTemplate(booking) {
+  const template = document.getElementById('booking-card-template');
+  const card = template.content.cloneNode(true);
+  
+  // Set booking data
+  const table = allTables.find(t => t.id === booking.table_id);
+  const tableName = table ? table.name : 'Unknown Table';
+  const bookingNum = booking.restaurant_booking_number || booking.id;
+  const timeUntil = getTimeUntilBooking(booking.booking_date, booking.booking_time);
+  
+  // Populate template
+  card.querySelector('.booking-guest').textContent = booking.guest_name;
+  card.querySelector('.booking-number').textContent = `#${bookingNum}`;
+  card.querySelector('.booking-time-until').textContent = `in ${timeUntil}`;
+  card.querySelector('.booking-pax').textContent = booking.pax;
+  card.querySelector('.booking-table').textContent = tableName;
+  card.querySelector('.booking-time').textContent = booking.booking_time;
+  
+  // Handle optional phone
+  const phoneItem = card.querySelector('.booking-phone');
+  if (booking.phone) {
+    phoneItem.style.display = '';
+    card.querySelector('.booking-phone-val').textContent = booking.phone;
+  }
+  
+  // Handle optional notes
+  const notesItem = card.querySelector('.booking-notes');
+  if (booking.notes) {
+    notesItem.style.display = '';
+    card.querySelector('.booking-notes-val').textContent = booking.notes;
+  }
+  
+  // Set up event handlers
+  card.querySelector('.btn-edit-booking').onclick = () => editBooking(booking.id);
+  card.querySelector('.btn-delete-booking-inline').onclick = () => startDeleteBooking(booking.id);
+  
+  // Handle cancelled status styling
+  if (booking.status === 'cancelled') {
+    card.querySelector('.booking-card').classList.remove('reserved');
+    card.querySelector('.booking-card').classList.add('cancelled');
+  }
+  
+  return card;
+}
+
+// ============= OLD HTML TEMPLATE BUILDERS (DEPRECATED - use renderBookingCardFromTemplate instead) =============
+// These functions encapsulate HTML generation for display views
+// They separate concerns: display functions handle data/logic, builders handle HTML
+
+/**
+ * Build individual booking card HTML
+ * @deprecated Use renderBookingCardFromTemplate() instead
+ * @param {Object} booking - Booking object with id, guest_name, status, pax, table_id, booking_time, booking_date, phone, notes, restaurant_booking_number
+ * @param {Array} allTables - Array of table objects to look up table name
+ * @returns {string} HTML string for one booking card
+ */
+function buildBookingCardHTML_DEPRECATED(booking, allTables) {
+  const table = allTables.find(t => t.id === booking.table_id);
+  const tableName = table ? table.name : 'Unknown Table';
+  const bookingNum = booking.restaurant_booking_number || booking.id;
+  const timeUntil = getTimeUntilBooking(booking.booking_date, booking.booking_time);
+  
+  return `
+    <div class="booking-card ${booking.status === 'cancelled' ? 'cancelled' : 'reserved'}">
+      <div class="booking-header">
+        <div>
+          <div class="booking-guest">${escapeHtml(booking.guest_name)}</div>
+          <div class="booking-number">#${bookingNum}</div>
+        </div>
+        <div class="booking-status-badge">Reserved</div>
+      </div>
+      <div class="booking-time-until">in ${timeUntil}</div>
+      <div class="booking-details">
+        <div class="booking-details-item">
+          <span>Guests:</span>
+          <strong>${booking.pax}</strong>
+        </div>
+        <div class="booking-details-item">
+          <span>Table:</span>
+          <strong>${escapeHtml(tableName)}</strong>
+        </div>
+        <div class="booking-details-item">
+          <span>Time:</span>
+          <strong>${booking.booking_time}</strong>
+        </div>
+        ${booking.phone ? `<div class="booking-details-item"><span>Phone:</span><strong>${escapeHtml(booking.phone)}</strong></div>` : ''}
+        ${booking.notes ? `<div class="booking-details-item"><span>Notes:</span><strong>${escapeHtml(booking.notes)}</strong></div>` : ''}
+      </div>
+      <div class="booking-actions">
+        <button class="btn-edit-booking" onclick="editBooking(${booking.id})">Edit</button>
+        <button class="btn-delete-booking-inline" onclick="startDeleteBooking(${booking.id})">Delete</button>
+      </div>
+    </div>
+  `;
+}

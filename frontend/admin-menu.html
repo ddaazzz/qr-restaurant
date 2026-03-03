@@ -179,6 +179,197 @@
 <!-- Category Sidebar (Mobile Only) - Outside menu-container -->
 <div class="menu-category-sidebar"></div>
 
+<!-- ============= HTML TEMPLATES ============= -->
+
+<!-- Template: Menu Item Card -->
+<template id="menu-item-card-template">
+  <div class="menu-item-card-wrapper">
+    <div class="menu-item-image">
+      <img src="" alt="menu-item" class="menu-item-img"/>
+    </div>
+    <div class="menu-item-info">
+      <div class="menu-item-name"></div>
+      <div class="menu-item-price"></div>
+    </div>
+    <div class="menu-edit-controls" style="display: none;">
+      <!-- Controls populated by JS -->
+    </div>
+  </div>
+</template>
+
+<!-- Template: Add Item Card -->
+<template id="add-item-card-template">
+  <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 36px; cursor: pointer;">+</div>
+</template>
+
+<!-- Template: Edit Menu Item Modal -->
+<template id="edit-menu-item-modal-template">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 data-i18n="admin.edit-item">Edit Menu Item</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label data-i18n="admin.item-name">Item Name</label>
+          <input type="text" class="edit-item-name" />
+        </div>
+        <div class="form-group">
+          <label data-i18n="admin.price-cents">Price (cents)</label>
+          <input type="number" class="edit-item-price" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label data-i18n="admin.category">Category</label>
+          <select class="edit-item-category"></select>
+        </div>
+        <div class="form-group">
+          <label data-i18n="admin.availability">Available</label>
+          <select class="edit-item-available">
+            <option value="true" data-i18n="admin.yes">Yes</option>
+            <option value="false" data-i18n="admin.no">No (Sold Out)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label data-i18n="admin.description">Description</label>
+          <textarea class="edit-item-desc" placeholder="Item description..."></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label data-i18n="admin.item-image">Image</label>
+          <div class="image-upload-input">
+            <div class="edit-item-image-preview image-preview-box">
+              <div class="upload-placeholder" data-i18n="admin.upload-image">📸 Click to upload image</div>
+            </div>
+            <input type="file" class="edit-item-image-input hidden-file-input" accept="image/*"/>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary modal-save" data-i18n="admin.save">✓ Save</button>
+      <button class="btn-secondary modal-cancel" data-i18n="admin.cancel">Cancel</button>
+    </div>
+  </div>
+</template>
+
+<!-- Template: Variant View (Read-only) -->
+<template id="variant-view-template">
+  <div class="food-panel-variant-item">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <div class="food-panel-variant-name"></div>
+    </div>
+    <div class="food-panel-variant-options">
+      <!-- Options rendered here -->
+    </div>
+  </div>
+</template>
+
+<!-- Template: Variant Edit (with delete buttons) -->
+<template id="variant-edit-template">
+  <div class="food-panel-variant-item" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <div style="flex: 1;">
+        <div class="food-panel-variant-name" style="cursor: pointer;"></div>
+      </div>
+      <div style="display: flex; gap: 4px;">
+        <button class="btn-tertiary variant-edit-btn" style="font-size: 12px; padding: 4px 8px;"><img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px;"/></button>
+        <button class="btn-danger variant-delete-btn" style="padding: 4px 8px;"><img src="/uploads/website/bin.png" alt="delete" style="width: 14px; height: 14px;"/></button>
+      </div>
+    </div>
+    <div class="food-panel-variant-options">
+      <!-- Options rendered here -->
+    </div>
+  </div>
+</template>
+
+<!-- Template: Variant Inline Edit Form -->
+<template id="variant-inline-edit-template">
+  <div style="padding: 8px; border: 2px solid #2196F3; border-radius: 4px; background: #f5f5f5;">
+    <div style="margin-bottom: 8px;">
+      <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;" data-i18n="admin.variant-name">Variant Name</label>
+      <input class="inline-variant-name" type="text" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+    </div>
+    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+      <div style="flex: 1;">
+        <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;" data-i18n="admin.variant-min-select">Min Select</label>
+        <input class="inline-variant-min" type="number" min="0" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+      </div>
+      <div style="flex: 1;">
+        <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;" data-i18n="admin.variant-max-select">Max Select</label>
+        <input class="inline-variant-max" type="number" min="0" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+      </div>
+    </div>
+    <div style="margin-bottom: 8px;">
+      <label style="display: flex; align-items: center; font-size: 12px;">
+        <input class="inline-variant-required" type="checkbox" style="margin-right: 6px;" />
+        <span data-i18n="admin.variant-required">Required</span>
+      </label>
+    </div>
+    <div style="display: flex; gap: 6px;">
+      <button class="variant-inline-save" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.save">Save</button>
+      <button class="variant-inline-cancel" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.cancel">Cancel</button>
+      <button class="variant-options-edit-btn" style="flex: 1; padding: 6px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.edit-options">Edit Options</button>
+    </div>
+  </div>
+</template>
+
+<!-- Template: Variant Options Editor -->
+<template id="variant-options-editor-template">
+  <div style="padding: 8px; border: 2px solid #FF9800; border-radius: 4px; background: #fff3e0;">
+    <h4 style="margin: 0 0 8px 0; font-size: 13px;" class="options-editor-title">Edit Options</h4>
+    <div style="margin-bottom: 8px; max-height: 200px; overflow-y: auto;" class="options-list">
+      <!-- Options rendered here -->
+    </div>
+    <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+      <button class="add-option-btn" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.add-option">+ Add Option</button>
+      <button class="back-to-variant-btn" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.back">Back to Edit</button>
+    </div>
+    <div style="display: none; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;" class="option-form-inline">
+      <h5 style="margin: 0 0 8px 0; font-size: 12px;">Add Option</h5>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div>
+          <label style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;" data-i18n="admin.option-name">Option Name</label>
+          <input class="inline-option-name" type="text" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
+        </div>
+        <div>
+          <label style="display: block; font-size: 11px; font-weight: 500; margin-bottom: 2px;" data-i18n="admin.option-price-label">Price (cents) - optional</label>
+          <input class="inline-option-price" type="number" placeholder="0" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button class="save-inline-option" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;" data-i18n="admin.save">Save</button>
+          <button class="cancel-inline-option" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;" data-i18n="admin.cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Template: Variant Option Edit Form -->
+<template id="variant-option-edit-form-template">
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 6px; background: #f5f5f5; border: 2px solid #2196F3; border-radius: 3px; margin-bottom: 4px;">
+    <div style="display: flex; gap: 6px;">
+      <div style="flex: 1;">
+        <label style="display: block; font-size: 10px; font-weight: 500; margin-bottom: 2px;" data-i18n="admin.name">Name</label>
+        <input class="option-name-input" type="text" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; box-sizing: border-box;" />
+      </div>
+      <div style="flex: 0 0 80px;">
+        <label style="display: block; font-size: 10px; font-weight: 500; margin-bottom: 2px;" data-i18n="admin.price">Price</label>
+        <input class="option-price-input" type="number" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; box-sizing: border-box;" />
+      </div>
+    </div>
+    <div style="display: flex; gap: 4px;">
+      <button class="option-save-btn" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;" data-i18n="admin.save">Save</button>
+      <button class="option-cancel-btn" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;" data-i18n="admin.cancel">Cancel</button>
+    </div>
+  </div>
+</template>
+
 <!-- Language initialization script -->
 <script>
   (function() {

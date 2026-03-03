@@ -1,13 +1,13 @@
 // ============== STAFF PORTAL API CONFIGURATION ==============
 const API_BASE = (() => {
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    return "http://localhost:10000/api";
-  } else if (window.location.hostname.startsWith("192.") || window.location.hostname.startsWith("10.") || window.location.hostname.startsWith("172.")) {
-    // Local network IP (iPad, phone, etc.)
-    return `http://${window.location.hostname}:10000/api`;
-  } else {
-    return "https://chuio.io/api";
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+  const isLocalIP = hostname.startsWith("192.") || hostname.startsWith("10.") || hostname.startsWith("172.");
+  
+  if (isLocalhost || isLocalIP) {
+    return `http://${window.location.host}/api`;
   }
+  return "https://chuio.io/api";
 })();
 
 // Reset menu background when on staff page
