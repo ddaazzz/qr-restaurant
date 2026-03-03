@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, LoginCredentials } from '../types';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
+const API_URL = 'http://localhost:10000';
 
 class APIClient {
   private client: AxiosInstance;

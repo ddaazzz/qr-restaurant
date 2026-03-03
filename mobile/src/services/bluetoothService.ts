@@ -1,6 +1,6 @@
 import { BleManager, Device, Subscription } from 'react-native-ble-plx';
 import { Platform } from 'react-native';
-import * as Device as ExpoDevice from 'expo-device';
+import * as ExpoDevice from 'expo-device';
 import * as Permissions from 'expo-permissions';
 import { BluetoothPrinter, PrinterConfig } from '../types';
 

@@ -24,10 +24,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const bootstrapAsync = async () => {
     try {
+      console.log('[Auth] Starting bootstrap...');
       const token = await SecureStore.getItemAsync('authToken');
       const restaurantId = await SecureStore.getItemAsync('restaurantId');
       const role = await SecureStore.getItemAsync('role');
       const userId = await SecureStore.getItemAsync('userId');
+
+      console.log('[Auth] Bootstrap values:', { hasToken: !!token, hasRestaurantId: !!restaurantId, role });
 
       if (token && restaurantId && role) {
         apiClient.setRestaurantId(restaurantId);
@@ -37,10 +40,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           role: role as AuthResponse['role'],
           userId: userId || '',
         });
+        console.log('[Auth] User restored from storage');
+      } else {
+        console.log('[Auth] No saved credentials, showing login');
       }
     } catch (error) {
-      console.error('Failed to restore token', error);
+      console.error('[Auth] Failed to restore token', error);
     } finally {
+      console.log('[Auth] Bootstrap complete');
       setIsLoading(false);
     }
   };
