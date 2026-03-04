@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  ScrollView,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { TablesTab } from './admin/TablesTab';
@@ -17,11 +18,12 @@ import { SettingsTab } from './admin/SettingsTab';
 import { BookingsTab } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
 
-type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
+type ActiveTab = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
 
 export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('tables');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('tables');
+  const ordersTabRef = useRef(null);
 
   if (!user?.restaurantId) {
     return (
@@ -48,7 +50,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       case 'tables':
         return <TablesTab restaurantId={user.restaurantId} />;
       case 'orders':
-        return <OrdersTab restaurantId={user.restaurantId} />;
+        return <OrdersTab ref={ordersTabRef} restaurantId={user.restaurantId} />;
       case 'menu':
         return <MenuTab restaurantId={user.restaurantId} />;
       case 'staff':
@@ -68,30 +70,43 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Admin Dashboard</Text>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={styles.logoutBtn}>Logout</Text>
+        <Text style={styles.title}>Admin Panel</Text>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
       {/* Tab Navigation */}
-      <View style={styles.tabBar}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabBarContainer}
+        contentContainerStyle={styles.tabBar}
+      >
         {(['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'] as const).map(
           (tab) => (
             <TouchableOpacity
               key={tab}
-              style={[styles.tab, activeTab === tab && styles.activeTab]}
+              style={[
+                styles.tabButton,
+                activeTab === tab && styles.tabButtonActive,
+              ]}
               onPress={() => setActiveTab(tab)}
             >
-              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  activeTab === tab && styles.tabButtonTextActive,
+                ]}
+              >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </Text>
             </TouchableOpacity>
           )
         )}
-      </View>
+      </ScrollView>
 
-      {/* Content */}
+      {/* Tab Content */}
       <View style={styles.content}>{renderTabContent()}</View>
     </SafeAreaView>
   );
@@ -110,49 +125,61 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#2196F3',
-    padding: 20,
-    paddingTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1976D2',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
   },
-  logoutBtn: {
+  logoutButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
+  },
+  logoutButtonText: {
     color: '#fff',
-    fontSize: 14,
-    padding: 8,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tabBarContainer: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    paddingHorizontal: 5,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
     paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
   },
-  activeTab: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#2196F3',
+  tabButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 6,
+    marginHorizontal: 2,
   },
-  tabText: {
-    fontSize: 12,
+  tabButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#666',
   },
-  activeTabText: {
-    color: '#2196F3',
-    fontWeight: 'bold',
+  tabButtonTextActive: {
+    color: '#fff',
   },
   content: {
     flex: 1,
+    backgroundColor: '#fff',
   },
 });
