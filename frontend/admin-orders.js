@@ -1045,7 +1045,7 @@ function setOrderHistoryFilter(filterType) {
 async function selectSessionFromHistory(sessionId) {
   try {
     // Fetch orders for this session
-    const response = await fetch(`${API}/sessions/${sessionId}/orders`);
+    const response = await fetch(`${API}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`);
     if (!response.ok) throw new Error('Failed to load session orders');
     
     let data = await response.json();

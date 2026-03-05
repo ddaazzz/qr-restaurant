@@ -332,6 +332,100 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
 });
 
 /**
+ * GET /sessions/:sessionId/orders?restaurantId=X
+ * Returns all orders with items for a session
+ */
+router.get("/sessions/:sessionId/orders", async (req, res) => {
+  const sessionId = Number(req.params.sessionId);
+  const restaurantId = Number(req.query.restaurantId);
+
+  if (!sessionId || !restaurantId) {
+    return res.status(400).json({ error: "Invalid session id or restaurant id" });
+  }
+
+  try {
+    // Verify session belongs to this restaurant
+    const sessionRes = await pool.query(
+      `SELECT id, restaurant_id FROM table_sessions WHERE id = $1 AND restaurant_id = $2`,
+      [sessionId, restaurantId]
+    );
+
+    if (sessionRes.rowCount === 0) {
+      return res.status(403).json({ error: "Session not found or doesn't belong to this restaurant" });
+    }
+
+    // Get all orders with items for this session
+    const { rows } = await pool.query(
+      `
+      SELECT
+        o.id as order_id,
+        oi.id as order_item_id,
+        mi.name as item_name,
+        oi.quantity,
+        oi.price_cents,
+        oi.status,
+        COALESCE(
+          STRING_AGG(
+            DISTINCT v.name || ': ' || vo.name,
+            ', '
+          ),
+          ''
+        ) AS variants
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
+      LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
+      LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
+      WHERE o.session_id = $1
+        AND o.status <> 'cancelled'
+        AND (oi.removed IS FALSE OR oi.removed IS NULL)
+      GROUP BY
+        o.id,
+        oi.id,
+        mi.name,
+        oi.quantity,
+        oi.price_cents,
+        oi.status
+      ORDER BY o.id ASC, oi.id ASC
+      `,
+      [sessionId]
+    );
+
+    // Group into orders
+    const ordersMap: any = {};
+
+    for (const row of rows) {
+      if (!ordersMap[row.order_id]) {
+        ordersMap[row.order_id] = {
+          order_id: row.order_id,
+          items: []
+        };
+      }
+
+      const itemTotal = Number(row.quantity) * Number(row.price_cents);
+
+      ordersMap[row.order_id].items.push({
+        order_item_id: row.order_item_id,
+        name: row.item_name,
+        quantity: row.quantity,
+        status: row.status,
+        unit_price_cents: row.price_cents,
+        item_total_cents: itemTotal,
+        variants: row.variants || ''
+      });
+    }
+
+    res.json({
+      items: Object.values(ordersMap)
+    });
+  } catch (err) {
+    console.error("Get session orders failed", err);
+    res.status(500).json({ error: "Failed to get session orders" });
+  }
+});
+
+/**
  * END session (staff only)
  */
 router.post("/table-sessions/:sessionId/end", async (req, res) => {

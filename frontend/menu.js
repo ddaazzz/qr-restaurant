@@ -712,7 +712,7 @@ async function loadOrderStatus() {
   }
 
   try {
-    const url = `${API_BASE}/sessions/${sessionId}/orders`;
+    const url = `${API_BASE}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`;
     console.log("📡 Fetching orders from:", url);
     
     const res = await fetch(url);

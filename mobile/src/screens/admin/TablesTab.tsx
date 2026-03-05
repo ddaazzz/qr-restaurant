@@ -17,6 +17,7 @@ import {
   Pressable,
 } from 'react-native';
 import RNModal from 'react-native-modal';
+import * as QRCode from 'qrcode';
 import { apiClient } from '../../services/apiClient';
 
 interface TableCategory {
@@ -49,11 +50,14 @@ interface TableState {
   table_name: string;
   seat_count: number;
   category_id: number;
+  table_unit_id?: number;
+  unit_code?: string;
+  unit_name?: string;
+  qr_token?: string;
   session_id?: number;
   pax?: number;
   started_at?: string;
   bill_closure_requested?: boolean;
-  qr_token?: string;
   booking_time?: string;
 }
 
@@ -169,6 +173,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
       // Transform into table objects
       const tableMap: { [key: number]: Table } = {};
+      const unitsMap: { [key: number]: Set<number> } = {}; // Track which units we've seen for each table
+      
       tableStateRes.data.forEach((row: TableState) => {
         if (!tableMap[row.table_id]) {
           tableMap[row.table_id] = {
@@ -180,6 +186,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             units: [],
             reserved: false,
           };
+          unitsMap[row.table_id] = new Set();
+        }
+
+        // Add unit to table if not already added (each row represents one unit)
+        if (row.table_unit_id && !unitsMap[row.table_id].has(row.table_unit_id)) {
+          unitsMap[row.table_id].add(row.table_unit_id);
+          tableMap[row.table_id].units.push({
+            id: row.table_unit_id,
+            qr_token: row.qr_token,
+          } as any);
         }
 
         if (row.session_id) {
@@ -225,17 +241,53 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   // Load QR image when modal opens
   useEffect(() => {
-    if (showQRModal && selectedTable?.units?.[0]?.qr_token) {
+    if (showQRModal && selectedSession) {
+      console.log('[QR Debug] QR Modal opened, session:', selectedSession);
+      console.log('[QR Debug] selectedTable:', selectedTable);
+      console.log('[QR Debug] selectedTable.units:', selectedTable?.units);
+      
+      // Get QR token from selectedTable.units
+      const qrToken = selectedTable?.units?.[0]?.qr_token;
+      console.log('[QR Debug] QR Token from table units:', qrToken);
+      
+      if (!qrToken) {
+        console.log('[QR Debug] No QR token found in table units, units:', selectedTable?.units);
+        setQrLoading(false);
+        return;
+      }
+
       setQrLoading(true);
-      const token = selectedTable.units[0].qr_token;
-      // Generate QR code image URL
-      const baseUrl = __DEV__ ? 'http://192.168.1.100:3000' : 'https://api.chuio.io';
-      setQrImageUrl(`${baseUrl}/api/qr/${token}`);
-      setQrLoading(false);
+      // Generate QR code as data URI using the qrcode library
+      const qrDataUrl = `https://chuio.io/${qrToken}`;
+      console.log('[QR Debug] QR Data URL to encode:', qrDataUrl);
+      
+      QRCode.toDataURL(qrDataUrl, {
+        width: 300,
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+      })
+        .then((dataUrl: string) => {
+          console.log('[QR Debug] QR Code generated successfully');
+          console.log('[QR Debug] Data URL length:', dataUrl.length);
+          console.log('[QR Debug] Data URL preview:', dataUrl.substring(0, 50));
+          setQrImageUrl(dataUrl);
+          setQrLoading(false);
+        })
+        .catch((error: any) => {
+          console.error('[QR Debug] Failed to generate QR code:', error);
+          Alert.alert('Error', 'Failed to generate QR code: ' + error.message);
+          setQrLoading(false);
+        });
     } else if (!showQRModal) {
+      console.log('[QR Debug] QR Modal closed, clearing QR');
       setQrImageUrl(null);
+    } else {
+      console.log('[QR Debug] QR Modal conditions not met:', {
+        showQRModal,
+        hasSession: !!selectedSession,
+      });
     }
-  }, [showQRModal, selectedTable]);
+  }, [showQRModal, selectedSession, selectedTable]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -641,7 +693,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   };
 
   const printQR = () => {
-    if (!selectedSession) return;
+    console.log('[PrintQR] Button clicked');
+    console.log('[PrintQR] selectedSession:', selectedSession);
+    console.log('[PrintQR] selectedTable:', selectedTable);
+    if (!selectedSession) {
+      console.log('[PrintQR] No session selected, returning');
+      return;
+    }
+    console.log('[PrintQR] Opening QR modal');
     setShowQRModal(true);
     setShowSessionGearMenu(false);
   };
@@ -961,7 +1020,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Print QR Code</Text>
-
+              
               {selectedTable && selectedSession && qrImageUrl ? (
                 <>
                   <ScrollView style={{ marginBottom: 16 }}>
@@ -1022,6 +1081,21 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 </>
               ) : (
                 <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                  <Text style={{ marginBottom: 20, color: '#666' }}>
+                    Loading QR Code...
+                  </Text>
+                  <Text style={{ marginBottom: 10, fontSize: 12, color: '#999' }}>
+                    Table: {selectedTable?.name || 'NONE'}
+                  </Text>
+                  <Text style={{ marginBottom: 10, fontSize: 12, color: '#999' }}>
+                    Session: {selectedSession?.id || 'NONE'}
+                  </Text>
+                  <Text style={{ marginBottom: 10, fontSize: 12, color: '#999' }}>
+                    QR URL: {qrImageUrl ? 'PRESENT' : 'NOT YET'}
+                  </Text>
+                  <Text style={{ marginBottom: 10, fontSize: 12, color: '#999' }}>
+                    QR Loading: {qrLoading ? 'YES' : 'NO'}
+                  </Text>
                   <ActivityIndicator size="large" color="#3b82f6" />
                 </View>
               )}

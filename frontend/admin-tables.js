@@ -1459,7 +1459,7 @@ async function loadAndRenderOrders(sessionId) {
       await loadAdminSettings();
     }
 
-    const res = await fetch(`${API}/sessions/${sessionId}/orders`);
+    const res = await fetch(`${API}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`);
     if (!res.ok) {
       const err = await res.json();
       console.error("Error loading orders:", err);
@@ -1492,7 +1492,7 @@ async function loadAndRenderOrders(sessionId) {
           return `
             <div class="order-item" style="display:flex;gap:6px;align-items:center;justify-content:space-between;margin:8px 0;">
               <div style="flex:1;">
-                <div><strong>${i.name}</strong></div>
+                <div><strong>${i.name || 'Item'}</strong></div>
                 ${i.variants && i.variants.trim() ? `<div style="font-size:0.85em;color:#666;margin-top:2px;font-style:italic;">${i.variants}</div>` : ''}
                 <div style="color:#999;font-size:0.9em;">${t('admin.status-label')} ${i.status}</div>
               </div>
@@ -1936,7 +1936,7 @@ async function closeBillModal(sessionId) {
   }
 
   // Get orders to calculate total
-  const res = await fetch(`${API}/sessions/${sessionId}/orders`);
+  const res = await fetch(`${API}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`);
   if (!res.ok) return alert("Failed to load orders");
 
   const data = await res.json();
