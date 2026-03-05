@@ -2,7 +2,9 @@ import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, LoginCredentials } from '../types';
 
-const API_URL = 'http://localhost:10000';
+// For iOS simulator on Mac, use 127.0.0.1 instead of localhost
+// For physical devices, you would need the actual host IP
+export const API_URL = 'http://localhost:10000';
 
 class APIClient {
   private client: AxiosInstance;
@@ -225,6 +227,56 @@ class APIClient {
 
   setRestaurantId(id: string) {
     this.restaurantId = id;
+  }
+
+  setToken(token: string) {
+    this.token = token;
+  }
+
+  // Generic HTTP methods
+  async get(url: string, config?: any) {
+    try {
+      const response = await this.client.get(url, config);
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async post(url: string, data?: any, config?: any) {
+    try {
+      const response = await this.client.post(url, data, config);
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async put(url: string, data?: any, config?: any) {
+    try {
+      const response = await this.client.put(url, data, config);
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async delete(url: string, config?: any) {
+    try {
+      const response = await this.client.delete(url, config);
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async patch(url: string, data?: any, config?: any) {
+    try {
+      const response = await this.client.patch(url, data, config);
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
   }
 
   private handleError(error: any): Error {

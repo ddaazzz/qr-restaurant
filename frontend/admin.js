@@ -7,7 +7,7 @@
 // - admin-reports.js (reports)
 // - admin-settings.js (settings, POS, QR preferences)
 
-// Determine API base URL - use ngrok for remote access, local backend for development
+// Determine API base URL - use same domain for remote access, local backend for development
 var API = (() => {
   const hostname = window.location.hostname;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
@@ -15,8 +15,8 @@ var API = (() => {
   if (isLocalhost) {
     return `http://${window.location.host}/api`;
   }
-  // Remote access via ngrok
-  return "https://herma-confined-deloris.ngrok-free.dev/api";
+  // Remote access - use same domain
+  return `https://${window.location.hostname}/api`;
 })();
 
 var restaurantId = localStorage.getItem("restaurantId");

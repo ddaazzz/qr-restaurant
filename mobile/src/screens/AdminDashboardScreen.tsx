@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,23 +7,25 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
-  ScrollView,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
-import { TablesTab } from './admin/TablesTab';
-import { MenuTab } from './admin/MenuTab';
+import { TablesTab, TablesTabRef } from './admin/TablesTab';
+import { MenuTab, MenuTabRef } from './admin/MenuTab';
 import { OrdersTab } from './admin/OrdersTab';
 import { StaffTab } from './admin/StaffTab';
 import { SettingsTab } from './admin/SettingsTab';
 import { BookingsTab } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
 
-type ActiveTab = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
+type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
 
 export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('tables');
-  const ordersTabRef = useRef(null);
+  const [activeTab, setActiveTab] = useState<TabType>('tables');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const tablesTabRef = useRef<TablesTabRef>(null);
+  const menuTabRef = useRef<MenuTabRef>(null);
+  const ordersTabRef = useRef<any>(null);
 
   if (!user?.restaurantId) {
     return (
@@ -45,14 +47,32 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     ]);
   };
 
+  const handleEditToggle = () => {
+    if (tablesTabRef.current?.toggleEditMode) {
+      tablesTabRef.current.toggleEditMode();
+    }
+  };
+
+  const handleMenuEditToggle = () => {
+    if (menuTabRef.current?.toggleEditMode) {
+      menuTabRef.current.toggleEditMode();
+    }
+  };
+
+  const handleHistoryToggle = () => {
+    if (ordersTabRef.current?.toggleHistory) {
+      ordersTabRef.current.toggleHistory();
+    }
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'tables':
-        return <TablesTab restaurantId={user.restaurantId} />;
+        return <TablesTab ref={tablesTabRef} restaurantId={user.restaurantId} />;
       case 'orders':
         return <OrdersTab ref={ordersTabRef} restaurantId={user.restaurantId} />;
       case 'menu':
-        return <MenuTab restaurantId={user.restaurantId} />;
+        return <MenuTab ref={menuTabRef} restaurantId={user.restaurantId} />;
       case 'staff':
         return <StaffTab restaurantId={user.restaurantId} />;
       case 'bookings':
@@ -66,48 +86,85 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     }
   };
 
+  const getTabDisplayName = () => {
+    const names: Record<TabType, string> = {
+      'tables': 'Tables',
+      'orders': 'Orders',
+      'menu': 'Menu',
+      'staff': 'Staff',
+      'bookings': 'Bookings',
+      'reports': 'Reports',
+      'settings': 'Settings',
+    };
+    return names[activeTab];
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Admin Panel</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
+        <TouchableOpacity 
+          onPress={() => setSidebarOpen(!sidebarOpen)}
+          style={styles.menuToggleBtn}
+        >
+          <Text style={styles.menuToggleIcon}>{sidebarOpen ? '◀' : '▶'}</Text>
         </TouchableOpacity>
+        <Text style={styles.title}>{getTabDisplayName()}</Text>
+        <View style={styles.headerActions}>
+          {activeTab === 'tables' && (
+            <TouchableOpacity 
+              style={styles.headerActionBtn}
+              onPress={handleEditToggle}
+            >
+              <Text style={styles.headerActionBtnText}>✎ Edit</Text>
+            </TouchableOpacity>
+          )}
+          {activeTab === 'menu' && (
+            <TouchableOpacity 
+              style={styles.headerActionBtn}
+              onPress={handleMenuEditToggle}
+            >
+              <Text style={styles.headerActionBtnText}>✎ Edit</Text>
+            </TouchableOpacity>
+          )}
+          {activeTab === 'orders' && (
+            <TouchableOpacity 
+              style={styles.headerActionBtn}
+              onPress={handleHistoryToggle}
+            >
+              <Text style={styles.headerActionBtnText}>📜 History</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnContainer}>
+            <Text style={styles.logoutBtn}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Tab Navigation */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabBarContainer}
-        contentContainerStyle={styles.tabBar}
-      >
-        {(['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'] as const).map(
-          (tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.tabButton,
-                activeTab === tab && styles.tabButtonActive,
-              ]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  activeTab === tab && styles.tabButtonTextActive,
-                ]}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          )
+      {/* Main Layout: Sidebar + Content */}
+      <View style={styles.mainLayout}>
+        {/* Sidebar Navigation */}
+        {sidebarOpen && (
+          <View style={styles.sidebar}>
+            {(['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'] as const).map(
+              (tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.sidebarTab, activeTab === tab && styles.sidebarTabActive]}
+                  onPress={() => setActiveTab(tab)}
+                >
+                  <Text style={[styles.sidebarTabText, activeTab === tab && styles.sidebarTabTextActive]}>
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              )
+            )}
+          </View>
         )}
-      </ScrollView>
 
-      {/* Tab Content */}
-      <View style={styles.content}>{renderTabContent()}</View>
+        {/* Content */}
+        <View style={styles.content} key={`tab-${activeTab}`}>{renderTabContent()}</View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -115,7 +172,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f9fafb',
   },
   centerContainer: {
     flex: 1,
@@ -124,62 +181,102 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    backgroundColor: '#f9fafb',
+    padding: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1976D2',
+    borderBottomColor: '#e5e7eb',
   },
-  title: {
-    fontSize: 24,
+  menuToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginLeft: -8,
+    backgroundColor: '#2c3e50',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuToggleIcon: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
   },
-  logoutButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 4,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontSize: 13,
+  title: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
   },
-  tabBarContainer: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  tabBar: {
+  headerActions: {
     flexDirection: 'row',
-    paddingHorizontal: 8,
-    gap: 4,
+    alignItems: 'center',
+    gap: 8,
   },
-  tabButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginVertical: 8,
-    backgroundColor: '#f0f0f0',
+  headerActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#5a5a5a',
     borderRadius: 6,
-    marginHorizontal: 2,
   },
-  tabButtonActive: {
-    backgroundColor: '#2196F3',
-  },
-  tabButtonText: {
-    fontSize: 13,
+  headerActionBtnText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#666',
-  },
-  tabButtonTextActive: {
     color: '#fff',
+  },
+  logoutBtnContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  logoutBtn: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#5a5a5a',
+    color: '#ffffff',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  mainLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  sidebar: {
+    width: 100,
+    backgroundColor: '#f9fafb',
+    borderRightWidth: 2,
+    borderRightColor: '#e5e7eb',
+    paddingVertical: 0,
+  },
+  sidebarTab: {
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  sidebarTabActive: {
+    borderLeftColor: '#5a5a5a',
+    backgroundColor: '#e0e0e0',
+  },
+  sidebarTabText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#1f2937',
+    textAlign: 'center',
+  },
+  sidebarTabTextActive: {
+    color: '#5a5a5a',
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
-    backgroundColor: '#fff',
   },
 });

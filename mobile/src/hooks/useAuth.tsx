@@ -33,6 +33,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Auth] Bootstrap values:', { hasToken: !!token, hasRestaurantId: !!restaurantId, role });
 
       if (token && restaurantId && role) {
+        // Set token and restaurantId on API client
+        apiClient.setToken(token);
         apiClient.setRestaurantId(restaurantId);
         setUser({
           token,
@@ -56,9 +58,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       const response = await apiClient.login({ email, password });
-      await SecureStore.setItemAsync('role', response.role);
-      await SecureStore.setItemAsync('userId', response.userId);
-      apiClient.setRestaurantId(response.restaurantId);
+      // apiClient already handles storing to SecureStore
+      // Just set token and restaurantId on API client and state
+      apiClient.setToken(String(response.token));
+      apiClient.setRestaurantId(String(response.restaurantId));
       setUser(response);
     } finally {
       setIsLoading(false);
@@ -69,9 +72,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       const response = await apiClient.kitchenLogin(pin);
-      await SecureStore.setItemAsync('role', response.role);
-      await SecureStore.setItemAsync('userId', response.userId);
-      apiClient.setRestaurantId(response.restaurantId);
+      // apiClient already handles storing to SecureStore
+      // Just set token and restaurantId on API client and state
+      apiClient.setToken(String(response.token));
+      apiClient.setRestaurantId(String(response.restaurantId));
       setUser(response);
     } finally {
       setIsLoading(false);
@@ -82,8 +86,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       await apiClient.logout();
-      await SecureStore.deleteItemAsync('role');
-      await SecureStore.deleteItemAsync('userId');
+      // apiClient already handles clearing SecureStore
       setUser(null);
     } finally {
       setIsLoading(false);

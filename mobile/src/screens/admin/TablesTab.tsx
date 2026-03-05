@@ -1,0 +1,2154 @@
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  Modal,
+  TextInput,
+  Alert,
+  Dimensions,
+  Image,
+  Share,
+  Pressable,
+} from 'react-native';
+import RNModal from 'react-native-modal';
+import { apiClient } from '../../services/apiClient';
+
+interface TableCategory {
+  id: number;
+  key: string;
+  name?: string;
+}
+
+interface Session {
+  id: number;
+  pax: number;
+  started_at: string;
+  bill_closure_requested?: boolean;
+}
+
+interface Table {
+  id: number;
+  name: string;
+  seat_count: number;
+  category_id: number;
+  sessions: Session[];
+  reserved?: boolean;
+  booking_time?: string;
+  units: Array<{ id: number; qr_token: string }>;
+}
+
+interface TableState {
+  id: number;
+  table_id: number;
+  table_name: string;
+  seat_count: number;
+  category_id: number;
+  session_id?: number;
+  pax?: number;
+  started_at?: string;
+  bill_closure_requested?: boolean;
+  qr_token?: string;
+  booking_time?: string;
+}
+
+interface Bill {
+  total_cents: number;
+  subtotal_cents: number;
+  service_charge_cents?: number;
+  items: Array<{ name: string; price_cents: number; quantity: number; status: string }>;
+}
+
+interface Order {
+  order_id: number;
+  items: Array<{ name: string; quantity: number; unit_price_cents: number; status: string; variants?: string }>;
+}
+
+type ViewType = 'grid' | 'sessionDetail' | 'sessionList';
+
+export interface TablesTabRef {
+  toggleEditMode: () => void;
+}
+
+export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
+  const [categories, setCategories] = useState<TableCategory[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // View state
+  const [currentView, setCurrentView] = useState<ViewType>('grid');
+  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [sessionOrders, setSessionOrders] = useState<Order[]>([]);
+  const [sessionBill, setSessionBill] = useState<Bill | null>(null);
+
+  // Modal states
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showCloseBillModal, setShowCloseBillModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
+  const [showSessionGearMenu, setShowSessionGearMenu] = useState(false);
+  const [showChangePaxModal, setShowChangePaxModal] = useState(false);
+  const [showMoveTableModal, setShowMoveTableModal] = useState(false);
+  const [newPaxValue, setNewPaxValue] = useState('');
+  const [selectedMoveTable, setSelectedMoveTable] = useState<number | null>(null);
+
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [editingTableId, setEditingTableId] = useState<number | null>(null);
+  const [editingTableName, setEditingTableName] = useState('');
+  const [editingTableSeats, setEditingTableSeats] = useState('');
+  const [editingTablePaxId, setEditingTablePaxId] = useState<number | null>(null);
+  const [editingPaxValue, setEditingPaxValue] = useState('');
+  const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
+  const [deletingTableId, setDeletingTableId] = useState<number | null>(null);
+
+  // Modal states for edit operations
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
+  const [showEditTableModal, setShowEditTableModal] = useState(false);
+  const [showEditPaxModal, setShowEditPaxModal] = useState(false);
+  const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false);
+  const [showDeleteTableModal, setShowDeleteTableModal] = useState(false);
+
+  // Form inputs
+  const [categoryName, setCategoryName] = useState('');
+  const [tableName, setTableName] = useState('');
+  const [tableSeats, setTableSeats] = useState('4');
+  const [sessionPax, setSessionPax] = useState('1');
+  const [guestName, setGuestName] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [bookingPax, setBookingPax] = useState('2');
+  const [bookingTime, setBookingTime] = useState('18:00');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [discountAmount, setDiscountAmount] = useState('0');
+  const [closeReason, setCloseReason] = useState('');
+
+  // Service charge
+  const [serviceCharge, setServiceCharge] = useState(0);
+
+  // Expose toggleEditMode through ref
+  useImperativeHandle(ref, () => ({
+    toggleEditMode() {
+      setIsEditMode(prev => !prev);
+    }
+  }), []);
+
+  const getTodayDateString = useCallback(() => {
+    const now = new Date();
+    return now.toISOString().split('T')[0];
+  }, []);
+
+  const loadTableData = useCallback(async () => {
+    try {
+      setError(null);
+      // Load categories
+      const categoriesRes = await apiClient.get(
+        `/api/restaurants/${restaurantId}/table-categories`
+      );
+      setCategories(categoriesRes.data);
+
+      // Load table state
+      const tableStateRes = await apiClient.get(
+        `/api/restaurants/${restaurantId}/table-state`
+      );
+
+      // Transform into table objects
+      const tableMap: { [key: number]: Table } = {};
+      tableStateRes.data.forEach((row: TableState) => {
+        if (!tableMap[row.table_id]) {
+          tableMap[row.table_id] = {
+            id: row.table_id,
+            name: row.table_name,
+            seat_count: row.seat_count,
+            category_id: row.category_id,
+            sessions: [],
+            units: [],
+            reserved: false,
+          };
+        }
+
+        if (row.session_id) {
+          tableMap[row.table_id].sessions.push({
+            id: row.session_id,
+            pax: row.pax || 0,
+            started_at: row.started_at || '',
+            bill_closure_requested: row.bill_closure_requested,
+          });
+        }
+      });
+
+      const tableArray = Object.values(tableMap);
+      setTables(tableArray);
+
+      if (!selectedCategory && categoriesRes.data.length > 0) {
+        setSelectedCategory(categoriesRes.data[0].id);
+      }
+
+      // Load service charge settings
+      try {
+        const settingsRes = await apiClient.get(`/api/restaurants/${restaurantId}/admin-settings`);
+        if (settingsRes.data && settingsRes.data.service_charge_percent) {
+          setServiceCharge(settingsRes.data.service_charge_percent);
+        }
+      } catch (e) {
+        console.log('Could not load service charge settings');
+      }
+    } catch (err: any) {
+      console.error('Error fetching table data:', err);
+      setError(err.message || 'Failed to load tables');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [restaurantId, selectedCategory]);
+
+  useEffect(() => {
+    loadTableData();
+    const interval = setInterval(loadTableData, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, [restaurantId, loadTableData]);
+
+  // Load QR image when modal opens
+  useEffect(() => {
+    if (showQRModal && selectedTable?.units?.[0]?.qr_token) {
+      setQrLoading(true);
+      const token = selectedTable.units[0].qr_token;
+      // Generate QR code image URL
+      const baseUrl = __DEV__ ? 'http://192.168.1.100:3000' : 'https://api.chuio.io';
+      setQrImageUrl(`${baseUrl}/api/qr/${token}`);
+      setQrLoading(false);
+    } else if (!showQRModal) {
+      setQrImageUrl(null);
+    }
+  }, [showQRModal, selectedTable]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadTableData();
+  };
+
+  const filteredTables = selectedCategory
+    ? tables.filter((t) => t.category_id === selectedCategory)
+    : [];
+
+  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const formatDuration = (startedAt: string) => {
+    try {
+      const start = new Date(startedAt);
+      const now = new Date();
+      const diffMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
+
+      if (diffMinutes < 1) return 'just now';
+      if (diffMinutes < 60) return `${diffMinutes}m`;
+
+      const hours = Math.floor(diffMinutes / 60);
+      const mins = diffMinutes % 60;
+      return `${hours}h ${mins}m`;
+    } catch {
+      return '--';
+    }
+  };
+
+  const getTableCardColor = (table: Table) => {
+    if (table.sessions.length === 0 && !table.reserved) return '#f3f4f6';
+    if (table.sessions.length > 1) return '#2196F3';
+    if (table.sessions.length === 1) {
+      const session = table.sessions[0];
+      if (session.bill_closure_requested) return '#ffeb3b';
+
+      try {
+        const start = new Date(session.started_at);
+        const now = new Date();
+        const diffMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
+
+        if (diffMinutes < 30) return '#2196F3';
+        if (diffMinutes < 60) return '#9c27b0';
+        if (diffMinutes < 120) return '#ff9800';
+        return '#f44336';
+      } catch {
+        return '#2196F3';
+      }
+    }
+    if (table.reserved) return '#f3f4f6';
+    return '#f3f4f6';
+  };
+
+  const handleTableClick = (table: Table) => {
+    setSelectedTable(table);
+    if (table.sessions.length > 0) {
+      setCurrentView('sessionList');
+    } else {
+      setCurrentView('sessionDetail');
+    }
+  };
+
+  const loadSessionOrders = async (sessionId: number) => {
+    try {
+      const res = await apiClient.get(
+        `/api/sessions/${sessionId}/orders`
+      );
+      setSessionOrders(res.data.items || []);
+
+      const billRes = await apiClient.get(
+        `/api/sessions/${sessionId}/bill`
+      );
+      setSessionBill(billRes.data);
+    } catch (err) {
+      console.error('Error loading session orders:', err);
+    }
+  };
+
+  const handleSessionClick = async (session: Session) => {
+    setSelectedSession(session);
+    setCurrentView('sessionDetail');
+    await loadSessionOrders(session.id);
+  };
+
+  const createCategory = async () => {
+    if (!categoryName.trim()) {
+      Alert.alert('Error', 'Category name required');
+      return;
+    }
+
+    try {
+      await apiClient.post(
+        `/api/restaurants/${restaurantId}/table-categories`,
+        { name: categoryName }
+      );
+      setCategoryName('');
+      setShowCategoryModal(false);
+      await loadTableData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to create category');
+    }
+  };
+
+  const createTable = async () => {
+    if (!tableName.trim()) {
+      Alert.alert('Error', 'Table name required');
+      return;
+    }
+    if (!tableSeats || parseInt(tableSeats) <= 0) {
+      Alert.alert('Error', 'Valid seat count required');
+      return;
+    }
+
+    try {
+      await apiClient.post(
+        `/api/restaurants/${restaurantId}/tables`,
+        {
+          category_id: selectedCategory,
+          name: tableName,
+          seat_count: parseInt(tableSeats),
+        }
+      );
+      setTableName('');
+      setTableSeats('4');
+      setShowTableModal(false);
+      await loadTableData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to create table');
+    }
+  };
+
+  const editCategory = async (categoryId: number) => {
+    if (!editingCategoryName.trim()) {
+      Alert.alert('Error', 'Category name required');
+      return;
+    }
+
+    try {
+      await apiClient.patch(
+        `/api/restaurants/${restaurantId}/table-categories/${categoryId}`,
+        { name: editingCategoryName }
+      );
+      setEditingCategoryId(null);
+      setEditingCategoryName('');
+      await loadTableData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to edit category');
+    }
+  };
+
+  const deleteCategory = async (categoryId: number, categoryName: string) => {
+    Alert.alert(
+      'Delete Category',
+      `Are you sure you want to delete "${categoryName}"?`,
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              await apiClient.delete(
+                `/api/restaurants/${restaurantId}/table-categories/${categoryId}`
+              );
+              await loadTableData();
+            } catch (err: any) {
+              Alert.alert('Error', err.response?.data?.error || 'Failed to delete category');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
+
+  const updateTable = async () => {
+    if (!editingTableName.trim()) {
+      Alert.alert('Error', 'Table name required');
+      return;
+    }
+    if (!editingTableSeats || parseInt(editingTableSeats) <= 0) {
+      Alert.alert('Error', 'Valid seat count required');
+      return;
+    }
+
+    try {
+      await apiClient.patch(`/tables/${editingTableId}`, {
+        name: editingTableName,
+        seat_count: parseInt(editingTableSeats),
+        restaurantId: parseInt(restaurantId),
+      });
+      setEditingTableId(null);
+      setEditingTableName('');
+      setEditingTableSeats('');
+      setShowEditTableModal(false);
+      await loadTableData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update table');
+    }
+  };
+
+  const deleteTable = async (tableId: number, tableName: string) => {
+    Alert.alert(
+      'Delete Table',
+      `Are you sure you want to delete table "${tableName}"?`,
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              await apiClient.delete(`/tables/${tableId}`, {
+                data: { restaurantId: parseInt(restaurantId) },
+              });
+              await loadTableData();
+            } catch (err: any) {
+              Alert.alert('Error', err.response?.data?.error || 'Failed to delete table');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
+
+  const updateTablePax = async (tableId: number) => {
+    if (!editingPaxValue || parseInt(editingPaxValue) <= 0) {
+      Alert.alert('Error', 'Valid seat count required');
+      return;
+    }
+
+    try {
+      await apiClient.patch(`/tables/${tableId}`, {
+        seat_count: parseInt(editingPaxValue),
+        restaurantId: parseInt(restaurantId),
+      });
+      setEditingTablePaxId(null);
+      setEditingPaxValue('');
+      setShowEditPaxModal(false);
+      await loadTableData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update seat count');
+    }
+  };
+
+  const startSession = async () => {
+    if (!selectedTable || !sessionPax || parseInt(sessionPax) <= 0) {
+      Alert.alert('Error', 'Valid pax count required');
+      return;
+    }
+
+    try {
+      await apiClient.post(
+        `/api/tables/${selectedTable.id}/sessions`,
+        { pax: parseInt(sessionPax) }
+      );
+      setSessionPax('1');
+      setShowSessionModal(false);
+      await loadTableData();
+      setSelectedTable(null);
+      setCurrentView('grid');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to start session');
+    }
+  };
+
+  const bookTable = async () => {
+    if (!guestName.trim() || !guestPhone.trim() || !guestEmail.trim()) {
+      Alert.alert('Error', 'All guest details required');
+      return;
+    }
+
+    try {
+      await apiClient.post(
+        `/api/restaurants/${restaurantId}/bookings`,
+        {
+          table_id: selectedTable?.id,
+          guest_name: guestName,
+          phone_number: guestPhone,
+          email: guestEmail,
+          pax: parseInt(bookingPax),
+          booking_date: getTodayDateString(),
+          booking_time: bookingTime,
+          status: 'confirmed',
+        }
+      );
+      setGuestName('');
+      setGuestPhone('');
+      setGuestEmail('');
+      setShowBookingModal(false);
+      await loadTableData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to book table');
+    }
+  };
+
+  const closeBill = async () => {
+    if (!selectedSession) return;
+
+    try {
+      await apiClient.post(
+        `/api/sessions/${selectedSession.id}/close-bill`,
+        {
+          payment_method: paymentMethod,
+          amount_paid: (sessionBill?.total_cents || 0) - parseInt(discountAmount || '0'),
+          discount_applied: parseInt(discountAmount || '0'),
+          notes: closeReason,
+        }
+      );
+      setShowCloseBillModal(false);
+      setPaymentMethod('cash');
+      setDiscountAmount('0');
+      setCloseReason('');
+      await loadTableData();
+      setCurrentView('grid');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
+    }
+  };
+
+  const endSession = async (sessionId: number) => {
+    Alert.alert('End Session', 'Are you sure you want to end this session?', [
+      { text: 'Cancel' },
+      {
+        text: 'End',
+        onPress: async () => {
+          try {
+            await apiClient.post(
+              `/api/table-sessions/${sessionId}/end`,
+              {}
+            );
+            await loadTableData();
+            setCurrentView('grid');
+          } catch (err: any) {
+            Alert.alert('Error', err.response?.data?.error || 'Failed to end session');
+          }
+        },
+      },
+    ]);
+  };
+
+  const changePax = async (sessionId: number, currentPax: number) => {
+    setNewPaxValue(currentPax.toString());
+    setShowChangePaxModal(true);
+    setShowSessionGearMenu(false);
+  };
+
+  const submitChangePax = async () => {
+    if (!selectedSession || !newPaxValue || parseInt(newPaxValue) <= 0) {
+      Alert.alert('Error', 'Valid pax count required');
+      return;
+    }
+
+    try {
+      await apiClient.patch(
+        `/api/table-sessions/${selectedSession.id}`,
+        { pax: parseInt(newPaxValue) }
+      );
+      setShowChangePaxModal(false);
+      setNewPaxValue('');
+      await loadTableData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update pax');
+    }
+  };
+
+  const moveTable = () => {
+    if (!selectedTable) return;
+    const availableTables = tables.filter((t) => t.sessions.length === 0 && t.id !== selectedTable.id);
+    if (availableTables.length === 0) {
+      Alert.alert('Error', 'No empty tables available');
+      return;
+    }
+    setShowMoveTableModal(true);
+    setShowSessionGearMenu(false);
+  };
+
+  const submitMoveTable = async () => {
+    if (!selectedTable || !selectedSession || !selectedMoveTable) {
+      Alert.alert('Error', 'No table selected');
+      return;
+    }
+
+    try {
+      await apiClient.patch(
+        `/api/table-sessions/${selectedSession.id}/move-table`,
+        { new_table_id: selectedMoveTable }
+      );
+      setShowMoveTableModal(false);
+      setSelectedMoveTable(null);
+      await loadTableData();
+      setCurrentView('grid');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to move table');
+    }
+  };
+
+  const orderForTable = () => {
+    if (!selectedTable || !selectedSession) return;
+    // This would open the order screen for the table
+    // For now, just show an alert
+    Alert.alert('Order for Table', `Open order screen for ${selectedTable.name}`);
+    setShowSessionGearMenu(false);
+  };
+
+  const printQR = () => {
+    if (!selectedSession) return;
+    setShowQRModal(true);
+    setShowSessionGearMenu(false);
+  };
+
+  const printBill = async () => {
+    if (!selectedSession) return;
+    try {
+      // Print bill functionality
+      Alert.alert('Print Bill', `Printing bill for ${selectedTable?.name}`);
+      setShowSessionGearMenu(false);
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to print bill');
+    }
+  };
+
+  const splitBill = () => {
+    if (!selectedSession) return;
+    Alert.alert('Split Bill', 'Split bill functionality - Coming soon');
+    setShowSessionGearMenu(false);
+  };
+
+  const calculateTotal = () => {
+    let total = 0;
+    sessionOrders.forEach((order) => {
+      order.items.forEach((item) => {
+        total += item.quantity * item.unit_price_cents;
+      });
+    });
+
+    const chargeAmount = Math.round(total * serviceCharge / 100);
+    return { subtotal: total, serviceChargeAmount: chargeAmount, total: total + chargeAmount };
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
+
+  if (currentView === 'sessionDetail' && selectedSession && selectedTable) {
+    const totals = calculateTotal();
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setCurrentView('grid')}>
+            <Text style={styles.backButton}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>
+            {selectedTable.name} • {selectedSession.pax} pax
+          </Text>
+          <View style={{ position: 'relative' }}>
+            <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
+              <Text style={styles.gearIcon}>⚙️</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Session Gear Menu - Outside header to avoid clipping */}
+        {showSessionGearMenu && (
+          <>
+            {/* Overlay to close menu when tapped elsewhere */}
+            <Pressable
+              style={styles.menuOverlay}
+              onPress={() => setShowSessionGearMenu(false)}
+            />
+            <View style={styles.gearMenuContainer}>
+              <TouchableOpacity
+                style={styles.gearMenuItem}
+                onPress={() => changePax(selectedSession.id, selectedSession.pax)}
+              >
+                <Text style={styles.gearMenuItemText}>👥 Change Pax</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.gearMenuItem}
+                onPress={moveTable}
+              >
+                <Text style={styles.gearMenuItemText}>↔️ Move Table</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.gearMenuItem}
+                onPress={orderForTable}
+              >
+                <Text style={styles.gearMenuItemText}>📱 Order for Table</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.gearMenuItem}
+                onPress={printQR}
+              >
+                <Text style={styles.gearMenuItemText}>📋 Print QR</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.gearMenuItem}
+                onPress={printBill}
+              >
+                <Text style={styles.gearMenuItemText}>🖨️ Print Bill</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.gearMenuItem}
+                onPress={splitBill}
+              >
+                <Text style={styles.gearMenuItemText}>💵 Split Bill</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.gearMenuItem, styles.gearMenuItemDelete]}
+                onPress={() => {
+                  endSession(selectedSession.id);
+                  setShowSessionGearMenu(false);
+                }}
+              >
+                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>🗑️ End Session</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        <ScrollView style={styles.content}>
+          <Text style={styles.sectionTitle}>Orders</Text>
+          {sessionOrders.length === 0 ? (
+            <Text style={styles.emptyText}>No orders</Text>
+          ) : (
+            sessionOrders.map((order, idx) => (
+              <View key={idx} style={styles.orderCard}>
+                <Text style={styles.orderTitle}>Order #{order.order_id}</Text>
+                {order.items.map((item, itemIdx) => (
+                  <View key={itemIdx} style={styles.orderItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.itemStatus}>{item.status}</Text>
+                    </View>
+                    <Text style={styles.itemPrice}>
+                      {formatPrice(item.quantity * item.unit_price_cents)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ))
+          )}
+
+          <View style={styles.totalsSection}>
+            <View style={styles.totalRow}>
+              <Text>Subtotal</Text>
+              <Text>{formatPrice(totals.subtotal)}</Text>
+            </View>
+            {serviceCharge > 0 && (
+              <View style={styles.totalRow}>
+                <Text>Service Charge ({serviceCharge}%)</Text>
+                <Text>{formatPrice(totals.serviceChargeAmount)}</Text>
+              </View>
+            )}
+            <View style={[styles.totalRow, styles.grandTotal]}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnPrimary]}
+            onPress={() => setShowCloseBillModal(true)}
+          >
+            <Text style={styles.btnText}>Close Bill</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnSecondary]}
+            onPress={() => endSession(selectedSession.id)}
+          >
+            <Text style={styles.btnText}>End Session</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Close Bill Modal */}
+        <Modal visible={showCloseBillModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Close Bill</Text>
+
+              <Text style={styles.label}>Payment Method</Text>
+              <View style={styles.selectGroup}>
+                {['cash', 'card', 'online'].map((method) => (
+                  <TouchableOpacity
+                    key={method}
+                    style={[
+                      styles.selectOption,
+                      paymentMethod === method && styles.selectOptionActive,
+                    ]}
+                    onPress={() => setPaymentMethod(method)}
+                  >
+                    <Text
+                      style={[
+                        styles.selectOptionText,
+                        paymentMethod === method && styles.selectOptionTextActive,
+                      ]}
+                    >
+                      {method.charAt(0).toUpperCase() + method.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.label}>Discount (cents)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={discountAmount}
+                onChangeText={setDiscountAmount}
+                placeholder="0"
+              />
+
+              <Text style={styles.label}>Reason</Text>
+              <TextInput
+                style={[styles.input, styles.multilineInput]}
+                multiline
+                value={closeReason}
+                onChangeText={setCloseReason}
+                placeholder="Optional notes"
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => setShowCloseBillModal(false)}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={closeBill}
+                >
+                  <Text style={styles.btnText}>Close Bill</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Change Pax Modal */}
+        <Modal visible={showChangePaxModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Change Pax</Text>
+
+              <Text style={styles.label}>New Pax Count</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="number-pad"
+                value={newPaxValue}
+                onChangeText={setNewPaxValue}
+                placeholder="1"
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => setShowChangePaxModal(false)}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={submitChangePax}
+                >
+                  <Text style={styles.btnText}>Update</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Move Table Modal */}
+        <Modal visible={showMoveTableModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Move to Table</Text>
+
+              <Text style={styles.label}>Select Available Table</Text>
+              <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
+                {tables
+                  .filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id)
+                  .map((table) => (
+                    <TouchableOpacity
+                      key={table.id}
+                      style={[
+                        styles.tableOption,
+                        selectedMoveTable === table.id && styles.tableOptionSelected,
+                      ]}
+                      onPress={() => setSelectedMoveTable(table.id)}
+                    >
+                      <Text style={styles.tableOptionText}>{table.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => setShowMoveTableModal(false)}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={submitMoveTable}
+                >
+                  <Text style={styles.btnText}>Move</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Print QR Code Modal */}
+        <Modal visible={showQRModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Print QR Code</Text>
+
+              {selectedTable && selectedSession && qrImageUrl ? (
+                <>
+                  <ScrollView style={{ marginBottom: 16 }}>
+                    <View style={styles.qrHeader}>
+                      <Text style={styles.qrHeaderTable}>{selectedTable.name}</Text>
+                      <Text style={styles.qrHeaderPax}>Party of {selectedSession.pax}</Text>
+                    </View>
+                    
+                    <View style={styles.qrImageContainer}>
+                      {qrLoading ? (
+                        <ActivityIndicator size="large" color="#3b82f6" />
+                      ) : (
+                        <Image
+                          source={{ uri: qrImageUrl }}
+                          style={styles.qrImage}
+                          resizeMode="contain"
+                          onError={() => {
+                            Alert.alert('Error', 'Failed to load QR code image');
+                            setShowQRModal(false);
+                          }}
+                        />
+                      )}
+                    </View>
+
+                    <View style={styles.qrFooter}>
+                      <Text style={styles.qrFooterText}>Scan to order</Text>
+                    </View>
+                  </ScrollView>
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnSecondary]}
+                      onPress={() => setShowQRModal(false)}
+                    >
+                      <Text style={styles.btnText}>Close</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnPrimary]}
+                      onPress={async () => {
+                        if (!selectedTable.units || !selectedTable.units[0]) return;
+                        const qrToken = selectedTable.units[0].qr_token;
+                        const message = `QR Code for ${selectedTable.name}\nParty of ${selectedSession.pax}\nhttps://chuio.io/${qrToken}`;
+                        try {
+                          await Share.share({
+                            message: message,
+                            title: `QR Code - ${selectedTable.name}`,
+                          });
+                        } catch (err: any) {
+                          if (!err.message?.includes('User cancelled')) {
+                            Alert.alert('Error', 'Failed to share QR code');
+                          }
+                        }
+                      }}
+                    >
+                      <Text style={styles.btnText}>📋 Print QR</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator size="large" color="#3b82f6" />
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  if (currentView === 'sessionList' && selectedTable) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setCurrentView('grid')}>
+            <Text style={styles.backButton}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>{selectedTable.name}</Text>
+        </View>
+
+        <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <Text style={styles.sectionTitle}>Active Sessions</Text>
+          {selectedTable.sessions.length === 0 ? (
+            <Text style={styles.emptyText}>No active sessions</Text>
+          ) : (
+            selectedTable.sessions.map((session, idx) => (
+              <TouchableOpacity
+                key={session.id}
+                style={styles.sessionCard}
+                onPress={() => handleSessionClick(session)}
+              >
+                <View>
+                  <Text style={styles.sessionTitle}>
+                    {selectedTable.name}
+                    {String.fromCharCode(65 + idx)}
+                  </Text>
+                  <Text style={styles.sessionInfo}>
+                    {session.pax} pax • Dining {formatDuration(session.started_at)}
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
+            ))
+          )}
+
+          {selectedTable.sessions.length < selectedTable.seat_count && (
+            <>
+              <Text style={styles.sectionTitle}>Options</Text>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={() => setShowSessionModal(true)}
+              >
+                <Text style={styles.btnText}>Start New Session</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          <TouchableOpacity
+            style={[styles.btn, styles.btnSecondary]}
+            onPress={() => {
+              setShowBookingModal(true);
+            }}
+          >
+            <Text style={styles.btnText}>Book Table</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Session Modal */}
+        <Modal visible={showSessionModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Start New Session</Text>
+
+              <Text style={styles.label}>Number of Guests</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="number-pad"
+                value={sessionPax}
+                onChangeText={setSessionPax}
+                placeholder="1"
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => setShowSessionModal(false)}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={startSession}
+                >
+                  <Text style={styles.btnText}>Start Session</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Booking Modal */}
+        <Modal visible={showBookingModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <Text style={styles.modalTitle}>Book Table</Text>
+
+              <Text style={styles.label}>Guest Name</Text>
+              <TextInput
+                style={styles.input}
+                value={guestName}
+                onChangeText={setGuestName}
+                placeholder="John Smith"
+              />
+
+              <Text style={styles.label}>Phone</Text>
+              <TextInput
+                style={styles.input}
+                value={guestPhone}
+                onChangeText={setGuestPhone}
+                placeholder="+1 (555) 123-4567"
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                value={guestEmail}
+                onChangeText={setGuestEmail}
+                placeholder="john@example.com"
+                keyboardType="email-address"
+              />
+
+              <Text style={styles.label}>Guests</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="number-pad"
+                value={bookingPax}
+                onChangeText={setBookingPax}
+                placeholder="2"
+              />
+
+              <Text style={styles.label}>Reservation Time</Text>
+              <TextInput
+                style={styles.input}
+                value={bookingTime}
+                onChangeText={setBookingTime}
+                placeholder="18:00"
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => setShowBookingModal(false)}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={bookTable}
+                >
+                  <Text style={styles.btnText}>Book Table</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Category Bar Wrapper - Separate Context */}
+      <View style={styles.categoryBarWrapper}>
+        <ScrollView
+          horizontal
+          scrollEnabled={true}
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryScroll}
+          contentContainerStyle={styles.categoryContent}
+        >
+          {/* Add Category Button - Visible in Edit Mode */}
+          {isEditMode && (
+            <TouchableOpacity
+              style={[styles.categoryBtn, styles.categoryBtnAdd]}
+              onPress={() => setShowCategoryModal(true)}
+            >
+              <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
+                + Add
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {categories.map((cat) => (
+            <View key={cat.id} style={{ position: 'relative' }}>
+              <TouchableOpacity
+                style={[
+                  styles.categoryBtn,
+                  selectedCategory === cat.id && styles.categoryBtnActive,
+                ]}
+                onPress={() => setSelectedCategory(cat.id)}
+              >
+                <Text
+                  style={[
+                    styles.categoryBtnText,
+                    selectedCategory === cat.id && styles.categoryBtnTextActive,
+                  ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {cat.key || cat.name || `Cat ${cat.id}`}
+                </Text>
+              </TouchableOpacity>
+              {isEditMode && (
+                <View style={styles.categoryActionButtons}>
+                  <TouchableOpacity
+                    style={styles.categoryActionBtn}
+                    onPress={() => {
+                      setEditingCategoryId(cat.id);
+                      setEditingCategoryName(cat.name || cat.key || '');
+                      setShowEditCategoryModal(true);
+                    }}
+                  >
+                    <Text style={styles.categoryActionBtnText}>✏️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.categoryActionBtn, styles.categoryActionBtnDelete]}
+                    onPress={() => deleteCategory(cat.id, cat.name || cat.key || `Category ${cat.id}`)}
+                  >
+                    <Text style={styles.categoryActionBtnText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Tables Grid Wrapper - Separate Context */}
+      <View style={styles.tablesGridWrapper}>
+        <FlatList
+          data={isEditMode && selectedCategory 
+            ? [...filteredTables, { id: 'add-table', name: '+ Add Table', isAddButton: true }]
+            : filteredTables
+          }
+          keyExtractor={(item: any) => (item.id === 'add-table' ? 'add-table' : item.id.toString())}
+          renderItem={({ item: tableOrAdd }: any) => {
+            if (tableOrAdd.isAddButton) {
+              return (
+                <View style={styles.tableCardWrapper}>
+                  <TouchableOpacity
+                    style={[styles.tableCard, { backgroundColor: '#e8e8e8' }]}
+                    onPress={() => setShowTableModal(true)}
+                  >
+                    <View style={styles.tableCardContent}>
+                      <Text style={[styles.tableCardName, { color: '#666' }]}>
+                        + Add Table
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+            const table = tableOrAdd as Table;
+            return (
+          <View style={styles.tableCardWrapper}>
+            <TouchableOpacity
+              style={[styles.tableCard, { backgroundColor: getTableCardColor(table) }]}
+              onPress={() => handleTableClick(table)}
+            >
+              <View style={styles.tableCardContent}>
+                <Text style={[styles.tableCardName, getTableTextColor(getTableCardColor(table))]}>
+                  {table.name}
+                </Text>
+                {table.sessions.length > 0 && (
+                  <Text style={[{ fontSize: 12, marginTop: 6 }, getTableTextColor(getTableCardColor(table))]}>
+                    {table.sessions.length} active • {table.sessions[0].pax} pax
+                  </Text>
+                )}
+                {table.sessions.length === 0 && !table.reserved && (
+                  <Text style={[{ fontSize: 12, marginTop: 6 }, getTableTextColor(getTableCardColor(table))]}>
+                    ○ Available
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+            {isEditMode && (
+              <View style={styles.tableActionButtonsContainer}>
+                {/* Edit Table Button */}
+                <TouchableOpacity
+                  style={styles.tableActionBtn}
+                  onPress={() => {
+                    setEditingTableId(table.id);
+                    setEditingTableName(table.name);
+                    setEditingTableSeats(table.seat_count.toString());
+                    setShowEditTableModal(true);
+                  }}
+                >
+                  <Text style={styles.tableActionBtnText}>✏️</Text>
+                </TouchableOpacity>
+                {/* Change Pax/Seat Count Button - Always visible */}
+                <TouchableOpacity
+                  style={styles.tableActionBtn}
+                  onPress={() => {
+                    setEditingTablePaxId(table.id);
+                    setEditingPaxValue(table.seat_count.toString());
+                    setShowEditPaxModal(true);
+                  }}
+                >
+                  <Text style={styles.tableActionBtnText}>👥</Text>
+                </TouchableOpacity>
+                {/* Delete Table Button */}
+                <TouchableOpacity
+                  style={[styles.tableActionBtn, styles.tableActionBtnDelete]}
+                  onPress={() => deleteTable(table.id, table.name)}
+                >
+                  <Text style={styles.tableActionBtnText}>🗑️</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+            );
+          }}
+        numColumns={3}
+        columnWrapperStyle={styles.gridRow}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No tables in this category</Text>
+          </View>
+        }
+        contentContainerStyle={styles.listContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      />
+      </View>
+
+      {/* Category Modal */}
+      <Modal visible={showCategoryModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>New Category</Text>
+
+            <Text style={styles.label}>Category Name</Text>
+            <TextInput
+              style={styles.input}
+              value={categoryName}
+              onChangeText={setCategoryName}
+              placeholder="e.g., Main Floor"
+              autoFocus
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => setShowCategoryModal(false)}
+              >
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={createCategory}
+              >
+                <Text style={styles.btnText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Category Modal */}
+      <Modal visible={editingCategoryId !== null} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Category</Text>
+
+            <Text style={styles.label}>Category Name</Text>
+            <TextInput
+              style={styles.input}
+              value={editingCategoryName}
+              onChangeText={setEditingCategoryName}
+              placeholder="e.g., Main Floor"
+              autoFocus
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => {
+                  setEditingCategoryId(null);
+                  setEditingCategoryName('');
+                }}
+              >
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={() => editingCategoryId && editCategory(editingCategoryId)}
+              >
+                <Text style={styles.btnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Table Modal */}
+      <Modal visible={showTableModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>New Table</Text>
+
+            <Text style={styles.label}>Table Name</Text>
+            <TextInput
+              style={styles.input}
+              value={tableName}
+              onChangeText={setTableName}
+              placeholder="e.g., T01"
+            />
+
+            <Text style={styles.label}>Seat Count</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              value={tableSeats}
+              onChangeText={setTableSeats}
+              placeholder="4"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => setShowTableModal(false)}
+              >
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={createTable}
+              >
+                <Text style={styles.btnText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Table Modal */}
+      <Modal visible={editingTableId !== null} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Table</Text>
+
+            <Text style={styles.label}>Table Name</Text>
+            <TextInput
+              style={styles.input}
+              value={editingTableName}
+              onChangeText={setEditingTableName}
+              placeholder="e.g., T01"
+              autoFocus
+            />
+
+            <Text style={styles.label}>Seat Count</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              value={editingTableSeats}
+              onChangeText={setEditingTableSeats}
+              placeholder="4"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => {
+                  setEditingTableId(null);
+                  setEditingTableName('');
+                  setEditingTableSeats('');
+                }}
+              >
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={updateTable}
+              >
+                <Text style={styles.btnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Table Pax Modal */}
+      <Modal visible={editingTablePaxId !== null} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Table Capacity</Text>
+
+            <Text style={styles.label}>Seat Count</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              value={editingPaxValue}
+              onChangeText={setEditingPaxValue}
+              placeholder="1"
+              autoFocus
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => {
+                  setEditingTablePaxId(null);
+                  setEditingPaxValue('');
+                }}
+              >
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={() => {
+                  if (editingTablePaxId) {
+                    updateTablePax(editingTablePaxId);
+                  }
+                }}
+              >
+                <Text style={styles.btnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+    </View>
+  );
+});
+
+const getTableTextColor = (bgColor: string) => {
+  if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b') {
+    return { color: '#000' };
+  }
+  return { color: '#fff' };
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  backButton: {
+    fontSize: 16,
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    flex: 1,
+    textAlign: 'center',
+  },
+  editBtnText: {
+    color: '#3b82f6',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  editBtnDone: {
+    color: '#10b981',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  gearIcon: {
+    fontSize: 20,
+    color: '#3b82f6',
+  },
+  gearMenuContainer: {
+    position: 'absolute',
+    top: 55,
+    right: 16,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 1000,
+    minWidth: 180,
+  },
+  menuOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+  },
+  gearMenuItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  gearMenuItemDelete: {
+    borderBottomWidth: 0,
+  },
+  gearMenuItemText: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  gearMenuItemTextDelete: {
+    color: '#dc2626',
+  },
+  tableOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  tableOptionSelected: {
+    backgroundColor: '#3b82f6',
+  },
+  tableOptionText: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  categoryBarWrapper: {
+    flex: 0,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  tablesGridWrapper: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  categoryScroll: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    height: 48,
+    flexShrink: 0,
+  },
+  categoryContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  categoryBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: '#f9fafb',
+    marginHorizontal: 4,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryBtnActive: {
+    backgroundColor: '#3b82f6',
+  },
+  categoryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  categoryBtnTextActive: {
+    color: '#ffffff',
+  },
+  categoryBtnAdd: {
+    backgroundColor: '#e5e7eb',
+  },
+  categoryBtnAddText: {
+    color: '#4b5563',
+  },
+  categoryActionButtons: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingRight: 4,
+  },
+  categoryActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.8,
+  },
+  categoryActionBtnDelete: {
+    backgroundColor: '#ef4444',
+  },
+  listContent: {
+    padding: 12,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  tableCardWrapper: {
+    flex: 1,
+    marginRight: 8,
+    position: 'relative',
+  },
+  tableCard: {
+    flex: 1,
+    borderRadius: 8,
+    padding: 16,
+    paddingTop: 40,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    minHeight: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableEditIconsContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  tableActionButtonsContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  tableEditIcon: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  tableActionBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  tableActionBtnDelete: {
+    backgroundColor: 'rgba(255, 100, 100, 0.9)',
+  },
+  tableDeleteIcon: {
+    backgroundColor: 'rgba(255, 100, 100, 0.9)',
+  },
+  tableEditIconText: {
+    fontSize: 16,
+  },
+  tableActionBtnText: {
+    fontSize: 16,
+  },
+  categoryActionBtnText: {
+    fontSize: 14,
+  },
+  tableCardContent: {
+    alignItems: 'center',
+  },
+  tableCardName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 16,
+    marginBottom: 8,
+    color: '#1f2937',
+  },
+  orderCard: {
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+  },
+  orderTitle: {
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#1f2937',
+  },
+  orderItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  itemName: {
+    fontWeight: '500',
+    color: '#1f2937',
+    fontSize: 13,
+  },
+  itemStatus: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  itemPrice: {
+    fontWeight: '600',
+    color: '#1f2937',
+    fontSize: 13,
+  },
+  totalsSection: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 6,
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  grandTotal: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+    paddingTop: 12,
+    backgroundColor: '#374151',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+  },
+  totalLabel: {
+    fontWeight: '700',
+    color: '#fff',
+    fontSize: 14,
+  },
+  sessionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+  },
+  sessionTitle: {
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  sessionInfo: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  chevron: {
+    fontSize: 20,
+    color: '#d1d5db',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  btn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  btnPrimary: {
+    backgroundColor: '#3b82f6',
+  },
+  btnSecondary: {
+    backgroundColor: '#e5e7eb',
+  },
+  btnText: {
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    maxHeight: Dimensions.get('window').height * 0.8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#1f2937',
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
+    color: '#374151',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+    fontSize: 14,
+  },
+  multilineInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  selectGroup: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  selectOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+  },
+  selectOptionActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  selectOptionText: {
+    fontWeight: '600',
+    color: '#6b7280',
+    fontSize: 12,
+  },
+  selectOptionTextActive: {
+    color: '#fff',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  errorContainer: {
+    backgroundColor: '#fee',
+    padding: 12,
+    borderRadius: 8,
+    margin: 12,
+  },
+  errorText: {
+    color: '#c33',
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  retryBtn: {
+    backgroundColor: '#c33',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  retryBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+
+  // QR Modal styling
+  bottomSheetModal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  qrModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: '90%',
+    paddingTop: 0,
+  },
+  qrModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  qrModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  qrModalCloseButton: {
+    fontSize: 24,
+    color: '#666',
+    fontWeight: '600',
+  },
+  qrModalBody: {
+    padding: 16,
+  },
+  qrModalBodyContent: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  qrHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  qrHeaderTable: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  qrHeaderPax: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  qrImageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  qrImage: {
+    width: '90%',
+    height: '90%',
+  },
+  qrFooter: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  qrFooterText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
+  qrErrorText: {
+    fontSize: 14,
+    color: '#dc2626',
+    textAlign: 'center',
+  },
+  qrModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  editModeControls: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+});
