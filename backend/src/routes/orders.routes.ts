@@ -556,9 +556,26 @@ router.patch("/order-items/:orderItemId/status", async (req, res) => {
 // PATCH /order-items/:id
 router.patch("/order-items/:id", async (req, res) => {
   const { id } = req.params;
-  const { quantity } = req.body;
+  const { quantity, restaurantId } = req.body;
+
+  if (!restaurantId) {
+    return res.status(400).json({ error: "Restaurant ID is required" });
+  }
 
   try {
+    // Verify order item belongs to restaurant
+    const checkRes = await pool.query(
+      `SELECT oi.id FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       JOIN table_sessions ts ON ts.id = o.session_id
+       WHERE oi.id = $1 AND ts.restaurant_id = $2`,
+      [id, restaurantId]
+    );
+
+    if (checkRes.rowCount === 0) {
+      return res.status(403).json({ error: "Order item not found or doesn't belong to this restaurant" });
+    }
+
     if (quantity <= 0) {
       await pool.query(
         `DELETE FROM order_items WHERE id = $1`,
@@ -577,7 +594,7 @@ router.patch("/order-items/:id", async (req, res) => {
     await pool.query(`
       DELETE FROM orders
       WHERE id NOT IN (
-        SELECT DISTINCT order_id FROM order_items
+        SELECT DISTINCT order_id FROM order_items`
       )
     `);
 
@@ -592,8 +609,26 @@ router.patch("/order-items/:id", async (req, res) => {
 // Delete order item
 router.delete("/order-items/:id", async (req, res) => {
   const { id } = req.params;
+  const { restaurantId } = req.body;
+
+  if (!restaurantId) {
+    return res.status(400).json({ error: "Restaurant ID is required" });
+  }
 
   try {
+    // Verify order item belongs to restaurant
+    const checkRes = await pool.query(
+      `SELECT oi.id FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       JOIN table_sessions ts ON ts.id = o.session_id
+       WHERE oi.id = $1 AND ts.restaurant_id = $2`,
+      [id, restaurantId]
+    );
+
+    if (checkRes.rowCount === 0) {
+      return res.status(403).json({ error: "Order item not found or doesn't belong to this restaurant" });
+    }
+
     await pool.query(
       `DELETE FROM order_items WHERE id = $1`,
       [id]

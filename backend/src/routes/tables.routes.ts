@@ -178,30 +178,6 @@ router.post("/restaurants/:restaurantId/tables", async (req, res) => {
   }
 });
 
-// Regenerate QR token (staff)
-router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
-  try {
-    const { tableId } = req.params;
-
-    const newToken = crypto.randomBytes(16).toString("hex");
-
-    const result = await pool.query(
-      `
-      UPDATE table_units
-      SET qr_token = $1
-      WHERE id = $2
-      RETURNING id, name, qr_token
-      `,
-      [newToken, tableId]
-    );
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to regenerate QR" });
-  }
-});
-
 /**
  * UPDATE table name
  * (Admin / Staff)

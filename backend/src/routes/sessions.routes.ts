@@ -115,9 +115,20 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
 router.patch("/table-sessions/:sessionId", async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { pax } = req.body;
+    const { pax, restaurantId } = req.body;
 
     if (!pax || pax <= 0) return res.status(400).json({ error: "Invalid pax" });
+    if (!restaurantId) return res.status(400).json({ error: "Restaurant ID is required" });
+
+    // Verify session belongs to restaurant
+    const sessionCheck = await pool.query(
+      `SELECT id FROM table_sessions WHERE id = $1 AND restaurant_id = $2`,
+      [sessionId, restaurantId]
+    );
+
+    if (sessionCheck.rowCount === 0) {
+      return res.status(403).json({ error: "Session not found or doesn't belong to this restaurant" });
+    }
 
     const result = await pool.query(
       `UPDATE table_sessions SET pax=$1 WHERE id=$2 RETURNING *`,

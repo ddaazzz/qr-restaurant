@@ -52,15 +52,20 @@ router.get("/restaurants/:restaurantId/bookings", async (req, res) => {
 // GET single booking
 router.get("/bookings/:bookingId", async (req, res) => {
   const { bookingId } = req.params;
+  const { restaurantId } = req.query;
+
+  if (!restaurantId) {
+    return res.status(400).json({ error: "Restaurant ID is required" });
+  }
 
   try {
     const res_data = await pool.query(
-      `SELECT * FROM bookings WHERE id = $1`,
-      [bookingId]
+      `SELECT * FROM bookings WHERE id = $1 AND restaurant_id = $2`,
+      [bookingId, restaurantId]
     );
 
     if (res_data.rowCount === 0) {
-      return res.status(404).json({ error: "Booking not found" });
+      return res.status(404).json({ error: "Booking not found or doesn't belong to this restaurant" });
     }
 
     res.json(res_data.rows[0]);
