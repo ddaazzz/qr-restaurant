@@ -594,7 +594,7 @@ router.patch("/order-items/:id", async (req, res) => {
     await pool.query(`
       DELETE FROM orders
       WHERE id NOT IN (
-        SELECT DISTINCT order_id FROM order_items`
+        SELECT DISTINCT order_id FROM order_items
       )
     `);
 
