@@ -435,7 +435,7 @@ async function updateOrderItem(orderItemId, quantity) {
   const res = await fetch(`${API}/order-items/${orderItemId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ quantity })
+    body: JSON.stringify({ quantity, restaurantId })
   });
 
   if (!res.ok) {
@@ -452,7 +452,9 @@ async function removeOrderItem(orderItemId) {
   if (!confirm("Remove this item?")) return;
 
   const res = await fetch(`${API}/order-items/${orderItemId}`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ restaurantId })
   });
 
   if (!res.ok) {

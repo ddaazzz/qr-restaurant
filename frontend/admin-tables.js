@@ -1882,7 +1882,7 @@ async function changeSessionPaxModal(sessionId, currentPax) {
   const res = await fetch(`${API}/table-sessions/${sessionId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pax: newPax })
+    body: JSON.stringify({ pax: newPax, restaurantId })
   });
 
   if (!res.ok) {
@@ -2106,7 +2106,11 @@ async function createTable() {
 async function regenQR(tableId) {
   await fetch(
     `${API}/tables/${tableId}/regenerate-qr`,
-    { method: "POST" }
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restaurantId })
+    }
   );
   loadTablesCategoryTable();
 }
