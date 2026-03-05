@@ -52,6 +52,42 @@ function attachEventListeners() {
   });
 }
 
+// ========== ORDER ITEM MANAGEMENT ==========
+async function updateOrderItem(orderItemId, quantity) {
+  const res = await fetch(`${API}/order-items/${orderItemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity, restaurantId })
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    return alert(err.error || "Failed to update item");
+  }
+
+  if (ACTIVE_SESSION_ID) {
+    loadAndRenderOrders(ACTIVE_SESSION_ID);
+  }
+}
+
+async function removeOrderItem(orderItemId) {
+  if (!confirm("Remove this item?")) return;
+
+  const res = await fetch(`${API}/order-items/${orderItemId}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ restaurantId })
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    return alert(err.error || "Failed to delete item");
+  }
+  if (ACTIVE_SESSION_ID) {
+    loadAndRenderOrders(ACTIVE_SESSION_ID);
+  }
+}
+
 // ========== LOAD MENU (CATEGORIES + ITEMS) ==========
 async function loadOrdersMenu() {
   try {
