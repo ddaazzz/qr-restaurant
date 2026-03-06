@@ -438,7 +438,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           <Modal
             visible={selectedOrder !== null}
             transparent={true}
-            animationType="slide"
+            animationType="fade"
             onRequestClose={() => {
               setSelectedOrder(null);
               setSessionBillData(null);
@@ -694,7 +694,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         <Modal
           visible={showVariantModal}
           transparent={true}
-          animationType="slide"
+          animationType="fade"
           onRequestClose={() => setShowVariantModal(false)}
         >
           <View style={styles.modalOverlay}>
