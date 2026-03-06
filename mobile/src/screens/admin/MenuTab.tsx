@@ -1780,28 +1780,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
 
-  // Form Elements
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 6,
-    color: '#374151',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 14,
-    fontSize: 14,
-    color: '#1f2937',
-  },
-  multilineInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-
   // Buttons
   btn: {
     flex: 1,

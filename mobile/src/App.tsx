@@ -19,7 +19,7 @@ const RootNavigator = () => {
 
   // Determine which screen to show based on user role
   if (isSignedIn && user) {
-    if (user.role === 'kitchen_staff') {
+    if (user.role === 'kitchen') {
       return <KitchenDashboardScreen />;
     } else {
       return <AdminDashboardScreen />;

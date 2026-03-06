@@ -3,6 +3,13 @@
     "version": ">= 5.0.0"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "large"
+      }
+    },
     "preview": {
       "ios": {
         "resourceClass": "large"
@@ -12,25 +19,20 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
-      },
-      "simulator": true
-    },
-    "preview2": {
-      "android": {
-        "gradleCommand": ":app:assembleRelease"
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
       }
-    },
-    "preview3": {
-      "developmentClient": true,
-      "distribution": "internal"
     },
     "production": {
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
       }
+    },
+    "development-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "environment": "development"
     }
   },
   "submit": {

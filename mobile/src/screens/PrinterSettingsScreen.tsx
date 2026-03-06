@@ -9,8 +9,8 @@ import {
   Alert,
   FlatList,
   Modal,
-  Picker,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { usePrinters } from '../hooks/useAPI';
 import { bluetoothService } from '../services/bluetoothService';
 

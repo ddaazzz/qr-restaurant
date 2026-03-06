@@ -12,9 +12,23 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../services/apiClient';
 
+interface KitchenItem {
+  id: string;
+  orderId: string;
+  tableNumber: number;
+  createdAt: string;
+  status: string;
+  items: Array<{
+    quantity: number;
+    name: string;
+    selectedOptions?: Array<{ name: string }>;
+    notes?: string;
+  }>;
+}
+
 export const KitchenDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
-  const [kitchenItems, setKitchenItems] = useState([]);
+  const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

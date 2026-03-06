@@ -28,7 +28,7 @@ export const BookingsTab = ({ restaurantId }: { restaurantId: string }) => {
   const fetchBookings = async () => {
     try {
       setError(null);
-      const response = await apiClient.get<BookingsResponse>(`/api/restaurants/${restaurantId}/bookings`);
+      const response = await apiClient.get(`/api/restaurants/${restaurantId}/bookings`);
       setBookings(response.data.bookings || []);
     } catch (err: any) {
       console.error('Error fetching bookings:', err);

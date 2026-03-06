@@ -30,6 +30,11 @@
       "package": "com.qrrestaurant.app"
     },
     "web": {},
-    "plugins": []
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "d7a44e22-e18c-4f3e-bfe8-6c64bf222802"
+      }
+    }
   }
 }
