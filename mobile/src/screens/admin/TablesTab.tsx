@@ -13,11 +13,9 @@ import {
   Alert,
   Dimensions,
   Image,
-  Share,
   Pressable,
 } from 'react-native';
 import RNModal from 'react-native-modal';
-import * as QRCode from 'qrcode';
 import { apiClient } from '../../services/apiClient';
 
 interface TableCategory {
@@ -69,8 +67,18 @@ interface Bill {
 }
 
 interface Order {
-  order_id: number;
-  items: Array<{ name: string; quantity: number; unit_price_cents: number; status: string; variants?: string }>;
+  order_id?: number;
+  id?: number;
+  items: Array<{
+    name?: string;
+    item_name?: string;
+    menu_item_name?: string;
+    quantity: number;
+    unit_price_cents?: number;
+    price_cents?: number;
+    status: string;
+    variants?: string;
+  }>;
 }
 
 type ViewType = 'grid' | 'sessionDetail' | 'sessionList';
@@ -78,6 +86,13 @@ type ViewType = 'grid' | 'sessionDetail' | 'sessionList';
 export interface TablesTabRef {
   toggleEditMode: () => void;
 }
+
+const getTableTextColor = (bgColor: string) => {
+  if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b') {
+    return { color: '#000' };
+  }
+  return { color: '#fff' };
+};
 
 export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
   const [categories, setCategories] = useState<TableCategory[]>([]);
@@ -101,8 +116,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showCloseBillModal, setShowCloseBillModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
-  const [qrLoading, setQrLoading] = useState(false);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
   const [showSessionGearMenu, setShowSessionGearMenu] = useState(false);
   const [showChangePaxModal, setShowChangePaxModal] = useState(false);
   const [showMoveTableModal, setShowMoveTableModal] = useState(false);
@@ -257,35 +272,19 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       }
 
       setQrLoading(true);
-      // Generate QR code as data URI using the qrcode library
+      // Generate QR code using QR server API
       const qrDataUrl = `https://chuio.io/${qrToken}`;
       console.log('[QR Debug] QR Data URL to encode:', qrDataUrl);
       
-      QRCode.toDataURL(qrDataUrl, {
-        width: 300,
-        errorCorrectionLevel: 'H',
-        type: 'image/png',
-      })
-        .then((dataUrl: string) => {
-          console.log('[QR Debug] QR Code generated successfully');
-          console.log('[QR Debug] Data URL length:', dataUrl.length);
-          console.log('[QR Debug] Data URL preview:', dataUrl.substring(0, 50));
-          setQrImageUrl(dataUrl);
-          setQrLoading(false);
-        })
-        .catch((error: any) => {
-          console.error('[QR Debug] Failed to generate QR code:', error);
-          Alert.alert('Error', 'Failed to generate QR code: ' + error.message);
-          setQrLoading(false);
-        });
+      // Use qr-server.com API to generate QR code
+      const qrServerUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrDataUrl)}`;
+      console.log('[QR Debug] QR Server URL:', qrServerUrl);
+      
+      setQrImageUrl(qrServerUrl);
+      setQrLoading(false);
     } else if (!showQRModal) {
       console.log('[QR Debug] QR Modal closed, clearing QR');
       setQrImageUrl(null);
-    } else {
-      console.log('[QR Debug] QR Modal conditions not met:', {
-        showQRModal,
-        hasSession: !!selectedSession,
-      });
     }
   }, [showQRModal, selectedSession, selectedTable]);
 
@@ -355,14 +354,19 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       const res = await apiClient.get(
         `/api/sessions/${sessionId}/orders`
       );
-      setSessionOrders(res.data.items || []);
+      console.log('[LoadOrders] API Response:', res.data);
+      const orders = res.data.items || res.data || [];
+      console.log('[LoadOrders] Parsed orders:', orders);
+      setSessionOrders(Array.isArray(orders) ? orders : []);
 
       const billRes = await apiClient.get(
         `/api/sessions/${sessionId}/bill`
       );
+      console.log('[LoadBill] Bill data:', billRes.data);
       setSessionBill(billRes.data);
     } catch (err) {
       console.error('Error loading session orders:', err);
+      Alert.alert('Error Loading Orders', 'Failed to load orders for this session');
     }
   };
 
@@ -726,7 +730,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     let total = 0;
     sessionOrders.forEach((order) => {
       order.items.forEach((item) => {
-        total += item.quantity * item.unit_price_cents;
+        total += item.quantity * (item.unit_price_cents || item.price_cents || 0);
       });
     });
 
@@ -824,22 +828,32 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           {sessionOrders.length === 0 ? (
             <Text style={styles.emptyText}>No orders</Text>
           ) : (
-            sessionOrders.map((order, idx) => (
-              <View key={idx} style={styles.orderCard}>
-                <Text style={styles.orderTitle}>Order #{order.order_id}</Text>
-                {order.items.map((item, itemIdx) => (
-                  <View key={itemIdx} style={styles.orderItem}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemName}>{item.name}</Text>
-                      <Text style={styles.itemStatus}>{item.status}</Text>
-                    </View>
-                    <Text style={styles.itemPrice}>
-                      {formatPrice(item.quantity * item.unit_price_cents)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ))
+            sessionOrders.map((order, idx) => {
+              console.log(`[OrderRender] Order ${idx}:`, order);
+              return (
+                <View key={idx} style={styles.orderCard}>
+                  <Text style={styles.orderTitle}>Order #{order.order_id || order.id}</Text>
+                  {order.items && order.items.length > 0 ? (
+                    order.items.map((item, itemIdx) => (
+                      <View key={itemIdx} style={styles.orderItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.itemName}>
+                            {item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}
+                          </Text>
+                          <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
+                          {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
+                        </View>
+                        <Text style={styles.itemPrice}>
+                          {formatPrice((item.unit_price_cents || item.price_cents || 0) * item.quantity)}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.itemStatus}>No items in order</Text>
+                  )}
+                </View>
+              );
+            })
           )}
 
           <View style={styles.totalsSection}>
@@ -1059,23 +1073,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.btn, styles.btnPrimary]}
-                      onPress={async () => {
-                        if (!selectedTable.units || !selectedTable.units[0]) return;
-                        const qrToken = selectedTable.units[0].qr_token;
-                        const message = `QR Code for ${selectedTable.name}\nParty of ${selectedSession.pax}\nhttps://chuio.io/${qrToken}`;
-                        try {
-                          await Share.share({
-                            message: message,
-                            title: `QR Code - ${selectedTable.name}`,
-                          });
-                        } catch (err: any) {
-                          if (!err.message?.includes('User cancelled')) {
-                            Alert.alert('Error', 'Failed to share QR code');
-                          }
-                        }
+                      onPress={() => {
+                        Alert.alert(
+                          'QR Code Ready',
+                          'The QR code is displayed above. Users can scan it to place orders.',
+                          [{ text: 'OK', onPress: () => setShowQRModal(false) }]
+                        );
                       }}
                     >
-                      <Text style={styles.btnText}>📋 Print QR</Text>
+                      <Text style={styles.btnText}>✓ Done</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -1637,13 +1643,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     </View>
   );
 });
-
-const getTableTextColor = (bgColor: string) => {
-  if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b') {
-    return { color: '#000' };
-  }
-  return { color: '#fff' };
-};
 
 const styles = StyleSheet.create({
   container: {

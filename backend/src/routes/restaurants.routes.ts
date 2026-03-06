@@ -24,7 +24,7 @@ router.get("/:restaurantId", async (req, res) => {
 
     // Verify restaurant exists
     const result = await pool.query(
-      "SELECT id, name, address, phone, logo_url, theme_color, timezone, background_url, service_charge_percent, regenerate_qr_per_session FROM restaurants WHERE id = $1",
+      "SELECT id, name, address, phone, logo_url, theme_color, timezone, background_url FROM restaurants WHERE id = $1",
       [restaurantId]
     );
 

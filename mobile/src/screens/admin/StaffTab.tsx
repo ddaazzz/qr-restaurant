@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert } from 'react-native';
 import { apiClient } from '../../services/apiClient';
 
@@ -28,7 +28,11 @@ interface MenuCategory {
   name: string;
 }
 
-export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
+export interface StaffTabRef {
+  toggleEditMode: () => void;
+}
+
+export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [menuCategories, setMenuCategories] = useState<MenuCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,8 +60,8 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
   const fetchStaff = async () => {
     try {
       setError(null);
-      const response = await apiClient.get<StaffMember[]>(`/api/restaurants/${restaurantId}/staff`);
-      setStaff(response.data);
+      const response = await apiClient.get(`/api/restaurants/${restaurantId}/staff`);
+      setStaff(response.data as StaffMember[]);
     } catch (err: any) {
       console.error('Error fetching staff:', err);
       setError(err.message || 'Failed to load staff');
@@ -69,8 +73,8 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
 
   const fetchMenuCategories = async () => {
     try {
-      const response = await apiClient.get<MenuCategory[]>(`/api/restaurants/${restaurantId}/menu_categories`);
-      setMenuCategories(response.data);
+      const response = await apiClient.get(`/api/restaurants/${restaurantId}/menu_categories`);
+      setMenuCategories(response.data as MenuCategory[]);
     } catch (err: any) {
       console.error('Error fetching categories:', err);
     }
@@ -80,6 +84,12 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
     fetchStaff();
     fetchMenuCategories();
   }, [restaurantId]);
+
+  useImperativeHandle(ref, () => ({
+    toggleEditMode() {
+      setEditMode(prev => !prev);
+    }
+  }), []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -205,8 +215,8 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
 
   const openDetailModal = async (staffMember: StaffMember) => {
     try {
-      const response = await apiClient.get<StaffMember>(`/api/restaurants/${restaurantId}/staff/${staffMember.id}`);
-      setSelectedStaff(response.data);
+      const response = await apiClient.get(`/api/restaurants/${restaurantId}/staff/${staffMember.id}`);
+      setSelectedStaff(response.data as StaffMember);
       setShowDetailModal(true);
     } catch (err: any) {
       Alert.alert('Error', 'Failed to load staff details');
@@ -218,8 +228,8 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
       const endpoint = action === 'in' ? 'clock-in' : 'clock-out';
       await apiClient.post(`/api/restaurants/${restaurantId}/staff/${staffId}/${endpoint}`, {});
       if (selectedStaff) {
-        const updated = await apiClient.get<StaffMember>(`/api/restaurants/${restaurantId}/staff/${staffId}`);
-        setSelectedStaff(updated.data);
+        const updated = await apiClient.get(`/api/restaurants/${restaurantId}/staff/${staffId}`);
+        setSelectedStaff(updated.data as StaffMember);
       }
     } catch (err: any) {
       Alert.alert('Error', err.message || `Failed to clock ${action}`);
@@ -268,17 +278,6 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header with edit button */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Staff Management</Text>
-        <TouchableOpacity
-          style={[styles.editBtn, editMode && styles.editBtnActive]}
-          onPress={() => setEditMode(!editMode)}
-        >
-          <Text style={styles.editBtnText}>{editMode ? '✓ Done' : '✏️ Edit'}</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Staff Grid */}
       <FlatList
         data={editMode ? [{ id: 'add' }, ...staff] : staff}
@@ -544,6 +543,14 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
                         {selectedStaff.currently_clocked_in ? '🟢 Clocked In' : '⚪ Clocked Out'}
                       </Text>
                     </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Access</Text>
+                      <Text style={styles.infoValue}>
+                        {selectedStaff.access_rights && selectedStaff.access_rights.length > 0
+                          ? selectedStaff.access_rights.map(r => getAccessLabel(r)).join(', ')
+                          : 'No access'}
+                      </Text>
+                    </View>
                   </View>
 
                   {/* Clock In/Out */}
@@ -618,7 +625,7 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
             {/* Modal Actions */}
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalActionBtn, styles.editBtn]}
+                style={[styles.modalActionBtn, styles.modalEditBtn]}
                 onPress={() => {
                   setShowDetailModal(false);
                   if (selectedStaff) openForm(selectedStaff);
@@ -640,7 +647,7 @@ export const StaffTab = ({ restaurantId }: { restaurantId: string }) => {
       </Modal>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -651,38 +658,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  editBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 6,
-  },
-  editBtnActive: {
-    backgroundColor: '#5a5a5a',
-  },
-  editBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  editBtnActive: {
-    backgroundColor: '#5a5a5a',
   },
   gridContent: {
     padding: 12,
@@ -697,50 +672,50 @@ const styles = StyleSheet.create({
   },
   staffCard: {
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
-    textAlign: 'center',
-    cursor: 'pointer',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-    borderWidth: 2,
-    borderColor: '#f5f5f5',
-    minHeight: 200,
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    minHeight: 160,
+    flex: 1,
   },
   addStaffCard: {
     borderStyle: 'dashed',
     backgroundColor: '#f9f9f9',
     borderColor: '#d0d0d0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   addStaffIcon: {
-    fontSize: 40,
-    marginBottom: 8,
+    fontSize: 32,
+    marginBottom: 6,
   },
   addStaffText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1f2937',
+    textAlign: 'center',
   },
   staffCardName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 8,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   staffCardRole: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     marginBottom: 8,
     alignSelf: 'center',
   },
   staffCardRoleText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   staffCardPin: {
@@ -762,15 +737,15 @@ const styles = StyleSheet.create({
   },
   staffCardActions: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 'auto',
+    gap: 10,
+    marginTop: 12,
     width: '100%',
     justifyContent: 'center',
   },
   cardActionBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     flex: 1,
     alignItems: 'center',
   },
@@ -816,8 +791,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: '95%',
     paddingTop: 0,
-    display: 'flex',
     flexDirection: 'column',
+    height: '100%',
   },
   formHeader: {
     flexDirection: 'row',
@@ -861,6 +836,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingBottom: 16,
   },
   formGroup: {
     marginBottom: 16,
@@ -872,27 +848,30 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   formInput: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#e5e7eb',
-    borderRadius: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     fontSize: 14,
     color: '#1f2937',
+    backgroundColor: '#f9f9f9',
   },
   roleButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
+    justifyContent: 'space-between',
   },
   roleBtn: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: '#f9f9f9',
+    borderWidth: 2,
     borderColor: '#e5e7eb',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   roleBtnActive: {
     backgroundColor: '#5a5a5a',
@@ -909,17 +888,19 @@ const styles = StyleSheet.create({
   accessGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
+    justifyContent: 'space-between',
   },
   accessCheckbox: {
     width: '48%',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#f9f9f9',
+    borderWidth: 2,
     borderColor: '#e5e7eb',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   accessCheckboxActive: {
     backgroundColor: '#5a5a5a',
@@ -929,6 +910,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#1f2937',
+    textAlign: 'center',
   },
   accessCheckboxTextActive: {
     color: '#fff',
@@ -976,8 +958,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     maxHeight: '90%',
     paddingTop: 0,
-    display: 'flex',
     flexDirection: 'column',
+    height: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1002,6 +984,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingBottom: 16,
   },
   infoSection: {
     backgroundColor: '#f9f9f9',
@@ -1013,19 +996,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
   infoLabel: {
-    fontSize: 12,
-    color: '#999',
-    fontWeight: '500',
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '600',
+    flex: 1,
   },
   infoValue: {
     fontSize: 14,
     color: '#1f2937',
-    fontWeight: '500',
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
   },
   clockSection: {
     backgroundColor: '#f0f7ff',
@@ -1129,7 +1116,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  editBtn: {
+  modalEditBtn: {
     backgroundColor: '#5a5a5a',
   },
   deleteBtn: {

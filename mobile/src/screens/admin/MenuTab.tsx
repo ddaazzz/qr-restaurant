@@ -77,8 +77,18 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     const [error, setError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Edit mode
-    const [isEditMode, setIsEditMode] = useState(false);
+    // Edit mode - toggles item availability visibility and variant edit toggle visibility
+    const [showAvailabilityToggles, setShowAvailabilityToggles] = useState(false);
+
+    // Variant edit mode tracking - which variants are being edited
+    const [editingVariantIds, setEditingVariantIds] = useState<Set<number>>(new Set());
+
+    // Item inline editing state
+    const [editingItemInlineId, setEditingItemInlineId] = useState<number | null>(null);
+    const [inlineEditName, setInlineEditName] = useState('');
+    const [inlineEditDescription, setInlineEditDescription] = useState('');
+    const [inlineEditPrice, setInlineEditPrice] = useState('');
+    const [inlineEditImageUrl, setInlineEditImageUrl] = useState('');
 
     // Selected items for detail view
     const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -126,7 +136,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     useImperativeHandle(ref, () => ({
       toggleEditMode() {
-        setIsEditMode(prev => !prev);
+        setShowAvailabilityToggles(prev => !prev);
       }
     }), []);
 
@@ -145,13 +155,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         const allItems = Array.isArray(itemsRes.data) ? itemsRes.data : [];
         
         // Extract unique categories from items
-        const uniqueCategories = Array.from(
-          new Map(
-            allItems
-              .map((item: any) => [item.category_id, { id: item.category_id, name: item.category_name }])
-              .filter(([_, cat]) => cat.id && cat.name)
-          ).values()
-        );
+        const categoryMap = new Map<number, MenuCategory>();
+        allItems.forEach((item: any) => {
+          if (item.category_id && item.category_name && !categoryMap.has(item.category_id)) {
+            categoryMap.set(item.category_id, { id: item.category_id, name: item.category_name });
+          }
+        });
+        const uniqueCategories = Array.from(categoryMap.values());
         
         setItems(allItems);
         setCategories(uniqueCategories);
@@ -525,7 +535,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
             style={styles.categoryScroll}
             contentContainerStyle={styles.categoryContent}
           >
-            {isEditMode && (
+            {showAvailabilityToggles && (
               <TouchableOpacity
                 style={[styles.categoryBtn, styles.categoryBtnAdd]}
                 onPress={() => setShowCategoryModal(true)}
@@ -556,7 +566,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
-                {isEditMode && (
+                {/* Category edit/delete buttons - only visible when edit toggle is ON */}
+                {showAvailabilityToggles && (
                   <View style={styles.categoryActionButtons}>
                     <TouchableOpacity
                       style={styles.categoryActionBtn}
@@ -584,7 +595,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         {/* Items Grid */}
         <View style={styles.itemsGridWrapper}>
           <FlatList
-            data={isEditMode && selectedCategory
+            data={selectedCategory
               ? [...filteredItems, { id: 'add-item', name: '+ Add Item', isAddButton: true } as any]
               : filteredItems
             }
@@ -629,33 +640,29 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                       <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
                       <View style={styles.itemMeta}>
                         <Text style={styles.itemPrice}>{formatPrice(item.price_cents)}</Text>
-                        <View 
-                          style={[
-                            styles.availabilityBadge,
-                            { backgroundColor: item.available ? '#d1f0d1' : '#fdd' }
-                          ]}
-                        >
-                          <Text style={[styles.availabilityText, { color: item.available ? '#2d7a2d' : '#c33' }]}>
-                            {item.available ? '✓' : '✕'}
-                          </Text>
-                        </View>
+                        {showAvailabilityToggles && (
+                          <View 
+                            style={[
+                              styles.availabilityBadge,
+                              { backgroundColor: item.available ? '#d1f0d1' : '#fdd' }
+                            ]}
+                          >
+                            <Text style={[styles.availabilityText, { color: item.available ? '#2d7a2d' : '#c33' }]}>
+                              {item.available ? '✓' : '✕'}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   </TouchableOpacity>
 
-                  {isEditMode && (
+                  {showAvailabilityToggles && (
                     <View style={styles.itemActionButtons}>
                       <TouchableOpacity
                         style={styles.itemActionBtn}
                         onPress={() => toggleAvailability(item.id, item.available)}
                       >
                         <Text style={styles.itemActionBtnText}>{item.available ? '👁️' : '🚫'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.itemActionBtn, styles.itemActionBtnDelete]}
-                        onPress={() => deleteItem(item.id, item.name)}
-                      >
-                        <Text style={styles.itemActionBtnText}>🗑️</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -682,157 +689,288 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 <Text style={styles.detailCloseBtn}>✕</Text>
               </TouchableOpacity>
               <Text style={styles.detailTitle}>Item Details</Text>
-              {isEditMode && (
-                <View style={styles.detailHeaderActions}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEditingItemId(selectedItem.id);
-                      setEditingItemName(selectedItem.name);
-                      setEditingItemDescription(selectedItem.description || '');
-                      setEditingItemPrice((selectedItem.price_cents / 100).toString());
-                      setEditingItemImageUrl(selectedItem.image_url || '');
-                      setShowEditItemModal(true);
-                    }}
-                  >
-                    <Text style={styles.detailHeaderActionBtn}>✏️ Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => deleteItem(selectedItem.id, selectedItem.name)}
-                  >
-                    <Text style={[styles.detailHeaderActionBtn, styles.detailHeaderActionBtnDelete]}>🗑️ Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              {/* Item edit button - toggle inline editing */}
+              <TouchableOpacity
+                onPress={() => {
+                  if (editingItemInlineId === selectedItem.id) {
+                    setEditingItemInlineId(null);
+                  } else {
+                    setEditingItemInlineId(selectedItem.id);
+                    setInlineEditName(selectedItem.name);
+                    setInlineEditDescription(selectedItem.description || '');
+                    setInlineEditPrice((selectedItem.price_cents / 100).toString());
+                    setInlineEditImageUrl(selectedItem.image_url || '');
+                  }
+                }}
+                style={styles.categoryActionBtn}
+              >
+                <Text style={styles.detailHeaderActionBtn}>
+                  {editingItemInlineId === selectedItem.id ? '✕' : '✏️'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.detailContent}>
-              {getFullImageUrl(selectedItem.image_url) && (
-                <Image 
-                  source={{ uri: getFullImageUrl(selectedItem.image_url)! }} 
-                  style={styles.detailImage}
-                  onError={(e) => console.log('Image failed to load:', e)}
-                />
-              )}
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Name</Text>
-                <Text style={styles.detailValue}>{selectedItem.name}</Text>
-              </View>
-
-              {selectedItem.description && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Description</Text>
-                  <Text style={styles.detailValue}>{selectedItem.description}</Text>
-                </View>
-              )}
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Price</Text>
-                <Text style={styles.detailValue}>{formatPrice(selectedItem.price_cents)}</Text>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Availability</Text>
-                <Text style={[
-                  styles.detailValue,
-                  { color: selectedItem.available ? '#2d7a2d' : '#c33' }
-                ]}>
-                  {selectedItem.available ? '✓ Available' : '✕ Out of Stock'}
-                </Text>
-              </View>
-
-              {/* Variants Section */}
-              {selectedItem.variants && selectedItem.variants.length > 0 && (
-                <View style={styles.variantsSection}>
-                  <View style={styles.variantsSectionHeader}>
-                    <Text style={styles.detailLabel}>Variants</Text>
-                    {isEditMode && (
-                      <TouchableOpacity
-                        onPress={() => {
-                          setEditingItemForVariant(selectedItem);
-                          setShowVariantModal(true);
-                        }}
-                      >
-                        <Text style={styles.addBtn}>+ Add</Text>
-                      </TouchableOpacity>
-                    )}
+              {/* Inline Edit Form */}
+              {editingItemInlineId === selectedItem.id ? (
+                <View style={styles.inlineEditForm}>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Name</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={inlineEditName}
+                      onChangeText={setInlineEditName}
+                      placeholder="Item name"
+                    />
                   </View>
 
-                  {selectedItem.variants.map((variant) => (
-                    <View key={variant.id} style={styles.variantCard}>
-                      <View style={styles.variantHeader}>
-                        <Text style={styles.variantName}>{variant.name}</Text>
-                        {isEditMode && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Description</Text>
+                    <TextInput
+                      style={[styles.input, styles.multilineInput]}
+                      value={inlineEditDescription}
+                      onChangeText={setInlineEditDescription}
+                      placeholder="Item description"
+                      multiline
+                    />
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Price ($)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={inlineEditPrice}
+                      onChangeText={setInlineEditPrice}
+                      placeholder="Price"
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Image URL</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={inlineEditImageUrl}
+                      onChangeText={setInlineEditImageUrl}
+                      placeholder="Image URL"
+                    />
+                  </View>
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnSecondary]}
+                      onPress={() => {
+                        setEditingItemInlineId(null);
+                      }}
+                    >
+                      <Text style={styles.btnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnPrimary]}
+                      onPress={async () => {
+                        try {
+                          await apiClient.patch(
+                            `/api/menu-items/${selectedItem.id}`,
+                            {
+                              name: inlineEditName,
+                              description: inlineEditDescription,
+                              price_cents: Math.round(parseFloat(inlineEditPrice) * 100),
+                              image_url: inlineEditImageUrl,
+                            }
+                          );
+                          setEditingItemInlineId(null);
+                          await loadMenuData();
+                          // Reload selected item
+                          const updatedItems = items.filter(i => i.id === selectedItem.id);
+                          if (updatedItems.length > 0) {
+                            setSelectedItem(updatedItems[0]);
+                          }
+                        } catch (err: any) {
+                          Alert.alert('Error', err.response?.data?.error || 'Failed to update item');
+                        }
+                      }}
+                    >
+                      <Text style={styles.btnText}>Save</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.btn, { backgroundColor: '#fee' }]}
+                      onPress={() => {
+                        Alert.alert(
+                          'Delete Item',
+                          `Are you sure you want to delete "${selectedItem.name}"?`,
+                          [
+                            { text: 'Cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  await deleteItem(selectedItem.id, selectedItem.name);
+                                  setShowDetailPanel(false);
+                                } catch (err: any) {
+                                  Alert.alert('Error', 'Failed to delete item');
+                                }
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                    >
+                      <Text style={{ color: '#c33', fontWeight: '600', fontSize: 13 }}>🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                /* Display Mode */
+                <>
+                  {getFullImageUrl(selectedItem.image_url) && (
+                    <Image 
+                      source={{ uri: getFullImageUrl(selectedItem.image_url)! }} 
+                      style={styles.detailImage}
+                      onError={(e) => console.log('Image failed to load:', e)}
+                    />
+                  )}
+
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Name</Text>
+                    <Text style={styles.detailValue}>{selectedItem.name}</Text>
+                  </View>
+
+                  {selectedItem.description && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailLabel}>Description</Text>
+                      <Text style={styles.detailValue}>{selectedItem.description}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Price</Text>
+                    <Text style={styles.detailValue}>{formatPrice(selectedItem.price_cents)}</Text>
+                  </View>
+
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Availability</Text>
+                    <Text style={[
+                      styles.detailValue,
+                      { color: selectedItem.available ? '#2d7a2d' : '#c33' }
+                    ]}>
+                      {selectedItem.available ? '✓ Available' : '✕ Out of Stock'}
+                    </Text>
+                  </View>
+
+                  {/* Variants Section */}
+                  {selectedItem.variants && selectedItem.variants.length > 0 && (
+                    <View style={styles.variantsSection}>
+                      <View style={styles.variantsSectionHeader}>
+                        <Text style={styles.detailLabel}>Variants</Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEditingItemForVariant(selectedItem);
+                            setShowVariantModal(true);
+                          }}
+                        >
+                          <Text style={styles.addBtn}>+ Add</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {selectedItem.variants.map((variant) => {
+                        const isVariantInEditMode = editingVariantIds.has(variant.id);
+                        return (
+                          <View key={variant.id} style={styles.variantCard}>
+                        <View style={styles.variantHeader}>
+                          <Text style={styles.variantName}>{variant.name}</Text>
+                          {/* Toggle button to show/hide variant edit/delete options */}
+                          <TouchableOpacity
+                            onPress={() => {
+                              const newSet = new Set(editingVariantIds);
+                              if (newSet.has(variant.id)) {
+                                newSet.delete(variant.id);
+                              } else {
+                                newSet.add(variant.id);
+                              }
+                              setEditingVariantIds(newSet);
+                            }}
+                          >
+                            <Text style={styles.variantToggleBtn}>
+                              {isVariantInEditMode ? '▼ Hide' : '▶ Show'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {isVariantInEditMode && (
                           <View style={styles.variantActions}>
                             <TouchableOpacity
+                              style={styles.variantActionBtn}
                               onPress={() => {
                                 setEditingVariantId(variant.id);
                                 setEditingVariantName(variant.name);
                                 setShowEditVariantModal(true);
                               }}
                             >
-                              <Text style={styles.actionSmallBtn}>Edit</Text>
+                              <Text style={styles.actionSmallBtn}>✏️ Edit</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
+                              style={[styles.variantActionBtn, styles.variantActionBtnDelete]}
                               onPress={() => deleteVariant(variant.id, variant.name)}
                             >
-                              <Text style={styles.actionSmallBtnDelete}>Del</Text>
+                              <Text style={styles.actionSmallBtnDelete}>🗑️ Delete</Text>
                             </TouchableOpacity>
                           </View>
                         )}
-                      </View>
 
-                      {variant.options && variant.options.length > 0 && (
-                        <View style={styles.optionsContainer}>
-                          {variant.options.map((option) => (
-                            <View key={option.id} style={styles.optionItem}>
-                              <View>
-                                <Text style={styles.optionName}>{option.name}</Text>
-                                <Text style={styles.optionPrice}>
-                                  +{formatPrice(option.price_cents)}
-                                </Text>
-                              </View>
-                              {isEditMode && (
-                                <View style={styles.optionActions}>
-                                  <TouchableOpacity
-                                    onPress={() => {
-                                      setEditingOptionId(option.id);
-                                      setEditingOptionName(option.name);
-                                      setEditingOptionPrice((option.price_cents / 100).toString());
-                                      setShowEditVariantOptionModal(true);
-                                    }}
-                                  >
-                                    <Text style={styles.actionSmallBtn}>Edit</Text>
-                                  </TouchableOpacity>
-                                  <TouchableOpacity
-                                    onPress={() => deleteVariantOption(option.id, option.name)}
-                                  >
-                                    <Text style={styles.actionSmallBtnDelete}>Del</Text>
-                                  </TouchableOpacity>
+                        {variant.options && variant.options.length > 0 && (
+                          <View style={styles.optionsContainer}>
+                            {variant.options.map((option) => (
+                              <View key={option.id} style={styles.optionItem}>
+                                <View>
+                                  <Text style={styles.optionName}>{option.name}</Text>
+                                  <Text style={styles.optionPrice}>
+                                    +{formatPrice(option.price_cents)}
+                                  </Text>
                                 </View>
-                              )}
-                            </View>
-                          ))}
-                        </View>
-                      )}
+                                {/* Show option edit/delete only when variant is in edit mode */}
+                                {isVariantInEditMode && (
+                                  <View style={styles.optionActions}>
+                                    <TouchableOpacity
+                                      onPress={() => {
+                                        setEditingOptionId(option.id);
+                                        setEditingOptionName(option.name);
+                                        setEditingOptionPrice((option.price_cents / 100).toString());
+                                        setShowEditVariantOptionModal(true);
+                                      }}
+                                    >
+                                      <Text style={styles.actionSmallBtn}>Edit</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      onPress={() => deleteVariantOption(option.id, option.name)}
+                                    >
+                                      <Text style={styles.actionSmallBtnDelete}>Del</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        )}
 
-                      {isEditMode && (
-                        <TouchableOpacity
-                          style={styles.addOptionBtn}
-                          onPress={() => {
-                            setEditingVariantForOption(variant);
-                            setShowVariantOptionModal(true);
-                          }}
-                        >
-                          <Text style={styles.addOptionBtnText}>+ Add Option</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  ))}
+                        {isVariantInEditMode && (
+                          <TouchableOpacity
+                            style={styles.addOptionBtn}
+                            onPress={() => {
+                              setEditingVariantForOption(variant);
+                              setShowVariantOptionModal(true);
+                            }}
+                          >
+                            <Text style={styles.addOptionBtnText}>+ Add Option</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               )}
 
-              {isEditMode && (!selectedItem.variants || selectedItem.variants.length === 0) && (
+              {(!selectedItem.variants || selectedItem.variants.length === 0) && (
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary, { marginTop: 16 }]}
                   onPress={() => {
@@ -842,6 +980,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 >
                   <Text style={styles.btnText}>+ Add Variant</Text>
                 </TouchableOpacity>
+              )}
+                </>
               )}
             </ScrollView>
           </View>
@@ -1482,6 +1622,38 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
 
+  // Inline Edit Form
+  inlineEditForm: {
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  formGroup: {
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6b7280',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+    fontSize: 14,
+    color: '#1f2937',
+  },
+  multilineInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+
   // Variants Section
   variantsSection: {
     marginTop: 12,
@@ -1514,9 +1686,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
   },
+  variantToggleBtn: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3b82f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: '#dbeafe',
+  },
   variantActions: {
     flexDirection: 'row',
     gap: 6,
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  variantActionBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 4,
+    alignItems: 'center',
+    backgroundColor: '#dbeafe',
+  },
+  variantActionBtnDelete: {
+    backgroundColor: '#fee2e2',
   },
   actionSmallBtn: {
     fontSize: 11,

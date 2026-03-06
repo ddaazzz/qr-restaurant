@@ -11,10 +11,10 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { TablesTab, TablesTabRef } from './admin/TablesTab';
 import { MenuTab, MenuTabRef } from './admin/MenuTab';
+import { StaffTab, StaffTabRef } from './admin/StaffTab';
 import { OrdersTab } from './admin/OrdersTab';
-import { StaffTab } from './admin/StaffTab';
 import { SettingsTab } from './admin/SettingsTab';
-import { BookingsTab } from './admin/BookingsTab';
+import { BookingsTab, BookingsTabRef } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
 
 type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
@@ -25,7 +25,9 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
+  const staffTabRef = useRef<StaffTabRef>(null);
   const ordersTabRef = useRef<any>(null);
+  const bookingsTabRef = useRef<BookingsTabRef>(null);
 
   if (!user?.restaurantId) {
     return (
@@ -59,6 +61,12 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     }
   };
 
+  const handleStaffEditToggle = () => {
+    if (staffTabRef.current?.toggleEditMode) {
+      staffTabRef.current.toggleEditMode();
+    }
+  };
+
   const handleHistoryToggle = () => {
     if (ordersTabRef.current?.toggleHistory) {
       ordersTabRef.current.toggleHistory();
@@ -74,9 +82,9 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       case 'menu':
         return <MenuTab ref={menuTabRef} restaurantId={user.restaurantId} />;
       case 'staff':
-        return <StaffTab restaurantId={user.restaurantId} />;
+        return <StaffTab ref={staffTabRef} restaurantId={user.restaurantId} />;
       case 'bookings':
-        return <BookingsTab restaurantId={user.restaurantId} />;
+        return <BookingsTab ref={bookingsTabRef} restaurantId={user.restaurantId} />;
       case 'reports':
         return <ReportsTab restaurantId={user.restaurantId} />;
       case 'settings':
@@ -127,12 +135,28 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Text style={styles.headerActionBtnText}>✎ Edit</Text>
             </TouchableOpacity>
           )}
+          {activeTab === 'staff' && (
+            <TouchableOpacity 
+              style={styles.headerActionBtn}
+              onPress={handleStaffEditToggle}
+            >
+              <Text style={styles.headerActionBtnText}>✎ Edit</Text>
+            </TouchableOpacity>
+          )}
           {activeTab === 'orders' && (
             <TouchableOpacity 
               style={styles.headerActionBtn}
               onPress={handleHistoryToggle}
             >
               <Text style={styles.headerActionBtnText}>📜 History</Text>
+            </TouchableOpacity>
+          )}
+          {activeTab === 'bookings' && (
+            <TouchableOpacity 
+              style={styles.headerActionBtn}
+              onPress={() => bookingsTabRef.current?.openNewBookingModal()}
+            >
+              <Text style={styles.headerActionBtnText}>+ New</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnContainer}>
