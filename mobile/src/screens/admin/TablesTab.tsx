@@ -232,7 +232,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
       // Load service charge settings
       try {
-        const settingsRes = await apiClient.get(`/api/restaurants/${restaurantId}/admin-settings`);
+        const settingsRes = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
         if (settingsRes.data && settingsRes.data.service_charge_percent) {
           setServiceCharge(settingsRes.data.service_charge_percent);
         }

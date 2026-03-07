@@ -19,6 +19,8 @@ interface RestaurantSettings {
   name: string;
   phone?: string;
   address?: string;
+  logo_url?: string;
+  background_url?: string;
   timezone?: string;
   service_charge_percent?: number;
   theme_color?: string;
@@ -111,6 +113,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         address: formData.address,
         timezone: formData.timezone,
         service_charge_percent: parseFloat(formData.service_charge_percent?.toString() || '0'),
+        language_preference: formData.language_preference,
+        logo_url: formData.logo_url,
+        background_url: formData.background_url,
         booking_time_allowance_mins: parseInt(formData.booking_time_allowance_mins?.toString() || '30'),
         qr_mode: formData.qr_mode,
       });
@@ -268,6 +273,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
+              <Text style={styles.label}>Preferred Language</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.language_preference}
+                onChangeText={(text) => setFormData({ ...formData, language_preference: text })}
+                placeholder="e.g., en, es, fr"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
               <Text style={styles.label}>Service Charge (%)</Text>
               <TextInput
                 style={styles.input}
@@ -277,6 +292,26 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 }
                 placeholder="0"
                 keyboardType="decimal-pad"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Logo URL</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.logo_url || ''}
+                onChangeText={(text) => setFormData({ ...formData, logo_url: text })}
+                placeholder="https://..."
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Background URL</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.background_url || ''}
+                onChangeText={(text) => setFormData({ ...formData, background_url: text })}
+                placeholder="https://..."
               />
             </View>
 
@@ -326,9 +361,25 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <Text style={styles.value}>{settings.timezone || 'UTC'}</Text>
             </View>
             <View style={styles.settingItem}>
+              <Text style={styles.label}>Preferred Language</Text>
+              <Text style={styles.value}>{settings.language_preference || '—'}</Text>
+            </View>
+            <View style={styles.settingItem}>
               <Text style={styles.label}>Service Charge</Text>
               <Text style={styles.value}>{settings.service_charge_percent || 0} %</Text>
             </View>
+            {settings.logo_url && (
+              <View style={styles.settingItem}>
+                <Text style={styles.label}>Logo</Text>
+                <Text style={styles.value}>✓ Uploaded</Text>
+              </View>
+            )}
+            {settings.background_url && (
+              <View style={styles.settingItem}>
+                <Text style={styles.label}>Background</Text>
+                <Text style={styles.value}>✓ Uploaded</Text>
+              </View>
+            )}
           </>
         ) : null}
       </View>

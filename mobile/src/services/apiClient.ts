@@ -2,9 +2,11 @@ import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, LoginCredentials } from '../types';
 
-// For iOS simulator on Mac, use 127.0.0.1 instead of localhost
-// For physical devices, you would need the actual host IP
-export const API_URL = 'http://localhost:10000';
+// Use environment variable for API URL, fallback to localhost for development
+const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
+export const API_URL = defaultUrl;
+
+console.log('[API] Configured endpoint:', API_URL);
 
 class APIClient {
   private client: AxiosInstance;
@@ -48,34 +50,50 @@ class APIClient {
   // Auth endpoints
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
+      console.log('[API] Logging in with email:', credentials.email);
+      console.log('[API] Request to:', API_URL + '/api/auth/login');
       const response = await this.client.post<AuthResponse>('/api/auth/login', credentials);
       const { token, restaurantId } = response.data;
       
-      await SecureStore.setItemAsync('authToken', token);
-      if (restaurantId) {
-        await SecureStore.setItemAsync('restaurantId', restaurantId);
-        this.restaurantId = restaurantId;
-      }
-      this.token = token;
+      console.log('[API] Response received:', { token: typeof token, restaurantId: typeof restaurantId, tokenLength: token?.length });
       
+      // Ensure token is a string
+      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+      const restaurantIdString = restaurantId ? (typeof restaurantId === 'string' ? restaurantId : String(restaurantId)) : null;
+      
+      console.log('[API] Storing credentials in SecureStore...');
+      await SecureStore.setItemAsync('authToken', tokenString);
+      if (restaurantIdString) {
+        await SecureStore.setItemAsync('restaurantId', restaurantIdString);
+        this.restaurantId = restaurantIdString;
+      }
+      this.token = tokenString;
+      
+      console.log('[API] ✅ Login successful, restaurantId:', restaurantIdString);
       return response.data;
     } catch (error) {
+      console.error('[API] Login failed:', error);
       throw this.handleError(error);
     }
   }
 
   async kitchenLogin(pin: string): Promise<AuthResponse> {
     try {
+      console.log('[API] Kitchen login with PIN');
       const response = await this.client.post<AuthResponse>('/api/auth/kitchen-login', { pin });
       const { token, restaurantId } = response.data;
       
-      await SecureStore.setItemAsync('authToken', token);
-      if (restaurantId) {
-        await SecureStore.setItemAsync('restaurantId', restaurantId);
-        this.restaurantId = restaurantId;
-      }
-      this.token = token;
+      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+      const restaurantIdString = restaurantId ? (typeof restaurantId === 'string' ? restaurantId : String(restaurantId)) : null;
       
+      await SecureStore.setItemAsync('authToken', tokenString);
+      if (restaurantIdString) {
+        await SecureStore.setItemAsync('restaurantId', restaurantIdString);
+        this.restaurantId = restaurantIdString;
+      }
+      this.token = tokenString;
+      
+      console.log('[API] ✅ Kitchen login successful');
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -281,9 +299,21 @@ class APIClient {
 
   private handleError(error: any): Error {
     if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
       const message = error.response?.data?.message || error.message;
+      const fullError = `API Error - Status: ${status}, Message: ${message}, URL: ${error.config?.url}`;
+      console.error('[API Error]', fullError);
+      console.error('[API Error Details]', {
+        status,
+        message,
+        url: error.config?.url,
+        method: error.config?.method,
+        response: error.response?.data,
+        originalError: error.message
+      });
       return new Error(message);
     }
+    console.error('[API Error] Non-axios error:', error);
     return error as Error;
   }
 }

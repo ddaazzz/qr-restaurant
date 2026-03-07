@@ -4,6 +4,7 @@
     "slug": "qr-restaurant-ai",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
+    "icon": "./assets/logo.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
@@ -12,6 +13,7 @@
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.qrrestaurant.app",
+      "icon": "./assets/logo.png",
       "infoPlist": {
         "NSBluetoothPeripheralUsageDescription": "We need Bluetooth to connect to receipt printers",
         "NSBluetoothAlwaysUsageDescription": "We need Bluetooth to connect to receipt printers",
@@ -20,6 +22,7 @@
       }
     },
     "android": {
+      "icon": "./assets/logo.png",
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
