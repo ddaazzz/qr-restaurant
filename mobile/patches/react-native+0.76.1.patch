@@ -58,6 +58,6 @@ index df3df01..3ac7eef 100644
 +    //       },
 +    //     );
 +    // }
-     if (prevNodeRef.current != null) {
-       const prevNode = prevNodeRef.current;
-       // TODO: Stop restoring default values (unless `reset` is called).
+ 
+     return () => {
+       drivenAnimationEndedListener?.remove();
