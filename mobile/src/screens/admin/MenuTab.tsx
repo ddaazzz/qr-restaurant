@@ -990,7 +990,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         {/* ==================== MODALS ==================== */}
 
         {/* Category Modals */}
-        <Modal visible={showCategoryModal} animationType="slide" transparent>
+        <Modal visible={showCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>New Category</Text>
@@ -1022,7 +1022,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
           </View>
         </Modal>
 
-        <Modal visible={showEditCategoryModal} animationType="slide" transparent>
+        <Modal visible={showEditCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Category</Text>
@@ -1058,7 +1058,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         </Modal>
 
         {/* Item Modals */}
-        <Modal visible={showItemModal} animationType="slide" transparent>
+        <Modal visible={showItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>New Food Item</Text>
@@ -1116,7 +1116,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
           </View>
         </Modal>
 
-        <Modal visible={showEditItemModal} animationType="slide" transparent>
+        <Modal visible={showEditItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Item</Text>
@@ -1175,7 +1175,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         </Modal>
 
         {/* Variant Modals */}
-        <Modal visible={showVariantModal} animationType="slide" transparent>
+        <Modal visible={showVariantModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>New Variant</Text>

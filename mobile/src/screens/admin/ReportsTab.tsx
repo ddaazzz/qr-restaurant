@@ -382,7 +382,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       )}
 
       {/* Trend Mode Modal */}
-      <Modal visible={showTrendModal} transparent animationType="slide">
+      <Modal visible={showTrendModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Trend View</Text>

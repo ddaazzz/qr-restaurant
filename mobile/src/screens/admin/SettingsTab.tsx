@@ -552,7 +552,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       </TouchableOpacity>
 
       {/* Coupon Modal */}
-      <Modal visible={showCouponModal} transparent animationType="slide">
+      <Modal visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Create Coupon</Text>
@@ -675,7 +675,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       </Modal>
 
       {/* QR Mode Modal */}
-      <Modal visible={showQRModal} transparent animationType="slide">
+      <Modal visible={showQRModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select QR Mode</Text>

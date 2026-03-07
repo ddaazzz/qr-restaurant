@@ -491,7 +491,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
       </ScrollView>
 
       {/* Booking Modal */}
-      <Modal visible={showBookingModal} transparent animationType="slide">
+      <Modal visible={showBookingModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>

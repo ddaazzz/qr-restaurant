@@ -206,7 +206,7 @@ export const PrinterSettingsScreen = ({ navigation }: any) => {
       </ScrollView>
 
       {/* Location Modal */}
-      <Modal visible={showLocationModal} transparent animationType="slide">
+      <Modal visible={showLocationModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Printer Location</Text>

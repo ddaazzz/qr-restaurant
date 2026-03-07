@@ -890,7 +890,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </View>
 
         {/* Close Bill Modal */}
-        <Modal visible={showCloseBillModal} animationType="slide" transparent>
+        <Modal visible={showCloseBillModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Close Bill</Text>
@@ -955,7 +955,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </Modal>
 
         {/* Change Pax Modal */}
-        <Modal visible={showChangePaxModal} animationType="slide" transparent>
+        <Modal visible={showChangePaxModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Change Pax</Text>
@@ -988,7 +988,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </Modal>
 
         {/* Move Table Modal */}
-        <Modal visible={showMoveTableModal} animationType="slide" transparent>
+        <Modal visible={showMoveTableModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Move to Table</Text>
@@ -1030,7 +1030,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </Modal>
 
         {/* Print QR Code Modal */}
-        <Modal visible={showQRModal} animationType="slide" transparent>
+        <Modal visible={showQRModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Print QR Code</Text>
@@ -1170,7 +1170,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </ScrollView>
 
         {/* Session Modal */}
-        <Modal visible={showSessionModal} animationType="slide" transparent>
+        <Modal visible={showSessionModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Start New Session</Text>
@@ -1203,7 +1203,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </Modal>
 
         {/* Booking Modal */}
-        <Modal visible={showBookingModal} animationType="slide" transparent>
+        <Modal visible={showBookingModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>Book Table</Text>
@@ -1438,7 +1438,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </View>
 
       {/* Category Modal */}
-      <Modal visible={showCategoryModal} animationType="slide" transparent>
+      <Modal visible={showCategoryModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Category</Text>
@@ -1471,7 +1471,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Edit Category Modal */}
-      <Modal visible={editingCategoryId !== null} animationType="slide" transparent>
+      <Modal visible={editingCategoryId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Category</Text>
@@ -1507,7 +1507,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Table Modal */}
-      <Modal visible={showTableModal} animationType="slide" transparent>
+      <Modal visible={showTableModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Table</Text>
@@ -1548,7 +1548,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Edit Table Modal */}
-      <Modal visible={editingTableId !== null} animationType="slide" transparent>
+      <Modal visible={editingTableId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Table</Text>
@@ -1594,7 +1594,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Edit Table Pax Modal */}
-      <Modal visible={editingTablePaxId !== null} animationType="slide" transparent>
+      <Modal visible={editingTablePaxId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Table Capacity</Text>

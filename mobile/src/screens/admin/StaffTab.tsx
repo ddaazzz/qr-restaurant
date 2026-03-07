@@ -357,7 +357,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
       )}
 
       {/* Create/Edit Form Modal */}
-      <Modal visible={showForm} transparent animationType="slide" onRequestClose={closeForm}>
+      <Modal visible={showForm} transparent animationType="fade" onRequestClose={closeForm}>
         <View style={styles.formOverlay}>
           <View style={styles.formContent}>
             <View style={styles.formHeader}>
@@ -503,7 +503,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
       </Modal>
 
       {/* Detail Modal */}
-      <Modal visible={showDetailModal} transparent animationType="slide" onRequestClose={() => setShowDetailModal(false)}>
+      <Modal visible={showDetailModal} transparent animationType="fade" onRequestClose={() => setShowDetailModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.detailModalContent}>
             <View style={styles.modalHeader}>
