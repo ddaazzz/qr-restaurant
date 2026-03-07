@@ -5,6 +5,10 @@ import { LoginScreen } from './screens/LoginScreen';
 import { KitchenLoginScreen } from './screens/KitchenLoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
+import { patchAnimationErrors } from './services/AnimationErrorPatcher';
+
+// Patch animation errors at startup
+patchAnimationErrors();
 
 // Suppress the onUserDrivenAnimationEnded warning from native animated module
 // This is a known issue with SDK 54 and doesn't affect functionality
