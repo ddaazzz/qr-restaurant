@@ -150,7 +150,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>✎ Edit</Text>
+              <Text style={styles.headerActionBtnText}>Edit</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'menu' && (
@@ -158,7 +158,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleMenuEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>✎ Edit</Text>
+              <Text style={styles.headerActionBtnText}>Edit</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'staff' && (
@@ -166,7 +166,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleStaffEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>✎ Edit</Text>
+              <Text style={styles.headerActionBtnText}>Edit</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'orders' && (
