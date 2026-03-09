@@ -13,13 +13,15 @@
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.qrrestaurant.app",
+      "buildNumber": "2",
       "icon": "./assets/logo.png",
       "infoPlist": {
         "NSBluetoothPeripheralUsageDescription": "We need Bluetooth to connect to receipt printers",
         "NSBluetoothAlwaysUsageDescription": "We need Bluetooth to connect to receipt printers",
         "NSBluetoothAlwaysAndWhenInUseUsageDescription": "We need Bluetooth to connect to receipt printers",
         "NSLocationWhenInUseUsageDescription": "Location is needed for Bluetooth scanning"
-      }
+      },
+      "runtimeVersion": "1.0.0"
     },
     "android": {
       "icon": "./assets/logo.png",
@@ -28,9 +30,17 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.qrrestaurant.app"
+      "package": "com.qrrestaurant.app",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {},
     "plugins": [],
@@ -38,6 +48,9 @@
       "eas": {
         "projectId": "d7a44e22-e18c-4f3e-bfe8-6c64bf222802"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d7a44e22-e18c-4f3e-bfe8-6c64bf222802"
     }
   }
 }
