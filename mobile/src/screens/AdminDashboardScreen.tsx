@@ -11,6 +11,7 @@ import {
   Dimensions,
   FlatList,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { QRScannerModal } from '../components/QRScannerModal';
 import { TablesTab, TablesTabRef } from './admin/TablesTab';
@@ -241,28 +242,39 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           <View style={styles.sidebar}>
             {(['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'] as const).map(
               (tab) => {
-                const tabLabels: Record<TabType, string> = {
-                  'tables': 'Tables',
-                  'orders': 'Orders',
-                  'menu': 'Menu',
-                  'staff': 'Staff',
-                  'bookings': 'Bookings',
-                  'reports': 'Reports',
-                  'settings': 'More',
+                const tabConfig: Record<TabType, { label: string; icon: string }> = {
+                  'tables': { label: 'Tables', icon: 'grid' },
+                  'orders': { label: 'Orders', icon: 'receipt' },
+                  'menu': { label: 'Menu', icon: 'restaurant' },
+                  'staff': { label: 'Staff', icon: 'people' },
+                  'bookings': { label: 'Bookings', icon: 'calendar' },
+                  'reports': { label: 'Reports', icon: 'stats-chart' },
+                  'settings': { label: 'More', icon: 'cog' },
                 };
+                const config = tabConfig[tab];
                 return (
                   <TouchableOpacity
                     key={tab}
                     style={[styles.sidebarTab, activeTab === tab && styles.sidebarTabActive]}
                     onPress={() => setActiveTab(tab)}
                   >
+                    <Ionicons 
+                      name={config.icon as any} 
+                      size={32} 
+                      color={activeTab === tab ? '#fff' : 'rgba(255,255,255,0.7)'} 
+                      style={styles.sidebarIcon}
+                    />
                     <Text style={[styles.sidebarTabText, activeTab === tab && styles.sidebarTabTextActive]}>
-                      {tabLabels[tab]}
+                      {config.label}
                     </Text>
                   </TouchableOpacity>
                 );
               }
             )}
+            {/* Sidebar Footer */}
+            <View style={styles.sidebarFooter}>
+              <Text style={styles.sidebarTrademark}>chuio.io</Text>
+            </View>
           </View>
         )}
 
@@ -469,35 +481,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   sidebar: {
-    width: 100,
-    backgroundColor: '#f9fafb',
-    borderRightWidth: 2,
-    borderRightColor: '#e5e7eb',
-    paddingVertical: 0,
+    width: 120,
+    backgroundColor: '#2c3e50',
+    paddingVertical: 24,
+    paddingHorizontal: 8,
+    gap: 16,
+    flex: 1,
+    justifyContent: 'flex-start',
   },
   sidebarTab: {
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    borderLeftWidth: 3,
-    borderLeftColor: 'transparent',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  sidebarIcon: {
+    width: 36,
+    height: 36,
   },
   sidebarTabActive: {
-    borderLeftColor: '#2C3E50',
-    backgroundColor: '#ecf0f1',
+    backgroundColor: '#4a90e2',
   },
   sidebarTabText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#1f2937',
+    color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
+    lineHeight: 13,
   },
   sidebarTabTextActive: {
-    color: '#2C3E50',
-    fontWeight: 'bold',
+    color: '#fff',
+  },
+  sidebarFooter: {
+    marginTop: 'auto',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+  },
+  sidebarTrademark: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    marginTop: 8,
   },
   content: {
     flex: 1,
