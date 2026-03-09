@@ -22,10 +22,7 @@ import {
   Image,
   Pressable,
 } from 'react-native';
-import { apiClient } from '../../services/apiClient';
-
-// API base URL for full image paths
-const API_URL = 'http://localhost:10000';
+import { apiClient, API_URL } from '../../services/apiClient';
 
 // ==================== INTERFACES ====================
 
