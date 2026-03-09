@@ -139,7 +139,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           <Text style={styles.menuToggleIcon}>{sidebarOpen ? '◀' : '▶'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{getTabDisplayName()}</Text>
-        <View style={styles.headerActions}>
+        <View style={styles.headerCenterActions}>
           {activeTab === 'tables' && (
             <TouchableOpacity 
               style={styles.headerActionBtn}
@@ -186,10 +186,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           >
             <Text style={styles.headerActionBtnText}>📱 Scan QR</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnContainer}>
-            <Text style={styles.logoutBtn}>Logout</Text>
-          </TouchableOpacity>
         </View>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+          <Text style={styles.logoutBtnText}>🚪 Logout</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Main Layout: Sidebar + Content */}
@@ -244,9 +244,9 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
@@ -258,6 +258,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   menuToggleIcon: {
     fontSize: 16,
@@ -268,12 +269,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#1f2937',
-    flex: 1,
+    flex: 0,
+    minWidth: 80,
   },
-  headerActions: {
+  headerCenterActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+    flex: 1,
   },
   headerActionBtn: {
     paddingHorizontal: 12,
@@ -286,19 +289,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  logoutBtnContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
   logoutBtn: {
-    fontSize: 12,
-    fontWeight: '600',
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#2C3E50',
-    color: '#ffffff',
     borderRadius: 6,
-    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  logoutBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
   mainLayout: {
     flex: 1,
