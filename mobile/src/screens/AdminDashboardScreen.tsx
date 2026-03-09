@@ -29,6 +29,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+  const [restaurants, setRestaurants] = useState<Array<{ id: number; name: string }>>([]);
   const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
   const staffTabRef = useRef<StaffTabRef>(null);
@@ -42,6 +43,39 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       </SafeAreaView>
     );
   }
+
+  // Fetch restaurants when dropdown is opened
+  const openAdminDropdown = async () => {
+    if (showAdminDropdown) {
+      setShowAdminDropdown(false);
+      return;
+    }
+
+    // If restaurants already loaded, just open
+    if (restaurants.length > 0) {
+      setShowAdminDropdown(true);
+      return;
+    }
+
+    // Fetch restaurants for superadmin
+    if (user.role === 'superadmin') {
+      try {
+        const response = await fetch('https://chuio.io/api/auth/restaurants', {
+          headers: {
+            'Authorization': `Bearer ${user.token}`,
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setRestaurants(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch restaurants:', error);
+      }
+    }
+
+    setShowAdminDropdown(true);
+  };
 
   const handleLogout = async () => {
     Alert.alert('Logout', 'Are you sure?', [
@@ -185,10 +219,16 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Text style={styles.headerActionBtnText}>+ New</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity 
+            style={styles.headerActionBtn}
+            onPress={handleScanQR}
+          >
+            <Text style={styles.headerActionBtnText}>Scan QR</Text>
+          </TouchableOpacity>
         </View>
         <TouchableOpacity 
           style={styles.adminBtn}
-          onPress={() => setShowAdminDropdown(!showAdminDropdown)}
+          onPress={openAdminDropdown}
         >
           <Text style={styles.adminBtnText}>Admin ▼</Text>
         </TouchableOpacity>
@@ -251,16 +291,41 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           activeOpacity={1}
         >
           <View style={styles.dropdownContent}>
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowAdminDropdown(false);
-                handleScanQR();
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Scan QR</Text>
-            </TouchableOpacity>
-            <View style={styles.dropdownDivider} />
+            {/* Restaurants List for Superadmin */}
+            {user?.role === 'superadmin' && restaurants.length > 0 && (
+              <>
+                <Text style={styles.dropdownSectionTitle}>Select Restaurant</Text>
+                <View style={styles.restaurantsList}>
+                  {restaurants.map((restaurant) => (
+                    <TouchableOpacity
+                      key={restaurant.id}
+                      style={[
+                        styles.dropdownItem,
+                        parseInt(user.restaurantId) === restaurant.id && styles.dropdownItemActive,
+                      ]}
+                      onPress={() => {
+                        if (parseInt(user.restaurantId) !== restaurant.id) {
+                          // TODO: Implement restaurant switching
+                          Alert.alert('Restaurant Switch', `Switching to ${restaurant.name}`);
+                        }
+                        setShowAdminDropdown(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        parseInt(user.restaurantId) === restaurant.id && styles.dropdownItemTextActive,
+                      ]}>
+                        {restaurant.name}
+                        {parseInt(user.restaurantId) === restaurant.id && ' ✓'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.dropdownDivider} />
+              </>
+            )}
+            
+            {/* Logout */}
             <TouchableOpacity
               style={styles.dropdownItem}
               onPress={handleLogout}
@@ -379,6 +444,25 @@ const styles = StyleSheet.create({
   dropdownDivider: {
     height: 1,
     backgroundColor: '#e5e7eb',
+  },
+  dropdownSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  restaurantsList: {
+    maxHeight: 250,
+  },
+  dropdownItemActive: {
+    backgroundColor: '#f0f0f0',
+  },
+  dropdownItemTextActive: {
+    color: '#2C3E50',
+    fontWeight: '600',
   },
   mainLayout: {
     flex: 1,
