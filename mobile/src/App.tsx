@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, View, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { LoginScreen } from './screens/LoginScreen';
 import { StaffLoginScreen } from './screens/StaffLoginScreen';
 import { KitchenLoginScreen } from './screens/KitchenLoginScreen';
@@ -46,8 +47,10 @@ const RootNavigator = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

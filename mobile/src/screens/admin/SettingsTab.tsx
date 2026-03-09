@@ -18,6 +18,8 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { apiClient } from '../../services/apiClient';
+import { LanguagePicker } from '../../components/LanguagePicker';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface RestaurantSettings {
   id: number;
@@ -44,6 +46,7 @@ interface PrinterSettings {
   kitchen_auto_print?: boolean;
   bill_auto_print?: boolean;
   bluetooth_device_id?: string;
+  bluetooth_device_name?: string;
 }
 
 interface Coupon {
@@ -57,6 +60,7 @@ interface Coupon {
 }
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
+  const { language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
@@ -72,6 +76,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [showStaffLogin, setShowStaffLogin] = useState(false);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
 
   // Bluetooth device states
   const [scanningBluetooth, setScanningBluetooth] = useState(false);
@@ -348,7 +353,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       bluetooth_device_name: device.name,
     });
     setShowBluetoothSelector(false);
-    Alert.alert('✓ Connected', `Bluetooth printer "${device.name}" selected. Click Save to apply.`);
+    Alert.alert(
+      '✓ Device Selected', 
+      `Printer "${device.name}" selected.\n\n📌 Important: Your printer may require PIN authentication.\n\nIf you see a pairing request, enter the PIN (usually "0000" for thermal printers).\n\nTap "Save" to apply these settings.`
+    );
   };
 
   const createCoupon = async () => {
@@ -897,6 +905,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         )}
       </View>
 
+      {/* Language Settings */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>🌍 Language</Text>
+        </View>
+        <View style={styles.settingItem}>
+          <Text style={styles.label}>Current Language</Text>
+          <Text style={styles.value}>{language === 'zh' ? '中文 (Chinese)' : 'English'}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.btn, styles.btnSecondary]}
+          onPress={() => setShowLanguagePicker(true)}
+        >
+          <Text style={styles.btnText}>🗣️ Change Language</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* QR Code Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>📱 QR Code Settings</Text>
@@ -1272,6 +1297,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* Language Picker */}
+      <LanguagePicker
+        visible={showLanguagePicker}
+        onClose={() => setShowLanguagePicker(false)}
+      />
     </ScrollView>
   );
 };

@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
+import { useLanguage } from '../contexts/LanguageContext';
 import { apiClient } from '../services/apiClient';
 
 interface KitchenItem {
@@ -29,6 +30,7 @@ interface KitchenItem {
 
 export const KitchenDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

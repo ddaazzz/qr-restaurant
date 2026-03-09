@@ -1,6 +1,7 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert } from 'react-native';
 import { apiClient } from '../../services/apiClient';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface StaffMember {
   id: number;
@@ -33,6 +34,7 @@ export interface StaffTabRef {
 }
 
 export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
+  const { t } = useLanguage();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [menuCategories, setMenuCategories] = useState<MenuCategory[]>([]);
   const [loading, setLoading] = useState(true);

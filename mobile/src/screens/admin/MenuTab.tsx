@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // ==================== INTERFACES ====================
 
@@ -65,6 +66,7 @@ export interface MenuTabRef {
 
 export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
   ({ restaurantId }, ref) => {
+    const { t } = useLanguage();
     // ==================== STATE MANAGEMENT ====================
     
     // Data

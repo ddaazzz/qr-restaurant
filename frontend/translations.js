@@ -1535,7 +1535,7 @@ const translations = {
     'nav.kitchen-dashboard': '廚房儀表板',
 
     // Home page
-    'home.title': 'Chuio - 餐廳落單系統',
+    'home.title': '餐廳落單系統',
     'home.completely-free': '完全免費',
     'home.free-badge': '✓ 100% 免費 • ✓ 永久免費 • ✓ 無需信用卡 • ✓ 無隱藏費用',
     'home.join-waitlist': '加入等候名單',

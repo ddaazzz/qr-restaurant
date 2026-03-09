@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { useLanguage } from '../contexts/LanguageContext';
 import { QRScannerModal } from '../components/QRScannerModal';
 import { TablesTab, TablesTabRef } from './admin/TablesTab';
 import { MenuTab, MenuTabRef } from './admin/MenuTab';
@@ -26,6 +27,7 @@ type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' |
 
 export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabType>('tables');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showQRScanner, setShowQRScanner] = useState(false);

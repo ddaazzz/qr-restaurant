@@ -1,3 +1,0 @@
-{
-  ":post_install_hook": "echo 'Skipping pod cache cleanup'"
-}

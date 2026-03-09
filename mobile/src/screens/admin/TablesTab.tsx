@@ -19,6 +19,7 @@ import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
 import { apiClient } from '../../services/apiClient';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface TableCategory {
   id: number;
@@ -98,6 +99,7 @@ const getTableTextColor = (bgColor: string) => {
 };
 
 export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
+  const { t } = useLanguage();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -907,7 +909,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             console.log('[PrintBill] Sending thermal print data to:', device.id);
             
             // Send to thermal printer using ESC/POS commands
-            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData);
+            // Use 30 second timeout for authentication and printing
+            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData, 30000);
             
             console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
@@ -950,6 +953,81 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           err.response?.data?.error || err.message || 'Failed to print bill'
         );
       }
+    }
+  };
+
+  const testPrintBill = async () => {
+    console.log('[TestPrint] Starting diagnostic test print');
+    
+    try {
+      // Check if printer is configured
+      const printerRes = await apiClient.get(
+        `/api/restaurants/${restaurantId}/printer-settings`
+      );
+      
+      if (!printerRes.data || !printerRes.data.printer_type) {
+        Alert.alert('🖨️ No Printer', 'Please configure a Bluetooth printer first');
+        return;
+      }
+
+      if (printerRes.data.printer_type !== 'bluetooth') {
+        Alert.alert('ℹ️ Not Bluetooth', 'Test print only works with Bluetooth printers');
+        return;
+      }
+
+      const device = { 
+        id: printerRes.data.bluetooth_device_id, 
+        name: printerRes.data.bluetooth_device_name 
+      };
+
+      if (!device.id) {
+        Alert.alert('❌ No Device', 'Bluetooth device not configured');
+        return;
+      }
+
+      Alert.alert('⏳ Test Print', 'Sending minimal test sequence to printer...');
+
+      // Import BleManager
+      let BleManager: any = null;
+      try {
+        const ble = require('react-native-ble-plx');
+        BleManager = ble.BleManager;
+      } catch (e) {
+        throw new Error('Bluetooth not available');
+      }
+
+      const manager = new BleManager();
+      
+      // Wait for BLE to be ready
+      await new Promise<void>((resolve) => {
+        let attempts = 0;
+        const checkState = async () => {
+          try {
+            const state = await manager.state();
+            if (state === 'PoweredOn') {
+              resolve();
+            } else if (++attempts < 10) {
+              setTimeout(checkState, 200);
+            } else {
+              resolve();
+            }
+          } catch (e) {
+            if (++attempts < 10) setTimeout(checkState, 200);
+            else resolve();
+          }
+        };
+        checkState();
+      });
+
+      console.log('[TestPrint] Sending test sequence to:', device.id);
+      // Use 30 second timeout for authentication and test print
+      await thermalPrinterService.sendTestPrint(manager, device.id, 30000);
+      
+      Alert.alert('✓ Test Sent', 'Check printer - it should print "TEST" if working');
+      setShowSessionGearMenu(false);
+    } catch (err: any) {
+      console.error('[TestPrint] Error:', err);
+      Alert.alert('❌ Test Failed', err.message || 'Could not send test print');
     }
   };
 
@@ -1036,6 +1114,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 onPress={() => printBill(false)}
               >
                 <Text style={styles.gearMenuItemText}>🖨️ Print Bill</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]}
+                onPress={testPrintBill}
+              >
+                <Text style={styles.gearMenuItemText}>🧪 Test Print</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
