@@ -81,7 +81,11 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.errorText}>Camera permission required</Text>
+          <Text style={styles.errorText}>Camera Permission Required</Text>
+          <Text style={styles.infoText}>Tap 'Allow' when prompted to enable camera access for QR scanning</Text>
+          <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={requestPermission}>
+            <Text style={styles.buttonText}>Request Permission</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
             <Text style={styles.buttonText}>Close</Text>
           </TouchableOpacity>
@@ -207,6 +211,9 @@ const styles = StyleSheet.create({
   closeButton: {
     backgroundColor: '#2C3E50',
   },
+  primaryButton: {
+    backgroundColor: '#2C3E50',
+  },
   buttonText: {
     color: '#fff',
     fontSize: 14,
@@ -221,6 +228,12 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#ff6b6b',
     fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  infoText: {
+    color: '#666',
+    fontSize: 14,
     marginBottom: 20,
     textAlign: 'center',
   },

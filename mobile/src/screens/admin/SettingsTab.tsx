@@ -169,13 +169,24 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       // Try to scan for Bluetooth devices
       // For iOS simulator/development, fall back to manual entry
       try {
-        const { BleManager } = require('react-native-ble-plx');
+        let BleManager: any = null;
+        try {
+          const ble = require('react-native-ble-plx');
+          BleManager = ble.BleManager;
+        } catch (requireErr: any) {
+          throw new Error('BleManager not available: ' + requireErr.message);
+        }
         
         if (!BleManager) {
           throw new Error('BleManager not available');
         }
 
-        const manager = new BleManager();
+        let manager: any;
+        try {
+          manager = new BleManager();
+        } catch (managerErr: any) {
+          throw new Error('Failed to initialize BleManager: ' + managerErr.message);
+        }
         const foundDevices: Array<{ id: string; name: string; signal: number }> = [];
         let scanSubscription: any = null;
 
@@ -566,10 +577,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     setPrinterFormData({ ...printerFormData, printer_type: itemValue })
                   }
                 >
-                  <Picker.Item label="🖨️ Thermal Network Printer" value="thermal" />
-                  <Picker.Item label="📱 Browser Print" value="browser" />
-                  <Picker.Item label="📡 Bluetooth" value="bluetooth" />
-                  <Picker.Item label="🔌 USB" value="usb" />
+                  <Picker.Item label="Thermal Network Printer" value="thermal" />
+                  <Picker.Item label="Browser Print" value="browser" />
+                  <Picker.Item label="Bluetooth" value="bluetooth" />
+                  <Picker.Item label="USB" value="usb" />
                   <Picker.Item label="None" value="none" />
                 </Picker>
               </View>
@@ -747,7 +758,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <>
             <View style={styles.settingItem}>
               <Text style={styles.label}>Printer Type</Text>
-              <Text style={styles.value}>{printerSettings.printer_type || '—'}</Text>
+              <Text style={styles.value}>
+                {printerSettings.printer_type === 'thermal' && 'Thermal Network Printer'}
+                {printerSettings.printer_type === 'browser' && 'Browser Print'}
+                {printerSettings.printer_type === 'bluetooth' && 'Bluetooth'}
+                {printerSettings.printer_type === 'usb' && 'USB'}
+                {printerSettings.printer_type === 'none' && 'None'}
+                {!printerSettings.printer_type && '—'}
+              </Text>
             </View>
             <View style={styles.settingItem}>
               <Text style={styles.label}>Host/IP</Text>
