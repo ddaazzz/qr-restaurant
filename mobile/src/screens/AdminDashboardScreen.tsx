@@ -81,10 +81,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   };
 
   const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('admin.logout'), 'Are you sure?', [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Logout',
+        text: t('admin.logout'),
         onPress: async () => {
           setShowAdminDropdown(false);
           await logout();
@@ -159,13 +159,13 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
   const getTabDisplayName = () => {
     const names: Record<TabType, string> = {
-      'tables': 'Tables',
-      'orders': 'Orders',
-      'menu': 'Menu',
-      'staff': 'Staff',
-      'bookings': 'Bookings',
-      'reports': 'Reports',
-      'settings': 'Settings',
+      'tables': t('admin.tables'),
+      'orders': t('admin.orders'),
+      'menu': t('admin.menu'),
+      'staff': t('admin.staff'),
+      'bookings': t('admin.bookings', 'Bookings'),
+      'reports': t('admin.reports', 'Reports'),
+      'settings': t('admin.settings'),
     };
     return names[activeTab];
   };
@@ -187,7 +187,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>Edit</Text>
+              <Text style={styles.headerActionBtnText}>{t('admin.edit')}</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'menu' && (
@@ -195,7 +195,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleMenuEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>Edit</Text>
+              <Text style={styles.headerActionBtnText}>{t('admin.edit')}</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'staff' && (
@@ -203,7 +203,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleStaffEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>Edit</Text>
+              <Text style={styles.headerActionBtnText}>{t('admin.edit')}</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'orders' && (
@@ -211,7 +211,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleHistoryToggle}
             >
-              <Text style={styles.headerActionBtnText}>History</Text>
+              <Text style={styles.headerActionBtnText}>{t('admin.history')}</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'bookings' && (
@@ -219,21 +219,21 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={() => bookingsTabRef.current?.openNewBookingModal()}
             >
-              <Text style={styles.headerActionBtnText}>+ New</Text>
+              <Text style={styles.headerActionBtnText}>+ {t('common.new', 'New')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity 
             style={styles.headerActionBtn}
             onPress={handleScanQR}
           >
-            <Text style={styles.headerActionBtnText}>Scan QR</Text>
+            <Text style={styles.headerActionBtnText}>{t('admin.scan-qr')}</Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity 
           style={styles.adminBtn}
           onPress={openAdminDropdown}
         >
-          <Text style={styles.adminBtnText}>Admin ▼</Text>
+          <Text style={styles.adminBtnText}>{t('login.admin', 'Admin')} ▼</Text>
         </TouchableOpacity>
       </View>
 
@@ -245,13 +245,13 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             {(['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'] as const).map(
               (tab) => {
                 const tabConfig: Record<TabType, { label: string; icon: string }> = {
-                  'tables': { label: 'Tables', icon: 'grid' },
-                  'orders': { label: 'Orders', icon: 'receipt' },
-                  'menu': { label: 'Menu', icon: 'restaurant' },
-                  'staff': { label: 'Staff', icon: 'people' },
-                  'bookings': { label: 'Bookings', icon: 'calendar' },
-                  'reports': { label: 'Reports', icon: 'stats-chart' },
-                  'settings': { label: 'More', icon: 'cog' },
+                  'tables': { label: t('admin.tables'), icon: 'grid' },
+                  'orders': { label: t('admin.orders'), icon: 'receipt' },
+                  'menu': { label: t('admin.menu'), icon: 'restaurant' },
+                  'staff': { label: t('admin.staff'), icon: 'people' },
+                  'bookings': { label: t('admin.bookings', 'Bookings'), icon: 'calendar' },
+                  'reports': { label: t('admin.reports', 'Reports'), icon: 'stats-chart' },
+                  'settings': { label: t('common.more', 'More'), icon: 'cog' },
                 };
                 const config = tabConfig[tab];
                 return (
@@ -308,7 +308,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             {/* Restaurants List for Superadmin */}
             {user?.role === 'superadmin' && restaurants.length > 0 && (
               <>
-                <Text style={styles.dropdownSectionTitle}>Select Restaurant</Text>
+                <Text style={styles.dropdownSectionTitle}>{t('common.select-restaurant', 'Select Restaurant')}</Text>
                 <View style={styles.restaurantsList}>
                   {restaurants.map((restaurant) => (
                     <TouchableOpacity
@@ -344,7 +344,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.dropdownItem}
               onPress={handleLogout}
             >
-              <Text style={styles.dropdownItemText}>Logout</Text>
+              <Text style={styles.dropdownItemText}>{t('admin.logout')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

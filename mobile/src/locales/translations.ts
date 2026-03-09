@@ -27,6 +27,8 @@ export const translations = {
     'admin.history': 'History',
     'admin.scan-qr': 'Scan QR',
     'admin.logout': 'Logout',
+    'admin.bookings': 'Bookings',
+    'admin.reports': 'Reports',
 
     // Tables Tab
     'tables.title': 'Tables',
@@ -115,6 +117,9 @@ export const translations = {
     'common.english': 'English',
     'common.chinese': '中文',
     'common.no-data': 'No data',
+    'common.more': 'More',
+    'common.new': 'New',
+    'common.select-restaurant': 'Select Restaurant',
   },
   zh: {
     // Login Screen
@@ -144,6 +149,8 @@ export const translations = {
     'admin.history': '歷史',
     'admin.scan-qr': '掃描二維碼',
     'admin.logout': '登出',
+    'admin.bookings': '預訂',
+    'admin.reports': '報告',
 
     // Tables Tab
     'tables.title': '桌位管理',
@@ -232,6 +239,9 @@ export const translations = {
     'common.english': 'English',
     'common.chinese': '繁體中文',
     'common.no-data': '無數據',
+    'common.more': '更多',
+    'common.new': '新增',
+    'common.select-restaurant': '選擇餐廳',
   },
 };
 
