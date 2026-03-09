@@ -333,7 +333,7 @@
 
 .orders-item-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-color: #2196F3;
+  border-color: #2C3E50;
 }
 
 .orders-item-image {
@@ -369,7 +369,7 @@
 .orders-item-price {
   font-size: 14px;
   font-weight: bold;
-  color: #2196F3;
+  color: #2C3E50;
 }
 
 /* ============== CART PANEL ============== */
@@ -457,7 +457,7 @@
 
 .cart-item-price {
   font-weight: bold;
-  color: #2196F3;
+  color: #2C3E50;
   font-size: 12px;
 }
 
@@ -505,7 +505,7 @@
 
 .cart-total span:last-child {
   font-size: 18px;
-  color: #2196F3;
+  color: #2C3E50;
 }
 
 /* ============== ORDER TYPE SELECTION ============== */
@@ -539,7 +539,7 @@
 }
 
 .order-type-option:hover {
-  border-color: #2196F3;
+  border-color: #2C3E50;
   background: #f9f9f9;
 }
 
@@ -619,12 +619,12 @@
 }
 
 .btn-primary {
-  background: #2196F3;
+  background: #2C3E50;
   color: white;
 }
 
 .btn-primary:hover {
-  background: #1976D2;
+  background: #2C3E50;
 }
 
 .btn-primary:active {
@@ -711,12 +711,12 @@
 }
 
 .form-actions .btn-primary {
-  background: #2196F3;
+  background: #2C3E50;
   color: white;
 }
 
 .form-actions .btn-primary:hover {
-  background: #1976D2;
+  background: #2C3E50;
 }
 
 .form-actions .btn-secondary {
@@ -1392,12 +1392,12 @@
 }
 
 .variant-slide-footer .btn-primary {
-  background: #2196F3;
+  background: #2C3E50;
   color: white;
 }
 
 .variant-slide-footer .btn-primary:hover {
-  background: #1976D2;
+  background: #2C3E50;
 }
 
 .variant-slide-footer .btn-secondary {

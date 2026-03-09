@@ -395,7 +395,7 @@
 
 .menu-item-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-color: #2196F3;
+  border-color: #2C3E50;
 }
 
 .menu-item-image {
@@ -449,7 +449,7 @@
 .menu-item-price {
   font-size: 14px;
   font-weight: bold;
-  color: #2196F3;
+  color: #2C3E50;
 }
 
 .badge-sold-out {

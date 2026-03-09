@@ -364,14 +364,10 @@ function updateSectionHeader(titleKey, actionButtonId) {
     }
   }
 
-  // Show scan QR button only for tables section
+  // Show scan QR button on all sections for easy access
   var scanBtn = document.getElementById("scan-qr-btn");
   if (scanBtn) {
-    if (CURRENT_SECTION === "tables") {
-      scanBtn.style.display = "inline-block";
-    } else {
-      scanBtn.style.display = "none";
-    }
+    scanBtn.style.display = "inline-block";
   }
 }
 

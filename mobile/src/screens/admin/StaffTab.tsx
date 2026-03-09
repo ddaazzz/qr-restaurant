@@ -874,8 +874,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   roleBtnActive: {
-    backgroundColor: '#5a5a5a',
-    borderColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
+    borderColor: '#2C3E50',
   },
   roleBtnText: {
     fontSize: 13,
@@ -903,8 +903,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   accessCheckboxActive: {
-    backgroundColor: '#5a5a5a',
-    borderColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
+    borderColor: '#2C3E50',
   },
   accessCheckboxText: {
     fontSize: 12,

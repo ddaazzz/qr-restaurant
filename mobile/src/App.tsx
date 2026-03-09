@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, View, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { LoginScreen } from './screens/LoginScreen';
+import { StaffLoginScreen } from './screens/StaffLoginScreen';
 import { KitchenLoginScreen } from './screens/KitchenLoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
@@ -23,7 +24,7 @@ const RootNavigator = () => {
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#2196F3" />
+        <ActivityIndicator size="large" color="#2C3E50" />
       </View>
     );
   }
@@ -32,12 +33,14 @@ const RootNavigator = () => {
   if (isSignedIn && user) {
     if (user.role === 'kitchen') {
       return <KitchenDashboardScreen />;
+    } else if (user.role === 'staff') {
+      return <AdminDashboardScreen />;
     } else {
       return <AdminDashboardScreen />;
     }
   }
 
-  // Show role selection (Kitchen or Admin login)
+  // Show role selection (Kitchen, Staff, or Admin login)
   return <LoginScreen />;
 };
 

@@ -8,7 +8,8 @@ interface AuthContextType {
   isLoading: boolean;
   isSignedIn: boolean;
   login: (email: string, password: string) => Promise<void>;
-  kitchenLogin: (pin: string) => Promise<void>;
+  kitchenLogin: (pin: string, restaurantId?: string) => Promise<void>;
+  staffLogin: (pin: string, restaurantId?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -68,10 +69,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const kitchenLogin = async (pin: string) => {
+  const kitchenLogin = async (pin: string, restaurantId?: string) => {
     setIsLoading(true);
     try {
-      const response = await apiClient.kitchenLogin(pin);
+      const response = await apiClient.kitchenLogin(pin, restaurantId);
+      // apiClient already handles storing to SecureStore
+      // Just set token and restaurantId on API client and state
+      apiClient.setToken(String(response.token));
+      apiClient.setRestaurantId(String(response.restaurantId));
+      setUser(response);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const staffLogin = async (pin: string, restaurantId?: string) => {
+    setIsLoading(true);
+    try {
+      const response = await apiClient.staffLogin(pin, restaurantId);
       // apiClient already handles storing to SecureStore
       // Just set token and restaurantId on API client and state
       apiClient.setToken(String(response.token));
@@ -101,6 +116,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isSignedIn: !!user,
         login,
         kitchenLogin,
+        staffLogin,
         logout,
       }}
     >

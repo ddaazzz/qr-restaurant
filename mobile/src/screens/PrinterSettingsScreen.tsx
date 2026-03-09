@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,79 +7,112 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  FlatList,
-  Modal,
+  TextInput,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { usePrinters } from '../hooks/useAPI';
-import { bluetoothService } from '../services/bluetoothService';
+import { apiClient } from '../services/apiClient';
 
-export const PrinterSettingsScreen = ({ navigation }: any) => {
-  const { printers, scanning, error, scanForPrinters, connectPrinter, disconnectPrinter } =
-    usePrinters();
-  const [selectedPrinter, setSelectedPrinter] = useState<string | null>(null);
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState('kitchen');
+interface PrinterSettings {
+  printer_type?: string;
+  printer_host?: string;
+  printer_port?: number;
+  kitchen_auto_print?: boolean;
+  bill_auto_print?: boolean;
+}
+
+export const PrinterSettingsScreen = ({ route, navigation }: any) => {
+  const restaurantId = route?.params?.restaurantId || '';
+  
+  const [printerType, setPrinterType] = useState('network');
+  const [printerHost, setPrinterHost] = useState('');
+  const [printerPort, setPrinterPort] = useState('9100');
   const [testPrinting, setTestPrinting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const handleScan = async () => {
-    try {
-      await scanForPrinters();
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Scan failed');
+  // Load printer settings on mount
+  useEffect(() => {
+    loadPrinterSettings();
+  }, []);
+
+  const loadPrinterSettings = async () => {
+    if (!restaurantId) {
+      setLoading(false);
+      return;
     }
-  };
-
-  const handleConnectPrinter = async () => {
-    if (!selectedPrinter) return;
-
     try {
-      const success = await connectPrinter(selectedPrinter, selectedLocation);
-      if (success) {
-        Alert.alert('Success', `Printer connected to ${selectedLocation}`);
-        setShowLocationModal(false);
-        setSelectedPrinter(null);
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/printer-settings`);
+      if (res.data) {
+        setPrinterType(res.data.printer_type || 'network');
+        setPrinterHost(res.data.printer_host || '');
+        setPrinterPort(res.data.printer_port?.toString() || '9100');
       }
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Connection failed');
+      console.log('Error loading printer settings:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDisconnect = async (printerId: string) => {
-    Alert.alert('Disconnect', 'Remove this printer?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Disconnect',
-        style: 'destructive',
-        onPress: async () => {
-          await disconnectPrinter(printerId);
-        },
-      },
-    ]);
+  const savePrinterSettings = async () => {
+    if (!restaurantId) {
+      Alert.alert('Error', 'No restaurant ID');
+      return;
+    }
+    if (!printerHost.trim()) {
+      Alert.alert('Validation', 'Please enter printer IP address or hostname');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await apiClient.patch(
+        `/api/restaurants/${restaurantId}/printer-settings`,
+        {
+          printer_type: printerType,
+          printer_host: printerHost.trim(),
+          printer_port: parseInt(printerPort) || 9100,
+        }
+      );
+      Alert.alert('✅ Success', 'Printer settings saved successfully');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to save printer settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleTestPrint = async (printerId: string) => {
+  const testPrinterConnection = async () => {
+    if (!restaurantId) {
+      Alert.alert('Error', 'No restaurant ID');
+      return;
+    }
+    if (!printerHost.trim()) {
+      Alert.alert('Validation', 'Please enter printer IP address first');
+      return;
+    }
+
     setTestPrinting(true);
     try {
-      const testOrder = {
-        orderId: 'TEST-001',
-        tableNumber: 1,
-        restaurantName: 'Test Restaurant',
-        items: [
-          {
-            quantity: 1,
-            name: 'Test Item',
-            selectedOptions: [{ name: 'Test Option' }],
-            notes: 'Test print',
-          },
-        ],
-        totalAmount: 9.99,
-      };
+      const res = await apiClient.post(
+        `/api/restaurants/${restaurantId}/test-printer`,
+        {
+          printer_type: printerType,
+          printer_host: printerHost.trim(),
+          printer_port: parseInt(printerPort) || 9100,
+        }
+      );
 
-      await bluetoothService.printOrder(printerId, testOrder);
-      Alert.alert('Success', 'Test print sent to printer');
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Print failed');
+      if (res.data?.success) {
+        Alert.alert('✅ Connection Success', 'Printer is reachable and responding');
+      } else {
+        Alert.alert('⚠️ Connection Failed', res.data?.error || 'Unable to reach printer');
+      }
+    } catch (err: any) {
+      Alert.alert(
+        '❌ Connection Error',
+        err.response?.data?.error || 'Failed to connect to printer. Check IP and port.'
+      );
     } finally {
       setTestPrinting(false);
     }
@@ -254,7 +287,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#2C3E50',
     padding: 20,
     paddingTop: 40,
     flexDirection: 'row',
@@ -285,7 +318,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   scanButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#2C3E50',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -332,7 +365,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   connectButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#2C3E50',
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 6,
@@ -353,7 +386,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 10,
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    borderLeftColor: '#2C3E50',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -376,7 +409,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   testButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#2C3E50',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
@@ -445,7 +478,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonPrimary: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#2C3E50',
   },
   modalButtonText: {
     color: '#333',

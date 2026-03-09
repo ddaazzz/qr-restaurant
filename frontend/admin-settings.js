@@ -230,7 +230,7 @@ async function loadPOSIntegrationModal() {
   }
 }
 
-// Load Staff Login Links Modal
+// Load Staff Login Links Modal - Generate QR Codes
 async function loadStaffLoginLinksModal() {
   try {
     const rid = restaurantId || localStorage.getItem('restaurantId');
@@ -239,24 +239,99 @@ async function loadStaffLoginLinksModal() {
       return;
     }
     
-    const staffLinkEl = document.getElementById('staff-link');
-    const kitchenLinkEl = document.getElementById('kitchen-link');
+    // Clear previous QR codes
+    const qrStaffEl = document.getElementById('qr-staff');
+    const qrKitchenEl = document.getElementById('qr-kitchen');
+    const staffLinkDisplay = document.getElementById('staff-link-display');
+    const kitchenLinkDisplay = document.getElementById('kitchen-link-display');
     
-    if (!staffLinkEl || !kitchenLinkEl) {
-      console.warn('Staff link input elements not found');
+    if (!qrStaffEl || !qrKitchenEl) {
+      console.warn('QR code container elements not found');
       return;
     }
     
+    // Clear containers
+    qrStaffEl.innerHTML = '';
+    qrKitchenEl.innerHTML = '';
+    
+    // Generate deep links for mobile app or web fallback
     const staffLink = `${window.location.origin}/staff.html?rid=${rid}`;
     const kitchenLink = `${window.location.origin}/kitchen.html?rid=${rid}`;
     
-    staffLinkEl.value = staffLink;
-    kitchenLinkEl.value = kitchenLink;
+    // For mobile deep linking (if app is installed)
+    // const staffDeepLink = `chuio://staff-login?rid=${rid}`;
+    // const kitchenDeepLink = `chuio://kitchen-login?rid=${rid}`;
     
-    console.log('Staff login links loaded:', { staffLink, kitchenLink });
+    // Generate QR codes
+    try {
+      // Generate Staff QR Code
+      new QRCode(qrStaffEl, {
+        text: staffLink,
+        width: 160,
+        height: 160,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+      if (staffLinkDisplay) {
+        staffLinkDisplay.textContent = `Link: ${staffLink}`;
+      }
+      
+      // Generate Kitchen QR Code
+      new QRCode(qrKitchenEl, {
+        text: kitchenLink,
+        width: 160,
+        height: 160,
+        colorDark: '#2C3E50',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+      if (kitchenLinkDisplay) {
+        kitchenLinkDisplay.textContent = `Link: ${kitchenLink}`;
+      }
+      
+      console.log('✅ Staff login QR codes generated:', { staffLink, kitchenLink });
+    } catch (err) {
+      console.error('Failed to generate QR codes:', err);
+      qrStaffEl.innerHTML = '<p style="color: #f44336;">Failed to generate QR code. Please check if QRCode library is loaded.</p>';
+      qrKitchenEl.innerHTML = '<p style="color: #f44336;">Failed to generate QR code. Please check if QRCode library is loaded.</p>';
+    }
   } catch (err) {
     console.error("Failed to load staff login links:", err);
   }
+}
+
+// Download QR Code as image
+function downloadQRCode(qrElementId, filename) {
+  const qrElement = document.getElementById(qrElementId);
+  const canvas = qrElement.querySelector('canvas');
+  
+  if (!canvas) {
+    alert('❌ QR code not generated yet. Please reload the modal.');
+    return;
+  }
+  
+  const link = document.createElement('a');
+  link.href = canvas.toDataURL('image/png');
+  link.download = filename;
+  link.click();
+}
+
+// Print QR Code
+function printQRCode(qrElementId) {
+  const qrElement = document.getElementById(qrElementId);
+  const canvas = qrElement.querySelector('canvas');
+  
+  if (!canvas) {
+    alert('❌ QR code not generated yet. Please reload the modal.');
+    return;
+  }
+  
+  const printWindow = window.open();
+  const img = canvas.toDataURL('image/png');
+  printWindow.document.write(`<img src="${img}" style="max-width: 100%; margin: 20px;" />`);
+  printWindow.document.close();
+  printWindow.print();
 }
 
 // Load QR Settings Modal

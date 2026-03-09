@@ -354,28 +354,40 @@
     <div class="modal-backdrop" onclick="closeSettingsModal('staff-login-links')"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3 data-i18n="admin.staff-login-links">👥 Staff Login Links</h3>
+        <h3 data-i18n="admin.staff-login-links">👥 Staff & Kitchen Login QR Codes</h3>
         <button class="modal-close" onclick="closeSettingsModal('staff-login-links')">✕</button>
       </div>
       <div class="modal-body">
-        <p data-i18n="admin.staff-login-help" style="margin-bottom: 20px; font-size: 14px;">Share these links with your staff members to allow them to login without admin credentials:</p>
+        <p data-i18n="admin.staff-login-help" style="margin-bottom: 20px; font-size: 14px;">Share these QR codes with your staff members. Each staff member scans their unique QR code to login:</p>
         
+        <!-- Table Staff QR Code -->
         <div class="form-row">
           <div class="form-group" style="grid-column: 1 / -1;">
-            <label data-i18n="admin.table-staff-link">Table Staff Login Link</label>
-            <div style="display: flex; gap: 8px;">
-              <input id="staff-link" type="text" readonly class="form-input" style="flex: 1; font-size: 12px;" />
-              <button class="btn-secondary" onclick="copyToClipboard('staff-link')" data-i18n="admin.copy">📋 Copy</button>
+            <label data-i18n="admin.table-staff-link">👤 Table Staff Login QR Code</label>
+            <div style="display: flex; gap: 16px; align-items: flex-start;">
+              <div id="qr-staff" style="display: flex; justify-content: center; align-items: center; min-width: 180px; min-height: 180px; background: #f5f5f5; border: 2px solid #ddd; border-radius: 8px;"></div>
+              <div style="flex: 1;">
+                <p style="font-size: 12px; color: #666; margin-bottom: 12px;">Scan this code to access Table Staff login. Each staff member has a unique PIN.</p>
+                <button class="btn-primary" onclick="downloadQRCode('qr-staff', 'staff-qr.png')" style="width: 100%;">⬇️ Download QR Code</button>
+                <button class="btn-secondary" onclick="printQRCode('qr-staff')" style="width: 100%; margin-top: 8px;">🖨️ Print QR Code</button>
+                <div id="staff-link-display" style="margin-top: 12px; padding: 12px; background: #f9f9f9; border-radius: 6px; font-size: 11px; word-break: break-all; color: #666;"></div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="form-row">
+        <!-- Kitchen Staff QR Code -->
+        <div class="form-row" style="margin-top: 24px;">
           <div class="form-group" style="grid-column: 1 / -1;">
-            <label data-i18n="admin.kitchen-staff-link">Kitchen Staff Login Link</label>
-            <div style="display: flex; gap: 8px;">
-              <input id="kitchen-link" type="text" readonly class="form-input" style="flex: 1; font-size: 12px;" />
-              <button class="btn-secondary" onclick="copyToClipboard('kitchen-link')" data-i18n="admin.copy">📋 Copy</button>
+            <label data-i18n="admin.kitchen-staff-link">🍳 Kitchen Staff Login QR Code</label>
+            <div style="display: flex; gap: 16px; align-items: flex-start;">
+              <div id="qr-kitchen" style="display: flex; justify-content: center; align-items: center; min-width: 180px; min-height: 180px; background: #f5f5f5; border: 2px solid #ddd; border-radius: 8px;"></div>
+              <div style="flex: 1;">
+                <p style="font-size: 12px; color: #666; margin-bottom: 12px;">Scan this code to access Kitchen Dashboard. Each kitchen staff has a unique PIN.</p>
+                <button class="btn-primary" onclick="downloadQRCode('qr-kitchen', 'kitchen-qr.png')" style="width: 100%;">⬇️ Download QR Code</button>
+                <button class="btn-secondary" onclick="printQRCode('qr-kitchen')" style="width: 100%; margin-top: 8px;">🖨️ Print QR Code</button>
+                <div id="kitchen-link-display" style="margin-top: 12px; padding: 12px; background: #f9f9f9; border-radius: 6px; font-size: 11px; word-break: break-all; color: #666;"></div>
+              </div>
             </div>
           </div>
         </div>

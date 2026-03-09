@@ -316,7 +316,7 @@ function createVariantOptionsEditorElement(variant) {
           <div id="option-row-${option.id}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: white; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 4px;">
             <span style="font-size: 12px;">${option.name}${priceLabel}</span>
             <div style="display: flex; gap: 4px;">
-              <button onclick="editVariantOption(${option.id})" style="padding: 2px 6px; background: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Edit</button>
+              <button onclick="editVariantOption(${option.id})" style="padding: 2px 6px; background: #2C3E50; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Edit</button>
               <button onclick="deleteVariantOption(${option.id})" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Delete</button>
             </div>
           </div>

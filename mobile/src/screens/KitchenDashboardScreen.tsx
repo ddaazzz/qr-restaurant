@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../services/apiClient';
@@ -31,6 +32,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
     loadKitchenItems();
@@ -74,16 +76,16 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#FF9800" />
+        <ActivityIndicator size="large" color="#2C3E50" />
       </View>
     );
   }
 
   const statusColors: any = {
     pending: '#FVC107',
-    confirmed: '#2196F3',
-    preparing: '#FF9800',
-    ready: '#4CAF50',
+    confirmed: '#2C3E50',
+    preparing: '#2C3E50',
+    ready: '#2C3E50',
     served: '#9E9E9E',
   };
 
@@ -91,11 +93,42 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Kitchen Queue</Text>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={styles.logoutBtn}>Logout</Text>
+        <Text style={styles.title}>🍳 Kitchen Queue</Text>
+        <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.menuButton}>
+          <Text style={styles.menuButtonText}>Menu ▼</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Menu Dropdown */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <TouchableOpacity
+          style={styles.menuBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={styles.menuDropdown}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                Alert.alert('Language', 'Language selection would go here');
+                setShowMenu(false);
+              }}
+            >
+              <Text style={styles.menuItemText}>🌍 Language</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                handleLogout();
+              }}
+            >
+              <Text style={styles.menuItemText}>🚪 Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Content */}
       {error ? (
@@ -200,7 +233,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#FF9800',
+    backgroundColor: '#2C3E50',
     padding: 20,
     paddingTop: 40,
     flexDirection: 'row',
@@ -211,6 +244,49 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  menuButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  menuButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    paddingTop: 80,
+  },
+  menuDropdown: {
+    backgroundColor: '#fff',
+    marginHorizontal: 10,
+    marginRight: 20,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    alignSelf: 'flex-end',
+    minWidth: 180,
+  },
+  menuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuItemText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#eee',
   },
   logoutBtn: {
     color: '#fff',
@@ -226,7 +302,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 15,
     borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
+    borderLeftColor: '#2C3E50',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -289,7 +365,7 @@ const styles = StyleSheet.create({
   },
   notes: {
     fontSize: 13,
-    color: '#FF9800',
+    color: '#2C3E50',
     fontStyle: 'italic',
     marginTop: 5,
   },
@@ -308,7 +384,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   readyButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#2C3E50',
   },
   servedButton: {
     backgroundColor: '#9E9E9E',
@@ -330,7 +406,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#FF9800',
+    backgroundColor: '#2C3E50',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

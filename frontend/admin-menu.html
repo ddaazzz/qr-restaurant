@@ -61,7 +61,7 @@
       <div class="food-item-panel-image-section">
         <img id="food-panel-image" src="" alt="Food Item" class="food-item-panel-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23e5e7eb%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2220%22 fill=%22%23999%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22%3ENo Image%3C/text%3E%3C/svg%3E';"/>
         <input id="food-panel-image-input" type="file" accept="image/*" style="display: none;" onchange="previewFoodPanelImage(this)" />
-        <button id="food-panel-change-image-btn" onclick="document.getElementById('food-panel-image-input').click()" style="display: none; margin-top: 8px; padding: 6px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Change Image</button>
+        <button id="food-panel-change-image-btn" onclick="document.getElementById('food-panel-image-input').click()" style="display: none; margin-top: 8px; padding: 6px 12px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Change Image</button>
       </div>
 
       <div class="food-item-panel-details">
@@ -92,7 +92,7 @@
         <div class="food-item-panel-variants-section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h3 data-i18n="admin.variants">Variants</h3>
-            <button id="food-panel-add-variant-btn" onclick="startAddVariantFromPanel()" data-i18n="admin.add-variant" style="display: none; padding: 4px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add</button>
+            <button id="food-panel-add-variant-btn" onclick="startAddVariantFromPanel()" data-i18n="admin.add-variant" style="display: none; padding: 4px 8px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add</button>
           </div>
           <div id="food-panel-variants" class="food-panel-variants-container">
             <!-- Variants rendered here -->
@@ -127,7 +127,7 @@
               <div id="food-panel-variant-options-section" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #ddd;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <label data-i18n="admin.variant-options" style="font-size: 12px; font-weight: 500;">Options</label>
-                  <button onclick="startAddVariantOption()" data-i18n="admin.add-option" style="padding: 2px 8px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">+ Add Option</button>
+                  <button onclick="startAddVariantOption()" data-i18n="admin.add-option" style="padding: 2px 8px; background: #2C3E50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">+ Add Option</button>
                 </div>
                 <div id="food-panel-variant-options-list" style="display: flex; flex-direction: column; gap: 6px;">
                   <!-- Options rendered here -->
@@ -147,14 +147,14 @@
                     <input id="food-panel-option-price" type="number" placeholder="0" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
                   </div>
                   <div style="display: flex; gap: 4px;">
-                    <button onclick="saveVariantOption()" data-i18n="admin.save-option" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Save</button>
+                    <button onclick="saveVariantOption()" data-i18n="admin.save-option" style="flex: 1; padding: 4px; background: #2C3E50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Save</button>
                     <button onclick="cancelVariantOptionForm()" data-i18n="admin.cancel-option" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Cancel</button>
                   </div>
                 </div>
               </div>
 
               <div style="display: flex; gap: 6px;">
-              <button onclick="if (currentEditingVariantId) saveEditedVariantFromPanel(); else saveNewVariantFromPanel();" data-i18n="admin.save-variant" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Save Variant</button>
+              <button onclick="if (currentEditingVariantId) saveEditedVariantFromPanel(); else saveNewVariantFromPanel();" data-i18n="admin.save-variant" style="flex: 1; padding: 6px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Save Variant</button>
               <button onclick="cancelVariantForm()" data-i18n="admin.cancel-variant" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Cancel</button>
               </div>
             </div>
@@ -290,7 +290,7 @@
 
 <!-- Template: Variant Inline Edit Form -->
 <template id="variant-inline-edit-template">
-  <div style="padding: 8px; border: 2px solid #2196F3; border-radius: 4px; background: #f5f5f5;">
+  <div style="padding: 8px; border: 2px solid #2C3E50; border-radius: 4px; background: #f5f5f5;">
     <div style="margin-bottom: 8px;">
       <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;" data-i18n="admin.variant-name">Variant Name</label>
       <input class="inline-variant-name" type="text" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
@@ -312,22 +312,22 @@
       </label>
     </div>
     <div style="display: flex; gap: 6px;">
-      <button class="variant-inline-save" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.save">Save</button>
+      <button class="variant-inline-save" style="flex: 1; padding: 6px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.save">Save</button>
       <button class="variant-inline-cancel" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.cancel">Cancel</button>
-      <button class="variant-options-edit-btn" style="flex: 1; padding: 6px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.edit-options">Edit Options</button>
+      <button class="variant-options-edit-btn" style="flex: 1; padding: 6px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.edit-options">Edit Options</button>
     </div>
   </div>
 </template>
 
 <!-- Template: Variant Options Editor -->
 <template id="variant-options-editor-template">
-  <div style="padding: 8px; border: 2px solid #FF9800; border-radius: 4px; background: #fff3e0;">
+  <div style="padding: 8px; border: 2px solid #2C3E50; border-radius: 4px; background: #fff3e0;">
     <h4 style="margin: 0 0 8px 0; font-size: 13px;" class="options-editor-title">Edit Options</h4>
     <div style="margin-bottom: 8px; max-height: 200px; overflow-y: auto;" class="options-list">
       <!-- Options rendered here -->
     </div>
     <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-      <button class="add-option-btn" style="flex: 1; padding: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.add-option">+ Add Option</button>
+      <button class="add-option-btn" style="flex: 1; padding: 6px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.add-option">+ Add Option</button>
       <button class="back-to-variant-btn" style="flex: 1; padding: 6px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.back">Back to Edit</button>
     </div>
     <div style="display: none; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;" class="option-form-inline">
@@ -342,7 +342,7 @@
           <input class="inline-option-price" type="number" placeholder="0" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;" />
         </div>
         <div style="display: flex; gap: 4px;">
-          <button class="save-inline-option" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;" data-i18n="admin.save">Save</button>
+          <button class="save-inline-option" style="flex: 1; padding: 4px; background: #2C3E50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;" data-i18n="admin.save">Save</button>
           <button class="cancel-inline-option" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;" data-i18n="admin.cancel">Cancel</button>
         </div>
       </div>
@@ -352,7 +352,7 @@
 
 <!-- Template: Variant Option Edit Form -->
 <template id="variant-option-edit-form-template">
-  <div style="display: flex; flex-direction: column; gap: 6px; padding: 6px; background: #f5f5f5; border: 2px solid #2196F3; border-radius: 3px; margin-bottom: 4px;">
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 6px; background: #f5f5f5; border: 2px solid #2C3E50; border-radius: 3px; margin-bottom: 4px;">
     <div style="display: flex; gap: 6px;">
       <div style="flex: 1;">
         <label style="display: block; font-size: 10px; font-weight: 500; margin-bottom: 2px;" data-i18n="admin.name">Name</label>
@@ -364,7 +364,7 @@
       </div>
     </div>
     <div style="display: flex; gap: 4px;">
-      <button class="option-save-btn" style="flex: 1; padding: 4px; background: #4CAF50; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;" data-i18n="admin.save">Save</button>
+      <button class="option-save-btn" style="flex: 1; padding: 4px; background: #2C3E50; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;" data-i18n="admin.save">Save</button>
       <button class="option-cancel-btn" style="flex: 1; padding: 4px; background: #999; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;" data-i18n="admin.cancel">Cancel</button>
     </div>
   </div>

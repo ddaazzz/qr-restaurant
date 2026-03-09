@@ -5,15 +5,15 @@
 }
 
 :root {
-  --primary-color: #4a90e2;
-  --primary-dark: #2e5c8a;
-  --primary-light: #e3f0ff;
+  --primary-color: #2C3E50;
+  --primary-dark: #1a252f;
+  --primary-light: #ecf0f5;
   --text-dark: #1f2937;
   --text-light: #6b7280;
   --bg-light: #f9fafb;
   --border-color: #e5e7eb;
   --white: #ffffff;
-  --accent-color: #1abc9c;
+  --accent-color: #2C3E50;
 }
 
 body {

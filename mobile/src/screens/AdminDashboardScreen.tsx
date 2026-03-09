@@ -9,6 +9,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
+import { QRScannerModal } from '../components/QRScannerModal';
 import { TablesTab, TablesTabRef } from './admin/TablesTab';
 import { MenuTab, MenuTabRef } from './admin/MenuTab';
 import { StaffTab, StaffTabRef } from './admin/StaffTab';
@@ -23,6 +24,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('tables');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
   const staffTabRef = useRef<StaffTabRef>(null);
@@ -32,7 +34,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   if (!user?.restaurantId) {
     return (
       <SafeAreaView style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
+        <ActivityIndicator size="large" color="#2C3E50" />
       </SafeAreaView>
     );
   }
@@ -71,6 +73,25 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     if (ordersTabRef.current?.toggleHistory) {
       ordersTabRef.current.toggleHistory();
     }
+  };
+
+  const handleScanQR = () => {
+    setShowQRScanner(true);
+  };
+
+  const handleQRScanned = (token: string) => {
+    console.log('[AdminDashboard] QR scanned with token:', token);
+    
+    // Switch to Tables tab
+    setActiveTab('tables');
+    setShowQRScanner(false);
+
+    // Navigate to the session after a short delay to ensure Tables tab is loaded
+    setTimeout(() => {
+      if (tablesTabRef.current?.navigateToScannedQR) {
+        tablesTabRef.current.navigateToScannedQR(token);
+      }
+    }, 300);
   };
 
   const renderTabContent = () => {
@@ -159,6 +180,12 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Text style={styles.headerActionBtnText}>+ New</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity 
+            style={styles.headerActionBtn}
+            onPress={handleScanQR}
+          >
+            <Text style={styles.headerActionBtnText}>📱 Scan QR</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnContainer}>
             <Text style={styles.logoutBtn}>Logout</Text>
           </TouchableOpacity>
@@ -189,6 +216,14 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         {/* Content */}
         <View style={styles.content} key={`tab-${activeTab}`}>{renderTabContent()}</View>
       </View>
+
+      {/* QR Scanner Modal */}
+      <QRScannerModal
+        visible={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onQRScanned={handleQRScanned}
+        restaurantId={user.restaurantId}
+      />
     </SafeAreaView>
   );
 };
@@ -243,7 +278,7 @@ const styles = StyleSheet.create({
   headerActionBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
     borderRadius: 6,
   },
   headerActionBtnText: {
@@ -260,7 +295,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
     color: '#ffffff',
     borderRadius: 6,
     overflow: 'hidden',
@@ -287,8 +322,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
   },
   sidebarTabActive: {
-    borderLeftColor: '#5a5a5a',
-    backgroundColor: '#e0e0e0',
+    borderLeftColor: '#2C3E50',
+    backgroundColor: '#ecf0f1',
   },
   sidebarTabText: {
     fontSize: 10,
@@ -297,7 +332,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sidebarTabTextActive: {
-    color: '#5a5a5a',
+    color: '#2C3E50',
     fontWeight: 'bold',
   },
   content: {

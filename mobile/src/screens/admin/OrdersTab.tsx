@@ -1002,7 +1002,7 @@ const styles = StyleSheet.create({
   historyBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
     borderRadius: 6,
     borderWidth: 0,
   },
@@ -1026,7 +1026,7 @@ const styles = StyleSheet.create({
   backButton: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#5a5a5a',
+    color: '#2C3E50',
   },
   historyTitle: {
     fontSize: 18,
@@ -1051,7 +1051,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   filterBtnActive: {
-    backgroundColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
   },
   filterBtnText: {
     textAlign: 'center',
@@ -1319,8 +1319,8 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   orderTypeBtnActive: {
-    backgroundColor: '#5a5a5a',
-    borderColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
+    borderColor: '#2C3E50',
   },
   orderTypeBtnText: {
     fontSize: 12,
@@ -1349,8 +1349,8 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   tableBtnActive: {
-    backgroundColor: '#5a5a5a',
-    borderColor: '#5a5a5a',
+    backgroundColor: '#2C3E50',
+    borderColor: '#2C3E50',
   },
   tableBtnText: {
     fontSize: 13,

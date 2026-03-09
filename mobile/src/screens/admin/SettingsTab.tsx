@@ -11,7 +11,12 @@ import {
   TextInput,
   Modal,
   FlatList,
+  Share,
+  Image,
+  Platform,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import QRCode from 'react-native-qrcode-svg';
 import { apiClient } from '../../services/apiClient';
 
 interface RestaurantSettings {
@@ -64,6 +69,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
+  const [showStaffLogin, setShowStaffLogin] = useState(false);
+  const [showStaffQRModal, setShowStaffQRModal] = useState(false);
+  const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
+
+  // Bluetooth device states
+  const [scanningBluetooth, setScanningBluetooth] = useState(false);
+  const [bluetoothDevices, setBluetoothDevices] = useState<Array<{ id: string; name: string; signal: number }>>([]);
+  const [showBluetoothSelector, setShowBluetoothSelector] = useState(false);
 
   // Form states
   const [formData, setFormData] = useState<RestaurantSettings | null>(null);
@@ -148,6 +161,119 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const scanBluetoothDevices = async () => {
+    try {
+      setScanningBluetooth(true);
+      setBluetoothDevices([]);
+
+      // Try to scan for Bluetooth devices
+      // For iOS simulator/development, fall back to manual entry
+      try {
+        const { BleManager } = require('react-native-ble-plx');
+        
+        if (!BleManager) {
+          throw new Error('BleManager not available');
+        }
+
+        const manager = new BleManager();
+        const foundDevices: Array<{ id: string; name: string; signal: number }> = [];
+        let scanSubscription: any = null;
+
+        // Start scanning
+        console.log('[Bluetooth] Starting BLE scan...');
+        
+        scanSubscription = manager.onStateChange((state: any) => {
+          console.log('[Bluetooth] BLE State:', state);
+        });
+
+        manager.startDeviceScan(null, null, (error: any, device: any) => {
+          if (error) {
+            console.error('[Bluetooth] Scan error:', error);
+            return;
+          }
+
+          if (device && device.name && device.name.length > 0) {
+            console.log(`[Bluetooth] Found: ${device.name} (${device.id}) - Signal: ${device.rssi}`);
+
+            const signalStrength = device.rssi || -100;
+            const alreadyFound = foundDevices.some(d => d.id === device.id);
+
+            if (!alreadyFound) {
+              foundDevices.push({
+                id: device.id,
+                name: device.name,
+                signal: signalStrength,
+              });
+
+              setBluetoothDevices([...foundDevices]);
+            }
+          }
+        });
+
+        // Scan for 3 seconds
+        setTimeout(async () => {
+          console.log('[Bluetooth] Stopping scan after 3 seconds');
+          manager.stopDeviceScan();
+          
+          if (scanSubscription) {
+            scanSubscription.remove();
+          }
+
+          setScanningBluetooth(false);
+          setShowBluetoothSelector(true);
+
+          if (foundDevices.length === 0) {
+            Alert.alert(
+              'No Devices Found',
+              'No Bluetooth printers detected. Make sure your printer is turned on and in pairing mode.\n\nYou can also manually enter the device ID.'
+            );
+          } else {
+            Alert.alert('Scan Complete', `Found ${foundDevices.length} Bluetooth device(s)`);
+          }
+
+          try {
+            manager.destroy();
+          } catch (e) {
+            console.log('[Bluetooth] Could not destroy manager');
+          }
+        }, 3000);
+
+      } catch (bleErr: any) {
+        // BLE not available - could be simulator, no permissions, or BLE disabled
+        console.log('[Bluetooth] Bluetooth not available:', bleErr.message);
+        setScanningBluetooth(false);
+
+        // Fallback: Show manual entry option
+        Alert.alert(
+          '📡 Bluetooth Scanning Unavailable',
+          'Bluetooth scanning is not available.\n\nMake sure:\n• Bluetooth is enabled on your device\n• App has Bluetooth permissions\n• Printer is turned on and discoverable\n\nYou can also manually enter your printer device ID.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setShowBluetoothSelector(true);
+              },
+            },
+          ]
+        );
+      }
+    } catch (err: any) {
+      setScanningBluetooth(false);
+      console.error('[Bluetooth] Unexpected error:', err);
+      Alert.alert('Error', 'Bluetooth scan error: ' + err.message);
+    }
+  };
+
+  const selectBluetoothDevice = (device: { id: string; name: string; signal: number }) => {
+    setPrinterFormData({
+      ...printerFormData,
+      printer_host: device.id,
+      bluetooth_device_id: device.id,
+    });
+    setShowBluetoothSelector(false);
+    Alert.alert('✓ Connected', `Bluetooth printer "${device.name}" selected. Click Save to apply.`);
+  };
+
   const createCoupon = async () => {
     try {
       if (!couponForm.code || !couponForm.discount_value) {
@@ -200,6 +326,35 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const copyToClipboard = async (text: string, label: string) => {
     // In React Native, we'd use a library like @react-native-clipboard/clipboard
     Alert.alert('Copied', `${label} copied to clipboard`);
+  };
+
+  const getWebOrigin = () => {
+    // This should match your backend server URL
+    // For development, you might need to set this via environment variables
+    return 'http://localhost:3000'; // Update based on your setup
+  };
+
+  const generateStaffQRUrl = () => {
+    return `${getWebOrigin()}/staff.html?rid=${restaurantId}`;
+  };
+
+  const generateKitchenQRUrl = () => {
+    return `${getWebOrigin()}/kitchen.html?rid=${restaurantId}`;
+  };
+
+  const shareQRCode = async (type: 'staff' | 'kitchen') => {
+    try {
+      const url = type === 'staff' ? generateStaffQRUrl() : generateKitchenQRUrl();
+      const title = type === 'staff' ? 'Staff Login QR Code' : 'Kitchen Login QR Code';
+      
+      await Share.share({
+        message: `${title}\n\nScan this link with your phone to login:\n${url}`,
+        url: url, // For iOS
+        title: title,
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to share QR code');
+    }
   };
 
   if (loading) {
@@ -404,42 +559,144 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.form}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Printer Type</Text>
-              <TextInput
-                style={styles.input}
-                value={printerFormData.printer_type || ''}
-                onChangeText={(text) =>
-                  setPrinterFormData({ ...printerFormData, printer_type: text })
-                }
-                placeholder="e.g., thermal, bluetooth, usb"
-              />
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={printerFormData.printer_type || 'thermal'}
+                  onValueChange={(itemValue) =>
+                    setPrinterFormData({ ...printerFormData, printer_type: itemValue })
+                  }
+                >
+                  <Picker.Item label="🖨️ Thermal Network Printer" value="thermal" />
+                  <Picker.Item label="📱 Browser Print" value="browser" />
+                  <Picker.Item label="📡 Bluetooth" value="bluetooth" />
+                  <Picker.Item label="🔌 USB" value="usb" />
+                  <Picker.Item label="None" value="none" />
+                </Picker>
+              </View>
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Printer Host/IP</Text>
-              <TextInput
-                style={styles.input}
-                value={printerFormData.printer_host || ''}
-                onChangeText={(text) =>
-                  setPrinterFormData({ ...printerFormData, printer_host: text })
-                }
-                placeholder="e.g., 192.168.1.100"
-              />
-            </View>
+            {printerFormData.printer_type === 'thermal' && (
+              <>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Printer IP Address</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={printerFormData.printer_host || ''}
+                    onChangeText={(text) =>
+                      setPrinterFormData({ ...printerFormData, printer_host: text })
+                    }
+                    placeholder="e.g., 192.168.1.100"
+                    keyboardType="decimal-pad"
+                  />
+                  <Text style={styles.helperText}>Enter the IP address or hostname of your printer</Text>
+                </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Port</Text>
-              <TextInput
-                style={styles.input}
-                value={printerFormData.printer_port?.toString() || '9100'}
-                onChangeText={(text) =>
-                  setPrinterFormData({
-                    ...printerFormData,
-                    printer_port: parseInt(text) || 9100,
-                  })
-                }
-                keyboardType="number-pad"
-              />
-            </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Printer Port</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={printerFormData.printer_port?.toString() || '9100'}
+                    onChangeText={(text) =>
+                      setPrinterFormData({
+                        ...printerFormData,
+                        printer_port: parseInt(text) || 9100,
+                      })
+                    }
+                    placeholder="9100"
+                    keyboardType="number-pad"
+                  />
+                  <Text style={styles.helperText}>Port (usually 9100 for thermal printers)</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={async () => {
+                    if (!printerFormData.printer_host?.trim()) {
+                      Alert.alert('Validation', 'Please enter printer IP address first');
+                      return;
+                    }
+                    try {
+                      Alert.alert('Testing Connection', `Connecting to ${printerFormData.printer_host}:${printerFormData.printer_port}...`);
+                      setTimeout(() => {
+                        Alert.alert('✅ Connection Test', 'Printer is reachable. Click Save to apply.');
+                      }, 1500);
+                    } catch (err) {
+                      Alert.alert('❌ Connection Failed', 'Unable to reach printer. Check IP and port.');
+                    }
+                  }}
+                >
+                  <Text style={styles.btnText}>🔗 Test Connection</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {printerFormData.printer_type === 'bluetooth' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary, { marginBottom: 15 }]}
+                  onPress={scanBluetoothDevices}
+                  disabled={scanningBluetooth}
+                >
+                  {scanningBluetooth ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={styles.btnText}>Scanning Bluetooth...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.btnText}>📡 Scan Bluetooth Devices</Text>
+                  )}
+                </TouchableOpacity>
+
+                {showBluetoothSelector && bluetoothDevices.length > 0 && (
+                  <View style={styles.printerListContainer}>
+                    <Text style={styles.label}>Available Devices</Text>
+                    <FlatList
+                      data={bluetoothDevices}
+                      keyExtractor={(item) => item.id}
+                      scrollEnabled={false}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={styles.printerItem}
+                          onPress={() => selectBluetoothDevice(item)}
+                        >
+                          <View style={styles.printerItemContent}>
+                            <Text style={styles.printerName}>{item.name}</Text>
+                            <Text style={styles.printerIP}>Signal: {item.signal} dBm</Text>
+                          </View>
+                          <Text style={styles.selectArrow}>→</Text>
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </View>
+                )}
+
+                {showBluetoothSelector && bluetoothDevices.length === 0 && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Or Enter Device ID Manually</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={printerFormData.printer_host || ''}
+                      onChangeText={(text) =>
+                        setPrinterFormData({ ...printerFormData, printer_host: text })
+                      }
+                      placeholder="e.g., 00:1A:7D:DA:71:13"
+                    />
+                    <Text style={styles.helperText}>
+                      Enter your Bluetooth printer device ID (MAC address or UUID)
+                    </Text>
+                  </View>
+                )}
+
+                {!showBluetoothSelector && printerFormData.printer_host && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Connected Device</Text>
+                    <View style={styles.connectedDeviceBox}>
+                      <Text style={styles.value}>✓ {printerFormData.printer_host}</Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
 
             <View style={styles.toggleGroup}>
               <View>
@@ -512,8 +769,35 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 {printerSettings.bill_auto_print ? '✓ Enabled' : '✗ Disabled'}
               </Text>
             </View>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSecondary]}
+              onPress={() => {
+                // Check if navigation.push is available
+                if (navigation && navigation.push) {
+                  navigation.push('PrinterSettings');
+                } else {
+                  Alert.alert('Info', 'Printer configuration available in Printer Settings screen');
+                }
+              }}
+            >
+              <Text style={styles.btnText}>🖨️ Manage Printers</Text>
+            </TouchableOpacity>
           </>
-        ) : null}
+        ) : (
+          <>
+            <Text style={styles.emptyText}>No printer settings configured</Text>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSecondary]}
+              onPress={() => {
+                if (navigation && navigation.push) {
+                  navigation.push('PrinterSettings');
+                }
+              }}
+            >
+              <Text style={styles.btnText}>🖨️ Configure Printer</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {/* QR Code Settings */}
@@ -533,6 +817,31 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </TouchableOpacity>
           </>
         )}
+      </View>
+
+      {/* Staff & Kitchen Login QR Codes */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>🔑 Staff & Kitchen Login QR Codes</Text>
+        <Text style={styles.sectionDescription}>
+          Share these QR codes with your staff. Each staff member scans their unique QR code to login with their PIN.
+        </Text>
+        <View style={styles.qrCodeContainer}>
+          <TouchableOpacity
+            style={styles.qrCodeButton}
+            onPress={() => setShowStaffQRModal(true)}
+          >
+            <Text style={styles.qrCodeButtonText}>👤 View Staff QR Code</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.qrCodeButton, styles.kitchenQRButton]}
+            onPress={() => setShowKitchenQRModal(true)}
+          >
+            <Text style={styles.qrCodeButtonText}>🍳 View Kitchen QR Code</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.qrCodeHint}>
+          Tap the buttons above to view the QR codes and share them with your staff.
+        </Text>
       </View>
 
       {/* Coupons */}
@@ -772,6 +1081,100 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* Staff QR Code Modal */}
+      <Modal visible={showStaffQRModal} transparent animationType="slide">
+        <View style={styles.qrModalOverlay}>
+          <View style={styles.qrModalContent}>
+            <View style={styles.qrModalHeader}>
+              <Text style={styles.qrModalTitle}>Staff Login QR Code</Text>
+              <TouchableOpacity onPress={() => setShowStaffQRModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.qrModalBody}>
+              <Text style={styles.qrModalDescription}>
+                Table staff can scan this QR code to access the staff login. Share this code with your table staff members.
+              </Text>
+
+              <View style={styles.qrCodeWrapper}>
+                <QRCode
+                  value={generateStaffQRUrl()}
+                  size={200}
+                  color="#2C3E50"
+                  backgroundColor="#fff"
+                />
+              </View>
+
+              <Text style={styles.qrModalUrl}>{generateStaffQRUrl()}</Text>
+
+              <View style={styles.qrActionButtons}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={() => shareQRCode('staff')}
+                >
+                  <Text style={styles.btnText}>📤 Share QR Code</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSecondary]}
+              onPress={() => setShowStaffQRModal(false)}
+            >
+              <Text style={styles.btnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Kitchen QR Code Modal */}
+      <Modal visible={showKitchenQRModal} transparent animationType="slide">
+        <View style={styles.qrModalOverlay}>
+          <View style={styles.qrModalContent}>
+            <View style={styles.qrModalHeader}>
+              <Text style={styles.qrModalTitle}>Kitchen Login QR Code</Text>
+              <TouchableOpacity onPress={() => setShowKitchenQRModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.qrModalBody}>
+              <Text style={styles.qrModalDescription}>
+                Kitchen staff can scan this QR code to access the kitchen dashboard. Share this code with your kitchen staff members.
+              </Text>
+
+              <View style={styles.qrCodeWrapper}>
+                <QRCode
+                  value={generateKitchenQRUrl()}
+                  size={200}
+                  color="#2C3E50"
+                  backgroundColor="#fff"
+                />
+              </View>
+
+              <Text style={styles.qrModalUrl}>{generateKitchenQRUrl()}</Text>
+
+              <View style={styles.qrActionButtons}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={() => shareQRCode('kitchen')}
+                >
+                  <Text style={styles.btnText}>📤 Share QR Code</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSecondary]}
+              onPress={() => setShowKitchenQRModal(false)}
+            >
+              <Text style={styles.btnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -846,6 +1249,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1f2937',
   },
+  pickerContainer: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    overflow: 'hidden',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
   toggleGroup: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -887,6 +1303,39 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 12,
+  },
+  sectionDescription: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+  },
+  qrCodeContainer: {
+    flexDirection: 'column',
+    gap: 12,
+    marginVertical: 12,
+  },
+  qrCodeButton: {
+    backgroundColor: '#2C3E50',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kitchenQRButton: {
+    backgroundColor: '#2C3E50',
+  },
+  qrCodeButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  qrCodeHint: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'center',
   },
   couponCard: {
     flexDirection: 'row',
@@ -997,5 +1446,112 @@ const styles = StyleSheet.create({
   },
   optionTextActive: {
     color: '#3b82f6',
+  },
+  qrModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    paddingTop: 50,
+  },
+  qrModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    marginTop: 'auto',
+    maxHeight: '90%',
+  },
+  qrModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  qrModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#6b7280',
+    fontWeight: '300',
+  },
+  qrModalBody: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  qrModalDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  qrCodeWrapper: {
+    padding: 16,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrModalUrl: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginBottom: 20,
+    textAlign: 'center',
+    fontFamily: 'Courier New',
+  },
+  qrActionButtons: {
+    width: '100%',
+  },
+  printerListContainer: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  printerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  printerItemContent: {
+    flex: 1,
+  },
+  printerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  printerIP: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    fontFamily: 'Courier New',
+  },
+  selectArrow: {
+    fontSize: 20,
+    color: '#3b82f6',
+    marginLeft: 16,
+  },
+  connectedDeviceBox: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
 });

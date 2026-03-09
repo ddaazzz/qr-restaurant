@@ -401,7 +401,7 @@ router.post("/auth/staff-login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, role, access_rights FROM users WHERE pin=$1 AND restaurant_id=$2 AND (role='staff' OR role='kitchen')",
+      "SELECT id, role, access_rights FROM users WHERE pin=$1 AND restaurant_id=$2 AND role='staff'",
       [pin, restaurantId]
     );
 
@@ -410,12 +410,46 @@ router.post("/auth/staff-login", async (req, res) => {
       return res.status(401).json({ error: "Invalid PIN" });
     }
 
-    // Validate that the PIN's role matches the requested role
-    // This prevents kitchen staff from logging into staff.html and vice versa
-    if (requestedRole && user.role !== requestedRole) {
-      return res.status(403).json({ 
-        error: `PIN does not match requested role. Expected ${requestedRole} but found ${user.role}` 
-      });
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET || "devsecret",
+      { expiresIn: "8h" }
+    );
+
+    // ✅ LOG HERE (canonical action)
+    await logStaffActivity({
+      restaurantId,
+      staffId: user.id,
+      action: STAFF_ACTIONS.STAFF_LOGIN,
+      meta: { method: "PIN", role: user.role }
+    });
+
+    // Parse access_rights if it's a string (from database)
+    let accessRights = {};
+    if (user.access_rights) {
+      accessRights = typeof user.access_rights === 'string' ? JSON.parse(user.access_rights) : user.access_rights;
+    }
+
+    res.json({ token, role: user.role, restaurantId, access_rights: accessRights });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/auth/kitchen-login", async (req, res) => {
+  const { pin, restaurantId } = req.body;
+  if (!pin) return res.status(400).json({ error: "PIN required" });
+
+  try {
+    const result = await pool.query(
+      "SELECT id, role, access_rights FROM users WHERE pin=$1 AND restaurant_id=$2 AND role='kitchen'",
+      [pin, restaurantId]
+    );
+
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(401).json({ error: "Invalid PIN" });
     }
 
     const token = jwt.sign(

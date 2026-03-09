@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,16 +9,74 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../hooks/useAuth';
 
+type LoginMode = 'choice' | 'admin' | 'kitchen' | 'staff' | 'scan-qr-staff' | 'scan-qr-kitchen' | 'pin-entry';
+
 export const LoginScreen = () => {
+  const [mode, setMode] = useState<LoginMode>('choice');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [restaurantInput, setRestaurantInput] = useState('');
+  const [currentLoginType, setCurrentLoginType] = useState<'staff' | 'kitchen' | null>(null);
+  const [scanned, setScanned] = useState(false);
+  const { login, kitchenLogin, staffLogin } = useAuth();
 
-  const handleLogin = async () => {
+  // Load saved restaurantId on mount
+  useEffect(() => {
+    loadRestaurantId();
+  }, []);
+
+  const loadRestaurantId = async () => {
+    try {
+      const saved = await SecureStore.getItemAsync('restaurantId');
+      if (saved) {
+        setRestaurantId(saved);
+        setRestaurantInput(saved);
+      }
+    } catch (error) {
+      console.error('Failed to load restaurantId:', error);
+    }
+  };
+
+  const handleQRScanned = async (data: string) => {
+    if (scanned) return;
+    setScanned(true);
+
+    try {
+      // Parse the QR code URL to extract restaurantId
+      const url = new URL(data);
+      const rid = url.searchParams.get('rid');
+
+      if (!rid) {
+        Alert.alert('Invalid QR Code', 'Could not extract restaurant ID from QR code');
+        setScanned(false);
+        return;
+      }
+
+      // Store the restaurantId
+      setRestaurantId(rid);
+      await SecureStore.setItemAsync('restaurantId', rid);
+
+      // Move to PIN entry screen
+      if (currentLoginType === 'staff') {
+        setMode('pin-entry');
+      } else if (currentLoginType === 'kitchen') {
+        setMode('pin-entry');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to process QR code');
+      setScanned(false);
+    }
+  };
+
+  const handleAdminLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
       return;
@@ -34,38 +92,423 @@ export const LoginScreen = () => {
     }
   };
 
+  const handleKitchenLogin = async () => {
+    if (pin.length !== 6) {
+      Alert.alert('Error', 'PIN must be 6 digits');
+      return;
+    }
+
+    if (!restaurantId && !restaurantInput) {
+      Alert.alert('Error', 'Restaurant ID is required. Scan QR code or enter manually.');
+      return;
+    }
+
+    const rid = restaurantId || restaurantInput;
+    setLoading(true);
+    try {
+      await kitchenLogin(pin, rid);
+    } catch (error) {
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
+      setPin('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStaffLogin = async () => {
+    if (pin.length !== 6) {
+      Alert.alert('Error', 'PIN must be 6 digits');
+      return;
+    }
+
+    if (!restaurantId && !restaurantInput) {
+      Alert.alert('Error', 'Restaurant ID is required. Scan QR code or enter manually.');
+      return;
+    }
+
+    const rid = restaurantId || restaurantInput;
+    setLoading(true);
+    try {
+      await staffLogin(pin, rid);
+    } catch (error) {
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
+      setPin('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePINChange = (value: string) => {
+    const numericValue = value.replace(/[^0-9]/g, '').slice(0, 6);
+    setPin(numericValue);
+    if (numericValue.length === 6) {
+      // Auto-submit when 6 digits entered
+      if (currentLoginType === 'kitchen') {
+        setTimeout(() => handleKitchenLogin(), 100);
+      } else if (currentLoginType === 'staff') {
+        setTimeout(() => handleStaffLogin(), 100);
+      }
+    }
+  };
+
+  // Login Type Selection Screen
+  if (mode === 'choice') {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>QR Restaurant</Text>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.loginTypeButton, styles.adminButton]}
+              onPress={() => {
+                setMode('admin');
+                setEmail('');
+                setPassword('');
+              }}
+            >
+              <Text style={[styles.loginTypeButtonText, styles.adminButtonText]}>👨‍💼 Admin</Text>
+            </TouchableOpacity>
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.loginTypeButton, styles.staffButton]}
+                onPress={() => {
+                  setCurrentLoginType('staff');
+                  setPin('');
+                  setScanned(false);
+                  setMode('scan-qr-staff');
+                }}
+              >
+                <Text style={styles.loginTypeButtonText}>👤 Staff</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.loginTypeButton, styles.kitchenButton]}
+                onPress={() => {
+                  setCurrentLoginType('kitchen');
+                  setPin('');
+                  setScanned(false);
+                  setMode('scan-qr-kitchen');
+                }}
+              >
+                <Text style={styles.loginTypeButtonText}>🍳 Kitchen</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // Admin Login Screen
+  if (mode === 'admin') {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setMode('choice')}
+            disabled={loading}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.title}>Admin Login</Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            editable={!loading}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            editable={!loading}
+          />
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleAdminLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Login</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // QR Scanner Screen for Staff or Kitchen (Fallback to manual input)
+  if (mode === 'scan-qr-staff' || mode === 'scan-qr-kitchen') {
+    const isKitchen = mode === 'scan-qr-kitchen';
+    const titleText = isKitchen ? '🍳 Kitchen Login' : '👤 Staff Login';
+
+    const handleProceedToPin = async () => {
+      const rid = restaurantId || restaurantInput;
+      if (!rid) {
+        Alert.alert('Error', 'Please enter a restaurant ID');
+        return;
+      }
+      
+      if (!restaurantId) {
+        setRestaurantId(rid);
+        try {
+          await SecureStore.setItemAsync('restaurantId', rid);
+        } catch (error) {
+          console.error('Failed to save restaurantId:', error);
+        }
+      }
+      setMode('pin-entry');
+    };
+
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.content}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setMode('choice')}
+            >
+              <Text style={styles.backButtonText}>← Back</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.title}>{titleText}</Text>
+            <Text style={styles.subtitle}>Enter Restaurant ID</Text>
+
+            <View style={styles.restaurantInputContainer}>
+              <Text style={styles.restaurantInputLabel}>Restaurant ID</Text>
+              <TextInput
+                style={styles.restaurantInputField}
+                placeholder="Enter restaurant ID"
+                value={restaurantInput}
+                onChangeText={setRestaurantInput}
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, isKitchen ? styles.kitchenButton : styles.staffLoginButton]}
+              onPress={handleProceedToPin}
+            >
+              <Text style={styles.buttonText}>Continue →</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, styles.buttonSecondary, { marginTop: 12 }]}
+              onPress={() => setMode('choice')}
+            >
+              <Text style={styles.buttonText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // PIN Entry Screen (shared for both staff and kitchen)
+  if (mode === 'pin-entry') {
+    const isKitchen = currentLoginType === 'kitchen';
+    const titleText = isKitchen ? '🍳 Kitchen' : '👤 Table Staff';
+    const buttonColor = isKitchen ? {} : styles.staffLoginButton;
+
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => {
+              setMode('choice');
+              setPin('');
+              setRestaurantId(null);
+              setCurrentLoginType(null);
+            }}
+            disabled={loading}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.title}>{titleText}</Text>
+          <Text style={styles.subtitle}>Enter PIN</Text>
+          <Text style={styles.restaurantInfo}>Restaurant: {restaurantId}</Text>
+
+          <TextInput
+            style={styles.pinInput}
+            placeholder="000000"
+            value={pin}
+            onChangeText={handlePINChange}
+            keyboardType="number-pad"
+            maxLength={6}
+            editable={!loading}
+            textAlign="center"
+            secureTextEntry
+            autoFocus
+          />
+
+          <View style={styles.digitDisplay}>
+            {Array(6)
+              .fill(0)
+              .map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.digit,
+                    pin.length > i && (isKitchen ? styles.digitFilled : styles.digitFilledStaff),
+                  ]}
+                >
+                  <Text style={isKitchen ? styles.digitText : styles.digitTextStaff}>●</Text>
+                </View>
+              ))}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              isKitchen && styles.kitchenButton,
+              !isKitchen && styles.staffLoginButton,
+              loading && styles.buttonDisabled,
+            ]}
+            onPress={isKitchen ? handleKitchenLogin : handleStaffLogin}
+            disabled={loading || pin.length !== 6}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Login</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // Kitchen Login Screen
+  if (mode === 'kitchen') {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setMode('choice')}
+            disabled={loading}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.title}>🍳 Kitchen</Text>
+          <Text style={styles.subtitle}>Enter PIN</Text>
+
+          <TextInput
+            style={styles.pinInput}
+            placeholder="000000"
+            value={pin}
+            onChangeText={handlePINChange}
+            keyboardType="number-pad"
+            maxLength={6}
+            editable={!loading}
+            textAlign="center"
+            secureTextEntry
+            autoFocus
+          />
+
+          <View style={styles.digitDisplay}>
+            {Array(6)
+              .fill(0)
+              .map((_, i) => (
+                <View key={i} style={[styles.digit, pin.length > i && styles.digitFilled]}>
+                  <Text style={styles.digitText}>●</Text>
+                </View>
+              ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleKitchenLogin}
+            disabled={loading || pin.length !== 6}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Login</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // Staff Login Screen
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>QR Restaurant</Text>
-        <Text style={styles.subtitle}>Admin Login</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => setMode('choice')}
+          disabled={loading}
+        >
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.title}>👤 Table Staff</Text>
+        <Text style={styles.subtitle}>Enter PIN</Text>
 
         <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
+          style={styles.pinInput}
+          placeholder="000000"
+          value={pin}
+          onChangeText={handlePINChange}
+          keyboardType="number-pad"
+          maxLength={6}
           editable={!loading}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
+          textAlign="center"
           secureTextEntry
-          editable={!loading}
+          autoFocus
         />
+
+        <View style={styles.digitDisplay}>
+          {Array(6)
+            .fill(0)
+            .map((_, i) => (
+              <View key={i} style={[styles.digit, pin.length > i && styles.digitFilledStaff]}>
+                <Text style={styles.digitTextStaff}>●</Text>
+              </View>
+            ))}
+        </View>
 
         <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
+          style={[styles.button, styles.staffLoginButton, loading && styles.buttonDisabled]}
+          onPress={handleStaffLogin}
+          disabled={loading || pin.length !== 6}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -83,11 +526,68 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'stretch',
     paddingHorizontal: 20,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    padding: 10,
+  },
+  backButtonText: {
+    color: '#2C3E50',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  restaurantInputContainer: {
+    marginBottom: 20,
+    padding: 12,
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+  },
+  restaurantInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  restaurantInputField: {
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+    fontSize: 14,
+  },
+  restaurantInfoContainer: {
+    marginBottom: 20,
+    padding: 12,
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4caf50',
+  },
+  restaurantInfoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2e7d32',
+    marginBottom: 8,
+  },
+  changeRestaurantLink: {
+    fontSize: 12,
+    color: '#2C3E50',
+    textDecorationLine: 'underline',
   },
   title: {
     fontSize: 32,
@@ -102,6 +602,51 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     color: '#666',
   },
+  buttonContainer: {
+    alignItems: 'center',
+    marginTop: 40,
+    width: '100%',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  loginTypeButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminButton: {
+    backgroundColor: '#2C3E50',
+    width: '70%',
+    paddingHorizontal: 40,
+  },
+  staffButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#2C3E50',
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  kitchenButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#2C3E50',
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  loginTypeButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  adminButtonText: {
+    color: '#ffffff',
+  },
   input: {
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -112,12 +657,51 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     fontSize: 16,
   },
+  pinInput: {
+    opacity: 0,
+    height: 0,
+  },
+  digitDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 40,
+    gap: 10,
+  },
+  digit: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  digitFilled: {
+    borderColor: '#2C3E50',
+    backgroundColor: '#FFF3E0',
+  },
+  digitFilledStaff: {
+    borderColor: '#2C3E50',
+    backgroundColor: '#E8F5E9',
+  },
+  digitText: {
+    fontSize: 24,
+    color: '#2C3E50',
+  },
+  digitTextStaff: {
+    fontSize: 24,
+    color: '#2C3E50',
+  },
   button: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#2C3E50',
     borderRadius: 8,
     paddingVertical: 12,
     marginTop: 20,
     alignItems: 'center',
+  },
+  staffLoginButton: {
+    backgroundColor: '#2C3E50',
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -126,5 +710,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  camera: {
+    flex: 1,
+    display: 'none', // Camera no longer used in this screen
+  },
+  scannerOverlay: {
+    display: 'none', // Scanner overlay no longer used
+  },
+  restaurantInfo: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  buttonSecondary: {
+    backgroundColor: '#6b7280',
   },
 });

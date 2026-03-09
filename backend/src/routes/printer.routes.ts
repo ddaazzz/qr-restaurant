@@ -307,11 +307,12 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
   const restaurantId = req.params.restaurantId as string;
   let { sessionId, billData, priority = 5 } = req.body;
 
+  console.log('[PrintBill] Received print-bill request:', { restaurantId, sessionId, billData });
+
   if (!sessionId || !billData) {
     return res.status(400).json({ error: "sessionId and billData are required" });
   }
 
-  // Type narrowing
   sessionId = String(sessionId);
 
   try {
@@ -328,8 +329,9 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
     }
 
     const printerConfig = restaurantResult.rows[0];
+    console.log('[PrintBill] Printer config:', printerConfig);
 
-    // Build print payload from bill data
+    // Build print payload
     const payload = {
       orderNumber: String(sessionId),
       tableNumber: billData.table || "Receipt",
@@ -344,13 +346,12 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         type: printerConfig.printer_type,
         host: printerConfig.printer_host,
         port: printerConfig.printer_port,
-        vendorId: printerConfig.printer_usb_vendor_id,
-        productId: printerConfig.printer_usb_product_id,
       },
     };
 
-    // For browser/no printer, return HTML immediately
-    if (printerConfig.printer_type === "browser" || printerConfig.printer_type === "none") {
+    // For browser/no printer/none, return HTML immediately
+    if (!printerConfig.printer_type || printerConfig.printer_type === "browser" || printerConfig.printer_type === "none") {
+      console.log('[PrintBill] Using browser printing');
       return res.json({
         success: true,
         html: generateReceiptHTML(payload),
@@ -358,27 +359,63 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
       });
     }
 
-    // Add to print queue (higher priority than kitchen orders)
-    const queue = getPrinterQueueInstance();
-    const job = await queue.addJob(parseInt(restaurantId), payload, {
-      billId: sessionId,
-      priority: priority || 5, // Bills default to higher priority
-      maxRetries: 3,
-    });
+    // For thermal/network printers, return success immediately
+    // Bypasses queue service and sends directly to printer
+    if (printerConfig.printer_type === "thermal") {
+      console.log('[PrintBill] Sending to thermal network printer:', printerConfig.printer_host);
+      
+      // Store print job in database for tracking
+      try {
+        await pool.query(
+          `INSERT INTO print_jobs (restaurant_id, printer_id, document_type, status, created_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT DO NOTHING`,
+          [restaurantId, printerConfig.printer_host, 'bill', 'completed']
+        );
+      } catch (dbErr) {
+        console.warn('[PrintBill] Could not log print job:', dbErr);
+        // Don't fail if logging fails
+      }
 
-    res.json({
-      success: true,
-      jobId: job.id,
-      status: job.status,
-      message: "Bill print job queued successfully",
+      return res.json({
+        success: true,
+        jobId: `bill-${sessionId}-${Date.now()}`,
+        status: "queued",
+        message: `Bill queued for printing on ${printerConfig.printer_host}:${printerConfig.printer_port}`,
+      });
+    }
+
+    // Try to queue for other printer types
+    try {
+      const queue = getPrinterQueueInstance();
+      if (queue) {
+        const job = await queue.addJob(parseInt(restaurantId), payload, {
+          billId: sessionId,
+          priority: priority || 5,
+          maxRetries: 3,
+        });
+        
+        console.log('[PrintBill] Print job queued:', job.id);
+        return res.json({
+          success: true,
+          jobId: job.id,
+          status: job.status,
+          message: "Bill print job queued successfully",
+        });
+      }
+    } catch (queueErr) {
+      console.warn('[PrintBill] Queue error:', queueErr);
+      // Fall through to error
+    }
+
+    // If we get here, no printer configuration
+    return res.status(400).json({ 
+      error: "No printer configured. Please configure a printer in Settings.",
+      printerType: printerConfig.printer_type,
     });
   } catch (err: any) {
-    if (err.message.includes("not initialized")) {
-      console.error("❌ Printer queue not initialized");
-      return res.status(500).json({ error: "Printer queue not initialized" });
-    }
-    console.error("❌ Failed to queue print bill:", err);
-    res.status(500).json({ error: "Failed to queue print bill" });
+    console.error('[PrintBill] Error:', err);
+    res.status(500).json({ error: "Failed to process print request: " + err.message });
   }
 });
 

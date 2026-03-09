@@ -77,14 +77,18 @@ class APIClient {
     }
   }
 
-  async kitchenLogin(pin: string): Promise<AuthResponse> {
+  async kitchenLogin(pin: string, restaurantId?: string): Promise<AuthResponse> {
     try {
       console.log('[API] Kitchen login with PIN');
-      const response = await this.client.post<AuthResponse>('/api/auth/kitchen-login', { pin });
-      const { token, restaurantId } = response.data;
+      const payload: any = { pin };
+      if (restaurantId) {
+        payload.restaurantId = restaurantId;
+      }
+      const response = await this.client.post<AuthResponse>('/api/auth/kitchen-login', payload);
+      const { token, restaurantId: responseRestaurantId } = response.data;
       
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
-      const restaurantIdString = restaurantId ? (typeof restaurantId === 'string' ? restaurantId : String(restaurantId)) : null;
+      const restaurantIdString = responseRestaurantId ? (typeof responseRestaurantId === 'string' ? responseRestaurantId : String(responseRestaurantId)) : null;
       
       await SecureStore.setItemAsync('authToken', tokenString);
       if (restaurantIdString) {
@@ -94,6 +98,33 @@ class APIClient {
       this.token = tokenString;
       
       console.log('[API] ✅ Kitchen login successful');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async staffLogin(pin: string, restaurantId?: string): Promise<AuthResponse> {
+    try {
+      console.log('[API] Staff login with PIN');
+      const payload: any = { pin };
+      if (restaurantId) {
+        payload.restaurantId = restaurantId;
+      }
+      const response = await this.client.post<AuthResponse>('/api/auth/staff-login', payload);
+      const { token, restaurantId: responseRestaurantId } = response.data;
+      
+      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+      const restaurantIdString = responseRestaurantId ? (typeof responseRestaurantId === 'string' ? responseRestaurantId : String(responseRestaurantId)) : null;
+      
+      await SecureStore.setItemAsync('authToken', tokenString);
+      if (restaurantIdString) {
+        await SecureStore.setItemAsync('restaurantId', restaurantIdString);
+        this.restaurantId = restaurantIdString;
+      }
+      this.token = tokenString;
+      
+      console.log('[API] ✅ Staff login successful');
       return response.data;
     } catch (error) {
       throw this.handleError(error);

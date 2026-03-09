@@ -12,10 +12,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 
-export const KitchenLoginScreen = () => {
+export const StaffLoginScreen = () => {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const { kitchenLogin } = useAuth();
+  const { staffLogin } = useAuth();
 
   const handlePINChange = (value: string) => {
     // Only allow numbers and limit to 6 digits
@@ -37,7 +37,7 @@ export const KitchenLoginScreen = () => {
 
     setLoading(true);
     try {
-      await kitchenLogin(loginPin);
+      await staffLogin(loginPin);
     } catch (error) {
       Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
       setPin('');
@@ -52,7 +52,7 @@ export const KitchenLoginScreen = () => {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>Kitchen</Text>
+        <Text style={styles.title}>Staff</Text>
         <Text style={styles.subtitle}>Enter PIN</Text>
 
         <TextInput
@@ -65,6 +65,7 @@ export const KitchenLoginScreen = () => {
           editable={!loading}
           textAlign="center"
           secureTextEntry
+          autoFocus
         />
 
         <View style={styles.digitDisplay}>
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
   },
   digitFilled: {
     borderColor: '#2C3E50',
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#E8F5E9',
   },
   digitText: {
     fontSize: 24,

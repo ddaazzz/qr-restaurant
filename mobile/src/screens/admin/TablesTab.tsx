@@ -15,6 +15,7 @@ import {
   Image,
   Pressable,
 } from 'react-native';
+import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
 import { apiClient } from '../../services/apiClient';
 
@@ -85,6 +86,7 @@ type ViewType = 'grid' | 'sessionDetail' | 'sessionList';
 
 export interface TablesTabRef {
   toggleEditMode: () => void;
+  navigateToScannedQR: (token: string) => void;
 }
 
 const getTableTextColor = (bgColor: string) => {
@@ -160,12 +162,31 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   // Service charge
   const [serviceCharge, setServiceCharge] = useState(0);
 
-  // Expose toggleEditMode through ref
+  // Expose toggleEditMode and navigateToScannedQR through ref
   useImperativeHandle(ref, () => ({
     toggleEditMode() {
       setIsEditMode(prev => !prev);
+    },
+    navigateToScannedQR(token: string) {
+      console.log('[TablesTab] Navigating to scanned QR token:', token);
+      
+      // Find the table and session with this QR token
+      for (const table of tables) {
+        const matchingUnit = table.units?.find(unit => unit.qr_token === token);
+        if (matchingUnit && table.sessions && table.sessions.length > 0) {
+          // Found the table with this token
+          setSelectedTable(table);
+          setSelectedSession(table.sessions[0]); // Select the first/active session
+          setCurrentView('sessionDetail');
+          console.log('[TablesTab] Navigated to session:', table.sessions[0]);
+          return;
+        }
+      }
+      
+      console.warn('[TablesTab] No table found for QR token:', token);
+      Alert.alert('Table Not Found', 'Could not find this table. Please try again.');
     }
-  }), []);
+  }), [tables]);
 
   const getTodayDateString = useCallback(() => {
     const now = new Date();
@@ -318,7 +339,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const getTableCardColor = (table: Table) => {
     if (table.sessions.length === 0 && !table.reserved) return '#f3f4f6';
-    if (table.sessions.length > 1) return '#2196F3';
+    if (table.sessions.length > 1) return '#2C3E50';
     if (table.sessions.length === 1) {
       const session = table.sessions[0];
       if (session.bill_closure_requested) return '#ffeb3b';
@@ -328,12 +349,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         const now = new Date();
         const diffMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
 
-        if (diffMinutes < 30) return '#2196F3';
+        if (diffMinutes < 30) return '#2C3E50';
         if (diffMinutes < 60) return '#9c27b0';
         if (diffMinutes < 120) return '#ff9800';
         return '#f44336';
       } catch {
-        return '#2196F3';
+        return '#2C3E50';
       }
     }
     if (table.reserved) return '#f3f4f6';
@@ -600,6 +621,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           notes: closeReason,
         }
       );
+
+      // Check if auto-print is enabled and if so, print the bill
+      try {
+        const printerRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/printer-settings`
+        );
+
+        if (printerRes.data && printerRes.data.bill_auto_print === true) {
+          console.log('[CloseBill] Auto-print enabled, printing bill...');
+          // Call printBill with autoPrint flag to avoid showing success alert
+          await printBill(true);
+        }
+      } catch (autoError) {
+        console.log('[CloseBill] Auto-print check failed (non-critical):', autoError);
+        // Don't fail the close operation if auto-print fails
+      }
+
       setShowCloseBillModal(false);
       setPaymentMethod('cash');
       setDiscountAmount('0');
@@ -709,14 +747,122 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     setShowSessionGearMenu(false);
   };
 
-  const printBill = async () => {
-    if (!selectedSession) return;
+  const printBill = async (autoPrint: boolean = false) => {
+    console.log('[PrintBill] Starting printBill, autoPrint=', autoPrint);
+    console.log('[PrintBill] selectedSession:', selectedSession);
+    console.log('[PrintBill] sessionBill:', sessionBill);
+    
+    if (!selectedSession || !sessionBill) {
+      console.log('[PrintBill] Missing session or bill data, returning');
+      if (!autoPrint) {
+        Alert.alert('❌ Error', 'No bill data available. Please open a table session first.');
+      }
+      return;
+    }
+
     try {
-      // Print bill functionality
-      Alert.alert('Print Bill', `Printing bill for ${selectedTable?.name}`);
-      setShowSessionGearMenu(false);
+      console.log('[PrintBill] Fetching printer settings...');
+      // Check if printer is configured
+      const printerRes = await apiClient.get(
+        `/api/restaurants/${restaurantId}/printer-settings`
+      );
+      console.log('[PrintBill] Printer settings response:', printerRes.data);
+
+      if (!printerRes.data || !printerRes.data.printer_type) {
+        if (!autoPrint) {
+          Alert.alert(
+            '🖨️ No Printer Configured',
+            'Please configure a printer in Settings to enable printing. Would you like to set up a printer now?',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+              },
+              {
+                text: 'Configure Printer',
+                onPress: () => {
+                  console.log('[PrintBill] User wants to configure printer');
+                },
+                style: 'default',
+              },
+            ]
+          );
+        }
+        return;
+      }
+
+      // Prepare bill data in format expected by backend
+      const billPayload = {
+        sessionId: selectedSession.id,
+        billData: {
+          table: selectedTable?.name || 'Receipt',
+          items: sessionBill.items.map(item => ({
+            name: item.name,
+            quantity: item.quantity,
+            price_cents: item.price_cents,
+            status: item.status,
+          })),
+          subtotal: sessionBill.subtotal_cents,
+          serviceCharge: sessionBill.service_charge_cents || 0,
+          total: sessionBill.total_cents,
+        },
+        priority: 5,
+      };
+
+      console.log('[PrintBill] Sending print request with payload:', billPayload);
+
+      // Send to backend for printing
+      const printRes = await apiClient.post(
+        `/api/restaurants/${restaurantId}/print-bill`,
+        billPayload
+      );
+
+      console.log('[PrintBill] Print response:', printRes.data);
+
+      if (printRes.data && printRes.data.success) {
+        // Handle browser printing - open native print dialog
+        if (printRes.data.html) {
+          console.log('[PrintBill] Opening native print dialog for browser printing');
+          try {
+            await Print.printAsync({
+              html: printRes.data.html,
+            });
+            if (!autoPrint) {
+              Alert.alert('✓ Print Dialog Opened', `Bill for ${selectedTable?.name} ready to print`);
+            }
+          } catch (printErr: any) {
+            console.error('[PrintBill] Print dialog error:', printErr);
+            if (!autoPrint) {
+              Alert.alert('❌ Print Error', 'Failed to open print dialog: ' + printErr.message);
+            }
+          }
+        } else {
+          // Printer type is thermal/bluetooth/usb - sent to printer queue
+          if (!autoPrint) {
+            Alert.alert(
+              '✓ Print Sent',
+              `Bill for ${selectedTable?.name} sent to printer successfully`
+            );
+          }
+        }
+        setShowSessionGearMenu(false);
+      } else {
+        Alert.alert(
+          '❌ Printer Error',
+          printRes.data?.error || 'Failed to send to printer'
+        );
+      }
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to print bill');
+      console.log('[PrintBill] Error caught:', err);
+      console.log('[PrintBill] Error message:', err.message);
+      console.log('[PrintBill] Error response:', err.response?.data);
+      
+      if (!autoPrint) {
+        Alert.alert(
+          '❌ Error',
+          err.response?.data?.error || err.message || 'Failed to print bill'
+        );
+      }
     }
   };
 
@@ -800,7 +946,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
-                onPress={printBill}
+                onPress={() => printBill(false)}
               >
                 <Text style={styles.gearMenuItemText}>🖨️ Print Bill</Text>
               </TouchableOpacity>

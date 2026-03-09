@@ -1120,7 +1120,7 @@ button.btn-icon.danger:hover {
 }
 
 .modal-btn-primary:hover {
-  background: var(--primary-dark, #1976D2);
+  background: var(--primary-dark, #2C3E50);
   box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
 }
 
