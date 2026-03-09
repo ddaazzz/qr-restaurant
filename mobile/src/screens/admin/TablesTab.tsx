@@ -18,6 +18,7 @@ import {
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
 import { apiClient } from '../../services/apiClient';
+import { thermalPrinterService } from '../../services/thermalPrinterService';
 
 interface TableCategory {
   id: number;
@@ -842,6 +843,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           console.log('[PrintBill] Initiating Bluetooth printing to:', printRes.data.bluetoothDevice);
           console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
           
+          if (!autoPrint) {
+            Alert.alert('⏳ Printing...', 'Sending receipt to Bluetooth printer...');
+          }
+          
           try {
             const device = printRes.data.bluetoothDevice;
             
@@ -881,51 +886,39 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               checkState();
             });
 
-            console.log('[PrintBill] Connecting to Bluetooth device:', device.id);
+            console.log('[PrintBill] BLE ready, preparing thermal print data');
             
-            // Try to connect to the device
-            let connectedDevice: any;
-            try {
-              connectedDevice = await manager.connectToDevice(device.id, { timeout: 10000 });
-              console.log('[PrintBill] Connected to device');
-              
-              // Discover services and characteristics
-              const services = await connectedDevice.discoverAllServicesAndCharacteristics();
-              console.log('[PrintBill] Discovered services');
-              
-              // Try to find a writable characteristic (typically for printing data)
-              // Look for standard UART or generic data characteristics
-              const characteristics = await connectedDevice.characteristicsForService('180A'); // Device Info service
-              console.log('[PrintBill] Found characteristics:', characteristics?.length || 0);
-              
-              // For thermal printer, we'd need to send ESC/POS commands
-              // For now, just connect and acknowledge
-              console.log('[PrintBill] Bluetooth device ready for printing');
-              
-            } catch (connectErr: any) {
-              console.warn('[PrintBill] Connection/discovery details:', connectErr.message);
-              // Continue anyway - the queue system will handle printing
-            }
+            // Prepare receipt data for thermal printer
+            const receiptData = {
+              orderNumber: String(selectedSession?.id),
+              tableNumber: selectedTable?.name || 'Receipt',
+              items: sessionBill.items.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price_cents,
+              })),
+              subtotal: sessionBill.subtotal_cents,
+              serviceCharge: sessionBill.service_charge_cents || 0,
+              total: sessionBill.total_cents,
+              timestamp: new Date().toLocaleTimeString(),
+              restaurantName: 'Restaurant',
+            };
 
+            console.log('[PrintBill] Sending thermal print data to:', device.id);
+            
+            // Send to thermal printer using ESC/POS commands
+            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData);
+            
+            console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
-              Alert.alert(
-                '✓ Bluetooth Connected',
-                `Bill sent to printer "${device.name}". Ensure printer is powered on and nearby.`
-              );
-            }
-
-            // Clean up
-            try {
-              manager.destroy();
-            } catch (e) {
-              console.log('[PrintBill] Could not destroy manager');
+              Alert.alert('✓ Printed', `Bill sent to printer "${device.name}"`);
             }
           } catch (bluetoothErr: any) {
             console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
             if (!autoPrint) {
               Alert.alert(
-                '⚠️ Bill Queued',
-                `Bill for ${selectedTable?.name} has been sent to printer queue.`
+                '⚠️ Print Issue',
+                `Could not connect to printer. Make sure it's powered on and nearby.\n\nError: ${bluetoothErr.message}`
               );
             }
           }
