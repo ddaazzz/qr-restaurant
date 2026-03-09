@@ -203,7 +203,7 @@ nav {
 
 .login-btn {
   background-color: var(--primary-color);
-  color: var(--white);
+  color: #ffffff !important;
   padding: 10px 24px;
   border-radius: 6px;
   text-decoration: none;
@@ -214,6 +214,7 @@ nav {
 .login-btn:hover {
   background-color: #ea6317;
   transform: translateY(-2px);
+  color: #ffffff;
 }
 
 /* HAMBURGER MENU */
@@ -260,7 +261,7 @@ nav {
 
 /* HERO SECTION */
 .hero {
-  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  background: linear-gradient(135deg, #2C3E50 0%, #1a252f 100%);
   color: var(--white);
   padding: 80px 20px;
   text-align: left;
