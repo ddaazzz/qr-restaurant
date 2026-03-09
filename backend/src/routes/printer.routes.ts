@@ -422,6 +422,8 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
           id: printerConfig.bluetooth_device_id,
           name: printerConfig.bluetooth_device_name,
         },
+        // Return HTML for mobile app to send to Bluetooth printer
+        html: generateReceiptHTML(payload),
       });
     }
 
