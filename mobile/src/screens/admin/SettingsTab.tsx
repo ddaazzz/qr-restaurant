@@ -598,7 +598,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </Text>
               <View style={styles.pickerContainer}>
                 <Picker
-                  selectedValue={printerFormData.printer_type || 'thermal'}
+                  selectedValue={printerFormData.printer_type || 'bluetooth'}
                   onValueChange={(itemValue) =>
                     setPrinterFormData({ ...printerFormData, printer_type: itemValue })
                   }
