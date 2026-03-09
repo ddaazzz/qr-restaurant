@@ -100,10 +100,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       setSettings(settingsRes.data);
       const printerData = printerRes.data;
+      console.log('[Settings] Fetched printer data:', JSON.stringify(printerData, null, 2));
+      console.log('[Settings] Printer type from API:', printerData.printer_type);
       // Ensure printer_type defaults to 'bluetooth' if missing or empty
       if (!printerData.printer_type) {
+        console.log('[Settings] Printer type was null/empty, setting to bluetooth');
         printerData.printer_type = 'bluetooth';
       }
+      console.log('[Settings] Final printer type:', printerData.printer_type);
       setPrinterSettings(printerData);
       const couponsList = Array.isArray(couponsRes.data) ? couponsRes.data : couponsRes.data.coupons || [];
       setCoupons(couponsList);
@@ -129,7 +133,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       'usb': 'USB',
       'none': 'None',
     };
-    return labels[type || ''] || '—';
+    const label = labels[type || ''] || '—';
+    console.log('[Printer] getPrinterTypeLabel called with:', type, '-> result:', label);
+    return label;
   };
 
   const saveSettings = async () => {
@@ -161,13 +167,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     try {
       if (!printerFormData) return;
 
-      await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
+      const payload: any = {
         printer_type: printerFormData.printer_type,
         printer_host: printerFormData.printer_host,
         printer_port: parseInt(printerFormData.printer_port?.toString() || '9100'),
         kitchen_auto_print: printerFormData.kitchen_auto_print,
         bill_auto_print: printerFormData.bill_auto_print,
-      });
+      };
+
+      // Include Bluetooth device ID and name if selecting Bluetooth printer
+      if (printerFormData.printer_type === 'bluetooth') {
+        payload.bluetooth_device_id = printerFormData.bluetooth_device_id;
+        payload.bluetooth_device_name = printerFormData.bluetooth_device_name;
+      }
+
+      console.log('[SettingsTab] Saving printer settings with payload:', JSON.stringify(payload, null, 2));
+
+      await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, payload);
 
       setPrinterSettings(printerFormData);
       setPrinterEditMode(false);
@@ -210,13 +226,33 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         // Start scanning
         console.log('[Bluetooth] Starting BLE scan...');
         
-        try {
-          scanSubscription = manager.onStateChange((state: any) => {
-            console.log('[Bluetooth] BLE State:', state);
-          });
-        } catch (stateErr: any) {
-          console.error('[Bluetooth] State listener error:', stateErr.message);
-        }
+        // Wait for BLE to be powered on
+        await new Promise<void>((resolve) => {
+          let stateCheckInterval: any = null;
+          const checkState = async () => {
+            try {
+              const state = await manager.state();
+              console.log('[Bluetooth] Checking BLE state:', state);
+              if (state === 'PoweredOn') {
+                if (stateCheckInterval) clearInterval(stateCheckInterval);
+                resolve();
+              }
+            } catch (e) {
+              console.log('[Bluetooth] State check error:', e);
+            }
+          };
+          
+          checkState();
+          stateCheckInterval = setInterval(checkState, 200);
+          
+          // Timeout after 5 seconds
+          setTimeout(() => {
+            if (stateCheckInterval) clearInterval(stateCheckInterval);
+            resolve();
+          }, 5000);
+        });
+
+        console.log('[Bluetooth] BLE ready, starting scan...');
 
         manager.startDeviceScan(null, null, (error: any, device: any) => {
           if (error) {
@@ -304,10 +340,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   const selectBluetoothDevice = (device: { id: string; name: string; signal: number }) => {
+    console.log('[SettingsTab] Selected Bluetooth device:', JSON.stringify(device));
     setPrinterFormData({
       ...printerFormData,
       printer_host: device.id,
       bluetooth_device_id: device.id,
+      bluetooth_device_name: device.name,
     });
     setShowBluetoothSelector(false);
     Alert.alert('✓ Connected', `Bluetooth printer "${device.name}" selected. Click Save to apply.`);
@@ -606,19 +644,29 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <Text style={styles.displayValue}>
                 Selected: {getPrinterTypeLabel(printerFormData.printer_type)}
               </Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={printerFormData.printer_type || 'bluetooth'}
-                  onValueChange={(itemValue) =>
-                    setPrinterFormData({ ...printerFormData, printer_type: itemValue })
-                  }
-                >
-                  <Picker.Item label="Thermal Network Printer" value="thermal" />
-                  <Picker.Item label="Browser Print" value="browser" />
-                  <Picker.Item label="Bluetooth" value="bluetooth" />
-                  <Picker.Item label="USB" value="usb" />
-                  <Picker.Item label="None" value="none" />
-                </Picker>
+              <View style={styles.printerTypeButtons}>
+                {(['thermal', 'browser', 'bluetooth', 'usb', 'none'] as const).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.typeButton,
+                      printerFormData.printer_type === type && styles.typeButtonActive,
+                    ]}
+                    onPress={() => {
+                      console.log('[Printer Type] Selected:', type);
+                      setPrinterFormData({ ...printerFormData, printer_type: type });
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.typeButtonText,
+                        printerFormData.printer_type === type && styles.typeButtonTextActive,
+                      ]}
+                    >
+                      {getPrinterTypeLabel(type).substring(0, 3)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
 
@@ -1314,6 +1362,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
     overflow: 'hidden',
+  },
+  printerTypeButtons: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  typeButton: {
+    flex: 0.45,
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+  },
+  typeButtonActive: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#3b82f6',
+  },
+  typeButtonText: {
+    color: '#6b7280',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  typeButtonTextActive: {
+    color: '#fff',
   },
   helperText: {
     fontSize: 12,

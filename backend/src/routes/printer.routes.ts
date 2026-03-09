@@ -319,7 +319,8 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
     // Get restaurant printer config
     const restaurantResult = await pool.query(
       `SELECT printer_type, printer_host, printer_port,
-              printer_usb_vendor_id, printer_usb_product_id, name
+              printer_usb_vendor_id, printer_usb_product_id, 
+              bluetooth_device_id, bluetooth_device_name, name
        FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
@@ -329,7 +330,10 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
     }
 
     const printerConfig = restaurantResult.rows[0];
-    console.log('[PrintBill] Printer config:', printerConfig);
+    console.log('[PrintBill] Full printer config:', JSON.stringify(printerConfig, null, 2));
+    console.log('[PrintBill] Printer type:', printerConfig.printer_type);
+    console.log('[PrintBill] Bluetooth device ID:', printerConfig.bluetooth_device_id);
+    console.log('[PrintBill] Bluetooth device name:', printerConfig.bluetooth_device_name);
 
     // Build print payload
     const payload = {
@@ -346,6 +350,8 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         type: printerConfig.printer_type,
         host: printerConfig.printer_host,
         port: printerConfig.printer_port,
+        bluetoothDeviceId: printerConfig.bluetooth_device_id,
+        bluetoothDeviceName: printerConfig.bluetooth_device_name,
       },
     };
 
@@ -382,6 +388,40 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         jobId: `bill-${sessionId}-${Date.now()}`,
         status: "queued",
         message: `Bill queued for printing on ${printerConfig.printer_host}:${printerConfig.printer_port}`,
+      });
+    }
+
+    // For Bluetooth printers, handle separately
+    if (printerConfig.printer_type === "bluetooth") {
+      if (!printerConfig.bluetooth_device_id) {
+        return res.status(400).json({ 
+          error: "Bluetooth device configured but no device ID found. Please reconfigure printer in Settings.",
+          printerType: "bluetooth",
+        });
+      }
+      
+      console.log('[PrintBill] Sending to Bluetooth printer:', printerConfig.bluetooth_device_name);
+      
+      try {
+        await pool.query(
+          `INSERT INTO print_jobs (restaurant_id, printer_id, document_type, status, created_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT DO NOTHING`,
+          [restaurantId, printerConfig.bluetooth_device_id, 'bill', 'pending']
+        );
+      } catch (dbErr) {
+        console.warn('[PrintBill] Could not log print job:', dbErr);
+      }
+
+      return res.json({
+        success: true,
+        jobId: `bill-${sessionId}-${Date.now()}`,
+        status: "queued",
+        message: `Bill queued for Bluetooth printer "${printerConfig.bluetooth_device_name}"`,
+        bluetoothDevice: {
+          id: printerConfig.bluetooth_device_id,
+          name: printerConfig.bluetooth_device_name,
+        },
       });
     }
 
