@@ -22,8 +22,11 @@
       }
     },
     "production": {
+      "ios": {
+        "buildNumber": "2"
+      },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
+        "EXPO_PUBLIC_API_URL": "https://chuio.io"
       }
     },
     "development-simulator": {
