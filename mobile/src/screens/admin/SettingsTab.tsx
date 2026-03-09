@@ -116,6 +116,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     fetchSettings();
   }, [restaurantId]);
 
+  const getPrinterTypeLabel = (type?: string): string => {
+    const labels: Record<string, string> = {
+      'thermal': 'Thermal Network Printer',
+      'browser': 'Browser Print',
+      'bluetooth': 'Bluetooth',
+      'usb': 'USB',
+      'none': 'None',
+    };
+    return labels[type || ''] || '—';
+  };
+
   const saveSettings = async () => {
     try {
       if (!formData) return;
@@ -582,6 +593,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.form}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Printer Type</Text>
+              <Text style={styles.displayValue}>
+                Selected: {getPrinterTypeLabel(printerFormData.printer_type)}
+              </Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={printerFormData.printer_type || 'thermal'}
@@ -771,12 +785,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <View style={styles.settingItem}>
               <Text style={styles.label}>Printer Type</Text>
               <Text style={styles.value}>
-                {printerSettings.printer_type === 'thermal' && 'Thermal Network Printer'}
-                {printerSettings.printer_type === 'browser' && 'Browser Print'}
-                {printerSettings.printer_type === 'bluetooth' && 'Bluetooth'}
-                {printerSettings.printer_type === 'usb' && 'USB'}
-                {printerSettings.printer_type === 'none' && 'None'}
-                {!printerSettings.printer_type && '—'}
+                {getPrinterTypeLabel(printerSettings.printer_type)}
               </Text>
             </View>
             <View style={styles.settingItem}>
@@ -1278,6 +1287,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: '#1f2937',
+  },
+  displayValue: {
+    fontSize: 13,
+    color: '#2C3E50',
+    fontWeight: '500',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 6,
+    marginBottom: 8,
   },
   pickerContainer: {
     backgroundColor: '#f5f5f5',
