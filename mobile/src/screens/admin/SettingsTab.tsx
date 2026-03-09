@@ -167,14 +167,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setBluetoothDevices([]);
 
       // Try to scan for Bluetooth devices
-      // For iOS simulator/development, fall back to manual entry
       try {
         let BleManager: any = null;
         try {
           const ble = require('react-native-ble-plx');
           BleManager = ble.BleManager;
         } catch (requireErr: any) {
-          throw new Error('BleManager not available: ' + requireErr.message);
+          throw new Error('BleManager module not available');
         }
         
         if (!BleManager) {
@@ -185,17 +184,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         try {
           manager = new BleManager();
         } catch (managerErr: any) {
-          throw new Error('Failed to initialize BleManager: ' + managerErr.message);
+          console.error('[Bluetooth] Manager init error:', managerErr.message);
+          throw managerErr;
         }
+
         const foundDevices: Array<{ id: string; name: string; signal: number }> = [];
         let scanSubscription: any = null;
 
         // Start scanning
         console.log('[Bluetooth] Starting BLE scan...');
         
-        scanSubscription = manager.onStateChange((state: any) => {
-          console.log('[Bluetooth] BLE State:', state);
-        });
+        try {
+          scanSubscription = manager.onStateChange((state: any) => {
+            console.log('[Bluetooth] BLE State:', state);
+          });
+        } catch (stateErr: any) {
+          console.error('[Bluetooth] State listener error:', stateErr.message);
+        }
 
         manager.startDeviceScan(null, null, (error: any, device: any) => {
           if (error) {
@@ -224,10 +229,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         // Scan for 3 seconds
         setTimeout(async () => {
           console.log('[Bluetooth] Stopping scan after 3 seconds');
-          manager.stopDeviceScan();
+          try {
+            manager.stopDeviceScan();
+          } catch (stopErr: any) {
+            console.error('[Bluetooth] Stop scan error:', stopErr);
+          }
           
           if (scanSubscription) {
-            scanSubscription.remove();
+            try {
+              scanSubscription.remove();
+            } catch (e) {
+              console.log('[Bluetooth] Could not remove subscription');
+            }
           }
 
           setScanningBluetooth(false);
@@ -250,27 +263,26 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         }, 3000);
 
       } catch (bleErr: any) {
-        // BLE not available - could be simulator, no permissions, or BLE disabled
-        console.log('[Bluetooth] Bluetooth not available:', bleErr.message);
         setScanningBluetooth(false);
-
-        // Fallback: Show manual entry option
+        
         Alert.alert(
-          '📡 Bluetooth Scanning Unavailable',
-          'Bluetooth scanning is not available.\n\nMake sure:\n• Bluetooth is enabled on your device\n• App has Bluetooth permissions\n• Printer is turned on and discoverable\n\nYou can also manually enter your printer device ID.',
+          '📡 Bluetooth Scan Failed',
+          'Unable to scan for Bluetooth devices: ' + (bleErr.message || 'Unknown error') + '\n\nYou can manually enter your printer IP address or device ID instead.',
           [
             {
-              text: 'OK',
+              text: 'Manual Entry',
               onPress: () => {
                 setShowBluetoothSelector(true);
               },
+            },
+            {
+              text: 'Cancel',
             },
           ]
         );
       }
     } catch (err: any) {
       setScanningBluetooth(false);
-      console.error('[Bluetooth] Unexpected error:', err);
       Alert.alert('Error', 'Bluetooth scan error: ' + err.message);
     }
   };
