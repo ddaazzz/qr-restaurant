@@ -7,6 +7,9 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  Modal,
+  Dimensions,
+  FlatList,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { QRScannerModal } from '../components/QRScannerModal';
@@ -25,6 +28,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [activeTab, setActiveTab] = useState<TabType>('tables');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
   const staffTabRef = useRef<StaffTabRef>(null);
@@ -45,6 +49,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       {
         text: 'Logout',
         onPress: async () => {
+          setShowAdminDropdown(false);
           await logout();
         },
       },
@@ -169,7 +174,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.headerActionBtn}
               onPress={handleHistoryToggle}
             >
-              <Text style={styles.headerActionBtnText}>📜 History</Text>
+              <Text style={styles.headerActionBtnText}>History</Text>
             </TouchableOpacity>
           )}
           {activeTab === 'bookings' && (
@@ -180,15 +185,12 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Text style={styles.headerActionBtnText}>+ New</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity 
-            style={styles.headerActionBtn}
-            onPress={handleScanQR}
-          >
-            <Text style={styles.headerActionBtnText}>📱 Scan QR</Text>
-          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Text style={styles.logoutBtnText}>🚪 Logout</Text>
+        <TouchableOpacity 
+          style={styles.adminBtn}
+          onPress={() => setShowAdminDropdown(!showAdminDropdown)}
+        >
+          <Text style={styles.adminBtnText}>Admin ▼</Text>
         </TouchableOpacity>
       </View>
 
@@ -198,17 +200,28 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         {sidebarOpen && (
           <View style={styles.sidebar}>
             {(['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'] as const).map(
-              (tab) => (
-                <TouchableOpacity
-                  key={tab}
-                  style={[styles.sidebarTab, activeTab === tab && styles.sidebarTabActive]}
-                  onPress={() => setActiveTab(tab)}
-                >
-                  <Text style={[styles.sidebarTabText, activeTab === tab && styles.sidebarTabTextActive]}>
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              )
+              (tab) => {
+                const tabLabels: Record<TabType, string> = {
+                  'tables': 'Tables',
+                  'orders': 'Orders',
+                  'menu': 'Menu',
+                  'staff': 'Staff',
+                  'bookings': 'Bookings',
+                  'reports': 'Reports',
+                  'settings': 'More',
+                };
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.sidebarTab, activeTab === tab && styles.sidebarTabActive]}
+                    onPress={() => setActiveTab(tab)}
+                  >
+                    <Text style={[styles.sidebarTabText, activeTab === tab && styles.sidebarTabTextActive]}>
+                      {tabLabels[tab]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
             )}
           </View>
         )}
@@ -224,6 +237,39 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         onQRScanned={handleQRScanned}
         restaurantId={user.restaurantId}
       />
+
+      {/* Admin Dropdown Modal */}
+      <Modal
+        visible={showAdminDropdown}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowAdminDropdown(false)}
+      >
+        <TouchableOpacity
+          style={styles.dropdownOverlay}
+          onPress={() => setShowAdminDropdown(false)}
+          activeOpacity={1}
+        >
+          <View style={styles.dropdownContent}>
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                setShowAdminDropdown(false);
+                handleScanQR();
+              }}
+            >
+              <Text style={styles.dropdownItemText}>Scan QR</Text>
+            </TouchableOpacity>
+            <View style={styles.dropdownDivider} />
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={handleLogout}
+            >
+              <Text style={styles.dropdownItemText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -289,17 +335,50 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  logoutBtn: {
-    paddingHorizontal: 12,
+  adminBtn: {
+    paddingHorizontal: 14,
     paddingVertical: 8,
     backgroundColor: '#2C3E50',
     borderRadius: 6,
     flexShrink: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  logoutBtnText: {
+  adminBtnText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#fff',
+  },
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-start',
+    paddingTop: 60,
+  },
+  dropdownContent: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginHorizontal: 12,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
   },
   mainLayout: {
     flex: 1,
