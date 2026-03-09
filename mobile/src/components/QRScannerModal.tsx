@@ -29,12 +29,15 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     (async () => {
       if (!visible) return;
 
-      try {
-        if (permission === null) {
-          await requestPermission();
+      // Automatically request permission if not yet requested
+      if (permission === null) {
+        console.log('[QRScanner] Requesting camera permission...');
+        try {
+          const result = await requestPermission();
+          console.log('[QRScanner] Permission result:', result);
+        } catch (error) {
+          console.error('[QRScanner] Error requesting camera permission:', error);
         }
-      } catch (error) {
-        console.error('Error requesting camera permission:', error);
       }
     })();
   }, [visible, permission, requestPermission]);
@@ -77,17 +80,15 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     );
   }
 
-  if (!permission.granted) {
+  if (!permission?.granted) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.errorText}>Camera Permission Required</Text>
-          <Text style={styles.infoText}>Tap 'Allow' when prompted to enable camera access for QR scanning</Text>
-          <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={requestPermission}>
-            <Text style={styles.buttonText}>Request Permission</Text>
-          </TouchableOpacity>
+          <ActivityIndicator size="large" color="#2C3E50" style={{ marginBottom: 16 }} />
+          <Text style={styles.text}>Waiting for camera permission...</Text>
+          <Text style={styles.infoText}>Please allow camera access when prompted</Text>
           <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
-            <Text style={styles.buttonText}>Close</Text>
+            <Text style={styles.buttonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -115,15 +116,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
             <Text style={styles.instructionText}>Point camera at QR code</Text>
           </View>
 
-          {/* Bottom bar with buttons */}
+          {/* Bottom bar with close button */}
           <View style={styles.bottomBar}>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => setShowManualEntry(true)}
-            >
-              <Text style={styles.buttonText}>Enter Token</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity
               style={[styles.button, styles.closeButton]}
               onPress={onClose}
