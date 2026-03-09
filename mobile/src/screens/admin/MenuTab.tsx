@@ -22,6 +22,7 @@ import {
   Image,
   Pressable,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
 
 // ==================== INTERFACES ====================
@@ -128,6 +129,10 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     const [optionPrice, setOptionPrice] = useState('0');
     const [editingOptionName, setEditingOptionName] = useState('');
     const [editingOptionPrice, setEditingOptionPrice] = useState('0');
+
+    // Image upload states
+    const [uploadingImageItemId, setUploadingImageItemId] = useState<number | null>(null);
+    const [uploadingImageContext, setUploadingImageContext] = useState<'inline' | 'new' | 'edit' | null>(null);
 
     // ==================== REF HANDLING ====================
 
@@ -507,6 +512,77 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
       return `${API_URL}${imageUrl}`;
     };
 
+    const uploadItemImage = async (itemId: number, context: 'inline' | 'new' | 'edit') => {
+      try {
+        // Request media library permission
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'We need permission to access your photo library');
+          return;
+        }
+
+        // Pick image
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.7,
+        });
+
+        if (!result.canceled && result.assets.length > 0) {
+          const asset = result.assets[0];
+          setUploadingImageItemId(itemId);
+          setUploadingImageContext(context);
+
+          // Create FormData for upload
+          const formData = new FormData();
+          formData.append('image', {
+            uri: asset.uri,
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || `image-${Date.now()}.jpg`,
+          } as any);
+          formData.append('restaurantId', restaurantId);
+
+          // Upload to backend
+          const response = await apiClient.post(
+            `/api/menu-items/${itemId}/image`,
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+            }
+          );
+
+          // Update the appropriate state based on context
+          if (response.data?.image_url) {
+            if (context === 'inline' && selectedItem?.id === itemId) {
+              setInlineEditImageUrl(response.data.image_url);
+              setSelectedItem({
+                ...selectedItem,
+                image_url: response.data.image_url,
+              });
+            } else if (context === 'new') {
+              setItemImageUrl(response.data.image_url);
+            } else if (context === 'edit') {
+              setEditingItemImageUrl(response.data.image_url);
+            }
+
+            Alert.alert('Success', 'Image uploaded successfully');
+          }
+        }
+      } catch (err: any) {
+        console.error('Image upload error:', err);
+        Alert.alert(
+          'Upload Failed',
+          err.response?.data?.error || 'Failed to upload image. Please try again.'
+        );
+      } finally {
+        setUploadingImageItemId(null);
+        setUploadingImageContext(null);
+      }
+    };
+
     const filteredItems = selectedCategory
       ? items.filter(i => i.category_id === selectedCategory)
       : items;
@@ -627,6 +703,10 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                       <Image 
                         source={{ uri: getFullImageUrl(item.image_url)! }} 
                         style={styles.itemImage}
+                        onError={(error) => {
+                          console.log(`Image loading error for ${item.name}:`, error.error);
+                          console.log(`Image URL attempted: ${getFullImageUrl(item.image_url)}`);
+                        }}
                       />
                     ) : (
                       <View style={styles.noImage}>
@@ -744,13 +824,26 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                   </View>
 
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Image URL</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={inlineEditImageUrl}
-                      onChangeText={setInlineEditImageUrl}
-                      placeholder="Image URL"
-                    />
+                    <Text style={styles.label}>Image</Text>
+                    {inlineEditImageUrl && (
+                      <View style={styles.imagePreview}>
+                        <Image
+                          source={{ uri: getFullImageUrl(inlineEditImageUrl)! }}
+                          style={styles.previewImage}
+                        />
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnPrimary, { marginTop: 8 }]}
+                      onPress={() => uploadItemImage(selectedItem!.id, 'inline')}
+                      disabled={uploadingImageItemId === selectedItem!.id && uploadingImageContext === 'inline'}
+                    >
+                      <Text style={styles.btnText}>
+                        {uploadingImageItemId === selectedItem!.id && uploadingImageContext === 'inline'
+                          ? '⏳ Uploading...'
+                          : '📸 Upload Image'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
                   <View style={styles.modalActions}>
@@ -772,7 +865,6 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                               name: inlineEditName,
                               description: inlineEditDescription,
                               price_cents: Math.round(parseFloat(inlineEditPrice) * 100),
-                              image_url: inlineEditImageUrl,
                             }
                           );
                           setEditingItemInlineId(null);
@@ -1087,13 +1179,28 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.label}>Image URL (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={itemImageUrl}
-                onChangeText={setItemImageUrl}
-                placeholder="https://example.com/image.jpg"
-              />
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Image (Optional)</Text>
+                {itemImageUrl && (
+                  <View style={styles.imagePreview}>
+                    <Image
+                      source={{ uri: getFullImageUrl(itemImageUrl)! }}
+                      style={styles.previewImage}
+                    />
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary, { marginTop: 8 }]}
+                  onPress={() => uploadItemImage(0, 'new')}
+                  disabled={uploadingImageItemId === 0 && uploadingImageContext === 'new'}
+                >
+                  <Text style={styles.btnText}>
+                    {uploadingImageItemId === 0 && uploadingImageContext === 'new'
+                      ? '⏳ Uploading...'
+                      : '📸 Upload Image'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -1145,13 +1252,28 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.label}>Image URL (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={editingItemImageUrl}
-                onChangeText={setEditingItemImageUrl}
-                placeholder="https://example.com/image.jpg"
-              />
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Image (Optional)</Text>
+                {editingItemImageUrl && (
+                  <View style={styles.imagePreview}>
+                    <Image
+                      source={{ uri: getFullImageUrl(editingItemImageUrl)! }}
+                      style={styles.previewImage}
+                    />
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary, { marginTop: 8 }]}
+                  onPress={() => editingItemId && uploadItemImage(editingItemId, 'edit')}
+                  disabled={uploadingImageItemId === editingItemId && uploadingImageContext === 'edit'}
+                >
+                  <Text style={styles.btnText}>
+                    {uploadingImageItemId === editingItemId && uploadingImageContext === 'edit'
+                      ? '⏳ Uploading...'
+                      : '📸 Upload Image'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -1842,5 +1964,19 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#c33',
     fontSize: 13,
+  },
+
+  // Image Preview
+  imagePreview: {
+    marginBottom: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+    height: 200,
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
 });
