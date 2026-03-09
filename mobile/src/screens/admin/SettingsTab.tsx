@@ -99,11 +99,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       ]);
 
       setSettings(settingsRes.data);
-      setPrinterSettings(printerRes.data);
+      const printerData = printerRes.data;
+      // Ensure printer_type defaults to 'bluetooth' if missing or empty
+      if (!printerData.printer_type) {
+        printerData.printer_type = 'bluetooth';
+      }
+      setPrinterSettings(printerData);
       const couponsList = Array.isArray(couponsRes.data) ? couponsRes.data : couponsRes.data.coupons || [];
       setCoupons(couponsList);
       setFormData(settingsRes.data);
-      setPrinterFormData(printerRes.data);
+      setPrinterFormData(printerData);
     } catch (err: any) {
       console.error('[Settings] Error fetching settings:', err);
       setError(err.message || 'Failed to load settings');
@@ -580,7 +585,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {!printerEditMode && (
             <TouchableOpacity
               onPress={() => {
-                setPrinterFormData(printerSettings);
+                const dataToEdit = { ...printerSettings };
+                // Ensure printer_type has a valid default
+                if (!dataToEdit.printer_type) {
+                  dataToEdit.printer_type = 'bluetooth';
+                }
+                setPrinterFormData(dataToEdit);
                 setPrinterEditMode(true);
               }}
             >
