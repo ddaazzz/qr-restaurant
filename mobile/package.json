@@ -41,6 +41,7 @@
     "@react-native-community/cli": "20.1.2",
     "@types/react": "19.1.0",
     "babel-preset-expo": "54.0.10",
+    "expo-cli": "^6.3.12",
     "sharp": "^0.34.5"
   },
   "private": true

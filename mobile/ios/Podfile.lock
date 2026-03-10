@@ -27,6 +27,7 @@ PODS:
     - React-renderercss
     - React-rendererdebug
     - React-utils
+    - ReactAppDependencyProvider
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
@@ -2173,7 +2174,7 @@ SPEC CHECKSUMS:
   EXJSONUtils: 1d3e4590438c3ee593684186007028a14b3686cd
   EXManifests: a8d97683e5c7a3b026ffbd58559c64dc655b747b
   EXPermissions: 490e55ef5b334c5b2072e1ebd40e2bc1950cea73
-  Expo: bbb9c828a18bf74c7f45ea699afb802e83509a15
+  Expo: aadbcc8c6c14ff3105a9154f1683cb1424ff0d2a
   ExpoAsset: f867e55ceb428aab99e1e8c082b5aee7c159ea18
   ExpoCamera: 6a326deb45ba840749652e4c15198317aa78497e
   ExpoDevice: 6327c3c200816795708885adf540d26ecab83d1a

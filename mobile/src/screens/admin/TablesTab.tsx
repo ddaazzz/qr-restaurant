@@ -477,7 +477,7 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
         { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
         {
           text: t('button.delete'),
-          onPress: () => {
+          onPress: async () => {
             try {
               await apiClient.delete(
                 `/api/restaurants/${restaurantId}/table-categories/${categoryId}`
@@ -525,7 +525,8 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       [
         { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
         {
-          text: t('button.delete') () => {
+          text: t('button.delete'),
+          onPress: async () => {
             try {
               await apiClient.delete(`/tables/${tableId}`, {
                 data: { restaurantId: parseInt(restaurantId) },
@@ -651,12 +652,12 @@ t('error.error')
   };
 
   const endSession = async (sessionId: number) => {
-    Alert.alert(t('tables.end-session'), t('common.ok') + '?', [
-      { text: 'Cancel' },
-      {t('tables.end-session'), 'Are you sure you want to end this session?', [
-      { text: t('button.cancel') },
+    Alert.alert(t('tables.end-session'), 'Are you sure you want to end this session?', [
+      { text: t('button.cancel'), style: 'cancel' },
       {
-        text: t('button.submit')
+        text: t('button.submit'),
+        onPress: async () => {
+          try {
             await apiClient.post(
               `/api/table-sessions/${sessionId}/end`,
               {}
