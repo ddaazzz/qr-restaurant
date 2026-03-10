@@ -102,8 +102,9 @@ interface TablesTabProps {
   restaurantId: string;
 }
 
-const TablesTabComponent = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) => {
-  const { restaurantId } = props;
+type TablesTabComponent = React.ForwardRefExoticComponent<TablesTabProps & React.RefAttributes<TablesTabRef>>;
+
+const TablesTab: TablesTabComponent = React.forwardRef<TablesTabRef, TablesTabProps>(({ restaurantId }, ref) => {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -1957,10 +1958,7 @@ t('error.error')
 
     </View>
   );
-  }
-);
-
-export const TablesTab = TablesTabComponent;
+});
 
 const styles = StyleSheet.create({
   container: {
