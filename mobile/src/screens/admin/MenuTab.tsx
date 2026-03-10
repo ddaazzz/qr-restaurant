@@ -175,7 +175,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         }
       } catch (err: any) {
         console.error('Error fetching menu data:', err);
-        setError(err.response?.data?.error || 'Failed to load menu');
+        setError(err.response?.data?.error || t('error.failed-to-load'));
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -228,13 +228,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setShowEditCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to update category');
+        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
       }
     };
 
     const deleteCategory = (categoryId: number, categoryName: string) => {
       Alert.alert(
-        'Delete Category',
+        t('menu.delete-category'),
         `Are you sure you want to delete "${categoryName}"?`,
         [
           { text: t('button.cancel') },
@@ -266,7 +266,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
       }
 
       if (!selectedCategory) {
-        Alert.alert('Error', 'Select a category first');
+        Alert.alert(t('error.error'), t('menu.category'));
         return;
       }
 
