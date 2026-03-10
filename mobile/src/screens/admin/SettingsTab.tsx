@@ -414,9 +414,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   const getWebOrigin = () => {
-    // This should match your backend server URL
-    // For development, you might need to set this via environment variables
-    return 'http://localhost:3000'; // Update based on your setup
+    // Use chuio.io for all API and web requests in production
+    return 'https://chuio.io';
   };
 
   const generateStaffQRUrl = () => {

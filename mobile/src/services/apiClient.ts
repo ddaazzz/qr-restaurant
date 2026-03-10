@@ -2,8 +2,8 @@ import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, LoginCredentials } from '../types';
 
-// Use environment variable for API URL, fallback to localhost for development
-const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
+// Use environment variable for API URL, fallback to chuio.io
+const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'https://chuio.io';
 export const API_URL = defaultUrl;
 
 console.log('[API] Configured endpoint:', API_URL);
