@@ -98,7 +98,8 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
+export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(
+  ({ restaurantId }, ref) => {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -1951,7 +1952,8 @@ t('error.error')
 
     </View>
   );
-});
+  }
+);
 
 const styles = StyleSheet.create({
   container: {
