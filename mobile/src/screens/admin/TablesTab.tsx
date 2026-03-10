@@ -187,7 +187,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       }
       
       console.warn('[TablesTab] No table found for QR token:', token);
-      Alert.alert('Table Not Found', 'Could not find this table. Please try again.');
+      Alert.alert(t('error.error'), t('error.failed-to-load'));
     }
   }), [tables]);
 
@@ -265,7 +265,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
-      setError(err.message || 'Failed to load tables');
+      setError(err.message || t('error.failed-to-load'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -390,7 +390,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setSessionBill(billRes.data);
     } catch (err) {
       console.error('Error loading session orders:', err);
-      Alert.alert('Error Loading Orders', 'Failed to load orders for this session');
+      Alert.alert(t('error.error'), t('error.failed-to-load'));
     }
   };
 
@@ -402,7 +402,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const createCategory = async () => {
     if (!categoryName.trim()) {
-        Alert.alert(t('error.error'), t('tables.add-table'));
+      Alert.alert(t('error.error'), t('validation.name-required'));
+      return;
     }
 
     try {
@@ -414,17 +415,17 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setShowCategoryModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to create category');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
   const createTable = async () => {
     if (!tableName.trim()) {
-        Alert.alert(t('error.error'), t('tables.add-table'));
-        return;
-      }
-      if (!tableSeats || parseInt(tableSeats) <= 0) {
-        Alert.alert(t('error.error'), 'Valid seat count required');
+      Alert.alert(t('error.error'), t('validation.name-required'));
+      return;
+    }
+    if (!tableSeats || parseInt(tableSeats) <= 0) {
+      Alert.alert(t('error.error'), t('validation.valid-seat-count'));
     }
 
     try {
@@ -441,7 +442,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setShowTableModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to create table');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
@@ -465,9 +466,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const deleteCategory = async (categoryId: number, categoryName: string) => {
     Alert.alert(
-      'Delete Category',
       t('tables.delete-table'),
-      `Are you sure you want to delete "${categoryName}"?`,
+      `${t('common.ok')}?`,
       [
         { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
         {
@@ -478,7 +478,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               );
               await loadTableData();
             } catch (err: any) {
-              Alert.alert('Error', err.response?.data?.error || 'Failed to delete category');
+              Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
             }
           },
           style: 'destructive',
@@ -489,7 +489,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const updateTable = async () => {
     if (!editingTableName.trim()) {
-      Alert.alert('Error', 'Table name required');
+      Alert.alert(t('error.error'), t('validation.name-required'));
         Alert.alert(t('error.error'), t('tables.edit-table'));
         return;
       }
@@ -508,15 +508,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setShowEditTableModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to update table');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
   const deleteTable = async (tableId: number, tableName: string) => {
     Alert.alert(
-      'Delete Table',
       t('tables.delete-table'),
-      `Are you sure you want to delete table "${tableName}"?`,
+      `${t('common.ok')}?`,
       [
         { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
         {
@@ -527,7 +526,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               });
               await loadTableData();
             } catch (err: any) {
-              Alert.alert('Error', err.response?.data?.error || 'Failed to delete table');
+              Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
             }
           },
           style: 'destructive',
@@ -538,7 +537,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const updateTablePax = async (tableId: number) => {
     if (!editingPaxValue || parseInt(editingPaxValue) <= 0) {
-      Alert.alert('Error', 'Valid seat count required');
+      Alert.alert(t('error.error'), t('validation.valid-seat-count'));
         Alert.alert(t('error.error'), 'Valid seat count required');
 
     try {
@@ -551,7 +550,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setShowEditPaxModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to update seat count');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
@@ -600,7 +599,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setShowBookingModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to book table');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 t('error.error')
@@ -726,7 +725,7 @@ t('error.error')
     if (!selectedTable || !selectedSession) return;
     // This would open the order screen for the table
     // For now, just show an alert
-    Alert.alert('Order for Table', `Open order screen for ${selectedTable.name}`);
+    Alert.alert(t('orders.order-details'), `${t('common.ok')}?`);
     setShowSessionGearMenu(false);
   };
 
@@ -1026,7 +1025,7 @@ t('error.error')
 
   const splitBill = () => {
     if (!selectedSession) return;
-    Alert.alert('Split Bill', 'Split bill functionality - Coming soon');
+    Alert.alert(t('error.error'), t('error.failed-to-load'));
     setShowSessionGearMenu(false);
   };
 
