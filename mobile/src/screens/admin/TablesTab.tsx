@@ -402,8 +402,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const createCategory = async () => {
     if (!categoryName.trim()) {
-      Alert.alert('Error', 'Category name required');
-      return;
+        Alert.alert(t('error.error'), t('tables.add-table'));
     }
 
     try {
@@ -421,12 +420,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const createTable = async () => {
     if (!tableName.trim()) {
-      Alert.alert('Error', 'Table name required');
-      return;
-    }
-    if (!tableSeats || parseInt(tableSeats) <= 0) {
-      Alert.alert('Error', 'Valid seat count required');
-      return;
+        Alert.alert(t('error.error'), t('tables.add-table'));
+        return;
+      }
+      if (!tableSeats || parseInt(tableSeats) <= 0) {
+        Alert.alert(t('error.error'), 'Valid seat count required');
     }
 
     try {
@@ -449,8 +447,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const editCategory = async (categoryId: number) => {
     if (!editingCategoryName.trim()) {
-      Alert.alert('Error', 'Category name required');
-      return;
+        Alert.alert(t('error.error'), t('tables.edit-table'));
     }
 
     try {
@@ -469,12 +466,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const deleteCategory = async (categoryId: number, categoryName: string) => {
     Alert.alert(
       'Delete Category',
+      t('tables.delete-table'),
       `Are you sure you want to delete "${categoryName}"?`,
       [
-        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
         {
-          text: 'Delete',
-          onPress: async () => {
+          text: t('button.delete') () => {
             try {
               await apiClient.delete(
                 `/api/restaurants/${restaurantId}/table-categories/${categoryId}`
@@ -493,12 +490,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const updateTable = async () => {
     if (!editingTableName.trim()) {
       Alert.alert('Error', 'Table name required');
-      return;
-    }
-    if (!editingTableSeats || parseInt(editingTableSeats) <= 0) {
-      Alert.alert('Error', 'Valid seat count required');
-      return;
-    }
+        Alert.alert(t('error.error'), t('tables.edit-table'));
+        return;
+      }
+      if (!editingTableSeats || parseInt(editingTableSeats) <= 0) {
+        Alert.alert(t('error.error'), 'Valid seat count required');
 
     try {
       await apiClient.patch(`/tables/${editingTableId}`, {
@@ -519,12 +515,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const deleteTable = async (tableId: number, tableName: string) => {
     Alert.alert(
       'Delete Table',
+      t('tables.delete-table'),
       `Are you sure you want to delete table "${tableName}"?`,
       [
-        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
         {
-          text: 'Delete',
-          onPress: async () => {
+          text: t('button.delete') () => {
             try {
               await apiClient.delete(`/tables/${tableId}`, {
                 data: { restaurantId: parseInt(restaurantId) },
@@ -543,8 +539,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const updateTablePax = async (tableId: number) => {
     if (!editingPaxValue || parseInt(editingPaxValue) <= 0) {
       Alert.alert('Error', 'Valid seat count required');
-      return;
-    }
+        Alert.alert(t('error.error'), 'Valid seat count required');
 
     try {
       await apiClient.patch(`/tables/${tableId}`, {
@@ -563,8 +558,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const startSession = async () => {
     if (!selectedTable || !sessionPax || parseInt(sessionPax) <= 0) {
       Alert.alert('Error', 'Valid pax count required');
-      return;
-    }
+        Alert.alert(t('error.error'), 'Valid pax count required');
 
     try {
       await apiClient.post(
@@ -585,8 +579,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     if (!guestName.trim() || !guestPhone.trim() || !guestEmail.trim()) {
       Alert.alert('Error', 'All guest details required');
       return;
-    }
-
+        Alert.alert(t('error.error'), 'All guest details required');
     try {
       await apiClient.post(
         `/api/restaurants/${restaurantId}/bookings`,
@@ -610,7 +603,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       Alert.alert('Error', err.response?.data?.error || 'Failed to book table');
     }
   };
-
+t('error.error')
   const closeBill = async () => {
     if (!selectedSession) return;
 
@@ -655,10 +648,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const endSession = async (sessionId: number) => {
     Alert.alert('End Session', 'Are you sure you want to end this session?', [
       { text: 'Cancel' },
+      {t('tables.end-session'), 'Are you sure you want to end this session?', [
+      { text: t('button.cancel') },
       {
-        text: 'End',
-        onPress: async () => {
-          try {
+        text: t('button.submit')
             await apiClient.post(
               `/api/table-sessions/${sessionId}/end`,
               {}
@@ -704,7 +697,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     if (availableTables.length === 0) {
       Alert.alert('Error', 'No empty tables available');
       return;
-    }
+    }t('error.error')
     setShowMoveTableModal(true);
     setShowSessionGearMenu(false);
   };
@@ -712,7 +705,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const submitMoveTable = async () => {
     if (!selectedTable || !selectedSession || !selectedMoveTable) {
       Alert.alert('Error', 'No table selected');
-      return;
+      return;t('error.error')
     }
 
     try {
@@ -1064,10 +1057,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setCurrentView('grid')}>
-            <Text style={styles.backButton}>← Back</Text>
+            <Text style={styles.backButton}>← {t('modal.back')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {selectedTable.name} • {selectedSession.pax} pax
+            {selectedTable.name} • {selectedSession.pax} {t('tables.pax')}
           </Text>
           <View style={{ position: 'relative' }}>
             <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
@@ -1089,13 +1082,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 style={styles.gearMenuItem}
                 onPress={() => changePax(selectedSession.id, selectedSession.pax)}
               >
-                <Text style={styles.gearMenuItemText}>👥 Change Pax</Text>
+                <Text style={styles.gearMenuItemText}>👥 {t('tables.change-pax')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={moveTable}
               >
-                <Text style={styles.gearMenuItemText}>↔️ Move Table</Text>
+                <Text style={styles.gearMenuItemText}>↔️ {t('tables.move-table')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
@@ -1107,13 +1100,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 style={styles.gearMenuItem}
                 onPress={printQR}
               >
-                <Text style={styles.gearMenuItemText}>📋 Print QR</Text>
+                <Text style={styles.gearMenuItemText}>📋 {t('tables.print-qr')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={() => printBill(false)}
               >
-                <Text style={styles.gearMenuItemText}>🖨️ Print Bill</Text>
+                <Text style={styles.gearMenuItemText}>🖨️ {t('tables.print-bill')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]}
@@ -1134,16 +1127,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   setShowSessionGearMenu(false);
                 }}
               >
-                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>🗑️ End Session</Text>
+                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>🗑️ {t('tables.end-session')}</Text>
               </TouchableOpacity>
             </View>
           </>
         )}
 
         <ScrollView style={styles.content}>
-          <Text style={styles.sectionTitle}>Orders</Text>
+          <Text style={styles.sectionTitle}>{t('orders.order-details')}</Text>
           {sessionOrders.length === 0 ? (
-            <Text style={styles.emptyText}>No orders</Text>
+            <Text style={styles.emptyText}>{t('orders.empty-cart')}</Text>
           ) : (
             sessionOrders.map((order, idx) => {
               console.log(`[OrderRender] Order ${idx}:`, order);
@@ -1196,13 +1189,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             style={[styles.btn, styles.btnPrimary]}
             onPress={() => setShowCloseBillModal(true)}
           >
-            <Text style={styles.btnText}>Close Bill</Text>
+            <Text style={styles.btnText}>{t('tables.close-bill')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
             onPress={() => endSession(selectedSession.id)}
           >
-            <Text style={styles.btnText}>End Session</Text>
+            <Text style={styles.btnText}>{t('tables.end-session')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -1210,7 +1203,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         <Modal visible={showCloseBillModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Close Bill</Text>
+              <Text style={styles.modalTitle}>{t('tables.close-bill')}</Text>
 
               <Text style={styles.label}>Payment Method</Text>
               <View style={styles.selectGroup}>
@@ -1258,13 +1251,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowCloseBillModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={closeBill}
                 >
-                  <Text style={styles.btnText}>Close Bill</Text>
+                  <Text style={styles.btnText}>{t('tables.close-bill')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1275,9 +1268,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         <Modal visible={showChangePaxModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Change Pax</Text>
+              <Text style={styles.modalTitle}>{t('tables.change-pax')}</Text>
 
-              <Text style={styles.label}>New Pax Count</Text>
+              <Text style={styles.label}>{t('tables.change-pax')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1291,13 +1284,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowChangePaxModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitChangePax}
                 >
-                  <Text style={styles.btnText}>Update</Text>
+                  <Text style={styles.btnText}>{t('button.submit')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1308,7 +1301,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         <Modal visible={showMoveTableModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Move to Table</Text>
+              <Text style={styles.modalTitle}>{t('tables.move-table')}</Text>
 
               <Text style={styles.label}>Select Available Table</Text>
               <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
@@ -1333,13 +1326,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowMoveTableModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitMoveTable}
                 >
-                  <Text style={styles.btnText}>Move</Text>
+                  <Text style={styles.btnText}>{t('tables.move-table')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1350,14 +1343,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         <Modal visible={showQRModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Print QR Code</Text>
+              <Text style={styles.modalTitle}>{t('tables.print-qr')}</Text>
               
               {selectedTable && selectedSession && qrImageUrl ? (
                 <>
                   <ScrollView style={{ marginBottom: 16 }}>
                     <View style={styles.qrHeader}>
                       <Text style={styles.qrHeaderTable}>{selectedTable.name}</Text>
-                      <Text style={styles.qrHeaderPax}>Party of {selectedSession.pax}</Text>
+                      <Text style={styles.qrHeaderPax}>{t('tables.pax')} of {selectedSession.pax}</Text>
                     </View>
                     
                     <View style={styles.qrImageContainer}>
@@ -1386,7 +1379,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                       style={[styles.btn, styles.btnSecondary]}
                       onPress={() => setShowQRModal(false)}
                     >
-                      <Text style={styles.btnText}>Close</Text>
+                      <Text style={styles.btnText}>{t('button.close')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.btn, styles.btnPrimary]}
@@ -1456,7 +1449,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                     {String.fromCharCode(65 + idx)}
                   </Text>
                   <Text style={styles.sessionInfo}>
-                    {session.pax} pax • Dining {formatDuration(session.started_at)}
+                    {session.pax} {t('tables.pax')} • Dining {formatDuration(session.started_at)}
                   </Text>
                 </View>
                 <Text style={styles.chevron}>›</Text>
@@ -1466,12 +1459,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
           {selectedTable.sessions.length < selectedTable.seat_count && (
             <>
-              <Text style={styles.sectionTitle}>Options</Text>
+              <Text style={styles.sectionTitle}>{t('tables.start-session')}</Text>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={() => setShowSessionModal(true)}
               >
-                <Text style={styles.btnText}>Start New Session</Text>
+                <Text style={styles.btnText}>{t('tables.start-session')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1482,7 +1475,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               setShowBookingModal(true);
             }}
           >
-            <Text style={styles.btnText}>Book Table</Text>
+            <Text style={styles.btnText}>{t('tables.book-table')}</Text>
           </TouchableOpacity>
         </ScrollView>
 
@@ -1490,7 +1483,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         <Modal visible={showSessionModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Start New Session</Text>
+              <Text style={styles.modalTitle}>{t('tables.start-session')}</Text>
 
               <Text style={styles.label}>Number of Guests</Text>
               <TextInput
@@ -1506,13 +1499,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowSessionModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={startSession}
                 >
-                  <Text style={styles.btnText}>Start Session</Text>
+                  <Text style={styles.btnText}>{t('tables.start-session')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1523,7 +1516,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         <Modal visible={showBookingModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>Book Table</Text>
+              <Text style={styles.modalTitle}>{t('tables.book-table')}</Text>
 
               <Text style={styles.label}>Guest Name</Text>
               <TextInput
@@ -1573,13 +1566,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowBookingModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={bookTable}
                 >
-                  <Text style={styles.btnText}>Book Table</Text>
+                  <Text style={styles.btnText}>{t('tables.book-table')}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -1607,7 +1600,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               onPress={() => setShowCategoryModal(true)}
             >
               <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
-                + Add
+                + {t('tables.add-table')}
               </Text>
             </TouchableOpacity>
           )}
@@ -1700,7 +1693,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 )}
                 {table.sessions.length === 0 && !table.reserved && (
                   <Text style={[{ fontSize: 12, marginTop: 6 }, getTableTextColor(getTableCardColor(table))]}>
-                    ○ Available
+                    ○ {t('tables.empty-table')}
                   </Text>
                 )}
               </View>
@@ -1758,7 +1751,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       <Modal visible={showCategoryModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Category</Text>
+            <Text style={styles.modalTitle}>{t('tables.add-table')}</Text>
 
             <Text style={styles.label}>Category Name</Text>
             <TextInput
@@ -1774,13 +1767,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={() => setShowCategoryModal(false)}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text style={styles.btnText}>{t('button.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createCategory}
               >
-                <Text style={styles.btnText}>Create</Text>
+                <Text style={styles.btnText}>{t('button.submit')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1791,7 +1784,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       <Modal visible={editingCategoryId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Category</Text>
+            <Text style={styles.modalTitle}>{t('tables.edit-table')}</Text>
 
             <Text style={styles.label}>Category Name</Text>
             <TextInput
@@ -1810,13 +1803,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   setEditingCategoryName('');
                 }}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text style={styles.btnText}>{t('button.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={() => editingCategoryId && editCategory(editingCategoryId)}
               >
-                <Text style={styles.btnText}>Save</Text>
+                <Text style={styles.btnText}>{t('button.save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1827,7 +1820,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       <Modal visible={showTableModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Table</Text>
+            <Text style={styles.modalTitle}>{t('tables.add-table')}</Text>
 
             <Text style={styles.label}>Table Name</Text>
             <TextInput
@@ -1837,7 +1830,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               placeholder="e.g., T01"
             />
 
-            <Text style={styles.label}>Seat Count</Text>
+              <Text style={styles.label}>Seat Count</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
@@ -1851,13 +1844,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={() => setShowTableModal(false)}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text style={styles.btnText}>{t('button.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createTable}
               >
-                <Text style={styles.btnText}>Create</Text>
+                <Text style={styles.btnText}>{t('button.submit')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1868,7 +1861,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       <Modal visible={editingTableId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Table</Text>
+            <Text style={styles.modalTitle}>{t('tables.edit-table')}</Text>
 
             <Text style={styles.label}>Table Name</Text>
             <TextInput
@@ -1897,13 +1890,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   setEditingTableSeats('');
                 }}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text style={styles.btnText}>{t('button.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={updateTable}
               >
-                <Text style={styles.btnText}>Save</Text>
+                <Text style={styles.btnText}>{t('button.save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1934,7 +1927,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   setEditingPaxValue('');
                 }}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text style={styles.btnText}>{t('button.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
@@ -1944,7 +1937,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   }
                 }}
               >
-                <Text style={styles.btnText}>Save</Text>
+                <Text style={styles.btnText}>{t('button.save')}</Text>
               </TouchableOpacity>
             </View>
           </View>

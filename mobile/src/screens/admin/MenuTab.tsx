@@ -208,7 +208,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setShowCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to create category');
+        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
       }
     };
 
@@ -237,9 +237,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         'Delete Category',
         `Are you sure you want to delete "${categoryName}"?`,
         [
-          { text: 'Cancel' },
+          { text: t('button.cancel') },
           {
-            text: 'Delete',
+            text: t('button.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -249,7 +249,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 );
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete category');
+                Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
               }
             },
           },
@@ -289,7 +289,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setShowItemModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to create item');
+        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
       }
     };
 
@@ -326,9 +326,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         'Delete Item',
         `Are you sure you want to delete "${itemName}"?`,
         [
-          { text: 'Cancel' },
+          { text: t('button.cancel') },
           {
-            text: 'Delete',
+            text: t('button.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -342,7 +342,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                   setSelectedItem(null);
                 }
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete item');
+                Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
               }
             },
           },
@@ -386,7 +386,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setEditingItemForVariant(null);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to create variant');
+        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
       }
     };
 

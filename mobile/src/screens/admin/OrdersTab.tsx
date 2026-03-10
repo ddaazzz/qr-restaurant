@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal } from 'react-native';
 import { apiClient, API_URL } from '../../services/apiClient';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface MenuItem {
   id: number;
@@ -75,6 +76,8 @@ interface OrdersTabProps {
 
 const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<OrdersTabRef>) => {
   const { restaurantId, selectedTableOnInit } = props;
+  const { t } = useLanguage();
+    
     // Menu state
     const [categories, setCategories] = useState<Category[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -277,26 +280,26 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const handleSubmitOrder = async () => {
       if (cart.length === 0) {
-        Alert.alert('Empty Cart', 'Please add items before submitting');
+        Alert.alert(t('orders.empty-cart'), t('orders.add-items'));
         return;
       }
       if (!orderType) {
-        Alert.alert('Missing Info', 'Please select an order type');
+        Alert.alert(t('error.error'), t('orders.select-type'));
         return;
       }
       if (orderType === 'table' && !selectedTable) {
-        Alert.alert('Missing Table', 'Please select a table');
+        Alert.alert(t('error.error'), t('orders.select-table'));
         return;
       }
 
       try {
         // TODO: Implement actual API submission
-        Alert.alert('Success', `${orderType} order submitted with ${cart.length} items`);
+        Alert.alert(t('success.success'), `${orderType} order submitted with ${cart.length} items`);
         setCart([]);
         setOrderType(null);
         setSelectedTable(null);
       } catch (err: any) {
-        Alert.alert('Error', err.message || 'Failed to submit order');
+        Alert.alert(t('error.error'), err.message || t('error.error'));
       }
     };
 
@@ -351,18 +354,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {/* Header with back button */}
           <View style={styles.historyHeader}>
             <TouchableOpacity onPress={() => setShowHistory(false)}>
-              <Text style={styles.backButton}>← Back</Text>
+              <Text style={styles.backButton}>← {t('modal.back')}</Text>
             </TouchableOpacity>
-            <Text style={styles.historyTitle}>Order History</Text>
+            <Text style={styles.historyTitle}>{t('orders.order-history')}</Text>
           </View>
 
           {/* Filter buttons */}
           <View style={styles.filterBar}>
             {[
-              { id: 'all', label: 'All', count: orders.length },
-              { id: 'pay-now', label: 'Order Now', count: orders.filter(o => o.order_type === 'counter' || o.order_type === 'pay-now').length },
+              { id: 'all', label: t('orders.all'), count: orders.length },
+              { id: 'pay-now', label: t('orders.order-now'), count: orders.filter(o => o.order_type === 'counter' || o.order_type === 'pay-now').length },
               { id: 'to-go', label: 'To-Go', count: orders.filter(o => o.order_type === 'to-go').length },
-              { id: 'sessions', label: 'Sessions', count: sessions.length },
+              { id: 'sessions', label: t('orders.sessions'), count: sessions.length },
             ].map((filter: any) => (
               <TouchableOpacity
                 key={filter.id}
@@ -397,10 +400,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <View style={styles.orderHeader}>
                       <Text style={styles.orderId}>🪑 {session.table_name || 'Table'}</Text>
                       <View style={[styles.statusBadge, { backgroundColor: isEnded ? '#9ca3af' : '#10b981' }]}>
-                        <Text style={styles.statusText}>{isEnded ? 'Closed' : 'Active'}</Text>
+                        <Text style={styles.statusText}>{isEnded ? t('orders.closed') : t('orders.active')}</Text>
                       </View>
                     </View>
-                    <Text style={styles.orderDetails}>👥 {session.pax || 0} people • Started {formatDate(session.started_at)}</Text>
+                    <Text style={styles.orderDetails}>👥 {session.pax || 0} {t('tables.pax')} • Started {formatDate(session.started_at)}</Text>
                   </TouchableOpacity>
                 );
               } else {
@@ -427,7 +430,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No {historyFilter === 'sessions' ? 'sessions' : 'orders'} found</Text>
+                <Text style={styles.emptyText}>{historyFilter === 'sessions' ? t('kitchen.no-active-orders') : t('orders.empty-cart')}</Text>
               </View>
             }
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadOrdersAndSessions} />}
@@ -454,7 +457,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <Text style={styles.closeButton}>✕</Text>
                   </TouchableOpacity>
                   <Text style={styles.modalTitle}>
-                    {historyFilter === 'sessions' ? 'Session Details' : 'Order Details'}
+                    {historyFilter === 'sessions' ? t('orders.session-details') : t('orders.order-details')}
                   </Text>
                   <View style={{ width: 24 }} />
                 </View>
@@ -475,11 +478,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <TouchableOpacity 
                         style={[styles.modalActionBtn, styles.printBtn]}
                       >
-                        <Text style={styles.modalActionBtnText}>🖨️ Print Bill</Text>
+                        <Text style={styles.modalActionBtnText}>🖨️ {t('orders.print-receipt')}</Text>
                       </TouchableOpacity>
                       {selectedOrder && !(selectedOrder as Session).ended_at && (
                         <TouchableOpacity style={[styles.modalActionBtn, styles.closeBtn]}>
-                          <Text style={styles.modalActionBtnText}>✓ Close Bill</Text>
+                          <Text style={styles.modalActionBtnText}>✓ {t('tables.close-bill')}</Text>
                         </TouchableOpacity>
                       )}
                     </>
@@ -487,7 +490,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <TouchableOpacity 
                       style={[styles.modalActionBtn, styles.printBtn]}
                     >
-                      <Text style={styles.modalActionBtnText}>🖨️ Print Receipt</Text>
+                      <Text style={styles.modalActionBtnText}>🖨️ {t('orders.print-receipt')}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -625,7 +628,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     onPress={() => setOrderType('pay-now')}
                   >
                     <Text style={[styles.orderTypeBtnText, orderType === 'pay-now' && styles.orderTypeBtnTextActive]}>
-                      🛒 Order Now
+                      🛒 {t('orders.order-now')}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -642,7 +645,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               {/* Table selection for table orders */}
               {orderType === 'table' && (
                 <View style={styles.tableSelectionSection}>
-                  <Text style={styles.sectionLabel}>Select Table</Text>
+                  <Text style={styles.sectionLabel}>{t('orders.select-table')}</Text>
                   <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false}
@@ -683,7 +686,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   disabled={!orderType || (orderType === 'table' && !selectedTable)}
                   onPress={handleSubmitOrder}
                 >
-                  <Text style={styles.submitBtnText}>✓ Submit</Text>
+                  <Text style={styles.submitBtnText}>✓ {t('button.submit')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -816,13 +819,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   style={styles.cancelBtn}
                   onPress={() => setShowVariantModal(false)}
                 >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                  <Text style={styles.cancelBtnText}>{t('button.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.addBtn}
                   onPress={handleVariantSubmit}
                 >
-                  <Text style={styles.addBtnText}>Add to Cart</Text>
+                  <Text style={styles.addBtnText}>{t('menu.add-item')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -846,27 +849,27 @@ const SessionDetails = ({ session, billData }: { session: Session | null; billDa
   return (
     <View style={styles.detailsContainer}>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Table</Text>
+        <Text style={styles.detailLabel}>{t('orders.table')}</Text>
         <Text style={styles.detailValue}>{session.table_name || 'N/A'}</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Pax</Text>
+        <Text style={styles.detailLabel}>{t('tables.pax')}</Text>
         <Text style={styles.detailValue}>👥 {session.pax || 0} people</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Started</Text>
+        <Text style={styles.detailLabel}>{t('tables.start-session')}</Text>
         <Text style={styles.detailValue}>{session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A'}</Text>
       </View>
       {session.ended_at && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailLabel}>Closed</Text>
+          <Text style={styles.detailLabel}>{t('orders.closed')}</Text>
           <Text style={styles.detailValue}>{new Date(session.ended_at).toLocaleString()}</Text>
         </View>
       )}
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Status</Text>
+        <Text style={styles.detailLabel}>{t('bookings.status')}</Text>
         <Text style={[styles.detailValue, { color: isEnded ? '#9ca3af' : '#10b981' }]}>
-          {isEnded ? 'Closed' : 'Active'}
+          {isEnded ? t('orders.closed') : t('orders.active')}
         </Text>
       </View>
       
@@ -932,11 +935,11 @@ const OrderDetails = ({ order }: { order: Order | null }) => {
         <Text style={styles.detailValue}>#{order.id}</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Type</Text>
+        <Text style={styles.detailLabel}>{t('orders.select-type')}</Text>
         <Text style={styles.detailValue}>{getOrderTypeLabel(order.order_type)}</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Status</Text>
+        <Text style={styles.detailLabel}>{t('bookings.status')}</Text>
         <Text style={[styles.detailValue, { color: getStatusColor(order.status) }]}>{order.status}</Text>
       </View>
       <View style={styles.detailSection}>
@@ -946,7 +949,7 @@ const OrderDetails = ({ order }: { order: Order | null }) => {
         </Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Created</Text>
+        <Text style={styles.detailLabel}>Created Date</Text>
         <Text style={styles.detailValue}>{new Date(order.created_at).toLocaleString()}</Text>
       </View>
       {order.items && order.items.length > 0 && (

@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { apiClient } from '../../services/apiClient';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Booking {
   id: number;
@@ -46,6 +47,7 @@ export interface BookingsTabRef {
 
 export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>((props, ref) => {
   const { restaurantId } = props;
+  const { t } = useLanguage();
   
   // Main state
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -322,7 +324,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
       if (editingBookingId) {
         // Update booking
         await apiClient.patch(`/api/bookings/${editingBookingId}`, payload);
-        Alert.alert('Success', 'Booking updated successfully');
+        Alert.alert(t('success.success'), t('success.booking-updated'));
       } else {
         // Create booking - adjust field names for backend API
         const createPayload = {
@@ -332,7 +334,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
           booking_time: payload.booking_time,
         };
         await apiClient.post(`/api/restaurants/${restaurantId}/bookings`, createPayload);
-        Alert.alert('Success', 'Booking created successfully');
+        Alert.alert(t('success.success'), t('success.booking-created'));
       }
 
       closeModal();
@@ -355,7 +357,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
   };
 
   const deleteBooking = (bookingId: number) => {
-    Alert.alert('Delete Booking', 'Are you sure you want to delete this booking?', [
+    Alert.alert(t('bookings.delete-title'), t('bookings.delete-confirm'), [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -364,10 +366,10 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
             await apiClient.delete(`/api/bookings/${bookingId}`, {
               data: { restaurantId: parseInt(restaurantId) }
             });
-            Alert.alert('Success', 'Booking deleted');
+            Alert.alert(t('success.success'), t('success.booking-deleted'));
             await fetchBookings();
           } catch (err: any) {
-            Alert.alert('Error', err.message || 'Failed to delete booking');
+            Alert.alert(t('error.error'), err.message || t('error.failed'));
           }
         },
         style: 'destructive',

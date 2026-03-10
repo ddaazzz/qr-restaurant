@@ -207,7 +207,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             setShowDetailModal(false);
             setSelectedStaff(null);
           } catch (err: any) {
-            Alert.alert('Error', err.message || 'Failed to delete staff');
+            Alert.alert(t('error.error'), err.message || t('error.failed'));
           }
         },
         style: 'destructive',
@@ -221,7 +221,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
       setSelectedStaff(response.data as StaffMember);
       setShowDetailModal(true);
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to load staff details');
+      Alert.alert(t('error.error'), t('error.failed'));
     }
   };
 
@@ -234,7 +234,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
         setSelectedStaff(updated.data as StaffMember);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || `Failed to clock ${action}`);
+      Alert.alert(t('error.error'), err.message || t('error.failed'));
     }
   };
 

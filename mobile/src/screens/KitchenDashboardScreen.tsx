@@ -55,10 +55,10 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   };
 
   const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('button.logout'), t('modal.confirm'), [
+      { text: t('button.cancel'), style: 'cancel' },
       {
-        text: 'Logout',
+        text: t('button.logout'),
         onPress: async () => {
           await logout();
         },
@@ -71,7 +71,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
       await apiClient.updateOrderStatus(itemId, newStatus);
       loadKitchenItems();
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update status');
+      Alert.alert(t('error.error'), err instanceof Error ? err.message : t('error.failed'));
     }
   };
 
@@ -95,9 +95,9 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>🍳 Kitchen Queue</Text>
+        <Text style={styles.title}>🍳 {t('kitchen.kitchen-queue')}</Text>
         <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.menuButton}>
-          <Text style={styles.menuButtonText}>Menu ▼</Text>
+          <Text style={styles.menuButtonText}>{t('menu.menu')} ▼</Text>
         </TouchableOpacity>
       </View>
 
@@ -112,11 +112,11 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
-                Alert.alert('Language', 'Language selection would go here');
+                Alert.alert(t('language.language'), t('language.select'));
                 setShowMenu(false);
               }}
             >
-              <Text style={styles.menuItemText}>🌍 Language</Text>
+              <Text style={styles.menuItemText}>🌍 {t('language.language')}</Text>
             </TouchableOpacity>
             <View style={styles.menuDivider} />
             <TouchableOpacity
@@ -126,7 +126,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                 handleLogout();
               }}
             >
-              <Text style={styles.menuItemText}>🚪 Logout</Text>
+              <Text style={styles.menuItemText}>🚪 {t('button.logout')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -137,12 +137,12 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadKitchenItems}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('button.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : kitchenItems.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No active orders</Text>
+          <Text style={styles.emptyText}>{t('kitchen.no-active-orders')}</Text>
         </View>
       ) : (
         <FlatList

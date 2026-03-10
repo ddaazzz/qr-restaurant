@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { apiClient } from '../../services/apiClient';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Order {
   id: number;
@@ -48,6 +49,7 @@ interface DailyTrend {
 }
 
 export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
+  const { t } = useLanguage();
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
