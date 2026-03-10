@@ -19,7 +19,6 @@ import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
 import { apiClient } from '../../services/apiClient';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
-import { useLanguage } from '../../contexts/LanguageContext';
 
 interface TableCategory {
   id: number;
@@ -98,13 +97,7 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-interface TablesTabProps {
-  restaurantId: string;
-}
-
-const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) => {
-  const { restaurantId } = props;
-  const { t } = useLanguage();
+export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -192,7 +185,7 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       }
       
       console.warn('[TablesTab] No table found for QR token:', token);
-      Alert.alert(t('error.error'), t('error.failed-to-load'));
+      Alert.alert('Table Not Found', 'Could not find this table. Please try again.');
     }
   }), [tables]);
 
@@ -270,7 +263,7 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
-      setError(err.message || t('error.failed-to-load'));
+      setError(err.message || 'Failed to load tables');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -334,12 +327,12 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       const now = new Date();
       const diffMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
 
-      if (diffMinutes < 1) return t('tables.just-now');
-      if (diffMinutes < 60) return `${diffMinutes}${t('tables.minutes')}`;
+      if (diffMinutes < 1) return 'just now';
+      if (diffMinutes < 60) return `${diffMinutes}m`;
 
       const hours = Math.floor(diffMinutes / 60);
       const mins = diffMinutes % 60;
-      return `${hours}${t('tables.hours')} ${mins}${t('tables.minutes')}`;
+      return `${hours}h ${mins}m`;
     } catch {
       return '--';
     }
@@ -395,7 +388,7 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setSessionBill(billRes.data);
     } catch (err) {
       console.error('Error loading session orders:', err);
-      Alert.alert(t('error.error'), t('error.failed-to-load'));
+      Alert.alert('Error Loading Orders', 'Failed to load orders for this session');
     }
   };
 
@@ -407,7 +400,7 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
 
   const createCategory = async () => {
     if (!categoryName.trim()) {
-      Alert.alert(t('error.error'), t('validation.name-required'));
+      Alert.alert('Error', 'Category name required');
       return;
     }
 
@@ -420,17 +413,18 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setShowCategoryModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to create category');
     }
   };
 
   const createTable = async () => {
     if (!tableName.trim()) {
-      Alert.alert(t('error.error'), t('validation.name-required'));
+      Alert.alert('Error', 'Table name required');
       return;
     }
     if (!tableSeats || parseInt(tableSeats) <= 0) {
-      Alert.alert(t('error.error'), t('validation.valid-seat-count'));
+      Alert.alert('Error', 'Valid seat count required');
+      return;
     }
 
     try {
@@ -447,13 +441,14 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setShowTableModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to create table');
     }
   };
 
   const editCategory = async (categoryId: number) => {
     if (!editingCategoryName.trim()) {
-        Alert.alert(t('error.error'), t('tables.edit-table'));
+      Alert.alert('Error', 'Category name required');
+      return;
     }
 
     try {
@@ -465,18 +460,18 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setEditingCategoryName('');
       await loadTableData();
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to edit category');
     }
   };
 
   const deleteCategory = async (categoryId: number, categoryName: string) => {
     Alert.alert(
-      t('tables.delete-table'),
-      `${t('common.ok')}?`,
+      'Delete Category',
+      `Are you sure you want to delete "${categoryName}"?`,
       [
-        { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
         {
-          text: t('button.delete'),
+          text: 'Delete',
           onPress: async () => {
             try {
               await apiClient.delete(
@@ -484,7 +479,7 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
               );
               await loadTableData();
             } catch (err: any) {
-              Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+              Alert.alert('Error', err.response?.data?.error || 'Failed to delete category');
             }
           },
           style: 'destructive',
@@ -495,12 +490,13 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
 
   const updateTable = async () => {
     if (!editingTableName.trim()) {
-      Alert.alert(t('error.error'), t('validation.name-required'));
-        Alert.alert(t('error.error'), t('tables.edit-table'));
-        return;
-      }
-      if (!editingTableSeats || parseInt(editingTableSeats) <= 0) {
-        Alert.alert(t('error.error'), 'Valid seat count required');
+      Alert.alert('Error', 'Table name required');
+      return;
+    }
+    if (!editingTableSeats || parseInt(editingTableSeats) <= 0) {
+      Alert.alert('Error', 'Valid seat count required');
+      return;
+    }
 
     try {
       await apiClient.patch(`/tables/${editingTableId}`, {
@@ -514,18 +510,18 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setShowEditTableModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update table');
     }
   };
 
   const deleteTable = async (tableId: number, tableName: string) => {
     Alert.alert(
-      t('tables.delete-table'),
-      `${t('common.ok')}?`,
+      'Delete Table',
+      `Are you sure you want to delete table "${tableName}"?`,
       [
-        { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
         {
-          text: t('button.delete'),
+          text: 'Delete',
           onPress: async () => {
             try {
               await apiClient.delete(`/tables/${tableId}`, {
@@ -533,7 +529,7 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
               });
               await loadTableData();
             } catch (err: any) {
-              Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+              Alert.alert('Error', err.response?.data?.error || 'Failed to delete table');
             }
           },
           style: 'destructive',
@@ -544,8 +540,9 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
 
   const updateTablePax = async (tableId: number) => {
     if (!editingPaxValue || parseInt(editingPaxValue) <= 0) {
-      Alert.alert(t('error.error'), t('validation.valid-seat-count'));
-        Alert.alert(t('error.error'), 'Valid seat count required');
+      Alert.alert('Error', 'Valid seat count required');
+      return;
+    }
 
     try {
       await apiClient.patch(`/tables/${tableId}`, {
@@ -557,14 +554,15 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setShowEditPaxModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update seat count');
     }
   };
 
   const startSession = async () => {
     if (!selectedTable || !sessionPax || parseInt(sessionPax) <= 0) {
       Alert.alert('Error', 'Valid pax count required');
-        Alert.alert(t('error.error'), 'Valid pax count required');
+      return;
+    }
 
     try {
       await apiClient.post(
@@ -577,15 +575,16 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setSelectedTable(null);
       setCurrentView('grid');
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to start session');
     }
   };
 
   const bookTable = async () => {
     if (!guestName.trim() || !guestPhone.trim() || !guestEmail.trim()) {
-      Alert.alert(t('error.error'), t('tables.all-guest-details'));
+      Alert.alert('Error', 'All guest details required');
       return;
-        Alert.alert(t('error.error'), t('tables.all-guest-details'));
+    }
+
     try {
       await apiClient.post(
         `/api/restaurants/${restaurantId}/bookings`,
@@ -606,10 +605,10 @@ const TablesTab = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) =>
       setShowBookingModal(false);
       await loadTableData();
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to book table');
     }
   };
-t('error.error')
+
   const closeBill = async () => {
     if (!selectedSession) return;
 
@@ -647,15 +646,15 @@ t('error.error')
       await loadTableData();
       setCurrentView('grid');
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
     }
   };
 
   const endSession = async (sessionId: number) => {
-    Alert.alert(t('tables.end-session'), 'Are you sure you want to end this session?', [
-      { text: t('button.cancel'), style: 'cancel' },
+    Alert.alert('End Session', 'Are you sure you want to end this session?', [
+      { text: 'Cancel' },
       {
-        text: t('button.submit'),
+        text: 'End',
         onPress: async () => {
           try {
             await apiClient.post(
@@ -665,7 +664,7 @@ t('error.error')
             await loadTableData();
             setCurrentView('grid');
           } catch (err: any) {
-            Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+            Alert.alert('Error', err.response?.data?.error || 'Failed to end session');
           }
         },
       },
@@ -693,7 +692,7 @@ t('error.error')
       setNewPaxValue('');
       await loadTableData();
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update pax');
     }
   };
 
@@ -701,17 +700,17 @@ t('error.error')
     if (!selectedTable) return;
     const availableTables = tables.filter((t) => t.sessions.length === 0 && t.id !== selectedTable.id);
     if (availableTables.length === 0) {
-      Alert.alert(t('error.error'), t('tables.no-empty-tables'));
+      Alert.alert('Error', 'No empty tables available');
       return;
-    }t('error.error')
+    }
     setShowMoveTableModal(true);
     setShowSessionGearMenu(false);
   };
 
   const submitMoveTable = async () => {
     if (!selectedTable || !selectedSession || !selectedMoveTable) {
-      Alert.alert(t('error.error'), t('tables.no-table-selected'));
-      return;t('error.error')
+      Alert.alert('Error', 'No table selected');
+      return;
     }
 
     try {
@@ -732,7 +731,7 @@ t('error.error')
     if (!selectedTable || !selectedSession) return;
     // This would open the order screen for the table
     // For now, just show an alert
-    Alert.alert(t('orders.order-details'), `${t('common.ok')}?`);
+    Alert.alert('Order for Table', `Open order screen for ${selectedTable.name}`);
     setShowSessionGearMenu(false);
   };
 
@@ -757,7 +756,7 @@ t('error.error')
     if (!selectedSession || !sessionBill) {
       console.log('[PrintBill] Missing session or bill data, returning');
       if (!autoPrint) {
-        Alert.alert(t('error.error'), t('tables.no-bill-data'));
+        Alert.alert('❌ Error', 'No bill data available. Please open a table session first.');
       }
       return;
     }
@@ -781,7 +780,7 @@ t('error.error')
                 style: 'cancel',
               },
               {
-                text: t('tables.configure-printer'),
+                text: 'Configure Printer',
                 onPress: () => {
                   console.log('[PrintBill] User wants to configure printer');
                 },
@@ -830,12 +829,12 @@ t('error.error')
               html: printRes.data.html,
             });
             if (!autoPrint) {
-              Alert.alert(t('tables.print-dialog-opened'), `${t('tables.bill-for')} ${selectedTable?.name}`);
+              Alert.alert('✓ Print Dialog Opened', `Bill for ${selectedTable?.name} ready to print`);
             }
           } catch (printErr: any) {
             console.error('[PrintBill] Print dialog error:', printErr);
             if (!autoPrint) {
-              Alert.alert(t('tables.print-error'), t('error.failed-to-load') + ': ' + printErr.message);
+              Alert.alert('❌ Print Error', 'Failed to open print dialog: ' + printErr.message);
             }
           }
         } 
@@ -845,7 +844,7 @@ t('error.error')
           console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
           
           if (!autoPrint) {
-            Alert.alert(t('tables.printing'), t('tables.sending-printer'));
+            Alert.alert('⏳ Printing...', 'Sending receipt to Bluetooth printer...');
           }
           
           try {
@@ -908,12 +907,11 @@ t('error.error')
             console.log('[PrintBill] Sending thermal print data to:', device.id);
             
             // Send to thermal printer using ESC/POS commands
-            // Use 30 second timeout for authentication and printing
-            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData, 30000);
+            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData);
             
             console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
-              Alert.alert(t('tables.print-success'), `${t('tables.sent-to-printer')} "${device.name}"`);
+              Alert.alert('✓ Printed', `Bill sent to printer "${device.name}"`);
             }
           } catch (bluetoothErr: any) {
             console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
@@ -955,84 +953,9 @@ t('error.error')
     }
   };
 
-  const testPrintBill = async () => {
-    console.log('[TestPrint] Starting diagnostic test print');
-    
-    try {
-      // Check if printer is configured
-      const printerRes = await apiClient.get(
-        `/api/restaurants/${restaurantId}/printer-settings`
-      );
-      
-      if (!printerRes.data || !printerRes.data.printer_type) {
-        Alert.alert(t('tables.no-printer'), t('tables.printer-config-message'));
-        return;
-      }
-
-      if (printerRes.data.printer_type !== 'bluetooth') {
-        Alert.alert(t('error.error'), t('validation.name-required'));
-        return;
-      }
-
-      const device = { 
-        id: printerRes.data.bluetooth_device_id, 
-        name: printerRes.data.bluetooth_device_name 
-      };
-
-      if (!device.id) {
-        Alert.alert(t('error.error'), t('validation.name-required'));
-        return;
-      }
-
-      Alert.alert(t('tables.test-print'), t('tables.test-print-message'));
-
-      // Import BleManager
-      let BleManager: any = null;
-      try {
-        const ble = require('react-native-ble-plx');
-        BleManager = ble.BleManager;
-      } catch (e) {
-        throw new Error('Bluetooth not available');
-      }
-
-      const manager = new BleManager();
-      
-      // Wait for BLE to be ready
-      await new Promise<void>((resolve) => {
-        let attempts = 0;
-        const checkState = async () => {
-          try {
-            const state = await manager.state();
-            if (state === 'PoweredOn') {
-              resolve();
-            } else if (++attempts < 10) {
-              setTimeout(checkState, 200);
-            } else {
-              resolve();
-            }
-          } catch (e) {
-            if (++attempts < 10) setTimeout(checkState, 200);
-            else resolve();
-          }
-        };
-        checkState();
-      });
-
-      console.log('[TestPrint] Sending test sequence to:', device.id);
-      // Use 30 second timeout for authentication and test print
-      await thermalPrinterService.sendTestPrint(manager, device.id, 30000);
-      
-      Alert.alert(t('tables.print-success'), t('error.failed-to-load'));
-      setShowSessionGearMenu(false);
-    } catch (err: any) {
-      console.error('[TestPrint] Error:', err);
-      Alert.alert(t('tables.test-failed'), err.message || t('error.failed-to-load'));
-    }
-  };
-
   const splitBill = () => {
     if (!selectedSession) return;
-    Alert.alert(t('error.error'), t('error.failed-to-load'));
+    Alert.alert('Split Bill', 'Split bill functionality - Coming soon');
     setShowSessionGearMenu(false);
   };
 
@@ -1063,10 +986,10 @@ t('error.error')
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setCurrentView('grid')}>
-            <Text style={styles.backButton}>← {t('tables.back')}</Text>
+            <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {selectedTable.name} • {selectedSession.pax} {t('tables.pax')}
+            {selectedTable.name} • {selectedSession.pax} pax
           </Text>
           <View style={{ position: 'relative' }}>
             <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
@@ -1088,43 +1011,37 @@ t('error.error')
                 style={styles.gearMenuItem}
                 onPress={() => changePax(selectedSession.id, selectedSession.pax)}
               >
-                <Text style={styles.gearMenuItemText}>👥 {t('tables.change-pax')}</Text>
+                <Text style={styles.gearMenuItemText}>👥 Change Pax</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={moveTable}
               >
-                <Text style={styles.gearMenuItemText}>↔️ {t('tables.move-table')}</Text>
+                <Text style={styles.gearMenuItemText}>↔️ Move Table</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={orderForTable}
               >
-                <Text style={styles.gearMenuItemText}>📱 {t('tables.order-for-table')}</Text>
+                <Text style={styles.gearMenuItemText}>📱 Order for Table</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={printQR}
               >
-                <Text style={styles.gearMenuItemText}>📋 {t('tables.print-qr')}</Text>
+                <Text style={styles.gearMenuItemText}>📋 Print QR</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={() => printBill(false)}
               >
-                <Text style={styles.gearMenuItemText}>🖨️ {t('tables.print-bill')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]}
-                onPress={testPrintBill}
-              >
-                <Text style={styles.gearMenuItemText}>🧪 {t('tables.test-print')}</Text>
+                <Text style={styles.gearMenuItemText}>🖨️ Print Bill</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={splitBill}
               >
-                <Text style={styles.gearMenuItemText}>💵 {t('tables.split-bill')}</Text>
+                <Text style={styles.gearMenuItemText}>💵 Split Bill</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.gearMenuItem, styles.gearMenuItemDelete]}
@@ -1133,16 +1050,16 @@ t('error.error')
                   setShowSessionGearMenu(false);
                 }}
               >
-                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>🗑️ {t('tables.end-session')}</Text>
+                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>🗑️ End Session</Text>
               </TouchableOpacity>
             </View>
           </>
         )}
 
         <ScrollView style={styles.content}>
-          <Text style={styles.sectionTitle}>{t('orders.order-details')}</Text>
+          <Text style={styles.sectionTitle}>Orders</Text>
           {sessionOrders.length === 0 ? (
-            <Text style={styles.emptyText}>{t('orders.empty-cart')}</Text>
+            <Text style={styles.emptyText}>No orders</Text>
           ) : (
             sessionOrders.map((order, idx) => {
               console.log(`[OrderRender] Order ${idx}:`, order);
@@ -1165,7 +1082,7 @@ t('error.error')
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.itemStatus}>{t('tables.no-items-order')}</Text>
+                    <Text style={styles.itemStatus}>No items in order</Text>
                   )}
                 </View>
               );
@@ -1174,17 +1091,17 @@ t('error.error')
 
           <View style={styles.totalsSection}>
             <View style={styles.totalRow}>
-              <Text>{t('tables.subtotal')}</Text>
+              <Text>Subtotal</Text>
               <Text>{formatPrice(totals.subtotal)}</Text>
             </View>
             {serviceCharge > 0 && (
               <View style={styles.totalRow}>
-                <Text>{t('tables.service-charge')} ({serviceCharge}%)</Text>
+                <Text>Service Charge ({serviceCharge}%)</Text>
                 <Text>{formatPrice(totals.serviceChargeAmount)}</Text>
               </View>
             )}
             <View style={[styles.totalRow, styles.grandTotal]}>
-              <Text style={styles.totalLabel}>{t('tables.total')}</Text>
+              <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
             </View>
           </View>
@@ -1195,13 +1112,13 @@ t('error.error')
             style={[styles.btn, styles.btnPrimary]}
             onPress={() => setShowCloseBillModal(true)}
           >
-            <Text style={styles.btnText}>{t('tables.close-bill')}</Text>
+            <Text style={styles.btnText}>Close Bill</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
             onPress={() => endSession(selectedSession.id)}
           >
-            <Text style={styles.btnText}>{t('tables.end-session')}</Text>
+            <Text style={styles.btnText}>End Session</Text>
           </TouchableOpacity>
         </View>
 
@@ -1209,9 +1126,9 @@ t('error.error')
         <Modal visible={showCloseBillModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('tables.close-bill')}</Text>
+              <Text style={styles.modalTitle}>Close Bill</Text>
 
-              <Text style={styles.label}>{t('tables.payment-method')}</Text>
+              <Text style={styles.label}>Payment Method</Text>
               <View style={styles.selectGroup}>
                 {['cash', 'card', 'online'].map((method) => (
                   <TouchableOpacity
@@ -1228,13 +1145,13 @@ t('error.error')
                         paymentMethod === method && styles.selectOptionTextActive,
                       ]}
                     >
-                      {t(`tables.${method}`)}
+                      {method.charAt(0).toUpperCase() + method.slice(1)}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.label}>{t('tables.discount-cents')}</Text>
+              <Text style={styles.label}>Discount (cents)</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="numeric"
@@ -1243,13 +1160,13 @@ t('error.error')
                 placeholder="0"
               />
 
-              <Text style={styles.label}>{t('tables.reason')}</Text>
+              <Text style={styles.label}>Reason</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 multiline
                 value={closeReason}
                 onChangeText={setCloseReason}
-                placeholder={t('tables.optional-notes')}
+                placeholder="Optional notes"
               />
 
               <View style={styles.modalActions}>
@@ -1257,13 +1174,13 @@ t('error.error')
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowCloseBillModal(false)}
                 >
-                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                  <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={closeBill}
                 >
-                  <Text style={styles.btnText}>{t('tables.close-bill')}</Text>
+                  <Text style={styles.btnText}>Close Bill</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1274,9 +1191,9 @@ t('error.error')
         <Modal visible={showChangePaxModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('tables.change-pax')}</Text>
+              <Text style={styles.modalTitle}>Change Pax</Text>
 
-              <Text style={styles.label}>{t('tables.number-of-guests')}</Text>
+              <Text style={styles.label}>New Pax Count</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1290,13 +1207,13 @@ t('error.error')
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowChangePaxModal(false)}
                 >
-                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                  <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitChangePax}
                 >
-                  <Text style={styles.btnText}>{t('button.submit')}</Text>
+                  <Text style={styles.btnText}>Update</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1307,9 +1224,9 @@ t('error.error')
         <Modal visible={showMoveTableModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('tables.move-table')}</Text>
+              <Text style={styles.modalTitle}>Move to Table</Text>
 
-              <Text style={styles.label}>{t('tables.select-available-table')}</Text>
+              <Text style={styles.label}>Select Available Table</Text>
               <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
                 {tables
                   .filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id)
@@ -1332,13 +1249,13 @@ t('error.error')
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowMoveTableModal(false)}
                 >
-                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                  <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitMoveTable}
                 >
-                  <Text style={styles.btnText}>{t('tables.move-table')}</Text>
+                  <Text style={styles.btnText}>Move</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1349,14 +1266,14 @@ t('error.error')
         <Modal visible={showQRModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('tables.print-qr')}</Text>
+              <Text style={styles.modalTitle}>Print QR Code</Text>
               
               {selectedTable && selectedSession && qrImageUrl ? (
                 <>
                   <ScrollView style={{ marginBottom: 16 }}>
                     <View style={styles.qrHeader}>
                       <Text style={styles.qrHeaderTable}>{selectedTable.name}</Text>
-                      <Text style={styles.qrHeaderPax}>{t('tables.pax')} of {selectedSession.pax}</Text>
+                      <Text style={styles.qrHeaderPax}>Party of {selectedSession.pax}</Text>
                     </View>
                     
                     <View style={styles.qrImageContainer}>
@@ -1376,7 +1293,7 @@ t('error.error')
                     </View>
 
                     <View style={styles.qrFooter}>
-                      <Text style={styles.qrFooterText}>{t('tables.scan-to-order')}</Text>
+                      <Text style={styles.qrFooterText}>Scan to order</Text>
                     </View>
                   </ScrollView>
 
@@ -1385,14 +1302,14 @@ t('error.error')
                       style={[styles.btn, styles.btnSecondary]}
                       onPress={() => setShowQRModal(false)}
                     >
-                      <Text style={styles.btnText}>{t('button.close')}</Text>
+                      <Text style={styles.btnText}>Close</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.btn, styles.btnPrimary]}
                       onPress={() => {
                         Alert.alert(
-                          t('tables.qr-ready'),
-                          t('tables.qr-ready-message'),
+                          'QR Code Ready',
+                          'The QR code is displayed above. Users can scan it to place orders.',
                           [{ text: 'OK', onPress: () => setShowQRModal(false) }]
                         );
                       }}
@@ -1404,7 +1321,7 @@ t('error.error')
               ) : (
                 <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
                   <Text style={{ marginBottom: 20, color: '#666' }}>
-                    {t('tables.loading-qr')}
+                    Loading QR Code...
                   </Text>
                   <Text style={{ marginBottom: 10, fontSize: 12, color: '#999' }}>
                     Table: {selectedTable?.name || 'NONE'}
@@ -1433,15 +1350,15 @@ t('error.error')
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setCurrentView('grid')}>
-            <Text style={styles.backButton}>← {t('tables.back')}</Text>
+            <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{selectedTable.name}</Text>
         </View>
 
         <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          <Text style={styles.sectionTitle}>{t('tables.active-sessions')}</Text>
+          <Text style={styles.sectionTitle}>Active Sessions</Text>
           {selectedTable.sessions.length === 0 ? (
-            <Text style={styles.emptyText}>{t('tables.no-sessions')}</Text>
+            <Text style={styles.emptyText}>No active sessions</Text>
           ) : (
             selectedTable.sessions.map((session, idx) => (
               <TouchableOpacity
@@ -1455,7 +1372,7 @@ t('error.error')
                     {String.fromCharCode(65 + idx)}
                   </Text>
                   <Text style={styles.sessionInfo}>
-                    {session.pax} {t('tables.pax')} • {t('tables.dining')} {formatDuration(session.started_at)}
+                    {session.pax} pax • Dining {formatDuration(session.started_at)}
                   </Text>
                 </View>
                 <Text style={styles.chevron}>›</Text>
@@ -1465,12 +1382,12 @@ t('error.error')
 
           {selectedTable.sessions.length < selectedTable.seat_count && (
             <>
-              <Text style={styles.sectionTitle}>{t('tables.start-session')}</Text>
+              <Text style={styles.sectionTitle}>Options</Text>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={() => setShowSessionModal(true)}
               >
-                <Text style={styles.btnText}>{t('tables.start-session')}</Text>
+                <Text style={styles.btnText}>Start New Session</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1481,7 +1398,7 @@ t('error.error')
               setShowBookingModal(true);
             }}
           >
-            <Text style={styles.btnText}>{t('tables.book-table')}</Text>
+            <Text style={styles.btnText}>Book Table</Text>
           </TouchableOpacity>
         </ScrollView>
 
@@ -1489,9 +1406,9 @@ t('error.error')
         <Modal visible={showSessionModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('tables.start-session')}</Text>
+              <Text style={styles.modalTitle}>Start New Session</Text>
 
-              <Text style={styles.label}>{t('tables.number-of-guests')}</Text>
+              <Text style={styles.label}>Number of Guests</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1505,13 +1422,13 @@ t('error.error')
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowSessionModal(false)}
                 >
-                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                  <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={startSession}
                 >
-                  <Text style={styles.btnText}>{t('tables.start-session')}</Text>
+                  <Text style={styles.btnText}>Start Session</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1522,35 +1439,35 @@ t('error.error')
         <Modal visible={showBookingModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('tables.book-table')}</Text>
+              <Text style={styles.modalTitle}>Book Table</Text>
 
-              <Text style={styles.label}>{t('tables.guest-name')}</Text>
+              <Text style={styles.label}>Guest Name</Text>
               <TextInput
                 style={styles.input}
                 value={guestName}
                 onChangeText={setGuestName}
-                placeholder={t('tables.eg-john-smith')}
+                placeholder="John Smith"
               />
 
-              <Text style={styles.label}>{t('tables.phone')}</Text>
+              <Text style={styles.label}>Phone</Text>
               <TextInput
                 style={styles.input}
                 value={guestPhone}
                 onChangeText={setGuestPhone}
-                placeholder={t('tables.eg-phone')}
+                placeholder="+1 (555) 123-4567"
                 keyboardType="phone-pad"
               />
 
-              <Text style={styles.label}>{t('tables.email')}</Text>
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
                 value={guestEmail}
                 onChangeText={setGuestEmail}
-                placeholder={t('tables.eg-email')}
+                placeholder="john@example.com"
                 keyboardType="email-address"
               />
 
-              <Text style={styles.label}>{t('tables.guests')}</Text>
+              <Text style={styles.label}>Guests</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1559,12 +1476,12 @@ t('error.error')
                 placeholder="2"
               />
 
-              <Text style={styles.label}>{t('tables.reservation-time')}</Text>
+              <Text style={styles.label}>Reservation Time</Text>
               <TextInput
                 style={styles.input}
                 value={bookingTime}
                 onChangeText={setBookingTime}
-                placeholder={t('tables.eg-time')}
+                placeholder="18:00"
               />
 
               <View style={styles.modalActions}>
@@ -1572,13 +1489,13 @@ t('error.error')
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowBookingModal(false)}
                 >
-                  <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                  <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={bookTable}
                 >
-                  <Text style={styles.btnText}>{t('tables.book-table')}</Text>
+                  <Text style={styles.btnText}>Book Table</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -1606,7 +1523,7 @@ t('error.error')
               onPress={() => setShowCategoryModal(true)}
             >
               <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
-                + {t('tables.add-table')}
+                + Add
               </Text>
             </TouchableOpacity>
           )}
@@ -1699,7 +1616,7 @@ t('error.error')
                 )}
                 {table.sessions.length === 0 && !table.reserved && (
                   <Text style={[{ fontSize: 12, marginTop: 6 }, getTableTextColor(getTableCardColor(table))]}>
-                    ○ {t('tables.empty-table')}
+                    ○ Available
                   </Text>
                 )}
               </View>
@@ -1745,7 +1662,7 @@ t('error.error')
         columnWrapperStyle={styles.gridRow}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{t('tables.no-tables-category')}</Text>
+            <Text style={styles.emptyText}>No tables in this category</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
@@ -1757,14 +1674,14 @@ t('error.error')
       <Modal visible={showCategoryModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('tables.add-table')}</Text>
+            <Text style={styles.modalTitle}>New Category</Text>
 
-            <Text style={styles.label}>{t('tables.category-name')}</Text>
+            <Text style={styles.label}>Category Name</Text>
             <TextInput
               style={styles.input}
               value={categoryName}
               onChangeText={setCategoryName}
-              placeholder={t('tables.eg-main-floor')}
+              placeholder="e.g., Main Floor"
               autoFocus
             />
 
@@ -1773,13 +1690,13 @@ t('error.error')
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={() => setShowCategoryModal(false)}
               >
-                <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                <Text style={styles.btnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createCategory}
               >
-                <Text style={styles.btnText}>{t('button.submit')}</Text>
+                <Text style={styles.btnText}>Create</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1790,14 +1707,14 @@ t('error.error')
       <Modal visible={editingCategoryId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('tables.edit-table')}</Text>
+            <Text style={styles.modalTitle}>Edit Category</Text>
 
-            <Text style={styles.label}>{t('tables.category-name')}</Text>
+            <Text style={styles.label}>Category Name</Text>
             <TextInput
               style={styles.input}
               value={editingCategoryName}
               onChangeText={setEditingCategoryName}
-              placeholder={t('tables.eg-main-floor')}
+              placeholder="e.g., Main Floor"
               autoFocus
             />
 
@@ -1809,13 +1726,13 @@ t('error.error')
                   setEditingCategoryName('');
                 }}
               >
-                <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                <Text style={styles.btnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={() => editingCategoryId && editCategory(editingCategoryId)}
               >
-                <Text style={styles.btnText}>{t('button.save')}</Text>
+                <Text style={styles.btnText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1826,17 +1743,17 @@ t('error.error')
       <Modal visible={showTableModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('tables.add-table')}</Text>
+            <Text style={styles.modalTitle}>New Table</Text>
 
-            <Text style={styles.label}>{t('tables.table-name')}</Text>
+            <Text style={styles.label}>Table Name</Text>
             <TextInput
               style={styles.input}
               value={tableName}
               onChangeText={setTableName}
-              placeholder={t('tables.eg-t01')}
+              placeholder="e.g., T01"
             />
 
-              <Text style={styles.label}>{t('tables.seat-count')}</Text>
+            <Text style={styles.label}>Seat Count</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
@@ -1850,13 +1767,13 @@ t('error.error')
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={() => setShowTableModal(false)}
               >
-                <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                <Text style={styles.btnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createTable}
               >
-                <Text style={styles.btnText}>{t('button.submit')}</Text>
+                <Text style={styles.btnText}>Create</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1867,18 +1784,18 @@ t('error.error')
       <Modal visible={editingTableId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('tables.edit-table')}</Text>
+            <Text style={styles.modalTitle}>Edit Table</Text>
 
-            <Text style={styles.label}>{t('tables.table-name')}</Text>
+            <Text style={styles.label}>Table Name</Text>
             <TextInput
               style={styles.input}
               value={editingTableName}
               onChangeText={setEditingTableName}
-              placeholder={t('tables.eg-t01')}
+              placeholder="e.g., T01"
               autoFocus
             />
 
-            <Text style={styles.label}>{t('tables.seat-count')}</Text>
+            <Text style={styles.label}>Seat Count</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
@@ -1896,13 +1813,13 @@ t('error.error')
                   setEditingTableSeats('');
                 }}
               >
-                <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                <Text style={styles.btnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={updateTable}
               >
-                <Text style={styles.btnText}>{t('button.save')}</Text>
+                <Text style={styles.btnText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1913,9 +1830,9 @@ t('error.error')
       <Modal visible={editingTablePaxId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('tables.table-capacity')}</Text>
+            <Text style={styles.modalTitle}>Table Capacity</Text>
 
-            <Text style={styles.label}>{t('tables.seat-count')}</Text>
+            <Text style={styles.label}>Seat Count</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
@@ -1933,7 +1850,7 @@ t('error.error')
                   setEditingPaxValue('');
                 }}
               >
-                <Text style={styles.btnText}>{t('button.cancel')}</Text>
+                <Text style={styles.btnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
@@ -1943,7 +1860,7 @@ t('error.error')
                   }
                 }}
               >
-                <Text style={styles.btnText}>{t('button.save')}</Text>
+                <Text style={styles.btnText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
