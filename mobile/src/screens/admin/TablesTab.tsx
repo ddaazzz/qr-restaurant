@@ -102,8 +102,7 @@ interface TablesTabProps {
   restaurantId: string;
 }
 
-const TablesTabComponent = React.forwardRef<TablesTabRef, TablesTabProps>(
-  (props, ref) => {
+const TablesTabComponent = React.forwardRef<TablesTabRef, TablesTabProps>((props, ref) => {
   const { restaurantId } = props;
   const { t } = useLanguage();
   const [categories, setCategories] = useState<TableCategory[]>([]);
