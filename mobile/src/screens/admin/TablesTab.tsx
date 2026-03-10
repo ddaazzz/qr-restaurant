@@ -98,7 +98,13 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
+interface TablesTabProps {
+  restaurantId: string;
+}
+
+const TablesTabComponent = React.forwardRef<TablesTabRef, TablesTabProps>(
+  (props, ref) => {
+  const { restaurantId } = props;
   const { t } = useLanguage();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -329,12 +335,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       const now = new Date();
       const diffMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
 
-      if (diffMinutes < 1) return 'just now';
-      if (diffMinutes < 60) return `${diffMinutes}m`;
+      if (diffMinutes < 1) return t('tables.just-now');
+      if (diffMinutes < 60) return `${diffMinutes}${t('tables.minutes')}`;
 
       const hours = Math.floor(diffMinutes / 60);
       const mins = diffMinutes % 60;
-      return `${hours}h ${mins}m`;
+      return `${hours}${t('tables.hours')} ${mins}${t('tables.minutes')}`;
     } catch {
       return '--';
     }
@@ -571,15 +577,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setSelectedTable(null);
       setCurrentView('grid');
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to start session');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
   const bookTable = async () => {
     if (!guestName.trim() || !guestPhone.trim() || !guestEmail.trim()) {
-      Alert.alert('Error', 'All guest details required');
+      Alert.alert(t('error.error'), t('tables.all-guest-details'));
       return;
-        Alert.alert(t('error.error'), 'All guest details required');
+        Alert.alert(t('error.error'), t('tables.all-guest-details'));
     try {
       await apiClient.post(
         `/api/restaurants/${restaurantId}/bookings`,
@@ -641,12 +647,12 @@ t('error.error')
       await loadTableData();
       setCurrentView('grid');
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
   const endSession = async (sessionId: number) => {
-    Alert.alert('End Session', 'Are you sure you want to end this session?', [
+    Alert.alert(t('tables.end-session'), t('common.ok') + '?', [
       { text: 'Cancel' },
       {t('tables.end-session'), 'Are you sure you want to end this session?', [
       { text: t('button.cancel') },
@@ -659,7 +665,7 @@ t('error.error')
             await loadTableData();
             setCurrentView('grid');
           } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.error || 'Failed to end session');
+            Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
           }
         },
       },
@@ -687,7 +693,7 @@ t('error.error')
       setNewPaxValue('');
       await loadTableData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to update pax');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
@@ -695,7 +701,7 @@ t('error.error')
     if (!selectedTable) return;
     const availableTables = tables.filter((t) => t.sessions.length === 0 && t.id !== selectedTable.id);
     if (availableTables.length === 0) {
-      Alert.alert('Error', 'No empty tables available');
+      Alert.alert(t('error.error'), t('tables.no-empty-tables'));
       return;
     }t('error.error')
     setShowMoveTableModal(true);
@@ -704,7 +710,7 @@ t('error.error')
 
   const submitMoveTable = async () => {
     if (!selectedTable || !selectedSession || !selectedMoveTable) {
-      Alert.alert('Error', 'No table selected');
+      Alert.alert(t('error.error'), t('tables.no-table-selected'));
       return;t('error.error')
     }
 
@@ -751,7 +757,7 @@ t('error.error')
     if (!selectedSession || !sessionBill) {
       console.log('[PrintBill] Missing session or bill data, returning');
       if (!autoPrint) {
-        Alert.alert('❌ Error', 'No bill data available. Please open a table session first.');
+        Alert.alert(t('error.error'), t('tables.no-bill-data'));
       }
       return;
     }
@@ -775,7 +781,7 @@ t('error.error')
                 style: 'cancel',
               },
               {
-                text: 'Configure Printer',
+                text: t('tables.configure-printer'),
                 onPress: () => {
                   console.log('[PrintBill] User wants to configure printer');
                 },
@@ -824,12 +830,12 @@ t('error.error')
               html: printRes.data.html,
             });
             if (!autoPrint) {
-              Alert.alert('✓ Print Dialog Opened', `Bill for ${selectedTable?.name} ready to print`);
+              Alert.alert(t('tables.print-dialog-opened'), `${t('tables.bill-for')} ${selectedTable?.name}`);
             }
           } catch (printErr: any) {
             console.error('[PrintBill] Print dialog error:', printErr);
             if (!autoPrint) {
-              Alert.alert('❌ Print Error', 'Failed to open print dialog: ' + printErr.message);
+              Alert.alert(t('tables.print-error'), t('error.failed-to-load') + ': ' + printErr.message);
             }
           }
         } 
@@ -839,7 +845,7 @@ t('error.error')
           console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
           
           if (!autoPrint) {
-            Alert.alert('⏳ Printing...', 'Sending receipt to Bluetooth printer...');
+            Alert.alert(t('tables.printing'), t('tables.sending-printer'));
           }
           
           try {
@@ -907,7 +913,7 @@ t('error.error')
             
             console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
-              Alert.alert('✓ Printed', `Bill sent to printer "${device.name}"`);
+              Alert.alert(t('tables.print-success'), `${t('tables.sent-to-printer')} "${device.name}"`);
             }
           } catch (bluetoothErr: any) {
             console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
@@ -959,12 +965,12 @@ t('error.error')
       );
       
       if (!printerRes.data || !printerRes.data.printer_type) {
-        Alert.alert('🖨️ No Printer', 'Please configure a Bluetooth printer first');
+        Alert.alert(t('tables.no-printer'), t('tables.printer-config-message'));
         return;
       }
 
       if (printerRes.data.printer_type !== 'bluetooth') {
-        Alert.alert('ℹ️ Not Bluetooth', 'Test print only works with Bluetooth printers');
+        Alert.alert(t('error.error'), t('validation.name-required'));
         return;
       }
 
@@ -974,11 +980,11 @@ t('error.error')
       };
 
       if (!device.id) {
-        Alert.alert('❌ No Device', 'Bluetooth device not configured');
+        Alert.alert(t('error.error'), t('validation.name-required'));
         return;
       }
 
-      Alert.alert('⏳ Test Print', 'Sending minimal test sequence to printer...');
+      Alert.alert(t('tables.test-print'), t('tables.test-print-message'));
 
       // Import BleManager
       let BleManager: any = null;
@@ -1016,11 +1022,11 @@ t('error.error')
       // Use 30 second timeout for authentication and test print
       await thermalPrinterService.sendTestPrint(manager, device.id, 30000);
       
-      Alert.alert('✓ Test Sent', 'Check printer - it should print "TEST" if working');
+      Alert.alert(t('tables.print-success'), t('error.failed-to-load'));
       setShowSessionGearMenu(false);
     } catch (err: any) {
       console.error('[TestPrint] Error:', err);
-      Alert.alert('❌ Test Failed', err.message || 'Could not send test print');
+      Alert.alert(t('tables.test-failed'), err.message || t('error.failed-to-load'));
     }
   };
 
@@ -1057,7 +1063,7 @@ t('error.error')
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setCurrentView('grid')}>
-            <Text style={styles.backButton}>← {t('modal.back')}</Text>
+            <Text style={styles.backButton}>← {t('tables.back')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
             {selectedTable.name} • {selectedSession.pax} {t('tables.pax')}
@@ -1094,7 +1100,7 @@ t('error.error')
                 style={styles.gearMenuItem}
                 onPress={orderForTable}
               >
-                <Text style={styles.gearMenuItemText}>📱 Order for Table</Text>
+                <Text style={styles.gearMenuItemText}>📱 {t('tables.order-for-table')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
@@ -1112,13 +1118,13 @@ t('error.error')
                 style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]}
                 onPress={testPrintBill}
               >
-                <Text style={styles.gearMenuItemText}>🧪 Test Print</Text>
+                <Text style={styles.gearMenuItemText}>🧪 {t('tables.test-print')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={splitBill}
               >
-                <Text style={styles.gearMenuItemText}>💵 Split Bill</Text>
+                <Text style={styles.gearMenuItemText}>💵 {t('tables.split-bill')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.gearMenuItem, styles.gearMenuItemDelete]}
@@ -1159,7 +1165,7 @@ t('error.error')
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.itemStatus}>No items in order</Text>
+                    <Text style={styles.itemStatus}>{t('tables.no-items-order')}</Text>
                   )}
                 </View>
               );
@@ -1168,17 +1174,17 @@ t('error.error')
 
           <View style={styles.totalsSection}>
             <View style={styles.totalRow}>
-              <Text>Subtotal</Text>
+              <Text>{t('tables.subtotal')}</Text>
               <Text>{formatPrice(totals.subtotal)}</Text>
             </View>
             {serviceCharge > 0 && (
               <View style={styles.totalRow}>
-                <Text>Service Charge ({serviceCharge}%)</Text>
+                <Text>{t('tables.service-charge')} ({serviceCharge}%)</Text>
                 <Text>{formatPrice(totals.serviceChargeAmount)}</Text>
               </View>
             )}
             <View style={[styles.totalRow, styles.grandTotal]}>
-              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalLabel}>{t('tables.total')}</Text>
               <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
             </View>
           </View>
@@ -1205,7 +1211,7 @@ t('error.error')
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{t('tables.close-bill')}</Text>
 
-              <Text style={styles.label}>Payment Method</Text>
+              <Text style={styles.label}>{t('tables.payment-method')}</Text>
               <View style={styles.selectGroup}>
                 {['cash', 'card', 'online'].map((method) => (
                   <TouchableOpacity
@@ -1222,13 +1228,13 @@ t('error.error')
                         paymentMethod === method && styles.selectOptionTextActive,
                       ]}
                     >
-                      {method.charAt(0).toUpperCase() + method.slice(1)}
+                      {t(`tables.${method}`)}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.label}>Discount (cents)</Text>
+              <Text style={styles.label}>{t('tables.discount-cents')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="numeric"
@@ -1237,13 +1243,13 @@ t('error.error')
                 placeholder="0"
               />
 
-              <Text style={styles.label}>Reason</Text>
+              <Text style={styles.label}>{t('tables.reason')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 multiline
                 value={closeReason}
                 onChangeText={setCloseReason}
-                placeholder="Optional notes"
+                placeholder={t('tables.optional-notes')}
               />
 
               <View style={styles.modalActions}>
@@ -1270,7 +1276,7 @@ t('error.error')
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{t('tables.change-pax')}</Text>
 
-              <Text style={styles.label}>{t('tables.change-pax')}</Text>
+              <Text style={styles.label}>{t('tables.number-of-guests')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1303,7 +1309,7 @@ t('error.error')
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{t('tables.move-table')}</Text>
 
-              <Text style={styles.label}>Select Available Table</Text>
+              <Text style={styles.label}>{t('tables.select-available-table')}</Text>
               <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
                 {tables
                   .filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id)
@@ -1370,7 +1376,7 @@ t('error.error')
                     </View>
 
                     <View style={styles.qrFooter}>
-                      <Text style={styles.qrFooterText}>Scan to order</Text>
+                      <Text style={styles.qrFooterText}>{t('tables.scan-to-order')}</Text>
                     </View>
                   </ScrollView>
 
@@ -1385,8 +1391,8 @@ t('error.error')
                       style={[styles.btn, styles.btnPrimary]}
                       onPress={() => {
                         Alert.alert(
-                          'QR Code Ready',
-                          'The QR code is displayed above. Users can scan it to place orders.',
+                          t('tables.qr-ready'),
+                          t('tables.qr-ready-message'),
                           [{ text: 'OK', onPress: () => setShowQRModal(false) }]
                         );
                       }}
@@ -1398,7 +1404,7 @@ t('error.error')
               ) : (
                 <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
                   <Text style={{ marginBottom: 20, color: '#666' }}>
-                    Loading QR Code...
+                    {t('tables.loading-qr')}
                   </Text>
                   <Text style={{ marginBottom: 10, fontSize: 12, color: '#999' }}>
                     Table: {selectedTable?.name || 'NONE'}
@@ -1427,15 +1433,15 @@ t('error.error')
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setCurrentView('grid')}>
-            <Text style={styles.backButton}>← Back</Text>
+            <Text style={styles.backButton}>← {t('tables.back')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{selectedTable.name}</Text>
         </View>
 
         <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          <Text style={styles.sectionTitle}>Active Sessions</Text>
+          <Text style={styles.sectionTitle}>{t('tables.active-sessions')}</Text>
           {selectedTable.sessions.length === 0 ? (
-            <Text style={styles.emptyText}>No active sessions</Text>
+            <Text style={styles.emptyText}>{t('tables.no-sessions')}</Text>
           ) : (
             selectedTable.sessions.map((session, idx) => (
               <TouchableOpacity
@@ -1449,7 +1455,7 @@ t('error.error')
                     {String.fromCharCode(65 + idx)}
                   </Text>
                   <Text style={styles.sessionInfo}>
-                    {session.pax} {t('tables.pax')} • Dining {formatDuration(session.started_at)}
+                    {session.pax} {t('tables.pax')} • {t('tables.dining')} {formatDuration(session.started_at)}
                   </Text>
                 </View>
                 <Text style={styles.chevron}>›</Text>
@@ -1485,7 +1491,7 @@ t('error.error')
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{t('tables.start-session')}</Text>
 
-              <Text style={styles.label}>Number of Guests</Text>
+              <Text style={styles.label}>{t('tables.number-of-guests')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1518,33 +1524,33 @@ t('error.error')
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>{t('tables.book-table')}</Text>
 
-              <Text style={styles.label}>Guest Name</Text>
+              <Text style={styles.label}>{t('tables.guest-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={guestName}
                 onChangeText={setGuestName}
-                placeholder="John Smith"
+                placeholder={t('tables.eg-john-smith')}
               />
 
-              <Text style={styles.label}>Phone</Text>
+              <Text style={styles.label}>{t('tables.phone')}</Text>
               <TextInput
                 style={styles.input}
                 value={guestPhone}
                 onChangeText={setGuestPhone}
-                placeholder="+1 (555) 123-4567"
+                placeholder={t('tables.eg-phone')}
                 keyboardType="phone-pad"
               />
 
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>{t('tables.email')}</Text>
               <TextInput
                 style={styles.input}
                 value={guestEmail}
                 onChangeText={setGuestEmail}
-                placeholder="john@example.com"
+                placeholder={t('tables.eg-email')}
                 keyboardType="email-address"
               />
 
-              <Text style={styles.label}>Guests</Text>
+              <Text style={styles.label}>{t('tables.guests')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1553,12 +1559,12 @@ t('error.error')
                 placeholder="2"
               />
 
-              <Text style={styles.label}>Reservation Time</Text>
+              <Text style={styles.label}>{t('tables.reservation-time')}</Text>
               <TextInput
                 style={styles.input}
                 value={bookingTime}
                 onChangeText={setBookingTime}
-                placeholder="18:00"
+                placeholder={t('tables.eg-time')}
               />
 
               <View style={styles.modalActions}>
@@ -1739,7 +1745,7 @@ t('error.error')
         columnWrapperStyle={styles.gridRow}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No tables in this category</Text>
+            <Text style={styles.emptyText}>{t('tables.no-tables-category')}</Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
@@ -1753,12 +1759,12 @@ t('error.error')
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{t('tables.add-table')}</Text>
 
-            <Text style={styles.label}>Category Name</Text>
+            <Text style={styles.label}>{t('tables.category-name')}</Text>
             <TextInput
               style={styles.input}
               value={categoryName}
               onChangeText={setCategoryName}
-              placeholder="e.g., Main Floor"
+              placeholder={t('tables.eg-main-floor')}
               autoFocus
             />
 
@@ -1786,12 +1792,12 @@ t('error.error')
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{t('tables.edit-table')}</Text>
 
-            <Text style={styles.label}>Category Name</Text>
+            <Text style={styles.label}>{t('tables.category-name')}</Text>
             <TextInput
               style={styles.input}
               value={editingCategoryName}
               onChangeText={setEditingCategoryName}
-              placeholder="e.g., Main Floor"
+              placeholder={t('tables.eg-main-floor')}
               autoFocus
             />
 
@@ -1822,15 +1828,15 @@ t('error.error')
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{t('tables.add-table')}</Text>
 
-            <Text style={styles.label}>Table Name</Text>
+            <Text style={styles.label}>{t('tables.table-name')}</Text>
             <TextInput
               style={styles.input}
               value={tableName}
               onChangeText={setTableName}
-              placeholder="e.g., T01"
+              placeholder={t('tables.eg-t01')}
             />
 
-              <Text style={styles.label}>Seat Count</Text>
+              <Text style={styles.label}>{t('tables.seat-count')}</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
@@ -1863,16 +1869,16 @@ t('error.error')
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{t('tables.edit-table')}</Text>
 
-            <Text style={styles.label}>Table Name</Text>
+            <Text style={styles.label}>{t('tables.table-name')}</Text>
             <TextInput
               style={styles.input}
               value={editingTableName}
               onChangeText={setEditingTableName}
-              placeholder="e.g., T01"
+              placeholder={t('tables.eg-t01')}
               autoFocus
             />
 
-            <Text style={styles.label}>Seat Count</Text>
+            <Text style={styles.label}>{t('tables.seat-count')}</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
@@ -1907,9 +1913,9 @@ t('error.error')
       <Modal visible={editingTablePaxId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Table Capacity</Text>
+            <Text style={styles.modalTitle}>{t('tables.table-capacity')}</Text>
 
-            <Text style={styles.label}>Seat Count</Text>
+            <Text style={styles.label}>{t('tables.seat-count')}</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
@@ -1954,6 +1960,8 @@ t('error.error')
   );
   }
 );
+
+export const TablesTab = TablesTabComponent;
 
 const styles = StyleSheet.create({
   container: {

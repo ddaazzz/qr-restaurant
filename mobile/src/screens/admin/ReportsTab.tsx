@@ -195,34 +195,34 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
           {/* Key Metrics */}
           <View style={styles.metricsGrid}>
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Total Orders</Text>
+              <Text style={styles.metricLabel}>{t('reports.total-orders')}</Text>
               <Text style={styles.metricValue}>{stats.total_orders}</Text>
             </View>
 
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Total Revenue</Text>
+              <Text style={styles.metricLabel}>{t('reports.total-revenue')}</Text>
               <Text style={styles.metricValue}>{formatPrice(stats.total_revenue)}</Text>
             </View>
 
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Avg Bill</Text>
+              <Text style={styles.metricLabel}>{t('reports.avg-bill')}</Text>
               <Text style={styles.metricValue}>{formatPrice(stats.average_bill)}</Text>
             </View>
 
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Active Sessions</Text>
+              <Text style={styles.metricLabel}>{t('reports.active-sessions')}</Text>
               <Text style={styles.metricValue}>{stats.active_sessions}</Text>
             </View>
           </View>
 
           {/* Revenue Report */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📊 Revenue Report</Text>
+            <Text style={styles.sectionTitle}>📊 {t('reports.revenue')}</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Date</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('reports.date')}</Text>
+                <Text style={[styles.tableCell, { flex: 0.8 }]}>{t('reports.orders')}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('reports.revenue')}</Text>
               </View>
               <FlatList
                 data={Object.entries(stats.revenue_by_day)
@@ -245,12 +245,12 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
           {/* Busiest Tables (Daily Activity) */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📈 Daily Activity</Text>
+            <Text style={styles.sectionTitle}>📈 {t('reports.daily-activity')}</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Date</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('reports.date')}</Text>
+                <Text style={[styles.tableCell, { flex: 0.8 }]}>{t('reports.orders')}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('reports.revenue')}</Text>
               </View>
               <FlatList
                 data={Object.entries(stats.revenue_by_day)
@@ -273,12 +273,12 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
           {/* Hourly Revenue */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🕐 Hourly Revenue</Text>
+            <Text style={styles.sectionTitle}>🕐 {t('reports.hourly-revenue')}</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Hour</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('reports.hour')}</Text>
+                <Text style={[styles.tableCell, { flex: 0.8 }]}>{t('reports.orders')}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('reports.revenue')}</Text>
               </View>
               <FlatList
                 data={Array.from({ length: 24 }, (_, i) => {
@@ -305,7 +305,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
           {/* Top Revenue Days */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🏆 Top Revenue Days</Text>
+            <Text style={styles.sectionTitle}>🏆 {t('reports.top-revenue')}</Text>
             <View style={styles.cardsContainer}>
               {Object.entries(stats.revenue_by_day)
                 .sort(([, a], [, b]) => b - a)
@@ -326,7 +326,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
           {/* Daily Trends */}
           <View style={styles.section}>
             <View style={styles.trendHeader}>
-              <Text style={styles.sectionTitle}>📅 Daily Trends</Text>
+              <Text style={styles.sectionTitle}>📅 {t('reports.daily-trends')}</Text>
               <TouchableOpacity onPress={() => setShowTrendModal(true)} style={styles.trendBtn}>
                 <Text style={styles.trendBtnText}>{trendMode.toUpperCase()}</Text>
               </TouchableOpacity>
@@ -334,10 +334,10 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1.2 }]}>Period</Text>
-                <Text style={[styles.tableCell, { flex: 0.7 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Avg Bill</Text>
+                <Text style={[styles.tableCell, { flex: 1.2 }]}>{t('reports.period')}</Text>
+                <Text style={[styles.tableCell, { flex: 0.7 }]}>{t('reports.orders')}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('reports.revenue')}</Text>
+                <Text style={[styles.tableCell, { flex: 0.8 }]}>{t('reports.avg-bill')}</Text>
               </View>
               <FlatList
                 data={dailyTrends}
@@ -361,7 +361,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
           {/* Order Status Breakdown */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>💭 Order Status</Text>
+            <Text style={styles.sectionTitle}>💭 {t('reports.order-status')}</Text>
             {Object.entries(stats.order_count_by_status).map(([status, count]) => (
               <View key={status} style={styles.statusItem}>
                 <Text style={styles.statusLabel}>
@@ -413,7 +413,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               style={[styles.trendOption, { backgroundColor: '#e5e7eb', marginTop: 12 }]}
               onPress={() => setShowTrendModal(false)}
             >
-              <Text style={styles.trendOptionText}>Close</Text>
+              <Text style={styles.trendOptionText}>{t('button.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>

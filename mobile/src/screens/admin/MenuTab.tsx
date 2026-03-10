@@ -195,7 +195,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const createCategory = async () => {
       if (!categoryName.trim()) {
-        Alert.alert('Error', 'Category name required');
+        Alert.alert(t('error.error'), t('menu.category-required'));
         return;
       }
 
@@ -214,7 +214,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const updateCategory = async (categoryId: number) => {
       if (!editingCategoryName.trim()) {
-        Alert.alert('Error', 'Category name required');
+        Alert.alert(t('error.error'), t('menu.category-required'));
         return;
       }
 
@@ -261,7 +261,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const createItem = async () => {
       if (!itemName.trim() || !itemPrice.trim()) {
-        Alert.alert('Error', 'Item name and price required');
+        Alert.alert(t('error.error'), t('menu.item-price-required'));
         return;
       }
 
@@ -295,7 +295,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const updateItem = async (itemId: number) => {
       if (!editingItemName.trim() || !editingItemPrice.trim()) {
-        Alert.alert('Error', 'Item name and price required');
+        Alert.alert(t('error.error'), t('menu.item-price-required'));
         return;
       }
 
@@ -323,8 +323,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const deleteItem = (itemId: number, itemName: string) => {
       Alert.alert(
-        'Delete Item',
-        `Are you sure you want to delete "${itemName}"?`,
+        t('menu.delete-item'),
+        `${t('menu.delete-confirm')} "${itemName}"?`,
         [
           { text: t('button.cancel') },
           {
@@ -412,19 +412,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const deleteVariant = (variantId: number, variantName: string) => {
       Alert.alert(
-        'Delete Variant',
-        `Are you sure you want to delete "${variantName}"?`,
+        t('menu.delete-variant'),
+        `${t('menu.delete-confirm')} "${variantName}"?`,
         [
-          { text: 'Cancel' },
+          { text: t('button.cancel') },
           {
-            text: 'Delete',
+            text: t('button.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.delete(`/api/variants/${variantId}`);
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete variant');
+                Alert.alert(t('error.error'), err.response?.data?.error || t('menu.variant-update-failed'));
               }
             },
           },
@@ -484,19 +484,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const deleteVariantOption = (optionId: number, optionName: string) => {
       Alert.alert(
-        'Delete Option',
-        `Are you sure you want to delete "${optionName}"?`,
+        t('menu.delete-option'),
+        `${t('menu.delete-confirm')} "${optionName}"?`,
         [
-          { text: 'Cancel' },
+          { text: t('button.cancel') },
           {
-            text: 'Delete',
+            text: t('button.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.delete(`/api/variant-options/${optionId}`);
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete option');
+                Alert.alert(t('error.error'), err.response?.data?.error || t('menu.delete-option'));
               }
             },
           },
@@ -519,7 +519,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         // Request media library permission
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'We need permission to access your photo library');
+          Alert.alert(t('menu.permission-denied'), t('menu.photo-permission'));
           return;
         }
 
@@ -570,14 +570,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
               setEditingItemImageUrl(response.data.image_url);
             }
 
-            Alert.alert('Success', 'Image uploaded successfully');
+            Alert.alert(t('menu.upload-success'), t('menu.upload-success-message'));
           }
         }
       } catch (err: any) {
         console.error('Image upload error:', err);
         Alert.alert(
-          'Upload Failed',
-          err.response?.data?.error || 'Failed to upload image. Please try again.'
+          t('menu.upload-failed'),
+          err.response?.data?.error || t('menu.upload-failed-message')
         );
       } finally {
         setUploadingImageItemId(null);
@@ -752,7 +752,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
             columnWrapperStyle={styles.gridRow}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No items in this category</Text>
+                <Text style={styles.emptyText}>{t('menu.no-items-category')}</Text>
               </View>
             }
             contentContainerStyle={styles.listContent}
@@ -1084,9 +1084,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Category</Text>
+              <Text style={styles.modalTitle}>{t('menu.add-category')}</Text>
 
-              <Text style={styles.label}>Category Name</Text>
+              <Text style={styles.label}>{t('menu.category')}</Text>
               <TextInput
                 style={styles.input}
                 value={categoryName}
@@ -1116,9 +1116,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Category</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-category')}</Text>
 
-              <Text style={styles.label}>Category Name</Text>
+              <Text style={styles.label}>{t('menu.category')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingCategoryName}
@@ -1152,9 +1152,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Food Item</Text>
+              <Text style={styles.modalTitle}>{t('menu.add-item')}</Text>
 
-              <Text style={styles.label}>Item Name</Text>
+              <Text style={styles.label}>{t('menu.item-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={itemName}
@@ -1225,9 +1225,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Item</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-item')}</Text>
 
-              <Text style={styles.label}>Item Name</Text>
+              <Text style={styles.label}>{t('menu.item-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingItemName}
@@ -1299,9 +1299,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showVariantModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Variant</Text>
+              <Text style={styles.modalTitle}>{t('menu.add-variant')}</Text>
 
-              <Text style={styles.label}>Variant Name</Text>
+              <Text style={styles.label}>{t('menu.variant')}  {t('menu.name')}</Text>
               <TextInput
                 style={styles.input}
                 value={variantName}
@@ -1334,9 +1334,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditVariantModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Variant</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-variant')}</Text>
 
-              <Text style={styles.label}>Variant Name</Text>
+              <Text style={styles.label}>{t('menu.variant')} {t('menu.name')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingVariantName}
@@ -1370,9 +1370,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Option</Text>
+              <Text style={styles.modalTitle}>{t('menu.add-option')}</Text>
 
-              <Text style={styles.label}>Option Name</Text>
+              <Text style={styles.label}>{t('menu.option')} {t('menu.name')}</Text>
               <TextInput
                 style={styles.input}
                 value={optionName}
@@ -1414,9 +1414,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Option</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-option')}</Text>
 
-              <Text style={styles.label}>Option Name</Text>
+              <Text style={styles.label}>{t('menu.option')} {t('menu.name')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingOptionName}

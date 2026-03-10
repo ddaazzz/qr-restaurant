@@ -196,10 +196,10 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
   };
 
   const handleDeleteStaff = async (staffId: number) => {
-    Alert.alert('Delete Staff', 'Are you sure you want to delete this staff member?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('staff.delete-staff'), t('common.delete-confirm'), [
+      { text: t('button.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('button.delete'),
         onPress: async () => {
           try {
             await apiClient.delete(`/api/restaurants/${restaurantId}/staff/${staffId}`);
@@ -295,7 +295,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                   onPress={() => openForm()}
                 >
                   <Text style={styles.addStaffIcon}>➕</Text>
-                  <Text style={styles.addStaffText}>Add Staff</Text>
+                  <Text style={styles.addStaffText}>{t('staff.add-staff')}</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -346,7 +346,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
         contentContainerStyle={styles.gridContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No staff members</Text>
+            <Text style={styles.emptyText}>{t('staff.no-staff')}</Text>
           </View>
         }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -363,7 +363,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
         <View style={styles.formOverlay}>
           <View style={styles.formContent}>
             <View style={styles.formHeader}>
-              <Text style={styles.formTitle}>{editingStaffId ? 'Edit Staff' : 'Create New Staff'}</Text>
+              <Text style={styles.formTitle}>{editingStaffId ? t('staff.edit-staff') : t('staff.create-new-staff')}</Text>
               <TouchableOpacity onPress={closeForm}>
                 <Text style={styles.formCloseBtn}>✕</Text>
               </TouchableOpacity>
@@ -375,7 +375,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             <ScrollView style={styles.formBody}>
               {/* Name */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Staff Name</Text>
+                <Text style={styles.formLabel}>{t('staff.name')}</Text>
                 <TextInput
                   style={styles.formInput}
                   placeholder="e.g., John Smith"
@@ -386,7 +386,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
 
               {/* PIN */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>PIN (6 digits)</Text>
+                <Text style={styles.formLabel}>{t('staff.pin')} (6 {t('staff.digits')})</Text>
                 <TextInput
                   style={styles.formInput}
                   placeholder="e.g., 123456"
@@ -399,7 +399,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
 
               {/* Role */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Role</Text>
+                <Text style={styles.formLabel}>{t('staff.role')}</Text>
                 <View style={styles.roleButtons}>
                   {['staff', 'kitchen'].map((roleOption) => (
                     <TouchableOpacity
@@ -425,7 +425,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
 
               {/* Hourly Rate */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Hourly Rate ($/hr)</Text>
+                <Text style={styles.formLabel}>{t('staff.hourly-rate')}</Text>
                 <TextInput
                   style={styles.formInput}
                   placeholder="e.g., 15.50"
@@ -492,11 +492,11 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             {/* Form Actions */}
             <View style={styles.formActions}>
               <TouchableOpacity style={[styles.formBtn, styles.formBtnCancel]} onPress={closeForm}>
-                <Text style={styles.formBtnText}>Cancel</Text>
+                <Text style={styles.formBtnText}>{t('button.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.formBtn, styles.formBtnSubmit]} onPress={handleSubmitStaff}>
                 <Text style={[styles.formBtnText, styles.formBtnSubmitText]}>
-                  {editingStaffId ? '💾 Update' : '➕ Add'}
+                  {editingStaffId ? `💾 ${t('button.update')}` : `➕ ${t('button.add')}`}
                 </Text>
               </TouchableOpacity>
             </View>

@@ -155,8 +155,8 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
             <View style={styles.orderCard}>
               <View style={styles.orderHeader}>
                 <View>
-                  <Text style={styles.orderNumber}>Order #{item.orderId}</Text>
-                  <Text style={styles.tableNumber}>Table {item.tableNumber}</Text>
+                  <Text style={styles.orderNumber}>{t('orders.order-number')} {item.orderId}</Text>
+                  <Text style={styles.tableNumber}>{t('kitchen.table')} {item.tableNumber}</Text>
                   <Text style={styles.timestamp}>{new Date(item.createdAt).toLocaleTimeString()}</Text>
                 </View>
                 <View
@@ -192,7 +192,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.noItems}>No items</Text>
+                  <Text style={styles.noItems}>{t('kitchen.no-items')}</Text>
                 )}
               </View>
 
@@ -203,7 +203,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     style={[styles.actionButton, styles.readyButton]}
                     onPress={() => handleUpdateStatus(item.id, 'ready')}
                   >
-                    <Text style={styles.actionButtonText}>Ready</Text>
+                    <Text style={styles.actionButtonText}>{t('kitchen.ready')}</Text>
                   </TouchableOpacity>
                 )}
 
@@ -212,7 +212,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     style={[styles.actionButton, styles.servedButton]}
                     onPress={() => handleUpdateStatus(item.id, 'served')}
                   >
-                    <Text style={styles.actionButtonText}>Served</Text>
+                    <Text style={styles.actionButtonText}>{t('kitchen.served')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
