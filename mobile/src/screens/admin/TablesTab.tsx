@@ -461,7 +461,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(
       setEditingCategoryName('');
       await loadTableData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to edit category');
+      Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
     }
   };
 
@@ -472,7 +472,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(
       [
         { text: t('button.cancel'), onPress: () => {}, style: 'cancel' },
         {
-          text: t('button.delete') () => {
+          text: t('button.delete'),
+          onPress: () => {
             try {
               await apiClient.delete(
                 `/api/restaurants/${restaurantId}/table-categories/${categoryId}`
