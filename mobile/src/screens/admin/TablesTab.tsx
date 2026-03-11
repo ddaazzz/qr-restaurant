@@ -81,8 +81,16 @@ interface Order {
     quantity: number;
     unit_price_cents?: number;
     price_cents?: number;
+    item_total_cents?: number;
     status: string;
     variants?: string;
+    addons?: Array<{
+      menu_item_name?: string;
+      name?: string;
+      quantity: number;
+      unit_price_cents?: number;
+      item_total_cents?: number;
+    }>;
   }>;
 }
 
@@ -1666,17 +1674,33 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   <Text style={styles.orderTitle}>Order #{order.order_id || order.id}</Text>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, itemIdx) => (
-                      <View key={itemIdx} style={styles.orderItem}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.itemName}>
-                            {item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}
+                      <View key={itemIdx}>
+                        <View style={styles.orderItem}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.itemName}>
+                              {item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}
+                            </Text>
+                            <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
+                            {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
+                          </View>
+                          <Text style={styles.itemPrice}>
+                            {formatPrice((item.item_total_cents || item.unit_price_cents || item.price_cents || 0))}
                           </Text>
-                          <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
-                          {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
                         </View>
-                        <Text style={styles.itemPrice}>
-                          {formatPrice((item.unit_price_cents || item.price_cents || 0) * item.quantity)}
-                        </Text>
+                        {item.addons && item.addons.length > 0 && (
+                          <View style={{ paddingLeft: 12, paddingTop: 4, paddingBottom: 4 }}>
+                            {item.addons.map((addon, addonIdx) => (
+                              <View key={addonIdx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
+                                <Text style={[styles.itemStatus, { color: '#999', fontStyle: 'italic', flex: 1 }]}>
+                                  + {addon.menu_item_name || addon.name || 'Addon'} x{addon.quantity}
+                                </Text>
+                                <Text style={[styles.itemStatus, { color: '#666', marginLeft: 8 }]}>
+                                  {formatPrice((addon.item_total_cents || 0))}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
                       </View>
                     ))
                   ) : (

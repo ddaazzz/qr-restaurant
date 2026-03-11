@@ -695,7 +695,7 @@ function confirmAddons() {
   closeAddonModal();
 }
 
-
+function canAddToCart(item) {
   if (!item.variants || item.variants.length === 0) return true;
 
   for (const v of item.variants) {
@@ -925,17 +925,23 @@ function renderOrdersDrawer(orders, tableName) {
     orders.forEach((order, oIdx) => {
       console.log(`📦 Order ${oIdx}:`, order);
       order.items.forEach(item => {
-        const line = item.total_price_cents;
+        const line = item.item_total_cents || (item.unit_price_cents * item.quantity) || 0;
         subtotal += line;
+
+        const itemName = item.menu_item_name || item.name || 'Unknown';
+        const addonsHtml = item.addons && item.addons.length > 0 
+          ? item.addons.map(addon => `<div style="font-size: 11px; color: #666; margin-left: 12px; margin-top: 2px;">+ ${(addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity}</div>`).join('')
+          : '';
 
         html += `
           <div class="order-item">
             <div class="order-line">
-              <span class="item-name">${item.name}</span>
+              <span class="item-name">${itemName}</span>
               <span class="item-quantity">×${item.quantity}</span>
               <span class="item-price">$${(line / 100).toFixed(2)}</span>
             </div>
             ${item.variants ? `<div class="item-variants">${item.variants}</div>` : ""}
+            ${addonsHtml}
             <div class="item-status status-${item.status}">(${item.status})</div>
           </div>
         `;

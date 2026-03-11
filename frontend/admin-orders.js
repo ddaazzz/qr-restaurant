@@ -1193,12 +1193,22 @@ function displaySessionDetails(sessionId, orders) {
         const itemTotal = item.item_total_cents || 0;
         orderTotal += itemTotal;
         const variantsText = item.variants ? `<small style="color: #999;">${item.variants}</small>` : '';
+        const addonsHtml = item.addons && item.addons.length > 0 
+          ? item.addons.map(addon => {
+              const addonTotal = addon.item_total_cents || 0;
+              orderTotal += addonTotal;
+              return `<div style="padding: 4px 8px; margin-top: 4px; background: #fafafa; border-left: 2px solid #fbbf24; font-size: 11px; color: #666;">
+                + ${addon.menu_item_name} × ${addon.quantity} <span style="float: right; font-weight: 600;">$${(addonTotal / 100).toFixed(2)}</span>
+              </div>`;
+            }).join('')
+          : '';
         return `
           <div style="padding: 8px; background: white; border-radius: 4px; margin-bottom: 6px; border-left: 3px solid #667eea;">
             <div style="display: flex; justify-content: space-between; align-items: start;">
               <div style="flex: 1;">
                 <div style="font-weight: 500; color: #333; font-size: 12px;">${item.menu_item_name} × ${item.quantity}</div>
                 ${variantsText}
+                ${addonsHtml}
               </div>
               <div style="text-align: right; font-weight: 600; color: #667eea; font-size: 12px;">$${(itemTotal / 100).toFixed(2)}</div>
             </div>
