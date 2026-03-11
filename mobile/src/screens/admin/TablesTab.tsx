@@ -645,7 +645,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               tableNumber: table.name,
               pax: newSession.pax,
               startTime: startTimeStr,
-              qrCode: qrToken,
+              qrCode: `https://chuio.io/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
             };
 
