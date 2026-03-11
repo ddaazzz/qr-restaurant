@@ -23,7 +23,7 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://www.chuio.io"
+        "EXPO_PUBLIC_API_URL": "https://chuio.io"
       }
     },
     "development-simulator": {
