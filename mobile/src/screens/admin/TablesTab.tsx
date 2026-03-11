@@ -856,8 +856,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       // Build the URL that will be encoded in the QR code
       const qrDataUrl = `https://chuio.io/${qrToken}`;
       
-      // Use QR server API to generate QR code image directly (1200x1200 - doubled for larger display)
+      // Use QR server API to generate QR code image (1200x1200 for high quality)
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(qrDataUrl)}`;
+
+      // Get session info
+      const sessionStartTime = selectedSession 
+        ? new Date(selectedSession.started_at).toLocaleString()
+        : new Date().toLocaleString();
+      
+      const pax = selectedSession?.pax || 0;
+      const restaurantName = 'Chuio Restaurant';
 
       return `
         <!DOCTYPE html>
@@ -867,15 +875,75 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             <title>QR Code - ${tableName}</title>
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
-              body { font-family: 'Courier New', monospace; padding: 0; background: #fff; }
-              .receipt { width: 100%; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; max-width: 80mm; margin: 0 auto; }
-              .header { padding: 8px 0; font-size: 12px; }
-              #qrcode { display: flex; justify-content: center; flex-grow: 1; }
-              #qrcode img { width: 100vw; height: 100vw; max-width: 1200px; max-height: 1200px; }
-              .footer { padding: 8px 0; font-size: 11px; }
+              body { 
+                font-family: 'Courier New', monospace; 
+                padding: 12px; 
+                background: #fff; 
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+              }
+              .receipt { 
+                width: 100%; 
+                text-align: center; 
+                font-size: 12px; 
+                line-height: 1.5; 
+                max-width: 80mm; 
+                margin: 0 auto; 
+              }
+              .header { 
+                border-bottom: 2px dashed #000; 
+                padding-bottom: 8px; 
+                margin-bottom: 8px; 
+              }
+              .restaurant-name { 
+                font-weight: bold; 
+                font-size: 18px; 
+                margin-bottom: 4px; 
+              }
+              .divider { 
+                border-bottom: 1px dashed #000; 
+                margin: 8px 0; 
+              }
+              .info-section { 
+                text-align: left; 
+                margin: 8px 0; 
+                font-size: 11px; 
+              }
+              .info-row { 
+                display: flex; 
+                justify-content: space-between; 
+                margin-bottom: 4px; 
+              }
+              .info-label { 
+                font-weight: bold; 
+                min-width: 60px; 
+              }
+              #qrcode { 
+                display: flex; 
+                justify-content: center; 
+                margin: 12px 0; 
+              }
+              #qrcode img { 
+                max-width: 100%;
+                height: auto;
+                width: 200px;
+                height: 200px;
+              }
+              .scan-instruction { 
+                font-weight: bold; 
+                font-size: 13px; 
+                margin: 8px 0; 
+              }
+              .footer { 
+                font-size: 10px; 
+                color: #666; 
+                margin-top: 8px; 
+              }
               @media print { 
-                body { margin: 0; padding: 0; } 
-                .receipt { width: 80mm; height: auto; }
+                body { margin: 0; padding: 8px; } 
+                .receipt { width: 80mm; } 
                 #qrcode img { width: 70mm; height: 70mm; }
               }
             </style>
@@ -883,13 +951,34 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           <body>
             <div class="receipt">
               <div class="header">
-                <div style="font-weight: bold; font-size: 13px;">${tableName}</div>
+                <div class="restaurant-name">${restaurantName}</div>
               </div>
+              
+              <div class="info-section">
+                <div class="info-row">
+                  <span class="info-label">Table:</span>
+                  <span>${tableName}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Pax:</span>
+                  <span>${pax} pax</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Started:</span>
+                  <span>${sessionStartTime}</span>
+                </div>
+              </div>
+              
+              <div class="divider"></div>
+              
               <div id="qrcode">
                 <img src="${qrImageUrl}" alt="QR Code" />
               </div>
+              
+              <div class="scan-instruction">Scan this QR code to order</div>
+              
               <div class="footer">
-                <div>Scan to Order</div>
+                <p style="margin-top: 8px;">---</p>
               </div>
             </div>
             <script>
