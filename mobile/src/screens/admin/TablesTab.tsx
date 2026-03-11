@@ -14,6 +14,7 @@ import {
   Dimensions,
   Image,
   Pressable,
+  Keyboard,
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
@@ -568,6 +569,91 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     }
   };
 
+  const autoPrintQR = async (newSession: any, table: Table) => {
+    try {
+      // Get printer settings
+      const printerSettings = await printerSettingsService.getPrinterSettings(restaurantId, true);
+
+      // Use per-printer-type config if available
+      const qrPrinterType = printerSettings?.qr_printer_type || printerSettings?.printer_type;
+      const qrBluetoothDeviceId = printerSettings?.qr_bluetooth_device_id || printerSettings?.bluetooth_device_id;
+      const qrBluetoothDeviceName = printerSettings?.qr_bluetooth_device_name || printerSettings?.bluetooth_device_name;
+
+      // Check if QR printer is configured
+      if (!qrPrinterType || qrPrinterType === 'none') {
+        console.log('[AutoPrintQR] No QR printer configured');
+        return;
+      }
+
+      // Get QR token
+      const qrToken = table?.units?.[0]?.qr_token;
+      if (!qrToken) {
+        console.log('[AutoPrintQR] No QR token available');
+        return;
+      }
+
+      console.log('[AutoPrintQR] Auto-printing QR for session:', newSession.id, 'printer type:', qrPrinterType);
+
+      // Generate QR HTML
+      const qrHtml = await generateQRHTML(table.name, qrToken);
+
+      if (qrPrinterType === 'browser') {
+        await Print.printAsync({ html: qrHtml });
+      } else {
+        // Thermal/Network/Bluetooth printer - send to backend
+        const qrPayload = {
+          sessionId: newSession.id,
+          tableId: table.id,
+          tableName: table.name,
+          qrToken: qrToken,
+          priority: 10,
+        };
+
+        const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-qr`, qrPayload);
+
+        if (printRes.data?.bluetoothPayload) {
+          try {
+            const { BleManager } = require('react-native-ble-plx');
+            const manager = new BleManager();
+
+            const sessionDate = new Date(newSession.started_at);
+            const startTimeStr = sessionDate.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            });
+
+            const receiptData = {
+              restaurantName: 'QR Code',
+              tableNumber: table.name,
+              startTime: startTimeStr,
+              qrCode: qrToken,
+              printerPaperWidth: printerSettings?.printer_paper_width || 80,
+            };
+
+            await thermalPrinterService.sendToBluetooth(
+              manager,
+              printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
+              receiptData,
+              30000
+            );
+
+            console.log('[AutoPrintQR] ✓ QR successfully sent to Bluetooth printer');
+          } catch (err: any) {
+            console.error('[AutoPrintQR] Bluetooth send error:', err);
+          }
+        } else if (printRes.data?.success) {
+          console.log('[AutoPrintQR] ✓ QR queued for network printer');
+        } else if (printRes.data?.html) {
+          await Print.printAsync({ html: printRes.data.html });
+          console.log('[AutoPrintQR] ✓ QR sent to browser print');
+        }
+      }
+    } catch (err: any) {
+      console.error('[AutoPrintQR] Error:', err);
+    }
+  };
+
   const startSession = async () => {
     if (!selectedTable || !sessionPax || parseInt(sessionPax) <= 0) {
       Alert.alert('Error', 'Valid pax count required');
@@ -575,25 +661,28 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     }
 
     try {
+      Keyboard.dismiss();
+      
       const createRes = await apiClient.post(
         `/api/tables/${selectedTable.id}/sessions`,
         { pax: parseInt(sessionPax) }
       );
 
       // Check if QR auto-print is enabled
-      try {
-        const printerRes = await apiClient.get(
-          `/api/restaurants/${restaurantId}/printer-settings`
-        );
+      if (createRes.data?.id) {
+        try {
+          const printerRes = await apiClient.get(
+            `/api/restaurants/${restaurantId}/printer-settings`
+          );
 
-        if (printerRes.data?.qr_auto_print === true && createRes.data?.id) {
-          console.log('[StartSession] QR auto-print enabled, printing QR...');
-          // Auto-print the QR code for this new session
-          // This would need to be implemented in the printer service
-          // For now, just log it
+          if (printerRes.data?.qr_auto_print === true) {
+            console.log('[StartSession] QR auto-print enabled, auto-printing QR...');
+            // Auto-print the QR code for this new session
+            await autoPrintQR(createRes.data, selectedTable);
+          }
+        } catch (autoError) {
+          console.log('[StartSession] QR auto-print check failed (non-critical):', autoError);
         }
-      } catch (autoError) {
-        console.log('[StartSession] QR auto-print check failed (non-critical):', autoError);
       }
 
       setSessionPax('1');
@@ -1803,9 +1892,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </ScrollView>
 
         {/* Session Modal */}
-        <Modal visible={showSessionModal} animationType="fade" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+        <Modal visible={showSessionModal} animationType="fade" transparent onDismiss={() => Keyboard.dismiss()}>
+          <Pressable style={styles.modalOverlay} onPress={() => {
+            Keyboard.dismiss();
+            setShowSessionModal(false);
+          }}>
+            <Pressable style={styles.modalContent} onPress={() => {}}>
               <Text style={styles.modalTitle}>Start New Session</Text>
 
               <Text style={styles.label}>Number of Guests</Text>
@@ -1820,7 +1912,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
-                  onPress={() => setShowSessionModal(false)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setShowSessionModal(false);
+                  }}
                 >
                   <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
@@ -1831,8 +1926,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   <Text style={styles.btnText}>Start Session</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          </View>
+            </Pressable>
+          </Pressable>
         </Modal>
 
         {/* Booking Modal */}
