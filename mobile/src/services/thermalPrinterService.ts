@@ -6,6 +6,7 @@
 export interface ReceiptData {
   orderNumber?: string;
   tableNumber?: string;
+  pax?: number;
   startTime?: string;
   items?: Array<{ name: string; quantity: number; price?: number }>;
   subtotal?: number;
@@ -42,7 +43,12 @@ class ThermalPrinterService {
       }
       
       if (receipt.tableNumber) {
-        this.appendText(commands, `${receipt.tableNumber}`);
+        this.appendText(commands, `Table: ${receipt.tableNumber}`);
+        commands.push(10);
+      }
+      
+      if (receipt.pax) {
+        this.appendText(commands, `Pax: ${receipt.pax}`);
         commands.push(10);
       }
       

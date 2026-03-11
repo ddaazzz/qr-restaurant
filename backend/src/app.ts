@@ -18,6 +18,7 @@ import settingsRoutes from "./routes/settings.routes";
 import printerRoutes from "./routes/printer.routes";
 import printerZonesRoutes from "./routes/printerZones.routes";
 import customerReceiptsRoutes from "./routes/customerReceipts.routes";
+import addonsRoutes from "./routes/addons.routes";
 
 const app = express();
 
@@ -116,6 +117,7 @@ app.use("/api", settingsRoutes);
 app.use("/api", printerRoutes);
 app.use("/api", printerZonesRoutes);
 app.use("/api", customerReceiptsRoutes);
+app.use("/api", addonsRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/restaurants", staffRoutes);
 app.use("/api", tableRoutes);

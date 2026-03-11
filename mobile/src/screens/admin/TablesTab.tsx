@@ -107,6 +107,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [restaurantName, setRestaurantName] = useState<string>('');
 
   // View state
   const [currentView, setCurrentView] = useState<ViewType>('grid');
@@ -323,6 +324,22 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     };
 
     preloadPrinterSettings();
+  }, [restaurantId]);
+
+  // Load restaurant name for autoprint formatting
+  useEffect(() => {
+    const loadRestaurantName = async () => {
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}`);
+        if (res.data?.name) {
+          setRestaurantName(res.data.name);
+        }
+      } catch (err: any) {
+        console.warn('[TablesTab] Could not load restaurant name:', err.message);
+      }
+    };
+
+    loadRestaurantName();
   }, [restaurantId]);
 
   const onRefresh = async () => {
@@ -624,8 +641,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             });
 
             const receiptData = {
-              restaurantName: 'QR Code',
+              restaurantName: restaurantName || 'Restaurant',
               tableNumber: table.name,
+              pax: newSession.pax,
               startTime: startTimeStr,
               qrCode: qrToken,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
@@ -677,6 +695,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
           if (printerRes.data?.qr_auto_print === true) {
             console.log('[StartSession] QR auto-print enabled, auto-printing QR...');
+            // Wait for Bluetooth to initialize before autoprinting
+            await new Promise(resolve => setTimeout(resolve, 2500));
             // Auto-print the QR code for this new session
             await autoPrintQR(createRes.data, selectedTable);
           }

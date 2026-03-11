@@ -193,6 +193,51 @@ for (const v of variants) {
           [orderItemId, optionId]
         );
       }
+
+      /* ------------------------------
+         Handle addons if provided
+      ------------------------------ */
+      const addons = item.addons || [];
+      for (const addon of addons) {
+        const addonRes = await pool.query(
+          `
+          SELECT a.addon_item_id, a.addon_discount_price_cents, a.addon_name,
+                 mi.category_id
+          FROM addons a
+          JOIN menu_items mi ON a.addon_item_id = mi.id
+          WHERE a.id = $1 AND a.restaurant_id = $2 AND a.is_available = true
+          `,
+          [addon.addon_id, restaurantId]
+        );
+
+        if (addonRes.rowCount === 0) {
+          throw new Error(`Addon ${addon.addon_id} not found or unavailable`);
+        }
+
+        const addonData = addonRes.rows[0];
+
+        // Insert addon as a child order item
+        const addonItemRes = await pool.query(
+          `
+          INSERT INTO order_items
+            (order_id, menu_item_id, quantity, price_cents, status, restaurant_id, 
+             is_addon, parent_order_item_id, addon_id, print_category_id)
+          VALUES
+            ($1, $2, $3, $4, 'pending', $5, true, $6, $7, $8)
+          RETURNING id
+          `,
+          [
+            orderId,
+            addonData.addon_item_id,
+            addon.quantity || 1,
+            addonData.addon_discount_price_cents,
+            restaurantId,
+            orderItemId,
+            addon.addon_id,
+            addonData.category_id
+          ]
+        );
+      }
     }
 
     // ✅ AUTO-PRINT: Check if kitchen auto-print is enabled
@@ -206,23 +251,34 @@ for (const v of variants) {
         const config = restaurantConfigRes.rows[0];
 
         if (config.kitchen_auto_print && config.printer_type && config.printer_type !== 'none') {
-          // Fetch order details for printing
+          // Fetch order details for printing (including addons)
           const orderDetailsRes = await pool.query(
-            `SELECT oi.order_item_id, oi.order_id, oi.menu_item_id,
-                    oi.quantity, oi.price_cents, mi.name as item_name,
-                    ts.table_name, o.created_at
-             FROM order_items oi
-             JOIN orders o ON oi.order_id = o.id
-             JOIN menu_items mi ON oi.menu_item_id = mi.id
-             LEFT JOIN table_sessions ts ON o.session_id = ts.id
-             WHERE oi.order_id = $1 AND o.restaurant_id = $2
-             ORDER BY oi.order_item_id`,
+            `
+            SELECT 
+              oi.id,
+              oi.parent_order_item_id,
+              oi.is_addon,
+              oi.menu_item_id,
+              oi.quantity, 
+              oi.price_cents, 
+              mi.name as item_name,
+              mi.category_id as menu_category_id,
+              oi.print_category_id,
+              ts.table_name, 
+              o.created_at
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            JOIN menu_items mi ON oi.menu_item_id = mi.id
+            LEFT JOIN table_sessions ts ON o.session_id = ts.id
+            WHERE oi.order_id = $1 AND o.restaurant_id = $2
+            ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
+            `,
             [orderId, restaurantId]
           );
 
           if (orderDetailsRes.rowCount > 0) {
-            const items = orderDetailsRes.rows;
-            const tableNumber = items[0].table_name || "To-Go";
+            const allItems = orderDetailsRes.rows;
+            const tableNumber = allItems[0].table_name || "To-Go";
             const zonesService = getPrinterZonesService(pool);
             const queue = getPrinterQueueInstance();
 
@@ -230,17 +286,25 @@ for (const v of variants) {
             const zones = await zonesService.getZonesByRestaurant(restaurantId);
 
             if (zones.length > 1) {
-              // Multi-zone: Group items by zone, print to each zone separately
-              const itemsByZone: { [zoneId: number]: typeof items } = {};
+              // Multi-zone: Group items by zone
+              // Main items go to their category's zone
+              // Addon items go to their print_category zone (which is the addon item's category)
+              const itemsByZone: { [zoneId: number]: typeof allItems } = {};
 
-              for (const item of items) {
-                const zone = await zonesService.getZoneForMenuItem(restaurantId, item.menu_item_id);
-                if (zone) {
-                  if (!itemsByZone[zone.id]) {
-                    itemsByZone[zone.id] = [];
-                  }
-                  itemsByZone[zone.id].push(item);
+              for (const item of allItems) {
+                // Determine which category to use for zone assignment
+                let zoneCategory = item.menu_category_id;
+                if (item.is_addon && item.print_category_id) {
+                  zoneCategory = item.print_category_id;
                 }
+
+                const zone = await zonesService.getZoneByCategoryId(restaurantId, zoneCategory);
+                const zoneId = zone?.id || (await zonesService.getDefaultZone(restaurantId))?.id || 0;
+
+                if (!itemsByZone[zoneId]) {
+                  itemsByZone[zoneId] = [];
+                }
+                itemsByZone[zoneId].push(item);
               }
 
               // Queue print job for each zone
@@ -252,6 +316,7 @@ for (const v of variants) {
                   items: zoneItems.map((i) => ({
                     name: i.item_name,
                     quantity: i.quantity,
+                    isAddon: i.is_addon
                   })),
                   timestamp: new Date(zoneItems[0].created_at).toLocaleTimeString(),
                   restaurantName: '',
@@ -272,11 +337,12 @@ for (const v of variants) {
               const printPayload = {
                 orderNumber: String(orderId),
                 tableNumber,
-                items: items.map((i) => ({
+                items: allItems.map((i) => ({
                   name: i.item_name,
                   quantity: i.quantity,
+                  isAddon: i.is_addon
                 })),
-                timestamp: new Date(items[0].created_at).toLocaleTimeString(),
+                timestamp: new Date(allItems[0].created_at).toLocaleTimeString(),
                 restaurantName: '',
                 type: 'kitchen' as const,
               };
@@ -325,6 +391,8 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
 
         oi.id AS order_item_id,
+        oi.parent_order_item_id,
+        oi.is_addon,
         oi.quantity,
         oi.price_cents AS unit_price_cents,
 
@@ -355,19 +423,22 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         o.id,
         o.created_at,
         oi.id,
+        oi.parent_order_item_id,
+        oi.is_addon,
         oi.quantity,
         oi.price_cents,
         mi.name,
         ts.restaurant_id,
         mc.restaurant_id
 
-      ORDER BY o.created_at ASC, oi.id ASC
+      ORDER BY o.created_at ASC, oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
       `,
       [sessionId]
     );
 
-    // Group into orders
+    // Group into orders and handle addon items
     const ordersMap: any = {};
+    const itemsMap: any = {};
 
     for (const row of result.rows) {
       if (!ordersMap[row.order_id]) {
@@ -383,17 +454,48 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
       const itemTotal =
         Number(row.unit_price_cents) * Number(row.quantity);
 
-      ordersMap[row.order_id].items.push({
+      const itemObj = {
         order_item_id: row.order_item_id,
         menu_item_name: row.item_name,
         quantity: row.quantity,
         status: row.item_status,
         unit_price_cents: row.unit_price_cents,
         item_total_cents: itemTotal,
-        variants: row.variants
-      });
+        variants: row.variants,
+        is_addon: row.is_addon,
+        addons: []
+      };
 
-      ordersMap[row.order_id].total_cents += itemTotal;
+      itemsMap[row.order_item_id] = itemObj;
+
+      if (!row.is_addon && !row.parent_order_item_id) {
+        // Main item
+        ordersMap[row.order_id].items.push(itemObj);
+        ordersMap[row.order_id].total_cents += itemTotal;
+      }
+    }
+
+    // Link addons to their parent items
+    for (const row of result.rows) {
+      if (row.is_addon && row.parent_order_item_id) {
+        const parentItem = itemsMap[row.parent_order_item_id];
+        if (parentItem) {
+          const addonTotal = Number(row.unit_price_cents) * Number(row.quantity);
+          parentItem.addons.push({
+            order_item_id: row.order_item_id,
+            menu_item_name: row.item_name,
+            quantity: row.quantity,
+            unit_price_cents: row.unit_price_cents,
+            item_total_cents: addonTotal,
+            status: row.item_status
+          });
+          // Add addon price to total for parent order
+          const parentOrder = ordersMap[result.rows.find(r => r.order_item_id === row.parent_order_item_id)?.order_id];
+          if (parentOrder) {
+            parentOrder.total_cents += addonTotal;
+          }
+        }
+      }
     }
 
     res.json({

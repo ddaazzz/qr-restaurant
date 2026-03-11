@@ -488,21 +488,29 @@ if (v.max_select && selectedIds.length > v.max_select) {
 
   if (existing) {
     existing.quantity += 1;
+    closeAllDrawers();
+    saveCartToStorage();
+    updateCartBar();
   } else {
-    cart.items.push({
+    const cartItem = {
   menuItemId: item.id,
   name: item.name,
   quantity: 1,
   basePriceCents: item.price_cents,
   totalPriceCents: item.price_cents + extraPrice,
   variantOptionIds: selectedOptions,
-  variantOptionDetails: variantDetails
-});
+  variantOptionDetails: variantDetails,
+  addons: []
+};
+    
+    cart.items.push(cartItem);
 
+    // Show addon selection modal after adding the item
+    closeAllDrawers();
+    saveCartToStorage();
+    updateCartBar();
+    showAddonModal(item, cartItem);
   }
-  closeAllDrawers();
-  saveCartToStorage();
-  updateCartBar();
 
 }
 
@@ -527,9 +535,167 @@ function loadCartFromStorage() {
   }
 }
 
+async function showAddonModal(menuItem, cartItem) {
+  try {
+    // Fetch available addons for this menu item
+    const res = await fetch(
+      `${API_BASE}/restaurants/${restaurantId}/menu-items/${menuItem.id}/addons`
+    );
+
+    if (!res.ok) {
+      console.log("No addons available for this item");
+      return;
+    }
+
+    const addons = await res.json();
+
+    if (!addons || addons.length === 0) {
+      console.log("No addons to show");
+      return;
+    }
+
+    // Create addon modal
+    const modal = document.createElement("div");
+    modal.className = "addon-modal-overlay";
+    modal.id = "addon-modal";
+
+    let addonsHTML = '<div class="addon-modal">';
+    addonsHTML += `<h3 style="margin-top: 0;">${t('menu.addons') || 'Add-ons'} - ${menuItem.name}</h3>`;
+    addonsHTML += '<p style="color: #666; margin: 10px 0;">' + (t('menu.addon-optional') || 'Choose add-ons to make this item a combo') + '</p>';
+    addonsHTML += '<div class="addon-list">';
+
+    addons.forEach(addon => {
+      const discountPct = Math.round(
+        ((addon.regular_price_cents - addon.addon_discount_price_cents) / addon.regular_price_cents) * 100
+      );
+      
+      addonsHTML += `
+        <div class="addon-item">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" class="addon-checkbox" 
+                data-addon-id="${addon.id}" 
+                data-addon-name="${addon.addon_item_name}"
+                data-addon-price="${addon.addon_discount_price_cents}">
+              <div>
+                <div style="font-weight: 500;">${addon.addon_item_name}</div>
+                <div style="font-size: 0.85em; color: #888;">${addon.addon_category_name}</div>
+              </div>
+            </label>
+            <div style="text-align: right;">
+              <div style="color: #e74c3c; font-weight: 600;">$${(addon.addon_discount_price_cents / 100).toFixed(2)}</div>
+              <div style="font-size: 0.8em; color: #27ae60;">-${discountPct}%</div>
+            </div>
+          </div>
+          ${addon.addon_description ? `<div style="font-size: 0.9em; color: #666; margin-left: 30px; margin-bottom: 10px;">${addon.addon_description}</div>` : ''}
+        </div>
+      `;
+    });
+
+    addonsHTML += '</div>';
+    addonsHTML += `
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button class="btn-secondary" style="flex: 1;" onclick="closeAddonModal()">${t('menu.skip') || 'Skip'}</button>
+        <button class="btn-primary" style="flex: 1;" onclick="confirmAddons()">${t('menu.confirm') || 'Confirm'}</button>
+      </div>
+    `;
+    addonsHTML += '</div>';
+
+    modal.innerHTML = addonsHTML;
+
+    // Add styles for addon modal
+    const style = document.createElement('style');
+    style.textContent = `
+      .addon-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+      .addon-modal {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      }
+      .addon-list {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .addon-item {
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+      }
+      .addon-item:last-child {
+        border-bottom: none;
+      }
+      .addon-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+      }
+    `;
+    if (!document.querySelector('style[data-addons]')) {
+      style.setAttribute('data-addons', 'true');
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(modal);
+
+    // Store current cart item reference for addon confirmation
+    window.currentAddonCartItem = cartItem;
+    window.currentAddonMenuItemId = menuItem.id;
+  } catch (err) {
+    console.error("Failed to load addons:", err);
+  }
+}
+
+function closeAddonModal() {
+  const modal = document.getElementById("addon-modal");
+  if (modal) {
+    modal.remove();
+  }
+  window.currentAddonCartItem = null;
+  window.currentAddonMenuItemId = null;
+}
+
+function confirmAddons() {
+  const checkboxes = document.querySelectorAll(".addon-checkbox:checked");
+  
+  if (window.currentAddonCartItem) {
+    window.currentAddonCartItem.addons = Array.from(checkboxes).map(cb => ({
+      addon_id: parseInt(cb.dataset.addonId),
+      quantity: 1
+    }));
+
+    // Update cart item price if addons were added
+    if (window.currentAddonCartItem.addons.length > 0) {
+      checkboxes.forEach(cb => {
+        window.currentAddonCartItem.totalPriceCents += parseInt(cb.dataset.addonPrice);
+      });
+    }
+
+    saveCartToStorage();
+    updateCartBar();
+  }
+
+  closeAddonModal();
+}
 
 
-function canAddToCart(item) {
   if (!item.variants || item.variants.length === 0) return true;
 
   for (const v of item.variants) {
@@ -603,7 +769,8 @@ async function submitOrder() {
     items: cart.items.map(i => ({
       menu_item_id: i.menuItemId,
       quantity: i.quantity,
-      selected_option_ids: i.variantOptionIds || []
+      selected_option_ids: i.variantOptionIds || [],
+      addons: i.addons || []
     }))
   };
 

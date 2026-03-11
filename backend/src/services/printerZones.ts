@@ -193,6 +193,25 @@ export class PrinterZonesService {
   }
 
   /**
+   * Get printer zone by category ID directly
+   */
+  async getZoneByCategoryId(restaurantId: number, categoryId: number): Promise<PrinterZone | null> {
+    if (!categoryId) {
+      return null;
+    }
+
+    const zoneResult = await this.pool.query(
+      `SELECT pz.* FROM printer_zones pz
+       JOIN category_printer_zones cpz ON pz.id = cpz.zone_id
+       WHERE pz.restaurant_id = $1 AND cpz.menu_category_id = $2
+       LIMIT 1;`,
+      [restaurantId, categoryId]
+    );
+
+    return zoneResult.rows.length > 0 ? this.formatZone(zoneResult.rows[0]) : null;
+  }
+
+  /**
    * Get printer zone for a menu item (by category)
    */
   async getZoneForMenuItem(restaurantId: number, menuItemId: number): Promise<PrinterZone | null> {
