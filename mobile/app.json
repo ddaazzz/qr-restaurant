@@ -13,7 +13,7 @@
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.qrrestaurant.app",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "icon": "./assets/logo.png",
       "minimumOSVersion": "16.0",
       "infoPlist": {
