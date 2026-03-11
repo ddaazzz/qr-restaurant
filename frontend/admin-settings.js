@@ -136,6 +136,12 @@ async function openSettingsModal(modalName) {
       case 'booking-settings':
         await loadBookingSettingsModal();
         break;
+      case 'addon-presets':
+        await loadAddonPresets();
+        break;
+      case 'variant-presets':
+        await loadVariantPresets();
+        break;
     }
   }
 }

@@ -250,14 +250,61 @@
           </div>
         </div>
       </div>
-      <!-- Addon Configuration Section -->
+      
+      <!-- Item Type Options -->
       <div class="form-row" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #ddd;">
-        <div class="form-group" style="width: 100%;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <label data-i18n="admin.available-addons" style="font-weight: 600; font-size: 14px;">Available Add-ons</label>
-            <button type="button" class="btn-addon-add" style="background: #27ae60; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.add-addon">+ Add Addon</button>
+        <div style="width: 100%; display: flex; gap: 20px;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" class="edit-item-is-meal-combo" style="margin-right: 8px; cursor: pointer;"/>
+            <span style="font-weight: 600; font-size: 14px;" data-i18n="admin.is-meal-combo">Is Meal/Combo (Enable Add-ons)</span>
+          </label>
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" class="edit-item-has-variants" style="margin-right: 8px; cursor: pointer;"/>
+            <span style="font-weight: 600; font-size: 14px;" data-i18n="admin.has-variants">Has Variants</span>
+          </label>
+        </div>
+      </div>
+      
+      <!-- Variants Section (shown when has-variants is checked) -->
+      <div class="edit-item-variants-section" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 data-i18n="admin.variants" style="margin: 0;">Variants</h4>
+          <button type="button" class="btn-preset-variant-add" style="background: #2C3E50; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add Preset</button>
+        </div>
+        <div class="edit-item-preset-variants-list" style="margin-bottom: 12px;">
+          <!-- Preset variants displayed here -->
+        </div>
+        <div style="font-size: 11px; color: #666;">
+          <p data-i18n="admin.variants-info">Select from preset variant lists or manage variants in Settings</p>
+        </div>
+      </div>
+      
+      <!-- Addon Configuration Section (shown when is-meal-combo is checked) -->
+      <div class="edit-item-addons-section" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <label data-i18n="admin.available-addons" style="font-weight: 600; font-size: 14px; margin: 0;">Available Add-ons</label>
+        </div>
+        
+        <!-- Preset Addon Selection -->
+        <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px;" data-i18n="admin.add-preset-list">Add Preset List:</label>
+          <div style="display: flex; gap: 6px;">
+            <select class="edit-item-preset-addon-select" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+              <option value="" data-i18n="admin.select-preset">-- Select preset --</option>
+            </select>
+            <button type="button" class="btn-add-preset-addon" style="background: #27ae60; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.add">Add</button>
           </div>
-          <div class="edit-item-addons-list" style="border: 1px solid #ddd; border-radius: 4px; padding: 8px; min-height: 60px; max-height: 200px; overflow-y: auto; background: #f9f9f9;">
+        </div>
+        
+        <!-- Custom Addon Addition -->
+        <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+          <button type="button" class="btn-addon-add" style="background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;" data-i18n="admin.add-custom-addon">+ Add Custom Addon</button>
+        </div>
+        
+        <!-- Configured Addons List -->
+        <div style="margin-top: 12px;">
+          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 8px;" data-i18n="admin.configured-addons">Configured Add-ons:</label>
+          <div class="edit-item-addons-list" style="border: 1px solid #ddd; border-radius: 4px; padding: 8px; min-height: 60px; max-height: 200px; overflow-y: auto; background: white;">
             <!-- Addon items rendered here -->
             <div class="empty-addons-message" style="color: #999; font-size: 12px; padding: 20px; text-align: center;" data-i18n="admin.no-addons">No add-ons configured</div>
           </div>

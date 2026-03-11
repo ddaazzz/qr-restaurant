@@ -1,0 +1,187 @@
+/**
+ * Database Migration Runner
+ * Runs all pending migrations from backend/migrations directory
+ * 
+ * Usage: npx ts-node src/scripts/runMigrations.ts
+ */
+
+import fs from 'fs';
+import path from 'path';
+import pool from '../config/db';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+interface Migration {
+  name: string;
+  path: string;
+  content: string;
+}
+
+/**
+ * Read all migration files from migrations directory
+ * Migrations should be numbered: 001_*, 002_*, etc. for proper ordering
+ */
+function getMigrations(): Migration[] {
+  const migrationsDir = path.join(__dirname, '../../migrations');
+  
+  if (!fs.existsSync(migrationsDir)) {
+    console.error(`❌ Migrations directory not found: ${migrationsDir}`);
+    process.exit(1);
+  }
+
+  const files = fs.readdirSync(migrationsDir)
+    .filter(file => file.endsWith('.sql'))
+    .sort(); // Sorts numerically by default in JS for numbered files
+
+  return files.map(file => ({
+    name: file,
+    path: path.join(migrationsDir, file),
+    content: fs.readFileSync(path.join(migrationsDir, file), 'utf-8')
+  }));
+}
+
+/**
+ * Create migrations tracking table if it doesn't exist
+ */
+async function initializeMigrationsTable() {
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS migrations (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) UNIQUE NOT NULL,
+      run_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  
+  try {
+    await pool.query(createTableQuery);
+    console.log('✅ Migrations table initialized');
+  } catch (err) {
+    console.error('❌ Error initializing migrations table:', err);
+    throw err;
+  }
+}
+
+/**
+ * Get list of already-run migrations
+ */
+async function getRunMigrations(): Promise<string[]> {
+  try {
+    const result = await pool.query('SELECT name FROM migrations ORDER BY run_at');
+    return result.rows.map(row => row.name);
+  } catch (err) {
+    console.error('❌ Error fetching run migrations:', err);
+    return [];
+  }
+}
+
+/**
+ * Run a single migration
+ */
+async function runMigration(migration: Migration): Promise<boolean> {
+  const client = await pool.connect();
+  
+  try {
+    // Start transaction
+    await client.query('BEGIN');
+    
+    console.log(`⏳ Running migration: ${migration.name}`);
+    
+    // Split the migration into individual statements
+    // Handle multiple statements separated by semicolons
+    const statements = migration.content
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'));
+
+    // Execute each statement
+    for (const statement of statements) {
+      await client.query(statement);
+    }
+
+    // Record the migration as run
+    await client.query(
+      'INSERT INTO migrations (name) VALUES ($1)',
+      [migration.name]
+    );
+
+    // Commit transaction
+    await client.query('COMMIT');
+    console.log(`✅ Migration completed: ${migration.name}`);
+    return true;
+  } catch (err: any) {
+    // Rollback on error
+    await client.query('ROLLBACK');
+    console.error(`❌ Error in migration ${migration.name}:`, err.message);
+    return false;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Main migration runner
+ */
+async function runAllMigrations() {
+  try {
+    console.log('🔄 Starting database migration...\n');
+    console.log(`📊 Database: ${process.env.DATABASE_URL}`);
+    console.log('');
+
+    // Initialize migrations table
+    await initializeMigrationsTable();
+
+    // Get migrations
+    const migrations = getMigrations();
+    console.log(`📁 Found ${migrations.length} migration files\n`);
+
+    if (migrations.length === 0) {
+      console.log('ℹ️  No migrations to run');
+      process.exit(0);
+    }
+
+    // Get already-run migrations
+    const ranMigrations = await getRunMigrations();
+    console.log(`✅ Already run: ${ranMigrations.length} migrations\n`);
+
+    // Run pending migrations
+    const pendingMigrations = migrations.filter(m => !ranMigrations.includes(m.name));
+    
+    if (pendingMigrations.length === 0) {
+      console.log('✅ All migrations are up to date!');
+      process.exit(0);
+    }
+
+    console.log(`⏳ Running ${pendingMigrations.length} pending migrations...\n`);
+
+    let failureCount = 0;
+    for (const migration of pendingMigrations) {
+      const success = await runMigration(migration);
+      if (!success) {
+        failureCount++;
+      }
+    }
+
+    console.log('');
+    if (failureCount === 0) {
+      console.log('✅ All migrations completed successfully!');
+      process.exit(0);
+    } else {
+      console.log(`❌ ${failureCount} migration(s) failed`);
+      console.log('   Please check the errors above and fix them manually if needed');
+      process.exit(1);
+    }
+  } catch (err: any) {
+    console.error('❌ Fatal error:', err.message);
+    process.exit(1);
+  } finally {
+    await pool.end();
+  }
+}
+
+// Run migrations if this file is executed directly
+if (require.main === module) {
+  runAllMigrations();
+}
+
+export { runAllMigrations, getMigrations, getRunMigrations };

@@ -1304,6 +1304,18 @@ const translations = {
     'admin.delete': 'Delete',
     'admin.confirm': 'Confirm',
     'admin.upload-image': '📸 Click to upload image',
+    
+    // Menu Management - Meal/Combo & Presets (8 keys)
+    'admin.is-meal-combo': 'Is Meal/Combo (Enable Add-ons)',
+    'admin.has-variants': 'Has Variants',
+    'admin.variants-info': 'Select from preset variant lists or manage variants in Settings',
+    'admin.add-preset-list': 'Add Preset List:',
+    'admin.select-preset': '-- Select preset --',
+    'admin.add-custom-addon': '+ Add Custom Addon',
+    'admin.configured-addons': 'Configured Add-ons:',
+    'admin.addon-presets': '🎁 Addon Presets',
+    'admin.variant-presets': '⚙️ Variant Presets',
+    'admin.manage-presets': 'Manage preset addon and variant lists',
 
     // Order Management (2 keys)
     'admin.cart-is-empty': 'Cart is empty',
@@ -3285,6 +3297,18 @@ const translations = {
     'admin.delete': '刪除',
     'admin.confirm': '確認',
     'admin.upload-image': '📸 點擊上傳圖片',
+    
+    // Menu Management - Meal/Combo & Presets (Chinese)
+    'admin.is-meal-combo': '是套餐/組合（啟用附加項）',
+    'admin.has-variants': '有變體',
+    'admin.variants-info': '從預設變體列表中選擇或在設置中管理變體',
+    'admin.add-preset-list': '添加預設列表：',
+    'admin.select-preset': '-- 選擇預設 --',
+    'admin.add-custom-addon': '+ 添加自定義附加項',
+    'admin.configured-addons': '已配置的附加項：',
+    'admin.addon-presets': '🎁 附加項預設',
+    'admin.variant-presets': '⚙️ 變體預設',
+    'admin.manage-presets': '管理預設附加項和變體列表',
 
     // Order Management (Chinese)
     'admin.cart-is-empty': '購物車為空',

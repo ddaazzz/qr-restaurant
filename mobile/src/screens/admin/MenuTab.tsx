@@ -23,6 +23,7 @@ import {
   Pressable,
 } from 'react-native';
 import { apiClient, API_URL } from '../../services/apiClient';
+import { addonService, Addon } from '../../services/addonService';
 
 // ==================== INTERFACES ====================
 
@@ -48,6 +49,7 @@ interface MenuItem {
   category_id: number;
   available: boolean;
   image_url?: string;
+  is_meal_combo?: boolean;
   variants?: Variant[];
 }
 
@@ -132,6 +134,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     // Image upload states
     const [uploadingImageItemId, setUploadingImageItemId] = useState<number | null>(null);
     const [uploadingImageContext, setUploadingImageContext] = useState<'inline' | 'new' | 'edit' | null>(null);
+
+    // Addon management states
+    const [addons, setAddons] = useState<Addon[]>([]);
+    const [showAddonModal, setShowAddonModal] = useState(false);
+    const [showAddonSelectorModal, setShowAddonSelectorModal] = useState(false);
+    const [loadingAddons, setLoadingAddons] = useState(false);
+    const [addonSearchQuery, setAddonSearchQuery] = useState('');
+    const [selectedAddonItemId, setSelectedAddonItemId] = useState<number | null>(null);
+    const [addonDiscountPrice, setAddonDiscountPrice] = useState('');
+    
+    // Meal/Combo and Preset states
+    const [editingItemIsMealCombo, setEditingItemIsMealCombo] = useState(false);
+    const [showAddonPresetsDropdown, setShowAddonPresetsDropdown] = useState(false);
 
     // ==================== REF HANDLING ====================
 
@@ -304,6 +319,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
             description: editingItemDescription,
             price_cents: Math.round(parseFloat(editingItemPrice) * 100),
             image_url: editingItemImageUrl || null,
+            is_meal_combo: editingItemIsMealCombo,
+            restaurantId: restaurantId,
           }
         );
         setEditingItemId(null);
@@ -494,6 +511,89 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 await loadMenuData();
               } catch (err: any) {
                 Alert.alert('Error', err.response?.data?.error || 'Failed to delete option');
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    // ==================== ADDON OPERATIONS ====================
+
+    const loadAddonsForItem = async (itemId: number) => {
+      try {
+        setLoadingAddons(true);
+        const itemAddons = await addonService.getAddonsForMenuItem(restaurantId, itemId);
+        setAddons(itemAddons);
+      } catch (err: any) {
+        console.error('Error loading addons:', err);
+        Alert.alert('Error', 'Failed to load addons');
+      } finally {
+        setLoadingAddons(false);
+      }
+    };
+
+    const openEditItemWithAddons = async (item: MenuItem) => {
+      setEditingItemId(item.id);
+      setEditingItemName(item.name);
+      setEditingItemDescription(item.description || '');
+      setEditingItemPrice((item.price_cents / 100).toFixed(2));
+      setEditingItemImageUrl(item.image_url || '');
+      setEditingItemIsMealCombo(item.is_meal_combo || false);
+      setShowEditItemModal(true);
+      
+      // Load addons for this item
+      await loadAddonsForItem(item.id);
+    };
+
+    const createAddon = async () => {
+      if (!editingItemId || !selectedAddonItemId || !addonDiscountPrice.trim()) {
+        Alert.alert('Error', 'Please select an item and enter discount price');
+        return;
+      }
+
+      try {
+        const addonItem = items.find(i => i.id === selectedAddonItemId);
+        if (!addonItem) {
+          Alert.alert('Error', 'Selected item not found');
+          return;
+        }
+
+        await addonService.createAddon(restaurantId, {
+          menu_item_id: editingItemId,
+          addon_item_id: selectedAddonItemId,
+          addon_name: addonItem.name,
+          regular_price_cents: addonItem.price_cents,
+          addon_discount_price_cents: Math.round(parseFloat(addonDiscountPrice) * 100),
+        });
+
+        setShowAddonSelectorModal(false);
+        setSelectedAddonItemId(null);
+        setAddonDiscountPrice('');
+        setAddonSearchQuery('');
+        
+        // Reload addons
+        await loadAddonsForItem(editingItemId);
+      } catch (err: any) {
+        Alert.alert('Error', err.response?.data?.error || 'Failed to add addon');
+      }
+    };
+
+    const deleteAddon = (addonId: number, addonName: string) => {
+      Alert.alert(
+        'Delete Addon',
+        `Are you sure you want to remove "${addonName}"?`,
+        [
+          { text: 'Cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await addonService.deleteAddon(restaurantId, addonId);
+                setAddons(addons.filter(a => a.id !== addonId));
+              } catch (err: any) {
+                Alert.alert('Error', err.response?.data?.error || 'Failed to delete addon');
               }
             },
           },
@@ -698,25 +798,37 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 <Text style={styles.detailCloseBtn}>✕</Text>
               </TouchableOpacity>
               <Text style={styles.detailTitle}>Item Details</Text>
-              {/* Item edit button - toggle inline editing */}
-              <TouchableOpacity
-                onPress={() => {
-                  if (editingItemInlineId === selectedItem.id) {
-                    setEditingItemInlineId(null);
-                  } else {
-                    setEditingItemInlineId(selectedItem.id);
-                    setInlineEditName(selectedItem.name);
-                    setInlineEditDescription(selectedItem.description || '');
-                    setInlineEditPrice((selectedItem.price_cents / 100).toString());
-                    setInlineEditImageUrl(selectedItem.image_url || '');
-                  }
-                }}
-                style={styles.categoryActionBtn}
-              >
-                <Text style={styles.detailHeaderActionBtn}>
-                  {editingItemInlineId === selectedItem.id ? '✕' : '✏️'}
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {/* Add-ons button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowDetailPanel(false);
+                    openEditItemWithAddons(selectedItem);
+                  }}
+                  style={styles.categoryActionBtn}
+                >
+                  <Text style={styles.detailHeaderActionBtn}>🎁</Text>
+                </TouchableOpacity>
+                {/* Item edit button - toggle inline editing */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (editingItemInlineId === selectedItem.id) {
+                      setEditingItemInlineId(null);
+                    } else {
+                      setEditingItemInlineId(selectedItem.id);
+                      setInlineEditName(selectedItem.name);
+                      setInlineEditDescription(selectedItem.description || '');
+                      setInlineEditPrice((selectedItem.price_cents / 100).toString());
+                      setInlineEditImageUrl(selectedItem.image_url || '');
+                    }
+                  }}
+                  style={styles.categoryActionBtn}
+                >
+                  <Text style={styles.detailHeaderActionBtn}>
+                    {editingItemInlineId === selectedItem.id ? '✕' : '✏️'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView style={styles.detailContent}>
@@ -1207,6 +1319,75 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 </TouchableOpacity>
               </View>
 
+              {/* Meal/Combo and Variants Checkboxes */}
+              <View style={[styles.formGroup, { marginTop: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#ddd' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                    onPress={() => setEditingItemIsMealCombo(!editingItemIsMealCombo)}
+                  >
+                    <View style={{
+                      width: 18,
+                      height: 18,
+                      borderWidth: 2,
+                      borderColor: editingItemIsMealCombo ? '#4CAF50' : '#ddd',
+                      borderRadius: 3,
+                      backgroundColor: editingItemIsMealCombo ? '#4CAF50' : 'transparent',
+                      marginRight: 8,
+                      justifyContent: 'center',
+                      alignItems: 'center'
+                    }}>
+                      {editingItemIsMealCombo && <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#333' }}>Is Meal/Combo (Enable Add-ons)</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Addon Configuration Section - only shown if meal/combo is enabled */}
+              {editingItemIsMealCombo && (
+              <View style={[styles.formGroup, { marginTop: 16, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={[styles.label, { fontSize: 14, fontWeight: '600', margin: 0 }]}>Available Add-ons</Text>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary, { paddingHorizontal: 12, paddingVertical: 6 }]}
+                    onPress={() => setShowAddonSelectorModal(true)}
+                  >
+                    <Text style={[styles.btnText, { fontSize: 12 }]}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {loadingAddons ? (
+                  <ActivityIndicator size="small" color="#3b82f6" />
+                ) : addons.length === 0 ? (
+                  <Text style={{ fontSize: 12, color: '#999', textAlign: 'center', paddingVertical: 15 }}>
+                    No add-ons configured
+                  </Text>
+                ) : (
+                  <View style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 4, overflow: 'hidden' }}>
+                    {addons.map((addon, idx) => (
+                      <View key={addon.id} style={[
+                        { padding: 10, backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9', borderBottomWidth: idx < addons.length - 1 ? 1 : 0, borderBottomColor: '#eee', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
+                      ]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '500', marginBottom: 4 }}>{addon.addon_name}</Text>
+                          <Text style={{ fontSize: 11, color: '#666' }}>
+                            Regular: ${(addon.regular_price_cents / 100).toFixed(2)} | Addon: ${(addon.addon_discount_price_cents / 100).toFixed(2)}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={{ paddingLeft: 8 }}
+                          onPress={() => deleteAddon(addon.id, addon.addon_name)}
+                        >
+                          <Text style={{ fontSize: 16, color: '#e74c3c' }}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+              )}
+
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
@@ -1225,7 +1406,102 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
           </View>
         </Modal>
 
-        {/* Variant Modals */}
+        {/* Addon Selector Modal */}
+        <Modal visible={showAddonSelectorModal} animationType="fade" transparent>
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <Text style={styles.modalTitle}>Add Addon Item</Text>
+
+              <Text style={styles.label}>Search Items</Text>
+              <TextInput
+                style={styles.input}
+                value={addonSearchQuery}
+                onChangeText={setAddonSearchQuery}
+                placeholder="Search by name..."
+              />
+
+              <Text style={styles.label}>Select Item</Text>
+              <View style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 4, maxHeight: 250 }}>
+                <FlatList
+                  data={items.filter(i => 
+                    i.id !== editingItemId && 
+                    !addons.some(a => a.addon_item_id === i.id) &&
+                    i.name.toLowerCase().includes(addonSearchQuery.toLowerCase())
+                  )}
+                  keyExtractor={(item) => item.id.toString()}
+                  scrollEnabled={true}
+                  renderItem={({ item: addonItem }) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.input,
+                        {
+                          paddingVertical: 12,
+                          paddingHorizontal: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#eee',
+                          backgroundColor: selectedAddonItemId === addonItem.id ? '#e8f5e9' : 'white',
+                        }
+                      ]}
+                      onPress={() => setSelectedAddonItemId(addonItem.id)}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '500' }}>{addonItem.name}</Text>
+                          <Text style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
+                            ${(addonItem.price_cents / 100).toFixed(2)}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 18, color: selectedAddonItemId === addonItem.id ? '#4caf50' : '#ccc' }}>
+                          {selectedAddonItemId === addonItem.id ? '●' : '○'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    <Text style={{ paddingVertical: 20, textAlign: 'center', color: '#999', fontSize: 12 }}>
+                      No items available
+                    </Text>
+                  }
+                />
+              </View>
+
+              {selectedAddonItemId && (
+                <>
+                  <Text style={styles.label}>Addon Discount Price ($)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={addonDiscountPrice}
+                    onChangeText={setAddonDiscountPrice}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                  />
+                </>
+              )}
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => {
+                    setShowAddonSelectorModal(false);
+                    setSelectedAddonItemId(null);
+                    setAddonDiscountPrice('');
+                    setAddonSearchQuery('');
+                  }}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                {selectedAddonItemId && (
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary]}
+                    onPress={createAddon}
+                  >
+                    <Text style={styles.btnText}>Confirm</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
         <Modal visible={showVariantModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>

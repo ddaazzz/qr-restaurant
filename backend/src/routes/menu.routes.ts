@@ -509,6 +509,7 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       price_cents,
       description,
       category_id,
+      is_meal_combo,
       restaurantId
     } = req.body;
 
@@ -547,8 +548,9 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         name = COALESCE($1, name),
         price_cents = COALESCE($2, price_cents),
         description = COALESCE($3, description),
-        category_id = COALESCE($4, category_id)
-      WHERE id = $5
+        category_id = COALESCE($4, category_id),
+        is_meal_combo = COALESCE($5, is_meal_combo)
+      WHERE id = $6
       RETURNING *
       `,
       [
@@ -556,6 +558,7 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         price_cents ?? null,
         description ?? null,
         category_id ?? null,
+        is_meal_combo ?? null,
         itemId
       ]
     );

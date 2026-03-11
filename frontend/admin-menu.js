@@ -168,15 +168,52 @@ function createEditItemModalElement(item, categories) {
   
   imagePreview.onclick = () => imageInput.click();
   
-  // Set up addon button handler
-  const addonAddBtn = modal.querySelector('.btn-addon-add');
-  if (addonAddBtn) {
-    addonAddBtn.onclick = () => openAddonSelector(item.id, modal);
+  // Set up meal/combo checkbox
+  const mealComboCheckbox = modal.querySelector('.edit-item-is-meal-combo');
+  const addonsSection = modal.querySelector('.edit-item-addons-section');
+  if (mealComboCheckbox && addonsSection) {
+    mealComboCheckbox.checked = item.is_meal_combo || false;
+    mealComboCheckbox.onchange = function() {
+      addonsSection.style.display = this.checked ? 'block' : 'none';
+    };
+    addonsSection.style.display = mealComboCheckbox.checked ? 'block' : 'none';
+  }
+  
+  // Set up has_variants checkbox
+  const variantsCheckbox = modal.querySelector('.edit-item-has-variants');
+  const variantsSection = modal.querySelector('.edit-item-variants-section');
+  if (variantsCheckbox && variantsSection) {
+    // Check if item has any variants
+    const hasVariants = item.variants && item.variants.length > 0;
+    variantsCheckbox.checked = hasVariants || false;
+    variantsCheckbox.onchange = function() {
+      variantsSection.style.display = this.checked ? 'block' : 'none';
+    };
+    variantsSection.style.display = variantsCheckbox.checked ? 'block' : 'none';
+  }
+  
+  // Set up addon button handlers
+  const customAddonBtn = modal.querySelector('.btn-addon-add');
+  if (customAddonBtn) {
+    customAddonBtn.onclick = () => openAddonSelector(item.id, modal);
+  }
+  
+  // Set up preset addon button
+  const presetAddonBtn = modal.querySelector('.btn-add-preset-addon');
+  if (presetAddonBtn) {
+    presetAddonBtn.onclick = async () => {
+      const select = modal.querySelector('.edit-item-preset-addon-select');
+      if (select.value) {
+        await addPresetAddonsToItem(item.id, select.value, modal);
+        select.value = '';
+      }
+    };
   }
   
   // Load and display current addons
   (async () => {
     await renderAddonsInModal(item.id, modal);
+    await loadAddonPresetsDropdown(modal);
   })();
   
   // Button handlers
@@ -790,12 +827,16 @@ async function saveMenuItemEdit(itemId) {
   const categoryId = Number(document.getElementById(`edit-item-category-${itemId}`).value);
   const available = document.getElementById(`edit-item-available-${itemId}`).value === "true";
   const description = document.getElementById(`edit-item-desc-${itemId}`).value.trim();
+  
+  // Get meal/combo flag from checkbox
+  const isMealCombo = document.querySelector('.edit-item-is-meal-combo')?.checked || false;
+  
   const imageFile = document.getElementById(`edit-item-image-${itemId}`).files[0];
 
   if (!name || !price) return alert("Name and price are required");
 
   try {
-    // Update item properties
+    // Update item properties including is_meal_combo
     await fetch(`${API}/menu-items/${itemId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -805,6 +846,7 @@ async function saveMenuItemEdit(itemId) {
         category_id: categoryId,
         description,
         available,
+        is_meal_combo: isMealCombo,
         restaurantId: restaurantId
       })
     });
@@ -2135,6 +2177,82 @@ function openAddonSelector(itemId, editModal) {
   };
   
   document.body.appendChild(modal);
+}
+
+/**
+ * Load and populate addon presets dropdown in the edit modal
+ */
+async function loadAddonPresetsDropdown(modal) {
+  try {
+    const select = modal.querySelector('.edit-item-preset-addon-select');
+    if (!select) return;
+    
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets`);
+    if (!res.ok) return;
+    
+    const presets = await res.json();
+    
+    // Clear existing options except the first one
+    while (select.length > 1) {
+      select.remove(1);
+    }
+    
+    // Add preset options
+    presets.forEach(preset => {
+      const option = document.createElement('option');
+      option.value = preset.id;
+      option.textContent = preset.name;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error('Error loading addon presets:', err);
+  }
+}
+
+/**
+ * Add all items from a preset addon list to a menu item
+ */
+async function addPresetAddonsToItem(itemId, presetId, modal) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
+    if (!res.ok) {
+      alert('Failed to load preset items');
+      return;
+    }
+    
+    const presetItems = await res.json();
+    
+    // Add each item from the preset as an addon
+    for (const presetItem of presetItems) {
+      try {
+        const addRes = await fetch(`${API}/restaurants/${restaurantId}/addons`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            menu_item_id: itemId,
+            addon_item_id: presetItem.menu_item_id,
+            addon_name: presetItem.menu_item?.name || 'Unknown',
+            addon_preset_id: presetId,
+            regular_price_cents: presetItem.menu_item?.price_cents || 0,
+            addon_discount_price_cents: presetItem.addon_discount_price_cents,
+            is_available: presetItem.is_available
+          })
+        });
+        
+        if (!addRes.ok) {
+          console.warn('Failed to add addon from preset:', presetItem.menu_item_id);
+        }
+      } catch (err) {
+        console.error('Error adding preset addon:', err);
+      }
+    }
+    
+    // Refresh addons display
+    await renderAddonsInModal(itemId, modal);
+    alert('Preset addons added successfully');
+  } catch (err) {
+    alert('Error adding preset addons: ' + err.message);
+  }
 }
 
 /**

@@ -50,6 +50,18 @@
       <h3>📅 Booking Settings</h3>
       <p id="booking-settings-preview">Manage reservations</p>
     </div>
+
+    <!-- Addon Presets Card -->
+    <div class="settings-card" onclick="openSettingsModal('addon-presets')">
+      <h3 data-i18n="admin.addon-presets">🎁 Addon Presets</h3>
+      <p data-i18n="admin.manage-presets">Manage preset addon and variant lists</p>
+    </div>
+
+    <!-- Variant Presets Card -->
+    <div class="settings-card" onclick="openSettingsModal('variant-presets')">
+      <h3 data-i18n="admin.variant-presets">⚙️ Variant Presets</h3>
+      <p data-i18n="admin.manage-presets">Manage preset addon and variant lists</p>
+    </div>
   </div>
 
   <!-- HIDDEN: Preferences Modal -->
@@ -531,6 +543,44 @@
         <div class="form-actions" style="margin-top: 24px;">
           <button onclick="saveBookingSettings()" class="btn-primary">💾 Save Settings</button>
           <button onclick="closeSettingsModal('booking-settings')" class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Addon Presets Modal -->
+  <div id="modal-addon-presets" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('addon-presets')"></div>
+    <div class="modal-content" style="width: 90%; max-width: 700px;">
+      <div class="modal-header">
+        <h3 data-i18n="admin.addon-presets">🎁 Addon Presets</h3>
+        <button class="modal-close" onclick="closeSettingsModal('addon-presets')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 20px;">
+          <button onclick="startCreateAddonPreset()" class="btn-primary" style="width: 100%; margin-bottom: 16px;">+ Create New Preset</button>
+        </div>
+        <div id="addon-presets-list" style="max-height: 400px; overflow-y: auto;">
+          <!-- Presets rendered here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Variant Presets Modal -->
+  <div id="modal-variant-presets" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('variant-presets')"></div>
+    <div class="modal-content" style="width: 90%; max-width: 700px;">
+      <div class="modal-header">
+        <h3 data-i18n="admin.variant-presets">⚙️ Variant Presets</h3>
+        <button class="modal-close" onclick="closeSettingsModal('variant-presets')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 20px;">
+          <button onclick="startCreateVariantPreset()" class="btn-primary" style="width: 100%; margin-bottom: 16px;">+ Create New Preset</button>
+        </div>
+        <div id="variant-presets-list" style="max-height: 400px; overflow-y: auto;">
+          <!-- Presets rendered here -->
         </div>
       </div>
     </div>
