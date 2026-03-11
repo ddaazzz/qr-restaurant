@@ -123,13 +123,22 @@ function createEditItemModalElement(item, categories) {
   modal.id = `edit-item-modal-${item.id}`;
   modal.appendChild(fragment);
   
-  // Populate form fields
-  modal.querySelector('.edit-item-name').value = item.name;
-  modal.querySelector('.edit-item-price').value = item.price_cents;
-  modal.querySelector('.edit-item-desc').value = item.description || '';
+  // Set up form elements with IDs for saveMenuItemEdit to find them
+  const nameInput = modal.querySelector('.edit-item-name');
+  nameInput.id = `edit-item-name-${item.id}`;
+  nameInput.value = item.name;
+  
+  const priceInput = modal.querySelector('.edit-item-price');
+  priceInput.id = `edit-item-price-${item.id}`;
+  priceInput.value = item.price_cents;
+  
+  const descInput = modal.querySelector('.edit-item-desc');
+  descInput.id = `edit-item-desc-${item.id}`;
+  descInput.value = item.description || '';
   
   // Populate categories
   const categorySelect = modal.querySelector('.edit-item-category');
+  categorySelect.id = `edit-item-category-${item.id}`;
   categories.forEach(c => {
     const option = document.createElement('option');
     option.value = c.id;
@@ -139,10 +148,13 @@ function createEditItemModalElement(item, categories) {
   });
   
   // Populate available status
-  modal.querySelector('.edit-item-available').value = item.available !== false ? 'true' : 'false';
+  const availSelect = modal.querySelector('.edit-item-available');
+  availSelect.id = `edit-item-available-${item.id}`;
+  availSelect.value = item.available !== false ? 'true' : 'false';
   
   // Set up image
   const imagePreview = modal.querySelector('.edit-item-image-preview');
+  imagePreview.id = `edit-item-image-preview-${item.id}`;
   if (item.image_url) {
     imagePreview.innerHTML = `<img src="${item.image_url}" style="max-width: 100%; border-radius: 8px;"/>`;
   }
@@ -155,6 +167,17 @@ function createEditItemModalElement(item, categories) {
   };
   
   imagePreview.onclick = () => imageInput.click();
+  
+  // Set up addon button handler
+  const addonAddBtn = modal.querySelector('.btn-addon-add');
+  if (addonAddBtn) {
+    addonAddBtn.onclick = () => openAddonSelector(item.id, modal);
+  }
+  
+  // Load and display current addons
+  (async () => {
+    await renderAddonsInModal(item.id, modal);
+  })();
   
   // Button handlers
   modal.querySelector('.modal-close').onclick = () => modal.remove();
@@ -1868,4 +1891,329 @@ async function deleteVariantOption(itemId, groupId, optionId) {
   }
 
   await loadMenuItems();
+}
+
+// ============ ADDON MANAGEMENT FUNCTIONS ============
+
+/**
+ * Load addons configured for a specific menu item
+ * @param {number} itemId - Menu item ID
+ * @returns {Promise<Array>} Array of addon configurations
+ */
+async function loadAddonsForItem(itemId) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addons?menu_item_id=${itemId}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data || [];
+  } catch (err) {
+    console.error('Error loading addons:', err);
+    return [];
+  }
+}
+
+/**
+ * Render addons in the edit modal
+ * @param {number} itemId - Menu item ID
+ * @param {HTMLElement} modal - Modal element
+ */
+async function renderAddonsInModal(itemId, modal) {
+  const addons = await loadAddonsForItem(itemId);
+  const addonsList = modal.querySelector('.edit-item-addons-list');
+  const emptyMsg = modal.querySelector('.empty-addons-message');
+  
+  if (!addonsList) return;
+  
+  // Clear existing addons (except empty message)
+  const existingItems = addonsList.querySelectorAll('.addon-item');
+  existingItems.forEach(item => item.remove());
+  
+  if (addons.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  // Render each addon
+  addons.forEach(addon => {
+    const addonEl = renderAddonItem(addon, itemId);
+    addonsList.appendChild(addonEl);
+  });
+  
+  // Store addons in modal for saving later
+  modal.dataset.configuredAddons = JSON.stringify(addons);
+}
+
+/**
+ * Render a single addon item element
+ * @param {Object} addon - Addon configuration
+ * @param {number} itemId - Parent menu item ID
+ * @returns {HTMLElement} Addon item element
+ */
+function renderAddonItem(addon, itemId) {
+  const fragment = cloneTemplate('addon-item-template');
+  const addonItem = fragment.querySelector('.addon-item');
+  
+  if (!addonItem) return document.createElement('div');
+  
+  addonItem.dataset.addonId = addon.id;
+  addonItem.dataset.addonItemId = addon.addon_item_id;
+  
+  // Set addon name
+  const nameEl = addonItem.querySelector('.addon-item-name');
+  if (nameEl) nameEl.textContent = addon.addon_name || 'Unknown Item';
+  
+  // Set prices
+  const regularPriceEl = addonItem.querySelector('.addon-regular-price');
+  const discountPriceEl = addonItem.querySelector('.addon-discount-price');
+  
+  if (regularPriceEl) {
+    regularPriceEl.textContent = (addon.regular_price_cents / 100).toFixed(2);
+  }
+  if (discountPriceEl) {
+    discountPriceEl.textContent = (addon.addon_discount_price_cents / 100).toFixed(2);
+  }
+  
+  // Set up edit button
+  const editBtn = addonItem.querySelector('.btn-addon-edit');
+  if (editBtn) {
+    editBtn.onclick = () => editAddonPrice(itemId, addon.id, addon);
+  }
+  
+  // Set up remove button
+  const removeBtn = addonItem.querySelector('.btn-addon-remove');
+  if (removeBtn) {
+    removeBtn.onclick = () => removeAddonFromModal(itemId, addon.id, addonItem);
+  }
+  
+  return addonItem;
+}
+
+/**
+ * Open addon selector modal for adding new addons
+ * @param {number} itemId - Menu item ID
+ * @param {HTMLElement} editModal - The edit modal element
+ */
+function openAddonSelector(itemId, editModal) {
+  const fragment = cloneTemplate('addon-selector-modal-template');
+  if (!fragment) return;
+  
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = `addon-selector-${itemId}`;
+  modal.appendChild(fragment);
+  
+  // Get current addons to exclude them from the list
+  const currentAddOnElements = editModal.querySelectorAll('.addon-item');
+  const currentAddonIds = Array.from(currentAddOnElements).map(el => 
+    parseInt(el.dataset.addonItemId) || 0
+  );
+  
+  // Filter menu items: exclude current item and already added addons
+  const availableItems = MENU_ITEMS.filter(item => 
+    item.id !== itemId && !currentAddonIds.includes(item.id)
+  );
+  
+  let selectedItemId = null;
+  let selectedItem = null;
+  
+  // Render searchable item list
+  const itemsContainer = modal.querySelector('.addon-items-selector');
+  const searchInput = modal.querySelector('.addon-search-input');
+  const priceSection = modal.querySelector('.addon-price-section');
+  const priceInput = modal.querySelector('.addon-price-input');
+  const confirmBtn = modal.querySelector('.btn-addon-confirm-select');
+  
+  function renderItems(items) {
+    itemsContainer.innerHTML = items.map(item => `
+      <div class="addon-selectable-item" data-item-id="${item.id}" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="font-weight: 500; font-size: 13px;">${item.name}</div>
+          <div style="font-size: 11px; color: #666;">$${(item.price_cents / 100).toFixed(2)}</div>
+        </div>
+        <div style="font-size: 20px; color: #ccc; cursor: pointer;" class="addon-select-icon">○</div>
+      </div>
+    `).join('');
+    
+    // Add click handlers and hover effects
+    itemsContainer.querySelectorAll('.addon-selectable-item').forEach(el => {
+      el.onmouseenter = () => {
+        if (!el.style.background.includes('e8f5e9')) {
+          el.style.background = '#f5f5f5';
+        }
+      };
+      el.onmouseleave = () => {
+        if (!el.style.background.includes('e8f5e9')) {
+          el.style.background = '';
+        }
+      };
+      el.onclick = () => selectAddonItem(parseInt(el.dataset.itemId), el);
+    });
+  }
+  
+  function selectAddonItem(addonItemId, element) {
+    // Deselect previous
+    itemsContainer.querySelectorAll('.addon-selectable-item').forEach(el => {
+      el.style.background = '';
+      el.querySelector('.addon-select-icon').textContent = '○';
+    });
+    
+    // Select current
+    selectedItemId = addonItemId;
+    selectedItem = MENU_ITEMS.find(i => i.id === addonItemId);
+    element.style.background = '#e8f5e9';
+    element.querySelector('.addon-select-icon').textContent = '●';
+    
+    // Show price section
+    priceSection.style.display = 'block';
+    confirmBtn.style.display = 'block';
+    
+    // Set default price to item's regular price
+    if (priceInput && selectedItem) {
+      priceInput.value = selectedItem.price_cents;
+    }
+  }
+  
+  // Search functionality
+  searchInput.oninput = (e) => {
+    const query = e.target.value.toLowerCase();
+    const filtered = availableItems.filter(item => 
+      item.name.toLowerCase().includes(query)
+    );
+    renderItems(filtered);
+    
+    // Re-select if item is still visible after filter
+    if (selectedItemId) {
+      const el = itemsContainer.querySelector(`[data-item-id="${selectedItemId}"]`);
+      if (el) selectAddonItem(selectedItemId, el);
+    }
+  };
+  
+  // Initial render
+  renderItems(availableItems);
+  
+  // Close handlers
+  modal.querySelector('.modal-close').onclick = () => modal.remove();
+  modal.querySelector('.btn-addon-cancel-select').onclick = () => modal.remove();
+  
+  // Confirm selection
+  confirmBtn.onclick = async () => {
+    if (!selectedItemId || !selectedItem) {
+      alert('Please select an item');
+      return;
+    }
+    
+    const discountPrice = parseInt(priceInput.value) || selectedItem.price_cents;
+    
+    try {
+      // Create addon configuration via API
+      const res = await fetch(`${API}/restaurants/${restaurantId}/addons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          menu_item_id: itemId,
+          addon_item_id: selectedItemId,
+          addon_name: selectedItem.name,
+          regular_price_cents: selectedItem.price_cents,
+          addon_discount_price_cents: discountPrice,
+          is_available: true
+        })
+      });
+      
+      if (!res.ok) {
+        alert('Failed to add addon');
+        return;
+      }
+      
+      // Close selector modal and refresh addons in edit modal
+      modal.remove();
+      await renderAddonsInModal(itemId, editModal);
+    } catch (err) {
+      alert('Error adding addon: ' + err.message);
+    }
+  };
+  
+  document.body.appendChild(modal);
+}
+
+/**
+ * Edit addon discount price
+ * @param {number} itemId - Menu item ID
+ * @param {number} addonId - Addon configuration ID
+ * @param {Object} addon - Current addon data
+ */
+async function editAddonPrice(itemId, addonId, addon) {
+  const newPrice = prompt(
+    'Enter new addon discount price (cents):',
+    addon.addon_discount_price_cents
+  );
+  
+  if (newPrice === null) return;
+  
+  const price = parseInt(newPrice);
+  if (isNaN(price) || price < 0) {
+    alert('Invalid price');
+    return;
+  }
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addons/${addonId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        addon_discount_price_cents: price
+      })
+    });
+    
+    if (!res.ok) {
+      alert('Failed to update addon price');
+      return;
+    }
+    
+    // Re-render addons in the modal
+    const modal = document.getElementById(`edit-item-modal-${itemId}`);
+    if (modal) {
+      await renderAddonsInModal(itemId, modal);
+    }
+  } catch (err) {
+    alert('Error updating addon: ' + err.message);
+  }
+}
+
+/**
+ * Remove addon from modal (immediately delete)
+ * @param {number} itemId - Menu item ID
+ * @param {number} addonId - Addon configuration ID
+ * @param {HTMLElement} element - Addon item element
+ */
+async function removeAddonFromModal(itemId, addonId, element) {
+  if (!confirm('Remove this addon?')) return;
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addons/${addonId}`, {
+      method: 'DELETE'
+    });
+    
+    if (!res.ok) {
+      alert('Failed to remove addon');
+      return;
+    }
+    
+    // Remove element and check if list is empty
+    element.remove();
+    
+    const modal = document.getElementById(`edit-item-modal-${itemId}`);
+    if (modal) {
+      const list = modal.querySelector('.edit-item-addons-list');
+      const items = list.querySelectorAll('.addon-item');
+      const emptyMsg = modal.querySelector('.empty-addons-message');
+      
+      if (items.length === 0 && emptyMsg) {
+        emptyMsg.style.display = 'block';
+      }
+    }
+  } catch (err) {
+    alert('Error removing addon: ' + err.message);
+  }
 }

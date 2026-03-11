@@ -885,7 +885,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         : new Date().toLocaleString();
       
       const pax = selectedSession?.pax || 0;
-      const restaurantName = 'Chuio Restaurant';
 
       return `
         <!DOCTYPE html>
@@ -930,15 +929,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 text-align: left; 
                 margin: 8px 0; 
                 font-size: 11px; 
+                line-height: 1.8;
               }
               .info-row { 
                 display: flex; 
                 justify-content: space-between; 
-                margin-bottom: 4px; 
+                margin-bottom: 2px; 
               }
               .info-label { 
                 font-weight: bold; 
-                min-width: 60px; 
               }
               #qrcode { 
                 display: flex; 
@@ -953,7 +952,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               }
               .scan-instruction { 
                 font-weight: bold; 
-                font-size: 13px; 
+                font-size: 12px; 
                 margin: 8px 0; 
               }
               .footer { 
@@ -981,7 +980,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 </div>
                 <div class="info-row">
                   <span class="info-label">Pax:</span>
-                  <span>${pax} pax</span>
+                  <span>${pax}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Started:</span>
@@ -1112,10 +1111,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             
             // Send to printer using thermalPrinterService
             const receiptData = {
-              restaurantName: 'QR Code',
+              restaurantName: restaurantName || 'Restaurant',
               tableNumber: selectedTable.name,
+              pax: selectedSession.pax,
               startTime: startTimeStr,
-              qrCode: qrToken,
+              qrCode: `https://chuio.io/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
             };
             

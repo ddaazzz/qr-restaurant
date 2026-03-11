@@ -250,10 +250,66 @@
           </div>
         </div>
       </div>
+      <!-- Addon Configuration Section -->
+      <div class="form-row" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #ddd;">
+        <div class="form-group" style="width: 100%;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <label data-i18n="admin.available-addons" style="font-weight: 600; font-size: 14px;">Available Add-ons</label>
+            <button type="button" class="btn-addon-add" style="background: #27ae60; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;" data-i18n="admin.add-addon">+ Add Addon</button>
+          </div>
+          <div class="edit-item-addons-list" style="border: 1px solid #ddd; border-radius: 4px; padding: 8px; min-height: 60px; max-height: 200px; overflow-y: auto; background: #f9f9f9;">
+            <!-- Addon items rendered here -->
+            <div class="empty-addons-message" style="color: #999; font-size: 12px; padding: 20px; text-align: center;" data-i18n="admin.no-addons">No add-ons configured</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-primary modal-save" data-i18n="admin.save">✓ Save</button>
       <button class="btn-secondary modal-cancel" data-i18n="admin.cancel">Cancel</button>
+    </div>
+  </div>
+</template>
+
+<!-- Template: Addon Item in Edit Modal -->
+<template id="addon-item-template">
+  <div class="addon-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+    <div style="flex: 1;">
+      <div class="addon-item-name" style="font-weight: 500; font-size: 13px; margin-bottom: 4px;"></div>
+      <div style="display: flex; gap: 10px; font-size: 11px; color: #666;">
+        <span><strong>Regular:</strong> $<span class="addon-regular-price">0.00</span></span>
+        <span><strong>Addon Price:</strong> $<span class="addon-discount-price">0.00</span></span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 6px;">
+      <button type="button" class="btn-addon-edit" style="background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;" data-i18n="admin.edit">✎</button>
+      <button type="button" class="btn-addon-remove" style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;" data-i18n="admin.delete">✕</button>
+    </div>
+  </div>
+</template>
+
+<!-- Template: Addon Selector Modal -->
+<template id="addon-selector-modal-template">
+  <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-header">
+      <h2 data-i18n="admin.select-addon">Select Add-on Item</h2>
+      <button type="button" class="modal-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #333;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom: 12px;">
+        <input type="text" class="addon-search-input" placeholder="Search items..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;" />
+      </div>
+      <div class="addon-items-selector" style="border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; background: #f9f9f9;">
+        <!-- Items rendered here -->
+      </div>
+      <div class="addon-price-section" style="margin-top: 12px; display: none;">
+        <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">Addon Discount Price (cents)</label>
+        <input type="number" class="addon-price-input" placeholder="Enter discount price" value="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-primary addon-confirm-select" style="display: none;" data-i18n="admin.confirm">✓ Confirm</button>
+      <button type="button" class="btn-secondary addon-cancel-select" data-i18n="admin.cancel">Cancel</button>
     </div>
   </div>
 </template>

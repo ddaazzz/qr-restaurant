@@ -1295,6 +1295,16 @@ const translations = {
     'admin.save-variant': 'Save Variant',
     'admin.cancel-variant': 'Cancel',
 
+    // Menu Management - Addon Configuration (8 keys)
+    'admin.available-addons': 'Available Add-ons',
+    'admin.add-addon': '+ Add Addon',
+    'admin.no-addons': 'No add-ons configured',
+    'admin.select-addon': 'Select Add-on Item',
+    'admin.edit': 'Edit',
+    'admin.delete': 'Delete',
+    'admin.confirm': 'Confirm',
+    'admin.upload-image': '📸 Click to upload image',
+
     // Order Management (2 keys)
     'admin.cart-is-empty': 'Cart is empty',
     'admin.status-label': 'Status',
@@ -1508,6 +1518,10 @@ const translations = {
     'menu.bill-request-sent': '✓ Bill Request Sent',
     'menu.close-bill-requested': 'Bill closure requested. Staff will process it shortly.',
     'menu.coupon-will-apply': '✓ Coupon "{0}" will be applied at checkout',
+    'menu.addons': 'Add-ons',
+    'menu.addon-optional': 'Choose add-ons to make this item a combo',
+    'menu.skip': 'Skip',
+    'menu.confirm': 'Confirm',
     'menu.coupon-applied': '✓ Coupon applied: {0}',
     'menu.coupon-error': '✗ {0}',
     'menu.coupon-failed': '✗ Failed to apply coupon',
@@ -3262,6 +3276,16 @@ const translations = {
     'admin.save-variant': '保存變體',
     'admin.cancel-variant': '取消',
 
+    // Menu Management - Addon Configuration (Chinese)
+    'admin.available-addons': '可用附加項目',
+    'admin.add-addon': '+ 添加附加項',
+    'admin.no-addons': '未配置附加項目',
+    'admin.select-addon': '選擇附加項',
+    'admin.edit': '編輯',
+    'admin.delete': '刪除',
+    'admin.confirm': '確認',
+    'admin.upload-image': '📸 點擊上傳圖片',
+
     // Order Management (Chinese)
     'admin.cart-is-empty': '購物車為空',
     'admin.status-label': '狀態',
@@ -3474,6 +3498,11 @@ const translations = {
     'menu.back-to-menu': '返回菜單',
     'menu.bill-request-sent': '✓ 已發送結賬申請',
     'menu.close-bill-requested': '已申請結賬。店員將儘快處理。',
+    'menu.coupon-will-apply': '✓ 優惠券 "{0}" 將在結賬時成立',
+    'menu.addons': '加購項目',
+    'menu.addon-optional': '選擇加購項目組成套餐',
+    'menu.skip': '跳過',
+    'menu.confirm': '確認',
     'menu.coupon-will-apply': '✓ 優惠券"{0}"將在結賬時套用',
     'menu.coupon-applied': '✓ 優惠券已套用：{0}',
     'menu.coupon-error': '✗ {0}',
