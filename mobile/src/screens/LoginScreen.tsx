@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../hooks/useAuth';
-import { useLanguage } from '../contexts/LanguageContext';
 
 // Asset imports
 const backgroundImage = require('../../assets/background.png');
@@ -24,7 +23,6 @@ const logoImage = require('../../assets/logo.png');
 type LoginMode = 'choice' | 'admin' | 'kitchen' | 'staff' | 'scan-qr-staff' | 'scan-qr-kitchen' | 'pin-entry';
 
 export const LoginScreen = () => {
-  const { t } = useLanguage();
   const [mode, setMode] = useState<LoginMode>('choice');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -86,7 +84,7 @@ export const LoginScreen = () => {
 
   const handleAdminLogin = async () => {
     if (!email || !password) {
-      Alert.alert(t('common.error'), 'Please enter email and password');
+      Alert.alert('Error', 'Please enter email and password');
       return;
     }
 
@@ -94,7 +92,7 @@ export const LoginScreen = () => {
     try {
       await login(email, password);
     } catch (error) {
-      Alert.alert(t('login.error'), error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -102,7 +100,7 @@ export const LoginScreen = () => {
 
   const handleKitchenLogin = async () => {
     if (pin.length !== 6) {
-      Alert.alert(t('common.error'), t('login.invalid-pin'));
+      Alert.alert('Error', 'PIN must be 6 digits');
       return;
     }
 
@@ -116,7 +114,7 @@ export const LoginScreen = () => {
     try {
       await kitchenLogin(pin, rid);
     } catch (error) {
-      Alert.alert(t('login.error'), error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
       setPin('');
     } finally {
       setLoading(false);
@@ -125,7 +123,7 @@ export const LoginScreen = () => {
 
   const handleStaffLogin = async () => {
     if (pin.length !== 6) {
-      Alert.alert(t('common.error'), t('login.invalid-pin'));
+      Alert.alert('Error', 'PIN must be 6 digits');
       return;
     }
 
@@ -139,7 +137,7 @@ export const LoginScreen = () => {
     try {
       await staffLogin(pin, rid);
     } catch (error) {
-      Alert.alert(t('login.error'), error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
       setPin('');
     } finally {
       setLoading(false);
@@ -189,7 +187,7 @@ export const LoginScreen = () => {
                   setPassword('');
                 }}
               >
-                <Text style={[styles.loginTypeButtonText, styles.adminButtonText]}>{t('login.admin')}</Text>
+                <Text style={[styles.loginTypeButtonText, styles.adminButtonText]}>👨‍💼 Admin</Text>
               </TouchableOpacity>
 
               <View style={styles.buttonRow}>
@@ -202,7 +200,7 @@ export const LoginScreen = () => {
                     setMode('scan-qr-staff');
                   }}
                 >
-                  <Text style={styles.loginTypeButtonText}>{t('login.staff')}</Text>
+                  <Text style={styles.loginTypeButtonText}>👤 Staff</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -214,7 +212,7 @@ export const LoginScreen = () => {
                     setMode('scan-qr-kitchen');
                   }}
                 >
-                  <Text style={styles.loginTypeButtonText}>{t('login.kitchen')}</Text>
+                  <Text style={styles.loginTypeButtonText}>🍳 Kitchen</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -237,12 +235,12 @@ export const LoginScreen = () => {
             onPress={() => setMode('choice')}
             disabled={loading}
           >
-            <Text style={styles.backButtonText}>{t('login.back')}</Text>
+            <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
 
           <TextInput
             style={styles.input}
-            placeholder={t('login.email')}
+            placeholder="Email"
             value={email}
             onChangeText={setEmail}
             editable={!loading}
@@ -252,7 +250,7 @@ export const LoginScreen = () => {
 
           <TextInput
             style={styles.input}
-            placeholder={t('login.password')}
+            placeholder="Password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -267,7 +265,7 @@ export const LoginScreen = () => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>{t('login.login')}</Text>
+              <Text style={styles.buttonText}>Login</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -278,12 +276,12 @@ export const LoginScreen = () => {
   // QR Scanner Screen for Staff or Kitchen (Fallback to manual input)
   if (mode === 'scan-qr-staff' || mode === 'scan-qr-kitchen') {
     const isKitchen = mode === 'scan-qr-kitchen';
-    const titleText = isKitchen ? `🍳 ${t('login.kitchen')}` : `👤 ${t('login.staff')}`;
+    const titleText = isKitchen ? '🍳 Kitchen Login' : '👤 Staff Login';
 
     const handleProceedToPin = async () => {
       const rid = restaurantId || restaurantInput;
       if (!rid) {
-        Alert.alert(t('common.error'), 'Please enter a restaurant ID');
+        Alert.alert('Error', 'Please enter a restaurant ID');
         return;
       }
       
@@ -309,17 +307,17 @@ export const LoginScreen = () => {
               style={styles.backButton}
               onPress={() => setMode('choice')}
             >
-              <Text style={styles.backButtonText}>{t('login.back')}</Text>
+              <Text style={styles.backButtonText}>← Back</Text>
             </TouchableOpacity>
 
             <Text style={styles.title}>{titleText}</Text>
-            <Text style={styles.subtitle}>{t('login.enter-manually')}</Text>
+            <Text style={styles.subtitle}>Enter Restaurant ID</Text>
 
             <View style={styles.restaurantInputContainer}>
-              <Text style={styles.restaurantInputLabel}>{t('login.restaurant-id')}</Text>
+              <Text style={styles.restaurantInputLabel}>Restaurant ID</Text>
               <TextInput
                 style={styles.restaurantInputField}
-                placeholder={t('login.restaurant-id')}
+                placeholder="Enter restaurant ID"
                 value={restaurantInput}
                 onChangeText={setRestaurantInput}
                 placeholderTextColor="#999"
@@ -337,7 +335,7 @@ export const LoginScreen = () => {
               style={[styles.button, styles.buttonSecondary, { marginTop: 12 }]}
               onPress={() => setMode('choice')}
             >
-              <Text style={styles.buttonText}>{t('login.back')}</Text>
+              <Text style={styles.buttonText}>← Back</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -348,7 +346,7 @@ export const LoginScreen = () => {
   // PIN Entry Screen (shared for both staff and kitchen)
   if (mode === 'pin-entry') {
     const isKitchen = currentLoginType === 'kitchen';
-    const titleText = isKitchen ? `🍳 ${t('login.kitchen')}` : `👤 ${t('login.staff')}`;
+    const titleText = isKitchen ? '🍳 Kitchen' : '👤 Table Staff';
     const buttonColor = isKitchen ? {} : styles.staffLoginButton;
 
     return (
@@ -367,11 +365,11 @@ export const LoginScreen = () => {
             }}
             disabled={loading}
           >
-            <Text style={styles.backButtonText}>{t('login.back')}</Text>
+            <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
 
           <Text style={styles.title}>{titleText}</Text>
-          <Text style={styles.subtitle}>{t('login.enter-pin')}</Text>
+          <Text style={styles.subtitle}>Enter PIN</Text>
           <Text style={styles.restaurantInfo}>Restaurant: {restaurantId}</Text>
 
           <TextInput
@@ -416,7 +414,7 @@ export const LoginScreen = () => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>{t('login.login')}</Text>
+              <Text style={styles.buttonText}>Login</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -437,15 +435,15 @@ export const LoginScreen = () => {
             onPress={() => setMode('choice')}
             disabled={loading}
           >
-            <Text style={styles.backButtonText}>{t('login.back')}</Text>
+            <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
 
-          <Text style={styles.title}>🍳 {t('login.kitchen')}</Text>
-          <Text style={styles.subtitle}>{t('login.enter-pin')}</Text>
+          <Text style={styles.title}>🍳 Kitchen</Text>
+          <Text style={styles.subtitle}>Enter PIN</Text>
 
           <TextInput
             style={styles.pinInput}
-            placeholder={t('login.pin')}
+            placeholder="000000"
             value={pin}
             onChangeText={handlePINChange}
             keyboardType="number-pad"
@@ -474,7 +472,7 @@ export const LoginScreen = () => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>{t('login.login')}</Text>
+              <Text style={styles.buttonText}>Login</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -494,11 +492,11 @@ export const LoginScreen = () => {
           onPress={() => setMode('choice')}
           disabled={loading}
         >
-          <Text style={styles.backButtonText}>{t('login.back')}</Text>
+          <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>👤 {t('login.staff')}</Text>
-        <Text style={styles.subtitle}>{t('login.enter-pin')}</Text>
+        <Text style={styles.title}>👤 Table Staff</Text>
+        <Text style={styles.subtitle}>Enter PIN</Text>
 
         <TextInput
           style={styles.pinInput}

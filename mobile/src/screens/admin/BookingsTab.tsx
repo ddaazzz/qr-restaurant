@@ -13,7 +13,6 @@ import {
   Alert,
 } from 'react-native';
 import { apiClient } from '../../services/apiClient';
-import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Booking {
   id: number;
@@ -47,7 +46,6 @@ export interface BookingsTabRef {
 
 export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>((props, ref) => {
   const { restaurantId } = props;
-  const { t } = useLanguage();
   
   // Main state
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -92,7 +90,6 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
       const response = await apiClient.get(`/api/restaurants/${restaurantId}/bookings`);
       // Backend returns array directly
       let bookingsData = Array.isArray(response.data) ? response.data : (response.data.bookings || []);
-      console.log('[Bookings Debug] Response:', { rawData: response.data, parsedCount: bookingsData.length });
       
       // Normalize field names: booking_date -> date, booking_time -> time, pax -> party_size
       bookingsData = bookingsData.map((b: any) => ({
@@ -135,20 +132,9 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
       });
       
       const tablesData = Object.values(tableMap);
-      console.log('[Tables Debug] Response:', { 
-        rawDataLength: response.data?.length || 0, 
-        tablesCount: tablesData.length, 
-        tables: tablesData 
-      });
       setTables(tablesData);
     } catch (err: any) {
       console.error('Error fetching tables:', err);
-      console.log('[Tables Error Debug]', { 
-        status: err.response?.status, 
-        data: err.response?.data, 
-        message: err.message,
-        url: `/api/restaurants/${restaurantId}/table-state`
-      });
     }
   };
 

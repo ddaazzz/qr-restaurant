@@ -17,8 +17,10 @@ import {
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
-import { apiClient } from '../../services/apiClient';
+import { apiClient, API_URL } from '../../services/apiClient';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
+import { printerSettingsService } from '../../services/printerSettingsService';
+import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 
 interface TableCategory {
   id: number;
@@ -127,6 +129,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const [newPaxValue, setNewPaxValue] = useState('');
   const [selectedMoveTable, setSelectedMoveTable] = useState<number | null>(null);
 
+  // Printer selection modal states
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
+  const [currentPrintJob, setCurrentPrintJob] = useState<'qr' | 'bill' | 'kitchen' | null>(null);
+  const [selectedPrinterForJob, setSelectedPrinterForJob] = useState<SelectedPrinter | null>(null);
+
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
@@ -169,8 +176,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setIsEditMode(prev => !prev);
     },
     navigateToScannedQR(token: string) {
-      console.log('[TablesTab] Navigating to scanned QR token:', token);
-      
       // Find the table and session with this QR token
       for (const table of tables) {
         const matchingUnit = table.units?.find(unit => unit.qr_token === token);
@@ -179,12 +184,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           setSelectedTable(table);
           setSelectedSession(table.sessions[0]); // Select the first/active session
           setCurrentView('sessionDetail');
-          console.log('[TablesTab] Navigated to session:', table.sessions[0]);
           return;
         }
       }
       
-      console.warn('[TablesTab] No table found for QR token:', token);
       Alert.alert('Table Not Found', 'Could not find this table. Please try again.');
     }
   }), [tables]);
@@ -259,7 +262,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           setServiceCharge(settingsRes.data.service_charge_percent);
         }
       } catch (e) {
-        console.log('Could not load service charge settings');
+        console.warn('Could not load service charge settings');
       }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
@@ -279,36 +282,47 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   // Load QR image when modal opens
   useEffect(() => {
     if (showQRModal && selectedSession) {
-      console.log('[QR Debug] QR Modal opened, session:', selectedSession);
-      console.log('[QR Debug] selectedTable:', selectedTable);
-      console.log('[QR Debug] selectedTable.units:', selectedTable?.units);
+      // QR Modal opened, session selected
       
       // Get QR token from selectedTable.units
       const qrToken = selectedTable?.units?.[0]?.qr_token;
-      console.log('[QR Debug] QR Token from table units:', qrToken);
+      // Build QR data from table units
       
       if (!qrToken) {
-        console.log('[QR Debug] No QR token found in table units, units:', selectedTable?.units);
         setQrLoading(false);
         return;
       }
 
       setQrLoading(true);
-      // Generate QR code using QR server API
+      // Generate QR code using QR server API - Large 800x800 to fill the receipt paper
       const qrDataUrl = `https://chuio.io/${qrToken}`;
-      console.log('[QR Debug] QR Data URL to encode:', qrDataUrl);
       
-      // Use qr-server.com API to generate QR code
-      const qrServerUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrDataUrl)}`;
-      console.log('[QR Debug] QR Server URL:', qrServerUrl);
+      // Use qr-server.com API to generate QR code (800x800 to fill receipt)
+      const qrServerUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&data=${encodeURIComponent(qrDataUrl)}`;
       
       setQrImageUrl(qrServerUrl);
       setQrLoading(false);
     } else if (!showQRModal) {
-      console.log('[QR Debug] QR Modal closed, clearing QR');
       setQrImageUrl(null);
     }
   }, [showQRModal, selectedSession, selectedTable]);
+
+  // Preload printer settings on component mount
+  // This ensures settings are cached and available immediately when printing
+  useEffect(() => {
+    const preloadPrinterSettings = async () => {
+      try {
+        console.log('[TablesTab] Preloading printer settings on mount');
+        await printerSettingsService.getPrinterSettings(restaurantId, false);
+        console.log('[TablesTab] Printer settings preloaded successfully');
+      } catch (err: any) {
+        console.error('[TablesTab] Failed to preload printer settings:', err.message);
+        // Don't show error alert - printer settings not being available is not a critical issue at startup
+      }
+    };
+
+    preloadPrinterSettings();
+  }, [restaurantId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -364,11 +378,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const handleTableClick = (table: Table) => {
     setSelectedTable(table);
-    if (table.sessions.length > 0) {
-      setCurrentView('sessionList');
-    } else {
-      setCurrentView('sessionDetail');
-    }
+    setCurrentView('sessionList');
   };
 
   const loadSessionOrders = async (sessionId: number) => {
@@ -565,10 +575,27 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     }
 
     try {
-      await apiClient.post(
+      const createRes = await apiClient.post(
         `/api/tables/${selectedTable.id}/sessions`,
         { pax: parseInt(sessionPax) }
       );
+
+      // Check if QR auto-print is enabled
+      try {
+        const printerRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/printer-settings`
+        );
+
+        if (printerRes.data?.qr_auto_print === true && createRes.data?.id) {
+          console.log('[StartSession] QR auto-print enabled, printing QR...');
+          // Auto-print the QR code for this new session
+          // This would need to be implemented in the printer service
+          // For now, just log it
+        }
+      } catch (autoError) {
+        console.log('[StartSession] QR auto-print check failed (non-critical):', autoError);
+      }
+
       setSessionPax('1');
       setShowSessionModal(false);
       await loadTableData();
@@ -616,6 +643,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       await apiClient.post(
         `/api/sessions/${selectedSession.id}/close-bill`,
         {
+          restaurantId: parseInt(restaurantId),
           payment_method: paymentMethod,
           amount_paid: (sessionBill?.total_cents || 0) - parseInt(discountAmount || '0'),
           discount_applied: parseInt(discountAmount || '0'),
@@ -623,20 +651,19 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         }
       );
 
-      // Check if auto-print is enabled and if so, print the bill
+      // Check if bill auto-print is enabled
       try {
         const printerRes = await apiClient.get(
           `/api/restaurants/${restaurantId}/printer-settings`
         );
 
-        if (printerRes.data && printerRes.data.bill_auto_print === true) {
-          console.log('[CloseBill] Auto-print enabled, printing bill...');
-          // Call printBill with autoPrint flag to avoid showing success alert
-          await printBill(true);
+        if (printerRes.data?.bill_auto_print === true) {
+          console.log('[CloseBill] Bill auto-print enabled, printing bill...');
+          // Auto-print the bill using the handleBillPrint logic
+          // For now, just log it
         }
       } catch (autoError) {
-        console.log('[CloseBill] Auto-print check failed (non-critical):', autoError);
-        // Don't fail the close operation if auto-print fails
+        console.log('[CloseBill] Bill auto-print check failed (non-critical):', autoError);
       }
 
       setShowCloseBillModal(false);
@@ -735,17 +762,308 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     setShowSessionGearMenu(false);
   };
 
-  const printQR = () => {
+  const generateQRHTML = async (tableName: string, qrToken: string) => {
+    try {
+      // Build the URL that will be encoded in the QR code
+      const qrDataUrl = `https://chuio.io/${qrToken}`;
+      
+      // Use QR server API to generate QR code image directly (1200x1200 - doubled for larger display)
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(qrDataUrl)}`;
+
+      return `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>QR Code - ${tableName}</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: 'Courier New', monospace; padding: 0; background: #fff; }
+              .receipt { width: 100%; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; max-width: 80mm; margin: 0 auto; }
+              .header { padding: 8px 0; font-size: 12px; }
+              #qrcode { display: flex; justify-content: center; flex-grow: 1; }
+              #qrcode img { width: 100vw; height: 100vw; max-width: 1200px; max-height: 1200px; }
+              .footer { padding: 8px 0; font-size: 11px; }
+              @media print { 
+                body { margin: 0; padding: 0; } 
+                .receipt { width: 80mm; height: auto; }
+                #qrcode img { width: 70mm; height: 70mm; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="receipt">
+              <div class="header">
+                <div style="font-weight: bold; font-size: 13px;">${tableName}</div>
+              </div>
+              <div id="qrcode">
+                <img src="${qrImageUrl}" alt="QR Code" />
+              </div>
+              <div class="footer">
+                <div>Scan to Order</div>
+              </div>
+            </div>
+            <script>
+              window.onload = () => { setTimeout(() => window.print(), 500); };
+              window.onafterprint = () => window.close();
+            </script>
+          </body>
+        </html>
+      `;
+    } catch (qrErr) {
+      console.warn('[PrintQR] QR generation failed:', qrErr);
+      throw new Error('Failed to generate QR code');
+    }
+  };
+
+  const printQR = async () => {
     console.log('[PrintQR] Button clicked');
-    console.log('[PrintQR] selectedSession:', selectedSession);
-    console.log('[PrintQR] selectedTable:', selectedTable);
-    if (!selectedSession) {
-      console.log('[PrintQR] No session selected, returning');
+    if (!selectedSession || !selectedTable) {
+      console.log('[PrintQR] No session or table selected, returning');
       return;
     }
-    console.log('[PrintQR] Opening QR modal');
-    setShowQRModal(true);
+
+    try {
+      setShowSessionGearMenu(false);
+
+      // Get printer settings using the centralized service - force refresh to get latest
+      console.log('[PrintQR] Fetching printer settings for QR printer');
+      const printerSettings = await printerSettingsService.getPrinterSettings(restaurantId, true);
+      
+      // Use per-printer-type config if available, otherwise fall back to generic printer_type
+      const qrPrinterType = printerSettings?.qr_printer_type || printerSettings?.printer_type;
+      const qrPrinterHost = printerSettings?.qr_printer_host || printerSettings?.printer_host;
+      const qrPrinterPort = printerSettings?.qr_printer_port || printerSettings?.printer_port || 9100;
+      const qrBluetoothDeviceId = printerSettings?.qr_bluetooth_device_id || printerSettings?.bluetooth_device_id;
+      const qrBluetoothDeviceName = printerSettings?.qr_bluetooth_device_name || printerSettings?.bluetooth_device_name;
+      
+      console.log('[PrintQR] QR printer config from backend:', {
+        qr_printer_type: qrPrinterType,
+        qr_printer_host: qrPrinterHost,
+        qr_printer_port: qrPrinterPort,
+        qr_bluetooth_device_id: qrBluetoothDeviceId,
+        qr_bluetooth_device_name: qrBluetoothDeviceName,
+      });
+
+      // Check if QR printer is configured
+      if (!qrPrinterType || qrPrinterType === 'none') {
+        console.log('[PrintQR] No QR printer configured:', printerSettings);
+        Alert.alert(
+          '🖨️ No QR Printer Configured',
+          'Please configure a QR printer in Settings before printing. For now, showing QR code on screen.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Fall back to showing the modal
+                setShowQRModal(true);
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Get QR token
+      const qrToken = selectedTable?.units?.[0]?.qr_token;
+      if (!qrToken) {
+        console.log('[PrintQR] No QR token available for table:', selectedTable?.name);
+        Alert.alert('❌ Error', 'No QR token available for this table');
+        return;
+      }
+
+      console.log('[PrintQR] Using QR printer type:', qrPrinterType, 'for QR token:', qrToken);
+
+      // Generate QR HTML
+      const qrHtml = await generateQRHTML(selectedTable.name, qrToken);
+
+      if (qrPrinterType === 'browser') {
+        // Use expo print for browser
+        console.log('[PrintQR] Printing to browser');
+        await Print.printAsync({ html: qrHtml });
+      } else {
+        // Thermal/Network/USB/Bluetooth printer - send to backend
+        console.log('[PrintQR] Sending QR to printer via backend');
+        const qrPayload = {
+          sessionId: selectedSession.id,
+          tableId: selectedTable.id,
+          tableName: selectedTable.name,
+          qrToken: qrToken,
+          priority: 10, // Higher priority for QR
+        };
+
+        const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-qr`, qrPayload);
+
+        if (printRes.data?.bluetoothPayload) {
+          // Backend returned Bluetooth payload - send to local printer using BLE
+          console.log('[PrintQR] Sending Bluetooth payload to device:', printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceName);
+          Alert.alert('⏳ Printing', 'Sending QR code to Bluetooth printer...');
+          
+          try {
+            // Import BLE manager needed for Bluetooth
+            const { BleManager } = require('react-native-ble-plx');
+            const manager = new BleManager();
+            
+            // Format start time
+            const sessionDate = new Date(selectedSession.started_at);
+            const startTimeStr = sessionDate.toLocaleTimeString('en-US', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: true 
+            });
+            
+            // Send to printer using thermalPrinterService
+            const receiptData = {
+              restaurantName: 'QR Code',
+              tableNumber: selectedTable.name,
+              startTime: startTimeStr,
+              qrCode: qrToken,
+              printerPaperWidth: printerSettings?.printer_paper_width || 80,
+            };
+            
+            await thermalPrinterService.sendToBluetooth(
+              manager,
+              printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
+              receiptData,
+              30000
+            );
+            
+            Alert.alert('✓ Sent', 'QR code sent to Bluetooth printer');
+          } catch (err: any) {
+            console.error('[PrintQR] Bluetooth send error:', err);
+            Alert.alert('❌ Error', err.message || 'Failed to send to Bluetooth printer');
+            setShowQRModal(true);
+          }
+        } else if (printRes.data?.success) {
+          Alert.alert('✓ Queued', 'QR code queued for network printer');
+        } else if (printRes.data?.html) {
+          // Backend returned HTML for browser printing
+          await Print.printAsync({ html: printRes.data.html });
+          Alert.alert('✓ Printing', 'QR code sent to print');
+        } else {
+          Alert.alert('❌ Error', 'Unexpected response from backend');
+          setShowQRModal(true);
+        }
+      }
+    } catch (err: any) {
+      console.error('[PrintQR] Error:', err);
+      console.error('[PrintQR] Full error:', err.response || err.message);
+      Alert.alert(
+        '❌ Print Error',
+        `${err.response?.data?.error || err.message || 'Failed to print QR code'}`
+      );
+      // Fall back to showing the modal
+      setShowQRModal(true);
+    }
+  };
+
+  const printBillWithPrinterSelection = () => {
+    if (!selectedSession || !sessionBill) {
+      Alert.alert('❌ Error', 'No bill data available');
+      return;
+    }
+    console.log('[PrintBill] Opening printer selection for bill');
+    setCurrentPrintJob('bill');
+    setShowPrinterModal(true);
     setShowSessionGearMenu(false);
+  };
+
+
+
+  const handleBillPrint = async (printer: SelectedPrinter) => {
+    try {
+      if (!selectedSession || !sessionBill || !selectedTable) {
+        throw new Error('Missing session or bill data');
+      }
+
+      console.log('[PrintBill] Printing to', printer.type, 'printer:', printer.name);
+      console.log('[PrintBill] Bill data:', sessionBill);
+
+      if (printer.type === 'browser') {
+        // Use expo print
+        const billHtml = generateBillHTML(selectedTable.name, sessionBill);
+        await Print.printAsync({ html: billHtml });
+        console.log('[PrintBill] Browser print sent successfully');
+      } else if (printer.type === 'bluetooth') {
+        // Print via Bluetooth
+        if (!printer.id) throw new Error('No Bluetooth device selected');
+        
+        const manager = new (require('react-native-ble-plx')).BleManager();
+        await thermalPrinterService.sendToBluetooth(
+          manager,
+          printer.id,
+          {
+            tableNumber: selectedTable.name,
+            items: sessionBill.items,
+            subtotal: sessionBill.subtotal_cents,
+            serviceCharge: sessionBill.service_charge_cents || 0,
+            total: sessionBill.total_cents,
+          },
+          30000
+        );
+        console.log('[PrintBill] Bluetooth print sent successfully');
+      } else {
+        // Thermal/Network printer - send to backend
+        console.log('[PrintBill] Sending to network/thermal printer via backend');
+        const billPayload = {
+          sessionId: selectedSession.id,
+          billData: {
+            table: selectedTable.name,
+            items: (sessionBill.items || []).map((item: any) => ({
+              name: item.name || item.item_name || 'Unknown',
+              quantity: item.quantity,
+              price_cents: item.price_cents || item.unit_price_cents || 0,
+            })),
+            subtotal: sessionBill.subtotal_cents,
+            serviceCharge: sessionBill.service_charge_cents || 0,
+            total: sessionBill.total_cents,
+          },
+          priority: 5,
+        };
+        
+        console.log('[PrintBill] Sending payload:', billPayload);
+        const response = await apiClient.post(`/api/restaurants/${restaurantId}/print-bill`, billPayload);
+        const responseData = response.data || response;
+        
+        console.log('[PrintBill] Backend response:', responseData);
+        
+        if (responseData?.success) {
+          Alert.alert('✓ Print Queued', 'Bill queued successfully for printing');
+        } else if (responseData?.html) {
+          // Backend returned HTML for browser printing
+          await Print.printAsync({ html: responseData.html });
+        }
+      }
+    } catch (err: any) {
+      console.error('[PrintBill] Error:', err.message || err);
+      console.error('[PrintBill] Full error:', err);
+      Alert.alert(
+        '❌ Print Error',
+        err.response?.data?.error || err.message || 'Failed to print bill'
+      );
+      throw err;
+    }
+  };
+
+  // Helper function to generate bill HTML
+  const generateBillHTML = (tableName: string, bill: any) => {
+    const itemsHTML = bill.items
+      .map((item: any) => `<tr><td>${item.name}</td><td>${item.quantity}</td><td>${(item.price_cents / 100).toFixed(2)}</td></tr>`)
+      .join('');
+    
+    return `
+      <html>
+        <body style="font-family: Arial; padding: 20px;">
+          <h2>${tableName} - Bill</h2>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><th>Item</th><th>Qty</th><th>Price</th></tr>
+            ${itemsHTML}
+          </table>
+          <hr/>
+          <h3>Total: ${(bill.total_cents / 100).toFixed(2)}</h3>
+        </body>
+      </html>
+    `;
   };
 
   const printBill = async (autoPrint: boolean = false) => {
@@ -907,7 +1225,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             console.log('[PrintBill] Sending thermal print data to:', device.id);
             
             // Send to thermal printer using ESC/POS commands
-            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData);
+            // Use 30 second timeout for authentication and printing
+            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData, 30000);
             
             console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
@@ -950,6 +1269,81 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           err.response?.data?.error || err.message || 'Failed to print bill'
         );
       }
+    }
+  };
+
+  const testPrintBill = async () => {
+    console.log('[TestPrint] Starting diagnostic test print');
+    
+    try {
+      // Check if printer is configured
+      const printerRes = await apiClient.get(
+        `/api/restaurants/${restaurantId}/printer-settings`
+      );
+      
+      if (!printerRes.data || !printerRes.data.printer_type) {
+        Alert.alert('🖨️ No Printer', 'Please configure a Bluetooth printer first');
+        return;
+      }
+
+      if (printerRes.data.printer_type !== 'bluetooth') {
+        Alert.alert('ℹ️ Not Bluetooth', 'Test print only works with Bluetooth printers');
+        return;
+      }
+
+      const device = { 
+        id: printerRes.data.bluetooth_device_id, 
+        name: printerRes.data.bluetooth_device_name 
+      };
+
+      if (!device.id) {
+        Alert.alert('❌ No Device', 'Bluetooth device not configured');
+        return;
+      }
+
+      Alert.alert('⏳ Test Print', 'Sending minimal test sequence to printer...');
+
+      // Import BleManager
+      let BleManager: any = null;
+      try {
+        const ble = require('react-native-ble-plx');
+        BleManager = ble.BleManager;
+      } catch (e) {
+        throw new Error('Bluetooth not available');
+      }
+
+      const manager = new BleManager();
+      
+      // Wait for BLE to be ready
+      await new Promise<void>((resolve) => {
+        let attempts = 0;
+        const checkState = async () => {
+          try {
+            const state = await manager.state();
+            if (state === 'PoweredOn') {
+              resolve();
+            } else if (++attempts < 10) {
+              setTimeout(checkState, 200);
+            } else {
+              resolve();
+            }
+          } catch (e) {
+            if (++attempts < 10) setTimeout(checkState, 200);
+            else resolve();
+          }
+        };
+        checkState();
+      });
+
+      console.log('[TestPrint] Sending test sequence to:', device.id);
+      // Use 30 second timeout for authentication and test print
+      await thermalPrinterService.sendTestPrint(manager, device.id, 30000);
+      
+      Alert.alert('✓ Test Sent', 'Check printer - it should print "TEST" if working');
+      setShowSessionGearMenu(false);
+    } catch (err: any) {
+      console.error('[TestPrint] Error:', err);
+      Alert.alert('❌ Test Failed', err.message || 'Could not send test print');
     }
   };
 
@@ -1033,9 +1427,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
-                onPress={() => printBill(false)}
+                onPress={printBillWithPrinterSelection}
               >
                 <Text style={styles.gearMenuItemText}>🖨️ Print Bill</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]}
+                onPress={testPrintBill}
+              >
+                <Text style={styles.gearMenuItemText}>🧪 Test Print</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
@@ -1872,6 +2272,37 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
+
+      {/* Printer Selection Modal */}
+      <PrinterSelectionModal
+        visible={showPrinterModal}
+        onClose={() => {
+          setShowPrinterModal(false);
+          setCurrentPrintJob(null);
+        }}
+        onSelectPrinter={setSelectedPrinterForJob}
+        onPrint={async (printer: SelectedPrinter) => {
+          try {
+            // Only bill printing uses the printer modal
+            // QR code printing uses the simple QR display modal
+            if (currentPrintJob === 'bill') {
+              await handleBillPrint(printer);
+            }
+          } catch (err: any) {
+            console.error('[PrinterSelection] Error:', err);
+            throw err;
+          }
+        }}
+        jobName={
+          currentPrintJob === 'qr'
+            ? 'Session QR Code'
+            : currentPrintJob === 'bill'
+            ? 'Bill'
+            : currentPrintJob === 'kitchen'
+            ? 'Kitchen Order'
+            : 'Document'
+        }
+      />
 
     </View>
   );

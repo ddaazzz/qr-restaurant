@@ -22,9 +22,7 @@ import {
   Image,
   Pressable,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
-import { useLanguage } from '../../contexts/LanguageContext';
 
 // ==================== INTERFACES ====================
 
@@ -66,7 +64,6 @@ export interface MenuTabRef {
 
 export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
   ({ restaurantId }, ref) => {
-    const { t } = useLanguage();
     // ==================== STATE MANAGEMENT ====================
     
     // Data
@@ -175,7 +172,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         }
       } catch (err: any) {
         console.error('Error fetching menu data:', err);
-        setError(err.response?.data?.error || t('error.failed-to-load'));
+        setError(err.response?.data?.error || 'Failed to load menu');
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -195,7 +192,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const createCategory = async () => {
       if (!categoryName.trim()) {
-        Alert.alert(t('error.error'), t('menu.category-required'));
+        Alert.alert('Error', 'Category name required');
         return;
       }
 
@@ -208,13 +205,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setShowCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
+        Alert.alert('Error', err.response?.data?.error || 'Failed to create category');
       }
     };
 
     const updateCategory = async (categoryId: number) => {
       if (!editingCategoryName.trim()) {
-        Alert.alert(t('error.error'), t('menu.category-required'));
+        Alert.alert('Error', 'Category name required');
         return;
       }
 
@@ -228,18 +225,18 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setShowEditCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed-to-load'));
+        Alert.alert('Error', err.response?.data?.error || 'Failed to update category');
       }
     };
 
     const deleteCategory = (categoryId: number, categoryName: string) => {
       Alert.alert(
-        t('menu.delete-category'),
+        'Delete Category',
         `Are you sure you want to delete "${categoryName}"?`,
         [
-          { text: t('button.cancel') },
+          { text: 'Cancel' },
           {
-            text: t('button.delete'),
+            text: 'Delete',
             style: 'destructive',
             onPress: async () => {
               try {
@@ -249,7 +246,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 );
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
+                Alert.alert('Error', err.response?.data?.error || 'Failed to delete category');
               }
             },
           },
@@ -261,12 +258,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const createItem = async () => {
       if (!itemName.trim() || !itemPrice.trim()) {
-        Alert.alert(t('error.error'), t('menu.item-price-required'));
+        Alert.alert('Error', 'Item name and price required');
         return;
       }
 
       if (!selectedCategory) {
-        Alert.alert(t('error.error'), t('menu.category'));
+        Alert.alert('Error', 'Select a category first');
         return;
       }
 
@@ -289,13 +286,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setShowItemModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
+        Alert.alert('Error', err.response?.data?.error || 'Failed to create item');
       }
     };
 
     const updateItem = async (itemId: number) => {
       if (!editingItemName.trim() || !editingItemPrice.trim()) {
-        Alert.alert(t('error.error'), t('menu.item-price-required'));
+        Alert.alert('Error', 'Item name and price required');
         return;
       }
 
@@ -323,12 +320,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const deleteItem = (itemId: number, itemName: string) => {
       Alert.alert(
-        t('menu.delete-item'),
-        `${t('menu.delete-confirm')} "${itemName}"?`,
+        'Delete Item',
+        `Are you sure you want to delete "${itemName}"?`,
         [
-          { text: t('button.cancel') },
+          { text: 'Cancel' },
           {
-            text: t('button.delete'),
+            text: 'Delete',
             style: 'destructive',
             onPress: async () => {
               try {
@@ -342,7 +339,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                   setSelectedItem(null);
                 }
               } catch (err: any) {
-                Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
+                Alert.alert('Error', err.response?.data?.error || 'Failed to delete item');
               }
             },
           },
@@ -386,7 +383,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         setEditingItemForVariant(null);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert(t('error.error'), err.response?.data?.error || t('error.failed'));
+        Alert.alert('Error', err.response?.data?.error || 'Failed to create variant');
       }
     };
 
@@ -412,19 +409,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const deleteVariant = (variantId: number, variantName: string) => {
       Alert.alert(
-        t('menu.delete-variant'),
-        `${t('menu.delete-confirm')} "${variantName}"?`,
+        'Delete Variant',
+        `Are you sure you want to delete "${variantName}"?`,
         [
-          { text: t('button.cancel') },
+          { text: 'Cancel' },
           {
-            text: t('button.delete'),
+            text: 'Delete',
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.delete(`/api/variants/${variantId}`);
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert(t('error.error'), err.response?.data?.error || t('menu.variant-update-failed'));
+                Alert.alert('Error', err.response?.data?.error || 'Failed to delete variant');
               }
             },
           },
@@ -484,19 +481,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     const deleteVariantOption = (optionId: number, optionName: string) => {
       Alert.alert(
-        t('menu.delete-option'),
-        `${t('menu.delete-confirm')} "${optionName}"?`,
+        'Delete Option',
+        `Are you sure you want to delete "${optionName}"?`,
         [
-          { text: t('button.cancel') },
+          { text: 'Cancel' },
           {
-            text: t('button.delete'),
+            text: 'Delete',
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.delete(`/api/variant-options/${optionId}`);
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert(t('error.error'), err.response?.data?.error || t('menu.delete-option'));
+                Alert.alert('Error', err.response?.data?.error || 'Failed to delete option');
               }
             },
           },
@@ -515,74 +512,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     };
 
     const uploadItemImage = async (itemId: number, context: 'inline' | 'new' | 'edit') => {
-      try {
-        // Request media library permission
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert(t('menu.permission-denied'), t('menu.photo-permission'));
-          return;
-        }
-
-        // Pick image
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [1, 1],
-          quality: 0.7,
-        });
-
-        if (!result.canceled && result.assets.length > 0) {
-          const asset = result.assets[0];
-          setUploadingImageItemId(itemId);
-          setUploadingImageContext(context);
-
-          // Create FormData for upload
-          const formData = new FormData();
-          formData.append('image', {
-            uri: asset.uri,
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `image-${Date.now()}.jpg`,
-          } as any);
-          formData.append('restaurantId', restaurantId);
-
-          // Upload to backend
-          const response = await apiClient.post(
-            `/api/menu-items/${itemId}/image`,
-            formData,
-            {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
-            }
-          );
-
-          // Update the appropriate state based on context
-          if (response.data?.image_url) {
-            if (context === 'inline' && selectedItem?.id === itemId) {
-              setInlineEditImageUrl(response.data.image_url);
-              setSelectedItem({
-                ...selectedItem,
-                image_url: response.data.image_url,
-              });
-            } else if (context === 'new') {
-              setItemImageUrl(response.data.image_url);
-            } else if (context === 'edit') {
-              setEditingItemImageUrl(response.data.image_url);
-            }
-
-            Alert.alert(t('menu.upload-success'), t('menu.upload-success-message'));
-          }
-        }
-      } catch (err: any) {
-        console.error('Image upload error:', err);
-        Alert.alert(
-          t('menu.upload-failed'),
-          err.response?.data?.error || t('menu.upload-failed-message')
-        );
-      } finally {
-        setUploadingImageItemId(null);
-        setUploadingImageContext(null);
-      }
+      Alert.alert('Not Available', 'Image upload is not available in this version');
     };
 
     const filteredItems = selectedCategory
@@ -752,7 +682,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
             columnWrapperStyle={styles.gridRow}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>{t('menu.no-items-category')}</Text>
+                <Text style={styles.emptyText}>No items in this category</Text>
               </View>
             }
             contentContainerStyle={styles.listContent}
@@ -1084,9 +1014,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.add-category')}</Text>
+              <Text style={styles.modalTitle}>New Category</Text>
 
-              <Text style={styles.label}>{t('menu.category')}</Text>
+              <Text style={styles.label}>Category Name</Text>
               <TextInput
                 style={styles.input}
                 value={categoryName}
@@ -1116,9 +1046,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.edit-category')}</Text>
+              <Text style={styles.modalTitle}>Edit Category</Text>
 
-              <Text style={styles.label}>{t('menu.category')}</Text>
+              <Text style={styles.label}>Category Name</Text>
               <TextInput
                 style={styles.input}
                 value={editingCategoryName}
@@ -1152,9 +1082,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.add-item')}</Text>
+              <Text style={styles.modalTitle}>New Food Item</Text>
 
-              <Text style={styles.label}>{t('menu.item-name')}</Text>
+              <Text style={styles.label}>Item Name</Text>
               <TextInput
                 style={styles.input}
                 value={itemName}
@@ -1225,9 +1155,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.edit-item')}</Text>
+              <Text style={styles.modalTitle}>Edit Item</Text>
 
-              <Text style={styles.label}>{t('menu.item-name')}</Text>
+              <Text style={styles.label}>Item Name</Text>
               <TextInput
                 style={styles.input}
                 value={editingItemName}
@@ -1299,9 +1229,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showVariantModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.add-variant')}</Text>
+              <Text style={styles.modalTitle}>New Variant</Text>
 
-              <Text style={styles.label}>{t('menu.variant')}  {t('menu.name')}</Text>
+              <Text style={styles.label}>Variant Name</Text>
               <TextInput
                 style={styles.input}
                 value={variantName}
@@ -1334,9 +1264,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditVariantModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.edit-variant')}</Text>
+              <Text style={styles.modalTitle}>Edit Variant</Text>
 
-              <Text style={styles.label}>{t('menu.variant')} {t('menu.name')}</Text>
+              <Text style={styles.label}>Variant Name</Text>
               <TextInput
                 style={styles.input}
                 value={editingVariantName}
@@ -1370,9 +1300,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.add-option')}</Text>
+              <Text style={styles.modalTitle}>New Option</Text>
 
-              <Text style={styles.label}>{t('menu.option')} {t('menu.name')}</Text>
+              <Text style={styles.label}>Option Name</Text>
               <TextInput
                 style={styles.input}
                 value={optionName}
@@ -1414,9 +1344,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         <Modal visible={showEditVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.edit-option')}</Text>
+              <Text style={styles.modalTitle}>Edit Option</Text>
 
-              <Text style={styles.label}>{t('menu.option')} {t('menu.name')}</Text>
+              <Text style={styles.label}>Option Name</Text>
               <TextInput
                 style={styles.input}
                 value={editingOptionName}

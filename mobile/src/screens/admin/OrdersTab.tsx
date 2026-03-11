@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal } from 'react-native';
 import { apiClient, API_URL } from '../../services/apiClient';
-import { useLanguage } from '../../contexts/LanguageContext';
 
 interface MenuItem {
   id: number;
@@ -76,8 +75,6 @@ interface OrdersTabProps {
 
 const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<OrdersTabRef>) => {
   const { restaurantId, selectedTableOnInit } = props;
-  const { t } = useLanguage();
-    
     // Menu state
     const [categories, setCategories] = useState<Category[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -280,26 +277,73 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const handleSubmitOrder = async () => {
       if (cart.length === 0) {
-        Alert.alert(t('orders.empty-cart'), t('orders.add-items'));
+        Alert.alert('Empty Cart', 'Please add items before submitting');
         return;
       }
       if (!orderType) {
-        Alert.alert(t('error.error'), t('orders.select-type'));
+        Alert.alert('Missing Info', 'Please select an order type');
         return;
       }
       if (orderType === 'table' && !selectedTable) {
-        Alert.alert(t('error.error'), t('orders.select-table'));
+        Alert.alert('Missing Table', 'Please select a table');
         return;
       }
 
       try {
-        // TODO: Implement actual API submission
-        Alert.alert(t('success.success'), `${orderType} order submitted with ${cart.length} items`);
+        // Prepare items for API submission
+        const items = cart.map(cartItem => ({
+          menu_item_id: cartItem.id,
+          quantity: cartItem.quantity,
+          selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
+        }));
+
+        console.log('[OrderSubmit] Submitting order:', {
+          orderType,
+          selectedTable,
+          items,
+          restaurantId,
+        });
+
+        if (orderType === 'table') {
+          // For table orders, we need a session ID
+          // First, check if table has an active session
+          if (!selectedTable) {
+            throw new Error('Please select a table');
+          }
+          
+          // The selectedTable is now a table ID (string)
+          // We need to look up if this table has an active session
+          // For now, treat selectedTable as a session ID (in case it's been pre-selected from active sessions)
+          const sessionId = selectedTable;
+          
+          const res = await apiClient.post(
+            `/api/sessions/${sessionId}/orders`,
+            { items }
+          );
+          console.log('[OrderSubmit] Table order submitted:', res);
+          Alert.alert('✓ Success', `Order submitted with ${cart.length} items`);
+        } else if (orderType === 'pay-now') {
+          // For pay-now orders, create an order without a session
+          // Backend might need a different endpoint for this
+          // For now, alert user that they need to use a different flow
+          Alert.alert('Order Now', 'Please use the counter/pay-now flow from the Tables tab');
+          return;
+        } else if (orderType === 'to-go') {
+          // For to-go orders, similar approach
+          Alert.alert('To-Go Order', 'Please use the to-go flow from the Tables tab');
+          return;
+        }
+
+        // Clear cart and reset
         setCart([]);
         setOrderType(null);
         setSelectedTable(null);
       } catch (err: any) {
-        Alert.alert(t('error.error'), err.message || t('error.error'));
+        console.error('[OrderSubmit] Error:', err);
+        Alert.alert(
+          '❌ Error',
+          err.response?.data?.error || err.message || 'Failed to submit order. Make sure table has an active session.'
+        );
       }
     };
 
@@ -354,18 +398,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {/* Header with back button */}
           <View style={styles.historyHeader}>
             <TouchableOpacity onPress={() => setShowHistory(false)}>
-              <Text style={styles.backButton}>← {t('modal.back')}</Text>
+              <Text style={styles.backButton}>← Back</Text>
             </TouchableOpacity>
-            <Text style={styles.historyTitle}>{t('orders.order-history')}</Text>
+            <Text style={styles.historyTitle}>Order History</Text>
           </View>
 
           {/* Filter buttons */}
           <View style={styles.filterBar}>
             {[
-              { id: 'all', label: t('orders.all'), count: orders.length },
-              { id: 'pay-now', label: t('orders.order-now'), count: orders.filter(o => o.order_type === 'counter' || o.order_type === 'pay-now').length },
+              { id: 'all', label: 'All', count: orders.length },
+              { id: 'pay-now', label: 'Order Now', count: orders.filter(o => o.order_type === 'counter' || o.order_type === 'pay-now').length },
               { id: 'to-go', label: 'To-Go', count: orders.filter(o => o.order_type === 'to-go').length },
-              { id: 'sessions', label: t('orders.sessions'), count: sessions.length },
+              { id: 'sessions', label: 'Sessions', count: sessions.length },
             ].map((filter: any) => (
               <TouchableOpacity
                 key={filter.id}
@@ -400,10 +444,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <View style={styles.orderHeader}>
                       <Text style={styles.orderId}>🪑 {session.table_name || 'Table'}</Text>
                       <View style={[styles.statusBadge, { backgroundColor: isEnded ? '#9ca3af' : '#10b981' }]}>
-                        <Text style={styles.statusText}>{isEnded ? t('orders.closed') : t('orders.active')}</Text>
+                        <Text style={styles.statusText}>{isEnded ? 'Closed' : 'Active'}</Text>
                       </View>
                     </View>
-                    <Text style={styles.orderDetails}>👥 {session.pax || 0} {t('tables.pax')} • Started {formatDate(session.started_at)}</Text>
+                    <Text style={styles.orderDetails}>👥 {session.pax || 0} people • Started {formatDate(session.started_at)}</Text>
                   </TouchableOpacity>
                 );
               } else {
@@ -430,7 +474,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>{historyFilter === 'sessions' ? t('kitchen.no-active-orders') : t('orders.empty-cart')}</Text>
+                <Text style={styles.emptyText}>No {historyFilter === 'sessions' ? 'sessions' : 'orders'} found</Text>
               </View>
             }
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadOrdersAndSessions} />}
@@ -457,7 +501,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <Text style={styles.closeButton}>✕</Text>
                   </TouchableOpacity>
                   <Text style={styles.modalTitle}>
-                    {historyFilter === 'sessions' ? t('orders.session-details') : t('orders.order-details')}
+                    {historyFilter === 'sessions' ? 'Session Details' : 'Order Details'}
                   </Text>
                   <View style={{ width: 24 }} />
                 </View>
@@ -478,11 +522,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <TouchableOpacity 
                         style={[styles.modalActionBtn, styles.printBtn]}
                       >
-                        <Text style={styles.modalActionBtnText}>🖨️ {t('orders.print-receipt')}</Text>
+                        <Text style={styles.modalActionBtnText}>🖨️ Print Bill</Text>
                       </TouchableOpacity>
                       {selectedOrder && !(selectedOrder as Session).ended_at && (
                         <TouchableOpacity style={[styles.modalActionBtn, styles.closeBtn]}>
-                          <Text style={styles.modalActionBtnText}>✓ {t('tables.close-bill')}</Text>
+                          <Text style={styles.modalActionBtnText}>✓ Close Bill</Text>
                         </TouchableOpacity>
                       )}
                     </>
@@ -490,7 +534,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <TouchableOpacity 
                       style={[styles.modalActionBtn, styles.printBtn]}
                     >
-                      <Text style={styles.modalActionBtnText}>🖨️ {t('orders.print-receipt')}</Text>
+                      <Text style={styles.modalActionBtnText}>🖨️ Print Receipt</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -628,7 +672,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     onPress={() => setOrderType('pay-now')}
                   >
                     <Text style={[styles.orderTypeBtnText, orderType === 'pay-now' && styles.orderTypeBtnTextActive]}>
-                      🛒 {t('orders.order-now')}
+                      🛒 Order Now
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -645,7 +689,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               {/* Table selection for table orders */}
               {orderType === 'table' && (
                 <View style={styles.tableSelectionSection}>
-                  <Text style={styles.sectionLabel}>{t('orders.select-table')}</Text>
+                  <Text style={styles.sectionLabel}>Select Table</Text>
                   <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false}
@@ -686,7 +730,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   disabled={!orderType || (orderType === 'table' && !selectedTable)}
                   onPress={handleSubmitOrder}
                 >
-                  <Text style={styles.submitBtnText}>✓ {t('button.submit')}</Text>
+                  <Text style={styles.submitBtnText}>✓ Submit</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -819,13 +863,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   style={styles.cancelBtn}
                   onPress={() => setShowVariantModal(false)}
                 >
-                  <Text style={styles.cancelBtnText}>{t('button.cancel')}</Text>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.addBtn}
                   onPress={handleVariantSubmit}
                 >
-                  <Text style={styles.addBtnText}>{t('menu.add-item')}</Text>
+                  <Text style={styles.addBtnText}>Add to Cart</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -849,27 +893,27 @@ const SessionDetails = ({ session, billData }: { session: Session | null; billDa
   return (
     <View style={styles.detailsContainer}>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>{t('orders.table')}</Text>
+        <Text style={styles.detailLabel}>Table</Text>
         <Text style={styles.detailValue}>{session.table_name || 'N/A'}</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>{t('tables.pax')}</Text>
+        <Text style={styles.detailLabel}>Pax</Text>
         <Text style={styles.detailValue}>👥 {session.pax || 0} people</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>{t('tables.start-session')}</Text>
+        <Text style={styles.detailLabel}>Started</Text>
         <Text style={styles.detailValue}>{session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A'}</Text>
       </View>
       {session.ended_at && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailLabel}>{t('orders.closed')}</Text>
+          <Text style={styles.detailLabel}>Closed</Text>
           <Text style={styles.detailValue}>{new Date(session.ended_at).toLocaleString()}</Text>
         </View>
       )}
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>{t('bookings.status')}</Text>
+        <Text style={styles.detailLabel}>Status</Text>
         <Text style={[styles.detailValue, { color: isEnded ? '#9ca3af' : '#10b981' }]}>
-          {isEnded ? t('orders.closed') : t('orders.active')}
+          {isEnded ? 'Closed' : 'Active'}
         </Text>
       </View>
       
@@ -935,11 +979,11 @@ const OrderDetails = ({ order }: { order: Order | null }) => {
         <Text style={styles.detailValue}>#{order.id}</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>{t('orders.select-type')}</Text>
+        <Text style={styles.detailLabel}>Type</Text>
         <Text style={styles.detailValue}>{getOrderTypeLabel(order.order_type)}</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>{t('bookings.status')}</Text>
+        <Text style={styles.detailLabel}>Status</Text>
         <Text style={[styles.detailValue, { color: getStatusColor(order.status) }]}>{order.status}</Text>
       </View>
       <View style={styles.detailSection}>
@@ -949,7 +993,7 @@ const OrderDetails = ({ order }: { order: Order | null }) => {
         </Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Created Date</Text>
+        <Text style={styles.detailLabel}>Created</Text>
         <Text style={styles.detailValue}>{new Date(order.created_at).toLocaleString()}</Text>
       </View>
       {order.items && order.items.length > 0 && (
@@ -1005,7 +1049,7 @@ const styles = StyleSheet.create({
   historyBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#2196F3',
     borderRadius: 6,
     borderWidth: 0,
   },
@@ -1054,7 +1098,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   filterBtnActive: {
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#2196F3',
   },
   filterBtnText: {
     textAlign: 'center',
@@ -1322,8 +1366,8 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   orderTypeBtnActive: {
-    backgroundColor: '#2C3E50',
-    borderColor: '#2C3E50',
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
   },
   orderTypeBtnText: {
     fontSize: 12,
@@ -1352,8 +1396,8 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   tableBtnActive: {
-    backgroundColor: '#2C3E50',
-    borderColor: '#2C3E50',
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
   },
   tableBtnText: {
     fontSize: 13,

@@ -50,7 +50,24 @@ router.get("/restaurants/:restaurantId/printer-settings", async (req: Request, r
         bluetooth_device_name,
         kitchen_auto_print, 
         bill_auto_print,
-        print_logo
+        print_logo,
+        qr_printer_type,
+        qr_printer_host,
+        qr_printer_port,
+        qr_bluetooth_device_id,
+        qr_bluetooth_device_name,
+        qr_auto_print,
+        bill_printer_type,
+        bill_printer_host,
+        bill_printer_port,
+        bill_bluetooth_device_id,
+        bill_bluetooth_device_name,
+        kitchen_printer_type,
+        kitchen_printer_host,
+        kitchen_printer_port,
+        kitchen_bluetooth_device_id,
+        kitchen_bluetooth_device_name,
+        printer_paper_width
        FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
@@ -82,6 +99,23 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
     kitchen_auto_print,
     bill_auto_print,
     print_logo,
+    qr_printer_type,
+    qr_printer_host,
+    qr_printer_port,
+    qr_bluetooth_device_id,
+    qr_bluetooth_device_name,
+    qr_auto_print,
+    bill_printer_type,
+    bill_printer_host,
+    bill_printer_port,
+    bill_bluetooth_device_id,
+    bill_bluetooth_device_name,
+    kitchen_printer_type,
+    kitchen_printer_host,
+    kitchen_printer_port,
+    kitchen_bluetooth_device_id,
+    kitchen_bluetooth_device_name,
+    printer_paper_width,
   } = req.body;
 
   try {
@@ -97,8 +131,25 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
         bluetooth_device_name = COALESCE($7, bluetooth_device_name),
         kitchen_auto_print = COALESCE($8, kitchen_auto_print),
         bill_auto_print = COALESCE($9, bill_auto_print),
-        print_logo = COALESCE($10, print_logo)
-      WHERE id = $11
+        print_logo = COALESCE($10, print_logo),
+        qr_printer_type = COALESCE($11, qr_printer_type),
+        qr_printer_host = COALESCE($12, qr_printer_host),
+        qr_printer_port = COALESCE($13, qr_printer_port),
+        qr_bluetooth_device_id = COALESCE($14, qr_bluetooth_device_id),
+        qr_bluetooth_device_name = COALESCE($15, qr_bluetooth_device_name),
+        qr_auto_print = COALESCE($16, qr_auto_print),
+        bill_printer_type = COALESCE($17, bill_printer_type),
+        bill_printer_host = COALESCE($18, bill_printer_host),
+        bill_printer_port = COALESCE($19, bill_printer_port),
+        bill_bluetooth_device_id = COALESCE($20, bill_bluetooth_device_id),
+        bill_bluetooth_device_name = COALESCE($21, bill_bluetooth_device_name),
+        kitchen_printer_type = COALESCE($22, kitchen_printer_type),
+        kitchen_printer_host = COALESCE($23, kitchen_printer_host),
+        kitchen_printer_port = COALESCE($24, kitchen_printer_port),
+        kitchen_bluetooth_device_id = COALESCE($25, kitchen_bluetooth_device_id),
+        kitchen_bluetooth_device_name = COALESCE($26, kitchen_bluetooth_device_name),
+        printer_paper_width = COALESCE($27, printer_paper_width)
+      WHERE id = $28
       RETURNING *;
     `;
 
@@ -113,6 +164,23 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
       kitchen_auto_print,
       bill_auto_print,
       print_logo,
+      qr_printer_type,
+      qr_printer_host,
+      qr_printer_port,
+      qr_bluetooth_device_id,
+      qr_bluetooth_device_name,
+      qr_auto_print,
+      bill_printer_type,
+      bill_printer_host,
+      bill_printer_port,
+      bill_bluetooth_device_id,
+      bill_bluetooth_device_name,
+      kitchen_printer_type,
+      kitchen_printer_host,
+      kitchen_printer_port,
+      kitchen_bluetooth_device_id,
+      kitchen_bluetooth_device_name,
+      printer_paper_width,
       restaurantId,
     ]);
 
@@ -297,6 +365,142 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
     }
     console.error("❌ Failed to queue print order:", err);
     res.status(500).json({ error: "Failed to queue print order" });
+  }
+});
+
+/**
+ * Print QR code (queue-based)
+ */
+router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Response) => {
+  const restaurantId = req.params.restaurantId as string;
+  let { sessionId, tableId, tableName, qrToken, priority = 10 } = req.body;
+
+  console.log('[PrintQR] Received print-qr request:', { restaurantId, sessionId, tableName, qrToken });
+
+  if (!tableId || !tableName || !qrToken) {
+    return res.status(400).json({ error: "tableId, tableName, and qrToken are required" });
+  }
+
+  try {
+    // Get restaurant's QR printer configuration
+    const restaurantResult = await pool.query(
+      `SELECT qr_printer_type, qr_printer_host, qr_printer_port,
+              qr_bluetooth_device_id, qr_bluetooth_device_name, name
+       FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+
+    if (restaurantResult.rowCount === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    const printerConfig = restaurantResult.rows[0];
+    console.log('[PrintQR] QR printer config:', {
+      type: printerConfig.qr_printer_type,
+      host: printerConfig.qr_printer_host,
+      bluetoothDeviceId: printerConfig.qr_bluetooth_device_id,
+      bluetoothDeviceName: printerConfig.qr_bluetooth_device_name,
+    });
+
+    // Check if printer is configured
+    if (!printerConfig.qr_printer_type || printerConfig.qr_printer_type === 'none') {
+      return res.status(400).json({ error: "No QR printer configured. Please set up a printer in settings." });
+    }
+
+    // If browser printing, return HTML for client-side printing
+    if (printerConfig.qr_printer_type === 'browser') {
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://chuio.io/${qrToken}`)}`;  // Large QR: 1200x1200 (doubled), URL matches landing.js expectation
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>QR Code - ${tableName}</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: 'Courier New', monospace; padding: 12px; background: #fff; }
+              .receipt { width: 100%; text-align: center; font-size: 12px; line-height: 1.5; max-width: 80mm; margin: 0 auto; }
+              .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+              #qrcode { display: flex; justify-content: center; margin: 16px 0; }
+              .footer { font-size: 10px; color: #666; margin-top: 8px; }
+              @media print { body { margin: 0; padding: 8px; } .receipt { width: 80mm; } }
+            </style>
+          </head>
+          <body>
+            <div class="receipt">
+              <div class="header">
+                <div style="font-weight: bold; font-size: 14px;">Restaurant</div>
+              </div>
+              <div style="text-align: left; margin: 8px 0; font-size: 11px;">
+                <div>Table: ${tableName}</div>
+              </div>
+              <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
+              <div id="qrcode" style="text-align: center; margin: 16px 0;">
+                <img src="${qrImageUrl}" alt="QR Code" style="max-width: 100%; width: 200px; height: 200px;" />
+              </div>
+              <div style="font-weight: bold; font-size: 13px; margin: 8px 0;">Scan to order</div>
+              <div class="footer"><p style="margin-top: 8px;">---</p></div>
+            </div>
+            <script>
+              window.onload = () => { setTimeout(() => window.print(), 500); };
+              window.onafterprint = () => window.close();
+            </script>
+          </body>
+        </html>
+      `;
+      return res.json({ success: true, html });
+    }
+
+    // For Bluetooth printers: return payload to client to handle printing locally
+    // Bluetooth can only be accessed by the mobile device, not the backend server
+    if (printerConfig.qr_printer_type === 'bluetooth') {
+      console.log('[PrintQR] Returning Bluetooth payload for client-side printing');
+      const qrPayload = {
+        type: 'qr',
+        tableNumber: tableName,
+        qrToken: qrToken,
+        qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://chuio.io/${qrToken}`)}`,  // Large QR: 1200x1200 (doubled), URL matches landing.js expectation
+        printerConfig: {
+          bluetoothDeviceId: printerConfig.qr_bluetooth_device_id,
+          bluetoothDeviceName: printerConfig.qr_bluetooth_device_name,
+        },
+      };
+      return res.json({ success: true, bluetoothPayload: qrPayload });
+    }
+
+    // Queue print job for thermal/network printers (server-side capable)
+    const jobData = {
+      type: 'qr' as const,
+      tableNumber: tableName,
+      qrToken: qrToken,
+      qrDataUrl: `https://chuio.io/${qrToken}`,  // URL format matches landing.js expectation
+      restaurantName: printerConfig.name,
+      printerConfig: {
+        type: printerConfig.qr_printer_type,
+        host: printerConfig.qr_printer_host,
+        port: printerConfig.qr_printer_port,
+      },
+    };
+
+    // Check if print queue is initialized
+    const queue = getPrinterQueueInstance();
+
+    if (queue) {
+      const job = await queue.addJob(parseInt(restaurantId), jobData, {
+        jobType: 'qr',
+        orderId: null,
+        sessionId: parseInt(sessionId) || undefined,
+        priority,
+      });
+      console.log('[PrintQR] Queued job:', job.id);
+      return res.json({ success: true, jobId: job.id, message: 'QR code queued for printing' });
+    } else {
+      // Fallback: return error if queue not available
+      return res.status(500).json({ error: "Print queue not available" });
+    }
+  } catch (err) {
+    console.error('[PrintQR] Error:', err);
+    res.status(500).json({ error: "Failed to queue QR code print" });
   }
 });
 

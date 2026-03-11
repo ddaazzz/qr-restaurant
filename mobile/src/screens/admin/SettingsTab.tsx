@@ -18,8 +18,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { apiClient } from '../../services/apiClient';
-import { LanguagePicker } from '../../components/LanguagePicker';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { printerSettingsService } from '../../services/printerSettingsService';
 
 interface RestaurantSettings {
   id: number;
@@ -40,13 +39,46 @@ interface RestaurantSettings {
 }
 
 interface PrinterSettings {
+  // Generic printer settings (shared for all doc types)
+  // Backend stores only ONE printer config, not separate qr/bill/kitchen
+  id?: number;
   printer_type?: string;
   printer_host?: string;
   printer_port?: number;
-  kitchen_auto_print?: boolean;
-  bill_auto_print?: boolean;
+  printer_usb_vendor_id?: string;
+  printer_usb_product_id?: string;
   bluetooth_device_id?: string;
   bluetooth_device_name?: string;
+  
+  // QR Code Printer Configuration
+  qr_printer_type?: string;
+  qr_printer_host?: string;
+  qr_printer_port?: number;
+  qr_bluetooth_device_id?: string;
+  qr_bluetooth_device_name?: string;
+  qr_auto_print?: boolean;
+  
+  // Bill/Receipt Printer Configuration
+  bill_printer_type?: string;
+  bill_printer_host?: string;
+  bill_printer_port?: number;
+  bill_bluetooth_device_id?: string;
+  bill_bluetooth_device_name?: string;
+  bill_auto_print?: boolean;
+  
+  // Kitchen Order Printer Configuration
+  kitchen_printer_type?: string;
+  kitchen_printer_host?: string;
+  kitchen_printer_port?: number;
+  kitchen_bluetooth_device_id?: string;
+  kitchen_bluetooth_device_name?: string;
+  kitchen_auto_print?: boolean;
+  
+  // Auto-print flags for specific document types (legacy)
+  print_logo?: boolean;
+  
+  // Printer paper width for adaptive QR code sizing
+  printer_paper_width?: number;
 }
 
 interface Coupon {
@@ -60,7 +92,6 @@ interface Coupon {
 }
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
-  const { language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
@@ -69,19 +100,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Modal states
   const [editMode, setEditMode] = useState(false);
-  const [printerEditMode, setPrinterEditMode] = useState(false);
+  const [editingPrinterType, setEditingPrinterType] = useState<'qr' | 'bill' | 'kitchen' | null>(null);
+  const [bluetoothSearching, setBluetoothSearching] = useState(false);
+  const [bluetoothDevices, setBluetoothDevices] = useState<Array<{ id: string; name: string; signal: number }>>([]);
+  // Modal state: 'printer' | 'bluetooth' | null
+  const [activeModal, setActiveModal] = useState<'printer' | 'bluetooth' | null>(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [showStaffLogin, setShowStaffLogin] = useState(false);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
-  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
-
-  // Bluetooth device states
-  const [scanningBluetooth, setScanningBluetooth] = useState(false);
-  const [bluetoothDevices, setBluetoothDevices] = useState<Array<{ id: string; name: string; signal: number }>>([]);
-  const [showBluetoothSelector, setShowBluetoothSelector] = useState(false);
 
   // Form states
   const [formData, setFormData] = useState<RestaurantSettings | null>(null);
@@ -97,32 +126,45 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const fetchSettings = async () => {
     try {
       setError(null);
-      const [settingsRes, printerRes, couponsRes] = await Promise.all([
+      // Fetch critical settings first (don't wait for coupons - they're not critical)
+      const [settingsRes, printerRes] = await Promise.all([
         apiClient.get(`/api/restaurants/${restaurantId}/settings`),
         apiClient.get(`/api/restaurants/${restaurantId}/printer-settings`),
-        apiClient.get(`/api/restaurants/${restaurantId}/coupons`),
       ]);
 
       setSettings(settingsRes.data);
       const printerData = printerRes.data;
-      console.log('[Settings] Fetched printer data:', JSON.stringify(printerData, null, 2));
-      console.log('[Settings] Printer type from API:', printerData.printer_type);
+      // Fetched printer data from API
       // Ensure printer_type defaults to 'bluetooth' if missing or empty
       if (!printerData.printer_type) {
         console.log('[Settings] Printer type was null/empty, setting to bluetooth');
         printerData.printer_type = 'bluetooth';
       }
-      console.log('[Settings] Final printer type:', printerData.printer_type);
+      // Printer type set
       setPrinterSettings(printerData);
-      const couponsList = Array.isArray(couponsRes.data) ? couponsRes.data : couponsRes.data.coupons || [];
-      setCoupons(couponsList);
       setFormData(settingsRes.data);
       setPrinterFormData(printerData);
+
+      // Fetch coupons separately (non-blocking) with shorter timeout
+      // Don't block settings load if coupons endpoint is slow/unavailable
+      fetchCoupons();
     } catch (err: any) {
       console.error('[Settings] Error fetching settings:', err);
       setError(err.message || 'Failed to load settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCoupons = async () => {
+    try {
+      const couponsRes = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
+      const couponsList = Array.isArray(couponsRes.data) ? couponsRes.data : couponsRes.data.coupons || [];
+      setCoupons(couponsList);
+    } catch (err: any) {
+      console.warn('[Settings] Failed to fetch coupons (non-critical):', err.message);
+      // Don't show error or block UI - coupons fetching is non-critical
+      setCoupons([]);
     }
   };
 
@@ -133,10 +175,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const getPrinterTypeLabel = (type?: string): string => {
     const labels: Record<string, string> = {
       'thermal': 'Thermal Network Printer',
-      'browser': 'Browser Print',
-      'bluetooth': 'Bluetooth',
-      'usb': 'USB',
-      'none': 'None',
+      'bluetooth': 'Bluetooth Printer',
     };
     const label = labels[type || ''] || '—';
     console.log('[Printer] getPrinterTypeLabel called with:', type, '-> result:', label);
@@ -170,194 +209,152 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const savePrinterSettings = async () => {
     try {
-      if (!printerFormData) return;
+      if (!printerFormData || !editingPrinterType) return;
 
-      const payload: any = {
-        printer_type: printerFormData.printer_type,
-        printer_host: printerFormData.printer_host,
-        printer_port: parseInt(printerFormData.printer_port?.toString() || '9100'),
-        kitchen_auto_print: printerFormData.kitchen_auto_print,
-        bill_auto_print: printerFormData.bill_auto_print,
-      };
+      const prefix = editingPrinterType; // 'qr', 'bill', or 'kitchen'
+      const payload: any = {};
 
-      // Include Bluetooth device ID and name if selecting Bluetooth printer
+      // Save to per-printer-type columns: {prefix}_printer_type, {prefix}_printer_host, etc.
+      payload[`${prefix}_printer_type`] = printerFormData.printer_type;
+      payload[`${prefix}_printer_host`] = printerFormData.printer_host;
+      payload[`${prefix}_printer_port`] = parseInt((printerFormData.printer_port as any)?.toString() || '9100');
+
+      // Include Bluetooth device info if it's a bluetooth printer
       if (printerFormData.printer_type === 'bluetooth') {
-        payload.bluetooth_device_id = printerFormData.bluetooth_device_id;
-        payload.bluetooth_device_name = printerFormData.bluetooth_device_name;
+        payload[`${prefix}_bluetooth_device_id`] = printerFormData.bluetooth_device_id;
+        payload[`${prefix}_bluetooth_device_name`] = printerFormData.bluetooth_device_name;
+      } else {
+        // Clear bluetooth fields if switching away from bluetooth
+        payload[`${prefix}_bluetooth_device_id`] = null;
+        payload[`${prefix}_bluetooth_device_name`] = null;
       }
 
-      console.log('[SettingsTab] Saving printer settings with payload:', JSON.stringify(payload, null, 2));
+      // Save auto-print flag for the specific printer type
+      if (editingPrinterType === 'bill') {
+        payload.bill_auto_print = printerFormData.bill_auto_print || false;
+      } else if (editingPrinterType === 'kitchen') {
+        payload.kitchen_auto_print = printerFormData.kitchen_auto_print || false;
+      } else if (editingPrinterType === 'qr') {
+        payload.qr_auto_print = printerFormData.qr_auto_print || false;
+      }
+
+      // Save printer paper width if provided
+      if (printerFormData.printer_paper_width) {
+        payload.printer_paper_width = printerFormData.printer_paper_width;
+      }
+
+      console.log(`[SettingsTab] Saving ${editingPrinterType} printer settings with payload:`, payload);
 
       await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, payload);
 
-      setPrinterSettings(printerFormData);
-      setPrinterEditMode(false);
-      Alert.alert('Success', 'Printer settings saved!');
+      // Update local state with new data
+      setPrinterSettings({ ...printerSettings, ...payload } as PrinterSettings);
+      
+      // Invalidate cache so next fetch gets fresh data from backend
+      printerSettingsService.invalidateCache(restaurantId);
+      
+      setEditingPrinterType(null);
+      setActiveModal(null);
+      Alert.alert('Success', `${editingPrinterType.toUpperCase()} printer settings saved!`);
     } catch (err: any) {
+      console.error('[SettingsTab] Error saving printer settings:', err);
       Alert.alert('Error', err.response?.data?.error || 'Failed to save printer settings');
     }
   };
 
-  const scanBluetoothDevices = async () => {
+  const startBluetoothSearch = async () => {
     try {
-      setScanningBluetooth(true);
+      setBluetoothSearching(true);
       setBluetoothDevices([]);
 
-      // Try to scan for Bluetooth devices
+      let BleManager: any = null;
       try {
-        let BleManager: any = null;
-        try {
-          const ble = require('react-native-ble-plx');
-          BleManager = ble.BleManager;
-        } catch (requireErr: any) {
-          throw new Error('BleManager module not available');
-        }
-        
-        if (!BleManager) {
-          throw new Error('BleManager not available');
-        }
-
-        let manager: any;
-        try {
-          manager = new BleManager();
-        } catch (managerErr: any) {
-          console.error('[Bluetooth] Manager init error:', managerErr.message);
-          throw managerErr;
-        }
-
-        const foundDevices: Array<{ id: string; name: string; signal: number }> = [];
-        let scanSubscription: any = null;
-
-        // Start scanning
-        console.log('[Bluetooth] Starting BLE scan...');
-        
-        // Wait for BLE to be powered on
-        await new Promise<void>((resolve) => {
-          let stateCheckInterval: any = null;
-          const checkState = async () => {
-            try {
-              const state = await manager.state();
-              console.log('[Bluetooth] Checking BLE state:', state);
-              if (state === 'PoweredOn') {
-                if (stateCheckInterval) clearInterval(stateCheckInterval);
-                resolve();
-              }
-            } catch (e) {
-              console.log('[Bluetooth] State check error:', e);
-            }
-          };
-          
-          checkState();
-          stateCheckInterval = setInterval(checkState, 200);
-          
-          // Timeout after 5 seconds
-          setTimeout(() => {
-            if (stateCheckInterval) clearInterval(stateCheckInterval);
-            resolve();
-          }, 5000);
-        });
-
-        console.log('[Bluetooth] BLE ready, starting scan...');
-
-        manager.startDeviceScan(null, null, (error: any, device: any) => {
-          if (error) {
-            console.error('[Bluetooth] Scan error:', error);
-            return;
-          }
-
-          if (device && device.name && device.name.length > 0) {
-            console.log(`[Bluetooth] Found: ${device.name} (${device.id}) - Signal: ${device.rssi}`);
-
-            const signalStrength = device.rssi || -100;
-            const alreadyFound = foundDevices.some(d => d.id === device.id);
-
-            if (!alreadyFound) {
-              foundDevices.push({
-                id: device.id,
-                name: device.name,
-                signal: signalStrength,
-              });
-
-              setBluetoothDevices([...foundDevices]);
-            }
-          }
-        });
-
-        // Scan for 3 seconds
-        setTimeout(async () => {
-          console.log('[Bluetooth] Stopping scan after 3 seconds');
-          try {
-            manager.stopDeviceScan();
-          } catch (stopErr: any) {
-            console.error('[Bluetooth] Stop scan error:', stopErr);
-          }
-          
-          if (scanSubscription) {
-            try {
-              scanSubscription.remove();
-            } catch (e) {
-              console.log('[Bluetooth] Could not remove subscription');
-            }
-          }
-
-          setScanningBluetooth(false);
-          setShowBluetoothSelector(true);
-
-          if (foundDevices.length === 0) {
-            Alert.alert(
-              'No Devices Found',
-              'No Bluetooth printers detected. Make sure your printer is turned on and in pairing mode.\n\nYou can also manually enter the device ID.'
-            );
-          } else {
-            Alert.alert('Scan Complete', `Found ${foundDevices.length} Bluetooth device(s)`);
-          }
-
-          try {
-            manager.destroy();
-          } catch (e) {
-            console.log('[Bluetooth] Could not destroy manager');
-          }
-        }, 3000);
-
-      } catch (bleErr: any) {
-        setScanningBluetooth(false);
-        
-        Alert.alert(
-          '📡 Bluetooth Scan Failed',
-          'Unable to scan for Bluetooth devices: ' + (bleErr.message || 'Unknown error') + '\n\nYou can manually enter your printer IP address or device ID instead.',
-          [
-            {
-              text: 'Manual Entry',
-              onPress: () => {
-                setShowBluetoothSelector(true);
-              },
-            },
-            {
-              text: 'Cancel',
-            },
-          ]
-        );
+        const ble = require('react-native-ble-plx');
+        BleManager = ble.BleManager;
+      } catch (e) {
+        setBluetoothSearching(false);
+        Alert.alert('Error', 'Bluetooth not available on this device');
+        return;
       }
+
+      if (!BleManager) {
+        setBluetoothSearching(false);
+        Alert.alert('Error', 'Bluetooth not available');
+        return;
+      }
+
+      const manager = new BleManager();
+
+      // Wait for BLE to be ready
+      await new Promise<void>((resolve) => {
+        let attempts = 0;
+        const checkState = async () => {
+          try {
+            const state = await manager.state();
+            if (state === 'PoweredOn') {
+              resolve();
+            } else if (++attempts < 10) {
+              setTimeout(checkState, 200);
+            } else {
+              resolve();
+            }
+          } catch (e) {
+            if (++attempts < 10) setTimeout(checkState, 200);
+            else resolve();
+          }
+        };
+        checkState();
+      });
+
+      // Start scanning
+      const subscription = manager.onStateChange((state: any) => {
+        if (state === 'PoweredOn') {
+          manager.startDeviceScan(null, null, (error: any, device: any) => {
+            if (error) {
+              console.error('Scan error:', error);
+              return;
+            }
+
+            if (device && device.name) {
+              setBluetoothDevices((prev) => {
+                const exists = prev.find((d) => d.id === device.id);
+                if (!exists) {
+                  return [...prev, { id: device.id, name: device.name || 'Unknown', signal: device.rssi || 0 }];
+                }
+                return prev;
+              });
+            }
+          });
+
+          // Stop scanning after 10 seconds
+          setTimeout(() => {
+            manager.stopDeviceScan();
+            setBluetoothSearching(false);
+            if (subscription) subscription.remove();
+          }, 10000);
+        }
+      }, true);
     } catch (err: any) {
-      setScanningBluetooth(false);
-      Alert.alert('Error', 'Bluetooth scan error: ' + err.message);
+      setBluetoothSearching(false);
+      Alert.alert('Error', 'Failed to scan Bluetooth devices: ' + err.message);
     }
   };
 
   const selectBluetoothDevice = (device: { id: string; name: string; signal: number }) => {
-    console.log('[SettingsTab] Selected Bluetooth device:', JSON.stringify(device));
+    if (!editingPrinterType) return;
+
+    // Backend has generic bluetooth_device_id and bluetooth_device_name fields (not prefixed)
     setPrinterFormData({
       ...printerFormData,
-      printer_host: device.id,
       bluetooth_device_id: device.id,
       bluetooth_device_name: device.name,
-    });
-    setShowBluetoothSelector(false);
-    Alert.alert(
-      '✓ Device Selected', 
-      `Printer "${device.name}" selected.\n\n📌 Important: Your printer may require PIN authentication.\n\nIf you see a pairing request, enter the PIN (usually "0000" for thermal printers).\n\nTap "Save" to apply these settings.`
-    );
+    } as PrinterSettings);
+
+    setActiveModal('printer');
+    Alert.alert('✓ Device Selected', `"${device.name}" has been selected for your printer.`);
   };
+
+  // Bluetooth device selection is now handled at runtime during printing
 
   const createCoupon = async () => {
     try {
@@ -414,8 +411,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   const getWebOrigin = () => {
-    // Use chuio.io for all API and web requests in production
-    return 'https://chuio.io';
+    // This should match your backend server URL
+    // For development, you might need to set this via environment variables
+    return 'http://localhost:3000'; // Update based on your setup
   };
 
   const generateStaffQRUrl = () => {
@@ -625,267 +623,317 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       {/* Printer Settings */}
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>🖨️ Printer Settings</Text>
-          {!printerEditMode && (
-            <TouchableOpacity
-              onPress={() => {
-                const dataToEdit = { ...printerSettings };
-                // Ensure printer_type has a valid default
-                if (!dataToEdit.printer_type) {
-                  dataToEdit.printer_type = 'bluetooth';
-                }
-                setPrinterFormData(dataToEdit);
-                setPrinterEditMode(true);
-              }}
-            >
-              <Text style={styles.editBtn}>✎ Edit</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <Text style={styles.sectionTitle}>🖨️ Printer Settings</Text>
 
-        {printerEditMode && printerFormData ? (
-          <View style={styles.form}>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Printer Type</Text>
-              <Text style={styles.displayValue}>
-                Selected: {getPrinterTypeLabel(printerFormData.printer_type)}
-              </Text>
-              <View style={styles.printerTypeButtons}>
-                {(['thermal', 'browser', 'bluetooth', 'usb', 'none'] as const).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeButton,
-                      printerFormData.printer_type === type && styles.typeButtonActive,
-                    ]}
-                    onPress={() => {
-                      console.log('[Printer Type] Selected:', type);
-                      setPrinterFormData({ ...printerFormData, printer_type: type });
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        printerFormData.printer_type === type && styles.typeButtonTextActive,
-                      ]}
-                    >
-                      {getPrinterTypeLabel(type).substring(0, 3)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {printerFormData.printer_type === 'thermal' && (
-              <>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Printer IP Address</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={printerFormData.printer_host || ''}
-                    onChangeText={(text) =>
-                      setPrinterFormData({ ...printerFormData, printer_host: text })
-                    }
-                    placeholder="e.g., 192.168.1.100"
-                    keyboardType="decimal-pad"
-                  />
-                  <Text style={styles.helperText}>Enter the IP address or hostname of your printer</Text>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Printer Port</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={printerFormData.printer_port?.toString() || '9100'}
-                    onChangeText={(text) =>
-                      setPrinterFormData({
-                        ...printerFormData,
-                        printer_port: parseInt(text) || 9100,
-                      })
-                    }
-                    placeholder="9100"
-                    keyboardType="number-pad"
-                  />
-                  <Text style={styles.helperText}>Port (usually 9100 for thermal printers)</Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary]}
-                  onPress={async () => {
-                    if (!printerFormData.printer_host?.trim()) {
-                      Alert.alert('Validation', 'Please enter printer IP address first');
-                      return;
-                    }
-                    try {
-                      Alert.alert('Testing Connection', `Connecting to ${printerFormData.printer_host}:${printerFormData.printer_port}...`);
-                      setTimeout(() => {
-                        Alert.alert('✅ Connection Test', 'Printer is reachable. Click Save to apply.');
-                      }, 1500);
-                    } catch (err) {
-                      Alert.alert('❌ Connection Failed', 'Unable to reach printer. Check IP and port.');
-                    }
-                  }}
-                >
-                  <Text style={styles.btnText}>🔗 Test Connection</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {printerFormData.printer_type === 'bluetooth' && (
-              <>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary, { marginBottom: 15 }]}
-                  onPress={scanBluetoothDevices}
-                  disabled={scanningBluetooth}
-                >
-                  {scanningBluetooth ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                      <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
-                      <Text style={styles.btnText}>Scanning Bluetooth...</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.btnText}>📡 Scan Bluetooth Devices</Text>
-                  )}
-                </TouchableOpacity>
-
-                {showBluetoothSelector && bluetoothDevices.length > 0 && (
-                  <View style={styles.printerListContainer}>
-                    <Text style={styles.label}>Available Devices</Text>
-                    <FlatList
-                      data={bluetoothDevices}
-                      keyExtractor={(item) => item.id}
-                      scrollEnabled={false}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={styles.printerItem}
-                          onPress={() => selectBluetoothDevice(item)}
-                        >
-                          <View style={styles.printerItemContent}>
-                            <Text style={styles.printerName}>{item.name}</Text>
-                            <Text style={styles.printerIP}>Signal: {item.signal} dBm</Text>
-                          </View>
-                          <Text style={styles.selectArrow}>→</Text>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  </View>
-                )}
-
-                {showBluetoothSelector && bluetoothDevices.length === 0 && (
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Or Enter Device ID Manually</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={printerFormData.printer_host || ''}
-                      onChangeText={(text) =>
-                        setPrinterFormData({ ...printerFormData, printer_host: text })
-                      }
-                      placeholder="e.g., 00:1A:7D:DA:71:13"
-                    />
-                    <Text style={styles.helperText}>
-                      Enter your Bluetooth printer device ID (MAC address or UUID)
-                    </Text>
-                  </View>
-                )}
-
-                {!showBluetoothSelector && printerFormData.printer_host && (
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Connected Device</Text>
-                    <View style={styles.connectedDeviceBox}>
-                      <Text style={styles.value}>✓ {printerFormData.printer_host}</Text>
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-
-            <View style={styles.toggleGroup}>
-              <View>
-                <Text style={styles.label}>Kitchen Auto Print</Text>
-              </View>
-              <Switch
-                value={printerFormData.kitchen_auto_print || false}
-                onValueChange={(val) =>
-                  setPrinterFormData({ ...printerFormData, kitchen_auto_print: val })
-                }
-              />
-            </View>
-
-            <View style={styles.toggleGroup}>
-              <View>
-                <Text style={styles.label}>Bill Auto Print</Text>
-              </View>
-              <Switch
-                value={printerFormData.bill_auto_print || false}
-                onValueChange={(val) =>
-                  setPrinterFormData({
-                    ...printerFormData,
-                    bill_auto_print: val,
-                  })
-                }
-              />
-            </View>
-
-            <View style={styles.formActions}>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSecondary]}
-                onPress={() => {
-                  setPrinterEditMode(false);
-                  setPrinterFormData(printerSettings);
-                }}
-              >
-                <Text style={styles.btnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary]}
-                onPress={savePrinterSettings}
-              >
-                <Text style={styles.btnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : printerSettings ? (
+        {printerSettings ? (
           <>
-            <View style={styles.settingItem}>
-              <Text style={styles.label}>Printer Type</Text>
-              <Text style={styles.value}>
-                {getPrinterTypeLabel(printerSettings.printer_type)}
-              </Text>
-            </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.label}>Host/IP</Text>
-              <Text style={styles.value}>{printerSettings.printer_host || '—'}</Text>
-            </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.label}>Port</Text>
-              <Text style={styles.value}>{printerSettings.printer_port || 9100}</Text>
-            </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.label}>Kitchen Auto Print</Text>
-              <Text style={styles.value}>
-                {printerSettings.kitchen_auto_print ? '✓ Enabled' : '✗ Disabled'}
-              </Text>
-            </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.label}>Bill Auto Print</Text>
-              <Text style={styles.value}>
-                {printerSettings.bill_auto_print ? '✓ Enabled' : '✗ Disabled'}
-              </Text>
-            </View>
+            {/* QR Code Printer */}
             <TouchableOpacity
-              style={[styles.btn, styles.btnSecondary]}
+              style={[styles.settingItem, { borderBottomWidth: 0, paddingVertical: 12, paddingHorizontal: 12, backgroundColor: '#f9fafb', borderRadius: 8, marginBottom: 12 }]}
               onPress={() => {
-                // Check if navigation.push is available
-                if (navigation && navigation.push) {
-                  navigation.push('PrinterSettings');
-                } else {
-                  Alert.alert('Info', 'Printer configuration available in Printer Settings screen');
-                }
+                setEditingPrinterType('qr');
+                setPrinterFormData(printerSettings);
+                setActiveModal('printer');
               }}
             >
-              <Text style={styles.btnText}>🖨️ Manage Printers</Text>
+              <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 8 }]}>📋 QR Code Printer</Text>
+              <Text style={styles.value}>Type: {getPrinterTypeLabel(printerSettings.printer_type)}</Text>
+              {printerSettings.printer_host && <Text style={styles.value}>Host: {printerSettings.printer_host}</Text>}
+              <Text style={styles.value}>Auto-Print: ✓ Enabled</Text>
+              <Text style={[styles.value, { fontSize: 11, color: '#6b7280', marginTop: 4 }]}>Tap to edit</Text>
             </TouchableOpacity>
+
+            {/* Bill Printer */}
+            <TouchableOpacity
+              style={[styles.settingItem, { borderBottomWidth: 0, paddingVertical: 12, paddingHorizontal: 12, backgroundColor: '#f9fafb', borderRadius: 8, marginBottom: 12 }]}
+              onPress={() => {
+                setEditingPrinterType('bill');
+                setPrinterFormData(printerSettings);
+                setActiveModal('printer');
+              }}
+            >
+              <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 8 }]}>🧾 Bill Printer</Text>
+              <Text style={styles.value}>Type: {getPrinterTypeLabel(printerSettings.printer_type)}</Text>
+              {printerSettings.printer_host && <Text style={styles.value}>Host: {printerSettings.printer_host}</Text>}
+              <Text style={styles.value}>Auto-Print: {printerSettings.bill_auto_print ? '✓ On' : '✗ Off'}</Text>
+              <Text style={[styles.value, { fontSize: 11, color: '#6b7280', marginTop: 4 }]}>Tap to edit</Text>
+            </TouchableOpacity>
+
+            {/* Kitchen Order Printer */}
+            <TouchableOpacity
+              style={[styles.settingItem, { borderBottomWidth: 0, paddingVertical: 12, paddingHorizontal: 12, backgroundColor: '#f9fafb', borderRadius: 8, marginBottom: 12 }]}
+              onPress={() => {
+                setEditingPrinterType('kitchen');
+                setPrinterFormData(printerSettings);
+                setActiveModal('printer');
+              }}
+            >
+              <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 8 }]}>🍳 Kitchen Order Printer</Text>
+              <Text style={styles.value}>Type: {getPrinterTypeLabel(printerSettings.printer_type)}</Text>
+              {printerSettings.printer_host && <Text style={styles.value}>Host: {printerSettings.printer_host}</Text>}
+              <Text style={styles.value}>Auto-Print: {printerSettings.kitchen_auto_print ? '✓ On' : '✗ Off'}</Text>
+              <Text style={[styles.value, { fontSize: 11, color: '#6b7280', marginTop: 4 }]}>Tap to edit</Text>
+            </TouchableOpacity>
+
+            {activeModal === 'printer' && editingPrinterType && (
+              <Modal
+                transparent={true}
+                visible={true}
+                animationType="slide"
+                onRequestClose={() => setActiveModal(null)}
+              >
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>
+                        {editingPrinterType === 'qr' && '📋 QR Code Printer'}
+                        {editingPrinterType === 'bill' && '🧾 Bill Printer'}
+                        {editingPrinterType === 'kitchen' && '🍳 Kitchen Order Printer'}
+                      </Text>
+                      <TouchableOpacity onPress={() => setActiveModal(null)}>
+                        <Text style={styles.closeButton}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={styles.modalBody}>
+                      {/* Auto-Print Toggle */}
+                      <View style={styles.formGroup}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={styles.label}>Auto-Print</Text>
+                          <Switch
+                            value={
+                              editingPrinterType === 'bill'
+                                ? (printerFormData?.bill_auto_print || false)
+                                : editingPrinterType === 'kitchen'
+                                ? (printerFormData?.kitchen_auto_print || false)
+                                : editingPrinterType === 'qr'
+                                ? (printerFormData?.qr_auto_print || false)
+                                : false
+                            }
+                            onValueChange={(value) => {
+                              if (editingPrinterType === 'bill') {
+                                setPrinterFormData({ ...printerFormData, bill_auto_print: value } as PrinterSettings);
+                              } else if (editingPrinterType === 'kitchen') {
+                                setPrinterFormData({ ...printerFormData, kitchen_auto_print: value } as PrinterSettings);
+                              } else if (editingPrinterType === 'qr') {
+                                setPrinterFormData({ ...printerFormData, qr_auto_print: value } as PrinterSettings);
+                              }
+                            }}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Printer Type Selector */}
+                      <View style={styles.formGroup}>
+                        <Text style={styles.label}>Printer Type</Text>
+                        <View>
+                          {['thermal', 'bluetooth'].map((type) => (
+                            <TouchableOpacity
+                              key={type}
+                              style={{ paddingVertical: 8 }}
+                              onPress={() => {
+                                setPrinterFormData({ ...printerFormData, printer_type: type } as PrinterSettings);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View
+                                  style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: 9,
+                                    borderWidth: 2,
+                                    borderColor: printerFormData?.printer_type === type ? '#3b82f6' : '#d1d5db',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  {printerFormData?.printer_type === type && (
+                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3b82f6' }} />
+                                  )}
+                                </View>
+                                <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937' }}>{getPrinterTypeLabel(type)}</Text>
+                              </View>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Thermal Printer Config */}
+                      {printerFormData?.printer_type === 'thermal' && (
+                        <>
+                          <View style={styles.formGroup}>
+                            <Text style={styles.label}>IP Address</Text>
+                            <TextInput
+                              style={styles.input}
+                              value={printerFormData?.printer_host?.toString() || ''}
+                              onChangeText={(text) => {
+                                setPrinterFormData({ ...printerFormData, printer_host: text } as PrinterSettings);
+                              }}
+                              placeholder="e.g., 192.168.1.100"
+                            />
+                          </View>
+                          <View style={styles.formGroup}>
+                            <Text style={styles.label}>Port</Text>
+                            <TextInput
+                              style={styles.input}
+                              value={printerFormData?.printer_port?.toString() || '9100'}
+                              onChangeText={(text) => {
+                                setPrinterFormData({ ...printerFormData, printer_port: parseInt(text) || 9100 } as PrinterSettings);
+                              }}
+                              placeholder="9100"
+                              keyboardType="number-pad"
+                            />
+                          </View>
+                        </>
+                      )}
+
+                      {/* Network Printer Config - REMOVED */}
+                      {/* System supports Thermal and Bluetooth only */}
+
+                      {/* Bluetooth Config */}
+                      {printerFormData?.printer_type === 'bluetooth' && (
+                        <View style={styles.formGroup}>
+                          <Text style={styles.label}>Bluetooth Device</Text>
+                          <TouchableOpacity
+                            style={[styles.input, { paddingVertical: 12, borderColor: '#3b82f6', borderWidth: 1 }]}
+                            onPress={() => setActiveModal('bluetooth')}
+                          >
+                            <Text style={{ color: printerFormData?.bluetooth_device_name ? '#1f2937' : '#9ca3af' }}>
+                              {printerFormData?.bluetooth_device_name ? `✓ ${printerFormData?.bluetooth_device_name}` : '🔍 Tap to scan devices'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {/* Browser Printer Config - REMOVED */}
+                      {/* System supports Thermal and Bluetooth only */}
+
+                      {/* Printer Paper Width (for thermal/bluetooth printers) */}
+                      {(printerFormData?.printer_type === 'thermal' || printerFormData?.printer_type === 'bluetooth') && (
+                        <View style={styles.formGroup}>
+                          <Text style={styles.label}>Printer Paper Width</Text>
+                          <Text style={styles.helperText}>Select based on your printer model (affects QR code size)</Text>
+                          <View>
+                            {[
+                              { value: 80, label: '80mm (Standard)' },
+                              { value: 58, label: '58mm (Compact)' },
+                            ].map((option) => (
+                              <TouchableOpacity
+                                key={option.value}
+                                style={{ paddingVertical: 8 }}
+                                onPress={() => {
+                                  setPrinterFormData({ 
+                                    ...printerFormData, 
+                                    printer_paper_width: option.value 
+                                  } as PrinterSettings);
+                                }}
+                              >
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                  <View
+                                    style={{
+                                      width: 18,
+                                      height: 18,
+                                      borderRadius: 9,
+                                      borderWidth: 2,
+                                      borderColor: (printerFormData?.printer_paper_width || 80) === option.value ? '#3b82f6' : '#d1d5db',
+                                      justifyContent: 'center',
+                                      alignItems: 'center',
+                                    }}
+                                  >
+                                    {(printerFormData?.printer_paper_width || 80) === option.value && (
+                                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3b82f6' }} />
+                                    )}
+                                  </View>
+                                  <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937' }}>{option.label}</Text>
+                                </View>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+                    </ScrollView>
+
+                    {/* Modal Footer */}
+                    <View style={styles.formActions}>
+                      <TouchableOpacity
+                        style={[styles.btn, styles.btnSecondary]}
+                        onPress={() => setActiveModal(null)}
+                      >
+                        <Text style={styles.btnText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.btn, styles.btnPrimary]}
+                        onPress={savePrinterSettings}
+                      >
+                        <Text style={styles.btnText}>Save</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
+            )}
+
+            {/* Bluetooth Device Search Modal */}
+            <Modal
+              transparent={true}
+              visible={activeModal === 'bluetooth'}
+              animationType="slide"
+              onRequestClose={() => setActiveModal('printer')}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>🔍 Search Bluetooth Devices</Text>
+                    <TouchableOpacity onPress={() => setActiveModal('printer')}>
+                      <Text style={styles.closeButton}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.modalBody}>
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnPrimary, { marginBottom: 16 }]}
+                      onPress={startBluetoothSearch}
+                      disabled={bluetoothSearching}
+                    >
+                      <Text style={styles.btnText}>{bluetoothSearching ? '🔄 Scanning...' : '🔍 Scan for Devices'}</Text>
+                    </TouchableOpacity>
+
+                    {bluetoothDevices.length > 0 ? (
+                      <ScrollView style={{ maxHeight: 300 }}>
+                        {bluetoothDevices.map((device) => (
+                          <TouchableOpacity
+                            key={device.id}
+                            style={{
+                              borderBottomWidth: 1,
+                              borderBottomColor: '#e5e7eb',
+                              paddingVertical: 12,
+                              paddingHorizontal: 8,
+                            }}
+                            onPress={() => selectBluetoothDevice(device)}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: '500', color: '#1f2937' }}>{device.name}</Text>
+                            <Text style={{ fontSize: 12, color: '#6b7280' }}>Signal: {device.signal} dBm</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    ) : bluetoothSearching ? (
+                      <Text style={styles.helperText}>Searching for devices...</Text>
+                    ) : (
+                      <Text style={styles.helperText}>Click "Scan for Devices" to search for nearby Bluetooth devices</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.formActions}>
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnSecondary]}
+                      onPress={() => setActiveModal('printer')}
+                    >
+                      <Text style={styles.btnText}>Back</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
           </>
         ) : (
           <>
@@ -902,23 +950,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </TouchableOpacity>
           </>
         )}
-      </View>
-
-      {/* Language Settings */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>🌍 Language</Text>
-        </View>
-        <View style={styles.settingItem}>
-          <Text style={styles.label}>Current Language</Text>
-          <Text style={styles.value}>{language === 'zh' ? '中文 (Chinese)' : 'English'}</Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.btn, styles.btnSecondary]}
-          onPress={() => setShowLanguagePicker(true)}
-        >
-          <Text style={styles.btnText}>🗣️ Change Language</Text>
-        </TouchableOpacity>
       </View>
 
       {/* QR Code Settings */}
@@ -1296,12 +1327,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
         </View>
       </Modal>
-
-      {/* Language Picker */}
-      <LanguagePicker
-        visible={showLanguagePicker}
-        onClose={() => setShowLanguagePicker(false)}
-      />
     </ScrollView>
   );
 };
@@ -1569,6 +1594,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: '#1f2937',
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalBody: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#6b7280',
+    fontWeight: '300',
+  },
   typeBtn: {
     flex: 1,
     paddingVertical: 10,
@@ -1634,11 +1677,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1f2937',
-  },
-  closeButton: {
-    fontSize: 24,
-    color: '#6b7280',
-    fontWeight: '300',
   },
   qrModalBody: {
     alignItems: 'center',

@@ -31,12 +31,17 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
       // Automatically request permission if not yet requested
       if (permission === null) {
-        console.log('[QRScanner] Requesting camera permission...');
         try {
-          const result = await requestPermission();
-          console.log('[QRScanner] Permission result:', result);
+          await requestPermission();
         } catch (error) {
           console.error('[QRScanner] Error requesting camera permission:', error);
+        }
+      } else if (permission && !permission.granted) {
+        // Permission was previously denied, try requesting again
+        try {
+          await requestPermission();
+        } catch (error) {
+          console.error('[QRScanner] Error re-requesting camera permission:', error);
         }
       }
     })();
@@ -56,8 +61,6 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         finalToken = match ? match[1] : token;
       }
 
-      console.log('[QRScanner] Scanned token:', finalToken);
-
       // Call the callback with the token
       onQRScanned(finalToken);
       onClose();
@@ -69,24 +72,16 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
   if (!visible) return null;
 
-  if (permission === null) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
-          <ActivityIndicator size="large" color="#2C3E50" />
-          <Text style={styles.text}>Requesting camera permission...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
+  // If permission is still being determined or was denied, show appropriate screen
   if (!permission?.granted) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <ActivityIndicator size="large" color="#2C3E50" style={{ marginBottom: 16 }} />
-          <Text style={styles.text}>Waiting for camera permission...</Text>
-          <Text style={styles.infoText}>Please allow camera access when prompted</Text>
+          <Text style={styles.text}>Camera permission required</Text>
+          <Text style={styles.infoText}>Please allow camera access in Settings</Text>
+          <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={() => requestPermission()}>
+            <Text style={styles.buttonText}>Request Permission</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
             <Text style={styles.buttonText}>Cancel</Text>
           </TouchableOpacity>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert } from 'react-native';
 import { apiClient } from '../../services/apiClient';
-import { useLanguage } from '../../contexts/LanguageContext';
 
 interface StaffMember {
   id: number;
@@ -34,7 +33,6 @@ export interface StaffTabRef {
 }
 
 export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
-  const { t } = useLanguage();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [menuCategories, setMenuCategories] = useState<MenuCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,10 +194,10 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
   };
 
   const handleDeleteStaff = async (staffId: number) => {
-    Alert.alert(t('staff.delete-staff'), t('common.delete-confirm'), [
-      { text: t('button.cancel'), style: 'cancel' },
+    Alert.alert('Delete Staff', 'Are you sure you want to delete this staff member?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: t('button.delete'),
+        text: 'Delete',
         onPress: async () => {
           try {
             await apiClient.delete(`/api/restaurants/${restaurantId}/staff/${staffId}`);
@@ -207,7 +205,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             setShowDetailModal(false);
             setSelectedStaff(null);
           } catch (err: any) {
-            Alert.alert(t('error.error'), err.message || t('error.failed'));
+            Alert.alert('Error', err.message || 'Failed to delete staff');
           }
         },
         style: 'destructive',
@@ -221,7 +219,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
       setSelectedStaff(response.data as StaffMember);
       setShowDetailModal(true);
     } catch (err: any) {
-      Alert.alert(t('error.error'), t('error.failed'));
+      Alert.alert('Error', 'Failed to load staff details');
     }
   };
 
@@ -234,7 +232,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
         setSelectedStaff(updated.data as StaffMember);
       }
     } catch (err: any) {
-      Alert.alert(t('error.error'), err.message || t('error.failed'));
+      Alert.alert('Error', err.message || `Failed to clock ${action}`);
     }
   };
 
@@ -295,7 +293,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                   onPress={() => openForm()}
                 >
                   <Text style={styles.addStaffIcon}>➕</Text>
-                  <Text style={styles.addStaffText}>{t('staff.add-staff')}</Text>
+                  <Text style={styles.addStaffText}>Add Staff</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -346,7 +344,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
         contentContainerStyle={styles.gridContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{t('staff.no-staff')}</Text>
+            <Text style={styles.emptyText}>No staff members</Text>
           </View>
         }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -363,7 +361,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
         <View style={styles.formOverlay}>
           <View style={styles.formContent}>
             <View style={styles.formHeader}>
-              <Text style={styles.formTitle}>{editingStaffId ? t('staff.edit-staff') : t('staff.create-new-staff')}</Text>
+              <Text style={styles.formTitle}>{editingStaffId ? 'Edit Staff' : 'Create New Staff'}</Text>
               <TouchableOpacity onPress={closeForm}>
                 <Text style={styles.formCloseBtn}>✕</Text>
               </TouchableOpacity>
@@ -375,7 +373,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             <ScrollView style={styles.formBody}>
               {/* Name */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t('staff.name')}</Text>
+                <Text style={styles.formLabel}>Staff Name</Text>
                 <TextInput
                   style={styles.formInput}
                   placeholder="e.g., John Smith"
@@ -386,7 +384,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
 
               {/* PIN */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t('staff.pin')} (6 {t('staff.digits')})</Text>
+                <Text style={styles.formLabel}>PIN (6 digits)</Text>
                 <TextInput
                   style={styles.formInput}
                   placeholder="e.g., 123456"
@@ -399,7 +397,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
 
               {/* Role */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t('staff.role')}</Text>
+                <Text style={styles.formLabel}>Role</Text>
                 <View style={styles.roleButtons}>
                   {['staff', 'kitchen'].map((roleOption) => (
                     <TouchableOpacity
@@ -425,7 +423,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
 
               {/* Hourly Rate */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t('staff.hourly-rate')}</Text>
+                <Text style={styles.formLabel}>Hourly Rate ($/hr)</Text>
                 <TextInput
                   style={styles.formInput}
                   placeholder="e.g., 15.50"
@@ -492,11 +490,11 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             {/* Form Actions */}
             <View style={styles.formActions}>
               <TouchableOpacity style={[styles.formBtn, styles.formBtnCancel]} onPress={closeForm}>
-                <Text style={styles.formBtnText}>{t('button.cancel')}</Text>
+                <Text style={styles.formBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.formBtn, styles.formBtnSubmit]} onPress={handleSubmitStaff}>
                 <Text style={[styles.formBtnText, styles.formBtnSubmitText]}>
-                  {editingStaffId ? `💾 ${t('button.update')}` : `➕ ${t('button.add')}`}
+                  {editingStaffId ? '💾 Update' : '➕ Add'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -876,8 +874,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   roleBtnActive: {
-    backgroundColor: '#2C3E50',
-    borderColor: '#2C3E50',
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
   },
   roleBtnText: {
     fontSize: 13,
@@ -905,8 +903,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   accessCheckboxActive: {
-    backgroundColor: '#2C3E50',
-    borderColor: '#2C3E50',
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
   },
   accessCheckboxText: {
     fontSize: 12,

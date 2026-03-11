@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import cors from "cors";
+import { networkInterfaces } from "os";
 
 import restaurantRoutes from "./routes/restaurants.routes";
 import tableRoutes from "./routes/tables.routes";
@@ -51,6 +52,34 @@ app.use((req, res, next) => {
 ====================== */
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+/* ======================
+   NETWORK INFO (for dev)
+====================== */
+app.get("/network-info", (_req, res) => {
+  const interfaces = networkInterfaces();
+  let serverIP = "localhost";
+  
+  // Try to find the local network IP (not localhost or 127.0.0.1)
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      // Skip internal and non-IPv4 addresses  
+      if (addr.family === "IPv4" && !addr.internal) {
+        serverIP = addr.address;
+        break;
+      }
+    }
+    if (serverIP !== "localhost") break;
+  }
+  
+  res.json({
+    serverIP,
+    port: process.env.PORT || 10000,
+    apiUrl: `http://${serverIP}:${process.env.PORT || 10000}`,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 /* ======================

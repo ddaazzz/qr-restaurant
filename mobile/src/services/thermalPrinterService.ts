@@ -6,12 +6,15 @@
 export interface ReceiptData {
   orderNumber?: string;
   tableNumber?: string;
+  startTime?: string;
   items?: Array<{ name: string; quantity: number; price?: number }>;
   subtotal?: number;
   serviceCharge?: number;
   total?: number;
   timestamp?: string;
   restaurantName?: string;
+  qrCode?: string; // QR code data/token to print
+  printerPaperWidth?: number; // Paper width in mm (80 for standard, 58 for smaller)
 }
 
 class ThermalPrinterService {
@@ -21,16 +24,55 @@ class ThermalPrinterService {
   generateESCPOS(receipt: ReceiptData): Uint8Array {
     const commands: number[] = [];
 
-    // === PROPER INITIALIZATION FOR THERMAL PRINTER ===
-    // ESC @ - Initialize printer to default state
-    commands.push(27, 64); // ESC @
+    // NOTE: Initialization (ESC @) is now done AFTER PIN authentication
+    // So DO NOT include it here - the printer is already initialized
 
-    // Line spacing: ESC '3' n - Set line spacing to n dots
-    commands.push(27, 51, 30); // ESC '3' 30 - 30 dots
+    // === QR CODE ONLY RECEIPT (When no items) ===
+    // For QR receipts, make QR code the dominant element covering full paper
+    if (receipt.qrCode && (!receipt.items || receipt.items.length === 0)) {
+      // QR-only layout: minimal header, huge QR code, footer text
+      
+      // Small header with restaurant/table info
+      commands.push(27, 97, 1); // ESC 'a' 1 - Center
+      if (receipt.restaurantName && receipt.restaurantName !== 'QR Code') {
+        commands.push(27, 33, 8); // ESC '!' 8 - Bold
+        this.appendText(commands, receipt.restaurantName);
+        commands.push(27, 33, 0); // ESC '!' 0 - Normal
+        commands.push(10);
+      }
+      
+      if (receipt.tableNumber) {
+        this.appendText(commands, `${receipt.tableNumber}`);
+        commands.push(10);
+      }
+      
+      commands.push(10); // LF
+      
+      // === LARGE QR CODE - Main focus of receipt ===
+      commands.push(27, 97, 1); // ESC 'a' 1 - Center
+      this.appendQRCode(commands, receipt.qrCode, receipt.printerPaperWidth);
+      commands.push(10, 10); // LF x2
+      
+      // Footer text
+      commands.push(27, 97, 1); // ESC 'a' 1 - Center
+      this.appendText(commands, 'Scan to Order');
+      commands.push(10);
+      
+      if (receipt.startTime) {
+        this.appendText(commands, `Time: ${receipt.startTime}`);
+        commands.push(10);
+      }
+      
+      commands.push(10, 10); // LF x2
+      
+      // Paper feed and cut
+      commands.push(27, 100, 5); // ESC d 5 - Feed paper 5 lines
+      commands.push(27, 105); // ESC i - Full cut
+      
+      return new Uint8Array(commands);
+    }
 
-    // Master select: ESC M - Select font A/B
-    commands.push(27, 77, 0); // ESC M 0 - Font A
-
+    // === REGULAR RECEIPT WITH ITEMS ===
     // Alignment: ESC 'a' n - Select alignment (0=left, 1=center, 2=right)
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
 
@@ -135,11 +177,23 @@ class ThermalPrinterService {
 
     commands.push(10, 10); // LF x2
 
+    // === QR CODE SECTION ===
+    if (receipt.qrCode) {
+      commands.push(27, 97, 1); // ESC 'a' 1 - Center
+      this.appendQRCode(commands, receipt.qrCode, receipt.printerPaperWidth);
+      commands.push(10, 10); // LF x2
+    }
+
     // === FOOTER SECTION ===
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    this.appendText(commands, 'Thank You!');
-    commands.push(10);
-    this.appendText(commands, 'Please Visit Again');
+    
+    // Print start time if available
+    if (receipt.startTime) {
+      this.appendText(commands, `Time: ${receipt.startTime}`);
+      commands.push(10);
+    }
+    
+    this.appendText(commands, 'Scan to Place Order');
     commands.push(10, 10, 10); // LF x3
 
     // === PAPER FEED BEFORE CUT ===
@@ -150,6 +204,60 @@ class ThermalPrinterService {
     commands.push(27, 105); // ESC i - Full cut
 
     return new Uint8Array(commands);
+  }
+
+  /**
+   * Add ESC/POS QR code commands
+   * Uses GS ( k command format for QR code printing
+   * Module size: 3=small, 4=medium, 5=large
+   * For 80mm printers: use 4, For 58mm printers: use 3
+   */
+  private appendQRCode(commands: number[], qrData: string, printerPaperWidth?: number): void {
+    // GS ( k for QR code
+    // Format: GS ( k pL pH cn fnm m d...
+    
+    const dataBytes = qrData.split('').map(c => c.charCodeAt(0));
+    const dataLength = dataBytes.length;
+    
+    // Adaptive module size based on printer paper width
+    // For QR-only receipts, use maximum module size to fill the paper
+    // 80mm printers: module size 12 (~full paper width QR code)
+    // 58mm printers: module size 10 (~full paper width QR code)
+    let moduleSize = 12; // doubled from 6 for larger QR
+    if (printerPaperWidth && printerPaperWidth < 70) {
+      moduleSize = 10; // doubled from 5 for larger QR
+    }
+    
+    // Set QR code model: GS ( k pL pH 49 65 50 model (1, 2, or 3)
+    // Model 2 is most compatible
+    commands.push(29, 40, 107); // GS ( k
+    commands.push(4, 0); // pL=4, pH=0 (total 4 bytes)
+    commands.push(49, 65); // cn=49, fnm=65
+    commands.push(50); // model=50 (Model 2)
+    commands.push(0); // extra param
+    
+    // Set QR code size: GS ( k pL pH 49 67 size
+    commands.push(29, 40, 107); // GS ( k
+    commands.push(3, 0); // pL=3, pH=0
+    commands.push(49, 67); // cn=49, fnm=67
+    commands.push(moduleSize); // size in modules (4 = reasonable for thermal printer)
+    
+    // Set QR code data: GS ( k pL pH 49 80 48 d...
+    const pL = (dataLength + 3) & 0xFF;
+    const pH = ((dataLength + 3) >> 8) & 0xFF;
+    commands.push(29, 40, 107); // GS ( k
+    commands.push(pL, pH); // data length
+    commands.push(49, 80); // cn=49, fnm=80
+    commands.push(48); // fn2=48
+    for (const byte of dataBytes) {
+      commands.push(byte);
+    }
+    
+    // Print QR code: GS ( k pL pH 49 81 48
+    commands.push(29, 40, 107); // GS ( k
+    commands.push(3, 0); // pL=3, pH=0
+    commands.push(49, 81); // cn=49, fnm=81
+    commands.push(48); // fn2=48
   }
 
   /**
@@ -170,7 +278,6 @@ class ThermalPrinterService {
     pin: string = '0000'
   ): Promise<boolean> {
     try {
-      console.log('[ThermalPrinter] Authenticating with PIN:', pin);
 
       // For some printers, the PIN needs to be sent as data with terminator
       try {
@@ -181,28 +288,26 @@ class ThermalPrinterService {
             const pinBytes = pin.split('').map(c => c.charCodeAt(0));
             pinBytes.push(13); // Add CR (carriage return)
             pinBytes.push(10); // Add LF (line feed)
-            console.log('[ThermalPrinter] Sending PIN bytes:', pinBytes);
             
             try {
+              // Convert to base64 (react-native-ble-plx requires this)
+              const pinBase64 = this.arrayToBase64(pinBytes);
+              
               if (char.isWritableWithoutResponse) {
-                await char.writeWithoutResponse(pinBytes);
+                await char.writeWithoutResponse(pinBase64);
               } else {
-                await char.write(pinBytes);
+                await char.write(pinBase64);
               }
               
-              console.log('[ThermalPrinter] PIN sent successfully with terminator');
-              
-              // Wait longer for authentication to process
-              console.log('[ThermalPrinter] Waiting 1 second for PIN validation...');
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              // Wait longer for authentication to process - YU568 needs time to switch modes
+              await new Promise(resolve => setTimeout(resolve, 1500));
               
               // Try to read response if characteristic is readable
               if (char.isReadable) {
                 try {
                   const response = await char.read();
-                  console.log('[ThermalPrinter] PIN response:', Array.from(response));
                 } catch (readErr) {
-                  console.log('[ThermalPrinter] No PIN response (device may not support)');
+                  // Ignore read error, some printers don't respond
                 }
               }
               
@@ -218,7 +323,6 @@ class ThermalPrinterService {
       }
 
       // If direct PIN write fails, wait for iOS pairing dialog
-      console.log('[ThermalPrinter] Waiting for iOS pairing dialog (please approve with PIN 0000)...');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       return true;
@@ -226,6 +330,56 @@ class ThermalPrinterService {
       console.error('[ThermalPrinter] Authentication error:', err.message);
       return false;
     }
+  }
+
+  /**
+   * Send YU568 printer configuration commands AFTER authentication
+   * This wakes up the printer and puts it in print mode
+   */
+  private async initializePrinterAfterAuth(char: any): Promise<void> {
+    try {
+      const initCommands: number[] = [];
+      
+      // DLE EOT - Real-time status query (wakes printer)
+      initCommands.push(0x10, 0x04);
+      
+      // ESC @ - Initialize printer
+      initCommands.push(27, 64);
+      
+      // Line spacing: ESC '3' 30
+      initCommands.push(27, 51, 30);
+      
+      // Font selection: ESC M 0
+      initCommands.push(27, 77, 0);
+      
+      // Alignment: ESC 'a' 1 (center)
+      initCommands.push(27, 97, 1);
+      
+      // Convert to base64 (react-native-ble-plx requires this)
+      const initBase64 = this.arrayToBase64(initCommands);
+      
+      if (char.isWritableWithoutResponse) {
+        await char.writeWithoutResponse(initBase64);
+      } else if (char.isWritable) {
+        await char.write(initBase64);
+      }
+      
+      // Wait for initialization to take effect
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (e: any) {
+      console.warn('[ThermalPrinter] initialization after auth failed:', e.message);
+    }
+  }
+
+  /**
+   * Convert array of numbers to base64 string
+   */
+  private arrayToBase64(arr: number[]): string {
+    let binary = '';
+    for (let i = 0; i < arr.length; i++) {
+      binary += String.fromCharCode(arr[i]);
+    }
+    return btoa(binary);
   }
 
   /**
@@ -242,10 +396,8 @@ class ThermalPrinterService {
 
       // Generate ESC/POS data
       const escposData = this.generateESCPOS(receiptData);
-      console.log('[ThermalPrinter] Generated', escposData.length, 'bytes of print data');
 
       // Connect to device
-      console.log('[ThermalPrinter] Connecting to device...');
       let device: any;
       try {
         device = await manager.connectToDevice(deviceId, { timeout });
@@ -270,6 +422,27 @@ class ThermalPrinterService {
       const isAuthenticated = await this.authenticateWithPrinter(device, '0000');
       if (!isAuthenticated) {
         console.warn('[ThermalPrinter] Authentication may have failed, continuing anyway...');
+      }
+
+      // Find the main writable characteristic (Service 1) for initialization
+      let mainWriteChar: any = null;
+      try {
+        const chars = await device.characteristicsForService('49535343-fe7d-4ae5-8fa9-9fafd205e455');
+        for (const char of chars) {
+          if (char.isWritableWithoutResponse || char.isWritable) {
+            mainWriteChar = char;
+            console.log('[ThermalPrinter] Found Service 1 writable characteristic:', char.uuid);
+            break;
+          }
+        }
+      } catch (e: any) {
+        console.warn('[ThermalPrinter] Could not find Service 1:', e.message);
+      }
+
+      // Initialize printer AFTER authentication (critical for YU568!)
+      if (mainWriteChar) {
+        console.log('[ThermalPrinter] Initializing printer after authentication...');
+        await this.initializePrinterAfterAuth(mainWriteChar);
       }
 
       // Find a writable characteristic
@@ -350,19 +523,21 @@ class ThermalPrinterService {
 
       for (let i = 0; i < escposData.length; i += chunkSize) {
         const chunk = escposData.slice(i, Math.min(i + chunkSize, escposData.length));
-        const chunkArray = Array.from(chunk);
         const chunkNum = Math.floor(i / chunkSize) + 1;
         const totalChunks = Math.ceil(escposData.length / chunkSize);
 
         try {
-          console.log(`[ThermalPrinter] Chunk ${chunkNum}/${totalChunks}: Sending ${chunkArray.length} bytes`);
+          console.log(`[ThermalPrinter] Chunk ${chunkNum}/${totalChunks}: Sending ${chunk.length} bytes`);
+
+          // Convert chunk to base64 (react-native-ble-plx requires this)
+          const chunkBase64 = this.arrayToBase64(Array.from(chunk));
 
           if (writeCharacteristic.isWritableWithoutResponse) {
             console.log(`[ThermalPrinter] Using writeWithoutResponse`);
-            await writeCharacteristic.writeWithoutResponse(chunkArray);
+            await writeCharacteristic.writeWithoutResponse(chunkBase64);
           } else if (writeCharacteristic.isWritable) {
             console.log(`[ThermalPrinter] Using write with response`);
-            await writeCharacteristic.write(chunkArray);
+            await writeCharacteristic.write(chunkBase64);
           } else {
             throw new Error('Characteristic is not writable (no write capability)');
           }
@@ -536,18 +711,16 @@ class ThermalPrinterService {
 
       // CRITICAL: Send initialization AFTER PIN to put printer in print mode
       console.log('[ThermalPrinter] TEST: Sending initialization after PIN');
-      const initCommands: number[] = [];
-      initCommands.push(27, 64); // ESC @ - Initialize
-      initCommands.push(27, 51, 30); // ESC 3 30 - Line spacing
-      await writeChar.writeWithoutResponse(initCommands);
-      console.log('[ThermalPrinter] TEST: Initialization sent');
+      await this.initializePrinterAfterAuth(writeChar);
       
       // Wait for initialization to take effect
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Now send the test data (text + feeds)
       console.log('[ThermalPrinter] TEST: Sending', testData.length, 'bytes of print data');
-      await writeChar.writeWithoutResponse(Array.from(testData));
+      // Convert to base64 (react-native-ble-plx requires this format)
+      const testBase64 = this.arrayToBase64(Array.from(testData));
+      await writeChar.writeWithoutResponse(testBase64);
       console.log('[ThermalPrinter] TEST: Data sent successfully');
 
       // Wait LONGER for printer to process and print

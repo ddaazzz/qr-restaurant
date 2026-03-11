@@ -25,13 +25,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const bootstrapAsync = async () => {
     try {
-      console.log('[Auth] Starting bootstrap...');
       const token = await SecureStore.getItemAsync('authToken');
       const restaurantId = await SecureStore.getItemAsync('restaurantId');
       const role = await SecureStore.getItemAsync('role');
       const userId = await SecureStore.getItemAsync('userId');
-
-      console.log('[Auth] Bootstrap values:', { hasToken: !!token, hasRestaurantId: !!restaurantId, role });
 
       if (token && restaurantId && role) {
         // Set token and restaurantId on API client
@@ -43,14 +40,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           role: role as AuthResponse['role'],
           userId: userId || '',
         });
-        console.log('[Auth] User restored from storage');
-      } else {
-        console.log('[Auth] No saved credentials, showing login');
       }
     } catch (error) {
       console.error('[Auth] Failed to restore token', error);
     } finally {
-      console.log('[Auth] Bootstrap complete');
       setIsLoading(false);
     }
   };
@@ -59,10 +52,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       const response = await apiClient.login({ email, password });
-      // apiClient already handles storing to SecureStore
-      // Just set token and restaurantId on API client and state
-      apiClient.setToken(String(response.token));
-      apiClient.setRestaurantId(String(response.restaurantId));
+      // apiClient already handles storing to SecureStore and setting token/restaurantId
       setUser(response);
     } finally {
       setIsLoading(false);
@@ -73,10 +63,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       const response = await apiClient.kitchenLogin(pin, restaurantId);
-      // apiClient already handles storing to SecureStore
-      // Just set token and restaurantId on API client and state
-      apiClient.setToken(String(response.token));
-      apiClient.setRestaurantId(String(response.restaurantId));
+      // apiClient already handles storing to SecureStore and setting token/restaurantId
       setUser(response);
     } finally {
       setIsLoading(false);
@@ -87,10 +74,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       const response = await apiClient.staffLogin(pin, restaurantId);
-      // apiClient already handles storing to SecureStore
-      // Just set token and restaurantId on API client and state
-      apiClient.setToken(String(response.token));
-      apiClient.setRestaurantId(String(response.restaurantId));
+      // apiClient already handles storing to SecureStore and setting token/restaurantId
       setUser(response);
     } finally {
       setIsLoading(false);

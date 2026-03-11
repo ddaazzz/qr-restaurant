@@ -1,22 +1,24 @@
 import React from 'react';
 import { ActivityIndicator, View, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { LanguageProvider } from './contexts/LanguageContext';
 import { LoginScreen } from './screens/LoginScreen';
 import { StaffLoginScreen } from './screens/StaffLoginScreen';
 import { KitchenLoginScreen } from './screens/KitchenLoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
+import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
 
-// Patch animation errors at startup
+// Fix animation batching issues at startup
 patchAnimationErrors();
+configureAnimationPerformance();
 
-// Suppress the onUserDrivenAnimationEnded warning from native animated module
-// This is a known issue with SDK 54 and doesn't affect functionality
+// Suppress only specific known harmless warnings
 LogBox.ignoreLogs([
-  'onUserDrivenAnimationEnded',
-  'RCTNativeAnimatedModule'
+  // Network warnings from iOS when bundler not connected
+  'nw_socket_handle_socket_event',
+  'nw_endpoint_flow_failed_with_error',
+  'nw_connection'
 ]);
 
 const RootNavigator = () => {
@@ -47,10 +49,8 @@ const RootNavigator = () => {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
-    </LanguageProvider>
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
   );
 }

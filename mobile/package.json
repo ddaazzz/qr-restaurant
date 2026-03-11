@@ -5,6 +5,8 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
+    "start:localhost": "expo start --localhost",
+    "start:web": "expo start --web",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
@@ -15,16 +17,13 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-picker/picker": "2.11.1",
-    "axios": "1.7.0",
+    "axios": "^1.7.0",
     "expo": "54.0.33",
-    "expo-camera": "~17.0.10",
+    "expo-camera": "^55.0.9",
     "expo-device": "8.0.10",
-    "expo-image-picker": "^55.0.11",
     "expo-permissions": "14.4.0",
-    "expo-print": "~15.0.8",
+    "expo-print": "^55.0.8",
     "expo-secure-store": "15.0.8",
-    "expo-updates": "~29.0.16",
-    "jsqr": "^1.4.0",
     "qrcode": "1.5.4",
     "qrcode.react": "4.2.0",
     "react": "19.1.0",
@@ -40,9 +39,7 @@
     "@babel/core": "7.23.0",
     "@react-native-community/cli": "20.1.2",
     "@types/react": "19.1.0",
-    "babel-preset-expo": "54.0.10",
-    "expo-cli": "^6.3.12",
-    "sharp": "^0.34.5"
+    "babel-preset-expo": "54.0.10"
   },
   "private": true
 }

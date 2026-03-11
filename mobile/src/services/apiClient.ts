@@ -2,11 +2,9 @@ import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { AuthResponse, LoginCredentials } from '../types';
 
-// Use environment variable for API URL, fallback to chuio.io
-const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'https://chuio.io';
+// Use environment variable for API URL, fallback to localhost for development
+const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
 export const API_URL = defaultUrl;
-
-console.log('[API] Configured endpoint:', API_URL);
 
 class APIClient {
   private client: AxiosInstance;
@@ -16,7 +14,7 @@ class APIClient {
   constructor() {
     this.client = axios.create({
       baseURL: API_URL,
-      timeout: 10000,
+      timeout: 30000, // Increased from 10s to 30s to handle slower endpoints
     });
 
     // Add request interceptor for auth
@@ -50,18 +48,13 @@ class APIClient {
   // Auth endpoints
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      console.log('[API] Logging in with email:', credentials.email);
-      console.log('[API] Request to:', API_URL + '/api/auth/login');
       const response = await this.client.post<AuthResponse>('/api/auth/login', credentials);
       const { token, restaurantId } = response.data;
-      
-      console.log('[API] Response received:', { token: typeof token, restaurantId: typeof restaurantId, tokenLength: token?.length });
       
       // Ensure token is a string
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       const restaurantIdString = restaurantId ? (typeof restaurantId === 'string' ? restaurantId : String(restaurantId)) : null;
       
-      console.log('[API] Storing credentials in SecureStore...');
       await SecureStore.setItemAsync('authToken', tokenString);
       if (restaurantIdString) {
         await SecureStore.setItemAsync('restaurantId', restaurantIdString);
@@ -69,7 +62,6 @@ class APIClient {
       }
       this.token = tokenString;
       
-      console.log('[API] ✅ Login successful, restaurantId:', restaurantIdString);
       return response.data;
     } catch (error) {
       console.error('[API] Login failed:', error);
@@ -79,7 +71,6 @@ class APIClient {
 
   async kitchenLogin(pin: string, restaurantId?: string): Promise<AuthResponse> {
     try {
-      console.log('[API] Kitchen login with PIN');
       const payload: any = { pin };
       if (restaurantId) {
         payload.restaurantId = restaurantId;
@@ -97,7 +88,6 @@ class APIClient {
       }
       this.token = tokenString;
       
-      console.log('[API] ✅ Kitchen login successful');
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -106,7 +96,6 @@ class APIClient {
 
   async staffLogin(pin: string, restaurantId?: string): Promise<AuthResponse> {
     try {
-      console.log('[API] Staff login with PIN');
       const payload: any = { pin };
       if (restaurantId) {
         payload.restaurantId = restaurantId;
@@ -124,7 +113,6 @@ class APIClient {
       }
       this.token = tokenString;
       
-      console.log('[API] ✅ Staff login successful');
       return response.data;
     } catch (error) {
       throw this.handleError(error);

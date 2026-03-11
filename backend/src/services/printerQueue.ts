@@ -4,16 +4,19 @@ export interface PrintJob {
   id: number;
   restaurant_id: number;
   order_id?: string | null;
-  bill_id?: string | null;
+  session_id?: number | null;
+  job_type: string;
   status: 'queued' | 'printing' | 'completed' | 'failed';
   priority: number;
   printer_zone_id?: number | null;
   retry_count: number;
   max_retries: number;
   payload: any;
+  last_error_message?: string | null;
   created_at: Date;
+  started_at?: Date | null;
+  completed_at?: Date | null;
   next_retry_at?: Date | null;
-  error_message?: string | null;
 }
 
 export interface QueueConfig {
@@ -101,42 +104,45 @@ export class PrinterQueueService {
     restaurantId: number,
     payload: any,
     options: {
+      jobType?: string;
       orderId?: string;
-      billId?: string;
+      sessionId?: number;
       priority?: number;
       printerZoneId?: number;
       maxRetries?: number;
     } = {}
   ): Promise<PrintJob> {
     const {
-      orderId,
-      billId,
+      jobType = 'qr',
+      orderId = null,
+      sessionId = null,
       priority = 0,
-      printerZoneId,
+      printerZoneId = null,
       maxRetries = 3,
     } = options;
 
     const query = `
       INSERT INTO print_queue (
-        restaurant_id, order_id, bill_id, status, priority, 
+        restaurant_id, order_id, session_id, job_type, status, priority, 
         printer_zone_id, retry_count, max_retries, payload, created_at
       )
-      VALUES ($1, $2, $3, 'queued', $4, $5, 0, $6, $7, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, $3, $4, 'queued', $5, $6, 0, $7, $8, CURRENT_TIMESTAMP)
       RETURNING *;
     `;
 
     const result = await this.pool.query(query, [
       restaurantId,
-      orderId || null,
-      billId || null,
+      orderId,
+      sessionId,
+      jobType,
       priority,
-      printerZoneId || null,
+      printerZoneId,
       maxRetries,
       JSON.stringify(payload),
     ]);
 
     const job = result.rows[0];
-    console.log(`[PrinterQueue] Job #${job.id} queued for restaurant ${restaurantId}`);
+    console.log(`[PrinterQueue] Job #${job.id} queued for restaurant ${restaurantId} (type: ${jobType})`);
     return this.formatJob(job);
   }
 

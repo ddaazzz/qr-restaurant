@@ -11,7 +11,6 @@ import {
   Modal,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
-import { useLanguage } from '../contexts/LanguageContext';
 import { apiClient } from '../services/apiClient';
 
 interface KitchenItem {
@@ -30,7 +29,6 @@ interface KitchenItem {
 
 export const KitchenDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
-  const { t } = useLanguage();
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,10 +53,10 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   };
 
   const handleLogout = async () => {
-    Alert.alert(t('button.logout'), t('modal.confirm'), [
-      { text: t('button.cancel'), style: 'cancel' },
+    Alert.alert('Logout', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: t('button.logout'),
+        text: 'Logout',
         onPress: async () => {
           await logout();
         },
@@ -71,23 +69,23 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
       await apiClient.updateOrderStatus(itemId, newStatus);
       loadKitchenItems();
     } catch (err) {
-      Alert.alert(t('error.error'), err instanceof Error ? err.message : t('error.failed'));
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update status');
     }
   };
 
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2C3E50" />
+        <ActivityIndicator size="large" color="#FF9800" />
       </View>
     );
   }
 
   const statusColors: any = {
     pending: '#FVC107',
-    confirmed: '#2C3E50',
-    preparing: '#2C3E50',
-    ready: '#2C3E50',
+    confirmed: '#2196F3',
+    preparing: '#FF9800',
+    ready: '#4CAF50',
     served: '#9E9E9E',
   };
 
@@ -95,9 +93,9 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>🍳 {t('kitchen.kitchen-queue')}</Text>
+        <Text style={styles.title}>🍳 Kitchen Queue</Text>
         <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.menuButton}>
-          <Text style={styles.menuButtonText}>{t('menu.menu')} ▼</Text>
+          <Text style={styles.menuButtonText}>Menu ▼</Text>
         </TouchableOpacity>
       </View>
 
@@ -112,11 +110,11 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
-                Alert.alert(t('language.language'), t('language.select'));
+                Alert.alert('Language', 'Language selection would go here');
                 setShowMenu(false);
               }}
             >
-              <Text style={styles.menuItemText}>🌍 {t('language.language')}</Text>
+              <Text style={styles.menuItemText}>🌍 Language</Text>
             </TouchableOpacity>
             <View style={styles.menuDivider} />
             <TouchableOpacity
@@ -126,7 +124,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                 handleLogout();
               }}
             >
-              <Text style={styles.menuItemText}>🚪 {t('button.logout')}</Text>
+              <Text style={styles.menuItemText}>🚪 Logout</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -137,12 +135,12 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadKitchenItems}>
-            <Text style={styles.retryButtonText}>{t('button.retry')}</Text>
+            <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : kitchenItems.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>{t('kitchen.no-active-orders')}</Text>
+          <Text style={styles.emptyText}>No active orders</Text>
         </View>
       ) : (
         <FlatList
@@ -155,8 +153,8 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
             <View style={styles.orderCard}>
               <View style={styles.orderHeader}>
                 <View>
-                  <Text style={styles.orderNumber}>{t('orders.order-number')} {item.orderId}</Text>
-                  <Text style={styles.tableNumber}>{t('kitchen.table')} {item.tableNumber}</Text>
+                  <Text style={styles.orderNumber}>Order #{item.orderId}</Text>
+                  <Text style={styles.tableNumber}>Table {item.tableNumber}</Text>
                   <Text style={styles.timestamp}>{new Date(item.createdAt).toLocaleTimeString()}</Text>
                 </View>
                 <View
@@ -192,7 +190,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.noItems}>{t('kitchen.no-items')}</Text>
+                  <Text style={styles.noItems}>No items</Text>
                 )}
               </View>
 
@@ -203,7 +201,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     style={[styles.actionButton, styles.readyButton]}
                     onPress={() => handleUpdateStatus(item.id, 'ready')}
                   >
-                    <Text style={styles.actionButtonText}>{t('kitchen.ready')}</Text>
+                    <Text style={styles.actionButtonText}>Ready</Text>
                   </TouchableOpacity>
                 )}
 
@@ -212,7 +210,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     style={[styles.actionButton, styles.servedButton]}
                     onPress={() => handleUpdateStatus(item.id, 'served')}
                   >
-                    <Text style={styles.actionButtonText}>{t('kitchen.served')}</Text>
+                    <Text style={styles.actionButtonText}>Served</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -235,7 +233,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#FF9800',
     padding: 20,
     paddingTop: 40,
     flexDirection: 'row',
@@ -304,7 +302,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 15,
     borderLeftWidth: 4,
-    borderLeftColor: '#2C3E50',
+    borderLeftColor: '#FF9800',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -367,7 +365,7 @@ const styles = StyleSheet.create({
   },
   notes: {
     fontSize: 13,
-    color: '#2C3E50',
+    color: '#FF9800',
     fontStyle: 'italic',
     marginTop: 5,
   },
@@ -386,7 +384,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   readyButton: {
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#4CAF50',
   },
   servedButton: {
     backgroundColor: '#9E9E9E',
@@ -408,7 +406,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#FF9800',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

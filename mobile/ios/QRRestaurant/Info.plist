@@ -56,9 +56,9 @@
     <string>Location is needed for Bluetooth scanning</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your photos</string>
     <key>RCTNewArchEnabled</key>
+    <true/>
+    <key>UIApplicationSupportsMultipleScenes</key>
     <true/>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
