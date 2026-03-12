@@ -409,7 +409,26 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
 
     // If browser printing, return HTML for client-side printing
     if (printerConfig.qr_printer_type === 'browser') {
+      // Fetch session data for pax and start_time
+      let pax = 0;
+      let startTime = '';
+      if (sessionId) {
+        const sessionResult = await pool.query(
+          `SELECT pax, created_at FROM sessions WHERE id = $1 AND restaurant_id = $2`,
+          [sessionId, restaurantId]
+        );
+        if (sessionResult.rowCount > 0) {
+          pax = sessionResult.rows[0].pax || 0;
+          const createdAt = sessionResult.rows[0].created_at;
+          if (createdAt) {
+            const date = new Date(createdAt);
+            startTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          }
+        }
+      }
+
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://chuio.io/${qrToken}`)}`;  // Large QR: 1200x1200 (doubled), URL matches landing.js expectation
+      const restaurantName = printerConfig.name || 'Restaurant';
       const html = `
         <!DOCTYPE html>
         <html>
@@ -418,28 +437,38 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
             <title>QR Code - ${tableName}</title>
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
-              body { font-family: 'Courier New', monospace; padding: 12px; background: #fff; }
-              .receipt { width: 100%; text-align: center; font-size: 12px; line-height: 1.5; max-width: 80mm; margin: 0 auto; }
-              .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-              #qrcode { display: flex; justify-content: center; margin: 16px 0; }
-              .footer { font-size: 10px; color: #666; margin-top: 8px; }
+              body { font-family: 'Courier New', monospace; padding: 8px; background: #fff; }
+              .receipt { width: 100%; max-width: 80mm; margin: 0 auto; }
+              .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 12px; margin-bottom: 12px; }
+              .restaurant-name { font-weight: bold; font-size: 24px; margin-bottom: 4px; }
+              .start-time { font-size: 18px; margin-bottom: 8px; }
+              .table-pax { display: flex; justify-content: space-between; font-size: 20px; margin: 12px 0; }
+              .table-pax-left { text-align: left; }
+              .table-pax-right { text-align: right; }
+              .divider { border-bottom: 1px dashed #000; margin: 12px 0; }
+              #qrcode { display: flex; justify-content: center; margin: 20px 0; }
+              #qrcode img { width: 240px; height: 240px; }
+              .scan-text { text-align: center; font-weight: bold; font-size: 20px; margin: 16px 0; }
+              .footer { text-align: center; font-size: 14px; margin-top: 16px; padding-top: 12px; border-top: 1px dashed #000; }
               @media print { body { margin: 0; padding: 8px; } .receipt { width: 80mm; } }
             </style>
           </head>
           <body>
             <div class="receipt">
               <div class="header">
-                <div style="font-weight: bold; font-size: 14px;">Restaurant</div>
+                <div class="restaurant-name">${restaurantName}</div>
+                ${startTime ? `<div class="start-time">Time: ${startTime}</div>` : ''}
               </div>
-              <div style="text-align: left; margin: 8px 0; font-size: 11px;">
-                <div>Table: ${tableName}</div>
+              <div class="table-pax">
+                <div class="table-pax-left">Table: ${tableName}</div>
+                ${pax > 0 ? `<div class="table-pax-right">Pax: ${pax}</div>` : ''}
               </div>
-              <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-              <div id="qrcode" style="text-align: center; margin: 16px 0;">
-                <img src="${qrImageUrl}" alt="QR Code" style="max-width: 100%; width: 200px; height: 200px;" />
+              <div class="divider"></div>
+              <div id="qrcode" style="text-align: center;">
+                <img src="${qrImageUrl}" alt="QR Code" />
               </div>
-              <div style="font-weight: bold; font-size: 13px; margin: 8px 0;">Scan to order</div>
-              <div class="footer"><p style="margin-top: 8px;">---</p></div>
+              <div class="scan-text">Scan to Order</div>
+              <div class="footer">Powered by Chuio.io</div>
             </div>
             <script>
               window.onload = () => { setTimeout(() => window.print(), 500); };
@@ -455,11 +484,33 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
     // Bluetooth can only be accessed by the mobile device, not the backend server
     if (printerConfig.qr_printer_type === 'bluetooth') {
       console.log('[PrintQR] Returning Bluetooth payload for client-side printing');
+      
+      // Fetch session data for pax and start_time
+      let pax = 0;
+      let startTime = '';
+      if (sessionId) {
+        const sessionResult = await pool.query(
+          `SELECT pax, created_at FROM sessions WHERE id = $1 AND restaurant_id = $2`,
+          [sessionId, restaurantId]
+        );
+        if (sessionResult.rowCount > 0) {
+          pax = sessionResult.rows[0].pax || 0;
+          const createdAt = sessionResult.rows[0].created_at;
+          if (createdAt) {
+            const date = new Date(createdAt);
+            startTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          }
+        }
+      }
+
       const qrPayload = {
         type: 'qr',
         tableNumber: tableName,
+        pax: pax,
+        startTime: startTime,
         qrToken: qrToken,
         qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://chuio.io/${qrToken}`)}`,  // Large QR: 1200x1200 (doubled), URL matches landing.js expectation
+        restaurantName: printerConfig.name || 'Restaurant',
         printerConfig: {
           bluetoothDeviceId: printerConfig.qr_bluetooth_device_id,
           bluetoothDeviceName: printerConfig.qr_bluetooth_device_name,
@@ -896,6 +947,87 @@ router.delete("/restaurants/:restaurantId/bluetooth-devices/:deviceId", async (r
   } catch (err) {
     console.error("❌ Failed to delete Bluetooth device:", err);
     res.status(500).json({ error: "Failed to delete Bluetooth device" });
+  }
+});
+
+/**
+ * Get QR code format settings for a restaurant
+ */
+router.get("/restaurants/:restaurantId/qr-format", async (req: Request, res: Response) => {
+  const { restaurantId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT 
+        qr_restaurant_name_format,
+        qr_show_time,
+        qr_table_layout,
+        qr_size,
+        qr_footer_text
+       FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    const format = result.rows[0];
+    res.json({
+      restaurant_name: format.qr_restaurant_name_format || null,
+      show_time: format.qr_show_time !== false,
+      table_layout: format.qr_table_layout || 'both',
+      qr_size: format.qr_size || 'medium',
+      footer_text: format.qr_footer_text || 'Powered by Chuio.io',
+    });
+  } catch (err) {
+    console.error("❌ Failed to get QR format:", err);
+    res.status(500).json({ error: "Failed to get QR format" });
+  }
+});
+
+/**
+ * Save QR code format settings for a restaurant
+ */
+router.patch("/restaurants/:restaurantId/qr-format", async (req: Request, res: Response) => {
+  const { restaurantId } = req.params;
+  const {
+    restaurant_name,
+    show_time,
+    table_layout,
+    qr_size,
+    footer_text,
+  } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE restaurants 
+       SET qr_restaurant_name_format = $1,
+           qr_show_time = $2,
+           qr_table_layout = $3,
+           qr_size = $4,
+           qr_footer_text = $5
+       WHERE id = $6
+       RETURNING qr_restaurant_name_format, qr_show_time, qr_table_layout, qr_size, qr_footer_text`,
+      [restaurant_name || null, show_time, table_layout, qr_size, footer_text, restaurantId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    const format = result.rows[0];
+    res.json({
+      success: true,
+      restaurant_name: format.qr_restaurant_name_format || null,
+      show_time: format.qr_show_time,
+      table_layout: format.qr_table_layout,
+      qr_size: format.qr_size,
+      footer_text: format.qr_footer_text,
+    });
+  } catch (err) {
+    console.error("❌ Failed to save QR format:", err);
+    res.status(500).json({ error: "Failed to save QR format" });
   }
 });
 

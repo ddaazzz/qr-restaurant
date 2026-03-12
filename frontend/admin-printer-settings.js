@@ -208,11 +208,25 @@ window.addEventListener("DOMContentLoaded", () => {
     if (document.getElementById("printer-type")) {
       loadPrinterSettings();
     }
+    // Initialize QR format preview
+    if (document.getElementById("qr-format-name")) {
+      updateQRPreview();
+      // Add event listeners for real-time preview updates
+      document.getElementById("qr-format-name").addEventListener("input", updateQRPreview);
+      document.getElementById("qr-format-show-time").addEventListener("change", updateQRPreview);
+      document.getElementById("qr-format-table-layout").addEventListener("change", updateQRPreview);
+      document.getElementById("qr-format-footer").addEventListener("input", updateQRPreview);
+    }
   }, 500);
 
   // Also listen for when admin settings are opened
   window.addEventListener("settingsOpened", () => {
     loadPrinterSettings();
+    setTimeout(() => {
+      if (document.getElementById("qr-format-name")) {
+        updateQRPreview();
+      }
+    }, 100);
   });
 });
 
@@ -223,3 +237,115 @@ window.printerSettings = {
   test: testPrinterConnection,
   onTypeChanged: onPrinterTypeChanged,
 };
+
+/**
+ * Switch between printer settings tabs
+ */
+function switchPrinterTab(tabName) {
+  // Hide all tabs
+  const tabs = document.querySelectorAll('.modal-tab-content');
+  tabs.forEach(tab => tab.classList.remove('active'));
+
+  // Remove active class from all buttons
+  const buttons = document.querySelectorAll('.modal-tab-btn');
+  buttons.forEach(btn => btn.classList.remove('active'));
+
+  // Show selected tab
+  const selectedTab = document.getElementById(`tab-${tabName}`);
+  if (selectedTab) {
+    selectedTab.classList.add('active');
+  }
+
+  // Mark button as active
+  const selectedBtn = document.querySelector(`[data-tab="${tabName}"]`);
+  if (selectedBtn) {
+    selectedBtn.classList.add('active');
+  }
+}
+
+/**
+ * Update QR format preview based on editor inputs
+ */
+function updateQRPreview() {
+  const restaurantName = document.getElementById('qr-format-name')?.value || 'Restaurant';
+  const showTime = document.getElementById('qr-format-show-time')?.checked || false;
+  const tableLayout = document.getElementById('qr-format-table-layout')?.value || 'both';
+  const qrSize = document.getElementById('qr-format-qr-size')?.value || 'medium';
+  const footerText = document.getElementById('qr-format-footer')?.value || 'Powered by Chuio.io';
+
+  const sizeMap = { small: '180px', medium: '240px', large: '280px' };
+  const qrSizePixels = sizeMap[qrSize] || '240px';
+
+  let tableHtml = '';
+  if (tableLayout === 'both') {
+    tableHtml = '<div style="display: flex; justify-content: space-between; font-size: 13px; margin: 12px 0;"><div>Table: T02</div><div>Pax: 4</div></div>';
+  } else if (tableLayout === 'table-only') {
+    tableHtml = '<div style="font-size: 13px; margin: 12px 0;">Table: T02</div>';
+  } else if (tableLayout === 'vertical') {
+    tableHtml = '<div style="font-size: 13px; margin: 12px 0;">Table: T02<br>Pax: 4</div>';
+  }
+
+  const preview = document.getElementById('qr-format-preview');
+  if (preview) {
+    preview.innerHTML = `
+      <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">${restaurantName}</div>
+      ${showTime ? '<div style="font-size: 12px; margin-bottom: 12px;">Time: 4:20 PM</div>' : ''}
+      ${tableHtml}
+      <div style="border-bottom: 1px dashed #000; margin: 12px 0;"></div>
+      <div style="width: ${qrSizePixels}; height: ${qrSizePixels}; margin: 16px auto; background: #f0f0f0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;">QR Code</div>
+      <div style="font-weight: bold; font-size: 13px; margin: 12px 0;">Scan to Order</div>
+      <div style="border-top: 1px dashed #000; padding-top: 12px; margin-top: 12px; font-size: 11px;">${footerText}</div>
+    `;
+  }
+}
+
+/**
+ * Reset QR format to default
+ */
+function resetQRFormat() {
+  document.getElementById('qr-format-name').value = 'My Restaurant';
+  document.getElementById('qr-format-show-time').checked = true;
+  document.getElementById('qr-format-table-layout').value = 'both';
+  document.getElementById('qr-format-qr-size').value = 'medium';
+  document.getElementById('qr-format-footer').value = 'Powered by Chuio.io';
+  updateQRPreview();
+}
+
+/**
+ * Save QR format settings
+ */
+async function saveQRFormat() {
+  try {
+    const restaurantId = localStorage.getItem("restaurantId");
+    if (!restaurantId) {
+      alert("Restaurant ID not found");
+      return;
+    }
+
+    const formatData = {
+      restaurant_name: document.getElementById('qr-format-name').value,
+      show_time: document.getElementById('qr-format-show-time').checked,
+      table_layout: document.getElementById('qr-format-table-layout').value,
+      qr_size: document.getElementById('qr-format-qr-size').value,
+      footer_text: document.getElementById('qr-format-footer').value,
+    };
+
+    const response = await fetch(
+      `${API}/restaurants/${restaurantId}/qr-format`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formatData),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to save QR format");
+    }
+
+    alert("✅ QR Code format saved successfully!");
+  } catch (err) {
+    console.error("❌ Failed to save QR format:", err);
+    alert("Failed to save QR format: " + err.message);
+  }
+}

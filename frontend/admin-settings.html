@@ -243,7 +243,18 @@
         <h3>🖨️ Printer Settings</h3>
         <button class="modal-close" onclick="closeSettingsModal('printer-settings')">✕</button>
       </div>
+
+      <!-- Printer Layout Tabs -->
+      <div class="modal-tabs" style="border-bottom: 2px solid var(--border-color); display: flex; gap: 0; margin: 0;">
+        <button class="modal-tab-btn active" data-tab="printer-config" onclick="switchPrinterTab('printer-config')">⚙️ Printer Config</button>
+        <button class="modal-tab-btn" data-tab="qr-format" onclick="switchPrinterTab('qr-format')">📋 Print QR Code Format</button>
+        <button class="modal-tab-btn" data-tab="bill-format" onclick="switchPrinterTab('bill-format')">🧾 Print Bill Format</button>
+        <button class="modal-tab-btn" data-tab="kitchen-format" onclick="switchPrinterTab('kitchen-format')">🍳 Print Kitchen Format</button>
+      </div>
+
       <div class="modal-body">
+        <!-- TAB 1: PRINTER CONFIG -->
+        <div id="tab-printer-config" class="modal-tab-content active">
         <!-- Printer Type -->
         <div class="form-row">
           <div class="form-group" style="grid-column: 1 / -1;">
@@ -357,6 +368,106 @@
           <button id="test-printer-btn" onclick="testPrinterConnection()" class="btn-secondary hidden">🧪 Test</button>
           <button id="cancel-printer-btn" onclick="cancelEditModePrinter()" class="btn-secondary hidden">Cancel</button>
         </div>
+        </div><!-- End tab-printer-config -->
+
+        <!-- TAB 2: QR CODE FORMAT LAYOUT -->
+        <div id="tab-qr-format" class="modal-tab-content" style="display: none;">
+          <div class="form-row">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <h4 style="margin-bottom: 16px;">🎨 QR Code Print Format</h4>
+              <p style="font-size: 13px; color: #666; margin-bottom: 16px;">Customize how your QR code receipt looks when printed. Use the editor below to preview your layout.</p>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <!-- Format Editor -->
+                <div>
+                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Edit Layout</label>
+                  <div id="qr-format-editor" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: #f9fafb; max-height: 400px; overflow-y: auto;">
+                    <div style="margin-bottom: 12px;">
+                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Restaurant Name:</label>
+                      <input type="text" id="qr-format-name" placeholder="Restaurant Name" value="My Restaurant" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Show Time:</label>
+                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" id="qr-format-show-time" checked>
+                        <span style="font-size: 12px;">Display session start time</span>
+                      </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Table Format:</label>
+                      <select id="qr-format-table-layout" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                        <option value="both">Table & Pax (side by side)</option>
+                        <option value="table-only">Table Only</option>
+                        <option value="vertical">Table & Pax (stacked)</option>
+                      </select>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">QR Code Size:</label>
+                      <select id="qr-format-qr-size" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                        <option value="small">Small (200px)</option>
+                        <option value="medium" selected>Medium (240px)</option>
+                        <option value="large">Large (280px)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Footer Text:</label>
+                      <input type="text" id="qr-format-footer" placeholder="e.g., Powered by Chuio.io" value="Powered by Chuio.io" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Preview -->
+                <div>
+                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Preview</label>
+                  <div id="qr-format-preview" style="border: 2px solid #ddd; border-radius: 6px; padding: 16px; background: white; font-family: 'Courier New', monospace; text-align: center; max-height: 380px; overflow-y: auto; font-size: 12px;">
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">My Restaurant</div>
+                    <div style="font-size: 12px; margin-bottom: 12px;">Time: 4:20 PM</div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; margin: 12px 0;">
+                      <div>Table: T02</div>
+                      <div>Pax: 4</div>
+                    </div>
+                    <div style="border-bottom: 1px dashed #000; margin: 12px 0;"></div>
+                    <div style="width: 200px; height: 200px; margin: 16px auto; background: #f0f0f0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;">QR Code Preview</div>
+                    <div style="font-weight: bold; font-size: 13px; margin: 12px 0;">Scan to Order</div>
+                    <div style="border-top: 1px dashed #000; padding-top: 12px; margin-top: 12px; font-size: 11px;">Powered by Chuio.io</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top: 16px; display: flex; gap: 8px;">
+                <button class="btn-secondary" onclick="resetQRFormat()" style="flex: 1;">↺ Reset to Default</button>
+                <button class="btn-primary" onclick="saveQRFormat()" style="flex: 1;">💾 Save Format</button>
+              </div>
+            </div>
+          </div>
+        </div><!-- End tab-qr-format -->
+
+        <!-- TAB 3: BILL FORMAT LAYOUT (Coming Soon) -->
+        <div id="tab-bill-format" class="modal-tab-content" style="display: none;">
+          <div class="form-row">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <h4 style="margin-bottom: 16px;">🎨 Bill/Receipt Print Format</h4>
+              <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 6px; color: #999;">
+                <p>Coming Soon...</p>
+                <p style="font-size: 12px; margin-top: 8px;">Bill format customization will be available shortly</p>
+              </div>
+            </div>
+          </div>
+        </div><!-- End tab-bill-format -->
+
+        <!-- TAB 4: KITCHEN ORDER FORMAT LAYOUT (Coming Soon) -->
+        <div id="tab-kitchen-format" class="modal-tab-content" style="display: none;">
+          <div class="form-row">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <h4 style="margin-bottom: 16px;">🎨 Kitchen Order Print Format</h4>
+              <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 6px; color: #999;">
+                <p>Coming Soon...</p>
+                <p style="font-size: 12px; margin-top: 8px;">Kitchen order format customization will be available shortly</p>
+              </div>
+            </div>
+          </div>
+        </div><!-- End tab-kitchen-format -->
+
       </div>
     </div>
   </div>
