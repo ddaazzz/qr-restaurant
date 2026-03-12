@@ -45,17 +45,25 @@ function updatePrinterSettingsUI() {
   if (!currentPrinterSettings) return;
 
   const type = currentPrinterSettings.printer_type || "none";
-  document.getElementById("printer-type").value = type;
-  document.getElementById("printer-host").value =
-    currentPrinterSettings.printer_host || "";
-  document.getElementById("printer-port").value =
-    currentPrinterSettings.printer_port || 9100;
-  document.getElementById("kitchen-auto-print").checked =
-    currentPrinterSettings.kitchen_auto_print || false;
-  document.getElementById("bill-auto-print").checked =
-    currentPrinterSettings.bill_auto_print || false;
-  document.getElementById("print-logo").checked =
-    currentPrinterSettings.print_logo !== false;
+  
+  // Safely update elements that exist
+  const printerTypeEl = document.getElementById("printer-type");
+  if (printerTypeEl) printerTypeEl.value = type;
+  
+  const printerHostEl = document.getElementById("printer-host");
+  if (printerHostEl) printerHostEl.value = currentPrinterSettings.printer_host || "";
+  
+  const printerPortEl = document.getElementById("printer-port");
+  if (printerPortEl) printerPortEl.value = currentPrinterSettings.printer_port || 9100;
+  
+  const kitchenAutoPrintEl = document.getElementById("kitchen-auto-print");
+  if (kitchenAutoPrintEl) kitchenAutoPrintEl.checked = currentPrinterSettings.kitchen_auto_print || false;
+  
+  const billAutoPrintEl = document.getElementById("bill-auto-print");
+  if (billAutoPrintEl) billAutoPrintEl.checked = currentPrinterSettings.bill_auto_print || false;
+  
+  const printLogoEl = document.getElementById("print-logo");
+  if (printLogoEl) printLogoEl.checked = currentPrinterSettings.print_logo !== false;
 
   updatePrinterTypeUI(type);
 }
@@ -83,8 +91,11 @@ function updatePrinterTypeUI(type) {
  * Handle printer type selection change
  */
 function onPrinterTypeChanged() {
-  const type = document.getElementById("printer-type").value;
-  updatePrinterTypeUI(type);
+  const typeEl = document.getElementById("printer-type");
+  if (typeEl) {
+    const type = typeEl.value;
+    updatePrinterTypeUI(type);
+  }
 }
 
 /**
@@ -98,30 +109,30 @@ async function savePrinterSettings() {
       return;
     }
 
-    const printerType = document.getElementById("printer-type").value;
+    const printerTypeEl = document.getElementById("printer-type");
+    const printerType = printerTypeEl ? printerTypeEl.value : "none";
+    
+    const printerHostEl = document.getElementById("printer-host");
+    const printerPortEl = document.getElementById("printer-port");
+    const kitchenAutoPrintEl = document.getElementById("kitchen-auto-print");
+    const billAutoPrintEl = document.getElementById("bill-auto-print");
+    const printLogoEl = document.getElementById("print-logo");
+    
     const settings = {
       printer_type: printerType,
       printer_host:
-        printerType === "network"
-          ? document.getElementById("printer-host").value
+        printerType === "network" && printerHostEl
+          ? printerHostEl.value
           : null,
       printer_port:
-        printerType === "network"
-          ? parseInt(document.getElementById("printer-port").value) || 9100
+        printerType === "network" && printerPortEl
+          ? parseInt(printerPortEl.value) || 9100
           : null,
-      printer_usb_vendor_id:
-        printerType === "usb"
-          ? document.getElementById("printer-usb-vendor").value
-          : null,
-      printer_usb_product_id:
-        printerType === "usb"
-          ? document.getElementById("printer-usb-product").value
-          : null,
-      kitchen_auto_print:
-        document.getElementById("kitchen-auto-print").checked || false,
-      bill_auto_print:
-        document.getElementById("bill-auto-print").checked || false,
-      print_logo: document.getElementById("print-logo").checked !== false,
+      printer_usb_vendor_id: null,
+      printer_usb_product_id: null,
+      kitchen_auto_print: kitchenAutoPrintEl ? kitchenAutoPrintEl.checked : false,
+      bill_auto_print: billAutoPrintEl ? billAutoPrintEl.checked : false,
+      print_logo: printLogoEl ? printLogoEl.checked !== false : true,
     };
 
     const response = await fetch(
