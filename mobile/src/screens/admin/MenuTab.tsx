@@ -97,6 +97,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     const [inlineEditAddonPresets, setInlineEditAddonPresets] = useState<any[]>([]);
     const [inlineEditSelectedPresetId, setInlineEditSelectedPresetId] = useState<number | null>(null);
     const [inlineEditHasVariants, setInlineEditHasVariants] = useState(false);
+    const [variantPresets, setVariantPresets] = useState<any[]>([]);
+    const [inlineEditVariantPresets, setInlineEditVariantPresets] = useState<any[]>([]);
+    const [inlineEditSelectedVariantPresetId, setInlineEditSelectedVariantPresetId] = useState<number | null>(null);
 
     // Selected items for detail view
     const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -162,6 +165,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     // Meal/Combo and Preset states
     const [editingItemIsMealCombo, setEditingItemIsMealCombo] = useState(false);
     const [showAddonPresetsDropdown, setShowAddonPresetsDropdown] = useState(false);
+    const [showVariantPresetsDropdown, setShowVariantPresetsDropdown] = useState(false);
 
     // ==================== REF HANDLING ====================
 
@@ -638,6 +642,85 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
       );
     };
 
+    // ==================== VARIANT PRESET OPERATIONS ====================
+
+    const loadVariantPresetsForInlineEdit = async () => {
+      try {
+        const res = await apiClient.get(
+          `/api/restaurants/${restaurantId}/variant-presets`
+        );
+        const presets = Array.isArray(res.data) ? res.data : [];
+        setInlineEditVariantPresets(presets);
+      } catch (err: any) {
+        console.error('Error loading variant presets:', err);
+        Alert.alert('Error', 'Failed to load variant presets');
+      }
+    };
+
+    const applyVariantPresetToInlineItem = async () => {
+      if (!inlineEditSelectedVariantPresetId || !selectedItem) {
+        Alert.alert('Error', 'Please select a variant preset');
+        return;
+      }
+
+      try {
+        // Fetch the variants from the preset
+        const variantsRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/variant-presets/${inlineEditSelectedVariantPresetId}/variants`
+        );
+        const variants = Array.isArray(variantsRes.data) ? variantsRes.data : [];
+
+        if (variants.length === 0) {
+          Alert.alert('Error', 'This preset has no variants');
+          return;
+        }
+
+        // Add each variant from the preset
+        for (const variantPresetItem of variants) {
+          const variant = variantPresetItem.variant;
+
+          // Create variant in the current item
+          const newVariantRes = await apiClient.post(
+            `/api/menu-items/${selectedItem.id}/variants`,
+            {
+              name: variant.name,
+              required: variant.required || false,
+              min_select: variant.min_select || 0,
+              max_select: variant.max_select || 999,
+            }
+          );
+
+          const newVariant = newVariantRes.data;
+
+          // Load options for this preset variant
+          const optionsRes = await apiClient.get(
+            `/api/restaurants/${restaurantId}/variant-presets/${inlineEditSelectedVariantPresetId}/variants/${variantPresetItem.id}/options`
+          );
+          const options = Array.isArray(optionsRes.data) ? optionsRes.data : [];
+
+          // Add each option to the new variant
+          for (const option of options) {
+            await apiClient.post(
+              `/api/variants/${newVariant.id}/options`,
+              {
+                name: option.name,
+                price_cents: option.price_cents || 0,
+              }
+            );
+          }
+        }
+
+        Alert.alert('Success', 'Variant preset added successfully');
+        setInlineEditSelectedVariantPresetId(null);
+        setShowVariantPresetsDropdown(false);
+
+        // Reload menu data to show the new variants
+        await loadMenuData();
+      } catch (err: any) {
+        Alert.alert('Error', err.response?.data?.error || 'Failed to add variant preset');
+      }
+    };
+
     // ==================== HELPERS ====================
 
     const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -957,8 +1040,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                     <Text style={styles.label}>Has Variants</Text>
                     <TouchableOpacity
                       style={[styles.checkboxRow]}
-                      onPress={() => {
-                        setInlineEditHasVariants(!inlineEditHasVariants);
+                      onPress={async () => {
+                        const newValue = !inlineEditHasVariants;
+                        setInlineEditHasVariants(newValue);
+                        if (newValue && selectedItem) {
+                          // Load variant presets when variants are enabled
+                          await loadVariantPresetsForInlineEdit();
+                        }
                       }}
                     >
                       <View style={[styles.checkbox, inlineEditHasVariants && styles.checkboxChecked]}>
@@ -967,6 +1055,69 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                       <Text style={styles.checkboxLabel}>Enable variants for this item</Text>
                     </TouchableOpacity>
                   </View>
+
+                  {/* Variant Preset Selection - shown only if has variants */}
+                  {inlineEditHasVariants && (
+                    <View style={styles.addonSection}>
+                      <Text style={styles.label}>Select Variant Preset</Text>
+                      
+                      {/* Variant preset dropdown */}
+                      {inlineEditVariantPresets.length > 0 ? (
+                        <View style={styles.formGroup}>
+                          <TouchableOpacity
+                            style={styles.dropdownButton}
+                            onPress={() => setShowVariantPresetsDropdown(!showVariantPresetsDropdown)}
+                          >
+                            <Text style={styles.dropdownButtonText}>
+                              {inlineEditSelectedVariantPresetId
+                                ? inlineEditVariantPresets.find(p => p.id === inlineEditSelectedVariantPresetId)?.name || 'Select Preset'
+                                : 'Select Preset'}
+                            </Text>
+                            <Text style={styles.dropdownIcon}>▼</Text>
+                          </TouchableOpacity>
+
+                          {showVariantPresetsDropdown && (
+                            <View style={styles.dropdownMenu}>
+                              {inlineEditVariantPresets.map((preset) => (
+                                <TouchableOpacity
+                                  key={preset.id}
+                                  style={[
+                                    styles.dropdownItem,
+                                    inlineEditSelectedVariantPresetId === preset.id && styles.dropdownItemSelected,
+                                  ]}
+                                  onPress={() => {
+                                    setInlineEditSelectedVariantPresetId(preset.id);
+                                    setShowVariantPresetsDropdown(false);
+                                  }}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.dropdownItemText,
+                                      inlineEditSelectedVariantPresetId === preset.id && styles.dropdownItemTextSelected,
+                                    ]}
+                                  >
+                                    {preset.name}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      ) : (
+                        <Text style={styles.emptyText}>No variant presets available</Text>
+                      )}
+
+                      {/* Add preset button */}
+                      {inlineEditVariantPresets.length > 0 && (
+                        <TouchableOpacity
+                          style={[styles.btn, styles.btnSecondary, { marginTop: 12 }]}
+                          onPress={applyVariantPresetToInlineItem}
+                        >
+                          <Text style={styles.btnText}>+ Add Variant Preset</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
 
                   {/* Addon Selection - shown only if is combo/meal */}
                   {inlineEditIsMealCombo && (
@@ -2491,4 +2642,51 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     padding: 12,
     textAlign: 'center',
+  },
+  // Dropdown styles
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  dropdownIcon: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  dropdownMenu: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 6,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#dbeafe',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#1f2937',
+  },
+  dropdownItemTextSelected: {
+    color: '#3b82f6',
+    fontWeight: '600',
   },
