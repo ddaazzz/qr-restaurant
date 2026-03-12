@@ -699,7 +699,8 @@ async function deleteMenuCategory(categoryId, categoryName) {
   try {
     const res = await fetch(`${API}/menu_categories/${categoryId}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" }
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restaurantId })
     });
 
     if (!res.ok) {

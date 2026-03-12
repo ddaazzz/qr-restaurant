@@ -276,7 +276,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
               try {
                 await apiClient.delete(
                   `/api/menu_categories/${categoryId}`,
-                  { data: { restaurantId } }
+                  { data: { restaurantId: restaurantId } }
                 );
                 await loadMenuData();
               } catch (err: any) {

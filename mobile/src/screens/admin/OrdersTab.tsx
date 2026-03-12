@@ -170,7 +170,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           const response = await apiClient.get(`/api/restaurants/${restaurantId}/sessions`);
           setSessions(response.data || []);
         } else {
-          const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders`);
+          const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders?include=items`);
           let filteredOrders = Array.isArray(response.data) ? response.data : [];
 
           if (historyFilter === 'pay-now') {
@@ -187,7 +187,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       } finally {
         setRefreshing(false);
       }
-    };
+    }
 
     const loadSessionBill = async (sessionId: number) => {
       try {
