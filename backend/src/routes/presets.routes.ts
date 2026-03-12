@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import pool from '../config/db';
-import { validateRestaurantAccess } from '../middleware/auth';
 
 const router = Router();
 
@@ -10,7 +9,7 @@ const router = Router();
  * GET /api/restaurants/:restaurantId/addon-presets
  * Get all addon presets for a restaurant
  */
-router.get('/:restaurantId/addon-presets', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.get('/restaurants/:restaurantId/addon-presets', async (req: Request, res: Response) => {
   try {
     const restaurantId = req.params.restaurantId;
     
@@ -36,7 +35,7 @@ router.get('/:restaurantId/addon-presets', validateRestaurantAccess, async (req:
  * GET /api/restaurants/:restaurantId/addon-presets/:presetId
  * Get a single addon preset with details
  */
-router.get('/:restaurantId/addon-presets/:presetId', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.get('/restaurants/:restaurantId/addon-presets/:presetId', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     
@@ -60,7 +59,7 @@ router.get('/:restaurantId/addon-presets/:presetId', validateRestaurantAccess, a
  * GET /api/restaurants/:restaurantId/addon-presets/:presetId/items
  * Get all items in an addon preset
  */
-router.get('/:restaurantId/addon-presets/:presetId/items', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.get('/restaurants/:restaurantId/addon-presets/:presetId/items', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     
@@ -102,7 +101,7 @@ router.get('/:restaurantId/addon-presets/:presetId/items', validateRestaurantAcc
  * POST /api/restaurants/:restaurantId/addon-presets
  * Create a new addon preset
  */
-router.post('/:restaurantId/addon-presets', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.post('/restaurants/:restaurantId/addon-presets', async (req: Request, res: Response) => {
   try {
     const restaurantId = req.params.restaurantId;
     const { name, description, is_active = true } = req.body;
@@ -132,7 +131,7 @@ router.post('/:restaurantId/addon-presets', validateRestaurantAccess, async (req
  * POST /api/restaurants/:restaurantId/addon-presets/:presetId/items
  * Add an item to an addon preset
  */
-router.post('/:restaurantId/addon-presets/:presetId/items', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.post('/restaurants/:restaurantId/addon-presets/:presetId/items', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     const { menu_item_id, addon_discount_price_cents = 0 } = req.body;
@@ -172,7 +171,7 @@ router.post('/:restaurantId/addon-presets/:presetId/items', validateRestaurantAc
  * DELETE /api/restaurants/:restaurantId/addon-presets/:presetId/items/:itemId
  * Remove an item from an addon preset
  */
-router.delete('/:restaurantId/addon-presets/:presetId/items/:itemId', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.delete('/restaurants/:restaurantId/addon-presets/:presetId/items/:itemId', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId, itemId } = req.params;
     
@@ -202,7 +201,7 @@ router.delete('/:restaurantId/addon-presets/:presetId/items/:itemId', validateRe
  * DELETE /api/restaurants/:restaurantId/addon-presets/:presetId
  * Delete an addon preset
  */
-router.delete('/:restaurantId/addon-presets/:presetId', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.delete('/restaurants/:restaurantId/addon-presets/:presetId', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     
@@ -228,7 +227,7 @@ router.delete('/:restaurantId/addon-presets/:presetId', validateRestaurantAccess
  * GET /api/restaurants/:restaurantId/variant-presets
  * Get all variant presets for a restaurant
  */
-router.get('/:restaurantId/variant-presets', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.get('/restaurants/:restaurantId/variant-presets', async (req: Request, res: Response) => {
   try {
     const restaurantId = req.params.restaurantId;
     
@@ -254,7 +253,7 @@ router.get('/:restaurantId/variant-presets', validateRestaurantAccess, async (re
  * GET /api/restaurants/:restaurantId/variant-presets/:presetId
  * Get a single variant preset with details
  */
-router.get('/:restaurantId/variant-presets/:presetId', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.get('/restaurants/:restaurantId/variant-presets/:presetId', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     
@@ -278,7 +277,7 @@ router.get('/:restaurantId/variant-presets/:presetId', validateRestaurantAccess,
  * GET /api/restaurants/:restaurantId/variant-presets/:presetId/variants
  * Get all variants in a variant preset
  */
-router.get('/:restaurantId/variant-presets/:presetId/variants', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.get('/restaurants/:restaurantId/variant-presets/:presetId/variants', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     
@@ -320,7 +319,7 @@ router.get('/:restaurantId/variant-presets/:presetId/variants', validateRestaura
  * POST /api/restaurants/:restaurantId/variant-presets
  * Create a new variant preset
  */
-router.post('/:restaurantId/variant-presets', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.post('/restaurants/:restaurantId/variant-presets', async (req: Request, res: Response) => {
   try {
     const restaurantId = req.params.restaurantId;
     const { name, description, is_active = true } = req.body;
@@ -350,7 +349,7 @@ router.post('/:restaurantId/variant-presets', validateRestaurantAccess, async (r
  * POST /api/restaurants/:restaurantId/variant-presets/:presetId/variants
  * Add a variant to a variant preset
  */
-router.post('/:restaurantId/variant-presets/:presetId/variants', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.post('/restaurants/:restaurantId/variant-presets/:presetId/variants', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     const { variant_id } = req.body;
@@ -390,7 +389,7 @@ router.post('/:restaurantId/variant-presets/:presetId/variants', validateRestaur
  * DELETE /api/restaurants/:restaurantId/variant-presets/:presetId/variants/:variantId
  * Remove a variant from a variant preset
  */
-router.delete('/:restaurantId/variant-presets/:presetId/variants/:variantId', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.delete('/restaurants/:restaurantId/variant-presets/:presetId/variants/:variantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId, variantId } = req.params;
     
@@ -420,7 +419,7 @@ router.delete('/:restaurantId/variant-presets/:presetId/variants/:variantId', va
  * DELETE /api/restaurants/:restaurantId/variant-presets/:presetId
  * Delete a variant preset
  */
-router.delete('/:restaurantId/variant-presets/:presetId', validateRestaurantAccess, async (req: Request, res: Response) => {
+router.delete('/restaurants/:restaurantId/variant-presets/:presetId', async (req: Request, res: Response) => {
   try {
     const { restaurantId, presetId } = req.params;
     

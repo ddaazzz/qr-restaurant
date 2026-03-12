@@ -799,7 +799,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
               </TouchableOpacity>
               <Text style={styles.detailTitle}>Item Details</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {/* Add-ons button */}
+                {/* Item edit button - opens modal with full meal/combo and addon functionality */}
                 <TouchableOpacity
                   onPress={() => {
                     setShowDetailPanel(false);
@@ -807,26 +807,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                   }}
                   style={styles.categoryActionBtn}
                 >
-                  <Text style={styles.detailHeaderActionBtn}>🎁</Text>
-                </TouchableOpacity>
-                {/* Item edit button - toggle inline editing */}
-                <TouchableOpacity
-                  onPress={() => {
-                    if (editingItemInlineId === selectedItem.id) {
-                      setEditingItemInlineId(null);
-                    } else {
-                      setEditingItemInlineId(selectedItem.id);
-                      setInlineEditName(selectedItem.name);
-                      setInlineEditDescription(selectedItem.description || '');
-                      setInlineEditPrice((selectedItem.price_cents / 100).toString());
-                      setInlineEditImageUrl(selectedItem.image_url || '');
-                    }
-                  }}
-                  style={styles.categoryActionBtn}
-                >
-                  <Text style={styles.detailHeaderActionBtn}>
-                    {editingItemInlineId === selectedItem.id ? '✕' : '✏️'}
-                  </Text>
+                  <Text style={styles.detailHeaderActionBtn}>✏️</Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -451,34 +451,34 @@ function addToCart(item) {
   const selectedOptions = [];
   const variantDetails = [];
   let extraPrice = 0;
-    if (Array.isArray(item.variants)) {
-  item.variants.forEach(v => {
-  const selectedIds = variantSelections[item.id]?.[v.id] || [];
+  
+  if (Array.isArray(item.variants)) {
+    item.variants.forEach(v => {
+      const selectedIds = variantSelections[item.id]?.[v.id] || [];
 
- if (v.required && selectedIds.length === 0) {
-  alert(`Please select ${v.name}`);
-  throw new Error("Missing required variant");
-}
+      if (v.required && selectedIds.length === 0) {
+        alert(`Please select ${v.name}`);
+        throw new Error("Missing required variant");
+      }
 
-if (v.max_select && selectedIds.length > v.max_select) {
-  alert(`You can only select ${v.max_select} for ${v.name}`);
-  throw new Error("Too many selections");
-}
+      if (v.max_select && selectedIds.length > v.max_select) {
+        alert(`You can only select ${v.max_select} for ${v.name}`);
+        throw new Error("Too many selections");
+      }
 
-  selectedIds.forEach(optionId => {
-    const option = v.options.find(o => o.id === optionId);
+      selectedIds.forEach(optionId => {
+        const option = v.options.find(o => o.id === optionId);
 
-    selectedOptions.push(optionId);
-    variantDetails.push({
-      variant: v.name,
-      option: option.name
+        selectedOptions.push(optionId);
+        variantDetails.push({
+          variant: v.name,
+          option: option.name
+        });
+
+        extraPrice += option.price_cents || 0;
+      });
     });
-
-    extraPrice += option.price_cents || 0;
-  });
-});
-    }
-
+  }
 
   const existing = cart.items.find(
     c =>
@@ -493,15 +493,15 @@ if (v.max_select && selectedIds.length > v.max_select) {
     updateCartBar();
   } else {
     const cartItem = {
-  menuItemId: item.id,
-  name: item.name,
-  quantity: 1,
-  basePriceCents: item.price_cents,
-  totalPriceCents: item.price_cents + extraPrice,
-  variantOptionIds: selectedOptions,
-  variantOptionDetails: variantDetails,
-  addons: []
-};
+      menuItemId: item.id,
+      name: item.name,
+      quantity: 1,
+      basePriceCents: item.price_cents,
+      totalPriceCents: item.price_cents + extraPrice,
+      variantOptionIds: selectedOptions,
+      variantOptionDetails: variantDetails,
+      addons: []
+    };
     
     cart.items.push(cartItem);
 
@@ -511,7 +511,6 @@ if (v.max_select && selectedIds.length > v.max_select) {
     updateCartBar();
     showAddonModal(item, cartItem);
   }
-
 }
 
 // ============ CART PERSISTENCE ============

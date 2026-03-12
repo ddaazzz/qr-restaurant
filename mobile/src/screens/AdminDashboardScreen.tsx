@@ -21,6 +21,7 @@ import { OrdersTab } from './admin/OrdersTab';
 import { SettingsTab } from './admin/SettingsTab';
 import { BookingsTab, BookingsTabRef } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
+import { API_URL } from '../services/apiClient';
 
 type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
 
@@ -61,7 +62,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     // Fetch restaurants for superadmin
     if (user.role === 'superadmin') {
       try {
-        const response = await fetch('https://chuio.io/api/auth/restaurants', {
+        const response = await fetch(`${API_URL}/api/auth/restaurants`, {
           headers: {
             'Authorization': `Bearer ${user.token}`,
           }
