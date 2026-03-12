@@ -1075,8 +1075,9 @@ function toggleFoodItemEdit() {
   const saveBtn = document.getElementById('food-panel-save-btn');
   const cancelBtn = document.getElementById('food-panel-cancel-btn');
   const changeImageBtn = document.getElementById('food-panel-change-image-btn');
-  const addVariantBtn = document.getElementById('food-panel-add-variant-btn');
-  const itemTypeSection = document.getElementById('food-panel-item-type-section');
+  const addVariantBtn = document.getElementById('food-panel-add-variant-btn-standalone');
+  const hasVariantsCheckboxSection = document.getElementById('food-panel-has-variants-checkbox-section');
+  const isMealComboCheckboxSection = document.getElementById('food-panel-is-meal-combo-checkbox-section');
   const addonsSection = document.getElementById('food-panel-addons-section');
   const mealComboCheckbox = document.getElementById('food-panel-is-meal-combo');
   const variantsCheckbox = document.getElementById('food-panel-has-variants');
@@ -1100,8 +1101,8 @@ function toggleFoodItemEdit() {
     cancelBtn.style.display = 'inline';
     
     if (changeImageBtn) changeImageBtn.style.display = 'block';
-    if (addVariantBtn) addVariantBtn.style.display = 'block';
-    if (itemTypeSection) itemTypeSection.style.display = 'block';
+    if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'block';
+    if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'block';
     
     // Set meal/combo checkbox state
     if (mealComboCheckbox) {
@@ -1122,6 +1123,7 @@ function toggleFoodItemEdit() {
       variantsCheckbox.onchange = function() {
         if (variantsContainer) variantsContainer.style.display = this.checked ? 'block' : 'none';
         if (variantPresetsSection) variantPresetsSection.style.display = this.checked ? 'block' : 'none';
+        if (addVariantBtn) addVariantBtn.style.display = this.checked ? 'block' : 'none';
         if (this.checked) loadVariantPresetsDropdownForPanel();
       };
       // Set initial display
@@ -1130,6 +1132,9 @@ function toggleFoodItemEdit() {
       }
       if (variantPresetsSection) {
         variantPresetsSection.style.display = variantsCheckbox.checked ? 'block' : 'none';
+      }
+      if (addVariantBtn) {
+        addVariantBtn.style.display = variantsCheckbox.checked ? 'block' : 'none';
       }
     }
     
@@ -1202,9 +1207,8 @@ function cancelFoodItemEdit() {
   cancelBtn.style.display = 'none';
   
   if (changeImageBtn) changeImageBtn.style.display = 'none';
-  if (addVariantBtn) addVariantBtn.style.display = 'none';
-  if (itemTypeSection) itemTypeSection.style.display = 'none';
-  if (addonsSection) addonsSection.style.display = 'none';
+    if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
+    if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
   
   // Clear preset dropdown
   const presetSelect = document.getElementById('food-panel-preset-addon-select');

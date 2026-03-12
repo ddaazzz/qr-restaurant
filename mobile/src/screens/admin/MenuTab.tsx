@@ -1017,26 +1017,6 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                   </View>
 
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Is Combo/Meal</Text>
-                    <TouchableOpacity
-                      style={[styles.checkboxRow]}
-                      onPress={async () => {
-                        const newValue = !inlineEditIsMealCombo;
-                        setInlineEditIsMealCombo(newValue);
-                        if (newValue && selectedItem) {
-                          // Load addons when combo/meal is enabled
-                          await loadAddonsForItem(selectedItem.id);
-                        }
-                      }}
-                    >
-                      <View style={[styles.checkbox, inlineEditIsMealCombo && styles.checkboxChecked]}>
-                        {inlineEditIsMealCombo && <Text style={styles.checkboxCheck}>✓</Text>}
-                      </View>
-                      <Text style={styles.checkboxLabel}>Enable addon selection</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.formGroup}>
                     <Text style={styles.label}>Has Variants</Text>
                     <TouchableOpacity
                       style={[styles.checkboxRow]}
@@ -1055,6 +1035,23 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                       <Text style={styles.checkboxLabel}>Enable variants for this item</Text>
                     </TouchableOpacity>
                   </View>
+
+                  {/* Add Variant Button - shown only if has variants is checked */}
+                  {inlineEditHasVariants && (
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnSecondary, { marginBottom: 12 }]}
+                      onPress={() => {
+                        setVariantName('');
+                        setVariantMinSelect('');
+                        setVariantMaxSelect('');
+                        setVariantRequired(false);
+                        setEditingItemForVariant(selectedItem);
+                        setShowVariantModal(true);
+                      }}
+                    >
+                      <Text style={styles.btnText}>+ Add Variant</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {/* Variant Preset Selection - shown only if has variants */}
                   {inlineEditHasVariants && (
@@ -1116,6 +1113,29 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                           <Text style={styles.btnText}>+ Add Variant Preset</Text>
                         </TouchableOpacity>
                       )}
+                    </View>
+                  )}
+
+                  {/* Is Combo/Meal Checkbox - right above addon section */}
+                  {selectedItem && (
+                    <View style={styles.formGroup}>
+                      <Text style={styles.label}>Is Combo/Meal</Text>
+                      <TouchableOpacity
+                        style={[styles.checkboxRow]}
+                        onPress={async () => {
+                          const newValue = !inlineEditIsMealCombo;
+                          setInlineEditIsMealCombo(newValue);
+                          if (newValue && selectedItem) {
+                            // Load addons when combo/meal is enabled
+                            await loadAddonsForItem(selectedItem.id);
+                          }
+                        }}
+                      >
+                        <View style={[styles.checkbox, inlineEditIsMealCombo && styles.checkboxChecked]}>
+                          {inlineEditIsMealCombo && <Text style={styles.checkboxCheck}>✓</Text>}
+                        </View>
+                        <Text style={styles.checkboxLabel}>Enable addon selection</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
 

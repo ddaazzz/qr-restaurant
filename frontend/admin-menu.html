@@ -89,10 +89,20 @@
           <textarea id="food-panel-desc-input" style="display: none; width: 100%; min-height: 80px;"></textarea>
         </div>
 
+        <!-- Has Variants Checkbox -->
+        <div id="food-panel-has-variants-checkbox-section" style="display: none; margin-top: 16px; margin-bottom: 12px;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="food-panel-has-variants" style="margin-right: 8px; cursor: pointer;"/>
+            <span style="font-weight: 600; font-size: 14px;" data-i18n="admin.has-variants">Has Variants</span>
+          </label>
+        </div>
+
+        <!-- Add Variant Button (visible in edit mode, above variants section) -->
+        <button id="food-panel-add-variant-btn-standalone" onclick="startAddVariantFromPanel()" data-i18n="admin.add-variant" style="display: none; padding: 8px 16px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; width: 100%; margin-bottom: 12px;">+ Add Variant</button>
+
         <div class="food-item-panel-variants-section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h3 data-i18n="admin.variants">Variants</h3>
-            <button id="food-panel-add-variant-btn" onclick="startAddVariantFromPanel()" data-i18n="admin.add-variant" style="display: none; padding: 4px 8px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add</button>
+            <h3 style="margin: 0;" data-i18n="admin.variants">Variants</h3>
           </div>
           <div id="food-panel-variants" class="food-panel-variants-container">
             <!-- Variants rendered here -->
@@ -161,20 +171,6 @@
           </div>
         </div>
 
-        <!-- Meal/Combo Options -->
-        <div id="food-panel-item-type-section" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px solid #ddd;">
-          <div style="display: flex; gap: 20px;">
-            <label style="display: flex; align-items: center; cursor: pointer;">
-              <input type="checkbox" id="food-panel-is-meal-combo" style="margin-right: 8px; cursor: pointer;"/>
-              <span style="font-weight: 600; font-size: 14px;" data-i18n="admin.is-meal-combo">Is Meal/Combo (Enable Add-ons)</span>
-            </label>
-            <label style="display: flex; align-items: center; cursor: pointer;">
-              <input type="checkbox" id="food-panel-has-variants" style="margin-right: 8px; cursor: pointer;"/>
-              <span style="font-weight: 600; font-size: 14px;" data-i18n="admin.has-variants">Has Variants</span>
-            </label>
-          </div>
-        </div>
-
         <!-- Variant Preset Selection Section (shown when has-variants is checked) -->
         <div id="food-panel-variant-presets-section" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 6px; border: 1px solid #e0e0e0;">
           <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #1a1a1a;">Select Variant Preset(s):</label>
@@ -185,6 +181,14 @@
             <button type="button" id="food-panel-btn-add-variant-preset" style="background: #2C3E50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.2s ease;" onmouseover="this.style.background='#1a252f';" onmouseout="this.style.background='#2C3E50';">Add Preset</button>
           </div>
           <div id="food-panel-selected-variant-presets" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+
+        <!-- Is Meal/Combo Checkbox (right above addons section) -->
+        <div id="food-panel-is-meal-combo-checkbox-section" style="display: none; margin-top: 16px; margin-bottom: 12px;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="food-panel-is-meal-combo" style="margin-right: 8px; cursor: pointer;"/>
+            <span style="font-weight: 600; font-size: 14px;" data-i18n="admin.is-meal-combo">Is Meal/Combo (Enable Add-ons)</span>
+          </label>
         </div>
 
         <!-- Addon Configuration Section (shown when is-meal-combo is checked) -->
