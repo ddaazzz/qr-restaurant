@@ -88,6 +88,11 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     const [inlineEditDescription, setInlineEditDescription] = useState('');
     const [inlineEditPrice, setInlineEditPrice] = useState('');
     const [inlineEditImageUrl, setInlineEditImageUrl] = useState('');
+    const [inlineEditAvailable, setInlineEditAvailable] = useState(true);
+    const [inlineEditIsMealCombo, setInlineEditIsMealCombo] = useState(false);
+    const [inlineEditAddons, setInlineEditAddons] = useState<Addon[]>([]);
+    const [inlineEditAddonPresets, setInlineEditAddonPresets] = useState<any[]>([]);
+    const [inlineEditSelectedPresetId, setInlineEditSelectedPresetId] = useState<number | null>(null);
 
     // Selected items for detail view
     const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -799,11 +804,22 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
               </TouchableOpacity>
               <Text style={styles.detailTitle}>Item Details</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {/* Item edit button - opens modal with full meal/combo and addon functionality */}
+                {/* Item edit button - enables inline editing */}
                 <TouchableOpacity
                   onPress={() => {
-                    setShowDetailPanel(false);
-                    openEditItemWithAddons(selectedItem);
+                    // Initialize inline editing state
+                    setInlineEditName(selectedItem.name);
+                    setInlineEditDescription(selectedItem.description || '');
+                    setInlineEditPrice((selectedItem.price_cents / 100).toFixed(2));
+                    setInlineEditImageUrl(selectedItem.image_url || '');
+                    setInlineEditAvailable(selectedItem.available !== false);
+                    setInlineEditIsMealCombo(selectedItem.is_meal_combo || false);
+                    setEditingItemInlineId(selectedItem.id);
+                    
+                    // Load addons if it's a combo/meal
+                    if (selectedItem.is_meal_combo) {
+                      loadAddonsForItem(selectedItem.id);
+                    }
                   }}
                   style={styles.categoryActionBtn}
                 >
@@ -871,6 +887,93 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                     </TouchableOpacity>
                   </View>
 
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Availability</Text>
+                    <TouchableOpacity
+                      style={[styles.checkboxRow]}
+                      onPress={() => setInlineEditAvailable(!inlineEditAvailable)}
+                    >
+                      <View style={[styles.checkbox, inlineEditAvailable && styles.checkboxChecked]}>
+                        {inlineEditAvailable && <Text style={styles.checkboxCheck}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>Available</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Is Combo/Meal</Text>
+                    <TouchableOpacity
+                      style={[styles.checkboxRow]}
+                      onPress={async () => {
+                        const newValue = !inlineEditIsMealCombo;
+                        setInlineEditIsMealCombo(newValue);
+                        if (newValue && selectedItem) {
+                          // Load addons when combo/meal is enabled
+                          await loadAddonsForItem(selectedItem.id);
+                        }
+                      }}
+                    >
+                      <View style={[styles.checkbox, inlineEditIsMealCombo && styles.checkboxChecked]}>
+                        {inlineEditIsMealCombo && <Text style={styles.checkboxCheck}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>Enable addon selection</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Addon Selection - shown only if is combo/meal */}
+                  {inlineEditIsMealCombo && (
+                    <View style={styles.addonSection}>
+                      <Text style={styles.label}>Select Addon Items</Text>
+                      
+                      {/* Addon list */}
+                      {addons.length > 0 ? (
+                        <View style={styles.addonListContainer}>
+                          {addons.map((addon) => (
+                            <View key={addon.id} style={styles.addonItem}>
+                              <View style={styles.addonInfo}>
+                                <Text style={styles.addonName}>{addon.addon_name}</Text>
+                                <Text style={styles.addonPrice}>
+                                  Regular: {formatPrice(addon.regular_price_cents)} → 
+                                  Addon: {formatPrice(addon.addon_discount_price_cents)}
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                onPress={async () => {
+                                  try {
+                                    await addonService.deleteAddon(restaurantId, addon.id);
+                                    if (selectedItem) {
+                                      await loadAddonsForItem(selectedItem.id);
+                                    }
+                                  } catch (err: any) {
+                                    Alert.alert('Error', 'Failed to remove addon');
+                                  }
+                                }}
+                                style={styles.addonDeleteBtn}
+                              >
+                                <Text style={styles.addonDeleteBtnText}>🗑️</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.emptyText}>No addons yet</Text>
+                      )}
+
+                      {/* Add addon button */}
+                      <TouchableOpacity
+                        style={[styles.btn, styles.btnSecondary, { marginTop: 12 }]}
+                        onPress={() => {
+                          setAddonSearchQuery('');
+                          setSelectedAddonItemId(null);
+                          setAddonDiscountPrice('');
+                          setShowAddonSelectorModal(true);
+                        }}
+                      >
+                        <Text style={styles.btnText}>+ Add Addon Item</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
                   <View style={styles.modalActions}>
                     <TouchableOpacity
                       style={[styles.btn, styles.btnSecondary]}
@@ -890,6 +993,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                               name: inlineEditName,
                               description: inlineEditDescription,
                               price_cents: Math.round(parseFloat(inlineEditPrice) * 100),
+                              available: inlineEditAvailable,
+                              is_meal_combo: inlineEditIsMealCombo,
                             }
                           );
                           setEditingItemInlineId(null);
@@ -2168,4 +2273,83 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
-});
+
+  // Checkbox styles
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  checkboxCheck: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: '#374151',
+  },
+
+  // Addon section styles
+  addonSection: {
+    backgroundColor: '#f3f4f6',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  addonListContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  addonItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  addonInfo: {
+    flex: 1,
+  },
+  addonName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  addonPrice: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  addonDeleteBtn: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  addonDeleteBtnText: {
+    fontSize: 16,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    padding: 12,
+    textAlign: 'center',
+  },
