@@ -120,7 +120,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     setShowQRScanner(true);
   };
 
-  const handleQRScanned = (token: string) => {
+  const handleQRScanned = (data: { sessionId: number; tableName: string; token: string }) => {
     // Switch to Tables tab
     setActiveTab('tables');
     setShowQRScanner(false);
@@ -128,7 +128,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     // Navigate to the session after a short delay to ensure Tables tab is loaded
     setTimeout(() => {
       if (tablesTabRef.current?.navigateToScannedQR) {
-        tablesTabRef.current.navigateToScannedQR(token);
+        tablesTabRef.current.navigateToScannedQR(data.sessionId);
       }
     }, 300);
   };

@@ -185,20 +185,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     toggleEditMode() {
       setIsEditMode(prev => !prev);
     },
-    navigateToScannedQR(token: string) {
-      // Find the table and session with this QR token
+    navigateToScannedQR(sessionId: number) {
+      // Find the session by ID in all tables
+      console.log('[TablesTab] Looking for session ID:', sessionId);
+      
       for (const table of tables) {
-        const matchingUnit = table.units?.find(unit => unit.qr_token === token);
-        if (matchingUnit && table.sessions && table.sessions.length > 0) {
-          // Found the table with this token
+        const matchingSession = table.sessions?.find(session => session.id === sessionId);
+        if (matchingSession) {
+          console.log('[TablesTab] Found session:', matchingSession);
           setSelectedTable(table);
-          setSelectedSession(table.sessions[0]); // Select the first/active session
+          setSelectedSession(matchingSession);
           setCurrentView('sessionDetail');
           return;
         }
       }
       
-      Alert.alert('Table Not Found', 'Could not find this table. Please try again.');
+      console.error('[TablesTab] Session not found with ID:', sessionId);
+      Alert.alert('Session Not Found', 'Could not find this session. Please try again.');
     }
   }), [tables]);
 

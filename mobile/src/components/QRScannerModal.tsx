@@ -9,11 +9,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { apiClient } from '../services/apiClient';
 
 interface QRScannerModalProps {
   visible: boolean;
   onClose: () => void;
-  onQRScanned: (token: string) => void;
+  onQRScanned: (data: { sessionId: number; tableName: string; token: string }) => void;
   restaurantId: string;
 }
 
@@ -24,10 +25,15 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   restaurantId,
 }) => {
   const [permission, requestPermission] = useCameraPermissions();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [scannedOnce, setScannedOnce] = useState(false);
 
   useEffect(() => {
     (async () => {
-      if (!visible) return;
+      if (!visible) {
+        setScannedOnce(false);
+        return;
+      }
 
       // Automatically request permission if not yet requested
       if (permission === null) {
@@ -47,26 +53,74 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     })();
   }, [visible, permission, requestPermission]);
 
-  const handleQRScanned = (token: string) => {
-    try {
-      // Extract token from QR code data
-      let finalToken = token;
+  const handleBarcodeScanned = async (barcode: any) => {
+    if (isProcessing || scannedOnce) return;
 
-      // If it's a URL, extract the token from the path
-      if (token.includes('/scan/')) {
-        const match = token.match(/\/scan\/([^/?]+)/);
-        finalToken = match ? match[1] : token;
-      } else if (token.includes('token=')) {
-        const match = token.match(/token=([^&]+)/);
-        finalToken = match ? match[1] : token;
+    try {
+      setIsProcessing(true);
+      setScannedOnce(true);
+
+      const token = barcode.data || '';
+      console.log('[QRScanner] Barcode scanned:', token);
+
+      // Extract token from QR code data (if it's a URL)
+      let finalToken = token;
+      if (token.includes('/')) {
+        // It's a URL like https://chuio.io/40aabd8ce... - extract the last segment
+        const parts = token.split('/');
+        finalToken = parts[parts.length - 1];
+        console.log('[QRScanner] Extracted token from URL:', finalToken);
       }
 
-      // Call the callback with the token
-      onQRScanned(finalToken);
+      if (!finalToken || finalToken.trim().length === 0) {
+        Alert.alert('Invalid QR Code', 'Could not process this QR code. Please try again.');
+        setIsProcessing(false);
+        setScannedOnce(false);
+        return;
+      }
+
+      // Call backend /scan endpoint to get session info (matching webapp behavior)
+      console.log('[QRScanner] Calling backend /scan endpoint with token:', finalToken);
+      const response = await apiClient.post(`/api/scan/${finalToken}`, {});
+
+      if (response.status !== 200) {
+        Alert.alert('Error', 'Invalid QR code or session not found');
+        setIsProcessing(false);
+        setScannedOnce(false);
+        return;
+      }
+
+      const data = response.data;
+      console.log('[QRScanner] Scan response:', data);
+
+      if (!data.session_id) {
+        Alert.alert('No Session', `${data.table_name} has no active session. Start a new session from the tables view.`);
+        setIsProcessing(false);
+        setScannedOnce(false);
+        return;
+      }
+
+      // Successfully got session info - pass to parent
+      onQRScanned({
+        sessionId: data.session_id,
+        tableName: data.table_name,
+        token: finalToken,
+      });
       onClose();
     } catch (error) {
       console.error('[QRScanner] Error processing QR code:', error);
-      Alert.alert('Invalid QR Code', 'Could not process this QR code. Please try again.');
+      
+      let errorMsg = 'Could not process this QR code. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('404')) {
+          errorMsg = 'QR code not found or expired';
+        }
+        console.error('Error details:', error.message);
+      }
+      
+      Alert.alert('Invalid QR Code', errorMsg);
+      setIsProcessing(false);
+      setScannedOnce(false);
     }
   };
 
@@ -96,6 +150,10 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         <CameraView
           style={StyleSheet.absoluteFillObject}
           facing="back"
+          onBarcodeScanned={isProcessing ? undefined : handleBarcodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
+          }}
         />
 
         {/* Overlay UI */}
@@ -109,6 +167,9 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           <View style={styles.centerContent}>
             <View style={styles.scanFrame} />
             <Text style={styles.instructionText}>Point camera at QR code</Text>
+            {isProcessing && (
+              <ActivityIndicator size="large" color="#fff" style={{ marginTop: 20 }} />
+            )}
           </View>
 
           {/* Bottom bar with close button */}
@@ -116,6 +177,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
             <TouchableOpacity
               style={[styles.button, styles.closeButton]}
               onPress={onClose}
+              disabled={isProcessing}
             >
               <Text style={styles.buttonText}>Close Scanner</Text>
             </TouchableOpacity>
