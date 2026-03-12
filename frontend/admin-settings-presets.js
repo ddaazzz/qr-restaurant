@@ -288,21 +288,25 @@ function renderVariantPresetsList() {
   if (!listContainer) return;
   
   if (VARIANT_PRESETS_CACHE.length === 0) {
-    listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No presets created yet</div>';
+    listContainer.innerHTML = '<div style="padding: 40px 20px; text-align: center;"><p style="color: #999; font-size: 14px; margin: 0;">📋 No variant presets created yet</p><p style="color: #bbb; font-size: 12px; margin-top: 8px;">Create a variant preset template to get started</p></div>';
     return;
   }
   
   listContainer.innerHTML = VARIANT_PRESETS_CACHE.map(preset => `
-    <div style="background: #f9f9f9; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #2C3E50;">
-      <div style="display: flex; justify-content: space-between; align-items: start;">
-        <div style="flex: 1;">
-          <strong style="font-size: 14px;">${preset.name}</strong>
-          <p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${preset.description || 'No description'}</p>
-          <p style="margin: 4px 0 0 0; font-size: 11px; color: #999;">Variants: ${preset.variants_count || 0}</p>
+    <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafb 100%); padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 2px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: all 0.3s ease; cursor: default;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 18px; line-height: 1;">🏷️</span>
+            <strong style="font-size: 15px; color: #1f2937; word-break: break-word;">${preset.name}</strong>
+            <span style="background: #dbeafe; color: #1e40af; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px; white-space: nowrap;">${preset.options_count || 0} option${(preset.options_count || 0) !== 1 ? 's' : ''}</span>
+          </div>
+          ${preset.description ? `<p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7280;">${preset.description}</p>` : ''}
+          <p style="margin: 0; font-size: 11px; color: #9ca3af;">Template for variant options used in menu items</p>
         </div>
-        <div style="display: flex; gap: 6px;">
-          <button onclick="editVariantPreset(${preset.id})" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</button>
-          <button onclick="deleteVariantPreset(${preset.id}, '${preset.name}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
+        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+          <button onclick="editVariantPreset(${preset.id})" class="btn-secondary" style="padding: 8px 14px; font-size: 12px; border-radius: 6px; border: 1px solid #2C3E50; background: #2C3E50; color: white; cursor: pointer; font-weight: 600; transition: all 0.2s ease;"onmouseover="this.style.background='#1a252f'; this.style.borderColor='#1a252f'; this.style.boxShadow='0 2px 8px rgba(44, 62, 80, 0.3)';" onmouseout="this.style.background='#2C3E50'; this.style.borderColor='#2C3E50'; this.style.boxShadow='none';">✏️ Edit</button>
+          <button onclick="deleteVariantPreset(${preset.id}, '${preset.name}')" class="btn-danger" style="padding: 8px 14px; font-size: 12px; border-radius: 6px; border: 1px solid #d32f2f; background: #d32f2f; color: white; cursor: pointer; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.background='#b71c1c'; this.style.borderColor='#b71c1c'; this.style.boxShadow='0 2px 8px rgba(211, 47, 47, 0.3)';" onmouseout="this.style.background='#d32f2f'; this.style.borderColor='#d32f2f'; this.style.boxShadow='none';">🗑️ Delete</button>
         </div>
       </div>
     </div>
@@ -313,18 +317,46 @@ function renderVariantPresetsList() {
  * Start creating a new variant preset
  */
 function startCreateVariantPreset() {
-  const name = prompt('Preset Name (e.g., "Drink Sizes", "Preparation"):');
-  if (!name) return;
-  
-  const description = prompt('Description (optional):');
-  
-  createVariantPreset(name, description);
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+        <h3 style="margin: 0; color: white;">Create New Variant Preset</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 24px;">
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Variant Title (e.g., "Drink Size", "Temperature")</label>
+          <input id="preset-name" type="text" placeholder="e.g., Drink Size" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Description (optional)</label>
+          <textarea id="preset-description" placeholder="e.g., Available drink sizes" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box; min-height: 60px; font-family: inherit;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
+        <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600;">Cancel</button>
+        <button onclick="createVariantPreset()" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Create Preset</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
 }
 
 /**
  * Create a new variant preset
  */
-async function createVariantPreset(name, description) {
+async function createVariantPreset() {
+  const name = document.getElementById('preset-name')?.value;
+  const description = document.getElementById('preset-description')?.value;
+  
+  if (!name) {
+    alert('Please enter a variant title');
+    return;
+  }
+  
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets`, {
       method: 'POST',
@@ -342,15 +374,21 @@ async function createVariantPreset(name, description) {
     }
     
     const preset = await res.json();
-    alert('Preset created! Now add variants to it.');
-    await editVariantPreset(preset.id);
+    
+    // Close the create modal
+    document.querySelector('.modal-overlay').remove();
+    
+    // Reload presets and open the new preset for adding options
+    await loadVariantPresets();
+    alert('Preset created! Now add variant options.');
+    editVariantPreset(preset.id);
   } catch (err) {
     alert('Error creating preset: ' + err.message);
   }
 }
 
 /**
- * Edit a variant preset (manage its variants)
+ * Edit a variant preset (manage its options)
  */
 async function editVariantPreset(presetId) {
   try {
@@ -359,151 +397,242 @@ async function editVariantPreset(presetId) {
     
     const preset = await res.json();
     
-    // Get all variants from restaurant
-    // Note: This assumes MENU_ITEMS has variants, or we need to fetch them separately
-    const allVariants = [];
-    MENU_ITEMS.forEach(item => {
-      if (item.variants) {
-        item.variants.forEach(v => {
-          allVariants.push({ ...v, menu_item_name: item.name });
-        });
-      }
-    });
-    
-    // Build modal for editing preset variants
+    // Build modal for editing preset options
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = `
-      <div class="modal-content" style="max-width: 600px;">
-        <div class="modal-header">
-          <h3>Edit Preset: ${preset.name}</h3>
-          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+          <h3 style="margin: 0; color: white; display: flex; align-items: center; gap: 10px;"><span>🏷️</span> ${preset.name}</h3>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
         </div>
-        <div class="modal-body">
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Add Variants to Preset:</label>
-            <div style="display: flex; gap: 8px;">
-              <select id="variant-select-${presetId}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">-- Select variant --</option>
-              </select>
-              <button onclick="addVariantToPreset(${presetId})" style="padding: 8px 16px; background: #2C3E50; color: white; border: none; border-radius: 4px; cursor: pointer;">Add</button>
-            </div>
+        <div class="modal-body" style="padding: 24px;">
+          <div style="margin-bottom: 24px; padding: 16px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 6px;">
+            <label style="display: block; margin-bottom: 10px; font-weight: 700; font-size: 14px; color: #1f2937;">➕ Add New Option:</label>
+            <button onclick="showCreateOptionForm(${presetId})" style="width: 100%; padding: 10px 18px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">+ Add Option</button>
           </div>
           
-          <div style="margin-top: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Preset Variants:</label>
-            <div id="preset-variants-${presetId}" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
-              <!-- Variants rendered here -->
+          <div>
+            <label style="display: block; margin-bottom: 12px; font-weight: 700; font-size: 14px; color: #1f2937;">📋 Options:</label>
+            <div id="preset-options-${presetId}" style="max-height: 350px; overflow-y: auto; border: 2px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fafbfc;">
+              <!-- Options rendered here -->
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">Close</button>
+        <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
+          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.borderColor='#1f2937'; this.style.background='#f3f4f6';" onmouseout="this.style.borderColor='#d1d5db'; this.style.background='white';">Close</button>
         </div>
       </div>
     `;
     
     document.body.appendChild(modal);
     
-    // Populate variant dropdown
-    const select = document.getElementById(`variant-select-${presetId}`);
-    allVariants.forEach(variant => {
-      const option = document.createElement('option');
-      option.value = variant.id;
-      option.textContent = `${variant.menu_item_name} - ${variant.name}`;
-      select.appendChild(option);
-    });
-    
-    // Load and render preset variants
-    await loadAndRenderPresetVariants(presetId);
+    // Load and render preset options
+    await loadAndRenderPresetOptions(presetId);
   } catch (err) {
     console.error('Error editing preset:', err);
   }
 }
 
 /**
- * Load and render variants in a preset
+ * Show form to create a new option in preset
  */
-async function loadAndRenderPresetVariants(presetId) {
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants`);
-    if (!res.ok) return;
-    
-    const variants = await res.json();
-    const container = document.getElementById(`preset-variants-${presetId}`);
-    
-    if (!variants || variants.length === 0) {
-      container.innerHTML = '<div style="padding: 12px; text-align: center; color: #999;">No variants in this preset</div>';
-      return;
-    }
-    
-    container.innerHTML = variants.map(v => `
-      <div style="padding: 10px; background: white; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <div style="font-weight: 500; font-size: 13px;">${v.variant?.name || 'Unknown'}</div>
-          <div style="font-size: 11px; color: #666;">From menu item</div>
-        </div>
-        <button onclick="removeVariantFromPreset(${presetId}, ${v.variant_id})" class="btn-danger" style="padding: 4px 8px; font-size: 11px;">Remove</button>
+function showCreateOptionForm(presetId) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+        <h3 style="margin: 0; color: white;">Add Option</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
       </div>
-    `).join('');
-  } catch (err) {
-    console.error('Error loading preset variants:', err);
-  }
+      <div class="modal-body" style="padding: 24px;">
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Option Name (e.g., "Small", "Medium", "Large")</label>
+          <input id="new-option-name-${presetId}" type="text" placeholder="e.g., Small" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Price/Upcharge (optional, in cents)</label>
+          <input id="new-option-price-${presetId}" type="number" placeholder="e.g., 0 or 100 for $1.00" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
+        <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600;">Cancel</button>
+        <button onclick="createOptionInPreset(${presetId})" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Add Option</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
 }
 
 /**
- * Add a variant to a preset
+ * Create a new option in a preset
  */
-async function addVariantToPreset(presetId) {
-  const select = document.getElementById(`variant-select-${presetId}`);
+async function createOptionInPreset(presetId) {
+  const name = document.getElementById(`new-option-name-${presetId}`)?.value;
+  const priceCents = document.getElementById(`new-option-price-${presetId}`)?.value;
   
-  const variantId = parseInt(select.value);
-  
-  if (!variantId) {
-    alert('Please select a variant');
+  if (!name) {
+    alert('Please enter an option name');
     return;
   }
   
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants`, {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        variant_id: variantId
+        name,
+        price_cents: priceCents ? parseInt(priceCents) : 0
       })
     });
     
     if (!res.ok) {
-      alert('Failed to add variant to preset');
+      alert('Failed to create option');
       return;
     }
     
-    select.value = '';
-    await loadAndRenderPresetVariants(presetId);
+    // Close the create form modal
+    document.querySelector('.modal-overlay:last-child').remove();
+    // Reload the preset options
+    await loadAndRenderPresetOptions(presetId);
   } catch (err) {
-    alert('Error adding variant: ' + err.message);
+    alert('Error creating option: ' + err.message);
   }
 }
 
 /**
- * Remove a variant from a preset
+ * Load and render options in a preset
  */
-async function removeVariantFromPreset(presetId, variantId) {
-  if (!confirm('Remove this variant from the preset?')) return;
+async function loadAndRenderPresetOptions(presetId) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options`);
+    if (!res.ok) return;
+    
+    const options = await res.json();
+    const container = document.getElementById(`preset-options-${presetId}`);
+    
+    if (!options || options.length === 0) {
+      container.innerHTML = '<div style="padding: 24px; text-align: center;"><p style="color: #999; font-size: 13px; margin: 0;">No options added yet</p><p style="color: #bbb; font-size: 12px; margin-top: 8px;">Click "Add Option" to add the first one</p></div>';
+      return;
+    }
+    
+    container.innerHTML = options.map(opt => {
+      const price = opt.price_cents > 0 ? `+$${(opt.price_cents / 100).toFixed(2)}` : 'No charge';
+      
+      return `
+        <div style="padding: 14px; background: white; border-bottom: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: all 0.2s ease; border-left: 4px solid #10b981;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 13px; color: #1f2937;">${opt.name}</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${price}</div>
+          </div>
+          <div style="display: flex; gap: 6px; flex-shrink: 0;">
+            <button onclick="editOptionInPreset(${presetId}, ${opt.id})" style="padding: 6px 10px; background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;" onmouseover="this.style.background='#93c5fd';" onmouseout="this.style.background='#dbeafe';">✏️ Edit</button>
+            <button onclick="deleteOptionFromPreset(${presetId}, ${opt.id})" style="padding: 6px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;" onmouseover="this.style.background='#fca5a5'; this.style.color='#7c2d12';" onmouseout="this.style.background='#fee2e2'; this.style.color='#991b1b';">🗑️ Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading preset options:', err);
+  }
+}
+
+/**
+ * Edit an option in a preset
+ */
+async function editOptionInPreset(presetId, optionId) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options/${optionId}`);
+    if (!res.ok) return;
+    
+    const option = await res.json();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+          <h3 style="margin: 0; color: white;">Edit Option</h3>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 24px;">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Option Name</label>
+            <input id="edit-option-name-${optionId}" type="text" value="${option.name || ''}" placeholder="e.g., Small" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Price/Upcharge (optional, in cents)</label>
+            <input id="edit-option-price-${optionId}" type="number" value="${option.price_cents || 0}" placeholder="e.g., 0 or 100 for $1.00" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
+          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600;">Cancel</button>
+          <button onclick="saveEditedOptionInPreset(${presetId}, ${optionId})" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Save Changes</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  } catch (err) {
+    alert('Error loading option: ' + err.message);
+  }
+}
+
+/**
+ * Save edited option in preset
+ */
+async function saveEditedOptionInPreset(presetId, optionId) {
+  const name = document.getElementById(`edit-option-name-${optionId}`)?.value;
+  const priceCents = document.getElementById(`edit-option-price-${optionId}`)?.value;
+  
+  if (!name) {
+    alert('Please enter an option name');
+    return;
+  }
   
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants/${variantId}`, {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options/${optionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        price_cents: priceCents ? parseInt(priceCents) : 0
+      })
+    });
+    
+    if (!res.ok) {
+      alert('Failed to update option');
+      return;
+    }
+    
+    document.querySelector('.modal-overlay:last-child').remove();
+    await loadAndRenderPresetOptions(presetId);
+  } catch (err) {
+    alert('Error updating option: ' + err.message);
+  }
+}
+
+/**
+ * Delete an option from a preset
+ */
+async function deleteOptionFromPreset(presetId, optionId) {
+  if (!confirm('Delete this option?')) return;
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options/${optionId}`, {
       method: 'DELETE'
     });
     
     if (!res.ok) {
-      alert('Failed to remove variant');
+      alert('Failed to delete option');
       return;
     }
     
-    await loadAndRenderPresetVariants(presetId);
+    await loadAndRenderPresetOptions(presetId);
   } catch (err) {
-    alert('Error removing variant: ' + err.message);
+    alert('Error deleting option: ' + err.message);
   }
 }
 

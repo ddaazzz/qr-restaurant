@@ -1016,6 +1016,29 @@ body.edit-mode #menu-items-grid.menu-grid {
   border-color: #999;
 }
 
+/* Preset variant button styling */
+.btn-preset-variant-add {
+  background: #2C3E50 !important;
+  color: white !important;
+  border: none !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-preset-variant-add:hover {
+  background: #1a252f !important;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2) !important;
+}
+
+.edit-item-preset-variants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

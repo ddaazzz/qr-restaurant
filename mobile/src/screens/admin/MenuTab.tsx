@@ -38,6 +38,9 @@ interface Variant {
   id: number;
   item_id: number;
   name: string;
+  required?: boolean;
+  min_select?: number | null;
+  max_select?: number | null;
   options: VariantOption[];
 }
 
@@ -93,6 +96,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     const [inlineEditAddons, setInlineEditAddons] = useState<Addon[]>([]);
     const [inlineEditAddonPresets, setInlineEditAddonPresets] = useState<any[]>([]);
     const [inlineEditSelectedPresetId, setInlineEditSelectedPresetId] = useState<number | null>(null);
+    const [inlineEditHasVariants, setInlineEditHasVariants] = useState(false);
 
     // Selected items for detail view
     const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -124,7 +128,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     const [editingVariantId, setEditingVariantId] = useState<number | null>(null);
     const [editingItemForVariant, setEditingItemForVariant] = useState<MenuItem | null>(null);
     const [variantName, setVariantName] = useState('');
+    const [variantMinSelect, setVariantMinSelect] = useState('');
+    const [variantMaxSelect, setVariantMaxSelect] = useState('');
+    const [variantRequired, setVariantRequired] = useState(false);
     const [editingVariantName, setEditingVariantName] = useState('');
+    const [editingVariantMinSelect, setEditingVariantMinSelect] = useState('');
+    const [editingVariantMaxSelect, setEditingVariantMaxSelect] = useState('');
+    const [editingVariantRequired, setEditingVariantRequired] = useState(false);
 
     // Variant option management
     const [showVariantOptionModal, setShowVariantOptionModal] = useState(false);
@@ -396,11 +406,22 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
       }
 
       try {
+        const minSel = variantMinSelect.trim() ? parseInt(variantMinSelect) : null;
+        const maxSel = variantMaxSelect.trim() ? parseInt(variantMaxSelect) : null;
+
         await apiClient.post(
           `/api/menu-items/${editingItemForVariant.id}/variants`,
-          { name: variantName }
+          { 
+            name: variantName,
+            min_select: minSel,
+            max_select: maxSel,
+            required: variantRequired
+          }
         );
         setVariantName('');
+        setVariantMinSelect('');
+        setVariantMaxSelect('');
+        setVariantRequired(false);
         setShowVariantModal(false);
         setEditingItemForVariant(null);
         await loadMenuData();
@@ -416,12 +437,23 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
       }
 
       try {
+        const minSel = editingVariantMinSelect.trim() ? parseInt(editingVariantMinSelect) : null;
+        const maxSel = editingVariantMaxSelect.trim() ? parseInt(editingVariantMaxSelect) : null;
+
         await apiClient.patch(
           `/api/variants/${variantId}`,
-          { name: editingVariantName }
+          { 
+            name: editingVariantName,
+            min_select: minSel,
+            max_select: maxSel,
+            required: editingVariantRequired
+          }
         );
         setEditingVariantId(null);
         setEditingVariantName('');
+        setEditingVariantMinSelect('');
+        setEditingVariantMaxSelect('');
+        setEditingVariantRequired(false);
         setShowEditVariantModal(false);
         await loadMenuData();
       } catch (err: any) {
@@ -814,6 +846,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                     setInlineEditImageUrl(selectedItem.image_url || '');
                     setInlineEditAvailable(selectedItem.available !== false);
                     setInlineEditIsMealCombo(selectedItem.is_meal_combo || false);
+                    setInlineEditHasVariants(selectedItem.variants && selectedItem.variants.length > 0);
                     setEditingItemInlineId(selectedItem.id);
                     
                     // Load addons if it's a combo/meal
@@ -917,6 +950,21 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                         {inlineEditIsMealCombo && <Text style={styles.checkboxCheck}>✓</Text>}
                       </View>
                       <Text style={styles.checkboxLabel}>Enable addon selection</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Has Variants</Text>
+                    <TouchableOpacity
+                      style={[styles.checkboxRow]}
+                      onPress={() => {
+                        setInlineEditHasVariants(!inlineEditHasVariants);
+                      }}
+                    >
+                      <View style={[styles.checkbox, inlineEditHasVariants && styles.checkboxChecked]}>
+                        {inlineEditHasVariants && <Text style={styles.checkboxCheck}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>Enable variants for this item</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -1084,6 +1132,10 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                         <Text style={styles.detailLabel}>Variants</Text>
                         <TouchableOpacity
                           onPress={() => {
+                            setVariantName('');
+                            setVariantMinSelect('');
+                            setVariantMaxSelect('');
+                            setVariantRequired(false);
                             setEditingItemForVariant(selectedItem);
                             setShowVariantModal(true);
                           }}
@@ -1116,6 +1168,22 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                           </TouchableOpacity>
                         </View>
 
+                        {/* Variant metadata */}
+                        {(variant.required || variant.min_select != null || variant.max_select != null) && (
+                          <View style={{ marginBottom: 8, paddingLeft: 0 }}>
+                            {variant.required && (
+                              <Text style={{ fontSize: 12, color: '#d32f2f', fontWeight: '600' }}>* Required</Text>
+                            )}
+                            {(variant.min_select != null || variant.max_select != null) && (
+                              <Text style={{ fontSize: 12, color: '#666' }}>
+                                {variant.min_select != null && `Min: ${variant.min_select}`}
+                                {variant.min_select != null && variant.max_select != null && ', '}
+                                {variant.max_select != null && `Max: ${variant.max_select}`}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+
                         {isVariantInEditMode && (
                           <View style={styles.variantActions}>
                             <TouchableOpacity
@@ -1123,6 +1191,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                               onPress={() => {
                                 setEditingVariantId(variant.id);
                                 setEditingVariantName(variant.name);
+                                setEditingVariantMinSelect(variant.min_select ? String(variant.min_select) : '');
+                                setEditingVariantMaxSelect(variant.max_select ? String(variant.max_select) : '');
+                                setEditingVariantRequired(variant.required || false);
                                 setShowEditVariantModal(true);
                               }}
                             >
@@ -1193,6 +1264,10 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary, { marginTop: 16 }]}
                   onPress={() => {
+                    setVariantName('');
+                    setVariantMinSelect('');
+                    setVariantMaxSelect('');
+                    setVariantRequired(false);
                     setEditingItemForVariant(selectedItem);
                     setShowVariantModal(true);
                   }}
@@ -1602,12 +1677,44 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 autoFocus
               />
 
+              <Text style={styles.label}>Min Select (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={variantMinSelect}
+                onChangeText={setVariantMinSelect}
+                placeholder="e.g., 1"
+                keyboardType="number-pad"
+              />
+
+              <Text style={styles.label}>Max Select (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={variantMaxSelect}
+                onChangeText={setVariantMaxSelect}
+                placeholder="e.g., 3"
+                keyboardType="number-pad"
+              />
+
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setVariantRequired(!variantRequired)}
+              >
+                <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
+                  {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>Required</Text>
+              </TouchableOpacity>
+
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => {
                     setShowVariantModal(false);
                     setEditingItemForVariant(null);
+                    setVariantName('');
+                    setVariantMinSelect('');
+                    setVariantMaxSelect('');
+                    setVariantRequired(false);
                   }}
                 >
                   <Text style={styles.btnText}>Cancel</Text>
@@ -1637,12 +1744,44 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 autoFocus
               />
 
+              <Text style={styles.label}>Min Select (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={editingVariantMinSelect}
+                onChangeText={setEditingVariantMinSelect}
+                placeholder="e.g., 1"
+                keyboardType="number-pad"
+              />
+
+              <Text style={styles.label}>Max Select (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={editingVariantMaxSelect}
+                onChangeText={setEditingVariantMaxSelect}
+                placeholder="e.g., 3"
+                keyboardType="number-pad"
+              />
+
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setEditingVariantRequired(!editingVariantRequired)}
+              >
+                <View style={[styles.checkbox, editingVariantRequired && styles.checkboxChecked]}>
+                  {editingVariantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>Required</Text>
+              </TouchableOpacity>
+
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => {
                     setShowEditVariantModal(false);
                     setEditingVariantId(null);
+                    setEditingVariantName('');
+                    setEditingVariantMinSelect('');
+                    setEditingVariantMaxSelect('');
+                    setEditingVariantRequired(false);
                   }}
                 >
                   <Text style={styles.btnText}>Cancel</Text>

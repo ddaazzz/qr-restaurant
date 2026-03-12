@@ -439,4 +439,147 @@ router.delete('/restaurants/:restaurantId/variant-presets/:presetId', async (req
   }
 });
 
+// ============= VARIANT PRESET OPTIONS =============
+
+/**
+ * GET /api/restaurants/:restaurantId/variant-presets/:presetId/options
+ * Get all options for a variant preset
+ */
+router.get('/restaurants/:restaurantId/variant-presets/:presetId/options', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, presetId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT * FROM variant_preset_options 
+       WHERE variant_preset_id = $1 AND restaurant_id = $2
+       ORDER BY display_order, created_at`,
+      [presetId, restaurantId]
+    );
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching variant preset options:', err);
+    res.status(500).json({ error: 'Failed to fetch options' });
+  }
+});
+
+/**
+ * GET /api/restaurants/:restaurantId/variant-presets/:presetId/options/:optionId
+ * Get a single option from a variant preset
+ */
+router.get('/restaurants/:restaurantId/variant-presets/:presetId/options/:optionId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, presetId, optionId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT * FROM variant_preset_options 
+       WHERE id = $1 AND variant_preset_id = $2 AND restaurant_id = $3`,
+      [optionId, presetId, restaurantId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Option not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching variant preset option:', err);
+    res.status(500).json({ error: 'Failed to fetch option' });
+  }
+});
+
+/**
+ * POST /api/restaurants/:restaurantId/variant-presets/:presetId/options
+ * Create a new option in a variant preset
+ */
+router.post('/restaurants/:restaurantId/variant-presets/:presetId/options', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, presetId } = req.params;
+    const { name, price_cents } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Option name required' });
+    }
+    
+    // Verify preset belongs to restaurant
+    const presetCheck = await pool.query(
+      `SELECT id FROM variant_presets WHERE id = $1 AND restaurant_id = $2`,
+      [presetId, restaurantId]
+    );
+    
+    if (presetCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Preset not found' });
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO variant_preset_options
+        (variant_preset_id, restaurant_id, name, price_cents, display_order)
+       VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(display_order) FROM variant_preset_options WHERE variant_preset_id = $1), 0) + 1)
+       RETURNING *`,
+      [presetId, restaurantId, name.trim(), price_cents ?? 0]
+    );
+    
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating variant preset option:', err);
+    res.status(500).json({ error: 'Failed to create option' });
+  }
+});
+
+/**
+ * PATCH /api/restaurants/:restaurantId/variant-presets/:presetId/options/:optionId
+ * Update an option in a variant preset
+ */
+router.patch('/restaurants/:restaurantId/variant-presets/:presetId/options/:optionId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, presetId, optionId } = req.params;
+    const { name, price_cents } = req.body;
+    
+    const result = await pool.query(
+      `UPDATE variant_preset_options
+       SET name = COALESCE($1, name),
+           price_cents = COALESCE($2, price_cents),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3 AND variant_preset_id = $4 AND restaurant_id = $5
+       RETURNING *`,
+      [name?.trim() ?? null, price_cents ?? null, optionId, presetId, restaurantId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Option not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error updating variant preset option:', err);
+    res.status(500).json({ error: 'Failed to update option' });
+  }
+});
+
+/**
+ * DELETE /api/restaurants/:restaurantId/variant-presets/:presetId/options/:optionId
+ * Delete an option from a variant preset
+ */
+router.delete('/restaurants/:restaurantId/variant-presets/:presetId/options/:optionId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, presetId, optionId } = req.params;
+    
+    const result = await pool.query(
+      `DELETE FROM variant_preset_options
+       WHERE id = $1 AND variant_preset_id = $2 AND restaurant_id = $3
+       RETURNING id`,
+      [optionId, presetId, restaurantId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Option not found' });
+    }
+    
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting variant preset option:', err);
+    res.status(500).json({ error: 'Failed to delete option' });
+  }
+});
+
 export default router;

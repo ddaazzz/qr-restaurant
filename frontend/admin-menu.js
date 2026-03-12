@@ -290,7 +290,7 @@ function createVariantEditElement(variant) {
   // Set up edit button
   const editBtn = variantCard.querySelector('.variant-edit-btn');
   if (editBtn) {
-    editBtn.onclick = () => editVariantInline(variant.id);
+    editBtn.onclick = () => startEditVariantFromPanel(variant.id);
   }
   
   // Set up delete button
@@ -1114,8 +1114,23 @@ function toggleFoodItemEdit() {
     
     // Set variants checkbox state
     const hasVariants = item.variants && item.variants.length > 0;
+    const variantsContainer = document.getElementById('food-panel-variants');
+    const variantPresetsSection = document.getElementById('food-panel-variant-presets-section');
+    
     if (variantsCheckbox) {
       variantsCheckbox.checked = hasVariants || false;
+      variantsCheckbox.onchange = function() {
+        if (variantsContainer) variantsContainer.style.display = this.checked ? 'block' : 'none';
+        if (variantPresetsSection) variantPresetsSection.style.display = this.checked ? 'block' : 'none';
+        if (this.checked) loadVariantPresetsDropdownForPanel();
+      };
+      // Set initial display
+      if (variantsContainer) {
+        variantsContainer.style.display = variantsCheckbox.checked ? 'block' : 'none';
+      }
+      if (variantPresetsSection) {
+        variantPresetsSection.style.display = variantsCheckbox.checked ? 'block' : 'none';
+      }
     }
     
     // Load addon presets dropdown and current addons
@@ -1140,6 +1155,14 @@ function toggleFoodItemEdit() {
     if (customAddonBtn) {
       customAddonBtn.onclick = function() {
         addCustomAddonToFoodPanel(currentEditingItemId);
+      };
+    }
+    
+    // Set up variant preset button handler
+    const variantPresetBtn = document.getElementById('food-panel-btn-add-variant-preset');
+    if (variantPresetBtn) {
+      variantPresetBtn.onclick = function() {
+        addVariantPresetToFoodPanel();
       };
     }
     
@@ -1358,6 +1381,27 @@ function startAddVariantFromPanel() {
   }
 }
 
+function startEditVariantFromPanel(variantId) {
+  // Load variant data and show form for editing
+  const variant = CURRENT_VARIANTS.find(function(v) { return v.id == variantId; });
+  if (!variant) return;
+  
+  const form = document.getElementById('food-panel-variant-form');
+  const nameInput = document.getElementById('food-panel-variant-name');
+  const minInput = document.getElementById('food-panel-variant-min');
+  const maxInput = document.getElementById('food-panel-variant-max');
+  const requiredCheckbox = document.getElementById('food-panel-variant-required');
+  
+  if (form && nameInput && minInput && maxInput && requiredCheckbox) {
+    currentEditingVariantId = variantId;
+    nameInput.value = variant.name;
+    minInput.value = variant.min_select || '';
+    maxInput.value = variant.max_select || '';
+    requiredCheckbox.checked = variant.required || false;
+    form.style.display = 'block';
+  }
+}
+
 function cancelVariantForm() {
   const form = document.getElementById('food-panel-variant-form');
   const optionsSection = document.getElementById('food-panel-variant-options-section');
@@ -1422,6 +1466,65 @@ async function saveNewVariantFromPanel() {
     currentEditingOptionId = null;
   } catch (err) {
     alert('Error adding variant: ' + err.message);
+  }
+}
+
+async function saveEditedVariantFromPanel() {
+  const nameInput = document.getElementById('food-panel-variant-name');
+  const minInput = document.getElementById('food-panel-variant-min');
+  const maxInput = document.getElementById('food-panel-variant-max');
+  const requiredCheckbox = document.getElementById('food-panel-variant-required');
+  const form = document.getElementById('food-panel-variant-form');
+  
+  const name = nameInput.value.trim();
+  const minSel = parseInt(minInput.value) || null;
+  const maxSel = parseInt(maxInput.value) || null;
+  const required = requiredCheckbox.checked;
+  
+  if (!name) {
+    alert('Variant name is required');
+    return;
+  }
+  
+  if (!currentEditingVariantId) {
+    alert('No variant selected for editing');
+    return;
+  }
+  
+  try {
+    const payload = {
+      name: name,
+      min_select: minSel,
+      max_select: maxSel,
+      required: required
+    };
+    
+    const res = await fetch(`${API}/variants/${currentEditingVariantId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) throw new Error('Failed to update variant');
+    
+    alert('Variant updated');
+    
+    // Hide form and options section
+    if (form) form.style.display = 'none';
+    const optionsSection = document.getElementById('food-panel-variant-options-section');
+    if (optionsSection) optionsSection.style.display = 'none';
+    const optionForm = document.getElementById('food-panel-variant-option-form');
+    if (optionForm) optionForm.style.display = 'none';
+    
+    // Reload variants
+    const varRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`);
+    CURRENT_VARIANTS = varRes.ok ? await varRes.json() : [];
+    renderFoodPanelVariantsForEdit();
+    
+    currentEditingVariantId = null;
+    currentEditingOptionId = null;
+  } catch (err) {
+    alert('Error updating variant: ' + err.message);
   }
 }
 
@@ -1581,10 +1684,10 @@ async function saveInlineVariantOption() {
       alert('Option updated');
     } else {
       // Create new option
-      const res = await fetch(`${API}/variants/${currentEditingVariantId}/options`, {
+      const res = await fetch(`${API}/variant-options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, variant_id: currentEditingVariantId })
       });
       
       if (!res.ok) throw new Error('Failed to create option');
@@ -1644,10 +1747,10 @@ async function saveVariantOption() {
       alert('Option updated');
     } else {
       // Create new option
-      const res = await fetch(`${API}/variants/${currentEditingVariantId}/options`, {
+      const res = await fetch(`${API}/variant-options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, variant_id: currentEditingVariantId })
       });
       
       if (!res.ok) throw new Error('Failed to create option');
@@ -2572,5 +2675,155 @@ async function removeAddonFromModal(itemId, addonId, element) {
     }
   } catch (err) {
     alert('Error removing addon: ' + err.message);
+  }
+}
+
+/**
+ * Load variant presets dropdown for food panel
+ */
+async function loadVariantPresetsDropdownForPanel() {
+  const select = document.getElementById('food-panel-variant-preset-select');
+  if (!select) return;
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets`);
+    if (!res.ok) return;
+    
+    const presets = await res.json();
+    
+    // Clear existing options (keep placeholder)
+    const placeholder = select.querySelector('option[value=""]');
+    select.innerHTML = '';
+    if (placeholder) select.appendChild(placeholder);
+    
+    // Add preset options
+    presets.forEach(preset => {
+      const option = document.createElement('option');
+      option.value = preset.id;
+      option.textContent = preset.name;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error('Error loading variant presets:', err);
+  }
+}
+
+/**
+ * Add a variant preset to a food item
+ */
+async function addVariantPresetToFoodPanel() {
+  const select = document.getElementById('food-panel-variant-preset-select');
+  if (!select || !select.value) {
+    alert('Please select a variant preset');
+    return;
+  }
+  
+  const presetId = parseInt(select.value);
+  
+  try {
+    // Fetch the variants from the preset
+    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants`);
+    if (!res.ok) {
+      alert('Failed to load variant preset');
+      return;
+    }
+    
+    const variants = await res.json();
+    
+    if (!variants || variants.length === 0) {
+      alert('This preset has no variants');
+      return;
+    }
+    
+    // Add each variant from the preset
+    for (const variantPresetItem of variants) {
+      const variant = variantPresetItem.variant;
+      
+      // Create variant in the current item
+      const variantRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: variant.name,
+          required: variant.required || false,
+          min_select: variant.min_select || 0,
+          max_select: variant.max_select || 999
+        })
+      });
+      
+      if (!variantRes.ok) {
+        alert('Failed to add variant');
+        return;
+      }
+      
+      const newVariant = await variantRes.json();
+      
+      // Load options for this preset variant
+      const optionsRes = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants/${variantPresetItem.id}/options`);
+      if (optionsRes.ok) {
+        const options = await optionsRes.json();
+        
+        // Add each option to the new variant
+        for (const option of options) {
+          await fetch(`${API}/variants/${newVariant.id}/options`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: option.name,
+              price_cents: option.price_cents || 0
+            })
+          });
+        }
+      }
+    }
+    
+    alert('Variant preset added successfully');
+    select.value = '';
+    
+    // Reload variants display
+    const varRes = await fetch(`${API}/menu-items/${currentEditingItemId}`);
+    if (varRes.ok) {
+      const item = await varRes.json();
+      CURRENT_EDITING_ITEM = item;
+      if (item.variants) renderFoodPanelVariantsForEdit(item.variants);
+    }
+  } catch (err) {
+    alert('Error adding variant preset: ' + err.message);
+  }
+}
+
+/**
+ * Delete an addon configuration from a menu item (food panel)
+ * @param {number} itemId - Menu item ID
+ * @param {number} addonItemId - Addon item ID to delete
+ */
+async function deleteAddonFromItem(itemId, addonItemId) {
+  try {
+    // Find the addon by itemId and addonItemId, then delete it by its ID
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addons?menu_item_id=${itemId}`);
+    if (!res.ok) {
+      alert('Failed to load addons');
+      return;
+    }
+    
+    const addons = await res.json();
+    const addon = addons.find(a => a.addon_item_id === addonItemId);
+    
+    if (!addon) {
+      alert('Addon not found');
+      return;
+    }
+    
+    // Delete the addon by its ID
+    const deleteRes = await fetch(`${API}/restaurants/${restaurantId}/addons/${addon.id}`, {
+      method: 'DELETE'
+    });
+    
+    if (!deleteRes.ok) {
+      alert('Failed to delete addon');
+      return;
+    }
+  } catch (err) {
+    alert('Error deleting addon: ' + err.message);
   }
 }

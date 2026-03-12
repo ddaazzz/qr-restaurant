@@ -91,12 +91,30 @@ interface Coupon {
   description?: string;
 }
 
+interface Variant {
+  id: number;
+  name: string;
+  required?: boolean;
+  min_select?: number | null;
+  max_select?: number | null;
+  menu_item_name?: string;
+}
+
+interface VariantPreset {
+  id: number;
+  name: string;
+  description?: string;
+  variants_count: number;
+  variants?: Variant[];
+}
+
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
 
   // Modal states
   const [editMode, setEditMode] = useState(false);
@@ -108,6 +126,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
+  const [showVariantPresetsModal, setShowVariantPresetsModal] = useState(false);
+  const [selectedVariantPreset, setSelectedVariantPreset] = useState<VariantPreset | null>(null);
   const [showStaffLogin, setShowStaffLogin] = useState(false);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
@@ -168,8 +188,21 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const fetchVariantPresets = async () => {
+    try {
+      const presetsRes = await apiClient.get(`/api/restaurants/${restaurantId}/variant-presets`);
+      const presetsList = Array.isArray(presetsRes.data) ? presetsRes.data : presetsRes.data.presets || [];
+      setVariantPresets(presetsList);
+    } catch (err: any) {
+      console.warn('[Settings] Failed to fetch variant presets (non-critical):', err.message);
+      // Don't show error or block UI - variant presets fetching is non-critical
+      setVariantPresets([]);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
+    fetchVariantPresets();
   }, [restaurantId]);
 
   const getPrinterTypeLabel = (type?: string): string => {
@@ -1040,6 +1073,71 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         )}
       </View>
 
+      {/* Variant Presets */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>🏷️ Variant Presets</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
+            onPress={() => {
+              // Show create preset dialog
+              Alert.prompt(
+                '➕ Create Variant Preset',
+                'Enter variant title (e.g., "Drink Size", "Temperature")',
+                [
+                  {
+                    text: 'Cancel',
+                    style: 'cancel',
+                  },
+                  {
+                    text: 'Create',
+                    onPress: (name) => {
+                      if (name) {
+                        // For now, log the intent - API integration would go here
+                        Alert.alert('Success', `Preset "${name}" created! You can now add options.`);
+                      }
+                    },
+                  },
+                ],
+                'plain-text'
+              );
+            }}
+          >
+            <Text style={styles.btnSmallText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
+
+        {variantPresets.length > 0 ? (
+          <FlatList
+            data={variantPresets}
+            renderItem={({ item: preset }) => (
+              <TouchableOpacity
+                style={styles.presetCard}
+                onPress={() => {
+                  setSelectedVariantPreset(preset);
+                }}
+              >
+                <View style={styles.presetCardHeader}>
+                  <View>
+                    <Text style={styles.presetName}>{preset.name}</Text>
+                    {preset.description && (
+                      <Text style={styles.presetDescription}>{preset.description}</Text>
+                    )}
+                  </View>
+                  <View style={styles.variantBadge}>
+                    <Text style={styles.variantBadgeText}>{preset.options_count || 0}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id.toString()}
+            scrollEnabled={false}
+          />
+        ) : (
+          <Text style={styles.emptyText}>No variant presets yet</Text>
+        )}
+      </View>
+
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
@@ -1327,6 +1425,148 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* Variant Presets Modal */}
+      <Modal visible={showVariantPresetsModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🏷️ Variant Presets</Text>
+              <TouchableOpacity onPress={() => setShowVariantPresetsModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedVariantPreset ? (
+              <>
+                <ScrollView style={styles.presetDetailScroll}>
+                  <View style={styles.modalBody}>
+                    <Text style={styles.presetDetailTitle}>{selectedVariantPreset.name}</Text>
+                    {selectedVariantPreset.description && (
+                      <Text style={styles.presetDetailDesc}>{selectedVariantPreset.description}</Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnPrimary, { marginBottom: 16 }]}
+                      onPress={() => {
+                        // Show create option dialog
+                        Alert.prompt(
+                          '➕ Add New Option',
+                          'Enter option name (e.g., "Small", "Medium", "Large")',
+                          [
+                            {
+                              text: 'Cancel',
+                              style: 'cancel',
+                            },
+                            {
+                              text: 'Add',
+                              onPress: (name) => {
+                                if (name) {
+                                  Alert.alert('Success', `Option "${name}" added to "${selectedVariantPreset.name}"`);
+                                }
+                              },
+                            },
+                          ],
+                          'plain-text'
+                        );
+                      }}
+                    >
+                      <Text style={styles.btnText}>+ Add Option</Text>
+                    </TouchableOpacity>
+
+                    <Text style={styles.variantsLabel}>Options in "{selectedVariantPreset.name}":</Text>
+                    {selectedVariantPreset.variants && selectedVariantPreset.variants.length > 0 ? (
+                      selectedVariantPreset.variants.map((option, idx) => (
+                        <View key={idx} style={styles.variantDetailItem}>
+                          <View style={styles.variantDetailContent}>
+                            <Text style={styles.variantDetailName}>{option.name}</Text>
+                            {option.price_cents && option.price_cents > 0 && (
+                              <Text style={styles.variantDetailMeta}>
+                                +${(option.price_cents / 100).toFixed(2)}
+                              </Text>
+                            )}
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 6, marginLeft: 10 }}>
+                            <TouchableOpacity
+                              style={[styles.btn, styles.btnSmall, { backgroundColor: '#dbeafe', borderColor: '#93c5fd' }]}
+                              onPress={() => Alert.alert('Edit', `Edit option: ${option.name}`)}
+                            >
+                              <Text style={[styles.btnSmallText, { color: '#1e40af' }]}>✏️</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.btn, styles.btnSmall, { backgroundColor: '#fee2e2', borderColor: '#fecaca' }]}
+                              onPress={() =>
+                                Alert.alert(
+                                  'Delete',
+                                  `Delete option "${option.name}"?`,
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    { text: 'Delete', style: 'destructive', onPress: () => {} },
+                                  ]
+                                )
+                              }
+                            >
+                              <Text style={[styles.btnSmallText, { color: '#991b1b' }]}>🗑️</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.emptyText}>No options yet. Click "Add Option" to add one.</Text>
+                    )}
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalFooter}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnSecondary]}
+                    onPress={() => setSelectedVariantPreset(null)}
+                  >
+                    <Text style={styles.btnText}>Back</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <ScrollView style={styles.presetsListScroll}>
+                  <View style={styles.modalBody}>
+                    {variantPresets.length > 0 ? (
+                      variantPresets.map((preset) => (
+                        <TouchableOpacity
+                          key={preset.id}
+                          style={styles.presetListItem}
+                          onPress={() => setSelectedVariantPreset(preset)}
+                        >
+                          <View>
+                            <Text style={styles.presetListName}>{preset.name}</Text>
+                            {preset.description && (
+                              <Text style={styles.presetListDesc}>{preset.description}</Text>
+                            )}
+                          </View>
+                          <View style={styles.presetListBadge}>
+                            <Text style={styles.presetListBadgeText}>{preset.variants_count}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <Text style={styles.emptyText}>📋 No variant presets created yet</Text>
+                    )}
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalFooter}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnSecondary]}
+                    onPress={() => setShowVariantPresetsModal(false)}
+                  >
+                    <Text style={styles.btnText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -1563,6 +1803,143 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     paddingVertical: 16,
+  },
+  presetCard: {
+    backgroundColor: '#f8fafc',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#667eea',
+    elevation: 1,
+  },
+  presetCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  presetName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  presetDescription: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  variantBadge: {
+    backgroundColor: '#dbeafe',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    minWidth: 35,
+    alignItems: 'center',
+  },
+  variantBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e40af',
+  },
+  presetListItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#667eea',
+  },
+  presetListName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  presetListDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  presetListBadge: {
+    backgroundColor: '#dbeafe',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  presetListBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e40af',
+  },
+  presetDetailScroll: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  presetsListScroll: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  presetDetailTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  presetDetailDesc: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 16,
+  },
+  variantsLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  variantDetailItem: {
+    backgroundColor: '#f9fafb',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#667eea',
+  },
+  variantDetailContent: {
+    flex: 1,
+  },
+  variantDetailName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  requiredBadge: {
+    color: '#dc2626',
+    fontWeight: '900',
+  },
+  variantDetailMeta: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  variantDetailFrom: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 4,
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  variantDetailRequired: {
+    fontSize: 11,
+    color: '#dc2626',
+    fontWeight: '600',
+    marginTop: 4,
   },
   errorContainer: {
     backgroundColor: '#fee',

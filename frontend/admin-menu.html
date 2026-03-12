@@ -175,6 +175,18 @@
           </div>
         </div>
 
+        <!-- Variant Preset Selection Section (shown when has-variants is checked) -->
+        <div id="food-panel-variant-presets-section" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 6px; border: 1px solid #e0e0e0;">
+          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #1a1a1a;">Select Variant Preset(s):</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <select id="food-panel-variant-preset-select" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+              <option value="" data-i18n="admin.select-preset">-- Select a variant preset --</option>
+            </select>
+            <button type="button" id="food-panel-btn-add-variant-preset" style="background: #2C3E50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.2s ease;" onmouseover="this.style.background='#1a252f';" onmouseout="this.style.background='#2C3E50';">Add Preset</button>
+          </div>
+          <div id="food-panel-selected-variant-presets" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+
         <!-- Addon Configuration Section (shown when is-meal-combo is checked) -->
         <div id="food-panel-addons-section" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -312,10 +324,10 @@
       </div>
       
       <!-- Variants Section (shown when has-variants is checked) -->
-      <div class="edit-item-variants-section" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+      <div class="edit-item-variants-section" style="display: none; margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 6px; border: 1px solid #e0e0e0;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h4 data-i18n="admin.variants" style="margin: 0;">Variants</h4>
-          <button type="button" class="btn-preset-variant-add" style="background: #2C3E50; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Add Preset</button>
+          <h4 data-i18n="admin.variants" style="margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a;">Variants</h4>
+          <button type="button" class="btn-preset-variant-add" style="background: #2C3E50; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.2s ease;">+ Add Preset</button>
         </div>
         <div class="edit-item-preset-variants-list" style="margin-bottom: 12px;">
           <!-- Preset variants displayed here -->
