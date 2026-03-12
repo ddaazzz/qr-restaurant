@@ -104,6 +104,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sessionBillData, setSessionBillData] = useState<any>(null);
+    const [orderBillData, setOrderBillData] = useState<any>(null);
     const [loadingBill, setLoadingBill] = useState(false);
 
     // Expose toggleHistory through ref
@@ -170,7 +171,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           const response = await apiClient.get(`/api/restaurants/${restaurantId}/sessions`);
           setSessions(response.data || []);
         } else {
-          const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders?include=items`);
+          const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders`);
           let filteredOrders = Array.isArray(response.data) ? response.data : [];
 
           if (historyFilter === 'pay-now') {
@@ -197,6 +198,19 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       } catch (err: any) {
         console.error('Error loading session bill:', err);
         setSessionBillData(null);
+      } finally {
+        setLoadingBill(false);
+      }
+    };
+
+    const loadOrderBill = async (orderId: number) => {
+      try {
+        setLoadingBill(true);
+        const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders/${orderId}`);
+        setOrderBillData(response.data);
+      } catch (err: any) {
+        console.error('Error loading order details:', err);
+        setOrderBillData(null);
       } finally {
         setLoadingBill(false);
       }
@@ -455,7 +469,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 return (
                   <TouchableOpacity
                     style={styles.orderCard}
-                    onPress={() => setSelectedOrder(order)}
+                    onPress={() => {
+                      setSelectedOrder(order);
+                      loadOrderBill(order.id);
+                    }}
                   >
                     <View style={styles.orderHeader}>
                       <View>
@@ -489,6 +506,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             onRequestClose={() => {
               setSelectedOrder(null);
               setSessionBillData(null);
+              setOrderBillData(null);
             }}
           >
             <View style={styles.modalOverlay}>
@@ -497,6 +515,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   <TouchableOpacity onPress={() => {
                     setSelectedOrder(null);
                     setSessionBillData(null);
+                    setOrderBillData(null);
                   }}>
                     <Text style={styles.closeButton}>✕</Text>
                   </TouchableOpacity>
@@ -511,7 +530,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {historyFilter === 'sessions' ? (
                       <SessionDetails session={selectedOrder as Session} billData={sessionBillData} />
                     ) : (
-                      <OrderDetails order={selectedOrder as Order} />
+                      <OrderDetails order={selectedOrder as Order} billData={orderBillData} />
                     )}
                   </ScrollView>
                 )}
@@ -960,7 +979,7 @@ const SessionDetails = ({ session, billData }: { session: Session | null; billDa
 };
 
 // Helper component for order details
-const OrderDetails = ({ order }: { order: Order | null }) => {
+const OrderDetails = ({ order, billData }: { order: Order | null; billData?: any }) => {
   if (!order) return null;
   
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -996,12 +1015,12 @@ const OrderDetails = ({ order }: { order: Order | null }) => {
         <Text style={styles.detailLabel}>Created</Text>
         <Text style={styles.detailValue}>{new Date(order.created_at).toLocaleString()}</Text>
       </View>
-      {order.items && order.items.length > 0 && (
+      {billData?.items && billData.items.length > 0 && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailLabel}>Items ({order.items.length})</Text>
-          {order.items.map((item, idx) => (
+          <Text style={styles.detailLabel}>Items ({billData.items.length})</Text>
+          {billData.items.map((item: any, idx: number) => (
             <Text key={idx} style={styles.itemListText}>
-              • {item.name} x{item.quantity} - {formatPrice(item.price_cents * item.quantity)}
+              • {item.menu_item_name} x{item.quantity} - {formatPrice(item.price_cents * item.quantity)}
             </Text>
           ))}
         </View>
