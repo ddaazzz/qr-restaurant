@@ -312,7 +312,7 @@
         </div>
 
         <!-- Auto-Print Options -->
-        <div class="form-row" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+        <div class="form-row" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px; margin-bottom: 4px;">
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
               <input id="kitchen-auto-print" type="checkbox" class="hidden-checkbox" />
@@ -323,30 +323,30 @@
           </div>
         </div>
 
-        <div class="form-row">
+        <div class="form-row" style="margin-bottom: 4px;">
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
               <input id="bill-auto-print" type="checkbox" class="hidden-checkbox" />
               <span class="checkbox-display"></span>
               <span>Auto-Print Bills</span>
             </label>
-            <p style="font-size: 13px; color: #666; margin-top: 6px;">Automatically print bills when sessions are closed</p>
+            <p style="font-size: 13px; color: #666; margin-top: 4px;">Automatically print bills when sessions are closed</p>
           </div>
         </div>
 
-        <div class="form-row">
+        <div class="form-row" style="margin-bottom: 4px;">
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
               <input id="print-logo" type="checkbox" class="hidden-checkbox" />
               <span class="checkbox-display"></span>
               <span>Print Logo on Receipts</span>
             </label>
-            <p style="font-size: 13px; color: #666; margin-top: 6px;">Include restaurant logo when printing receipts</p>
+            <p style="font-size: 13px; color: #666; margin-top: 4px;">Include restaurant logo when printing receipts</p>
           </div>
         </div>
 
         <!-- Customer Receipts -->
-        <div class="form-row" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+        <div class="form-row" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px; margin-bottom: 4px;">
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display: block; margin-bottom: 8px; font-weight: 600;">Send Customer Receipts Via:</label>
             <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select how customers should receive their receipts</p>
@@ -400,7 +400,8 @@
                     <div style="margin-bottom: 12px;">
                       <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Show Time:</label>
                       <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="checkbox" id="qr-format-show-time" checked>
+                        <input type="checkbox" id="qr-format-show-time" class="hidden-checkbox" checked>
+                        <span class="checkbox-display"></span>
                         <span style="font-size: 12px;">Display session start time</span>
                       </label>
                     </div>
