@@ -195,7 +195,7 @@ function hidePrinterSettings() {
   }
 }
 
-function switchTab(tabName) {
+function switchTab(tabName, buttonElement) {
   // Hide all tabs
   document.querySelectorAll('.tab-content').forEach(tab => {
     tab.classList.remove('active');
@@ -217,9 +217,8 @@ function switchTab(tabName) {
   }
 
   // Mark button as active
-  const selectedBtn = event.target;
-  if (selectedBtn && selectedBtn.classList.contains('tab-button')) {
-    selectedBtn.classList.add('active');
+  if (buttonElement && buttonElement.classList) {
+    buttonElement.classList.add('active');
   }
 }
 
