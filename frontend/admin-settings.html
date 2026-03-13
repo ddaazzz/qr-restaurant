@@ -259,13 +259,10 @@
         <div class="form-row">
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Type</label>
-            <span id="view-printer-type" class="view-mode"></span>
-            <select id="printer-type" class="hidden" onchange="updatePrinterTypeFields()">
-              <option value="none">-- None (No Printer)</option>
-              <option value="browser">Browser Print</option>
-              <option value="thermal">Thermal Printer (Network)</option>
-              <option value="usb">USB Printer</option>
-              <option value="bluetooth">Bluetooth Receipt Printer</option>
+            <select id="printer-type" onchange="updatePrinterTypeFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
+              <option value="none">-- Select Printer Type</option>
+              <option value="network">🌐 Network Printer (Thermal over IP)</option>
+              <option value="bluetooth">📱 Bluetooth Receipt Printer</option>
             </select>
           </div>
         </div>
@@ -274,13 +271,11 @@
         <div class="form-row">
           <div class="form-group" id="printer-host-group" style="display: none;">
             <label>Printer Host/IP</label>
-            <span id="view-printer-host" class="view-mode"></span>
-            <input id="printer-host" type="text" placeholder="e.g., 192.168.1.100" class="hidden" />
+            <input id="printer-host" type="text" placeholder="e.g., 192.168.1.100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
           </div>
           <div class="form-group" id="printer-port-group" style="display: none;">
             <label>Printer Port</label>
-            <span id="view-printer-port" class="view-mode"></span>
-            <input id="printer-port" type="number" placeholder="e.g., 9100" value="9100" class="hidden" />
+            <input id="printer-port" type="number" placeholder="e.g., 9100" value="9100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
           </div>
         </div>
 
@@ -290,24 +285,17 @@
             <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bluetooth Device</label>
             <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select from available Bluetooth devices or scan for new printers</p>
             
-            <!-- Connected Devices List -->
-            <div style="margin-bottom: 16px;">
-              <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: #333;">Available Devices</label>
-              <div id="bluetooth-connected-devices" style="border: 1px solid var(--border-color); border-radius: 6px; max-height: 180px; overflow-y: auto; background: #f9fafb;">
-                <div style="padding: 16px; text-align: center; color: #999; font-size: 13px;">Loading connected devices...</div>
-              </div>
+            <!-- Device Selector Dropdown -->
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <select id="bluetooth-device-id" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: white;">
+                <option value="">-- No Device Selected --</option>
+              </select>
+              <button id="scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 0 0 200px;">🔍 Scan New Device</button>
             </div>
             
-            <!-- Scan for New Device -->
-            <div style="display: flex; gap: 8px;">
-              <button id="scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 1;">🔍 Scan New Device</button>
-              <button id="refresh-devices-btn" onclick="refreshConnectedDevices()" class="btn-secondary" style="flex: 1;">🔄 Refresh List</button>
-            </div>
-            
-            <!-- Hidden inputs -->
+            <!-- Selected Device Display -->
             <span id="view-bluetooth-device" class="view-mode" style="margin-top: 12px; display: block;"></span>
-            <input id="bluetooth-device-id" type="hidden" class="hidden" />
-            <input id="bluetooth-device-name" type="hidden" class="hidden" />
+            <input id="bluetooth-device-name" type="hidden" />
           </div>
         </div>
 
