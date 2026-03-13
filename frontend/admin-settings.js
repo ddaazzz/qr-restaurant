@@ -153,6 +153,77 @@ function closeSettingsModal(modalName) {
   }
 }
 
+// ============= PRINTER SETTINGS PAGE MANAGEMENT =============
+function showPrinterSettings() {
+  // Hide settings grid
+  const settingsGrid = document.querySelector('.settings-cards-grid');
+  if (settingsGrid) {
+    settingsGrid.style.display = 'none';
+  }
+
+  // Show printer settings page
+  const printerPage = document.getElementById('printer-settings-page');
+  if (printerPage) {
+    printerPage.classList.remove('hidden');
+    
+    // Load printer settings content
+    loadPrinterSettings().then(() => {
+      updateQRPreview();
+      fetchRestaurantDataForQRFormat();
+    });
+  }
+}
+
+function hidePrinterSettings() {
+  // Hide printer settings page
+  const printerPage = document.getElementById('printer-settings-page');
+  if (printerPage) {
+    printerPage.classList.add('hidden');
+  }
+
+  // Show settings grid
+  const settingsGrid = document.querySelector('.settings-cards-grid');
+  if (settingsGrid) {
+    settingsGrid.style.display = '';
+  }
+
+  // Reset any edit mode
+  const editBtn = document.getElementById('edit-printer-btn');
+  const saveBtn = document.getElementById('save-printer-btn');
+  if (editBtn && saveBtn && saveBtn.classList.contains('hidden') === false) {
+    cancelEditModePrinter();
+  }
+}
+
+function switchTab(tabName) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.remove('active');
+  });
+
+  // Remove active class from buttons
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  // Show selected tab - try printer page first, then modal
+  let selectedTab = document.getElementById(`printer-page-tab-${tabName}`);
+  if (!selectedTab) {
+    selectedTab = document.getElementById(`tab-${tabName}`);
+  }
+  
+  if (selectedTab) {
+    selectedTab.classList.add('active');
+  }
+
+  // Mark button as active
+  const selectedBtn = event.target;
+  if (selectedBtn && selectedBtn.classList.contains('tab-button')) {
+    selectedBtn.classList.add('active');
+  }
+}
+
+
 // ============= MODAL INITIALIZATION FUNCTIONS =============
 
 // Load Restaurant Information Modal

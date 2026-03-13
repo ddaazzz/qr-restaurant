@@ -22,7 +22,7 @@
     </div>
 
     <!-- Printer Settings Card -->
-    <div class="settings-card" onclick="window.location.href='/admin-printer-settings-page.html'">
+    <div class="settings-card" onclick="showPrinterSettings()">
       <h3>🖨️ Printer Settings</h3>
       <p id="printer-status-preview">Not configured</p>
     </div>
@@ -742,6 +742,53 @@
         </div>
         <div id="variant-presets-list" style="max-height: 400px; overflow-y: auto;">
           <!-- Presets rendered here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINTER SETTINGS FULL PAGE VIEW -->
+  <div id="printer-settings-page" class="settings-full-page hidden">
+    <div class="page-header">
+      <h1>🖨️ Printer Settings</h1>
+      <button class="back-button" onclick="hidePrinterSettings()">← Back to Settings</button>
+    </div>
+
+    <div class="page-content">
+      <div class="tabs-container">
+        <div class="tabs-header">
+          <button class="tab-button active" onclick="switchTab('printer-config')">⚙️ Printer Config</button>
+          <button class="tab-button" onclick="switchTab('qr-format')">📋 Print QR Code Format</button>
+          <button class="tab-button" onclick="switchTab('bill-format')">🧾 Print Bill Format</button>
+          <button class="tab-button" onclick="switchTab('kitchen-format')">🍳 Print Kitchen Format</button>
+        </div>
+
+        <!-- TAB 1: PRINTER CONFIG -->
+        <div id="printer-page-tab-printer-config" class="tab-content active">
+          <div id="printer-page-content-printer-config">
+            <!-- Content will be cloned from modal -->
+          </div>
+        </div>
+
+        <!-- TAB 2: QR CODE FORMAT -->
+        <div id="printer-page-tab-qr-format" class="tab-content">
+          <div id="printer-page-content-qr-format">
+            <!-- Content will be cloned from modal -->
+          </div>
+        </div>
+
+        <!-- TAB 3: BILL FORMAT -->
+        <div id="printer-page-tab-bill-format" class="tab-content">
+          <div id="printer-page-content-bill-format">
+            <!-- Content will be cloned from modal -->
+          </div>
+        </div>
+
+        <!-- TAB 4: KITCHEN FORMAT -->
+        <div id="printer-page-tab-kitchen-format" class="tab-content">
+          <div id="printer-page-content-kitchen-format">
+            <!-- Content will be cloned from modal -->
+          </div>
         </div>
       </div>
     </div>
