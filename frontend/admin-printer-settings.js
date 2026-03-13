@@ -46,7 +46,7 @@ function updatePrinterSettingsUI() {
 
   const type = currentPrinterSettings.printer_type || "none";
   
-  // Safely update elements that exist
+  // Update form elements
   const printerTypeEl = document.getElementById("printer-type");
   if (printerTypeEl) printerTypeEl.value = type;
   
@@ -56,6 +56,25 @@ function updatePrinterSettingsUI() {
   const printerPortEl = document.getElementById("printer-port");
   if (printerPortEl) printerPortEl.value = currentPrinterSettings.printer_port || 9100;
   
+  // Update view-mode displays
+  const typeLabel = {
+    'none': 'No Printer',
+    'browser': 'Browser Print',
+    'thermal': 'Thermal Printer (Network)',
+    'usb': 'USB Printer',
+    'bluetooth': 'Bluetooth Receipt Printer'
+  }[type] || 'Not Configured';
+  
+  const viewTypeEl = document.getElementById("view-printer-type");
+  if (viewTypeEl) viewTypeEl.textContent = typeLabel;
+  
+  const viewHostEl = document.getElementById("view-printer-host");
+  if (viewHostEl) viewHostEl.textContent = currentPrinterSettings.printer_host || 'Not set';
+  
+  const viewPortEl = document.getElementById("view-printer-port");
+  if (viewPortEl) viewPortEl.textContent = currentPrinterSettings.printer_port || '9100';
+  
+  // Update checkboxes
   const kitchenAutoPrintEl = document.getElementById("kitchen-auto-print");
   if (kitchenAutoPrintEl) kitchenAutoPrintEl.checked = currentPrinterSettings.kitchen_auto_print || false;
   
@@ -65,37 +84,23 @@ function updatePrinterSettingsUI() {
   const printLogoEl = document.getElementById("print-logo");
   if (printLogoEl) printLogoEl.checked = currentPrinterSettings.print_logo !== false;
 
-  updatePrinterTypeUI(type);
+  // Show/hide network/bluetooth fields
+  updatePrinterTypeFields();
 }
 
 /**
- * Update UI visibility based on printer type
+ * Update UI based on selected printer type
  */
-function updatePrinterTypeUI(type) {
-  const networkDiv = document.getElementById("network-printer-config");
-  const usbDiv = document.getElementById("usb-printer-config");
-  const autoSettings = document.getElementById("auto-print-settings");
+function updatePrinterTypeFields() {
+  const printerType = document.getElementById('printer-type')?.value || 'none';
+  const printerHostGroup = document.getElementById('printer-host-group');
+  const printerPortGroup = document.getElementById('printer-port-group');
+  const bluetoothDeviceGroup = document.getElementById('bluetooth-device-group');
 
-  if (networkDiv) {
-    networkDiv.style.display = type === "network" ? "block" : "none";
-  }
-  if (usbDiv) {
-    usbDiv.style.display = type === "usb" ? "block" : "none";
-  }
-  if (autoSettings) {
-    autoSettings.style.display = type !== "none" ? "block" : "none";
-  }
-}
-
-/**
- * Handle printer type selection change
- */
-function onPrinterTypeChanged() {
-  const typeEl = document.getElementById("printer-type");
-  if (typeEl) {
-    const type = typeEl.value;
-    updatePrinterTypeUI(type);
-  }
+  // Show/hide fields based on printer type
+  if (printerHostGroup) printerHostGroup.style.display = (printerType === 'thermal' || printerType === 'network') ? 'block' : 'none';
+  if (printerPortGroup) printerPortGroup.style.display = (printerType === 'thermal' || printerType === 'network') ? 'block' : 'none';
+  if (bluetoothDeviceGroup) bluetoothDeviceGroup.style.display = printerType === 'bluetooth' ? 'block' : 'none';
 }
 
 /**
@@ -229,10 +234,18 @@ window.addEventListener("DOMContentLoaded", () => {
       const updateFields = [
         'qr-format-name-size', 'qr-format-show-phone', 'qr-format-show-address',
         'qr-format-show-time', 'qr-format-details-size', 'qr-format-qr-size',
-        'qr-format-text-above', 'qr-format-text-below', 'qr-format-powered-by',
+        'qr-format-text-above', 'qr-format-text-below',
         'qr-format-footer-size'
       ];
       
+      const customFooterEl = document.getElementById('qr-format-custom-footer');
+      if (customFooterEl) {
+        customFooterEl.addEventListener('change', () => {
+          updateQRPreview();
+          updateFontSizeDisplay();
+        });
+      }
+
       updateFields.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -351,7 +364,7 @@ function updateQRPreview() {
   const qrSize = document.getElementById('qr-format-qr-size')?.value || 'medium';
   const textAbove = document.getElementById('qr-format-text-above')?.value || 'Scan to Order';
   const textBelow = document.getElementById('qr-format-text-below')?.value || 'Let us know how we did!';
-  const poweredBy = document.getElementById('qr-format-powered-by')?.value || 'Powered by Chuio.io';
+  const customFooter = document.getElementById('qr-format-custom-footer')?.value || '';
   const footerSize = document.getElementById('qr-format-footer-size')?.value || 10;
 
   // Restaurant data (from database or defaults)
@@ -407,8 +420,8 @@ function updateQRPreview() {
     
     <div style="font-weight: bold; font-size: ${detailsSize}px; margin: 8px 0;">${textAbove}</div>
     <div style="font-size: 11px; margin-bottom: 8px;">${textBelow}</div>
-    
-    <div style="font-size: ${footerSize}px; margin-top: 8px; color: #666;">${poweredBy}</div>
+    ${customFooter ? `<div style="font-size: ${footerSize}px; margin-bottom: 4px; color: #666;">${customFooter}</div>` : ''}
+    <div style="font-size: ${footerSize}px; margin-top: 8px; color: #666;">Powered by Chuio.io</div>
   `;
 
   const preview_el = document.getElementById('qr-format-preview');
@@ -431,7 +444,7 @@ function resetQRFormat() {
   document.getElementById('qr-format-qr-size').value = 'medium';
   document.getElementById('qr-format-text-above').value = 'Scan to Order';
   document.getElementById('qr-format-text-below').value = 'Let us know how we did!';
-  document.getElementById('qr-format-powered-by').value = 'Powered by Chuio.io';
+  document.getElementById('qr-format-custom-footer').value = '';
   document.getElementById('qr-format-footer-size').value = 10;
   updateQRPreview();
 }
@@ -456,7 +469,8 @@ async function saveQRFormat() {
       qr_size: document.getElementById('qr-format-qr-size').value,
       text_above_qr: document.getElementById('qr-format-text-above').value,
       text_below_qr: document.getElementById('qr-format-text-below').value,
-      powered_by_text: document.getElementById('qr-format-powered-by').value,
+      custom_footer: document.getElementById('qr-format-custom-footer').value || '',
+      powered_by_text: 'Powered by Chuio.io',
       footer_font_size: parseInt(document.getElementById('qr-format-footer-size').value),
     };
 

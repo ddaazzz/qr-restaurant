@@ -769,8 +769,7 @@
         <div class="form-row">
           <div class="form-group" style="grid-column: 1 / -1;">
             <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Type</label>
-            <span id="view-printer-type" class="view-mode"></span>
-            <select id="printer-type" class="hidden" onchange="updatePrinterTypeFields()">
+            <select id="printer-type" onchange="updatePrinterTypeFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
               <option value="none">-- None (No Printer)</option>
               <option value="browser">Browser Print</option>
               <option value="thermal">Thermal Printer (Network)</option>
@@ -838,10 +837,8 @@
 
         <!-- Action Buttons -->
         <div class="form-actions" style="margin-top: 24px;">
-          <button id="edit-printer-btn" onclick="enterEditModePrinter()" class="btn-primary">✎ Edit</button>
-          <button id="save-printer-btn" onclick="savePrinterSettings()" class="btn-primary hidden">💾 Save</button>
-          <button id="test-printer-btn" onclick="testPrinterConnection()" class="btn-secondary hidden">🧪 Test</button>
-          <button id="cancel-printer-btn" onclick="cancelEditModePrinter()" class="btn-secondary hidden">Cancel</button>
+          <button id="save-printer-btn" onclick="savePrinterSettings()" class="btn-primary">💾 Save</button>
+          <button id="test-printer-btn" onclick="testPrinterConnection()" class="btn-secondary">🧪 Test Connection</button>
         </div>
         </div>
 
