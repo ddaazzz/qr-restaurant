@@ -505,8 +505,21 @@
 
 .modal-tab-content {
   display: none;
+  padding: 0; /* Remove any default padding, let form-row handle it */
 }
 
 .modal-tab-content.active {
   display: block;
+}
+
+/* Ensure modal body and content are properly sized for scrolling */
+.modal-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* Allow flex to properly constrain height */
 }
