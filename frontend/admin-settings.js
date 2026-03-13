@@ -168,8 +168,12 @@ function showPrinterSettings() {
     
     // Load printer settings content
     loadPrinterSettings().then(() => {
-      updateQRPreview();
-      fetchRestaurantDataForQRFormat();
+      // After printer settings load, initialize QR preview
+      setTimeout(() => {
+        fetchRestaurantDataForQRFormat().then(() => {
+          updateQRPreview();
+        });
+      }, 100);
     });
   }
 }
@@ -219,6 +223,14 @@ function switchTab(tabName, buttonElement) {
   // Mark button as active
   if (buttonElement && buttonElement.classList) {
     buttonElement.classList.add('active');
+  }
+
+  // Update preview when switching to QR Format tab
+  if (tabName === 'qr-format') {
+    setTimeout(() => {
+      updateQRPreview();
+      fetchRestaurantDataForQRFormat();
+    }, 50);
   }
 }
 
