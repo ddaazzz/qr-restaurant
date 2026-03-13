@@ -444,7 +444,8 @@ function resetQRFormat() {
   document.getElementById('qr-format-qr-size').value = 'medium';
   document.getElementById('qr-format-text-above').value = 'Scan to Order';
   document.getElementById('qr-format-text-below').value = 'Let us know how we did!';
-  document.getElementById('qr-format-custom-footer').value = '';
+  const customFooterEl = document.getElementById('qr-format-custom-footer');
+  if (customFooterEl) customFooterEl.value = '';
   document.getElementById('qr-format-footer-size').value = 10;
   updateQRPreview();
 }
@@ -469,7 +470,7 @@ async function saveQRFormat() {
       qr_size: document.getElementById('qr-format-qr-size').value,
       text_above_qr: document.getElementById('qr-format-text-above').value,
       text_below_qr: document.getElementById('qr-format-text-below').value,
-      custom_footer: document.getElementById('qr-format-custom-footer').value || '',
+      custom_footer: document.getElementById('qr-format-custom-footer')?.value || '',
       powered_by_text: 'Powered by Chuio.io',
       footer_font_size: parseInt(document.getElementById('qr-format-footer-size').value),
     };
