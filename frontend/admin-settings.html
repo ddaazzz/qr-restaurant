@@ -795,17 +795,16 @@
             <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bluetooth Device</label>
             <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select from available Bluetooth devices or scan for new printers</p>
             
-            <!-- Device List -->
+            <!-- Device Selector Dropdown -->
             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-              <div id="bluetooth-connected-devices" style="border: 1px solid var(--border-color); border-radius: 6px; max-height: 180px; overflow-y: auto; background: #f9fafb; flex: 1; padding: 8px;">
-                <p style="font-size: 12px; color: #999; padding: 8px; text-align: center;">No devices yet - click scan to find devices</p>
-              </div>
-              <button id="scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 1;">🔍 Scan New Device</button>
+              <select id="bluetooth-device-id" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: white;">
+                <option value="">-- No Device Selected --</option>
+              </select>
+              <button id="scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 0 0 200px;">🔍 Scan New Device</button>
             </div>
             
             <!-- Selected Device Display -->
             <span id="view-bluetooth-device" class="view-mode" style="margin-top: 12px; display: block;"></span>
-            <input id="bluetooth-device-id" type="hidden" />
             <input id="bluetooth-device-name" type="hidden" />
           </div>
         </div>
