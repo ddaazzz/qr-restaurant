@@ -1042,7 +1042,6 @@ async function savePrinterSettings() {
         printer_port: printerPort,
         bluetooth_device_id: bluetoothDeviceId || null,
         bluetooth_device_name: bluetoothDeviceName || null,
-        bluetooth_device_name: bluetoothDeviceName || null,
         kitchen_auto_print: kitchenAutoPrint,
         bill_auto_print: billAutoPrint,
         customer_receipt_type: receiptTypes.join(', ')
