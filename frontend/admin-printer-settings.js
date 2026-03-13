@@ -389,7 +389,7 @@ function updateQRPreview() {
   const sizeMap = { small: '180px', medium: '220px', large: '260px' };
   const qrSizePixels = sizeMap[qrSize] || '220px';
 
-  const divider = '=' .repeat(40);
+  const divider = '='.repeat(40);
   const smallDivider = '-'.repeat(40);
 
   let preview = `<strong style="font-size: ${nameSize}px; display: block; margin-bottom: 4px;">${restaurantName}</strong>`;
