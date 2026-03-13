@@ -220,13 +220,28 @@ window.addEventListener("DOMContentLoaded", () => {
       loadPrinterSettings();
     }
     // Initialize QR format preview
-    if (document.getElementById("qr-format-name")) {
+    if (document.getElementById("qr-format-text-above")) {
       updateQRPreview();
+      // Fetch restaurant data to populate defaults
+      fetchRestaurantDataForQRFormat();
+      
       // Add event listeners for real-time preview updates
-      document.getElementById("qr-format-name").addEventListener("input", updateQRPreview);
-      document.getElementById("qr-format-show-time").addEventListener("change", updateQRPreview);
-      document.getElementById("qr-format-table-layout").addEventListener("change", updateQRPreview);
-      document.getElementById("qr-format-footer").addEventListener("input", updateQRPreview);
+      const updateFields = [
+        'qr-format-name-size', 'qr-format-show-phone', 'qr-format-show-address',
+        'qr-format-show-time', 'qr-format-details-size', 'qr-format-qr-size',
+        'qr-format-text-above', 'qr-format-text-below', 'qr-format-powered-by',
+        'qr-format-footer-size'
+      ];
+      
+      updateFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener(el.type === 'range' ? 'input' : 'change', () => {
+            updateQRPreview();
+            updateFontSizeDisplay();
+          });
+        }
+      });
     }
   }, 500);
 
@@ -275,50 +290,149 @@ function switchPrinterTab(tabName) {
 }
 
 /**
- * Update QR format preview based on editor inputs
+ * Fetch restaurant data and populate form defaults
+ */
+async function fetchRestaurantDataForQRFormat() {
+  try {
+    const restaurantId = localStorage.getItem("restaurantId");
+    if (!restaurantId) return;
+
+    const response = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    const restaurant = await response.json();
+
+    const nameInput = document.getElementById('qr-format-name');
+    const phoneInput = document.getElementById('qr-format-show-phone');
+    const addressInput = document.getElementById('qr-format-show-address');
+
+    if (nameInput && !nameInput.value.includes('Restaurant')) {
+      nameInput.value = restaurant.name || 'Restaurant';
+    }
+
+    // Store restaurant data for preview
+    window.restaurantData = {
+      name: restaurant.name || 'Restaurant',
+      phone: restaurant.phone || '+1 (555) 123-4567',
+      address: restaurant.address || '123 Main St',
+    };
+
+    updateQRPreview();
+  } catch (err) {
+    console.error('Error fetching restaurant data:', err);
+  }
+}
+
+/**
+ * Update font size display values
+ */
+function updateFontSizeDisplay() {
+  const nameSize = document.getElementById('qr-format-name-size')?.value || 18;
+  const detailsSize = document.getElementById('qr-format-details-size')?.value || 11;
+  const footerSize = document.getElementById('qr-format-footer-size')?.value || 10;
+
+  const nameSizeDisplay = document.getElementById('qr-name-size-display');
+  const detailsSizeDisplay = document.getElementById('qr-details-size-display');
+  const footerSizeDisplay = document.getElementById('qr-footer-size-display');
+
+  if (nameSizeDisplay) nameSizeDisplay.textContent = nameSize + 'px';
+  if (detailsSizeDisplay) detailsSizeDisplay.textContent = detailsSize + 'px';
+  if (footerSizeDisplay) footerSizeDisplay.textContent = footerSize + 'px';
+}
+
+/**
+ * Update QR format preview based on editor inputs - Professional Receipt Format
  */
 function updateQRPreview() {
-  const restaurantName = document.getElementById('qr-format-name')?.value || 'Restaurant';
+  // Get all form values
+  const nameSize = document.getElementById('qr-format-name-size')?.value || 18;
+  const showPhone = document.getElementById('qr-format-show-phone')?.checked || false;
+  const showAddress = document.getElementById('qr-format-show-address')?.checked || false;
   const showTime = document.getElementById('qr-format-show-time')?.checked || false;
-  const tableLayout = document.getElementById('qr-format-table-layout')?.value || 'both';
+  const detailsSize = document.getElementById('qr-format-details-size')?.value || 11;
   const qrSize = document.getElementById('qr-format-qr-size')?.value || 'medium';
-  const footerText = document.getElementById('qr-format-footer')?.value || 'Powered by Chuio.io';
+  const textAbove = document.getElementById('qr-format-text-above')?.value || 'Scan to Order';
+  const textBelow = document.getElementById('qr-format-text-below')?.value || 'Let us know how we did!';
+  const poweredBy = document.getElementById('qr-format-powered-by')?.value || 'Powered by Chuio.io';
+  const footerSize = document.getElementById('qr-format-footer-size')?.value || 10;
 
-  const sizeMap = { small: '180px', medium: '240px', large: '280px' };
-  const qrSizePixels = sizeMap[qrSize] || '240px';
+  // Restaurant data (from database or defaults)
+  const restaurantName = window.restaurantData?.name || 'La Cave (Sai Ying Pun)';
+  const phone = window.restaurantData?.phone || '+852 9442 0275';
+  const address = window.restaurantData?.address || 'SHOP E G/F FOOK MOON BLDG 56-72 THIRD ST';
 
-  let tableHtml = '';
-  if (tableLayout === 'both') {
-    tableHtml = '<div style="display: flex; justify-content: space-between; font-size: 13px; margin: 12px 0;"><div>Table: T02</div><div>Pax: 4</div></div>';
-  } else if (tableLayout === 'table-only') {
-    tableHtml = '<div style="font-size: 13px; margin: 12px 0;">Table: T02</div>';
-  } else if (tableLayout === 'vertical') {
-    tableHtml = '<div style="font-size: 13px; margin: 12px 0;">Table: T02<br>Pax: 4</div>';
+  const sizeMap = { small: '180px', medium: '220px', large: '260px' };
+  const qrSizePixels = sizeMap[qrSize] || '220px';
+
+  const divider = '=' .repeat(40);
+  const smallDivider = '-'.repeat(40);
+
+  let preview = `<strong style="font-size: ${nameSize}px; display: block; margin-bottom: 4px;">${restaurantName}</strong>`;
+
+  if (showPhone) {
+    preview += `<div style="font-size: 11px; margin-bottom: 2px;">Phone: ${phone}</div>`;
   }
 
-  const preview = document.getElementById('qr-format-preview');
-  if (preview) {
-    preview.innerHTML = `
-      <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">${restaurantName}</div>
-      ${showTime ? '<div style="font-size: 12px; margin-bottom: 12px;">Time: 4:20 PM</div>' : ''}
-      ${tableHtml}
-      <div style="border-bottom: 1px dashed #000; margin: 12px 0;"></div>
-      <div style="width: ${qrSizePixels}; height: ${qrSizePixels}; margin: 16px auto; background: #f0f0f0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;">QR Code</div>
-      <div style="font-weight: bold; font-size: 13px; margin: 12px 0;">Scan to Order</div>
-      <div style="border-top: 1px dashed #000; padding-top: 12px; margin-top: 12px; font-size: 11px;">${footerText}</div>
-    `;
+  if (showAddress) {
+    preview += `<div style="font-size: 11px; margin-bottom: 8px;">${address}</div>`;
   }
+
+  preview += `<div style="font-size: 10px; margin: 8px 0; letter-spacing: 0.5px;">${divider}</div>`;
+
+  if (showTime) {
+    preview += `<div style="font-size: ${detailsSize}px; margin: 4px 0;">Order Time: 2026-03-13 18:24:42</div>`;
+  }
+
+  preview += `
+    <div style="font-size: ${detailsSize}px; margin: 4px 0;">Served By: server</div>
+    <div style="font-size: ${detailsSize}px; margin-bottom: 8px;">Order No.: C2</div>
+    <div style="font-size: 10px; margin: 8px 0; letter-spacing: 0.5px;">${divider}</div>
+    
+    <div style="font-size: 11px; margin: 8px 0; text-align: left;">
+      <div>1    Domaine Rolet, Chardonnay    $450.0</div>
+      <div style="font-size: 10px; color: #666;">     "L'Etoile", 2022</div>
+    </div>
+    
+    <div style="font-size: 10px; margin: 8px 0; letter-spacing: 0.5px;">${smallDivider}</div>
+    
+    <div style="font-size: 11px; text-align: right; margin: 4px 0;">
+      <div>Subtotal: $450.0</div>
+      <div style="font-weight: bold; font-size: 14px; margin: 4px 0;">Amount: $450.0</div>
+      <div>Avg. per Person: $450.0</div>
+    </div>
+    <div style="font-size: 10px; margin: 8px 0; letter-spacing: 0.5px;">${divider}</div>
+    
+    <div style="font-weight: bold; font-size: 12px; margin: 12px 0;">Thank You</div>
+    <div style="font-size: 11px; margin-bottom: 12px;">Thank you for coming!</div>
+    
+    <div style="width: ${qrSizePixels}; height: ${qrSizePixels}; margin: 12px auto; background: #f0f0f0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;">QR Code</div>
+    
+    <div style="font-weight: bold; font-size: ${detailsSize}px; margin: 8px 0;">${textAbove}</div>
+    <div style="font-size: 11px; margin-bottom: 8px;">${textBelow}</div>
+    
+    <div style="font-size: ${footerSize}px; margin-top: 8px; color: #666;">${poweredBy}</div>
+  `;
+
+  const preview_el = document.getElementById('qr-format-preview');
+  if (preview_el) {
+    preview_el.innerHTML = preview;
+  }
+
+  updateFontSizeDisplay();
 }
 
 /**
  * Reset QR format to default
  */
 function resetQRFormat() {
-  document.getElementById('qr-format-name').value = 'My Restaurant';
+  document.getElementById('qr-format-name-size').value = 18;
+  document.getElementById('qr-format-show-phone').checked = true;
+  document.getElementById('qr-format-show-address').checked = true;
   document.getElementById('qr-format-show-time').checked = true;
-  document.getElementById('qr-format-table-layout').value = 'both';
+  document.getElementById('qr-format-details-size').value = 11;
   document.getElementById('qr-format-qr-size').value = 'medium';
-  document.getElementById('qr-format-footer').value = 'Powered by Chuio.io';
+  document.getElementById('qr-format-text-above').value = 'Scan to Order';
+  document.getElementById('qr-format-text-below').value = 'Let us know how we did!';
+  document.getElementById('qr-format-powered-by').value = 'Powered by Chuio.io';
+  document.getElementById('qr-format-footer-size').value = 10;
   updateQRPreview();
 }
 
@@ -334,15 +448,20 @@ async function saveQRFormat() {
     }
 
     const formatData = {
-      restaurant_name: document.getElementById('qr-format-name').value,
+      name_font_size: parseInt(document.getElementById('qr-format-name-size').value),
+      show_phone: document.getElementById('qr-format-show-phone').checked,
+      show_address: document.getElementById('qr-format-show-address').checked,
       show_time: document.getElementById('qr-format-show-time').checked,
-      table_layout: document.getElementById('qr-format-table-layout').value,
+      details_font_size: parseInt(document.getElementById('qr-format-details-size').value),
       qr_size: document.getElementById('qr-format-qr-size').value,
-      footer_text: document.getElementById('qr-format-footer').value,
+      text_above_qr: document.getElementById('qr-format-text-above').value,
+      text_below_qr: document.getElementById('qr-format-text-below').value,
+      powered_by_text: document.getElementById('qr-format-powered-by').value,
+      footer_font_size: parseInt(document.getElementById('qr-format-footer-size').value),
     };
 
     const response = await fetch(
-      `${API}/restaurants/${restaurantId}/qr-format`,
+      `${API}/restaurants/${restaurantId}/qr-receipt-format`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -354,7 +473,7 @@ async function saveQRFormat() {
       throw new Error("Failed to save QR format");
     }
 
-    alert("✅ QR Code format saved successfully!");
+    alert("✅ QR Code receipt format saved successfully!");
   } catch (err) {
     console.error("❌ Failed to save QR format:", err);
     alert("Failed to save QR format: " + err.message);

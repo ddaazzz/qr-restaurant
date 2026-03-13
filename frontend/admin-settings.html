@@ -386,62 +386,100 @@
           <div class="form-row">
             <div class="form-group" style="grid-column: 1 / -1;">
               <h4 style="margin-bottom: 16px;">🎨 QR Code Print Format</h4>
-              <p style="font-size: 13px; color: #666; margin-bottom: 16px;">Customize how your QR code receipt looks when printed. Use the editor below to preview your layout.</p>
+              <p style="font-size: 13px; color: #666; margin-bottom: 16px;">Customize your QR code receipt like the real example. Restaurant name, phone, and address are auto-filled from your restaurant settings.</p>
               
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <!-- Format Editor -->
                 <div>
                   <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Edit Layout</label>
-                  <div id="qr-format-editor" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: #f9fafb; max-height: 400px; overflow-y: auto;">
-                    <div style="margin-bottom: 12px;">
-                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Restaurant Name:</label>
-                      <input type="text" id="qr-format-name" placeholder="Restaurant Name" value="My Restaurant" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                  <div id="qr-format-editor" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: #f9fafb; max-height: 600px; overflow-y: auto;">
+                    
+                    <!-- Header Section -->
+                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📋 Header Section</h5>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Restaurant Name Font Size:</label>
+                        <input type="range" id="qr-format-name-size" min="12" max="24" value="18" onchange="updateQRPreview()" style="width: 100%;">
+                        <span style="font-size: 11px; color: #999;" id="qr-name-size-display">18px</span>
+                      </div>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Phone Number:</label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                          <input type="checkbox" id="qr-format-show-phone" class="hidden-checkbox" checked onchange="updateQRPreview()">
+                          <span class="checkbox-display"></span>
+                          <span style="font-size: 11px;">Include phone in receipt</span>
+                        </label>
+                      </div>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Address:</label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                          <input type="checkbox" id="qr-format-show-address" class="hidden-checkbox" checked onchange="updateQRPreview()">
+                          <span class="checkbox-display"></span>
+                          <span style="font-size: 11px;">Include address in receipt</span>
+                        </label>
+                      </div>
                     </div>
-                    <div style="margin-bottom: 12px;">
-                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Show Time:</label>
-                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="checkbox" id="qr-format-show-time" class="hidden-checkbox" checked>
-                        <span class="checkbox-display"></span>
-                        <span style="font-size: 12px;">Display session start time</span>
-                      </label>
+
+                    <!-- Order Details Section -->
+                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📝 Order Details</h5>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Order Time:</label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                          <input type="checkbox" id="qr-format-show-time" class="hidden-checkbox" checked onchange="updateQRPreview()">
+                          <span class="checkbox-display"></span>
+                          <span style="font-size: 11px;">Display session start time</span>
+                        </label>
+                      </div>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Order Details Font Size:</label>
+                        <input type="range" id="qr-format-details-size" min="10" max="14" value="11" onchange="updateQRPreview()" style="width: 100%;">
+                        <span style="font-size: 11px; color: #999;" id="qr-details-size-display">11px</span>
+                      </div>
                     </div>
-                    <div style="margin-bottom: 12px;">
-                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Table Format:</label>
-                      <select id="qr-format-table-layout" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                        <option value="both">Table & Pax (side by side)</option>
-                        <option value="table-only">Table Only</option>
-                        <option value="vertical">Table & Pax (stacked)</option>
-                      </select>
+
+                    <!-- QR Code Section -->
+                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📲 QR Code</h5>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">QR Code Size:</label>
+                        <select id="qr-format-qr-size" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                          <option value="small">Small (180px)</option>
+                          <option value="medium" selected>Medium (220px)</option>
+                          <option value="large">Large (260px)</option>
+                        </select>
+                      </div>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Text Above QR Code:</label>
+                        <input type="text" id="qr-format-text-above" placeholder="e.g., Scan to Order" value="Scan to Order" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                      </div>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Text Below QR Code:</label>
+                        <input type="text" id="qr-format-text-below" placeholder="e.g., Let us know how we did!" value="Let us know how we did!" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                      </div>
                     </div>
-                    <div style="margin-bottom: 12px;">
-                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">QR Code Size:</label>
-                      <select id="qr-format-qr-size" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                        <option value="small">Small (200px)</option>
-                        <option value="medium" selected>Medium (240px)</option>
-                        <option value="large">Large (280px)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Footer Text:</label>
-                      <input type="text" id="qr-format-footer" placeholder="e.g., Powered by Chuio.io" value="Powered by Chuio.io" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+
+                    <!-- Footer Section -->
+                    <div style="margin-bottom: 16px;">
+                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">🔧 Footer</h5>
+                      <div style="margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Powered By Text:</label>
+                        <input type="text" id="qr-format-powered-by" placeholder="e.g., Powered by Chuio.io" value="Powered by Chuio.io" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                      </div>
+                      <div>
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Footer Font Size:</label>
+                        <input type="range" id="qr-format-footer-size" min="8" max="12" value="10" onchange="updateQRPreview()" style="width: 100%;">
+                        <span style="font-size: 11px; color: #999;" id="qr-footer-size-display">10px</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <!-- Preview -->
                 <div>
-                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Preview</label>
-                  <div id="qr-format-preview" style="border: 2px solid #ddd; border-radius: 6px; padding: 16px; background: white; font-family: 'Courier New', monospace; text-align: center; max-height: 380px; overflow-y: auto; font-size: 12px;">
-                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">My Restaurant</div>
-                    <div style="font-size: 12px; margin-bottom: 12px;">Time: 4:20 PM</div>
-                    <div style="display: flex; justify-content: space-between; font-size: 13px; margin: 12px 0;">
-                      <div>Table: T02</div>
-                      <div>Pax: 4</div>
-                    </div>
-                    <div style="border-bottom: 1px dashed #000; margin: 12px 0;"></div>
-                    <div style="width: 200px; height: 200px; margin: 16px auto; background: #f0f0f0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;">QR Code Preview</div>
-                    <div style="font-weight: bold; font-size: 13px; margin: 12px 0;">Scan to Order</div>
-                    <div style="border-top: 1px dashed #000; padding-top: 12px; margin-top: 12px; font-size: 11px;">Powered by Chuio.io</div>
+                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">📄 Preview</label>
+                  <div id="qr-format-preview" style="border: 2px solid #ddd; border-radius: 6px; padding: 16px; background: white; font-family: 'Courier New', monospace; text-align: center; max-height: 600px; overflow-y: auto; font-size: 11px; white-space: pre-wrap; word-wrap: break-word;">
+                    Preview will update as you edit...
                   </div>
                 </div>
               </div>
