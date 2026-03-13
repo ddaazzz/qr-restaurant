@@ -897,7 +897,7 @@ function updatePrinterTypeFields() {
   const bluetoothGroup = document.getElementById('bluetooth-device-group');
   
   // Show/hide fields based on printer type
-  if (printerType === 'thermal' || printerType === 'usb') {
+  if (printerType === 'network') {
     hostGroup.style.display = 'block';
     portGroup.style.display = 'block';
     bluetoothGroup.style.display = 'none';
@@ -909,6 +909,56 @@ function updatePrinterTypeFields() {
     hostGroup.style.display = 'none';
     portGroup.style.display = 'none';
     bluetoothGroup.style.display = 'none';
+  }
+}
+
+/**
+ * Scan for available Bluetooth devices
+ */
+async function scanBluetoothDevices() {
+  const scanBtn = event.target;
+  const originalText = scanBtn.textContent;
+  
+  try {
+    scanBtn.disabled = true;
+    scanBtn.textContent = '🔍 Scanning...';
+    
+    // Try to use Web Bluetooth API if available
+    if (!navigator.bluetooth) {
+      alert('Bluetooth scanning not available in this browser. Please use Chrome/Edge with Bluetooth enabled, or manually enter the device ID below.');
+      return;
+    }
+    
+    // Request Bluetooth device
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }], // Thermal printer service UUID
+      optionalServices: ['generic_access']
+    });
+    
+    if (device) {
+      const select = document.getElementById('bluetooth-device-id');
+      
+      // Check if device already in list
+      const exists = Array.from(select.options).some(opt => opt.value === device.id);
+      
+      if (!exists) {
+        const option = document.createElement('option');
+        option.value = device.id;
+        option.textContent = device.name || 'Unknown Device';
+        select.appendChild(option);
+      }
+      
+      // Select the device
+      select.value = device.id;
+    }
+  } catch (err) {
+    if (err.name !== 'NotFoundError') {
+      console.error('Bluetooth scan error:', err);
+      alert('Bluetooth scan failed. Please try again or manually enter device ID.');
+    }
+  } finally {
+    scanBtn.disabled = false;
+    scanBtn.textContent = originalText;
   }
 }
 
@@ -958,6 +1008,15 @@ async function savePrinterSettings() {
   const printerHost = document.getElementById('printer-host').value;
   const printerPort = parseInt(document.getElementById('printer-port').value) || 9100;
   const bluetoothDeviceId = document.getElementById('bluetooth-device-id').value;
+  
+  // Get Bluetooth device name from the select element
+  let bluetoothDeviceName = null;
+  if (bluetoothDeviceId) {
+    const select = document.getElementById('bluetooth-device-id');
+    const option = select.querySelector(`option[value="${bluetoothDeviceId}"]`);
+    if (option) bluetoothDeviceName = option.textContent;
+  }
+  
   const kitchenAutoPrint = document.getElementById('kitchen-auto-print').checked;
   const billAutoPrint = document.getElementById('bill-auto-print').checked;
   
@@ -982,6 +1041,8 @@ async function savePrinterSettings() {
         printer_host: printerHost || null,
         printer_port: printerPort,
         bluetooth_device_id: bluetoothDeviceId || null,
+        bluetooth_device_name: bluetoothDeviceName || null,
+        bluetooth_device_name: bluetoothDeviceName || null,
         kitchen_auto_print: kitchenAutoPrint,
         bill_auto_print: billAutoPrint,
         customer_receipt_type: receiptTypes.join(', ')

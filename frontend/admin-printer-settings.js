@@ -59,10 +59,8 @@ function updatePrinterSettingsUI() {
   // Update view-mode displays
   const typeLabel = {
     'none': 'No Printer',
-    'browser': 'Browser Print',
-    'thermal': 'Thermal Printer (Network)',
-    'usb': 'USB Printer',
-    'bluetooth': 'Bluetooth Receipt Printer'
+    'network': '🌐 Network Printer (Thermal over IP)',
+    'bluetooth': '📱 Bluetooth Receipt Printer'
   }[type] || 'Not Configured';
   
   const viewTypeEl = document.getElementById("view-printer-type");
@@ -83,6 +81,22 @@ function updatePrinterSettingsUI() {
   
   const printLogoEl = document.getElementById("print-logo");
   if (printLogoEl) printLogoEl.checked = currentPrinterSettings.print_logo !== false;
+
+  // Load Bluetooth device if selected
+  if (type === 'bluetooth' && currentPrinterSettings.bluetooth_device_id) {
+    const bluetoothSelect = document.getElementById('bluetooth-device-id');
+    if (bluetoothSelect) {
+      // Check if device is already in the list
+      const exists = Array.from(bluetoothSelect.options).some(opt => opt.value === currentPrinterSettings.bluetooth_device_id);
+      if (!exists && currentPrinterSettings.bluetooth_device_name) {
+        const option = document.createElement('option');
+        option.value = currentPrinterSettings.bluetooth_device_id;
+        option.textContent = currentPrinterSettings.bluetooth_device_name;
+        bluetoothSelect.appendChild(option);
+      }
+      bluetoothSelect.value = currentPrinterSettings.bluetooth_device_id;
+    }
+  }
 
   // Show/hide network/bluetooth fields
   updatePrinterTypeFields();
