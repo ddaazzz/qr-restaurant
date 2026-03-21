@@ -14,6 +14,10 @@ import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../services/apiClient';
 import { printerSettingsService, KitchenPrinter } from '../services/printerSettingsService';
 import { printerSessionService } from '../services/printerSessionService';
+import { printerAutoPrintService } from '../services/printerAutoPrintService';
+import { printQueueService } from '../services/printQueueService';
+import { bluetoothService } from '../services/bluetoothService';
+import { printerDeviceStorageService } from '../services/printerDeviceStorageService';
 
 interface KitchenItem {
   id: string;
@@ -57,16 +61,82 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<KitchenItem | null>(null);
   const [matchingPrinters, setMatchingPrinters] = useState<KitchenPrinter[]>([]);
   const [printing, setPrinting] = useState(false);
+  const [printerConnected, setPrinterConnected] = useState(false);
+  const [printerStatus, setPrinterStatus] = useState('Initializing...');
 
   useEffect(() => {
-    loadKitchenItems();
-    loadKitchenPrinters();
+    initializePrinters();
+    subscribeToAutoPrint();
+    
     const interval = setInterval(() => {
       loadKitchenItems();
       loadKitchenPrinters(); // Refresh printer config periodically
     }, 5000); // Refresh every 5 seconds
-    return () => clearInterval(interval);
-  }, []);
+
+    return () => {
+      clearInterval(interval);
+      printerAutoPrintService.unsubscribeFromOrders();
+    };
+  }, [user?.restaurantId]);
+
+  /**
+   * Initialize printer services on mount
+   */
+  const initializePrinters = async () => {
+    try {
+      // Load saved printer devices from storage
+      await printerSessionService.loadSavedDevices();
+      console.log('[KitchenDashboard] Printer sessions initialized');
+
+      // Load kitchen printers config
+      await loadKitchenPrinters();
+      updatePrinterConnectionStatus();
+    } catch (err) {
+      console.error('[KitchenDashboard] Printer initialization error:', err);
+      setPrinterStatus('Printer init failed');
+    }
+  };
+
+  /**
+   * Subscribe to auto-print order events
+   */
+  const subscribeToAutoPrint = async () => {
+    const restaurantId = user?.restaurantId;
+    if (!restaurantId) return;
+
+    try {
+      // Register callback for new orders
+      printerAutoPrintService.onOrder(async (order) => {
+        console.log('[KitchenDashboard] Auto-print triggered for order:', order.orderId);
+        await handleAutoPrintOrder(order);
+      });
+
+      // Start polling for new orders
+      await printerAutoPrintService.subscribeToOrders(restaurantId, 3000);
+      console.log('[KitchenDashboard] Auto-print subscription started');
+    } catch (err) {
+      console.error('[KitchenDashboard] Auto-print setup error:', err);
+    }
+  };
+
+  /**
+   * Update printer connection status display
+   */
+  const updatePrinterConnectionStatus = () => {
+    const session = printerSessionService.getSession('kitchen');
+    if (session && session.connected) {
+      setPrinterConnected(true);
+      setPrinterStatus(`✅ Connected: ${session.deviceName}`);
+    } else {
+      setPrinterConnected(false);
+      const pending = printerSessionService.getSessionAny('kitchen');
+      if (pending) {
+        setPrinterStatus(`🔄 Reconnecting: ${pending.deviceName}...`);
+      } else {
+        setPrinterStatus('⚠️ Not connected');
+      }
+    }
+  };
 
   /**
    * Load kitchen printers from unified printer settings
@@ -168,8 +238,74 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   };
 
   /**
-   * Execute print to selected printer
-   * Matches webapp's printKitchenOrder() flow - backend determines printer and sends ESC/POS
+   * Handle auto-print orders from real-time subscription
+   */
+  const handleAutoPrintOrder = async (order: any) => {
+    try {
+      // Find appropriate printers for this order's category
+      let printers: KitchenPrinter[] = kitchenPrinters;
+      
+      if (order.categoryId && kitchenPrinters.length > 0) {
+        printers = kitchenPrinters.filter(p => 
+          p.categories && p.categories.includes(order.categoryId)
+        );
+      }
+
+      // If no category match, use all available printers
+      if (printers.length === 0) {
+        printers = kitchenPrinters;
+      }
+
+      // Auto-print to all matching printers
+      for (const printer of printers) {
+        try {
+          console.log(`[KitchenDashboard] Auto-printing order ${order.orderId} to ${printer.name}`);
+          
+          // Try to print, queue if fails
+          const success = await attemptPrint(order, printer);
+          if (!success && printer.bluetoothDevice) {
+            // Queue for retry if Bluetooth printer failed
+            const jobId = printQueueService.addJob(
+              order.orderId,
+              'kitchen',
+              printer.bluetoothDevice,
+              `Auto-print job for ${printer.name}`,
+              3
+            );
+            console.log(`[KitchenDashboard] Queued print job: ${jobId}`);
+          }
+        } catch (printerErr) {
+          console.error(`[KitchenDashboard] Auto-print error for printer ${printer.name}:`, printerErr);
+        }
+      }
+    } catch (err) {
+      console.error('[KitchenDashboard] Auto-print order error:', err);
+    }
+  };
+
+  /**
+   * Attempt to print an order (with retry queue fallback)
+   */
+  const attemptPrint = async (order: any, printer: KitchenPrinter): Promise<boolean> => {
+    try {
+      if (printer.type === 'network' && printer.host) {
+        await sendToNetworkPrinter(order, printer);
+        return true;
+      }
+
+      if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+        return await sendToBluetoothPrinterWithQueue(order, printer);
+      }
+
+      return false;
+    } catch (err) {
+      console.error('[KitchenDashboard] Print attempt error:', err);
+      return false;
+    }
+  };
+
+  /**
+   * Execute print to selected printer with queue & auto-reconnect support
    */
   const executePrint = async (order: KitchenItem, printer: KitchenPrinter) => {
     try {
@@ -182,23 +318,22 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
         throw new Error('Restaurant ID not found');
       }
 
-      // Method 1: Network Printer (LAN/WiFi)
-      if (printer.type === 'network' && printer.host) {
-        console.log(`[KitchenDashboard] Sending to network printer: ${printer.host}:9100`);
-        await sendToNetworkPrinter(order, printer);
-        Alert.alert('✅ Print Sent', `Order sent to${printer.name}\n📍 ${printer.host}:9100`);
-        return;
+      // Try to print
+      const success = await attemptPrint(order, printer);
+      
+      if (success) {
+        // Save device selection
+        if (printer.bluetoothDevice) {
+          await printerDeviceStorageService.savePrinterDevice(
+            'kitchen',
+            printer.bluetoothDevice,
+            printer.name
+          );
+        }
+        Alert.alert('✅ Print Sent', `Order sent to: ${printer.name}`);
+      } else {
+        throw new Error(`Failed to print to ${printer.name}`);
       }
-
-      // Method 2: Bluetooth Printer
-      if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
-        console.log(`[KitchenDashboard] Sending to Bluetooth printer: ${printer.bluetoothDevice}`);
-        await sendToBluetoothPrinter(order, printer);
-        Alert.alert('✅ Print Sent', `Order sent to: ${printer.name}\n📱 ${printer.bluetoothDevice}`);
-        return;
-      }
-
-      throw new Error(`Unsupported printer type: ${printer.type}`);
     } catch (err) {
       console.error('[KitchenDashboard] ❌ Print error:', err);
       const message = err instanceof Error ? err.message : 'Failed to print order';
@@ -257,18 +392,65 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   };
 
   /**
-   * Send print data to Bluetooth printer
-   * Matches webapp's Bluetooth approach - uses persistent session if available
+   * Send print data to Bluetooth printer with queue & retry support
    */
-  const sendToBluetoothPrinter = async (order: KitchenItem, printer: KitchenPrinter) => {
+  const sendToBluetoothPrinterWithQueue = async (
+    order: KitchenItem | any,
+    printer: KitchenPrinter
+  ): Promise<boolean> => {
     try {
       if (!printer.bluetoothDevice) {
         throw new Error('Bluetooth device not configured');
       }
 
-      console.log(`[KitchenDashboard] Connecting to Bluetooth printer: ${printer.bluetoothDevice}`);
+      console.log(`[KitchenDashboard] Connecting to Bluetooth: ${printer.bluetoothDevice}`);
 
-      // Generate ESC/POS from order data
+      // Check if we have an active session for this device
+      let session = printerSessionService.getSessionAny('kitchen');
+      const deviceNeedsConnection = !session || !session.connected || session.deviceId !== printer.bluetoothDevice;
+
+      if (deviceNeedsConnection) {
+        // Try to connect to device
+        try {
+          const connected = await bluetoothService.connectToPrinter(printer.bluetoothDevice);
+          
+          if (connected) {
+            // Update session
+            const newSession = {
+              deviceId: printer.bluetoothDevice,
+              deviceName: printer.name,
+              connected: true,
+              lastUsed: Date.now(),
+            };
+            await printerSessionService.setSession('kitchen', newSession);
+            printerSessionService.markConnected('kitchen');
+          } else {
+            // Queue the print job for retry
+            const jobId = printQueueService.addJob(
+              order.orderId,
+              'kitchen',
+              printer.bluetoothDevice,
+              'Kitchen print job',
+              3
+            );
+            console.log(`[KitchenDashboard] Device not available, job queued: ${jobId}`);
+            return false;
+          }
+        } catch (err) {
+          console.error('[KitchenDashboard] Connection failed:', err);
+          const jobId = printQueueService.addJob(
+            order.orderId,
+            'kitchen',
+            printer.bluetoothDevice,
+            'Kitchen print job',
+            3
+          );
+          console.log(`[KitchenDashboard] Connection error, job queued: ${jobId}`);
+          return false;
+        }
+      }
+
+      // Send print request to backend
       const { thermalPrinterService } = require('../services/thermalPrinterService');
       const printerService = new thermalPrinterService();
       
@@ -286,8 +468,6 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
       const escposArray = printerService.generateESCPOS(receiptData);
       console.log(`[KitchenDashboard] Generated ${escposArray.length} bytes of ESC/POS`);
 
-      // Send to backend print endpoint - backend handles Bluetooth connection
-      // This matches webapp's architecture where backend generates and controls printing
       const response = await apiClient.post(
         `/restaurants/${user?.restaurantId}/print-order`,
         {
@@ -298,13 +478,24 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
         }
       );
 
-      console.log('[KitchenDashboard] ✅ Bluetooth print request sent to backend');
-      // Backend will handle device connection and printing asynchronously
-      return response;
+      console.log('[KitchenDashboard] ✅ Print sent successfully');
+      updatePrinterConnectionStatus();
+      return true;
     } catch (err) {
       console.error('[KitchenDashboard] Bluetooth print error:', err);
-      throw new Error(`Failed to print to ${printer.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      printerSessionService.markDisconnected('kitchen', 
+        err instanceof Error ? err.message : 'Print failed'
+      );
+      return false;
     }
+  };
+
+  /**
+   * Send print data to Bluetooth printer
+   * Matches webapp's Bluetooth approach - uses persistent session if available
+   */
+  const sendToBluetoothPrinter = async (order: KitchenItem, printer: KitchenPrinter) => {
+    return await sendToBluetoothPrinterWithQueue(order, printer);
   };
 
   if (loading) {
@@ -327,7 +518,12 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>🍳 Kitchen Queue</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>🍳 Kitchen Queue</Text>
+          <Text style={[styles.printerStatus, { color: printerConnected ? '#4CAF50' : '#FF9800' }]}>
+            {printerStatus}
+          </Text>
+        </View>
         <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.menuButton}>
           <Text style={styles.menuButtonText}>Menu ▼</Text>
         </TouchableOpacity>
@@ -536,6 +732,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  printerStatus: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
   },
   menuButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
