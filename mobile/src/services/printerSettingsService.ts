@@ -111,6 +111,12 @@ class PrinterSettingsService {
     const flat: BackendPrinterSettings = { id: 0 };
 
     for (const row of printerRows) {
+      // Safety check: skip rows without a type
+      if (!row || !row.type) {
+        console.warn('[PrinterSettings] Skipping printer row with missing type:', row);
+        continue;
+      }
+
       const type = row.type.toLowerCase(); // 'qr', 'bill', 'kitchen'
       const prefix = `${type}_`;
 
@@ -173,6 +179,12 @@ class PrinterSettingsService {
       // NEW: API returns array of PrinterRow objects
       const printerRows = Array.isArray(response.data) ? response.data : [response.data];
       console.log(`[PrinterSettings] Received ${printerRows.length} printer rows from API`);
+      
+      // DEBUG: Log the full API response to diagnose issues
+      console.log(
+        `[PrinterSettings] Full API response:`,
+        JSON.stringify(printerRows, null, 2)
+      );
       
       // Convert from array format to flat format
       const settings = this.convertArrayFormatToFlatFormat(printerRows);

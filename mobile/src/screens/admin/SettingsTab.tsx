@@ -2126,7 +2126,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   btn: {
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 6,
     alignItems: 'center',
@@ -2149,7 +2149,7 @@ const styles = StyleSheet.create({
   btnText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13,
   },
   btnSmallText: {
     color: '#fff',
