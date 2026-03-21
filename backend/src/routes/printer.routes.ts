@@ -57,6 +57,11 @@ router.get("/restaurants/:restaurantId/printer-settings", async (req: Request, r
       [restaurantId]
     );
 
+    console.log(`[PrinterSettings] GET endpoint - Restaurant: ${restaurantId}, Found ${result.rows.length} printers`);
+    if (result.rows.length > 0) {
+      console.log(`[PrinterSettings] Raw DB Response:`, JSON.stringify(result.rows, null, 2));
+    }
+
     // Return array of printers, or empty array if none found
     res.json(result.rows);
   } catch (err) {
