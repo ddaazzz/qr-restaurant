@@ -1,7 +1,6 @@
 import { BleManager, Device, Subscription } from 'react-native-ble-plx';
 import { Platform } from 'react-native';
 import * as ExpoDevice from 'expo-device';
-import * as Permissions from 'expo-permissions';
 import { BluetoothPrinter, PrinterConfig } from '../types';
 
 class BluetoothService {
@@ -16,28 +15,26 @@ class BluetoothService {
 
   async requestPermissions(): Promise<boolean> {
     try {
-      if (Platform.OS === 'ios') {
-        // On iOS 13+, location permission is required for Bluetooth scanning
-        const { status } = await (Permissions.askAsync as any)(
-          (Permissions as any).LOCATION
-        ).catch(() => ({ status: 'undetermined' }));
-        return status === 'granted';
-      } else {
-        // For Android, request Bluetooth permissions
-        const result = await (Permissions.askAsync as any)(
-          (Permissions as any).BLUETOOTH,
-          (Permissions as any).BLUETOOTH_SCAN
-        ).catch(() => ({ status: 'undetermined' }));
-        return true; // Assume granted
+      // Use react-native-ble-plx's native permission request
+      // This handles iOS and Android permissions correctly
+      const state = await this.manager.state();
+      console.log('[Bluetooth] Manager state:', state);
+      
+      if (state !== 'PoweredOn') {
+        console.warn('[Bluetooth] Bluetooth is not powered on');
+        return false;
       }
+      
+      return true;
     } catch (error) {
-      console.warn('Permission request failed, continuing anyway:', error);
-      return true; // Continue even if permission check fails
+      console.warn('[Bluetooth] Permission check failed, trying to proceed:', error);
+      return true; // Continue anyway, device permissions may still work
     }
   }
 
   async scanForPrinters(): Promise<BluetoothPrinter[]> {
     try {
+      console.log('[Bluetooth] Starting printer scan...');
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
         throw new Error('Bluetooth permissions not granted');

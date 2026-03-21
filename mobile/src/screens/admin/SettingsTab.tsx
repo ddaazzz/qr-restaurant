@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
-import * as Permissions from 'expo-permissions';
 import { BleManager } from 'react-native-ble-plx';
 import { apiClient } from '../../services/apiClient';
 import { printerSettingsService } from '../../services/printerSettingsService';
@@ -339,37 +338,22 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setBluetoothSearching(true);
       setBluetoothDevices([]);
 
-      // Request permissions first
-      console.log('Requesting Bluetooth permissions...');
-      if (Platform.OS === 'ios') {
-        // iOS requires location permission for Bluetooth scanning
-        const { status } = await (Permissions.askAsync as any)(
-          (Permissions as any).LOCATION
-        ).catch((err: any) => {
-          console.warn('iOS location permission request failed, continuing anyway:', err);
-          return { status: 'granted' };
-        });
-        if (status !== 'granted') {
-          console.warn('Location permission not granted, scanning may not work on iOS');
-        }
-      } else {
-        // Android requires Bluetooth permissions
-        try {
-          const bluetoothPerms = (Permissions as any).BLUETOOTH || 'android.permission.BLUETOOTH';
-          const bluetoothScanPerms = (Permissions as any).BLUETOOTH_SCAN || 'android.permission.BLUETOOTH_SCAN';
-          const results = await (Permissions.askAsync as any)(bluetoothPerms, bluetoothScanPerms).catch(() => ({ 
-            [bluetoothPerms]: 'granted',
-            [bluetoothScanPerms]: 'granted'
-          }));
-          console.log('Android Bluetooth permission results:', results);
-        } catch (permErr) {
-          console.warn('Android permission request failed, continuing:', permErr);
-        }
-      }
-
-      // Initialize BLE Manager
+      // Request permissions through BleManager's native implementation
+      console.log('Initializing Bluetooth...');
       const manager = new BleManager();
-      console.log('BleManager initialized');
+      
+      try {
+        // Check Bluetooth state
+        const state = await manager.state();
+        console.log('[Bluetooth] Manager state:', state);
+        
+        if (state !== 'PoweredOn') {
+          Alert.alert('Bluetooth', 'Please enable Bluetooth on your device and try again');
+          return;
+        }
+      } catch (err) {
+        console.warn('Bluetooth state check failed, attempting to scan anyway:', err);
+      }
 
       const foundDevices: Map<string, { id: string; name: string; signal: number }> = new Map();
 
