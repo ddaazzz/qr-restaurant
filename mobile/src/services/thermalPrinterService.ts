@@ -31,16 +31,25 @@ class ThermalPrinterService {
     // === QR CODE ONLY RECEIPT (When no items) ===
     // For QR receipts, make QR code the dominant element covering full paper
     if (receipt.qrCode && (!receipt.items || receipt.items.length === 0)) {
-      // QR-only layout: minimal header, huge QR code, footer text
+      // QR-only layout: matches preview format exactly
       
-      // Small header with restaurant/table info
+      // === RESTAURANT NAME - CENTERED BOLD ===
       commands.push(27, 97, 1); // ESC 'a' 1 - Center
       if (receipt.restaurantName && receipt.restaurantName !== 'QR Code') {
         commands.push(27, 33, 8); // ESC '!' 8 - Bold
         this.appendText(commands, receipt.restaurantName);
         commands.push(27, 33, 0); // ESC '!' 0 - Normal
-        commands.push(10);
+      } else {
+        this.appendText(commands, 'Receipt');
       }
+      commands.push(10);
+      
+      // === SEPARATOR LINE ===
+      this.appendText(commands, '================================');
+      commands.push(10, 10); // LF x2
+      
+      // === TABLE INFO - LEFT ALIGNED ===
+      commands.push(27, 97, 0); // ESC 'a' 0 - Left align
       
       if (receipt.tableNumber) {
         this.appendText(commands, `Table: ${receipt.tableNumber}`);
@@ -52,23 +61,32 @@ class ThermalPrinterService {
         commands.push(10);
       }
       
+      if (receipt.startTime) {
+        this.appendText(commands, `Started: ${receipt.startTime}`);
+        commands.push(10);
+      }
+      
       commands.push(10); // LF
       
-      // === LARGE QR CODE - Main focus of receipt ===
+      // === TEXT ABOVE QR CODE - CENTERED BOLD (appears BEFORE QR) ===
+      commands.push(27, 97, 1); // ESC 'a' 1 - Center
+      commands.push(27, 33, 8); // ESC '!' 8 - Bold
+      this.appendText(commands, 'Scan to Order');
+      commands.push(27, 33, 0); // ESC '!' 0 - Normal
+      commands.push(10, 10); // LF x2
+      
+      // === SEPARATOR LINE ===
+      this.appendText(commands, '================================');
+      commands.push(10, 10); // LF x2
+      
+      // === LARGE QR CODE - CENTERED ===
       commands.push(27, 97, 1); // ESC 'a' 1 - Center
       this.appendQRCode(commands, receipt.qrCode, receipt.printerPaperWidth);
       commands.push(10, 10); // LF x2
       
-      // Footer text
+      // === TEXT BELOW QR CODE - CENTERED (appears AFTER QR) ===
       commands.push(27, 97, 1); // ESC 'a' 1 - Center
-      this.appendText(commands, 'Scan to Order');
-      commands.push(10);
-      
-      if (receipt.startTime) {
-        this.appendText(commands, `Time: ${receipt.startTime}`);
-        commands.push(10);
-      }
-      
+      this.appendText(commands, 'Let us know how we did!');
       commands.push(10, 10); // LF x2
       
       // Paper feed and cut

@@ -1115,12 +1115,12 @@ function toggleFoodItemEdit() {
     }
     
     // Set variants checkbox state
-    const hasVariants = item.variants && item.variants.length > 0;
+    const hasVariants = CURRENT_VARIANTS && CURRENT_VARIANTS.length > 0;
     const variantsContainer = document.getElementById('food-panel-variants');
     const variantPresetsSection = document.getElementById('food-panel-variant-presets-section');
     
     if (variantsCheckbox) {
-      variantsCheckbox.checked = hasVariants || false;
+      variantsCheckbox.checked = hasVariants;
       variantsCheckbox.onchange = function() {
         if (variantsContainer) variantsContainer.style.display = this.checked ? 'block' : 'none';
         if (variantPresetsSection) variantPresetsSection.style.display = this.checked ? 'block' : 'none';
@@ -1396,6 +1396,8 @@ function startEditVariantFromPanel(variantId) {
   const minInput = document.getElementById('food-panel-variant-min');
   const maxInput = document.getElementById('food-panel-variant-max');
   const requiredCheckbox = document.getElementById('food-panel-variant-required');
+  const optionsSection = document.getElementById('food-panel-variant-options-section');
+  const optionsList = document.getElementById('food-panel-variant-options-list');
   
   if (form && nameInput && minInput && maxInput && requiredCheckbox) {
     currentEditingVariantId = variantId;
@@ -1404,6 +1406,28 @@ function startEditVariantFromPanel(variantId) {
     maxInput.value = variant.max_select || '';
     requiredCheckbox.checked = variant.required || false;
     form.style.display = 'block';
+    
+    // Show options section and render existing options
+    if (optionsSection) optionsSection.style.display = 'block';
+    if (optionsList) {
+      optionsList.innerHTML = '';
+      if (variant.options && variant.options.length > 0) {
+        variant.options.forEach(function(option) {
+          const optionDiv = document.createElement('div');
+          optionDiv.style.display = 'flex';
+          optionDiv.style.justifyContent = 'space-between';
+          optionDiv.style.alignItems = 'center';
+          optionDiv.style.padding = '6px';
+          optionDiv.style.background = '#fff';
+          optionDiv.style.border = '1px solid #ddd';
+          optionDiv.style.borderRadius = '3px';
+          
+          const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+          optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
+          optionsList.appendChild(optionDiv);
+        });
+      }
+    }
   }
 }
 
@@ -1634,9 +1658,9 @@ function backToVariantEdit(variantId) {
 }
 
 function startAddVariantOption() {
-  const form = document.getElementById('variant-option-form-inline');
-  const nameInput = document.getElementById('inline-option-name');
-  const priceInput = document.getElementById('inline-option-price');
+  const form = document.getElementById('food-panel-variant-option-form');
+  const nameInput = document.getElementById('food-panel-option-name');
+  const priceInput = document.getElementById('food-panel-option-price');
   
   if (form && nameInput && priceInput) {
     currentEditingOptionId = null;
@@ -1770,7 +1794,28 @@ async function saveVariantOption() {
     
     // Re-render options for current variant
     const variant = CURRENT_VARIANTS.find(function(v) { return v.id == currentEditingVariantId; });
-    if (variant) renderVariantOptions(variant);
+    if (variant) {
+      const optionsList = document.getElementById('food-panel-variant-options-list');
+      if (optionsList) {
+        optionsList.innerHTML = '';
+        if (variant.options && variant.options.length > 0) {
+          variant.options.forEach(function(option) {
+            const optionDiv = document.createElement('div');
+            optionDiv.style.display = 'flex';
+            optionDiv.style.justifyContent = 'space-between';
+            optionDiv.style.alignItems = 'center';
+            optionDiv.style.padding = '6px';
+            optionDiv.style.background = '#fff';
+            optionDiv.style.border = '1px solid #ddd';
+            optionDiv.style.borderRadius = '3px';
+            
+            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+            optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
+            optionsList.appendChild(optionDiv);
+          });
+        }
+      }
+    }
     
     currentEditingOptionId = null;
   } catch (err) {
@@ -1856,9 +1901,30 @@ async function deleteVariantOption(optionId) {
     const varRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`);
     CURRENT_VARIANTS = varRes.ok ? await varRes.json() : [];
     
-    // Re-render options for current variant
+    // Re-render options for current variant by refreshing the form
     const variant = CURRENT_VARIANTS.find(function(v) { return v.id == currentEditingVariantId; });
-    if (variant) renderVariantOptions(variant);
+    if (variant) {
+      const optionsList = document.getElementById('food-panel-variant-options-list');
+      if (optionsList) {
+        optionsList.innerHTML = '';
+        if (variant.options && variant.options.length > 0) {
+          variant.options.forEach(function(option) {
+            const optionDiv = document.createElement('div');
+            optionDiv.style.display = 'flex';
+            optionDiv.style.justifyContent = 'space-between';
+            optionDiv.style.alignItems = 'center';
+            optionDiv.style.padding = '6px';
+            optionDiv.style.background = '#fff';
+            optionDiv.style.border = '1px solid #ddd';
+            optionDiv.style.borderRadius = '3px';
+            
+            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+            optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
+            optionsList.appendChild(optionDiv);
+          });
+        }
+      }
+    }
   } catch (err) {
     alert('Error deleting option: ' + err.message);
   }

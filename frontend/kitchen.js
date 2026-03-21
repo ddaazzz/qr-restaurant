@@ -95,9 +95,110 @@ async function submitPin() {
     document.getElementById("login-screen").style.display = "none";
     document.getElementById("kitchen-app").classList.add("active");
 
-    // Start loading orders
+    // Start loading orders (polling)
     loadKitchenOrders();
     setInterval(loadKitchenOrders, 5000);
+
+    // Initialize kitchen printer Bluetooth session (same structure as QR/Bill)
+    try {
+      console.log('[Kitchen] Initializing kitchen printer Bluetooth session...');
+      const kitchenPrinterData = await fetch(`${API_BASE}/restaurants/${restaurantId}/printer-settings`);
+      if (kitchenPrinterData.ok) {
+        const printers = await kitchenPrinterData.json();
+        const kitchenPrinter = printers.find(p => p.type === 'Kitchen');
+        
+        if (kitchenPrinter && kitchenPrinter.bluetooth_device_name) {
+          console.log('[Kitchen] Kitchen printer found, initializing Bluetooth session...');
+          // Store kitchen printer info for later use
+          window.kitchenPrinterConfig = {
+            bluetoothDeviceName: kitchenPrinter.bluetooth_device_name,
+            bluetoothDeviceId: kitchenPrinter.bluetooth_device_id
+          };
+          
+          // Request Bluetooth device and establish session
+          try {
+            const device = await navigator.bluetooth.requestDevice({
+              filters: [{ name: kitchenPrinter.bluetooth_device_name }],
+              optionalServices: ['49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000ffe0-0000-1000-8000-00805f9b34fb']
+            });
+
+            // Initialize printer session same as admin does
+            if (!window.bluetoothSessions) window.bluetoothSessions = {};
+            window.bluetoothSessions.KITCHEN = {
+              device: device,
+              server: null,
+              service: null,
+              characteristic: null,
+              connected: false,
+              lastUsed: Date.now()
+            };
+
+            const server = await device.gatt.connect();
+            window.bluetoothSessions.KITCHEN.server = server;
+            window.bluetoothSessions.KITCHEN.connected = true;
+
+            // Get service
+            const knownUUIDs = [
+              '49535343-fe7d-4ae5-8fa9-9fafd205e455',  // MPT-2/3 series
+              '0000ffe0-0000-1000-8000-00805f9b34fb',  // Common BLE UART
+              '0000fff0-0000-1000-8000-00805f9b34fb'   // Alternative BLE UART
+            ];
+
+            let service;
+            for (const uuid of knownUUIDs) {
+              try {
+                service = await server.getPrimaryService(uuid);
+                break;
+              } catch (e) {
+                // Try next UUID
+              }
+            }
+
+            if (!service) {
+              const services = await server.getPrimaryServices();
+              for (const svc of services) {
+                try {
+                  const characteristics = await svc.getCharacteristics();
+                  const writable = characteristics.find(c => c.properties.writeWithoutResponse || c.properties.write);
+                  if (writable) {
+                    service = svc;
+                    break;
+                  }
+                } catch (e) {}
+              }
+            }
+
+            if (service) {
+              window.bluetoothSessions.KITCHEN.service = service;
+              const characteristics = await service.getCharacteristics();
+              const writableChar = characteristics.find(c => 
+                c.properties.writeWithoutResponse || c.properties.write
+              );
+              if (writableChar) {
+                window.bluetoothSessions.KITCHEN.characteristic = writableChar;
+                console.log('✅ Kitchen printer session established:', device.name);
+              }
+            }
+          } catch (bluetoothError) {
+            console.warn('[Kitchen] Bluetooth session setup skipped (user cancelled or not supported)');
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[Kitchen] Could not initialize printer session (non-blocking):', error);
+    }
+
+    // Initialize WebSocket for REAL-TIME DISPLAY UPDATES
+    // ⚠️  NOTE: Kitchen printer AUTO-PRINTS orders on the BACKEND (session not required)
+    // This WebSocket is OPTIONAL - just for refreshing the kitchen display UI in real-time
+    if (typeof kitchenOrderWebSocketClient !== 'undefined') {
+      try {
+        kitchenOrderWebSocketClient.connect(restaurantId);
+        console.log('✅ Kitchen display connected for real-time updates');
+      } catch (error) {
+        console.warn('⚠️  WebSocket display not available:', error);
+      }
+    }
   } catch (err) {
     console.error(err);
     errorEl.textContent = "Connection error";

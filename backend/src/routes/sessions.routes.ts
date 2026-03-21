@@ -276,7 +276,7 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
     // Get session details to find restaurant_id
     const sessionRes = await pool.query(
       `
-      SELECT ts.table_id, ts.started_at, ts.order_type, t.restaurant_id, t.name as table_name
+      SELECT ts.table_id, ts.started_at, ts.order_type, ts.pax, t.restaurant_id, t.name as table_name
       FROM table_sessions ts
       JOIN tables t ON t.id = ts.table_id
       WHERE ts.id = $1

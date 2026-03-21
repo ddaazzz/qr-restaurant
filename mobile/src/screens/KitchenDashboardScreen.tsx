@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../services/apiClient';
+import { printerSettingsService, KitchenPrinter } from '../services/printerSettingsService';
+import { printerSessionService } from '../services/printerSessionService';
 
 interface KitchenItem {
   id: string;
@@ -19,6 +21,7 @@ interface KitchenItem {
   tableNumber: number;
   createdAt: string;
   status: string;
+  categoryId?: number;  // NEW: category for printer routing
   items: Array<{
     quantity: number;
     name: string;
@@ -27,18 +30,64 @@ interface KitchenItem {
   }>;
 }
 
+/**
+ * KITCHEN AUTO-PRINT ARCHITECTURE (Matches Web App)
+ * 
+ * PRIMARY (Always Works - Server-Side):
+ *   1. Order created in database
+ *   2. PostgreSQL trigger fires → PostgreSQL NOTIFY
+ *   3. Backend OrderNotifier receives event
+ *   4. Backend KitchenAutoPrintService auto-prints to configured printer
+ *   → WORKS EVEN IF KITCHEN STAFF ISN'T LOGGED IN ✅
+ * 
+ * FALLBACK (Optional - Kitchen Staff Can Also Print):
+ *   1. Kitchen staff logs in → printer session initialized
+ *   2. Staff taps "Print" on order → calls backend print endpoint
+ *   3. Backend sends ESC/POS to configured printer
+ *   → Backup print if server didn't auto-print ✅
+ */
 export const KitchenDashboardScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [kitchenPrinters, setKitchenPrinters] = useState<KitchenPrinter[]>([]);
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
+  const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<KitchenItem | null>(null);
+  const [matchingPrinters, setMatchingPrinters] = useState<KitchenPrinter[]>([]);
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
     loadKitchenItems();
-    const interval = setInterval(loadKitchenItems, 5000); // Refresh every 5 seconds
+    loadKitchenPrinters();
+    const interval = setInterval(() => {
+      loadKitchenItems();
+      loadKitchenPrinters(); // Refresh printer config periodically
+    }, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, []);
+
+  /**
+   * Load kitchen printers from unified printer settings
+   * NEW: Supports multi-printer configuration with category routing
+   */
+  const loadKitchenPrinters = async () => {
+    try {
+      const restaurantId = user?.restaurantId;
+      if (!restaurantId) return;
+
+      const printers = await printerSettingsService.getKitchenPrinters(restaurantId);
+      console.log('[KitchenDashboard] Loaded kitchen printers:', {
+        count: printers.length,
+        printers: printers.map(p => ({ name: p.name, categories: p.categories }))
+      });
+      setKitchenPrinters(printers);
+    } catch (err) {
+      console.error('[KitchenDashboard] Error loading kitchen printers:', err);
+      // Don't show alert if printers fail to load - use auto-print fallback
+    }
+  };
 
   const loadKitchenItems = async () => {
     try {
@@ -70,6 +119,191 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
       loadKitchenItems();
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
+
+  /**
+   * Handle print order button - routes to appropriate printer based on category
+   * NEW: Supports multi-printer with category-based routing
+   */
+  const handlePrintOrder = async (order: KitchenItem) => {
+    try {
+      setSelectedOrderForPrint(order);
+
+      // Find printers that can handle this order's category
+      let printers: KitchenPrinter[] = [];
+      
+      if (order.categoryId && kitchenPrinters.length > 0) {
+        // NEW: Match by category ID
+        printers = kitchenPrinters.filter(p => 
+          p.categories && p.categories.includes(order.categoryId!)
+        );
+        console.log(`[KitchenDashboard] Found ${printers.length} printers for category ${order.categoryId}`);
+      } else if (kitchenPrinters.length > 0) {
+        // Fallback: if no category or no match, show all printers
+        printers = kitchenPrinters;
+        console.log(`[KitchenDashboard] No category match, showing all ${printers.length} printers`);
+      }
+
+      if (printers.length === 0) {
+        Alert.alert(
+          '⚠️ No Printer Configured',
+          'No kitchen printer is configured for this order category.\n\nPlease configure printers in web admin.'
+        );
+        return;
+      }
+
+      if (printers.length === 1) {
+        // Only one option - print directly
+        await executePrint(order, printers[0]);
+      } else {
+        // Multiple options - show selection modal
+        setMatchingPrinters(printers);
+        setShowPrinterModal(true);
+      }
+    } catch (err) {
+      console.error('[KitchenDashboard] Error in handlePrintOrder:', err);
+      Alert.alert('Error', 'Failed to prepare order for printing');
+    }
+  };
+
+  /**
+   * Execute print to selected printer
+   * Matches webapp's printKitchenOrder() flow - backend determines printer and sends ESC/POS
+   */
+  const executePrint = async (order: KitchenItem, printer: KitchenPrinter) => {
+    try {
+      setPrinting(true);
+      setShowPrinterModal(false);
+      
+      console.log(`[KitchenDashboard] 🖇️ Printing order ${order.orderId} to: ${printer.name} (${printer.type})`);
+
+      if (!user?.restaurantId) {
+        throw new Error('Restaurant ID not found');
+      }
+
+      // Method 1: Network Printer (LAN/WiFi)
+      if (printer.type === 'network' && printer.host) {
+        console.log(`[KitchenDashboard] Sending to network printer: ${printer.host}:9100`);
+        await sendToNetworkPrinter(order, printer);
+        Alert.alert('✅ Print Sent', `Order sent to${printer.name}\n📍 ${printer.host}:9100`);
+        return;
+      }
+
+      // Method 2: Bluetooth Printer
+      if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+        console.log(`[KitchenDashboard] Sending to Bluetooth printer: ${printer.bluetoothDevice}`);
+        await sendToBluetoothPrinter(order, printer);
+        Alert.alert('✅ Print Sent', `Order sent to: ${printer.name}\n📱 ${printer.bluetoothDevice}`);
+        return;
+      }
+
+      throw new Error(`Unsupported printer type: ${printer.type}`);
+    } catch (err) {
+      console.error('[KitchenDashboard] ❌ Print error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to print order';
+      Alert.alert('❌ Print Failed', message);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  /**
+   * Send print data to network printer via TCP/IP
+   * Matches webapp's network printer approach
+   */
+  const sendToNetworkPrinter = async (order: KitchenItem, printer: KitchenPrinter) => {
+    try {
+      if (!printer.host) {
+        throw new Error('Printer host not configured');
+      }
+
+      console.log(`[KitchenDashboard] Connecting to network printer: ${printer.host}:9100`);
+
+      // Generate ESC/POS from order data
+      const { thermalPrinterService } = require('../services/thermalPrinterService');
+      const printerService = new thermalPrinterService();
+      
+      const receiptData = {
+        orderNumber: order.orderId,
+        tableNumber: order.tableNumber,
+        items: order.items?.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity
+        })),
+        timestamp: new Date().toLocaleString(),
+        restaurantName: ''
+      };
+
+      const escposArray = printerService.generateESCPOS(receiptData);
+      console.log(`[KitchenDashboard] Generated ${escposArray.length} bytes of ESC/POS`);
+
+      // Send to backend print endpoint (backup - usually server-side auto-print handles this)
+      const response = await apiClient.post(
+        `/restaurants/${user?.restaurantId}/print-order`,
+        {
+          orderId: order.orderId,
+          orderType: 'kitchen',
+          priority: 10
+        }
+      );
+
+      console.log('[KitchenDashboard] ✅ Print request sent to backend');
+      return response;
+    } catch (err) {
+      console.error('[KitchenDashboard] Network print error:', err);
+      throw new Error(`Failed to print to ${printer.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  /**
+   * Send print data to Bluetooth printer
+   * Matches webapp's Bluetooth approach - uses persistent session if available
+   */
+  const sendToBluetoothPrinter = async (order: KitchenItem, printer: KitchenPrinter) => {
+    try {
+      if (!printer.bluetoothDevice) {
+        throw new Error('Bluetooth device not configured');
+      }
+
+      console.log(`[KitchenDashboard] Connecting to Bluetooth printer: ${printer.bluetoothDevice}`);
+
+      // Generate ESC/POS from order data
+      const { thermalPrinterService } = require('../services/thermalPrinterService');
+      const printerService = new thermalPrinterService();
+      
+      const receiptData = {
+        orderNumber: order.orderId,
+        tableNumber: order.tableNumber,
+        items: order.items?.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity
+        })),
+        timestamp: new Date().toLocaleString(),
+        restaurantName: ''
+      };
+
+      const escposArray = printerService.generateESCPOS(receiptData);
+      console.log(`[KitchenDashboard] Generated ${escposArray.length} bytes of ESC/POS`);
+
+      // Send to backend print endpoint - backend handles Bluetooth connection
+      // This matches webapp's architecture where backend generates and controls printing
+      const response = await apiClient.post(
+        `/restaurants/${user?.restaurantId}/print-order`,
+        {
+          orderId: order.orderId,
+          orderType: 'kitchen',
+          printerName: printer.bluetoothDevice,
+          priority: 10
+        }
+      );
+
+      console.log('[KitchenDashboard] ✅ Bluetooth print request sent to backend');
+      // Backend will handle device connection and printing asynchronously
+      return response;
+    } catch (err) {
+      console.error('[KitchenDashboard] Bluetooth print error:', err);
+      throw new Error(`Failed to print to ${printer.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -125,6 +359,53 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
               }}
             >
               <Text style={styles.menuItemText}>🚪 Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* NEW: Printer Selection Modal */}
+      <Modal visible={showPrinterModal} transparent animationType="fade" onRequestClose={() => setShowPrinterModal(false)}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowPrinterModal(false)}
+        >
+          <View style={styles.printerModalContent}>
+            <Text style={styles.printerModalTitle}>Select Printer</Text>
+            <Text style={styles.printerModalSubtitle}>
+              {selectedOrderForPrint ? `Order #${selectedOrderForPrint.orderId}` : ''}
+            </Text>
+
+            <View style={styles.printerList}>
+              {matchingPrinters.map((printer) => (
+                <TouchableOpacity
+                  key={printer.id}
+                  style={styles.printerOption}
+                  onPress={() => executePrint(selectedOrderForPrint!, printer)}
+                  disabled={printing}
+                >
+                  <View style={styles.printerOptionContent}>
+                    <Text style={styles.printerName}>{printer.name}</Text>
+                    <Text style={styles.printerType}>
+                      {printer.type === 'network' 
+                        ? `📍 ${printer.host || 'Network Printer'}` 
+                        : `📱 ${printer.bluetoothDevice || 'Bluetooth'}`}
+                    </Text>
+                    <Text style={styles.printerCategories}>
+                      Categories: {printer.categories?.join(', ') || 'All'}
+                    </Text>
+                  </View>
+                  <Text style={styles.printerArrow}>→</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.printerModalCancel}
+              onPress={() => setShowPrinterModal(false)}
+            >
+              <Text style={styles.printerModalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -196,6 +477,17 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
 
               {/* Action Buttons */}
               <View style={styles.actions}>
+                {/* NEW: Print Button */}
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.printButton]}
+                  onPress={() => handlePrintOrder(item)}
+                  disabled={printing}
+                >
+                  <Text style={styles.actionButtonText}>
+                    {printing ? '⏳ Printing...' : '🖨️ Print'}
+                  </Text>
+                </TouchableOpacity>
+
                 {item.status !== 'ready' && (
                   <TouchableOpacity
                     style={[styles.actionButton, styles.readyButton]}
@@ -423,5 +715,80 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     color: '#999',
+  },
+  // NEW: Print button and modal styles
+  printButton: {
+    backgroundColor: '#2196F3',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  printerModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  printerModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  printerModalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  printerList: {
+    marginBottom: 16,
+  },
+  printerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+  },
+  printerOptionContent: {
+    flex: 1,
+  },
+  printerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  printerType: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
+  },
+  printerCategories: {
+    fontSize: 12,
+    color: '#999',
+  },
+  printerArrow: {
+    fontSize: 16,
+    color: '#2196F3',
+    marginLeft: 8,
+  },
+  printerModalCancel: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  printerModalCancelText: {
+    fontSize: 16,
+    color: '#999',
+    fontWeight: '500',
   },
 });

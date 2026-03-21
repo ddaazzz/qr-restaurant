@@ -15,8 +15,8 @@ var API = (() => {
   if (isLocalhost) {
     return `http://${window.location.host}/api`;
   }
-  // Remote access - use same domain
-  return `https://${window.location.hostname}/api`;
+  // Remote/local network access - use HTTPS with same host:port
+  return `https://${window.location.host}/api`;
 })();
 
 var restaurantId = localStorage.getItem("restaurantId");
@@ -158,7 +158,11 @@ async function switchSection(sectionId) {
         ordersSection.innerHTML = await response.text();
         reTranslateContent();
       }
-      await initializeOrders();
+      if (typeof initializeOrders === 'function') {
+        await initializeOrders();
+      } else {
+        console.warn('[admin.js] initializeOrders not yet loaded');
+      }
       reTranslateContent();
       updateSectionHeader('admin.section-orders', 'orders-history-header-btn');
     } else if (sectionId === "tables") {
@@ -172,7 +176,11 @@ async function switchSection(sectionId) {
           console.error("Error loading tables HTML:", err);
         }
       }
-      await initializeTables();
+      if (typeof initializeTables === 'function') {
+        await initializeTables();
+      } else {
+        console.warn('[admin.js] initializeTables not yet loaded');
+      }
       reTranslateContent();
       updateSectionHeader('admin.section-tables', 'table-edit-btn');
     } else if (sectionId === "menu") {
@@ -186,7 +194,11 @@ async function switchSection(sectionId) {
           console.error("Error loading menu HTML:", err);
         }
       }
-      await initializeMenu();
+      if (typeof initializeMenu === 'function') {
+        await initializeMenu();
+      } else {
+        console.warn('[admin.js] initializeMenu not yet loaded');
+      }
       reTranslateContent();
       updateSectionHeader('admin.section-menu', 'menu-edit-btn');
     } else if (sectionId === "staff") {
@@ -217,8 +229,12 @@ async function switchSection(sectionId) {
           console.log("⏭️ Staff HTML already loaded, skipping fetch");
         }
         console.log("🔵 Calling initializeStaff()...");
-        await initializeStaff();
-        console.log("✅ initializeStaff() completed");
+        if (typeof initializeStaff === 'function') {
+          await initializeStaff();
+          console.log("✅ initializeStaff() completed");
+        } else {
+          console.warn('[admin.js] initializeStaff not yet loaded');
+        }
         reTranslateContent();
       } else {
         console.log("❌ User does not have access to staff management (need admin/superadmin or staff feature 4)");
@@ -235,7 +251,11 @@ async function switchSection(sectionId) {
           console.error("Error loading bookings HTML:", err);
         }
       }
-      initializeBookings();
+      if (typeof initializeBookings === 'function') {
+        initializeBookings();
+      } else {
+        console.warn('[admin.js] initializeBookings not yet loaded');
+      }
       reTranslateContent();
       updateSectionHeader('admin.section-reservations', '');
     } else if (sectionId === "reports") {
@@ -267,8 +287,12 @@ async function switchSection(sectionId) {
           console.log("⏭️ Reports HTML already loaded, skipping fetch");
         }
         console.log("🔵 Calling initializeReports()...");
-        await initializeReports();
-        console.log("✅ initializeReports() completed");
+        if (typeof initializeReports === 'function') {
+          await initializeReports();
+          console.log("✅ initializeReports() completed");
+        } else {
+          console.warn('[admin.js] initializeReports not yet loaded');
+        }
         reTranslateContent();
       } else {
         console.log("❌ User does not have access to reports (need admin/superadmin or staff feature 3)");
@@ -291,7 +315,11 @@ async function switchSection(sectionId) {
             console.error("Error loading settings HTML:", err);
           }
         }
-        await initializeSettings();
+        if (typeof initializeSettings === 'function') {
+          await initializeSettings();
+        } else {
+          console.warn('[admin.js] initializeSettings not yet loaded');
+        }
         reTranslateContent();
       } else {
         console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
@@ -413,8 +441,17 @@ async function loadApp() {
     }
     
     // Load only tables on page load
-    await loadTablesCategories();
-    await loadTablesCategoryTable();
+    if (typeof loadTablesCategories === 'function') {
+      await loadTablesCategories();
+    } else {
+      console.warn('[admin.js] loadTablesCategories not yet loaded');
+    }
+    
+    if (typeof loadTablesCategoryTable === 'function') {
+      await loadTablesCategoryTable();
+    } else {
+      console.warn('[admin.js] loadTablesCategoryTable not yet loaded');
+    }
   } catch (err) {
     console.error("Error loading app:", err);
     // Continue with UTC as fallback
@@ -593,4 +630,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     initializeSuperadmin();
   }
   await initializeApp();
+
+  // ========== STEP 3: Initialize WebSocket for real-time auto-print ==========
+  if (typeof autoPrintClient !== 'undefined' && restaurantId) {
+    try {
+      console.log('[Admin Init] Initializing auto-print WebSocket client');
+      autoPrintClient.initialize(parseInt(restaurantId), (event) => {
+        console.log('[Admin Init] Auto-print event received:', event);
+        // The autoPrintClient will handle triggering the print automatically
+      });
+    } catch (err) {
+      console.warn('[Admin Init] Failed to initialize auto-print client:', err);
+    }
+  }
 });

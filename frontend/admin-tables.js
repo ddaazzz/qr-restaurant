@@ -1,6 +1,14 @@
 // ============= TABLES MODULE =============
 // All table management functionality extracted from admin.js
 
+// ============= PRINTER ROUTING HELPERS =============
+// Printer routing functions are defined in printer-routing.js
+// Backend endpoints handle HTML generation and printer routing:
+// - POST /api/restaurants/:id/print-qr - QR code printing
+// - POST /api/restaurants/:id/print-order - Order/kitchen receipt printing  
+// - POST /api/restaurants/:id/print-bill - Bill/session receipt printing
+// ============= END PRINTER ROUTING HELPERS =============
+
 // Initialization state
 let tablesInitialized = false;
 
@@ -1248,6 +1256,9 @@ async function submitStartSession(tableId) {
       return alert(err.error || "Failed to start session");
     }
 
+    const sessionResponse = await res.json();
+    const newSessionId = sessionResponse.id;
+
     const overlay = document.querySelector(".modal-overlay");
     if (overlay) overlay.remove();
     
@@ -1259,6 +1270,10 @@ async function submitStartSession(tableId) {
     if (table) {
       handleTableClick(table);
     }
+
+    // Note: Auto-print is now handled by WebSocket (session-notifier)
+    // This allows printing from any tab/page, not just when user is on tables tab
+    // So we don't need to call printQR here
   } catch (err) {
     alert("Error starting session: " + err.message);
   }
@@ -1426,7 +1441,6 @@ async function renderSessionOrder(session) {
           <button onclick="moveTableModal(${table.id})">${t('admin.move-table')}</button>
           <button onclick="orderForTable('${table.units[0] ? table.units[0].qr_token : ''}')">📱 ${t('admin.order-for-table')}</button>
           <button onclick="printQR(${session.id})">${t('admin.print-qr')}</button>
-          <button onclick="printBill(${session.id})">${t('admin.print-bill')}</button>
           <button onclick="splitBill(${session.id})">${t('admin.split-bill')}</button>
           <button onclick="endTableSession(${session.id})" style="color: #c33;">${t('admin.delete-session')}</button>
         </div>
@@ -1443,9 +1457,14 @@ async function renderSessionOrder(session) {
       <div id="session-total" style="font-weight: bold; margin-bottom: 12px; font-size: 16px;">
         ${t('admin.total-label')} —
       </div>
-      <button class="btn-primary" style="width: 100%;" onclick="closeBillModal(${session.id})">
-        💳 ${t('admin.close-bill')}
-      </button>
+      <div style="display: flex; gap: 8px;">
+        <button style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: white; color: #333; font-weight: 600; cursor: pointer;" onclick="printBill(${session.id})">
+          ${t('admin.print-bill')}
+        </button>
+        <button style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #1f2937; color: white; font-weight: 600; cursor: pointer;" onclick="closeBillModal(${session.id})">
+          ${t('admin.close-bill')}
+        </button>
+      </div>
     </div>
   `;
 
@@ -1490,16 +1509,16 @@ async function loadAndRenderOrders(sessionId) {
           totalCents += itemTotal;
 
           return `
-            <div class="order-item" style="display:flex;gap:6px;align-items:center;justify-content:space-between;margin:8px 0;">
-              <div style="flex:1;">
-                <div><strong>${i.name || 'Item'}</strong></div>
-                ${i.variants && i.variants.trim() ? `<div style="font-size:0.85em;color:#666;margin-top:2px;font-style:italic;">${i.variants}</div>` : ''}
-                <div style="color:#999;font-size:0.9em;">${t('admin.status-label')} ${i.status}</div>
+            <div class="order-item" style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;margin:8px 0;padding:8px 0;border-bottom:1px solid #f0f0f0;">
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                  <strong style="flex:1;">${i.name || i.item_name || i.menu_item_name || 'Item'}</strong>
+                  <span style="color:#999;font-size:0.85em;white-space:nowrap;">x${i.quantity}</span>
+                </div>
+                ${i.variants && i.variants.trim() ? `<div style="font-size:0.8em;color:#777;font-style:italic;margin-bottom:2px;">${i.variants}</div>` : ''}
+                <div style="font-size:0.8em;color:#aaa;">${i.status}</div>
               </div>
-              <div style="text-align: right;">
-                <div style="font-weight: bold;">$${(itemTotal / 100).toFixed(2)}</div>
-                <div style="font-size: 0.9em; color: var(--text-light);">x${i.quantity}</div>
-              </div>
+              <div style="text-align: right; white-space: nowrap; font-weight: 600;">$${(itemTotal / 100).toFixed(2)}</div>
             </div>
           `;
         }).join("")}
@@ -1519,7 +1538,7 @@ async function loadAndRenderOrders(sessionId) {
       </div>
       ${serviceChargePercent > 0 ? `
         <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
-          <span>${t('admin.service-charge-label').replace('{0}', serviceChargePercent)}:</span>
+          <span>${t('admin.service-charge-label').replace('{0}', serviceChargePercent)} (${serviceChargePercent}%):</span>
           <span>$${(serviceCharge / 100).toFixed(2)}</span>
         </div>
       ` : ''}
@@ -1541,115 +1560,44 @@ function getSessionLabel(table, sessionId) {
 }
 
 // STUB FUNCTIONS to avoid undefined errors
-async function printBill(sessionId) {
-  const res = await fetch(`${API}/sessions/${sessionId}/bill`);
-  if (!res.ok) return alert("Failed to load bill");
-
-  const bill = await res.json();
-  const lang = localStorage.getItem('language') || 'en';
+async function printBill(sessionId, autoPrint = false) {
+  console.log('[PrintBill] Starting bill print for session:', sessionId, 'autoPrint:', autoPrint);
   
-  // Translation labels
-  const labels = {
-    'subtotal': lang === 'zh' ? '小計：' : 'Subtotal:',
-    'service': lang === 'zh' ? '服務費' : 'Service Charge',
-    'total': lang === 'zh' ? '總計：' : 'TOTAL:',
-    'order-type': lang === 'zh' ? '訂單類型' : 'Order Type',
-    'table': lang === 'zh' ? '座位' : 'Table',
-    'time': lang === 'zh' ? '時間' : 'Time',
-    'thank-you': lang === 'zh' ? '感謝蒞臨！' : 'Thank you for your visit!',
-    'come-again': lang === 'zh' ? '歡迎再來！' : 'Come Again!'
-  };
-  
-  const win = window.open("", "_blank");
-  
-  let itemsHTML = '';
-  bill.items.forEach(i => {
-    const lineTotal = (i.price_cents * i.quantity / 100).toFixed(2);
-    itemsHTML += `<div class="item-row"><div class="item-name">${i.name}</div><div class="item-qty">x${i.quantity}</div><div class="item-price">$${lineTotal}</div></div>`;
-  });
-  
-  const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>${labels.service} (%):</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';
-  
-  // Format session start time and order type from bill response
-  let sessionInfoHTML = '';
-  if (bill.session) {
-    const startTime = bill.session.started_at ? new Date(bill.session.started_at).toLocaleString() : 'N/A';
-    let orderType = lang === 'zh' ? '座位' : 'Table';
-    let tableInfo = '';
+  try {
+    const restaurantId = localStorage.getItem('restaurantId');
     
-    if (bill.session.order_type === 'to-go') orderType = lang === 'zh' ? '外帶' : 'To Go';
-    else if (bill.session.order_type === 'pay-now') orderType = lang === 'zh' ? '現場結帳' : 'Counter/Pay Now';
-    else if (bill.session.table_id) tableInfo = ` - ${labels.table} ${bill.session.table_name || '#' + bill.session.table_id}`;
+    // Fetch bill data from backend
+    const billResponse = await fetch(`${API}/sessions/${sessionId}/bill`);
+    if (!billResponse.ok) {
+      throw new Error('Failed to load bill data');
+    }
     
-    sessionInfoHTML = `
-      <div style="font-size: 11px; color: #666; margin-bottom: 2px;">${labels['order-type']}: ${orderType}${tableInfo}</div>
-      <div style="font-size: 11px; color: #666; margin-bottom: 6px;">${labels.time}: ${startTime}</div>
-    `;
+    const billData = await billResponse.json();
+    console.log('[PrintBill] Bill data loaded:', billData);
+    
+    // Format bill data for printing
+    const billPayload = {
+      table: billData.session.table_name,
+      pax: billData.session.pax,
+      items: billData.items.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price_cents
+      })),
+      subtotal: billData.subtotal_cents,
+      serviceCharge: billData.service_charge_cents,
+      total: billData.total_cents
+    };
+    
+    // Call backend endpoint - it handles HTML generation and printer routing
+    await printBillViaAPI(restaurantId, sessionId, billPayload);
+    console.log('[PrintBill] Bill print completed');
+  } catch (err) {
+    console.error('[PrintBill] Error:', err);
+    if (!autoPrint) {
+      alert('⚠️ Print error: ' + err.message);
+    }
   }
-  
-  const billHTML = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <title>Receipt</title>
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: 'Courier New', monospace; width: 300px; padding: 12px; background: #fff; }
-      .receipt { width: 100%; text-align: center; font-size: 13px; line-height: 1.4; }
-      .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-      .logo { max-width: 60px; margin: 0 auto 6px; height: auto; }
-      .restaurant-name { font-weight: bold; font-size: 16px; margin-bottom: 4px; }
-      .restaurant-info { font-size: 11px; color: #333; margin-bottom: 2px; }
-      .divider { border-bottom: 1px dashed #000; margin: 8px 0; }
-      .items { text-align: left; margin: 8px 0; }
-      .item-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
-      .item-name { flex: 1; }
-      .item-qty { text-align: center; min-width: 30px; margin: 0 4px; }
-      .item-price { text-align: right; min-width: 50px; font-weight: bold; }
-      .summary { border-top: 2px dashed #000; padding-top: 6px; margin-top: 8px; }
-      .summary-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
-      .summary-row.subtotal { border-bottom: 1px dashed #000; padding-bottom: 3px; }
-      .summary-row.total { font-size: 16px; font-weight: bold; margin-top: 3px; }
-      .footer { margin-top: 10px; font-size: 10px; color: #666; border-top: 1px dashed #000; padding-top: 6px; }
-      .thank-you { font-weight: bold; margin-top: 4px; }
-      @media print { body { margin: 0; padding: 0; } .receipt { width: 100%; } }
-    </style>
-  </head>
-  <body>
-    <div class="receipt">
-      <div class="header">
-        ${bill.restaurant && bill.restaurant.logo_url ? `<img src="${bill.restaurant.logo_url}" class="logo" alt="Logo"/>` : ''}
-        <div class="restaurant-name">${bill.restaurant ? bill.restaurant.name : 'Receipt'}</div>
-        <div class="restaurant-info">${bill.restaurant ? bill.restaurant.address || '' : ''}</div>
-        <div class="restaurant-info">${bill.restaurant ? bill.restaurant.phone || '' : ''}</div>
-      </div>
-      <div class="divider"></div>
-      ${sessionInfoHTML}
-      <div class="items">${itemsHTML}</div>
-      <div class="summary">
-        <div class="summary-row subtotal">
-          <span>${labels.subtotal}</span>
-          <span>$${(bill.subtotal_cents / 100).toFixed(2)}</span>
-        </div>
-        ${serviceChargeHTML}
-        <div class="summary-row total">
-          <span>${labels.total}</span>
-          <span>$${(bill.total_cents / 100).toFixed(2)}</span>
-        </div>
-      </div>
-      <div class="footer">
-        <div>${labels['thank-you']}</div>
-        <div class="thank-you">${labels['come-again']}</div>
-      </div>
-    </div>
-    <script>
-      window.print();
-      window.onafterprint = () => window.close();
-    </script>
-  </body>
-</html>`;
-  
-  win.document.write(billHTML);
 }
 
 async function splitBill(sessionId) {
@@ -1674,109 +1622,106 @@ async function splitBill(sessionId) {
   );
 }
 
-async function printQR(sessionId) {
-  const session = findSessionById(sessionId);
-  if (!session) return alert("Session not found");
+async function printQR(sessionId, autoPrint = false, sessionEventData = null) {
+  console.log('[PrintQR] Starting QR print for session:', sessionId, 'autoPrint:', autoPrint, 'eventData:', sessionEventData);
   
-  const table = TABLES.find(t => t.sessions.some(s => s.id === sessionId));
-  if (!table) return alert("Table not found");
-
-  const lang = localStorage.getItem('language') || 'en';
-  const labels = {
-    'table': lang === 'zh' ? '座位' : 'Table',
-    'pax': lang === 'zh' ? '人數' : 'Pax',
-    'started': lang === 'zh' ? '開始時間' : 'Started',
-    'scan-to-order': lang === 'zh' ? '掃描 QR Code 開始點餐' : 'Scan this QR code to order'
-  };
-
-  const sessionLabel = getSessionLabel(table, sessionId);
-  const tableUnit = table.units[0];
-  const qrToken = tableUnit ? tableUnit.qr_token : null;
-
-  if (!qrToken) return alert("QR code not available");
-
-  const qrURL = (window.location.hostname === "localhost" ? "http://localhost:10000/" : "https://chuio.io/") + qrToken;
-  const startTime = new Date(session.started_at).toLocaleString();
-  const pax = session.pax || 0;
-  const restaurantName = document.querySelector('[data-i18n="app.restaurant-name"]')?.textContent || 'Restaurant';
-
-  const win = window.open("", "_blank");
-  
-  const qrHTML = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <title>QR Code - ${sessionLabel}</title>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: 'Courier New', monospace; padding: 12px; background: #fff; }
-      .receipt { width: 100%; text-align: center; font-size: 12px; line-height: 1.5; max-width: 80mm; margin: 0 auto; }
-      .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-      .restaurant-name { font-weight: bold; font-size: 18px; margin-bottom: 4px; }
-      .divider { border-bottom: 1px dashed #000; margin: 8px 0; }
-      .info-section { text-align: left; margin: 8px 0; font-size: 11px; }
-      .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-      .info-label { font-weight: bold; min-width: 60px; }
-      #qrcode { display: flex; justify-content: center; margin: 12px 0; }
-      #qrcode img { max-width: 200px; height: auto; }
-      .scan-instruction { font-weight: bold; font-size: 13px; margin: 8px 0; }
-      .footer { font-size: 10px; color: #666; margin-top: 8px; }
-      @media print { 
-        body { margin: 0; padding: 8px; } 
-        .receipt { width: 80mm; } 
-        .instruction { display: none; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="receipt">
-      <div class="header">
-        <div class="restaurant-name">${restaurantName}</div>
-      </div>
-      
-      <div class="info-section">
-        <div class="info-row">
-          <span class="info-label">${labels.table}:</span>
-          <span>${table.name}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.pax}:</span>
-          <span>${pax} ${lang === 'zh' ? '人' : 'pax'}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.started}:</span>
-          <span>${startTime}</span>
-        </div>
-      </div>
-      
-      <div class="divider"></div>
-      
-      <div id="qrcode"><\/div>
-      
-      <div class="scan-instruction">${labels['scan-to-order']}</div>
-      
-      <div class="footer">
-        <p style="margin-top: 8px;">---</p>
-      </div>
-    </div>
+  try {
+    let session = findSessionById(sessionId);
+    let table = null;
+    let qrToken = null;
+    let tableId = null;
+    let tableName = null;
     
-    <script>
-      new QRCode(document.getElementById("qrcode"), { 
-        text: "${qrURL}", 
-        width: 200, 
-        height: 200, 
-        correctLevel: QRCode.CorrectLevel.H,
-        colorDark: "#000000",
-        colorLight: "#ffffff"
+    // If we have session event data from WebSocket, use it
+    if (sessionEventData && sessionEventData.tableId) {
+      console.log('[PrintQR] Using WebSocket session event data');
+      tableId = sessionEventData.tableId;
+      
+      // Try to get table from local cache first
+      table = TABLES.find(t => t.id === tableId);
+      
+      if (table) {
+        tableName = table.name;
+        const tableUnit = table.units && table.units[0];
+        qrToken = tableUnit ? tableUnit.qr_token : null;
+      }
+      
+      // If not in cache or missing QR token, fetch from API
+      if (!qrToken) {
+        console.log('[PrintQR] Fetching table data from API for ID:', tableId);
+        const res = await fetch(`${API}/tables/${tableId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          table = await res.json();
+          tableName = table.name;
+          if (table.units && table.units[0]) {
+            qrToken = table.units[0].qr_token;
+          }
+        }
+      }
+    } 
+    // If session found locally, use local data
+    else if (session) {
+      table = TABLES.find(t => t.sessions.some(s => s.id === sessionId));
+      if (!table) throw new Error("Table not found");
+      
+      const tableUnit = table.units[0];
+      qrToken = tableUnit ? tableUnit.qr_token : null;
+      tableId = table.id;
+      tableName = table.name;
+    }
+    // Last resort: fetch from API
+    else {
+      console.log('[PrintQR] Session not in local cache, fetching from API...');
+      const restaurantId = localStorage.getItem('restaurantId');
+      const res = await fetch(`${API}/sessions/${sessionId}/bill`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      window.onload = () => { setTimeout(() => window.print(), 500); };
-      window.onafterprint = () => window.close();
-    <\/script>
-  </body>
-</html>`;
-  
-  win.document.write(qrHTML);
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch session ${sessionId}: ${res.status}`);
+      }
+      
+      const billData = await res.json();
+      session = billData.session;
+      tableId = session.table_id;
+      tableName = session.table_name;
+      
+      // Get QR token from table if needed
+      if (tableId) {
+        const tableRes = await fetch(`${API}/tables/${tableId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (tableRes.ok) {
+          table = await tableRes.json();
+          if (table.units && table.units[0]) {
+            qrToken = table.units[0].qr_token;
+          }
+        }
+      }
+    }
+
+    if (!qrToken) throw new Error("QR code not available");
+
+    const restaurantId = localStorage.getItem('restaurantId');
+    
+    // Call backend endpoint - it handles HTML generation and printer routing
+    await printQRViaAPI(
+      restaurantId,
+      sessionId,
+      tableId,
+      tableName,
+      qrToken
+    );
+    
+    console.log('[PrintQR] QR print completed');
+  } catch (err) {
+    console.error('[PrintQR] Error:', err);
+    if (!autoPrint) {
+      alert('⚠️ Print error: ' + err.message);
+    }
+  }
 }
 
 async function endTableSession(sessionId) {
@@ -2076,6 +2021,25 @@ async function submitCloseBill(sessionId, grandTotal) {
   }
   
   closeSessionPanel();
+
+  // Check if bill auto-print is enabled
+  try {
+    const restId = localStorage.getItem('restaurantId');
+    const settingsRes = await fetch(`${API}/restaurants/${restId}/printer-settings`);
+    
+    if (settingsRes.ok) {
+      const printers = await settingsRes.json();
+      // Find the Bill printer and check its auto_print setting
+      const billPrinter = printers.find(p => p.type === 'Bill');
+      if (billPrinter && billPrinter.settings && billPrinter.settings.auto_print === true) {
+        console.log('[CloseBill] Bill auto-print enabled, auto-printing bill...');
+        // Auto-print the bill silently
+        await printBill(sessionId, true);
+      }
+    }
+  } catch (autoError) {
+    console.log('[CloseBill] Bill auto-print check failed (non-critical):', autoError);
+  }
 }
 
 async function createTable() {

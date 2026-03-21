@@ -3555,13 +3555,11 @@ function t(key, lang = null) {
   }
   
   const result = value || key;
-  console.log('[Translations] t("' + key + '") in "' + currentLang + '" =', result);
   return result;
 }
 
 // Set language (applies UI changes only, does NOT save to database)
 window.setLanguage = function(lang) {
-  console.log('[Translations] Setting language to:', lang);
   localStorage.setItem('language', lang);
   // Also save as restaurant language preference locally
   localStorage.setItem('restaurantLanguage', lang);
@@ -3569,14 +3567,12 @@ window.setLanguage = function(lang) {
   
   // Apply translations to DOM elements with data-i18n attribute
   const translatableElements = document.querySelectorAll('[data-i18n]');
-  console.log('[Translations] Found', translatableElements.length, 'elements with data-i18n attribute');
   
   translatableElements.forEach(el => {
     const key = el.getAttribute('data-i18n');
     const newText = t(key, lang);
     if (el.textContent !== newText) {
       el.textContent = newText;
-      console.log('[Translations] Updated:', key, '→', newText);
     }
   });
   
@@ -3597,14 +3593,12 @@ window.setLanguage = function(lang) {
     const activeLangBtn = document.querySelector(selector);
     if (activeLangBtn) {
       activeLangBtn.classList.add('active');
-      console.log('[Translations] Activated language button:', selector);
       break;
     }
   }
   
   // Dispatch custom event for other listeners
   window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
-  console.log('[Translations] Language changed event dispatched');
 };
 
 // Save language preference to database (called ONLY when user changes language in settings)
@@ -3619,7 +3613,7 @@ window.saveLanguageToDatabaseAsync = function(lang) {
     })
     .then(res => res.json())
     .then(data => {
-      console.log('[Translations] Language preference saved to database:', data);
+      // Language preference saved successfully
     })
     .catch(err => {
       console.warn('[Translations] Failed to save language preference to database:', err);
@@ -3636,6 +3630,5 @@ function getCurrentLanguage() {
   }
   
   const lang = localStorage.getItem('language') || 'zh';
-  console.log('[Translations] Current language:', lang);
   return lang;
 }

@@ -1,12 +1,12 @@
 const API = (() => {
   const hostname = window.location.hostname;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  const isLocalIP = hostname.startsWith("10.") || hostname.startsWith("192.") || hostname.startsWith("172.");
   
-  if (isLocalhost || isLocalIP) {
+  if (isLocalhost) {
     return `http://${window.location.host}/api`;
   }
-  return "https://chuio.io/api";
+  // Remote/local network access - use HTTPS with same host
+  return `https://${window.location.host}/api`;
 })();
 
 const params = new URLSearchParams(window.location.search);

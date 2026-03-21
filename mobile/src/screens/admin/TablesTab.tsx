@@ -133,6 +133,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
+  const [qrTextAbove, setQrTextAbove] = useState('Scan to Order');
+  const [qrTextBelow, setQrTextBelow] = useState('Let us know how we did!');
   const [showSessionGearMenu, setShowSessionGearMenu] = useState(false);
   const [showChangePaxModal, setShowChangePaxModal] = useState(false);
   const [showMoveTableModal, setShowMoveTableModal] = useState(false);
@@ -146,6 +148,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedTableForEditControls, setSelectedTableForEditControls] = useState<number | null>(null);
+  const [selectedCategoryForEditControls, setSelectedCategoryForEditControls] = useState<number | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [editingTableId, setEditingTableId] = useState<number | null>(null);
@@ -183,7 +187,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   // Expose toggleEditMode and navigateToScannedQR through ref
   useImperativeHandle(ref, () => ({
     toggleEditMode() {
-      setIsEditMode(prev => !prev);
+      setIsEditMode(prev => {
+        const newIsEditMode = !prev;
+        // Clear selected controls when exiting edit mode
+        if (!newIsEditMode) {
+          setSelectedTableForEditControls(null);
+          setSelectedCategoryForEditControls(null);
+        }
+        return newIsEditMode;
+      });
     },
     navigateToScannedQR(sessionId: number) {
       // Find the session by ID in all tables
@@ -352,6 +364,26 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
     loadRestaurantName();
   }, [restaurantId]);
+
+  // Load QR text settings when QR modal opens
+  useEffect(() => {
+    if (!showQRModal) return;
+
+    const loadQRTextSettings = async () => {
+      try {
+        const printerSettings = await printerSettingsService.getPrinterSettings(restaurantId, false);
+        setQrTextAbove(printerSettings?.qr_text_above || 'Scan to Order');
+        setQrTextBelow(printerSettings?.qr_text_below || 'Let us know how we did!');
+      } catch (err: any) {
+        console.warn('[TablesTab] Failed to load QR text settings:', err.message);
+        // Use defaults if fetch fails
+        setQrTextAbove('Scan to Order');
+        setQrTextBelow('Let us know how we did!');
+      }
+    };
+
+    loadQRTextSettings();
+  }, [showQRModal, restaurantId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -622,8 +654,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
       console.log('[AutoPrintQR] Auto-printing QR for session:', newSession.id, 'printer type:', qrPrinterType);
 
-      // Generate QR HTML
-      const qrHtml = await generateQRHTML(table.name, qrToken);
+      // Generate QR HTML with customizable text from printer settings
+      const qrHtml = await generateQRHTML(
+        table.name, 
+        qrToken,
+        printerSettings?.qr_text_above,
+        printerSettings?.qr_text_below
+      );
 
       if (qrPrinterType === 'browser') {
         await Print.printAsync({ html: qrHtml });
@@ -779,8 +816,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
         if (printerRes.data?.bill_auto_print === true) {
           console.log('[CloseBill] Bill auto-print enabled, printing bill...');
-          // Auto-print the bill using the handleBillPrint logic
-          // For now, just log it
+          // Auto-print the bill with the handleBillPrint logic
+          await printBill(true);
         }
       } catch (autoError) {
         console.log('[CloseBill] Bill auto-print check failed (non-critical):', autoError);
@@ -882,7 +919,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     setShowSessionGearMenu(false);
   };
 
-  const generateQRHTML = async (tableName: string, qrToken: string) => {
+  const generateQRHTML = async (tableName: string, qrToken: string, qrTextAbove?: string, qrTextBelow?: string) => {
     try {
       // Build the URL that will be encoded in the QR code
       const qrDataUrl = `https://chuio.io/${qrToken}`;
@@ -894,6 +931,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       const sessionStartTime = selectedSession 
         ? new Date(selectedSession.started_at).toLocaleString()
         : new Date().toLocaleString();
+      
+      // Use printer settings text or defaults
+      const textAbove = qrTextAbove || 'Scan to Order';
+      const textBelow = qrTextBelow || 'Let us know how we did!';
       
       const pax = selectedSession?.pax || 0;
 
@@ -1005,10 +1046,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 <img src="${qrImageUrl}" alt="QR Code" />
               </div>
               
-              <div class="scan-instruction">Scan this QR code to order</div>
+              <div class="scan-instruction">${textAbove}</div>
               
               <div class="footer">
-                <p style="margin-top: 8px;">---</p>
+                <p style="margin-top: 8px;">${textBelow}</p>
               </div>
             </div>
             <script>
@@ -1082,8 +1123,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
       console.log('[PrintQR] Using QR printer type:', qrPrinterType, 'for QR token:', qrToken);
 
-      // Generate QR HTML
-      const qrHtml = await generateQRHTML(selectedTable.name, qrToken);
+      // Generate QR HTML with customizable text from printer settings
+      const qrHtml = await generateQRHTML(
+        selectedTable.name, 
+        qrToken,
+        printerSettings?.qr_text_above,
+        printerSettings?.qr_text_below
+      );
 
       if (qrPrinterType === 'browser') {
         // Use expo print for browser
@@ -1918,7 +1964,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                     </View>
 
                     <View style={styles.qrFooter}>
-                      <Text style={styles.qrFooterText}>Scan to order</Text>
+                      <Text style={styles.qrFooterText}>{qrTextAbove}</Text>
                     </View>
                   </ScrollView>
 
@@ -2165,8 +2211,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 style={[
                   styles.categoryBtn,
                   selectedCategory === cat.id && styles.categoryBtnActive,
+                  isEditMode && selectedCategoryForEditControls === cat.id && styles.categoryBtnSelected,
                 ]}
-                onPress={() => setSelectedCategory(cat.id)}
+                onPress={() => {
+                  // In edit mode, toggle controls visibility for this category
+                  if (isEditMode) {
+                    if (selectedCategoryForEditControls === cat.id) {
+                      // Clicking same category again toggles off
+                      setSelectedCategoryForEditControls(null);
+                    } else {
+                      // Clicking different category shows its controls
+                      setSelectedCategoryForEditControls(cat.id);
+                    }
+                  } else {
+                    // Normal mode: just switch category
+                    setSelectedCategory(cat.id);
+                  }
+                }}
               >
                 <Text
                   style={[
@@ -2179,7 +2240,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   {cat.key || cat.name || `Cat ${cat.id}`}
                 </Text>
               </TouchableOpacity>
-              {isEditMode && (
+              {isEditMode && selectedCategoryForEditControls === cat.id && (
                 <View style={styles.categoryActionButtons}>
                   <TouchableOpacity
                     style={styles.categoryActionBtn}
@@ -2233,8 +2294,20 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             return (
           <View style={styles.tableCardWrapper}>
             <TouchableOpacity
-              style={[styles.tableCard, { backgroundColor: getTableCardColor(table) }]}
-              onPress={() => handleTableClick(table)}
+              style={[
+                styles.tableCard,
+                { backgroundColor: getTableCardColor(table) },
+                isEditMode && selectedTableForEditControls === table.id && styles.tableCardSelected,
+              ]}
+              onPress={() => {
+                if (isEditMode) {
+                  // In edit mode: only toggle edit controls visibility, don't open session panel
+                  setSelectedTableForEditControls(selectedTableForEditControls === table.id ? null : table.id);
+                } else {
+                  // Normal mode: open session panel
+                  handleTableClick(table);
+                }
+              }}
             >
               <View style={styles.tableCardContent}>
                 <Text style={[styles.tableCardName, getTableTextColor(getTableCardColor(table))]}>
@@ -2252,7 +2325,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 )}
               </View>
             </TouchableOpacity>
-            {isEditMode && (
+            {isEditMode && selectedTableForEditControls === table.id && (
               <View style={styles.tableActionButtonsContainer}>
                 {/* Edit Table Button */}
                 <TouchableOpacity
@@ -2677,6 +2750,11 @@ const styles = StyleSheet.create({
   categoryBtnActive: {
     backgroundColor: '#3b82f6',
   },
+  categoryBtnSelected: {
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
+  },
   categoryBtnText: {
     fontSize: 13,
     fontWeight: '600',
@@ -2737,6 +2815,14 @@ const styles = StyleSheet.create({
     minHeight: 120,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  tableCardSelected: {
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    shadowColor: '#3b82f6',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
   tableEditIconsContainer: {
     position: 'absolute',

@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>QRRestaurant.ipa</key>
+	<array>
+		<dict>
+			<key>architectures</key>
+			<array>
+				<string>arm64</string>
+			</array>
+			<key>buildNumber</key>
+			<string>7</string>
+			<key>certificate</key>
+			<dict>
+				<key>SHA1</key>
+				<string>62CCF2ABB056782856F185C6C917D00B5AC8C8A0</string>
+				<key>dateExpires</key>
+				<string>16/3/2027</string>
+				<key>type</key>
+				<string>Cloud Managed Apple Distribution</string>
+			</dict>
+			<key>embeddedBinaries</key>
+			<array>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>buildNumber</key>
+					<string>1</string>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>62CCF2ABB056782856F185C6C917D00B5AC8C8A0</string>
+						<key>dateExpires</key>
+						<string>16/3/2027</string>
+						<key>type</key>
+						<string>Cloud Managed Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>React.framework</string>
+					<key>symbols</key>
+					<true/>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>5V7D5PUU8D</string>
+						<key>name</key>
+						<string>FairSquare Ltd.</string>
+					</dict>
+					<key>versionNumber</key>
+					<string>1.0</string>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>buildNumber</key>
+					<string>1</string>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>62CCF2ABB056782856F185C6C917D00B5AC8C8A0</string>
+						<key>dateExpires</key>
+						<string>16/3/2027</string>
+						<key>type</key>
+						<string>Cloud Managed Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>ReactNativeDependencies.framework</string>
+					<key>symbols</key>
+					<true/>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>5V7D5PUU8D</string>
+						<key>name</key>
+						<string>FairSquare Ltd.</string>
+					</dict>
+					<key>versionNumber</key>
+					<string>1.0</string>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>buildNumber</key>
+					<string>0.12.0</string>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>62CCF2ABB056782856F185C6C917D00B5AC8C8A0</string>
+						<key>dateExpires</key>
+						<string>16/3/2027</string>
+						<key>type</key>
+						<string>Cloud Managed Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>hermes.framework</string>
+					<key>symbols</key>
+					<true/>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>5V7D5PUU8D</string>
+						<key>name</key>
+						<string>FairSquare Ltd.</string>
+					</dict>
+					<key>versionNumber</key>
+					<string>0.12.0</string>
+				</dict>
+			</array>
+			<key>entitlements</key>
+			<dict>
+				<key>application-identifier</key>
+				<string>5V7D5PUU8D.com.qrrestaurant.app</string>
+				<key>beta-reports-active</key>
+				<true/>
+				<key>com.apple.developer.team-identifier</key>
+				<string>5V7D5PUU8D</string>
+				<key>get-task-allow</key>
+				<false/>
+			</dict>
+			<key>name</key>
+			<string>QRRestaurant.app</string>
+			<key>profile</key>
+			<dict>
+				<key>UUID</key>
+				<string>661fde4b-6070-4d19-9817-2f97f86dd1ec</string>
+				<key>dateExpires</key>
+				<string>16/3/2027</string>
+				<key>name</key>
+				<string>iOS Team Store Provisioning Profile: com.qrrestaurant.app</string>
+			</dict>
+			<key>symbols</key>
+			<true/>
+			<key>team</key>
+			<dict>
+				<key>id</key>
+				<string>5V7D5PUU8D</string>
+				<key>name</key>
+				<string>FairSquare Ltd.</string>
+			</dict>
+			<key>versionNumber</key>
+			<string>1.0.0</string>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -763,7 +763,8 @@ async function createOrder(tableId, sessionId) {
       }
       
       const sessionData = await createSessionRes.json();
-      targetSessionId = sessionData.session_id;
+      targetSessionId = sessionData.id; // Session endpoint returns 'id', not 'session_id'
+      console.log('[Orders] Created new session with ID:', targetSessionId);
       alert(`Session created for ${pax} people`);
     }
   }
@@ -1444,73 +1445,16 @@ function getStatusStyle(status) {
 // Print receipt for an order
 async function printReceipt(orderId) {
   try {
-    const order = ORDERS.find(o => o.id === orderId);
-    if (!order) {
-      alert('Order not found');
-      return;
-    }
-
-    // Build receipt HTML
-    let receiptHTML = `
-      <html>
-        <head>
-          <title>Receipt - Order #${order.id}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .receipt-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-            .receipt-title { font-size: 18px; font-weight: bold; }
-            .receipt-content { margin: 20px 0; }
-            .receipt-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-            .receipt-item-name { flex: 1; }
-            .receipt-item-price { text-align: right; min-width: 100px; }
-            .receipt-total { display: flex; justify-content: space-between; font-size: 18px; font-weight: bold; margin-top: 20px; padding-top: 10px; border-top: 2px solid #000; }
-            .receipt-footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
-          </style>
-        </head>
-        <body>
-          <div class="receipt-header">
-            <div class="receipt-title">Receipt</div>
-            <div>Order #${order.id}</div>
-            <div style="font-size: 12px; color: #666;">${new Date(order.created_at).toLocaleString()}</div>
-          </div>
-          <div class="receipt-content">
-            <div style="font-weight: bold; margin-bottom: 10px;">Items:</div>
-    `;
-
-    // Add order items
-    order.items.forEach(item => {
-      const itemTotal = (item.item_total_cents / 100).toFixed(2);
-      receiptHTML += `
-        <div class="receipt-item">
-          <div class="receipt-item-name">${item.menu_item_name} x${item.quantity}</div>
-          <div class="receipt-item-price">$${itemTotal}</div>
-        </div>
-      `;
-    });
-
-    // Add total
-    const totalAmount = (order.total_cents / 100).toFixed(2);
-    receiptHTML += `
-          </div>
-          <div class="receipt-total">
-            <span>Total:</span>
-            <span>$${totalAmount}</span>
-          </div>
-          <div class="receipt-footer">
-            <p>Thank you for your order!</p>
-          </div>
-        </body>
-      </html>
-    `;
-
-    // Open print dialog
-    const printWindow = window.open('', '', 'height=600,width=800');
-    printWindow.document.write(receiptHTML);
-    printWindow.document.close();
-    printWindow.print();
+    console.log('[PrintReceipt] Starting receipt print for order:', orderId);
+    
+    const restaurantId = localStorage.getItem('restaurantId');
+    
+    // Call backend endpoint - it handles HTML generation and printer routing
+    await printOrderViaAPI(restaurantId, orderId);
+    console.log('[PrintReceipt] Receipt print completed');
   } catch (err) {
-    console.error('Error printing receipt:', err);
-    alert('Error printing receipt: ' + err.message);
+    console.error('[PrintReceipt] Error:', err);
+    alert('⚠️ Print error: ' + err.message);
   }
 }
 

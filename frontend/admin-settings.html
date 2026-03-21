@@ -24,7 +24,7 @@
     <!-- Printer Settings Card -->
     <div class="settings-card" onclick="showPrinterSettings()">
       <h3>🖨️ Printer Settings</h3>
-      <p id="printer-status-preview">Not configured</p>
+      <p>Configure multiple printers</p>
     </div>
 
     <!-- Staff Login Links Card -->
@@ -231,281 +231,6 @@
           <button id="test-pos-btn" onclick="testPOSConnection()" class="btn-secondary hidden" data-i18n="admin.test">🧪 Test Connection</button>
           <button id="cancel-pos-btn" onclick="cancelEditModePOS()" class="btn-secondary hidden" data-i18n="admin.cancel">Cancel</button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- HIDDEN: Printer Settings Modal -->
-  <div id="modal-printer-settings" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('printer-settings')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>🖨️ Printer Settings</h3>
-        <button class="modal-close" onclick="closeSettingsModal('printer-settings')">✕</button>
-      </div>
-
-      <!-- Printer Layout Tabs -->
-      <div class="modal-tabs" style="border-bottom: 2px solid var(--border-color); display: flex; gap: 0; margin: 0;">
-        <button class="modal-tab-btn active" data-tab="printer-config" onclick="switchPrinterTab('printer-config')">⚙️ Printer Config</button>
-        <button class="modal-tab-btn" data-tab="qr-format" onclick="switchPrinterTab('qr-format')">📋 Print QR Code Format</button>
-        <button class="modal-tab-btn" data-tab="bill-format" onclick="switchPrinterTab('bill-format')">🧾 Print Bill Format</button>
-        <button class="modal-tab-btn" data-tab="kitchen-format" onclick="switchPrinterTab('kitchen-format')">🍳 Print Kitchen Format</button>
-      </div>
-
-      <div class="modal-body">
-        <!-- TAB 1: PRINTER CONFIG -->
-        <div id="tab-printer-config" class="modal-tab-content active">
-        <!-- Printer Type -->
-        <div class="form-row">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Type</label>
-            <select id="printer-type" onchange="updatePrinterTypeFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
-              <option value="none">-- Select Printer Type</option>
-              <option value="network">🌐 Network Printer (Thermal over IP)</option>
-              <option value="bluetooth">📱 Bluetooth Receipt Printer</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Printer Host (Network only) -->
-        <div class="form-row">
-          <div class="form-group" id="printer-host-group" style="display: none;">
-            <label>Printer Host/IP</label>
-            <input id="printer-host" type="text" placeholder="e.g., 192.168.1.100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
-          </div>
-          <div class="form-group" id="printer-port-group" style="display: none;">
-            <label>Printer Port</label>
-            <input id="printer-port" type="number" placeholder="e.g., 9100" value="9100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
-          </div>
-        </div>
-
-        <!-- Bluetooth Device Selection -->
-        <div class="form-row" id="bluetooth-device-group" style="display: none;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bluetooth Device</label>
-            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select from available Bluetooth devices or scan for new printers</p>
-            
-            <!-- Device Selector Dropdown -->
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-              <select id="bluetooth-device-id" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: white;">
-                <option value="">-- No Device Selected --</option>
-              </select>
-              <button id="scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 0 0 200px;">🔍 Scan New Device</button>
-            </div>
-            
-            <!-- Selected Device Display -->
-            <span id="view-bluetooth-device" class="view-mode" style="margin-top: 12px; display: block;"></span>
-            <input id="bluetooth-device-name" type="hidden" />
-          </div>
-        </div>
-
-        <!-- Auto-Print Options -->
-        <div class="form-row" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px; margin-bottom: 4px;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
-              <input id="kitchen-auto-print" type="checkbox" class="hidden-checkbox" />
-              <span class="checkbox-display"></span>
-              <span>Auto-Print Orders to Kitchen</span>
-            </label>
-            <p style="font-size: 13px; color: #666; margin-top: 6px;">Automatically print orders to the kitchen when they're placed</p>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom: 4px;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
-              <input id="bill-auto-print" type="checkbox" class="hidden-checkbox" />
-              <span class="checkbox-display"></span>
-              <span>Auto-Print Bills</span>
-            </label>
-            <p style="font-size: 13px; color: #666; margin-top: 4px;">Automatically print bills when sessions are closed</p>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom: 4px;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
-              <input id="print-logo" type="checkbox" class="hidden-checkbox" />
-              <span class="checkbox-display"></span>
-              <span>Print Logo on Receipts</span>
-            </label>
-            <p style="font-size: 13px; color: #666; margin-top: 4px;">Include restaurant logo when printing receipts</p>
-          </div>
-        </div>
-
-        <!-- Customer Receipts -->
-        <div class="form-row" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px; margin-bottom: 4px;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Send Customer Receipts Via:</label>
-            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select how customers should receive their receipts</p>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                <input id="receipt-email" type="checkbox" />Email
-              </label>
-              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                <input id="receipt-printer" type="checkbox" />Printer
-              </label>
-              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                <input id="receipt-qr" type="checkbox" />QR Code
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Connection Test -->
-        <div class="form-group" style="margin-top: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Connection Status</label>
-          <div id="printer-connection-status" style="padding: 10px; background: #fef3c7; border-radius: 6px; color: #92400e; border-left: 4px solid #f59e0b;">
-            ⚠️ Not Configured
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="form-actions" style="margin-top: 24px;">
-          <button id="edit-printer-btn" onclick="enterEditModePrinter()" class="btn-primary">✎ Edit</button>
-          <button id="save-printer-btn" onclick="savePrinterSettings()" class="btn-primary hidden">💾 Save</button>
-          <button id="test-printer-btn" onclick="testPrinterConnection()" class="btn-secondary hidden">🧪 Test</button>
-          <button id="cancel-printer-btn" onclick="cancelEditModePrinter()" class="btn-secondary hidden">Cancel</button>
-        </div>
-        </div><!-- End tab-printer-config -->
-
-        <!-- TAB 2: QR CODE FORMAT LAYOUT -->
-        <div id="tab-qr-format" class="modal-tab-content">
-          <div class="form-row">
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <h4 style="margin-bottom: 16px;">🎨 QR Code Print Format</h4>
-              <p style="font-size: 13px; color: #666; margin-bottom: 16px;">Customize your QR code receipt like the real example. Restaurant name, phone, and address are auto-filled from your restaurant settings.</p>
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <!-- Format Editor -->
-                <div>
-                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Edit Layout</label>
-                  <div id="qr-format-editor" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: #f9fafb; max-height: 600px; overflow-y: auto;">
-                    
-                    <!-- Header Section -->
-                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📋 Header Section</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Restaurant Name Font Size:</label>
-                        <input type="range" id="qr-format-name-size" min="12" max="24" value="18" onchange="updateQRPreview()" style="width: 100%;">
-                        <span style="font-size: 11px; color: #999;" id="qr-name-size-display">18px</span>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Phone Number:</label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                          <input type="checkbox" id="qr-format-show-phone" class="hidden-checkbox" checked onchange="updateQRPreview()">
-                          <span class="checkbox-display"></span>
-                          <span style="font-size: 11px;">Include phone in receipt</span>
-                        </label>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Address:</label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                          <input type="checkbox" id="qr-format-show-address" class="hidden-checkbox" checked onchange="updateQRPreview()">
-                          <span class="checkbox-display"></span>
-                          <span style="font-size: 11px;">Include address in receipt</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <!-- Order Details Section -->
-                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📝 Order Details</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Order Time:</label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                          <input type="checkbox" id="qr-format-show-time" class="hidden-checkbox" checked onchange="updateQRPreview()">
-                          <span class="checkbox-display"></span>
-                          <span style="font-size: 11px;">Display session start time</span>
-                        </label>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Order Details Font Size:</label>
-                        <input type="range" id="qr-format-details-size" min="10" max="14" value="11" onchange="updateQRPreview()" style="width: 100%;">
-                        <span style="font-size: 11px; color: #999;" id="qr-details-size-display">11px</span>
-                      </div>
-                    </div>
-
-                    <!-- QR Code Section -->
-                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📲 QR Code</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">QR Code Size:</label>
-                        <select id="qr-format-qr-size" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                          <option value="small">Small (180px)</option>
-                          <option value="medium" selected>Medium (220px)</option>
-                          <option value="large">Large (260px)</option>
-                        </select>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Text Above QR Code:</label>
-                        <input type="text" id="qr-format-text-above" placeholder="e.g., Scan to Order" value="Scan to Order" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Text Below QR Code:</label>
-                        <input type="text" id="qr-format-text-below" placeholder="e.g., Let us know how we did!" value="Let us know how we did!" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                      </div>
-                    </div>
-
-                    <!-- Footer Section -->
-                    <div style="margin-bottom: 16px;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">🔧 Footer</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Powered By Text:</label>
-                        <input type="text" id="qr-format-powered-by" placeholder="e.g., Powered by Chuio.io" value="Powered by Chuio.io" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                      </div>
-                      <div>
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Footer Font Size:</label>
-                        <input type="range" id="qr-format-footer-size" min="8" max="12" value="10" onchange="updateQRPreview()" style="width: 100%;">
-                        <span style="font-size: 11px; color: #999;" id="qr-footer-size-display">10px</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Preview -->
-                <div>
-                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">📄 Preview</label>
-                  <div id="qr-format-preview" style="border: 2px solid #ddd; border-radius: 6px; padding: 16px; background: white; font-family: 'Courier New', monospace; text-align: center; max-height: 600px; overflow-y: auto; font-size: 11px; white-space: pre-wrap; word-wrap: break-word;">
-                    Preview will update as you edit...
-                  </div>
-                </div>
-              </div>
-
-              <div style="margin-top: 16px; display: flex; gap: 8px;">
-                <button class="btn-secondary" onclick="resetQRFormat()" style="flex: 1;">↺ Reset to Default</button>
-                <button class="btn-primary" onclick="saveQRFormat()" style="flex: 1;">💾 Save Format</button>
-              </div>
-            </div>
-          </div>
-        </div><!-- End tab-qr-format -->
-
-        <!-- TAB 3: BILL FORMAT LAYOUT (Coming Soon) -->
-        <div id="tab-bill-format" class="modal-tab-content">
-          <div class="form-row">
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <h4 style="margin-bottom: 16px;">🎨 Bill/Receipt Print Format</h4>
-              <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 6px; color: #999;">
-                <p>Coming Soon...</p>
-                <p style="font-size: 12px; margin-top: 8px;">Bill format customization will be available shortly</p>
-              </div>
-            </div>
-          </div>
-        </div><!-- End tab-bill-format -->
-
-        <!-- TAB 4: KITCHEN ORDER FORMAT LAYOUT (Coming Soon) -->
-        <div id="tab-kitchen-format" class="modal-tab-content">
-          <div class="form-row">
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <h4 style="margin-bottom: 16px;">🎨 Kitchen Order Print Format</h4>
-              <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 6px; color: #999;">
-                <p>Coming Soon...</p>
-                <p style="font-size: 12px; margin-top: 8px;">Kitchen order format customization will be available shortly</p>
-              </div>
-            </div>
-          </div>
-        </div><!-- End tab-kitchen-format -->
-
       </div>
     </div>
   </div>
@@ -734,255 +459,64 @@
       </div>
     </div>
   </div>
+</div>
 
-  <!-- PRINTER SETTINGS FULL PAGE VIEW -->
-  <div id="printer-settings-page" class="settings-full-page hidden">
-    <div class="page-header">
-      <h1>🖨️ Printer Settings</h1>
-      <button class="back-button" onclick="hidePrinterSettings()">← Back to Settings</button>
+<!-- PRINTER SETTINGS FULL PAGE VIEW (MOVED OUTSIDE SETTINGS-CONTAINER) -->
+<!-- Printer Settings Container (loaded by admin-printer.html) -->
+<div id="printer-settings-container-slot"></div>
     </div>
+  </div>
+</div>
 
-    <div class="page-content">
-      <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-button active" onclick="switchTab('printer-config', this)">⚙️ Printer Config</button>
-          <button class="tab-button" onclick="switchTab('qr-format', this)">📋 Print QR Code Format</button>
-          <button class="tab-button" onclick="switchTab('bill-format', this)">🧾 Print Bill Format</button>
-          <button class="tab-button" onclick="switchTab('kitchen-format', this)">🍳 Print Kitchen Format</button>
+<!-- PRINTER CONFIGURATION MODAL (MOVED OUTSIDE SETTINGS-CONTAINER) -->
+<div id="printer-config-modal" class="settings-modal hidden">
+  <div class="modal-backdrop" onclick="closePrinterConfigModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="config-printer-title">Configure Printer</h3>
+      <button class="modal-close" onclick="closePrinterConfigModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Printer Type -->
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Type</label>
+        <select id="config-printer-type" onchange="updateConfigPrinterTypeFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
+          <option value="thermal">🌐 Network Printer (Thermal)</option>
+          <option value="bluetooth">📱 Bluetooth Printer</option>
+        </select>
+      </div>
+
+      <!-- Network Printer Fields -->
+      <div id="config-printer-host-group" style="display: none;">
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Host/IP</label>
+          <input id="config-printer-host" type="text" placeholder="e.g., 192.168.1.100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
         </div>
+      </div>
 
-        <!-- TAB 1: PRINTER CONFIG -->
-        <div id="printer-page-tab-printer-config" class="tab-content active">
-        <!-- Printer Type -->
-        <div class="form-row">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Type</label>
-            <select id="printer-type" onchange="updatePrinterTypeFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
-              <option value="none">-- Select Printer Type</option>
-              <option value="network">🌐 Network Printer (Thermal over IP)</option>
-              <option value="bluetooth">📱 Bluetooth Receipt Printer</option>
+      <div id="config-printer-port-group" style="display: none;">
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Port</label>
+          <input id="config-printer-port" type="number" placeholder="e.g., 9100" value="9100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
+        </div>
+      </div>
+
+      <!-- Bluetooth Device Selection -->
+      <div id="config-bluetooth-device-group" style="display: none;">
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bluetooth Device</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <select id="config-bluetooth-device" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: white;">
+              <option value="">-- No Device Selected --</option>
             </select>
-          </div>
-        </div>
-
-        <!-- Printer Host (Network only) -->
-        <div class="form-row">
-          <div class="form-group" id="printer-host-group" style="display: none;">
-            <label>Printer Host/IP</label>
-            <input id="printer-host" type="text" placeholder="e.g., 192.168.1.100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
-          </div>
-          <div class="form-group" id="printer-port-group" style="display: none;">
-            <label>Printer Port</label>
-            <input id="printer-port" type="number" placeholder="e.g., 9100" value="9100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
-          </div>
-        </div>
-
-        <!-- Bluetooth Device Selection -->
-        <div class="form-row" id="bluetooth-device-group" style="display: none;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bluetooth Device</label>
-            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">Select from available Bluetooth devices or scan for new printers</p>
-            
-            <!-- Device Selector Dropdown -->
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-              <select id="bluetooth-device-id" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: white;">
-                <option value="">-- No Device Selected --</option>
-              </select>
-              <button id="scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 0 0 200px;">🔍 Scan New Device</button>
-            </div>
-            
-            <!-- Selected Device Display -->
-            <span id="view-bluetooth-device" class="view-mode" style="margin-top: 12px; display: block;"></span>
-            <input id="bluetooth-device-name" type="hidden" />
-          </div>
-        </div>
-
-        <!-- Auto-Print Options -->
-        <div class="form-row" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px; margin-bottom: 4px;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
-              <input id="kitchen-auto-print" type="checkbox" class="hidden-checkbox" />
-              <span class="checkbox-display"></span>
-              <span>Auto-Print Orders to Kitchen</span>
-            </label>
-            <p style="font-size: 13px; color: #666; margin-top: 6px;">Automatically print orders to the kitchen when they're placed</p>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom: 4px;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
-              <input id="bill-auto-print" type="checkbox" class="hidden-checkbox" />
-              <span class="checkbox-display"></span>
-              <span>Auto-Print Bills</span>
-            </label>
-            <p style="font-size: 13px; color: #666; margin-top: 4px;">Automatically print bills when sessions are closed</p>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom: 4px;">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
-              <input id="print-logo" type="checkbox" class="hidden-checkbox" />
-              <span class="checkbox-display"></span>
-              <span>Print Logo on Receipts</span>
-            </label>
-            <p style="font-size: 13px; color: #666; margin-top: 4px;">Include restaurant logo when printing receipts</p>
-          </div>
-        </div>
-
-        <!-- Connection Test -->
-        <div class="form-group" style="margin-top: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Connection Status</label>
-          <div id="printer-connection-status" style="padding: 10px; background: #fef3c7; border-radius: 6px; color: #92400e; border-left: 4px solid #f59e0b;">
-            ⚠️ Not Configured
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="form-actions" style="margin-top: 24px;">
-          <button id="save-printer-btn" onclick="savePrinterSettings()" class="btn-primary">💾 Save</button>
-          <button id="test-printer-btn" onclick="testPrinterConnection()" class="btn-secondary">🧪 Test Connection</button>
-        </div>
-        </div>
-
-        <!-- TAB 2: QR CODE FORMAT -->
-        <div id="printer-page-tab-qr-format" class="tab-content">
-          <div class="form-row">
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <h4 style="margin-bottom: 16px;">🎨 QR Code Print Format</h4>
-              <p style="font-size: 13px; color: #666; margin-bottom: 16px;">Customize your QR code receipt. Restaurant name, phone, and address are auto-filled from your restaurant settings.</p>
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <!-- Format Editor -->
-                <div>
-                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Edit Layout</label>
-                  <div id="qr-format-editor" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: #f9fafb; max-height: 600px; overflow-y: auto;">
-                    
-                    <!-- Header Section -->
-                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📋 Header Section</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Restaurant Name Font Size:</label>
-                        <input type="range" id="qr-format-name-size" min="12" max="24" value="18" onchange="updateQRPreview()" style="width: 100%;">
-                        <span style="font-size: 11px; color: #999;" id="qr-name-size-display">18px</span>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Phone Number:</label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                          <input type="checkbox" id="qr-format-show-phone" class="hidden-checkbox" checked onchange="updateQRPreview()">
-                          <span class="checkbox-display"></span>
-                          <span style="font-size: 11px;">Include phone in receipt</span>
-                        </label>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Address:</label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                          <input type="checkbox" id="qr-format-show-address" class="hidden-checkbox" checked onchange="updateQRPreview()">
-                          <span class="checkbox-display"></span>
-                          <span style="font-size: 11px;">Include address in receipt</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <!-- Order Details Section -->
-                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📝 Order Details</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Show Order Time:</label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                          <input type="checkbox" id="qr-format-show-time" class="hidden-checkbox" checked onchange="updateQRPreview()">
-                          <span class="checkbox-display"></span>
-                          <span style="font-size: 11px;">Display session start time</span>
-                        </label>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Order Details Font Size:</label>
-                        <input type="range" id="qr-format-details-size" min="10" max="14" value="11" onchange="updateQRPreview()" style="width: 100%;">
-                        <span style="font-size: 11px; color: #999;" id="qr-details-size-display">11px</span>
-                      </div>
-                    </div>
-
-                    <!-- QR Code Section -->
-                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">📲 QR Code</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">QR Code Size:</label>
-                        <select id="qr-format-qr-size" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                          <option value="small">Small (180px)</option>
-                          <option value="medium" selected>Medium (220px)</option>
-                          <option value="large">Large (260px)</option>
-                        </select>
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Text Above QR Code:</label>
-                        <input type="text" id="qr-format-text-above" placeholder="e.g., Scan to Order" value="Scan to Order" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                      </div>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Text Below QR Code:</label>
-                        <input type="text" id="qr-format-text-below" placeholder="e.g., Let us know how we did!" value="Let us know how we did!" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                      </div>
-                    </div>
-
-                    <!-- Footer Section -->
-                    <div style="margin-bottom: 16px;">
-                      <h5 style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px;">🔧 Footer</h5>
-                      <div style="margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Powered By Text:</label>
-                        <input type="text" id="qr-format-powered-by" placeholder="e.g., Powered by Chuio.io" value="Powered by Chuio.io" onchange="updateQRPreview()" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
-                      </div>
-                      <div>
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">Footer Font Size:</label>
-                        <input type="range" id="qr-format-footer-size" min="8" max="12" value="10" onchange="updateQRPreview()" style="width: 100%;">
-                        <span style="font-size: 11px; color: #999;" id="qr-footer-size-display">10px</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Preview -->
-                <div>
-                  <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">📄 Preview</label>
-                  <div id="qr-format-preview" style="border: 2px solid #ddd; border-radius: 6px; padding: 16px; background: white; font-family: 'Courier New', monospace; text-align: center; max-height: 600px; overflow-y: auto; font-size: 11px; white-space: pre-wrap; word-wrap: break-word;">
-                    Preview will update as you edit...
-                  </div>
-                </div>
-              </div>
-
-              <div style="margin-top: 16px; display: flex; gap: 8px;">
-                <button class="btn-secondary" onclick="resetQRFormat()" style="flex: 1;">↺ Reset to Default</button>
-                <button class="btn-primary" onclick="saveQRFormat()" style="flex: 1;">💾 Save Format</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB 3: BILL FORMAT -->
-        <div id="printer-page-tab-bill-format" class="tab-content">
-          <div class="form-row">
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <h4 style="margin-bottom: 16px;">🎨 Bill/Receipt Print Format</h4>
-              <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 6px; color: #999;">
-                <p>Coming Soon...</p>
-                <p style="font-size: 12px; margin-top: 8px;">Bill format customization will be available shortly</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB 4: KITCHEN FORMAT -->
-        <div id="printer-page-tab-kitchen-format" class="tab-content">
-          <div class="form-row">
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <h4 style="margin-bottom: 16px;">🎨 Kitchen Order Print Format</h4>
-              <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 6px; color: #999;">
-                <p>Coming Soon...</p>
-                <p style="font-size: 12px; margin-top: 8px;">Kitchen order format customization will be available shortly</p>
-              </div>
-            </div>
+            <button id="config-scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 0 0 auto; padding: 8px 16px;">🔍 Scan</button>
           </div>
         </div>
       </div>
+    </div>
+    <div class="modal-footer" style="display: flex; gap: 12px; padding: 16px; border-top: 1px solid var(--border-color); background: #f9fafb;">
+      <button onclick="closePrinterConfigModal()" class="btn-secondary" style="flex: 1;">Cancel</button>
+      <button onclick="savePrinterConfig()" class="btn-primary" style="flex: 1;">💾 Save</button>
     </div>
   </div>
 </div>

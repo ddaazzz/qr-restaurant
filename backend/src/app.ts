@@ -16,7 +16,6 @@ import bookingsRoutes from "./routes/bookings.routes";
 import waitlistRoutes from "./routes/waitlist.routes";
 import settingsRoutes from "./routes/settings.routes";
 import printerRoutes from "./routes/printer.routes";
-import printerZonesRoutes from "./routes/printerZones.routes";
 import customerReceiptsRoutes from "./routes/customerReceipts.routes";
 import addonsRoutes from "./routes/addons.routes";
 import presetsRoutes from "./routes/presets.routes";
@@ -116,7 +115,6 @@ app.use("/lib", express.static(path.join(__dirname, "../../node_modules/html5-qr
 ====================== */
 app.use("/api", settingsRoutes);
 app.use("/api", printerRoutes);
-app.use("/api", printerZonesRoutes);
 app.use("/api", customerReceiptsRoutes);
 app.use("/api", addonsRoutes);
 app.use("/api", presetsRoutes);

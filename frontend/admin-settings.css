@@ -257,6 +257,38 @@
   grid-column: 1 / -1;
 }
 
+/* PRINTER SETTINGS CONTAINER */
+#printer-settings-container-slot {
+  width: 100%;
+  min-height: 400px;
+  padding: 24px;
+  background: #fafbfc;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s ease-in;
+  margin-top: 20px;
+}
+
+#printer-settings-container-slot[style*="display: none"] {
+  display: none !important;
+}
+
+#printer-settings-container-slot[style*="display: block"] {
+  display: block !important;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 768px) {
   .form-row {
     grid-template-columns: 1fr;

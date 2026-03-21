@@ -158,25 +158,16 @@ function generateKitchenOrderHTML(order, restaurantName = "Restaurant") {
  */
 async function printKitchenOrder(order, restaurantName = "Restaurant") {
   try {
-    const html = generateKitchenOrderHTML(order, restaurantName);
-    const printWindow = window.open("", "", "height=600,width=400");
-
-    if (!printWindow) {
-      alert("Unable to open print window. Check popup blocker settings.");
-      return;
-    }
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-
-    // Wait for content to load before printing
-    setTimeout(() => {
-      printWindow.print();
-      setTimeout(() => printWindow.close(), 500);
-    }, 250);
+    console.log('[PrintKitchenOrder] Starting kitchen order print for order:', order.id);
+    
+    const restaurantId = localStorage.getItem('restaurantId');
+    
+    // Call backend endpoint - it handles HTML generation and printer routing
+    await printOrderViaAPI(restaurantId, order.id, 0);
+    console.log('[PrintKitchenOrder] Kitchen order print completed');
   } catch (err) {
-    console.error("❌ Failed to print order:", err);
-    alert("Failed to print order");
+    console.error('[PrintKitchenOrder] Error:', err);
+    alert('⚠️ Print error: ' + err.message);
   }
 }
 

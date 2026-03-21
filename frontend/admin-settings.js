@@ -154,48 +154,102 @@ function closeSettingsModal(modalName) {
 }
 
 // ============= PRINTER SETTINGS PAGE MANAGEMENT =============
-function showPrinterSettings() {
+async function showPrinterSettings() {
   // Hide settings grid
   const settingsGrid = document.querySelector('.settings-cards-grid');
   if (settingsGrid) {
     settingsGrid.style.display = 'none';
   }
 
-  // Show printer settings page
-  const printerPage = document.getElementById('printer-settings-page');
-  if (printerPage) {
-    printerPage.classList.remove('hidden');
-    
-    // Load printer settings content
-    loadPrinterSettings().then(() => {
-      // After printer settings load, initialize QR preview
-      setTimeout(() => {
-        fetchRestaurantDataForQRFormat().then(() => {
-          updateQRPreview();
+  // Get the container slot
+  const containerSlot = document.getElementById('printer-settings-container-slot');
+  if (!containerSlot) {
+    console.error('[admin-settings.js] Printer settings container slot not found');
+    alert('Printer settings container not found');
+    return;
+  }
+  
+  // Show the container
+  containerSlot.style.display = 'block';
+  
+  // Load printer HTML if not already loaded
+  if (!containerSlot.hasChildNodes()) {
+    try {
+      console.log('[admin-settings.js] Loading printer HTML module');
+      const response = await fetch('/admin-printer.html');
+      const html = await response.text();
+      containerSlot.innerHTML = html;
+      console.log('[admin-settings.js] Printer HTML loaded');
+      
+      // Load printer CSS if not already loaded
+      if (!document.getElementById('admin-printer-css')) {
+        const link = document.createElement('link');
+        link.id = 'admin-printer-css';
+        link.rel = 'stylesheet';
+        link.href = '/admin-printer.css';
+        document.head.appendChild(link);
+        console.log('[admin-settings.js] Printer CSS loaded');
+      }
+      
+      // Load required JavaScript files for printer module
+      if (!window.adminPrinterJSLoaded) {
+        console.log('[admin-settings.js] Loading admin-printer.js');
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = '/admin-printer.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
         });
-      }, 100);
-    });
+        window.adminPrinterJSLoaded = true;
+        console.log('[admin-settings.js] admin-printer.js loaded');
+      }
+      
+      if (!window.adminPrinterKitchenJSLoaded) {
+        console.log('[admin-settings.js] Loading admin-printer-kitchen.js');
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = '/admin-printer-kitchen.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+        window.adminPrinterKitchenJSLoaded = true;
+        console.log('[admin-settings.js] admin-printer-kitchen.js loaded');
+      }
+      
+      // Initialize printer settings module
+      if (typeof initializePrinterSettings === 'function') {
+        console.log('[admin-settings.js] Calling initializePrinterSettings()');
+        await initializePrinterSettings();
+      } else {
+        console.error('[admin-settings.js] initializePrinterSettings function not found');
+      }
+    } catch (err) {
+      console.error('[admin-settings.js] Failed to load printer settings module:', err);
+      alert('Failed to load printer settings: ' + err.message);
+    }
+  } else {
+    console.log('[admin-settings.js] Printer HTML already loaded, reinitializing');
+    // Module already loaded, just reinitialize
+    if (typeof initializePrinterSettings === 'function') {
+      await initializePrinterSettings();
+    }
   }
 }
 
 function hidePrinterSettings() {
-  // Hide printer settings page
-  const printerPage = document.getElementById('printer-settings-page');
-  if (printerPage) {
-    printerPage.classList.add('hidden');
+  console.log('[admin-settings.js] Hiding printer settings');
+  // Hide printer settings container
+  const containerSlot = document.getElementById('printer-settings-container-slot');
+  if (containerSlot) {
+    containerSlot.style.display = 'none';
   }
 
   // Show settings grid
   const settingsGrid = document.querySelector('.settings-cards-grid');
   if (settingsGrid) {
     settingsGrid.style.display = '';
-  }
-
-  // Reset any edit mode
-  const editBtn = document.getElementById('edit-printer-btn');
-  const saveBtn = document.getElementById('save-printer-btn');
-  if (editBtn && saveBtn && saveBtn.classList.contains('hidden') === false) {
-    cancelEditModePrinter();
   }
 }
 
@@ -228,12 +282,164 @@ function switchTab(tabName, buttonElement) {
   // Update preview when switching to QR Format tab
   if (tabName === 'qr-format') {
     setTimeout(() => {
-      updateQRPreview();
+      updateQRCodePreview();
       fetchRestaurantDataForQRFormat();
+    }, 50);
+  }
+
+  // Update preview when switching to Bill Format tab
+  if (tabName === 'bill-format') {
+    setTimeout(() => {
+      updateBillFormatPreview();
     }, 50);
   }
 }
 
+// ============= RESTAURANT DATA FETCHER =============
+async function fetchRestaurantDataForQRFormat() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    if (res.ok) {
+      const data = await res.json();
+      window.restaurantData = {
+        name: data.name || 'Restaurant Name',
+        phone: data.phone || '+1 (555) 123-4567',
+        address: data.address || '123 Main Street, City, State 12345'
+      };
+    }
+  } catch (err) {
+    console.error('Error fetching restaurant data:', err);
+    window.restaurantData = {
+      name: 'Restaurant Name',
+      phone: '+1 (555) 123-4567',
+      address: '123 Main Street, City, State 12345'
+    };
+  }
+}
+
+// ============= QR CODE FORMAT PREVIEW =============
+function updateQRCodePreview() {
+  const qrSize = document.getElementById('qr-code-size')?.value || 'medium';
+  const textAbove = document.getElementById('qr-text-above')?.value || 'Scan to Order';
+  const textBelow = document.getElementById('qr-text-below')?.value || 'Let us know how we did!';
+  
+  const sizeMap = { small: '180px', medium: '220px', large: '260px' };
+  const qrSizePixels = sizeMap[qrSize] || '220px';
+  
+  // Sample restaurant data
+  const restaurantName = window.restaurantData?.name || 'La Cave (Sai Ying Pun)';
+  const tableNumber = 'T02';
+  const startTime = '2026-03-13 18:24:42';
+  
+  const divider = '-'.repeat(40);
+  
+  const preview = `
+    <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${restaurantName}</div>
+    <div style="font-size: 11px; margin-bottom: 2px;">Table: ${tableNumber}</div>
+    <div style="font-size: 11px; margin-bottom: 8px;">Time: ${startTime}</div>
+    <div style="font-size: 10px; margin: 8px 0; letter-spacing: 0.5px;">${divider}</div>
+    
+    <div style="margin: 12px 0;">
+      <div style="width: ${qrSizePixels}; height: ${qrSizePixels}; margin: 0 auto; background: #f0f0f0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;">QR Code</div>
+    </div>
+    
+    <div style="font-weight: bold; font-size: 12px; margin: 10px 0;">${textAbove}</div>
+    <div style="font-size: 11px; margin-bottom: 10px;">${textBelow}</div>
+    <div style="font-size: 10px; margin-top: 8px; color: #666;">Powered by Chuio</div>
+  `;
+  
+  const previewEl = document.getElementById('qr-preview');
+  if (previewEl) {
+    previewEl.innerHTML = preview;
+  }
+}
+
+// ============= BILL FORMAT PREVIEW =============
+function updateBillFormatPreview() {
+  const paperWidth = document.getElementById('bill-format-paper-width')?.value || '80';
+  const showPhone = document.getElementById('bill-format-show-phone')?.checked || false;
+  const showAddress = document.getElementById('bill-format-show-address')?.checked || false;
+  const showTime = document.getElementById('bill-format-show-time')?.checked || false;
+  const showItems = document.getElementById('bill-format-show-items')?.checked || false;
+  const showTotal = document.getElementById('bill-format-show-total')?.checked || false;
+  const footerMsg = document.getElementById('bill-format-footer-msg')?.value || 'Thank you for your business!';
+  
+  // Set font sizes based on paper width
+  const fontSizes = paperWidth === '58' 
+    ? { header: '14px', details: '9px', footer: '8px', divider: '9px' }
+    : { header: '18px', details: '11px', footer: '10px', divider: '11px' };
+  
+  // Get restaurant data
+  const restaurantName = window.restaurantData?.name || 'Restaurant Name';
+  const phone = window.restaurantData?.phone || '+1 (555) 123-4567';
+  const address = window.restaurantData?.address || '123 Main Street, City, State 12345';
+  
+  // Divider lines that fit the page width (58mm ≈ 40 chars, 80mm ≈ 50 chars)
+  const dividerLength = paperWidth === '58' ? 40 : 50;
+  const divider = '='.repeat(dividerLength);
+  const subDivider = '-'.repeat(dividerLength);
+  
+  let preview = `<strong style="font-size: ${fontSizes.header}; display: block; margin-bottom: 2px; text-align: center;">${restaurantName}</strong>`;
+  
+  if (showPhone) {
+    preview += `<div style="font-size: ${fontSizes.details}; margin-bottom: 1px; text-align: center;">Phone: ${phone}</div>`;
+  }
+  
+  if (showAddress) {
+    preview += `<div style="font-size: ${fontSizes.details}; margin-bottom: 4px; text-align: center;">${address}</div>`;
+  }
+  
+  preview += `<div style="font-size: ${fontSizes.divider}; margin: 4px 0; letter-spacing: 0.5px; text-align: center;">${divider}</div>`;
+  
+  if (showTime) {
+    preview += `<div style="font-size: ${fontSizes.details}; margin: 2px 0; text-align: center;">Order Time: 2026-03-13 18:24:42</div>`;
+  }
+  
+  // Table and PAX - left and right aligned
+  preview += `
+    <div style="font-size: ${fontSizes.details}; margin: 2px 0; display: flex; justify-content: space-between;">
+      <span>Table: T02</span>
+      <span>Pax: 4</span>
+    </div>
+  `;
+  
+  if (showItems) {
+    preview += `
+    <div style="font-size: ${fontSizes.divider}; margin: 4px 0; letter-spacing: 0.5px; text-align: center;">${subDivider}</div>
+    <div style="font-size: ${fontSizes.details}; margin: 4px 0;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+        <span>1x Domaine Rolet, Chardonnay</span>
+        <span>$450.0</span>
+      </div>
+      <div style="font-size: 8px; color: #666; margin-left: 10px; margin-bottom: 2px;">"L'Etoile", 2022</div>
+    </div>
+    <div style="font-size: ${fontSizes.divider}; margin: 4px 0; letter-spacing: 0.5px; text-align: center;">${subDivider}</div>
+    `;
+  }
+  
+  if (showTotal) {
+    // Calculate avg per person: 450 / 4 = 112.5
+    const total = 450.0;
+    const pax = 4;
+    const avgPerPerson = (total / pax).toFixed(2);
+    
+    preview += `
+    <div style="font-size: ${fontSizes.details}; text-align: right; margin: 2px 0;">
+      <div>Subtotal: $${total.toFixed(1)}</div>
+      <div style="font-weight: bold; font-size: ${fontSizes.header}; margin: 2px 0;">Total: $${total.toFixed(1)}</div>
+      <div>Avg Per Person: $${avgPerPerson}</div>
+    </div>
+    <div style="font-size: ${fontSizes.divider}; margin: 4px 0; letter-spacing: 0.5px; text-align: center;">${divider}</div>
+    `;
+  }
+  
+  preview += `<div style="font-weight: bold; font-size: ${fontSizes.details}; margin: 6px 0; text-align: center;">Thank You</div><div style="font-size: ${fontSizes.footer}; text-align: center; margin-bottom: 4px;">${footerMsg}</div><div style="font-size: ${fontSizes.footer}; text-align: center; color: #666;">Powered by Chuio</div>`;
+  
+  const previewEl = document.getElementById('bill-format-preview');
+  if (previewEl) {
+    previewEl.innerHTML = preview;
+  }
+}
 
 // ============= MODAL INITIALIZATION FUNCTIONS =============
 
@@ -407,19 +613,52 @@ function downloadQRCode(qrElementId, filename) {
 
 // Print QR Code
 function printQRCode(qrElementId) {
-  const qrElement = document.getElementById(qrElementId);
-  const canvas = qrElement.querySelector('canvas');
-  
-  if (!canvas) {
-    alert('❌ QR code not generated yet. Please reload the modal.');
-    return;
+  try {
+    console.log('[PrintQRCode] Starting QR code print from:', qrElementId);
+    
+    const qrElement = document.getElementById(qrElementId);
+    
+    if (!qrElement) {
+      alert('❌ QR element not found. Please reload the modal.');
+      return;
+    }
+    
+    const canvas = qrElement.querySelector('canvas');
+    
+    if (!canvas) {
+      alert('❌ QR code not generated yet. Please reload the modal.');
+      return;
+    }
+    
+    const img = canvas.toDataURL('image/png');
+    // Fallback to browser print for QR codes in settings
+    handleBrowserPrint(`<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>QR Code</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; padding: 20px; }
+      .qr-container { text-align: center; }
+      img { max-width: 400px; height: auto; margin: 20px 0; }
+      @media print { 
+        body { margin: 0; padding: 0; } 
+        .qr-container { width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="qr-container">
+      <img src="${img}" alt="QR Code" />
+    </div>
+  </body>
+</html>`);
+    console.log('[PrintQRCode] QR code print completed');
+  } catch (err) {
+    console.error('[PrintQRCode] Error:', err);
+    alert('⚠️ Print error: ' + err.message);
   }
-  
-  const printWindow = window.open();
-  const img = canvas.toDataURL('image/png');
-  printWindow.document.write(`<img src="${img}" style="max-width: 100%; margin: 20px;" />`);
-  printWindow.document.close();
-  printWindow.print();
 }
 
 // Load QR Settings Modal
@@ -1169,12 +1408,7 @@ async function refreshConnectedDevices() {
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div>
                     <div style="font-weight: 600; color: #333; font-size: 14px;">📱 ${device.deviceName}</div>
-                    <div style="font-size: 12px; color: #666; margin-top: 2px;">ID: ${device.deviceId.substring(0, 16)}...</div>
-                    ${device.lastConnected ? '<div style="font-size: 11px; color: #999; margin-top: 2px;">Last used: ' + new Date(device.lastConnected).toLocaleDateString() + '</div>' : ''}
-                  </div>
-                  ${selectedBadge}
-                </div>
-              </div>`;
+                    <div style="font-size: 12px; color: #666; margin-top: 2px;">ID: ${device.deviceId.substring(0, 16)}...</div>\n                    ${device.lastConnected ? '<div style="font-size: 11px; color: #999; margin-top: 2px;">Last used: ' + new Date(device.lastConnected).toLocaleDateString() + '</div>' : ''}\n                  </div>\n                  ${selectedBadge}\n                </div>\n              </div>`;
     }
 
     deviceList.innerHTML = html;
@@ -1274,5 +1508,80 @@ async function scanBluetoothDevices() {
     }
   } finally {
     scanBtn.disabled = false;
-    scanBtn.textContent = '🔍 Scan New Device';  }
+    scanBtn.textContent = '🔍 Scan New Device';
+  }
+}
+
+// ============= QR CODE FORMAT SAVE/RESET FUNCTIONS =============
+function resetQRCode() {
+  document.getElementById('qr-code-size').value = 'medium';
+  document.getElementById('qr-text-above').value = 'Scan to Order';
+  document.getElementById('qr-text-below').value = 'Let us know how we did!';
+  updateQRCodePreview();
+}
+
+async function saveQRCode() {
+  try {
+    const qrSettings = {
+      qr_code_size: document.getElementById('qr-code-size').value,
+      qr_text_above: document.getElementById('qr-text-above').value,
+      qr_text_below: document.getElementById('qr-text-below').value
+    };
+    
+    const res = await fetch(`${API}/restaurants/${restaurantId}/printer-settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(qrSettings)
+    });
+    
+    if (res.ok) {
+      alert('QR Code format settings saved successfully!');
+    } else {
+      alert('Error saving QR Code format settings');
+    }
+  } catch (err) {
+    console.error('Error saving QR Code format:', err);
+    alert('Error saving QR Code format settings');
+  }
+}
+
+// ============= BILL FORMAT SAVE/RESET FUNCTIONS =============
+function resetBillFormat() {
+  document.getElementById('bill-format-paper-width').value = '80';
+  document.getElementById('bill-format-show-phone').checked = true;
+  document.getElementById('bill-format-show-address').checked = true;
+  document.getElementById('bill-format-show-time').checked = true;
+  document.getElementById('bill-format-show-items').checked = true;
+  document.getElementById('bill-format-show-total').checked = true;
+  document.getElementById('bill-format-footer-msg').value = 'Thank you for your business!';
+  updateBillFormatPreview();
+}
+
+async function saveBillFormat() {
+  try {
+    const billSettings = {
+      bill_format_paper_width: document.getElementById('bill-format-paper-width').value,
+      bill_format_show_phone: document.getElementById('bill-format-show-phone').checked,
+      bill_format_show_address: document.getElementById('bill-format-show-address').checked,
+      bill_format_show_time: document.getElementById('bill-format-show-time').checked,
+      bill_format_show_items: document.getElementById('bill-format-show-items').checked,
+      bill_format_show_total: document.getElementById('bill-format-show-total').checked,
+      bill_format_footer_msg: document.getElementById('bill-format-footer-msg').value
+    };
+    
+    const res = await fetch(`${API}/restaurants/${restaurantId}/printer-settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(billSettings)
+    });
+    
+    if (res.ok) {
+      alert('Bill format settings saved successfully!');
+    } else {
+      alert('Error saving bill format settings');
+    }
+  } catch (err) {
+    console.error('Error saving bill format:', err);
+    alert('Error saving bill format settings');
+  }
 }
