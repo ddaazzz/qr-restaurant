@@ -312,6 +312,52 @@ class BluetoothService {
       isConnected: true,
     }));
   }
+
+  /**
+   * Subscribe to device connection state changes
+   * Listens for when a connected device disconnects
+   */
+  subscribeToDeviceState(
+    deviceId: string,
+    onDisconnected: (error?: Error) => void
+  ): (() => void) | null {
+    try {
+      const device = this.discoveredDevices.get(deviceId);
+      if (!device) {
+        console.warn(`[Bluetooth] Device ${deviceId} not found for subscription`);
+        return null;
+      }
+
+      // Subscribe to device's state changes
+      const subscription = device.onDisconnected((error) => {
+        console.log(`[Bluetooth] Device ${deviceId} disconnected:`, error);
+        this.connectedDevices.delete(deviceId);
+        onDisconnected(error);
+      });
+
+      return () => {
+        // Unsubscribe function
+        if (subscription) {
+          subscription.remove();
+        }
+      };
+    } catch (err) {
+      console.error('[Bluetooth] Error subscribing to device state:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Get all discovered devices
+   */
+  getDiscoveredDevices(): BluetoothPrinter[] {
+    return Array.from(this.discoveredDevices.entries()).map(([id, device]) => ({
+      id,
+      name: device.name || 'Unknown Device',
+      location: 'kitchen',
+      isConnected: this.connectedDevices.has(id),
+    }));
+  }
 }
 
 export const bluetoothService = new BluetoothService();
