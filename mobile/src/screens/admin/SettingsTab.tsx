@@ -111,6 +111,21 @@ interface VariantPreset {
   variants?: Variant[];
 }
 
+interface PaymentTerminal {
+  id: number;
+  vendor_name: 'kpay' | 'other';
+  is_active: boolean;
+  app_id: string;
+  terminal_ip?: string;
+  terminal_port?: number;
+  endpoint_path?: string;
+  metadata?: Record<string, any>;
+  last_tested_at?: string;
+  last_error_message?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +133,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
+  const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
 
   // Modal states
   const [editMode, setEditMode] = useState(false);
@@ -128,6 +144,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // Modal state: 'printer' | 'bluetooth' | null
   const [activeModal, setActiveModal] = useState<'printer' | 'bluetooth' | null>(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [showPaymentTerminalModal, setShowPaymentTerminalModal] = useState(false);
+  const [editingTerminalId, setEditingTerminalId] = useState<number | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [showVariantPresetsModal, setShowVariantPresetsModal] = useState(false);
@@ -158,6 +176,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     min_order_value: '',
     description: '',
   });
+  const [terminalForm, setTerminalForm] = useState({
+    vendor_name: 'kpay' as 'kpay' | 'other',
+    app_id: '',
+    app_secret: '',
+    terminal_ip: '192.168.50.210',
+    terminal_port: '18080',
+    endpoint_path: '/v2/pos/sign',
+  });
+  const [testingTerminal, setTestingTerminal] = useState(false);
+  const [terminalTestResult, setTerminalTestResult] = useState<any>(null);
 
   const fetchSettings = async () => {
     try {
@@ -216,9 +244,22 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const fetchPaymentTerminals = async () => {
+    try {
+      const terminalsRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
+      const terminalsList = Array.isArray(terminalsRes.data) ? terminalsRes.data : [];
+      setPaymentTerminals(terminalsList);
+    } catch (err: any) {
+      console.warn('[Settings] Failed to fetch payment terminals (non-critical):', err.message);
+      // Don't show error or block UI - payment terminals fetching is non-critical
+      setPaymentTerminals([]);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
     fetchVariantPresets();
+    fetchPaymentTerminals();
   }, [restaurantId]);
 
   const getPrinterTypeLabel = (type?: string): string => {
@@ -469,6 +510,119 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         style: 'destructive',
       },
     ]);
+  };
+
+  // Payment Terminal Functions
+  const savePaymentTerminal = async () => {
+    try {
+      if (!terminalForm.app_id || !terminalForm.app_secret || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
+        Alert.alert('Validation', 'Please fill in all required fields');
+        return;
+      }
+
+      const payload = {
+        vendor_name: terminalForm.vendor_name,
+        app_id: terminalForm.app_id,
+        app_secret: terminalForm.app_secret,
+        terminal_ip: terminalForm.terminal_ip,
+        terminal_port: parseInt(terminalForm.terminal_port),
+        endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
+      };
+
+      if (editingTerminalId) {
+        // Update existing terminal
+        await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
+        Alert.alert('Success', 'Payment terminal updated successfully!');
+      } else {
+        // Create new terminal
+        await apiClient.post(`/api/restaurants/${restaurantId}/payment-terminals`, payload);
+        Alert.alert('Success', 'Payment terminal created successfully!');
+      }
+
+      await fetchPaymentTerminals();
+      resetTerminalForm();
+      setShowPaymentTerminalModal(false);
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to save payment terminal');
+    }
+  };
+
+  const testPaymentTerminal = async () => {
+    try {
+      if (!editingTerminalId) {
+        Alert.alert('Error', 'Please save the terminal configuration first');
+        return;
+      }
+
+      setTestingTerminal(true);
+      const response = await apiClient.post(
+        `/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}/test`
+      );
+
+      setTerminalTestResult(response.data);
+      
+      if (response.data.success) {
+        Alert.alert(
+          'Connection Successful! 🎉',
+          `Connected to ${terminalForm.vendor_name.toUpperCase()} terminal at ${terminalForm.terminal_ip}:${terminalForm.terminal_port}`
+        );
+      } else {
+        Alert.alert(
+          'Connection Failed',
+          response.data.error || response.data.message
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to test terminal connection');
+    } finally {
+      setTestingTerminal(false);
+    }
+  };
+
+  const deletePaymentTerminal = async (terminalId: number) => {
+    Alert.alert('Delete Payment Terminal', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        onPress: async () => {
+          try {
+            await apiClient.delete(`/api/restaurants/${restaurantId}/payment-terminals/${terminalId}`);
+            await fetchPaymentTerminals();
+            Alert.alert('Success', 'Payment terminal deleted!');
+          } catch (err: any) {
+            Alert.alert('Error', 'Failed to delete payment terminal');
+          }
+        },
+        style: 'destructive',
+      },
+    ]);
+  };
+
+  const editPaymentTerminal = (terminal: PaymentTerminal) => {
+    setEditingTerminalId(terminal.id);
+    setTerminalForm({
+      vendor_name: terminal.vendor_name,
+      app_id: terminal.app_id,
+      app_secret: '', // Don't pre-fill secret for security
+      terminal_ip: terminal.terminal_ip || '192.168.50.210',
+      terminal_port: terminal.terminal_port?.toString() || '18080',
+      endpoint_path: terminal.endpoint_path || '/v2/pos/sign',
+    });
+    setTerminalTestResult(null);
+    setShowPaymentTerminalModal(true);
+  };
+
+  const resetTerminalForm = () => {
+    setEditingTerminalId(null);
+    setTerminalForm({
+      vendor_name: 'kpay',
+      app_id: '',
+      app_secret: '',
+      terminal_ip: '192.168.50.210',
+      terminal_port: '18080',
+      endpoint_path: '/v2/pos/sign',
+    });
+    setTerminalTestResult(null);
   };
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -1379,6 +1533,74 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         ) : null}
       </View>
 
+      {/* Payment Terminal Card */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>💳 Payment Terminal</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
+            onPress={() => {
+              resetTerminalForm();
+              setShowPaymentTerminalModal(true);
+            }}
+          >
+            <Text style={styles.btnSmallText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        {paymentTerminals.length > 0 ? (
+          <FlatList
+            data={paymentTerminals}
+            renderItem={({ item: terminal }) => (
+              <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
+                    {terminal.is_active && (
+                      <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
+                    {terminal.terminal_ip}:{terminal.terminal_port}
+                  </Text>
+                  {terminal.last_tested_at && (
+                    <Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>
+                      ✓ Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}
+                    </Text>
+                  )}
+                  {terminal.last_error_message && (
+                    <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>
+                      ⚠️ Error: {terminal.last_error_message}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ marginLeft: 12, justifyContent: 'space-around' }}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
+                    onPress={() => editPaymentTerminal(terminal)}
+                  >
+                    <Text style={styles.btnSmallText}>✎</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnSmall, { backgroundColor: '#ef4444' }, { marginTop: 4 }]}
+                    onPress={() => deletePaymentTerminal(terminal.id)}
+                  >
+                    <Text style={styles.btnSmallText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            keyExtractor={(item) => item.id.toString()}
+            scrollEnabled={false}
+          />
+        ) : (
+          <Text style={styles.emptyText}>No payment terminals configured yet</Text>
+        )}
+      </View>
+
       {/* QR Code Settings */}
       {bluetoothModal}
       <View style={styles.section}>
@@ -1673,6 +1895,163 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 onPress={createCoupon}
               >
                 <Text style={styles.btnText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Payment Terminal Modal */}
+      <Modal visible={showPaymentTerminalModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingTerminalId ? '✎ Edit Payment Terminal' : '➕ Add Payment Terminal'}
+            </Text>
+
+            {/* Vendor Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Payment Vendor</Text>
+              <View>
+                {(['kpay', 'other'] as const).map((vendor) => (
+                  <TouchableOpacity
+                    key={vendor}
+                    style={{ paddingVertical: 8 }}
+                    onPress={() => setTerminalForm({ ...terminalForm, vendor_name: vendor })}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          borderWidth: 2,
+                          borderColor: terminalForm.vendor_name === vendor ? '#3b82f6' : '#d1d5db',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        {terminalForm.vendor_name === vendor && (
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3b82f6' }} />
+                        )}
+                      </View>
+                      <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
+                        {vendor === 'kpay' ? 'KPay' : 'Other'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* App ID */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>App ID / Terminal ID</Text>
+              <TextInput
+                style={styles.input}
+                value={terminalForm.app_id}
+                onChangeText={(text) => setTerminalForm({ ...terminalForm, app_id: text })}
+                placeholder="Enter app ID"
+              />
+            </View>
+
+            {/* App Secret */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>App Secret / Token</Text>
+              <TextInput
+                style={styles.input}
+                value={terminalForm.app_secret}
+                onChangeText={(text) => setTerminalForm({ ...terminalForm, app_secret: text })}
+                placeholder="Enter app secret"
+                secureTextEntry
+              />
+            </View>
+
+            {/* Terminal IP */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Terminal IP Address</Text>
+              <TextInput
+                style={styles.input}
+                value={terminalForm.terminal_ip}
+                onChangeText={(text) => setTerminalForm({ ...terminalForm, terminal_ip: text })}
+                placeholder="e.g., 192.168.50.210"
+              />
+            </View>
+
+            {/* Terminal Port */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Terminal Port</Text>
+              <TextInput
+                style={styles.input}
+                value={terminalForm.terminal_port}
+                onChangeText={(text) => setTerminalForm({ ...terminalForm, terminal_port: text })}
+                placeholder="e.g., 18080"
+                keyboardType="number-pad"
+              />
+            </View>
+
+            {/* Endpoint Path */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>API Endpoint Path</Text>
+              <TextInput
+                style={styles.input}
+                value={terminalForm.endpoint_path}
+                onChangeText={(text) => setTerminalForm({ ...terminalForm, endpoint_path: text })}
+                placeholder="e.g., /v2/pos/sign"
+              />
+            </View>
+
+            {/* Test Result */}
+            {terminalTestResult && (
+              <View style={[styles.formGroup, {
+                borderRadius: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                backgroundColor: terminalTestResult.success ? '#ecfdf5' : '#fef2f2',
+                borderWidth: 1,
+                borderColor: terminalTestResult.success ? '#86efac' : '#fecaca'
+              }]}>
+                <Text style={{
+                  fontSize: 13,
+                  fontWeight: '600',
+                  color: terminalTestResult.success ? '#059669' : '#dc2626',
+                  marginBottom: 4
+                }}>
+                  {terminalTestResult.success ? '✓ Connection Successful' : '⚠️ Connection Failed'}
+                </Text>
+                <Text style={{ fontSize: 12, color: '#1f2937' }}>
+                  {terminalTestResult.message}
+                </Text>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.formActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => {
+                  setShowPaymentTerminalModal(false);
+                  resetTerminalForm();
+                }}
+              >
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              {editingTerminalId && (
+                <TouchableOpacity
+                  style={[styles.btn, { backgroundColor: '#f59e0b' }]}
+                  onPress={testPaymentTerminal}
+                  disabled={testingTerminal}
+                >
+                  <Text style={styles.btnText}>{testingTerminal ? '⏳ Testing...' : '🧪 Test'}</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={savePaymentTerminal}
+              >
+                <Text style={styles.btnText}>{editingTerminalId ? '✓ Update' : '✓ Create'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2211,6 +2590,27 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     paddingVertical: 16,
+  },
+  terminalCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#f3f4f6',
+    padding: 14,
+    marginBottom: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  terminalCardActive: {
+    borderLeftColor: '#059669',
+    backgroundColor: '#f0fdf4',
+  },
+  terminalVendor: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
   },
   presetCard: {
     backgroundColor: '#f8fafc',

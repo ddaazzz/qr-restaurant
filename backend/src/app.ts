@@ -19,6 +19,7 @@ import printerRoutes from "./routes/printer.routes";
 import customerReceiptsRoutes from "./routes/customerReceipts.routes";
 import addonsRoutes from "./routes/addons.routes";
 import presetsRoutes from "./routes/presets.routes";
+import paymentTerminalsRoutes from "./routes/payment-terminals.routes";
 
 const app = express();
 
@@ -115,6 +116,7 @@ app.use("/lib", express.static(path.join(__dirname, "../../node_modules/html5-qr
 ====================== */
 app.use("/api", settingsRoutes);
 app.use("/api", printerRoutes);
+app.use("/api", paymentTerminalsRoutes);
 app.use("/api", customerReceiptsRoutes);
 app.use("/api", addonsRoutes);
 app.use("/api", presetsRoutes);
