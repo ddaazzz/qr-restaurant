@@ -62,6 +62,12 @@
       <h3 data-i18n="admin.variant-presets">⚙️ Variant Presets</h3>
       <p data-i18n="admin.manage-presets">Manage preset addon and variant lists</p>
     </div>
+
+    <!-- Payment Terminals Card -->
+    <div class="settings-card" onclick="openSettingsModal('payment-terminals')">
+      <h3>💳 Payment Terminals</h3>
+      <p id="payment-terminals-preview">Configure KPay and other payment terminals</p>
+    </div>
   </div>
 
   <!-- HIDDEN: Preferences Modal -->
@@ -455,6 +461,79 @@
         </div>
         <div id="variant-presets-list" style="max-height: 400px; overflow-y: auto;">
           <!-- Presets rendered here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Payment Terminals Modal -->
+  <div id="modal-payment-terminals" class="settings-modal hidden">
+    <div class="modal-backdrop" onclick="closeSettingsModal('payment-terminals')"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>💳 Payment Terminals</h3>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="terminal-add-btn" class="btn-primary" onclick="openPaymentTerminalForm()" style="padding: 6px 12px; font-size: 13px;">+ Add Terminal</button>
+          <button class="modal-close" onclick="closeSettingsModal('payment-terminals')">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Payment Terminals List View -->
+        <div id="payment-terminal-list-view">
+          <div id="payment-terminals-list" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- JS renders payment terminals here -->
+          </div>
+          <p id="no-terminals-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;">No payment terminals configured yet</p>
+        </div>
+
+        <!-- Payment Terminal Form (hidden) -->
+        <div id="payment-terminal-form-view" style="display: none;">
+          <button onclick="closePaymentTerminalForm()" class="btn-secondary" style="width: 100%; margin-bottom: 16px; padding: 8px;">← Back to List</button>
+          
+          <div id="terminal-error" class="error-message" style="display: none; margin-bottom: 16px;"></div>
+          <div id="terminal-success" class="success-message" style="display: none; margin-bottom: 16px;"></div>
+          
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Vendor</label>
+            <select id="new-terminal-vendor" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+              <option value="kpay">KPay</option>
+              <option value="other">Other Vendor</option>
+            </select>
+          </div>
+
+          <div class="form-row two-col">
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;">App ID</label>
+              <input id="new-terminal-app-id" type="text" placeholder="Enter app ID" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+            </div>
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;">App Secret</label>
+              <input id="new-terminal-app-secret" type="password" placeholder="Enter app secret" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+            </div>
+          </div>
+
+          <div class="form-row two-col">
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Terminal IP</label>
+              <input id="new-terminal-ip" type="text" placeholder="e.g., 192.168.50.210" value="192.168.50.210" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+            </div>
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Terminal Port</label>
+              <input id="new-terminal-port" type="text" placeholder="e.g., 18080" value="18080" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Endpoint Path</label>
+            <input id="new-terminal-endpoint" type="text" placeholder="e.g., /v2/pos/sign" value="/v2/pos/sign" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-top: 20px;">
+            <button onclick="testPaymentTerminal()" class="btn-secondary" style="flex: 1; padding: 10px;">🧪 Test Connection</button>
+            <button onclick="savePaymentTerminal()" class="btn-primary" style="flex: 1; padding: 10px;">💾 Save Terminal</button>
+          </div>
+
+          <div id="terminal-test-result" style="display: none; margin-top: 16px; padding: 12px; border-radius: 4px;"></div>
         </div>
       </div>
     </div>

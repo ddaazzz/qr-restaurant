@@ -133,6 +133,9 @@ async function openSettingsModal(modalName) {
       case 'coupons':
         await loadCouponsModal();
         break;
+      case 'payment-terminals':
+        await loadPaymentTerminals();
+        break;
       case 'booking-settings':
         await loadBookingSettingsModal();
         break;
@@ -1584,4 +1587,241 @@ async function saveBillFormat() {
     console.error('Error saving bill format:', err);
     alert('Error saving bill format settings');
   }
+}
+
+// ============= PAYMENT TERMINALS MANAGEMENT =============
+
+let PAYMENT_TERMINALS_CACHE = [];
+let EDITING_TERMINAL_ID = null;
+
+async function loadPaymentTerminals() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`);
+    if (res.ok) {
+      PAYMENT_TERMINALS_CACHE = await res.json();
+      renderPaymentTerminalsList();
+    }
+  } catch (err) {
+    console.error('Failed to load payment terminals:', err);
+    showError('terminal-error', 'Failed to load terminals');
+  }
+}
+
+function renderPaymentTerminalsList() {
+  const listContainer = document.getElementById('payment-terminals-list');
+  const noMsg = document.getElementById('no-terminals-msg');
+  
+  if (!PAYMENT_TERMINALS_CACHE || PAYMENT_TERMINALS_CACHE.length === 0) {
+    listContainer.style.display = 'none';
+    noMsg.style.display = 'block';
+    return;
+  }
+  
+  listContainer.style.display = 'flex';
+  noMsg.style.display = 'none';
+  listContainer.innerHTML = '';
+  
+  PAYMENT_TERMINALS_CACHE.forEach(terminal => {
+    const card = document.createElement('div');
+    card.className = 'terminal-card' + (terminal.is_active ? ' terminal-card-active' : '');
+    
+    let html = '<div style="flex: 1;">';
+    html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+    html += '<span style="font-weight: bold; font-size: 14px;">' + terminal.vendor_name.toUpperCase() + '</span>';
+    if (terminal.is_active) {
+      html += '<span style="background: #059669; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">ACTIVE</span>';
+    }
+    html += '</div>';
+    html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: ' + terminal.app_id + '</div>';
+    html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">' + terminal.terminal_ip + ':' + terminal.terminal_port + '</div>';
+    
+    if (terminal.last_tested_at) {
+      html += '<div style="font-size: 11px; color: #059669; margin-top: 4px;">✓ Tested: ' + new Date(terminal.last_tested_at).toLocaleDateString() + '</div>';
+    }
+    if (terminal.last_error_message) {
+      html += '<div style="font-size: 11px; color: #dc2626; margin-top: 4px;">⚠️ ' + terminal.last_error_message + '</div>';
+    }
+    html += '</div>';
+    html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px;">';
+    html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">✎ Edit</button>';
+    html += '<button onclick="deletePaymentTerminal(' + terminal.id + ')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">🗑️ Delete</button>';
+    html += '</div>';
+    
+    card.innerHTML = html;
+    listContainer.appendChild(card);
+  });
+}
+
+function openPaymentTerminalForm() {
+  EDITING_TERMINAL_ID = null;
+  document.getElementById('payment-terminal-form-view').style.display = 'block';
+  document.getElementById('payment-terminal-list-view').style.display = 'none';
+  clearPaymentTerminalForm();
+}
+
+function closePaymentTerminalForm() {
+  document.getElementById('payment-terminal-form-view').style.display = 'none';
+  document.getElementById('payment-terminal-list-view').style.display = 'block';
+  clearPaymentTerminalForm();
+}
+
+function clearPaymentTerminalForm() {
+  document.getElementById('new-terminal-vendor').value = 'kpay';
+  document.getElementById('new-terminal-app-id').value = '';
+  document.getElementById('new-terminal-app-secret').value = '';
+  document.getElementById('new-terminal-ip').value = '192.168.50.210';
+  document.getElementById('new-terminal-port').value = '18080';
+  document.getElementById('new-terminal-endpoint').value = '/v2/pos/sign';
+  document.getElementById('terminal-error').style.display = 'none';
+  document.getElementById('terminal-success').style.display = 'none';
+  document.getElementById('terminal-test-result').style.display = 'none';
+  EDITING_TERMINAL_ID = null;
+}
+
+async function editPaymentTerminal(terminalId) {
+  const terminal = PAYMENT_TERMINALS_CACHE.find(t => t.id === terminalId);
+  if (!terminal) return;
+  
+  EDITING_TERMINAL_ID = terminalId;
+  document.getElementById('new-terminal-vendor').value = terminal.vendor_name;
+  document.getElementById('new-terminal-app-id').value = terminal.app_id || '';
+  document.getElementById('new-terminal-app-secret').value = terminal.app_secret || '';
+  document.getElementById('new-terminal-ip').value = terminal.terminal_ip || '192.168.50.210';
+  document.getElementById('new-terminal-port').value = terminal.terminal_port || '18080';
+  document.getElementById('new-terminal-endpoint').value = terminal.endpoint_path || '/v2/pos/sign';
+  
+  document.getElementById('payment-terminal-form-view').style.display = 'block';
+  document.getElementById('payment-terminal-list-view').style.display = 'none';
+  document.getElementById('terminal-error').style.display = 'none';
+  document.getElementById('terminal-success').style.display = 'none';
+  document.getElementById('terminal-test-result').style.display = 'none';
+}
+
+async function savePaymentTerminal() {
+  const vendor = document.getElementById('new-terminal-vendor').value;
+  const appId = document.getElementById('new-terminal-app-id').value.trim();
+  const appSecret = document.getElementById('new-terminal-app-secret').value;
+  const terminalIp = document.getElementById('new-terminal-ip').value.trim();
+  const terminalPort = document.getElementById('new-terminal-port').value.trim();
+  const endpointPath = document.getElementById('new-terminal-endpoint').value.trim();
+  
+  if (!appId || !appSecret || !terminalIp || !terminalPort) {
+    showError('terminal-error', 'All fields are required');
+    return;
+  }
+  
+  try {
+    const payload = {
+      vendor_name: vendor,
+      app_id: appId,
+      app_secret: appSecret,
+      terminal_ip: terminalIp,
+      terminal_port: parseInt(terminalPort),
+      endpoint_path: endpointPath
+    };
+    
+    const method = EDITING_TERMINAL_ID ? 'PATCH' : 'POST';
+    const url = EDITING_TERMINAL_ID 
+      ? `${API}/restaurants/${restaurantId}/payment-terminals/${EDITING_TERMINAL_ID}`
+      : `${API}/restaurants/${restaurantId}/payment-terminals`;
+    
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (res.ok) {
+      showSuccess('terminal-success', EDITING_TERMINAL_ID ? 'Terminal updated!' : 'Terminal created!');
+      await loadPaymentTerminals();
+      setTimeout(() => closePaymentTerminalForm(), 1000);
+    } else {
+      const err = await res.json();
+      showError('terminal-error', err.message || 'Failed to save terminal');
+    }
+  } catch (err) {
+    showError('terminal-error', 'Network error: ' + err.message);
+  }
+}
+
+async function testPaymentTerminal() {
+  const terminalId = EDITING_TERMINAL_ID;
+  if (!terminalId) {
+    showError('terminal-error', 'Save terminal first before testing');
+    return;
+  }
+  
+  try {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '🔄 Testing...';
+    
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const result = await res.json();
+    const resultDiv = document.getElementById('terminal-test-result');
+    
+    if (result.success) {
+      resultDiv.style.background = '#f0fdf4';
+      resultDiv.style.borderLeft = '4px solid #22c55e';
+      resultDiv.style.color = '#166534';
+      resultDiv.innerHTML = '✓ Connection successful!';
+    } else {
+      resultDiv.style.background = '#fef2f2';
+      resultDiv.style.borderLeft = '4px solid #dc2626';
+      resultDiv.style.color = '#991b1b';
+      resultDiv.innerHTML = '✗ ' + (result.message || 'Connection failed');
+    }
+    resultDiv.style.display = 'block';
+    
+    btn.disabled = false;
+    btn.textContent = originalText;
+  } catch (err) {
+    showError('terminal-error', 'Test failed: ' + err.message);
+  }
+}
+
+async function deletePaymentTerminal(terminalId) {
+  if (!confirm('Delete this payment terminal?')) return;
+  
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
+      method: 'DELETE'
+    });
+    
+    if (res.ok) {
+      await loadPaymentTerminals();
+      showSuccess('terminal-success', 'Terminal deleted');
+    } else {
+      showError('terminal-error', 'Failed to delete terminal');
+    }
+  } catch (err) {
+    showError('terminal-error', 'Delete failed: ' + err.message);
+  }
+}
+
+function showError(elementId, message) {
+  const el = document.getElementById(elementId);
+  el.textContent = message;
+  el.style.display = 'block';
+  el.style.background = '#fef2f2';
+  el.style.color = '#991b1b';
+  el.style.borderLeft = '4px solid #dc2626';
+  el.style.padding = '12px';
+  el.style.borderRadius = '4px';
+}
+
+function showSuccess(elementId, message) {
+  const el = document.getElementById(elementId);
+  el.textContent = message;
+  el.style.display = 'block';
+  el.style.background = '#f0fdf4';
+  el.style.color = '#166534';
+  el.style.borderLeft = '4px solid #22c55e';
+  el.style.padding = '12px';
+  el.style.borderRadius = '4px';
 }
