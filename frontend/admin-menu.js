@@ -73,8 +73,8 @@ function createMenuItemCardElement(item, isEditMode) {
   if (item.image_url) {
     imgEl.src = item.image_url;
   } else {
-    imgEl.style.display = 'none';
-    card.querySelector('.menu-item-image').innerHTML = '<div class="no-image">📸</div>';
+    imgEl.src = '/uploads/website/placeholder.png';
+    imgEl.style.display = '';
   }
   
   card.querySelector('.menu-item-name').textContent = item.name;
@@ -792,6 +792,7 @@ async function addMenuItemPrompt(categoryId) {
       return alert(err.error || "Failed to create item");
     }
 
+    showToast(`"${name.trim()}" added to menu`);
     await loadMenuItems();
   } catch (err) {
     alert("Error creating item: " + err.message);
@@ -1143,6 +1144,9 @@ function toggleFoodItemEdit() {
     loadAddonPresetsDropdownForPanel(currentEditingItemId);
     renderAddonsInFoodPanel(currentEditingItemId);
     
+    // Load variant presets dropdown (always, not just on checkbox toggle)
+    loadVariantPresetsDropdownForPanel();
+    
     // Set up addon button handlers
     const presetAddonBtn = document.getElementById('food-panel-btn-add-preset-addon');
     const customAddonBtn = document.getElementById('food-panel-btn-addon-add');
@@ -1291,7 +1295,7 @@ async function saveFoodItemEdit() {
     imageInput.value = '';
     
     cancelFoodItemEdit();
-    alert('Item updated successfully');
+    showToast('Item updated successfully');
   } catch (err) {
     alert('Error saving: ' + err.message);
   }

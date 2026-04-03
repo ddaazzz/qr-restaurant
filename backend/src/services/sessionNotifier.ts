@@ -49,7 +49,7 @@ export class SessionNotifier extends EventEmitter {
       this.listenClient.on('notification', (msg) => {
         if (msg.channel === 'new_session') {
           try {
-            const payload = JSON.parse(msg.payload);
+            const payload = JSON.parse(msg.payload ?? '{}');
             console.log('[SessionNotifier] New session detected:', payload);
             
             // Check if we should auto-print (haven't printed this session before)

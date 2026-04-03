@@ -1,11 +1,36 @@
 // ============= SETTINGS MANAGEMENT =============
 
+console.log('[admin-settings.js] Module loading...');
+
 // Initialization gate
 let settingsInitialized = false;
 
 let ADMIN_SETTINGS_CACHE = {};
 let SETTINGS_EDIT_MODE = {};
 let STAGED_LOGO = null;
+let EDITING_COUPON_ID = null;
+
+// Setup button listeners when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupPaymentTestButton);
+} else {
+  setupPaymentTestButton();
+}
+
+function setupPaymentTestButton() {
+  console.log('[admin-settings.js] Setting up payment test button listener');
+  const btn = document.querySelector('button[onclick="testPaymentTerminal()"]');
+  if (btn) {
+    console.log('[admin-settings.js] Found test button, attaching listener');
+    btn.addEventListener('click', function(e) {
+      console.log('[BUTTON ONCLICK] Test connection button clicked');
+      e.preventDefault();
+      testPaymentTerminal();
+    });
+  } else {
+    console.log('[admin-settings.js] Test button not found yet');
+  }
+}
 
 // ========== INITIALIZE SETTINGS ==========
 async function initializeSettings() {
@@ -118,9 +143,6 @@ async function openSettingsModal(modalName) {
       case 'restaurant-info':
         await loadRestaurantInfoModal();
         break;
-      case 'pos-integration':
-        await loadPOSIntegrationModal();
-        break;
       case 'printer-settings':
         await loadPrinterSettings();
         break;
@@ -150,10 +172,71 @@ async function openSettingsModal(modalName) {
 }
 
 function closeSettingsModal(modalName) {
-  const modal = document.getElementById(`modal-${modalName}`);
-  if (modal) {
-    modal.classList.add('hidden');
+  // Redirect to page-based hiding
+  hideSettingsPage(modalName);
+}
+
+// ============= SETTINGS PAGE MANAGEMENT =============
+async function showSettingsPage(pageName) {
+  // Hide the settings cards grid
+  const grid = document.querySelector('.settings-cards-grid');
+  if (grid) grid.style.display = 'none';
+
+  // Hide edit-settings-header button while in a subpage
+  const editBtn = document.getElementById('edit-settings-header');
+  if (editBtn) editBtn.style.display = 'none';
+
+  // Show the settings page element
+  const page = document.getElementById(`page-${pageName}`);
+  if (page) {
+    page.classList.remove('hidden');
+    page.classList.add('active');
+
+    // Load page data
+    switch (pageName) {
+      case 'restaurant-info':
+        await loadRestaurantInfoModal();
+        break;
+      case 'staff-login-links':
+        await loadStaffLoginLinksModal();
+        break;
+      case 'qr-settings':
+        await loadQRSettingsModal();
+        break;
+      case 'coupons':
+        await loadCouponsModal();
+        break;
+      case 'payment-terminals':
+        await loadPaymentTerminals();
+        break;
+      case 'booking-settings':
+        await loadBookingSettingsModal();
+        break;
+      case 'addon-presets':
+        await loadAddonPresets();
+        break;
+      case 'variant-presets':
+        await loadVariantPresets();
+        break;
+    }
   }
+}
+
+function hideSettingsPage(pageName) {
+  // Hide the page
+  const page = document.getElementById(`page-${pageName}`);
+  if (page) {
+    page.classList.add('hidden');
+    page.classList.remove('active');
+  }
+
+  // Restore settings cards grid
+  const grid = document.querySelector('.settings-cards-grid');
+  if (grid) grid.style.display = '';
+
+  // Restore edit-settings-header button
+  const editBtn = document.getElementById('edit-settings-header');
+  if (editBtn) editBtn.style.display = '';
 }
 
 // ============= PRINTER SETTINGS PAGE MANAGEMENT =============
@@ -228,6 +311,8 @@ async function showPrinterSettings() {
       } else {
         console.error('[admin-settings.js] initializePrinterSettings function not found');
       }
+      // Apply translations to dynamically loaded HTML
+      if (typeof reTranslateContent === 'function') reTranslateContent();
     } catch (err) {
       console.error('[admin-settings.js] Failed to load printer settings module:', err);
       alert('Failed to load printer settings: ' + err.message);
@@ -238,6 +323,7 @@ async function showPrinterSettings() {
     if (typeof initializePrinterSettings === 'function') {
       await initializePrinterSettings();
     }
+    if (typeof reTranslateContent === 'function') reTranslateContent();
   }
 }
 
@@ -461,9 +547,14 @@ async function loadRestaurantInfoModal() {
     // Use color swatch template
     const colorTemplate = document.getElementById('color-swatch-template');
     const colorSwatch = colorTemplate.content.cloneNode(true).querySelector('div');
-    colorSwatch.style.backgroundColor = settings.theme_color || '#000';
+    const hex = settings.theme_color || '#2c3e50';
+    colorSwatch.style.backgroundColor = hex;
     document.getElementById('view-color').innerHTML = '';
     document.getElementById('view-color').appendChild(colorSwatch);
+    const hexLabel = document.createElement('span');
+    hexLabel.textContent = hex.toUpperCase();
+    hexLabel.style.cssText = 'margin-left:10px;font-size:13px;font-weight:600;color:#374151;vertical-align:middle;font-family:monospace;';
+    document.getElementById('view-color').appendChild(hexLabel);
     
     // Populate input fields for edit mode
     document.getElementById('restaurant-name').value = settings.name || '';
@@ -471,7 +562,7 @@ async function loadRestaurantInfoModal() {
     document.getElementById('restaurant-address').value = settings.address || '';
     document.getElementById('timezone-select').value = settings.timezone || 'UTC';
     document.getElementById('serviceChargeInput').value = settings.service_charge_percent || 0;
-    document.getElementById('colorInput').value = settings.theme_color || '#4a90e2';
+    document.getElementById('colorInput').value = settings.theme_color || '#2c3e50';
     
     if (settings.logo_url) {
       document.getElementById('restaurant-logo').src = settings.logo_url;
@@ -484,46 +575,6 @@ async function loadRestaurantInfoModal() {
     }
   } catch (err) {
     console.error("Failed to load restaurant info:", err);
-  }
-}
-
-// Load POS Integration Modal
-async function loadPOSIntegrationModal() {
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
-    const settings = await res.json();
-    
-    document.getElementById('view-webhook-url').textContent = settings.pos_webhook_url ? settings.pos_webhook_url.substring(0, 50) + '...' : 'Not configured';
-    document.getElementById('view-api-key').textContent = settings.pos_api_key ? '••••••••••••••••' : 'Not configured';
-    document.getElementById('view-pos-system').textContent = settings.pos_system_type || 'Not selected';
-    
-    document.getElementById('pos-webhook-url').value = settings.pos_webhook_url || '';
-    document.getElementById('pos-api-key').value = settings.pos_api_key || '';
-    document.getElementById('pos-system-type').value = settings.pos_system_type || '';
-    
-    // Update connection status
-    const statusDiv = document.getElementById('pos-connection-status');
-    const hasConfig = settings.pos_webhook_url && settings.pos_api_key;
-    
-    // Use POS status template
-    const statusTemplate = document.getElementById('pos-status-template');
-    const statusElement = statusTemplate.content.cloneNode(true);
-    const statusContent = statusElement.querySelector('div');
-    
-    if (hasConfig) {
-      statusContent.textContent = '🟢 Configured';
-      statusContent.style.background = '#f0fdf4';
-      statusContent.style.color = '#166534';
-    } else {
-      statusContent.textContent = '🔴 Not Configured';
-      statusContent.style.background = '#fef2f2';
-      statusContent.style.color = '#991b1b';
-    }
-    
-    statusDiv.innerHTML = '';
-    statusDiv.appendChild(statusElement);
-  } catch (err) {
-    console.error("Failed to load POS settings:", err);
   }
 }
 
@@ -674,8 +725,28 @@ async function loadQRSettingsModal() {
     if (qrModeSelect && settings.qr_mode) {
       qrModeSelect.value = settings.qr_mode;
     }
+
+    const showStatusToggle = document.getElementById('show-item-status-toggle');
+    if (showStatusToggle) {
+      const enabled = settings.show_item_status_to_diners !== false; // default true
+      showStatusToggle.checked = enabled;
+    }
   } catch (err) {
     console.error("Failed to load QR settings:", err);
+  }
+}
+
+async function saveShowItemStatusSetting(enabled) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ show_item_status_to_diners: enabled })
+    });
+    if (!res.ok) throw new Error('Failed to save setting');
+  } catch (err) {
+    console.error("Error saving show item status setting:", err);
+    alert('Failed to save setting');
   }
 }
 
@@ -692,7 +763,6 @@ async function loadCouponsModal() {
     } else {
       document.getElementById('no-coupons-msg').style.display = 'none';
       
-      // Use coupon list template
       const couponTemplate = document.getElementById('coupon-list-template');
       couponsList.innerHTML = '';
       
@@ -701,6 +771,7 @@ async function loadCouponsModal() {
         couponElement.querySelector('[data-coupon-code]').textContent = coupon.code;
         couponElement.querySelector('[data-coupon-discount]').textContent = 
           coupon.discount_type === 'percentage' ? coupon.discount_value + '%' : '$' + coupon.discount_value + ' off';
+        couponElement.querySelector('[data-coupon-edit]').onclick = () => editCoupon(coupon);
         couponElement.querySelector('[data-coupon-delete]').onclick = () => deleteCoupon(coupon.id);
         couponsList.appendChild(couponElement);
       });
@@ -771,26 +842,6 @@ function cancelEditMode() {
   document.getElementById('cancel-settings-btn').classList.add('hidden');
 }
 
-// Toggle Coupon Edit/Add Mode
-function toggleCouponEditMode() {
-  const editView = document.getElementById('coupon-edit-view');
-  const editBtn = document.getElementById('coupon-edit-btn');
-  
-  if (!editView) {
-    console.warn('coupon-edit-view not found');
-    return;
-  }
-  
-  if (editView.style.display === 'none' || !editView.style.display) {
-    editView.style.display = 'flex';
-    editBtn.style.display = 'none';
-    document.getElementById('new-coupon-code').focus();
-  } else {
-    editView.style.display = 'none';
-    editBtn.style.display = 'block';
-  }
-}
-
 // Clear coupon form
 function clearCouponForm() {
   document.getElementById('new-coupon-code').value = '';
@@ -800,6 +851,88 @@ function clearCouponForm() {
   document.getElementById('new-coupon-max-uses').value = '';
   document.getElementById('new-coupon-valid-until').value = '';
   document.getElementById('new-coupon-description').value = '';
+}
+
+// Open form to add a new coupon
+function openAddCouponForm() {
+  EDITING_COUPON_ID = null;
+  clearCouponForm();
+  const title = document.getElementById('coupon-form-title');
+  const submitBtn = document.getElementById('coupon-submit-btn');
+  if (title) title.textContent = 'Add New Coupon';
+  if (submitBtn) { submitBtn.textContent = 'Create Coupon'; submitBtn.setAttribute('data-i18n', 'admin.create-coupon'); }
+  document.getElementById('coupon-form-section').style.display = 'block';
+  document.getElementById('new-coupon-code').focus();
+}
+
+// Load existing coupon into form for editing
+function editCoupon(coupon) {
+  EDITING_COUPON_ID = coupon.id;
+  document.getElementById('new-coupon-code').value = coupon.code || '';
+  document.getElementById('new-coupon-type').value = coupon.discount_type || 'percentage';
+  document.getElementById('new-coupon-value').value = coupon.discount_value || '';
+  document.getElementById('new-coupon-min-order').value = coupon.minimum_order_value || 0;
+  document.getElementById('new-coupon-max-uses').value = coupon.max_uses || '';
+  document.getElementById('new-coupon-valid-until').value = coupon.valid_until ? coupon.valid_until.split('T')[0] : '';
+  document.getElementById('new-coupon-description').value = coupon.description || '';
+  const title = document.getElementById('coupon-form-title');
+  const submitBtn = document.getElementById('coupon-submit-btn');
+  if (title) title.textContent = `Edit Coupon: ${coupon.code}`;
+  if (submitBtn) { submitBtn.textContent = 'Save Changes'; submitBtn.removeAttribute('data-i18n'); }
+  document.getElementById('coupon-form-section').style.display = 'block';
+  document.getElementById('new-coupon-code').focus();
+}
+
+// Close/hide coupon form
+function closeCouponForm() {
+  document.getElementById('coupon-form-section').style.display = 'none';
+  EDITING_COUPON_ID = null;
+  clearCouponForm();
+}
+
+// Submit coupon form (create or update)
+async function submitCouponForm() {
+  const code = document.getElementById('new-coupon-code').value.toUpperCase().trim();
+  const type = document.getElementById('new-coupon-type').value;
+  const value = parseFloat(document.getElementById('new-coupon-value').value);
+  const minOrder = parseFloat(document.getElementById('new-coupon-min-order').value) || 0;
+  const maxUses = document.getElementById('new-coupon-max-uses').value ? parseInt(document.getElementById('new-coupon-max-uses').value) : null;
+  const validUntil = document.getElementById('new-coupon-valid-until').value;
+  const description = document.getElementById('new-coupon-description').value;
+
+  if (!code || !type || isNaN(value)) {
+    alert('Please fill in all required fields (code, type, value)');
+    return;
+  }
+
+  try {
+    let res;
+    if (EDITING_COUPON_ID) {
+      res = await fetch(`${API}/coupons/${EDITING_COUPON_ID}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_until: validUntil || null, description, restaurantId })
+      });
+    } else {
+      res = await fetch(`${API}/restaurants/${restaurantId}/coupons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_until: validUntil || null, description })
+      });
+    }
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || (EDITING_COUPON_ID ? 'Failed to update coupon' : 'Failed to create coupon'));
+    }
+
+    alert(EDITING_COUPON_ID ? 'Coupon updated successfully!' : 'Coupon created successfully!');
+    closeCouponForm();
+    await loadCouponsModal();
+  } catch (err) {
+    console.error("Error saving coupon:", err);
+    alert('Failed to save coupon: ' + err.message);
+  }
 }
 
 // Save Restaurant Settings
@@ -881,90 +1014,6 @@ function uploadRestaurantBackground(file) {
 }
 
 // Edit POS Settings
-function enterEditModePOS() {
-  document.getElementById('view-webhook-url').classList.add('hidden');
-  document.getElementById('view-api-key').classList.add('hidden');
-  document.getElementById('view-pos-system').classList.add('hidden');
-  
-  document.getElementById('pos-webhook-url').classList.remove('hidden');
-  document.getElementById('pos-api-key').classList.remove('hidden');
-  document.getElementById('pos-system-type').classList.remove('hidden');
-  
-  document.getElementById('edit-pos-btn').classList.add('hidden');
-  document.getElementById('save-pos-btn').classList.remove('hidden');
-  document.getElementById('test-pos-btn').classList.remove('hidden');
-  document.getElementById('cancel-pos-btn').classList.remove('hidden');
-}
-
-function cancelEditModePOS() {
-  document.getElementById('view-webhook-url').classList.remove('hidden');
-  document.getElementById('view-api-key').classList.remove('hidden');
-  document.getElementById('view-pos-system').classList.remove('hidden');
-  
-  document.getElementById('pos-webhook-url').classList.add('hidden');
-  document.getElementById('pos-api-key').classList.add('hidden');
-  document.getElementById('pos-system-type').classList.add('hidden');
-  
-  document.getElementById('edit-pos-btn').classList.remove('hidden');
-  document.getElementById('save-pos-btn').classList.add('hidden');
-  document.getElementById('test-pos-btn').classList.add('hidden');
-  document.getElementById('cancel-pos-btn').classList.add('hidden');
-}
-
-async function savePOSSettings() {
-  const payload = {
-    pos_webhook_url: document.getElementById('pos-webhook-url').value,
-    pos_api_key: document.getElementById('pos-api-key').value,
-    pos_system_type: document.getElementById('pos-system-type').value
-  };
-  
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!res.ok) throw new Error('Failed to save');
-    
-    alert('POS settings saved successfully!');
-    cancelEditModePOS();
-    await loadPOSIntegrationModal();
-  } catch (err) {
-    console.error("Error saving POS settings:", err);
-    alert('Failed to save POS settings');
-  }
-}
-
-async function testPOSConnection() {
-  const webhookUrl = document.getElementById('pos-webhook-url').value;
-  const apiKey = document.getElementById('pos-api-key').value;
-  
-  if (!webhookUrl || !apiKey) {
-    alert('Please enter both webhook URL and API key');
-    return;
-  }
-  
-  try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({ test: true })
-    });
-    
-    if (res.ok) {
-      alert('✓ POS Connection Successful!');
-    } else {
-      alert('✗ POS Connection Failed - Check credentials');
-    }
-  } catch (err) {
-    alert('✗ Connection Error - Check URL and network');
-  }
-}
-
 // Copy to Clipboard
 function copyToClipboard(elementId) {
   const element = document.getElementById(elementId);
@@ -998,7 +1047,6 @@ async function saveBookingSettings() {
   }
 }
 
-// Coupons Management
 async function deleteCoupon(couponId) {
   if (!confirm('Are you sure you want to delete this coupon?')) return;
   
@@ -1011,50 +1059,6 @@ async function deleteCoupon(couponId) {
   } catch (err) {
     console.error("Error deleting coupon:", err);
     alert('Failed to delete coupon');
-  }
-}
-
-async function createCoupon() {
-  const code = document.getElementById('new-coupon-code').value.toUpperCase().trim();
-  const type = document.getElementById('new-coupon-type').value;
-  const value = parseFloat(document.getElementById('new-coupon-value').value);
-  const minOrder = parseFloat(document.getElementById('new-coupon-min-order').value) || 0;
-  const maxUses = document.getElementById('new-coupon-max-uses').value ? parseInt(document.getElementById('new-coupon-max-uses').value) : null;
-  const validUntil = document.getElementById('new-coupon-valid-until').value;
-  const description = document.getElementById('new-coupon-description').value;
-  
-  if (!code || !type || isNaN(value)) {
-    alert('Please fill in all required fields (code, type, value)');
-    return;
-  }
-  
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/coupons`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code,
-        discount_type: type,
-        discount_value: value,
-        minimum_order_value: minOrder,
-        max_uses: maxUses,
-        valid_until: validUntil || null,
-        description
-      })
-    });
-    
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to create coupon');
-    }
-    
-    alert('Coupon created successfully!');
-    clearCouponForm();
-    toggleCouponEditMode(); // Hide the form after successful creation
-    await loadCouponsModal();
-  } catch (err) {
-    console.error("Error creating coupon:", err);
-    alert('Failed to create coupon: ' + err.message);
   }
 }
 
@@ -1605,6 +1609,15 @@ async function loadPaymentTerminals() {
     console.error('Failed to load payment terminals:', err);
     showError('terminal-error', 'Failed to load terminals');
   }
+
+  // Show/hide Add Terminal button and superadmin notice based on role
+  const addBtn = document.getElementById('terminal-add-btn');
+  if (addBtn) addBtn.style.display = IS_SUPERADMIN ? '' : 'none';
+  const notice = document.getElementById('terminal-superadmin-notice');
+  if (notice) notice.style.display = IS_SUPERADMIN ? 'none' : 'block';
+
+  // Also load Order & Pay status
+  await loadOrderPayStatus();
 }
 
 function renderPaymentTerminalsList() {
@@ -1627,13 +1640,25 @@ function renderPaymentTerminalsList() {
     
     let html = '<div style="flex: 1;">';
     html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
-    html += '<span style="font-weight: bold; font-size: 14px;">' + terminal.vendor_name.toUpperCase() + '</span>';
+    
+    const vendorDisplay = terminal.vendor_name === 'payment-asia' ? 'Payment Asia' : terminal.vendor_name.toUpperCase();
+    html += '<span style="font-weight: bold; font-size: 14px;">' + vendorDisplay + '</span>';
+    
     if (terminal.is_active) {
       html += '<span style="background: #059669; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">ACTIVE</span>';
     }
     html += '</div>';
-    html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: ' + terminal.app_id + '</div>';
-    html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">' + terminal.terminal_ip + ':' + terminal.terminal_port + '</div>';
+    
+    // Show different info based on vendor type
+    if (terminal.vendor_name === 'payment-asia') {
+      html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">Token: ' + (terminal.merchant_token || terminal.app_id || '').substring(0, 20) + '...</div>';
+      html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">Environment: ' + (terminal.payment_gateway_env || 'sandbox') + '</div>';
+    } else {
+      html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: ' + (terminal.app_id || '') + '</div>';
+      if (terminal.terminal_ip && terminal.terminal_port) {
+        html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">' + terminal.terminal_ip + ':' + terminal.terminal_port + '</div>';
+      }
+    }
     
     if (terminal.last_tested_at) {
       html += '<div style="font-size: 11px; color: #059669; margin-top: 4px;">✓ Tested: ' + new Date(terminal.last_tested_at).toLocaleDateString() + '</div>';
@@ -1643,8 +1668,16 @@ function renderPaymentTerminalsList() {
     }
     html += '</div>';
     html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px;">';
-    html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">✎ Edit</button>';
-    html += '<button onclick="deletePaymentTerminal(' + terminal.id + ')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">🗑️ Delete</button>';
+    
+    // Activate button - only show to superadmin if not already active
+    if (!terminal.is_active && IS_SUPERADMIN) {
+      html += '<button onclick="activatePaymentTerminal(' + terminal.id + ')" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">Activate</button>';
+    }
+    
+    html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</button>';
+    if (IS_SUPERADMIN) {
+      html += '<button onclick="deletePaymentTerminal(' + terminal.id + ')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>';
+    }
     html += '</div>';
     
     card.innerHTML = html;
@@ -1653,6 +1686,10 @@ function renderPaymentTerminalsList() {
 }
 
 function openPaymentTerminalForm() {
+  if (!IS_SUPERADMIN) {
+    alert('Adding payment terminals requires Super Admin access.');
+    return;
+  }
   EDITING_TERMINAL_ID = null;
   document.getElementById('payment-terminal-form-view').style.display = 'block';
   document.getElementById('payment-terminal-list-view').style.display = 'none';
@@ -1669,49 +1706,117 @@ function clearPaymentTerminalForm() {
   document.getElementById('new-terminal-vendor').value = 'kpay';
   document.getElementById('new-terminal-app-id').value = '';
   document.getElementById('new-terminal-app-secret').value = '';
-  document.getElementById('new-terminal-ip').value = '192.168.50.210';
+  document.getElementById('new-terminal-ip').value = '';
   document.getElementById('new-terminal-port').value = '18080';
   document.getElementById('new-terminal-endpoint').value = '/v2/pos/sign';
+  document.getElementById('new-terminal-merchant-token').value = '';
+  document.getElementById('new-terminal-secret-code').value = '';
+  document.getElementById('new-terminal-gateway-env').value = 'sandbox';
   document.getElementById('terminal-error').style.display = 'none';
   document.getElementById('terminal-success').style.display = 'none';
   document.getElementById('terminal-test-result').style.display = 'none';
+  updatePaymentTerminalFields(); // Update field visibility
   EDITING_TERMINAL_ID = null;
 }
 
+function updatePaymentTerminalFields() {
+  const vendor = document.getElementById('new-terminal-vendor').value;
+  const kpayFields = document.getElementById('kpay-fields');
+  const paymentAsiaFields = document.getElementById('payment-asia-fields');
+  const kpayBtn = document.getElementById('kpay-test-btn');
+  const paymentAsiaBtn = document.getElementById('payment-asia-test-btn');
+  
+  if (vendor === 'payment-asia') {
+    kpayFields.style.display = 'none';
+    paymentAsiaFields.style.display = 'block';
+    kpayBtn.style.display = 'none';
+    paymentAsiaBtn.style.display = 'block';
+  } else {
+    kpayFields.style.display = 'block';
+    paymentAsiaFields.style.display = 'none';
+    kpayBtn.style.display = 'block';
+    paymentAsiaBtn.style.display = 'none';
+  }
+}
+
 async function editPaymentTerminal(terminalId) {
-  const terminal = PAYMENT_TERMINALS_CACHE.find(t => t.id === terminalId);
-  if (!terminal) return;
-  
-  EDITING_TERMINAL_ID = terminalId;
-  document.getElementById('new-terminal-vendor').value = terminal.vendor_name;
-  document.getElementById('new-terminal-app-id').value = terminal.app_id || '';
-  document.getElementById('new-terminal-app-secret').value = terminal.app_secret || '';
-  document.getElementById('new-terminal-ip').value = terminal.terminal_ip || '192.168.50.210';
-  document.getElementById('new-terminal-port').value = terminal.terminal_port || '18080';
-  document.getElementById('new-terminal-endpoint').value = terminal.endpoint_path || '/v2/pos/sign';
-  
-  document.getElementById('payment-terminal-form-view').style.display = 'block';
-  document.getElementById('payment-terminal-list-view').style.display = 'none';
-  document.getElementById('terminal-error').style.display = 'none';
-  document.getElementById('terminal-success').style.display = 'none';
-  document.getElementById('terminal-test-result').style.display = 'none';
+  try {
+    // Fetch full terminal details including app_secret
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`);
+    if (!res.ok) {
+      showError('terminal-error', 'Failed to load terminal details');
+      return;
+    }
+    const terminal = await res.json();
+    
+    EDITING_TERMINAL_ID = terminalId;
+    document.getElementById('new-terminal-vendor').value = terminal.vendor_name;
+    
+    if (terminal.vendor_name === 'payment-asia') {
+      // Load Payment Asia fields
+      document.getElementById('new-terminal-merchant-token').value = terminal.merchant_token || terminal.app_id || '';
+      document.getElementById('new-terminal-secret-code').value = terminal.secret_code || terminal.app_secret || '';
+      document.getElementById('new-terminal-gateway-env').value = terminal.payment_gateway_env || 'sandbox';
+    } else {
+      // Load KPay fields
+      document.getElementById('new-terminal-app-id').value = terminal.app_id || '';
+      document.getElementById('new-terminal-app-secret').value = terminal.app_secret || '';
+      document.getElementById('new-terminal-ip').value = terminal.terminal_ip || '';
+      document.getElementById('new-terminal-port').value = terminal.terminal_port || '18080';
+      document.getElementById('new-terminal-endpoint').value = terminal.endpoint_path || '/v2/pos/sign';
+    }
+    
+    document.getElementById('payment-terminal-form-view').style.display = 'block';
+    document.getElementById('payment-terminal-list-view').style.display = 'none';
+    document.getElementById('terminal-error').style.display = 'none';
+    document.getElementById('terminal-success').style.display = 'none';
+    document.getElementById('terminal-test-result').style.display = 'none';
+    updatePaymentTerminalFields(); // Update field visibility based on vendor
+  } catch (err) {
+    showError('terminal-error', 'Error loading terminal: ' + err.message);
+  }
 }
 
 async function savePaymentTerminal() {
-  const vendor = document.getElementById('new-terminal-vendor').value;
-  const appId = document.getElementById('new-terminal-app-id').value.trim();
-  const appSecret = document.getElementById('new-terminal-app-secret').value;
-  const terminalIp = document.getElementById('new-terminal-ip').value.trim();
-  const terminalPort = document.getElementById('new-terminal-port').value.trim();
-  const endpointPath = document.getElementById('new-terminal-endpoint').value.trim();
-  
-  if (!appId || !appSecret || !terminalIp || !terminalPort) {
-    showError('terminal-error', 'All fields are required');
+  // New terminals can only be created by superadmin; editing existing is allowed for both roles
+  if (!EDITING_TERMINAL_ID && !IS_SUPERADMIN) {
+    alert('Adding payment terminals requires Super Admin access.');
     return;
   }
+  const vendor = document.getElementById('new-terminal-vendor').value;
   
-  try {
-    const payload = {
+  let payload;
+  if (vendor === 'payment-asia') {
+    // Payment Asia validation
+    const merchantToken = document.getElementById('new-terminal-merchant-token').value.trim();
+    const secretCode = document.getElementById('new-terminal-secret-code').value.trim();
+    const env = document.getElementById('new-terminal-gateway-env').value;
+    
+    if (!merchantToken || !secretCode) {
+      showError('terminal-error', 'Merchant Token and Secret Code are required for Payment Asia');
+      return;
+    }
+    
+    payload = {
+      vendor_name: vendor,
+      app_id: merchantToken, // Merchant Token stored in app_id
+      app_secret: secretCode, // Secret Code stored in app_secret
+      payment_gateway_env: env
+    };
+  } else {
+    // KPay validation
+    const appId = document.getElementById('new-terminal-app-id').value.trim();
+    const appSecret = document.getElementById('new-terminal-app-secret').value;
+    const terminalIp = document.getElementById('new-terminal-ip').value.trim();
+    const terminalPort = document.getElementById('new-terminal-port').value.trim();
+    const endpointPath = document.getElementById('new-terminal-endpoint').value.trim();
+    
+    if (!appId || !appSecret || !terminalIp || !terminalPort) {
+      showError('terminal-error', 'All KPay fields are required (App ID, Secret, IP, Port)');
+      return;
+    }
+    
+    payload = {
       vendor_name: vendor,
       app_id: appId,
       app_secret: appSecret,
@@ -1719,7 +1824,9 @@ async function savePaymentTerminal() {
       terminal_port: parseInt(terminalPort),
       endpoint_path: endpointPath
     };
-    
+  }
+  
+  try {
     const method = EDITING_TERMINAL_ID ? 'PATCH' : 'POST';
     const url = EDITING_TERMINAL_ID 
       ? `${API}/restaurants/${restaurantId}/payment-terminals/${EDITING_TERMINAL_ID}`
@@ -1732,12 +1839,47 @@ async function savePaymentTerminal() {
     });
     
     if (res.ok) {
+      const savedTerminal = await res.json();
       showSuccess('terminal-success', EDITING_TERMINAL_ID ? 'Terminal updated!' : 'Terminal created!');
+      
+      // For KPay terminals, automatically test the connection
+      if (payload.vendor_name === 'kpay') {
+        console.log('[Save] KPay terminal saved, now testing connection...');
+        
+        // Show testing message
+        const testMsg = document.getElementById('terminal-success');
+        testMsg.textContent = 'Terminal saved! Now testing KPay connection...';
+        
+        // Test the terminal
+        try {
+          const testRes = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${savedTerminal.id}/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
+          
+          const testResult = await testRes.json();
+          
+          if (testResult.success) {
+            // Success!
+            showSuccess('terminal-success', '✅ KPay terminal saved and connection verified! Keys exchanged successfully.');
+            console.log('[Save] ✅ KPay connection successful');
+          } else {
+            // Connection test failed but terminal was saved
+            showError('terminal-error', '⚠️ Terminal saved but connection test failed: ' + (testResult.message || testResult.error || 'Unknown error'));
+            console.error('[Save] ❌ KPay connection test failed:', testResult);
+          }
+        } catch (testErr) {
+          showError('terminal-error', '⚠️ Terminal saved but connection test error: ' + testErr.message);
+          console.error('[Save] KPay connection test error:', testErr);
+        }
+      }
+      
       await loadPaymentTerminals();
-      setTimeout(() => closePaymentTerminalForm(), 1000);
+      setTimeout(() => closePaymentTerminalForm(), 1500);
     } else {
       const err = await res.json();
-      showError('terminal-error', err.message || 'Failed to save terminal');
+      showError('terminal-error', err.error || err.message || 'Failed to save terminal');
     }
   } catch (err) {
     showError('terminal-error', 'Network error: ' + err.message);
@@ -1745,8 +1887,92 @@ async function savePaymentTerminal() {
 }
 
 async function testPaymentTerminal() {
+  console.log('\n🚀 [KPay TEST] Initiating KPay terminal test');
+  
   const terminalId = EDITING_TERMINAL_ID;
+  const vendorName = document.getElementById('new-terminal-vendor').value;
+  
+  console.log('🏪 Terminal ID:', terminalId);
+  console.log('🏢 Restaurant ID:', restaurantId);
+  console.log('🔧 Vendor:', vendorName);
+  
+  if (vendorName !== 'kpay') {
+    showError('terminal-error', '❌ This is NOT a KPay terminal! Selected vendor: ' + vendorName.toUpperCase() + '. Use the "Test Payment" button for ' + vendorName.toUpperCase() + ' terminals.');
+    return;
+  }
+  
   if (!terminalId) {
+    console.error('[KPay TEST] No terminal ID set');
+    showError('terminal-error', 'Save terminal first before testing');
+    return;
+  }
+
+  try {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    
+    btn.disabled = true;
+    btn.textContent = '🔄 Opening KPay Payment...';
+    
+    // Open the payment popup with terminal and restaurant info
+    const paymentPageUrl = `${window.location.origin}/payment-popup.html?terminalId=${terminalId}&restaurantId=${restaurantId}`;
+    console.log('📱 Opening KPay payment page:', paymentPageUrl);
+    console.log('🏪 Terminal:', terminalId);
+    
+    const popupWindow = window.open(paymentPageUrl, 'KPayPayment', 'width=700,height=900,toolbar=no,menubar=no,scrollbars=yes');
+    
+    if (!popupWindow) {
+      throw new Error('Popup blocked. Please allow popups for this site.');
+    }
+    
+    console.log('✅ KPay payment window opened');
+    
+    btn.disabled = false;
+    btn.textContent = originalText;
+    
+    // Show info message in original window
+    const resultDiv = document.getElementById('terminal-test-result');
+    resultDiv.style.background = '#d1ecf1';
+    resultDiv.style.borderLeft = '4px solid #0c5460';
+    resultDiv.style.color = '#0c5460';
+    resultDiv.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="font-size: 20px;">🔄</div>
+        <div>
+          <strong>KPay Payment Window Opened (Terminal #${terminalId})</strong>
+          <div style="font-size: 13px; margin-top: 4px; opacity: 0.9;">
+            A new window has opened. Please complete the payment in the popup window. The terminal should process the payment.
+          </div>
+        </div>
+      </div>
+    `;
+    resultDiv.style.display = 'block';
+  } catch (err) {
+    console.error('❌ [KPay TEST] Exception');
+    console.error('❌ [KPay TEST] Error:', err.message);
+    showError('terminal-error', 'Failed to open KPay payment window: ' + err.message);
+    event.target.disabled = false;
+    event.target.textContent = originalText;
+  }
+}
+
+async function testPaymentAsia() {
+  console.log('\n🚀 [PAYMENT ASIA TEST] Initiating Payment Asia terminal test');
+  
+  const terminalId = EDITING_TERMINAL_ID;
+  const vendorName = document.getElementById('new-terminal-vendor').value;
+  
+  console.log('🏪 Terminal ID:', terminalId);
+  console.log('🏢 Restaurant ID:', restaurantId);
+  console.log('🔧 Vendor:', vendorName);
+  
+  if (vendorName !== 'payment-asia') {
+    showError('terminal-error', 'This test is for Payment Asia only. Use "Test Connection" button for KPay.');
+    return;
+  }
+  
+  if (!terminalId) {
+    console.error('[PAYMENT ASIA TEST] No terminal ID set');
     showError('terminal-error', 'Save terminal first before testing');
     return;
   }
@@ -1754,38 +1980,87 @@ async function testPaymentTerminal() {
   try {
     const btn = event.target;
     const originalText = btn.textContent;
+    
     btn.disabled = true;
-    btn.textContent = '🔄 Testing...';
+    btn.textContent = '🔄 Opening...';
     
-    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/test`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    
-    const result = await res.json();
     const resultDiv = document.getElementById('terminal-test-result');
     
-    if (result.success) {
-      resultDiv.style.background = '#f0fdf4';
-      resultDiv.style.borderLeft = '4px solid #22c55e';
-      resultDiv.style.color = '#166534';
-      resultDiv.innerHTML = '✓ Connection successful!';
-    } else {
-      resultDiv.style.background = '#fef2f2';
-      resultDiv.style.borderLeft = '4px solid #dc2626';
-      resultDiv.style.color = '#991b1b';
-      resultDiv.innerHTML = '✗ ' + (result.message || 'Connection failed');
-    }
+    // Get merchant token from form if available
+    const merchantToken = document.getElementById('new-terminal-merchant-token')?.value || 
+                          'ae476881-7bfc-4da8-bc7d-8203ad0fb28c';
+    
+    console.log('📱 Opening payment test page in new tab...');
+    
+    // Open custom payment test page in new tab (only pass merchant token and terminal ID)
+    const paymentTestUrl = `${window.location.origin}/payment-test.html?merchantToken=${encodeURIComponent(merchantToken)}&terminalId=${terminalId}&restaurantId=${restaurantId}`;
+    console.log('🔗 Payment Test URL:', paymentTestUrl);
+    
+    // Open in new tab
+    window.open(paymentTestUrl, '_blank');
+    console.log('✅ Payment test page opened in new tab');
+    
+    // Show success message
+    resultDiv.style.background = '#d4edda';
+    resultDiv.style.borderLeft = '4px solid #28a745';
+    resultDiv.style.color = '#155724';
+    resultDiv.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="font-size: 24px;">✅</div>
+        <div>
+          <strong>Payment test page opened in new tab!</strong>
+          <div style="font-size: 13px; margin-top: 4px; opacity: 0.9;">
+            A new tab has opened. Select your payment method and click "Make Payment" to proceed to Payment Asia.
+          </div>
+        </div>
+      </div>
+    `;
     resultDiv.style.display = 'block';
     
     btn.disabled = false;
     btn.textContent = originalText;
+    
   } catch (err) {
-    showError('terminal-error', 'Test failed: ' + err.message);
+    console.error('❌ [PAYMENT ASIA TEST] Exception');
+    console.error('❌ [PAYMENT ASIA TEST] Error:', err.message);
+    showError('terminal-error', 'Failed to open payment test page: ' + err.message);
+    if (event.target) {
+      event.target.disabled = false;
+      event.target.textContent = 'Test Payment';
+    }
+  }
+}
+
+async function activatePaymentTerminal(terminalId) {
+  if (!IS_SUPERADMIN) {
+    alert('Activating payment terminals requires Super Admin access.');
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      showSuccess('terminal-success', '✅ Terminal activated! ' + (result.message || 'Payment method is now active'));
+      await loadPaymentTerminals();
+    } else {
+      const err = await res.json();
+      showError('terminal-error', 'Failed to activate terminal: ' + (err.error || err.message || 'Unknown error'));
+    }
+  } catch (err) {
+    showError('terminal-error', 'Network error: ' + err.message);
   }
 }
 
 async function deletePaymentTerminal(terminalId) {
+  if (!IS_SUPERADMIN) {
+    alert('Deleting payment terminals requires Super Admin access.');
+    return;
+  }
   if (!confirm('Delete this payment terminal?')) return;
   
   try {
@@ -1824,4 +2099,138 @@ function showSuccess(elementId, message) {
   el.style.borderLeft = '4px solid #22c55e';
   el.style.padding = '12px';
   el.style.borderRadius = '4px';
+}
+
+// ============= ORDER & PAY FEATURE TOGGLE =============
+
+/**
+ * Load Order & Pay feature status
+ */
+async function loadOrderPayStatus() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    if (!res.ok) {
+      console.warn('[Order & Pay] Failed to load status');
+      return;
+    }
+
+    const settings = await res.json();
+    const isEnabled = settings.order_pay_enabled === true;
+    // hasPATerminal: true if active_payment_vendor is already set, OR if any PA terminal is active in cache
+    const hasPATerminal = settings.active_payment_vendor === 'payment-asia' ||
+      !!(PAYMENT_TERMINALS_CACHE && PAYMENT_TERMINALS_CACHE.some(t => t.vendor_name === 'payment-asia' && t.is_active));
+    
+    // Update button and status display
+    const toggleBtn = document.getElementById('order-pay-toggle-btn');
+    const statusDiv = document.getElementById('order-pay-status');
+
+    if (toggleBtn) {
+      if (!IS_SUPERADMIN) {
+        toggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
+        toggleBtn.className = isEnabled ? 'btn-success' : 'btn-secondary';
+        toggleBtn.disabled = true;
+        toggleBtn.title = 'Super Admin access required to change this setting';
+      } else {
+        toggleBtn.textContent = isEnabled ? 'Enabled' : 'Enable';
+        toggleBtn.className = isEnabled ? 'btn-success' : 'btn-secondary';
+        toggleBtn.disabled = false;
+        toggleBtn.title = '';
+      }
+    }
+
+    if (statusDiv) {
+      if (!hasPATerminal) {
+        statusDiv.innerHTML = '⚠️ No Payment Asia terminal active — activate one below for this to take effect';
+        statusDiv.style.color = '#92400e';
+      } else if (isEnabled) {
+        statusDiv.innerHTML = '🟢 Enabled - Customers can pay via Payment Asia';
+        statusDiv.style.color = '#166534';
+      } else {
+        statusDiv.innerHTML = '⚠️ Disabled - Customers cannot pay via Payment Asia';
+        statusDiv.style.color = '#92400e';
+      }
+    }
+
+    console.log('[Order & Pay] Status loaded:', isEnabled, '| PA terminal active:', hasPATerminal);
+  } catch (err) {
+    console.error('[Order & Pay] Failed to load status:', err);
+    const toggleBtn = document.getElementById('order-pay-toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.textContent = 'Error';
+      toggleBtn.disabled = true;
+    }
+  }
+}
+
+/**
+ * Toggle Order & Pay feature on/off
+ */
+async function toggleOrderPayFeature() {
+  if (!IS_SUPERADMIN) {
+    alert('Enabling or disabling Order & Pay requires Super Admin access.');
+    return;
+  }
+  try {
+    const toggleBtn = document.getElementById('order-pay-toggle-btn');
+    const statusDiv = document.getElementById('order-pay-status');
+
+    // Disable button while toggling
+    if (toggleBtn) {
+      toggleBtn.disabled = true;
+      toggleBtn.textContent = '⏳ Updating...';
+    }
+
+    // Fetch current status
+    const getRes = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    if (!getRes.ok) {
+      throw new Error('Failed to load current status');
+    }
+
+    const settings = await getRes.json();
+    const currentState = settings.order_pay_enabled === true;
+    const newState = !currentState;
+
+    // If enabling and PA terminal exists in cache but not yet the active vendor, activate it first
+    if (newState && settings.active_payment_vendor !== 'payment-asia') {
+      const paTerminal = PAYMENT_TERMINALS_CACHE && PAYMENT_TERMINALS_CACHE.find(t => t.vendor_name === 'payment-asia' && t.is_active);
+      if (paTerminal) {
+        const activateRes = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/activate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!activateRes.ok) {
+          throw new Error('Failed to activate Payment Asia terminal');
+        }
+      }
+    }
+
+    // Update status on backend
+    const patchRes = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_pay_enabled: newState })
+    });
+
+    if (!patchRes.ok) {
+      const error = await patchRes.json();
+      throw new Error(error.error || 'Failed to update setting');
+    }
+
+    await patchRes.json();
+
+    // Reload actual state from backend (avoids optimistic mismatch if PA terminal not active)
+    await loadOrderPayStatus();
+
+    console.log('[Order & Pay] Feature toggled:', newState ? 'ENABLED' : 'DISABLED');
+    showSuccess('terminal-success', `Order & Pay ${newState ? 'enabled' : 'disabled'} successfully`);
+  } catch (err) {
+    console.error('[Order & Pay] Toggle failed:', err);
+    const toggleBtn = document.getElementById('order-pay-toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.disabled = false;
+      toggleBtn.textContent = 'Retry';
+    }
+    showError('terminal-error', 'Failed to toggle Order & Pay: ' + err.message);
+  }
 }

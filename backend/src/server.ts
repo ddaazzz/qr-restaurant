@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import bcrypt from "bcrypt";
 import os from "os";
 import https from "https";
+import http from "http";
 import fs from "fs";
 import path from "path";
 import pool from "./config/db";
@@ -35,7 +36,7 @@ const localIP = getLocalIP();
 const certPath = path.join(__dirname, "../localhost-cert.pem");
 const keyPath = path.join(__dirname, "../localhost-key.pem");
 
-let server;
+let server: https.Server | http.Server;
 
 // Try HTTPS with certificates
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {

@@ -47,7 +47,7 @@ export class OrderNotifier extends EventEmitter {
         try {
           console.log('[OrderNotifier] Received NOTIFY on channel:', msg.channel, 'Payload:', msg.payload);
           if (msg.channel === 'new_order') {
-            const payload = JSON.parse(msg.payload);
+            const payload = JSON.parse(msg.payload ?? '{}');
             console.log('[OrderNotifier] ✅ New order detected:', payload);
             this.emit('new-order', {
               orderId: payload.id,
@@ -57,7 +57,7 @@ export class OrderNotifier extends EventEmitter {
               createdAt: payload.created_at,
             });
           } else if (msg.channel === 'order_status_change') {
-            const payload = JSON.parse(msg.payload);
+            const payload = JSON.parse(msg.payload ?? '{}');
             console.log('[OrderNotifier] ✅ Order status changed:', payload);
             this.emit('order-status-changed', {
               orderId: payload.id,

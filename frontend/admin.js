@@ -7,6 +7,94 @@
 // - admin-reports.js (reports)
 // - admin-settings.js (settings, POS, QR preferences)
 
+// ============= UI UTILITIES =============
+
+/**
+ * Show a toast notification. Disappears on click or after 4 seconds.
+ * @param {string} message
+ * @param {'success'|'error'|'info'} type
+ */
+function showToast(message, type = 'success') {
+  const existing = document.getElementById('app-toast');
+  if (existing) existing.remove();
+
+  const colors = {
+    success: { bg: '#1a1a2e', accent: '#22c55e', icon: '✅' },
+    error:   { bg: '#1a1a2e', accent: '#ef4444', icon: '❌' },
+    info:    { bg: '#1a1a2e', accent: '#3b82f6', icon: 'ℹ️' },
+  };
+  const c = colors[type] || colors.success;
+
+  const toast = document.createElement('div');
+  toast.id = 'app-toast';
+  toast.style.cssText = `
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(16px);
+    background: ${c.bg}; color: #fff; padding: 14px 24px;
+    border-left: 4px solid ${c.accent}; border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35); font-size: 15px; font-weight: 500;
+    z-index: 9999; cursor: pointer; white-space: pre-line; max-width: 90vw; text-align: center;
+    opacity: 0; transition: opacity 0.2s ease, transform 0.2s ease;
+  `;
+  toast.innerHTML = `${c.icon} ${message}`;
+
+  const dismiss = () => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(-50%) translateY(16px)';
+    setTimeout(() => toast.remove(), 220);
+  };
+  toast.addEventListener('click', dismiss);
+
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+  });
+  setTimeout(dismiss, 4000);
+}
+
+/**
+ * Styled modal to ask for pax count (replaces browser prompt).
+ * Returns a Promise that resolves to the pax number, or null if cancelled.
+ */
+function showPaxPrompt() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-content" style="width: 340px; padding: 28px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 18px;">No Active Session</h3>
+        <p style="margin: 0 0 20px 0; color: var(--text-light); font-size: 14px;">How many people (pax) for this table?</p>
+        <label style="display: block; margin-bottom: 20px;">
+          <span class="modal-content-label">Number of Guests</span>
+          <input type="number" id="pax-prompt-input" min="1" value="2" class="modal-input" style="font-size: 18px; text-align: center;">
+        </label>
+        <div class="modal-button-group">
+          <button id="pax-prompt-cancel" class="modal-cancel-btn">Cancel</button>
+          <button id="pax-prompt-confirm" class="modal-btn-primary">Start Session</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#pax-prompt-input');
+    input.focus();
+    input.select();
+    overlay.querySelector('#pax-prompt-confirm').addEventListener('click', () => {
+      const val = parseInt(input.value);
+      if (!val || val <= 0) { input.focus(); return; }
+      overlay.remove();
+      resolve(val);
+    });
+    overlay.querySelector('#pax-prompt-cancel').addEventListener('click', () => {
+      overlay.remove();
+      resolve(null);
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') overlay.querySelector('#pax-prompt-confirm').click();
+      if (e.key === 'Escape') overlay.querySelector('#pax-prompt-cancel').click();
+    });
+  });
+}
+
 // Determine API base URL - use same domain for remote access, local backend for development
 var API = (() => {
   const hostname = window.location.hostname;
@@ -100,6 +188,14 @@ function ensureLanguageOnModuleLoad() {
 // ============= APP INITIALIZATION =============
 async function initializeApp() {
   
+  // Decode JWT token to get current user ID for placed_by tracking
+  try {
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      window.staffUserId = payload.id || null;
+    }
+  } catch (e) { /* ignore decode errors */ }
+
   // Hide admin-only elements (but NOT sections) for staff
   var adminOnlyEls = document.querySelectorAll(".admin-only:not(section)");
   for (var i = 0; i < adminOnlyEls.length; i++) {
@@ -109,15 +205,8 @@ async function initializeApp() {
     }
   }
 
-  // Hide non-admin menu buttons for staff
-  if (IS_STAFF) {
-    var menuNavBtn = document.getElementById("menu-nav-btn");
-    var staffNavBtn = document.getElementById("staff-nav-btn");
-    var settingsNavBtn = document.getElementById("settings-nav-btn");
-    if (menuNavBtn) menuNavBtn.style.display = "none";
-    if (staffNavBtn) staffNavBtn.style.display = "none";
-    if (settingsNavBtn) settingsNavBtn.style.display = "none";
-  }
+  // Note: staff.html uses feature-based access control via staff.css (.menu-btn / .menu-btn.visible)
+  // Do NOT hide nav buttons here for IS_STAFF — that is handled by staff.js initializeStaffApp().
 
   await loadApp();
   
@@ -143,6 +232,21 @@ async function switchSection(sectionId) {
   var sections = document.querySelectorAll(".content-section");
   for (var s = 0; s < sections.length; s++) {
     sections[s].classList.remove("active");
+  }
+
+  // Close any open session panel (fixed on mobile, could persist across section changes)
+  if (sectionId !== "tables" && typeof closeSessionPanel === 'function') {
+    closeSessionPanel();
+  }
+
+  // Close orders cart panel if open (position:fixed on mobile, persists across sections)
+  if (sectionId !== "orders") {
+    var cartPanel = document.getElementById('orders-cart-view-container');
+    if (cartPanel && cartPanel.classList.contains('show-cart')) {
+      cartPanel.classList.remove('show-cart');
+      var cartBar = document.querySelector('.orders-cart-bar');
+      if (cartBar) cartBar.classList.remove('active');
+    }
   }
 
   // Show selected section
@@ -257,13 +361,13 @@ async function switchSection(sectionId) {
         console.warn('[admin.js] initializeBookings not yet loaded');
       }
       reTranslateContent();
-      updateSectionHeader('admin.section-reservations', '');
+      updateSectionHeader('admin.section-reservations', 'header-new-booking-btn');
     } else if (sectionId === "reports") {
       console.log("🔵 Loading REPORTS section");
       console.log("📌 IS_ADMIN:", IS_ADMIN, "IS_SUPERADMIN:", IS_SUPERADMIN, "IS_STAFF:", IS_STAFF);
       
       // Check if user has access to reports (admin/superadmin, or staff with feature 3)
-      var hasReportsAccess = IS_ADMIN || IS_SUPERADMIN || (IS_STAFF && typeof staffAccessRights !== 'undefined' && Array.isArray(staffAccessRights) && staffAccessRights.includes(3));
+      var hasReportsAccess = IS_ADMIN || IS_SUPERADMIN || (IS_STAFF && typeof staffAccessRights !== 'undefined' && Array.isArray(staffAccessRights) && staffAccessRights.includes(7));
       
       if (hasReportsAccess) {
         var reportsSection = document.getElementById("section-reports");
@@ -379,7 +483,7 @@ function updateSectionHeader(titleKey, actionButtonId) {
   var headerRightBtns = document.querySelectorAll(".header-right [id$='-btn'], .header-right [id$='-header']");
   for (var i = 0; i < headerRightBtns.length; i++) {
     var btn = headerRightBtns[i];
-    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown" && btn.id !== "scan-qr-btn") {
+    if (btn.id !== "admin-menu-btn" && btn.id !== "admin-dropdown" && btn.id !== "scan-qr-btn" && btn.id !== "clock-btn") {
       btn.style.display = "none";
     }
   }

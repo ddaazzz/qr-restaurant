@@ -1,0 +1,6194 @@
+
+> backend@1.0.0 start
+> ts-node --transpile-only src/server.ts
+
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[WebSocket] Client connected: QuOIic8yZ4v5ujr8AAAB
+[WebSocket] Client QuOIic8yZ4v5ujr8AAAB subscribed to restaurant-1-auto-print
+[SessionNotifier] New session detected: {
+  id: 130,
+  table_id: 91,
+  restaurant_id: 1,
+  pax: 4,
+  started_at: '2026-04-02T17:58:29.270382'
+}
+[WebSocket] Broadcasting new session to restaurant-1-auto-print: {
+  sessionId: 130,
+  tableId: 91,
+  restaurantId: 1,
+  pax: 4,
+  startedAt: '2026-04-02T17:58:29.270382'
+}
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": 12,
+      "auto_print": true,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T07:32:06.309Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "auto_print": true
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T07:32:06.309Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "bluetooth",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T07:32:06.309Z"
+  }
+]
+[Orders] ✨ Created new order 91 for session 130
+[OrderNotifier] Received NOTIFY on channel: new_order Payload: {"id" : 91, "session_id" : 130, "restaurant_id" : 1, "status" : "pending", "created_at" : "2026-04-02T17:58:38.806893", "event" : "order_created"}
+[OrderNotifier] ✅ New order detected: {
+  id: 91,
+  session_id: 130,
+  restaurant_id: 1,
+  status: 'pending',
+  created_at: '2026-04-02T17:58:38.806893',
+  event: 'order_created'
+}
+[WebSocket] Received new-order event from OrderNotifier: {
+  orderId: 91,
+  sessionId: 130,
+  restaurantId: 1,
+  status: 'pending',
+  createdAt: '2026-04-02T17:58:38.806893'
+}
+[WebSocket] ✅ Broadcasting new order to restaurant-1-kitchen-orders (0 clients listening): {
+  orderId: 91,
+  sessionId: 130,
+  restaurantId: 1,
+  status: 'pending',
+  createdAt: '2026-04-02T17:58:38.806893'
+}
+[KitchenAutoPrint] 📦 New order received: {
+  orderId: 91,
+  sessionId: 130,
+  restaurantId: 1,
+  status: 'pending',
+  createdAt: '2026-04-02T17:58:38.806893'
+}
+[KitchenAutoPrint] 🍳 Processing kitchen order #91 for restaurant 1
+[KitchenAutoPrint] Order #91 not found
+[Orders] Auto-print error (non-blocking): column ts.table_name does not exist
+[CloseBill] ✅ Bill closed for session 130 (cash)
+[OrderNotifier] Received NOTIFY on channel: order_status_change Payload: {"id" : 91, "session_id" : 130, "restaurant_id" : 1, "old_status" : "pending", "new_status" : "completed", "updated_at" : "2026-04-02T17:58:45.867445+00:00", "event" : "order_status_changed"}
+[OrderNotifier] ✅ Order status changed: {
+  id: 91,
+  session_id: 130,
+  restaurant_id: 1,
+  old_status: 'pending',
+  new_status: 'completed',
+  updated_at: '2026-04-02T17:58:45.867445+00:00',
+  event: 'order_status_changed'
+}
+[WebSocket] Broadcasting order status change to restaurant-1-kitchen-orders: {
+  orderId: 91,
+  sessionId: 130,
+  restaurantId: 1,
+  oldStatus: 'pending',
+  newStatus: 'completed',
+  updatedAt: '2026-04-02T17:58:45.867445+00:00'
+}
+[KitchenAutoPrint] Order status changed: {
+  orderId: 91,
+  sessionId: 130,
+  restaurantId: 1,
+  oldStatus: 'pending',
+  newStatus: 'completed',
+  updatedAt: '2026-04-02T17:58:45.867445+00:00'
+}
+[WebSocket] Client disconnected: QuOIic8yZ4v5ujr8AAAB
+[WebSocket] Client connected: XgpcYfdizOVSybSzAAAD
+[WebSocket] Client XgpcYfdizOVSybSzAAAD subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: XgpcYfdizOVSybSzAAAD
+[WebSocket] Client connected: mwdljSObNrWMXdgSAAAF
+[WebSocket] Client mwdljSObNrWMXdgSAAAF subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: mwdljSObNrWMXdgSAAAF
+[WebSocket] Client connected: LLVH4Ddn8FKNOvsbAAAH
+[WebSocket] Client LLVH4Ddn8FKNOvsbAAAH subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: LLVH4Ddn8FKNOvsbAAAH
+[WebSocket] Client connected: 4fmIej7BdOgv4GhZAAAJ
+[WebSocket] Client 4fmIej7BdOgv4GhZAAAJ subscribed to restaurant-1-auto-print
+🔄 Fetching kitchen orders for restaurant: 1
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": 12,
+      "auto_print": true,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T07:32:06.309Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "auto_print": true
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T07:32:06.309Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "bluetooth",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us k[WebSocket] Client disconnected: BIhIhVGaoxZdFHq0AAAn
+Server closed
+,
+    "updated_at": "2026-04-02T07:32:06.309Z"
+  }
+]
+📦 Found 102 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 148,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 3,
+  restaurant_order_number: 2,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:07.905Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 100 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 148,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 3,
+  restaurant_order_number: 2,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:07.905Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 100 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 148,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 3,
+  restaurant_order_number: 2,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:07.905Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 100 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 148,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 3,
+  restaurant_order_number: 2,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:07.905Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 99 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 151,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'Unknown Table',
+  order_type: 'counter',
+  order_id: 5,
+  restaurant_order_number: 4,
+  session_id: 4,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:27.683Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Medium'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 99 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 151,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'Unknown Table',
+  order_type: 'counter',
+  order_id: 5,
+  restaurant_order_number: 4,
+  session_id: 4,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:27.683Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Medium'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 98 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 152,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Caesar Salad',
+  category_id: 1,
+  table_name: 'Unknown Table',
+  order_type: 'to-go',
+  order_id: 6,
+  restaurant_order_number: 5,
+  session_id: 5,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:40.073Z',
+  variants: 'Size: Large'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 98 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 152,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Caesar Salad',
+  category_id: 1,
+  table_name: 'Unknown Table',
+  order_type: 'to-go',
+  order_id: 6,
+  restaurant_order_number: 5,
+  session_id: 5,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:40.073Z',
+  variants: 'Size: Large'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 97 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 153,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'Unknown Table',
+  order_type: 'counter',
+  order_id: 7,
+  restaurant_order_number: 6,
+  session_id: 6,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:47.286Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Medium'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 97 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 153,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'Unknown Table',
+  order_type: 'counter',
+  order_id: 7,
+  restaurant_order_number: 6,
+  session_id: 6,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:47.286Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Medium'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 97 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 153,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'Unknown Table',
+  order_type: 'counter',
+  order_id: 7,
+  restaurant_order_number: 6,
+  session_id: 6,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:47.286Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Medium'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 96 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 154,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Iced Lemon Tea',
+  category_id: 2,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 8,
+  restaurant_order_number: 7,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:59.412Z',
+  variants: 'Ice Level: No Ice'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 96 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 154,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Iced Lemon Tea',
+  category_id: 2,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 8,
+  restaurant_order_number: 7,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:45:59.412Z',
+  variants: 'Ice Level: No Ice'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 95 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 155,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Iced Lemon Tea',
+  category_id: 2,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 9,
+  restaurant_order_number: 8,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:47:15.726Z',
+  variants: 'Ice Level: No Ice'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 95 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 155,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Iced Lemon Tea',
+  category_id: 2,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 9,
+  restaurant_order_number: 8,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:47:15.726Z',
+  variants: 'Ice Level: No Ice'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 94 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 156,
+  status: 'pending',
+  quantity: 3,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 10,
+  restaurant_order_number: 9,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:47:44.459Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 94 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 156,
+  status: 'preparing',
+  quantity: 3,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 10,
+  restaurant_order_number: 9,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:47:44.459Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 94 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 156,
+  status: 'preparing',
+  quantity: 3,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 10,
+  restaurant_order_number: 9,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:47:44.459Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 92 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 158,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 11,
+  restaurant_order_number: 10,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:19.330Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 92 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 158,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 11,
+  restaurant_order_number: 10,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:19.330Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 90 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 160,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 12,
+  restaurant_order_number: 11,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:28.665Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 90 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 160,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 12,
+  restaurant_order_number: 11,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:28.665Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 90 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 160,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 12,
+  restaurant_order_number: 11,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:28.665Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 89 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 161,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 13,
+  restaurant_order_number: 12,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:29.036Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 88 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 162,
+  status: 'pending',
+  quantity: 2,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 14,
+  restaurant_order_number: 13,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:54.258Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Extra Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 88 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 162,
+  status: 'preparing',
+  quantity: 2,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 14,
+  restaurant_order_number: 13,
+  session_id: 3,
+  restaurant_id: 1,
+  created_at: '2026-02-18T04:48:54.258Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Extra Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 86 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 164,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 15,
+  restaurant_order_number: 14,
+  session_id: 10,
+  restaurant_id: 1,
+  created_at: '2026-02-18T09:20:32.859Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 86 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 164,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 15,
+  restaurant_order_number: 14,
+  session_id: 10,
+  restaurant_id: 1,
+  created_at: '2026-02-18T09:20:32.859Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 86 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 164,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 15,
+  restaurant_order_number: 14,
+  session_id: 10,
+  restaurant_id: 1,
+  created_at: '2026-02-18T09:20:32.859Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 85 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 165,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Iced Lemon Tea',
+  category_id: 2,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 16,
+  restaurant_order_number: 15,
+  session_id: 10,
+  restaurant_id: 1,
+  created_at: '2026-02-18T09:20:37.022Z',
+  variants: 'Ice Level: No Ice'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 85 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 165,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Iced Lemon Tea',
+  category_id: 2,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 16,
+  restaurant_order_number: 15,
+  session_id: 10,
+  restaurant_id: 1,
+  created_at: '2026-02-18T09:20:37.022Z',
+  variants: 'Ice Level: No Ice'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 84 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 166,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 17,
+  restaurant_order_number: 16,
+  session_id: 14,
+  restaurant_id: 1,
+  created_at: '2026-02-21T10:28:22.552Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 84 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 166,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 17,
+  restaurant_order_number: 16,
+  session_id: 14,
+  restaurant_id: 1,
+  created_at: '2026-02-21T10:28:22.552Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 82 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 168,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Thai Mango Sticky Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 18,
+  restaurant_order_number: 17,
+  session_id: 31,
+  restaurant_id: 1,
+  created_at: '2026-02-24T03:20:39.128Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 82 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 168,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Thai Mango Sticky Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 18,
+  restaurant_order_number: 17,
+  session_id: 31,
+  restaurant_id: 1,
+  created_at: '2026-02-24T03:20:39.128Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 82 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 168,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Thai Mango Sticky Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 18,
+  restaurant_order_number: 17,
+  session_id: 31,
+  restaurant_id: 1,
+  created_at: '2026-02-24T03:20:39.128Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 82 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 168,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Thai Mango Sticky Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 18,
+  restaurant_order_number: 17,
+  session_id: 31,
+  restaurant_id: 1,
+  created_at: '2026-02-24T03:20:39.128Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 81 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 173,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 21,
+  restaurant_order_number: 18,
+  session_id: 37,
+  restaurant_id: 1,
+  created_at: '2026-02-27T02:16:00.039Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 81 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 173,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 21,
+  restaurant_order_number: 18,
+  session_id: 37,
+  restaurant_id: 1,
+  created_at: '2026-02-27T02:16:00.039Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 79 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 175,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Thai Mango Sticky Rice',
+  category_id: 1,
+  table_name: 'T06A',
+  order_type: 'table',
+  order_id: 22,
+  restaurant_order_number: 19,
+  session_id: 39,
+  restaurant_id: 1,
+  created_at: '2026-03-03T08:57:05.420Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 79 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 175,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Thai Mango Sticky Rice',
+  category_id: 1,
+  table_name: 'T06A',
+  order_type: 'table',
+  order_id: 22,
+  restaurant_order_number: 19,
+  session_id: 39,
+  restaurant_id: 1,
+  created_at: '2026-03-03T08:57:05.420Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 78 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 176,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 23,
+  restaurant_order_number: 20,
+  session_id: 41,
+  restaurant_id: 1,
+  created_at: '2026-03-05T04:32:29.682Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 78 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 176,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 23,
+  restaurant_order_number: 20,
+  session_id: 41,
+  restaurant_id: 1,
+  created_at: '2026-03-05T04:32:29.682Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 78 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 176,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 23,
+  restaurant_order_number: 20,
+  session_id: 41,
+  restaurant_id: 1,
+  created_at: '2026-03-05T04:32:29.682Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 77 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 178,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 24,
+  restaurant_order_number: 21,
+  session_id: 42,
+  restaurant_id: 1,
+  created_at: '2026-03-05T05:05:47.846Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 77 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 178,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 24,
+  restaurant_order_number: 21,
+  session_id: 42,
+  restaurant_id: 1,
+  created_at: '2026-03-05T05:05:47.846Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 75 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 179,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 25,
+  restaurant_order_number: 22,
+  session_id: 42,
+  restaurant_id: 1,
+  created_at: '2026-03-05T07:50:23.510Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 75 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 179,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 25,
+  restaurant_order_number: 22,
+  session_id: 42,
+  restaurant_id: 1,
+  created_at: '2026-03-05T07:50:23.510Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 74 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 180,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 26,
+  restaurant_order_number: 23,
+  session_id: 42,
+  restaurant_id: 1,
+  created_at: '2026-03-05T07:50:24.859Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 74 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 180,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 26,
+  restaurant_order_number: 23,
+  session_id: 42,
+  restaurant_id: 1,
+  created_at: '2026-03-05T07:50:24.859Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 74 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 180,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 26,
+  restaurant_order_number: 23,
+  session_id: 42,
+  restaurant_id: 1,
+  created_at: '2026-03-05T07:50:24.859Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 73 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 181,
+  status: 'pending',
+  quantity: 3,
+  item_name: 'Caesar Salad',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 27,
+  restaurant_order_number: 24,
+  session_id: 41,
+  restaurant_id: 1,
+  created_at: '2026-03-11T09:48:24.121Z',
+  variants: 'Size: Large'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 73 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 181,
+  status: 'preparing',
+  quantity: 3,
+  item_name: 'Caesar Salad',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 27,
+  restaurant_order_number: 24,
+  session_id: 41,
+  restaurant_id: 1,
+  created_at: '2026-03-11T09:48:24.121Z',
+  variants: 'Size: Large'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 72 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 182,
+  status: 'pending',
+  quantity: 2,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 28,
+  restaurant_order_number: 25,
+  session_id: 41,
+  restaurant_id: 1,
+  created_at: '2026-03-11T09:48:46.007Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 72 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 182,
+  status: 'preparing',
+  quantity: 2,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 28,
+  restaurant_order_number: 25,
+  session_id: 41,
+  restaurant_id: 1,
+  created_at: '2026-03-11T09:48:46.007Z',
+  variants: 'Rice Portion: More Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 71 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 183,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Beef Vietnamese Pho',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 29,
+  restaurant_order_number: 26,
+  session_id: 71,
+  restaurant_id: 1,
+  created_at: '2026-03-20T07:55:47.793Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 71 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 183,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Beef Vietnamese Pho',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 29,
+  restaurant_order_number: 26,
+  session_id: 71,
+  restaurant_id: 1,
+  created_at: '2026-03-20T07:55:47.793Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 71 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 183,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Beef Vietnamese Pho',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 29,
+  restaurant_order_number: 26,
+  session_id: 71,
+  restaurant_id: 1,
+  created_at: '2026-03-20T07:55:47.793Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 69 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 185,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Beef Vietnamese Pho',
+  category_id: 1,
+  table_name: 'T05a',
+  order_type: 'table',
+  order_id: 30,
+  restaurant_order_number: 27,
+  session_id: 67,
+  restaurant_id: 1,
+  created_at: '2026-03-20T07:56:23.227Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 69 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 185,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Beef Vietnamese Pho',
+  category_id: 1,
+  table_name: 'T05a',
+  order_type: 'table',
+  order_id: 30,
+  restaurant_order_number: 27,
+  session_id: 67,
+  restaurant_id: 1,
+  created_at: '2026-03-20T07:56:23.227Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 68 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 186,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T10A',
+  order_type: 'table',
+  order_id: 31,
+  restaurant_order_number: 28,
+  session_id: 73,
+  restaurant_id: 1,
+  created_at: '2026-03-20T08:06:35.925Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 68 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 186,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T10A',
+  order_type: 'table',
+  order_id: 31,
+  restaurant_order_number: 28,
+  session_id: 73,
+  restaurant_id: 1,
+  created_at: '2026-03-20T08:06:35.925Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 67 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 187,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T03a',
+  order_type: 'table',
+  order_id: 32,
+  restaurant_order_number: 29,
+  session_id: 54,
+  restaurant_id: 1,
+  created_at: '2026-03-20T10:52:23.570Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 67 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 187,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T03a',
+  order_type: 'table',
+  order_id: 32,
+  restaurant_order_number: 29,
+  session_id: 54,
+  restaurant_id: 1,
+  created_at: '2026-03-20T10:52:23.570Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 188,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Caesar Salad',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 33,
+  restaurant_order_number: 30,
+  session_id: 74,
+  restaurant_id: 1,
+  created_at: '2026-03-28T18:35:48.226Z',
+  variants: 'Size: Large'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 188,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Caesar Salad',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 33,
+  restaurant_order_number: 30,
+  session_id: 74,
+  restaurant_id: 1,
+  created_at: '2026-03-28T18:35:48.226Z',
+  variants: 'Size: Large'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 188,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Caesar Salad',
+  category_id: 1,
+  table_name: 'T02a',
+  order_type: 'table',
+  order_id: 33,
+  restaurant_order_number: 30,
+  session_id: 74,
+  restaurant_id: 1,
+  created_at: '2026-03-28T18:35:48.226Z',
+  variants: 'Size: Large'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 65 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 189,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T06A',
+  order_type: 'table',
+  order_id: 34,
+  restaurant_order_number: 31,
+  session_id: 68,
+  restaurant_id: 1,
+  created_at: '2026-03-29T03:11:53.185Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 65 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 189,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Chicken Rice',
+  category_id: 1,
+  table_name: 'T06A',
+  order_type: 'table',
+  order_id: 34,
+  restaurant_order_number: 31,
+  session_id: 68,
+  restaurant_id: 1,
+  created_at: '2026-03-29T03:11:53.185Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 64 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 190,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 35,
+  restaurant_order_number: 32,
+  session_id: 65,
+  restaurant_id: 1,
+  created_at: '2026-03-29T03:24:35.084Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 64 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 190,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T04a',
+  order_type: 'table',
+  order_id: 35,
+  restaurant_order_number: 32,
+  session_id: 65,
+  restaurant_id: 1,
+  created_at: '2026-03-29T03:24:35.084Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 63 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 191,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T10A',
+  order_type: 'table',
+  order_id: 36,
+  restaurant_order_number: 33,
+  session_id: 75,
+  restaurant_id: 1,
+  created_at: '2026-03-30T02:13:06.796Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 63 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 191,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T10A',
+  order_type: 'table',
+  order_id: 36,
+  restaurant_order_number: 33,
+  session_id: 75,
+  restaurant_id: 1,
+  created_at: '2026-03-30T02:13:06.796Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 63 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 191,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T10A',
+  order_type: 'table',
+  order_id: 36,
+  restaurant_order_number: 33,
+  session_id: 75,
+  restaurant_id: 1,
+  created_at: '2026-03-30T02:13:06.796Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 62 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 192,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Beef Vietnamese Pho',
+  category_id: 1,
+  table_name: 'T10A',
+  order_type: 'table',
+  order_id: 37,
+  restaurant_order_number: 34,
+  session_id: 75,
+  restaurant_id: 1,
+  created_at: '2026-03-30T02:37:54.026Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 62 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 192,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Beef Vietnamese Pho',
+  category_id: 1,
+  table_name: 'T10A',
+  order_type: 'table',
+  order_id: 37,
+  restaurant_order_number: 34,
+  session_id: 75,
+  restaurant_id: 1,
+  created_at: '2026-03-30T02:37:54.026Z',
+  variants: ''
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 61 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 193,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 38,
+  restaurant_order_number: 35,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:33.278Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 61 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 193,
+  status: 'preparing',
+  quantity: 1,
+  item_name: 'Fried Rice',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 38,
+  restaurant_order_number: 35,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:33.278Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Mild'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+[WebSocket] Client disconnected: 4fmIej7BdOgv4GhZAAAJ
+[WebSocket] Client connected: YLWBGnmWztgFiTRKAAAL
+[WebSocket] Client YLWBGnmWztgFiTRKAAAL subscribed to restaurant-1-auto-print
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 60 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy'
+}
+[WebSocket] Client disconnected: YLWBGnmWztgFiTRKAAAL
+[WebSocket] Client connected: mTt-E9jNoD7vvaCmAAAN
+[WebSocket] Client mTt-E9jNoD7vvaCmAAAN subscribed to restaurant-1-auto-print
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+[WebSocket] Client disconnected: mTt-E9jNoD7vvaCmAAAN
+Server closed
+ypescript ver. 5.9.3)
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[WebSocket] Client connected: TxSwC_dTz5VpZ_MbAAAB
+[WebSocket] Client TxSwC_dTz5VpZ_MbAAAB subscribed to restaurant-1-auto-print
+[INFO] 02:43:20 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+[WebSocket] Client disconnected: TxSwC_dTz5VpZ_MbAAAB
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 03:46:51 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  override existing env vars with { override: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 03:46:56 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/sessions.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 03:48:08 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/sessions.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 03:51:56 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/auth.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 09:49:40 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:07:23 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/printer.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:10:29 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/waitlist.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:12:41 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:13:01 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:13:03 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:13:32 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/sessions.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[INFO] 10:13:39 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/sessions.routes.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[INFO] 10:14:48 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/waitlist.routes.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:14:52 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+[INFO] 10:14:52 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+📴 SIGTERM received, shutting down gracefully
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+❌ Uncaught Exception: write EPIPE
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+✅ Session notifier stopped
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+⚠️  Error stopping printer queue: Error: Printer queue not initialized. Call initializePrinterQueue first.
+    at getPrinterQueueInstance (/Users/user/Documents/qr-restaurant-ai/backend/src/routes/printer.routes.ts:30:11)
+    at process.<anonymous> (/Users/user/Documents/qr-restaurant-ai/backend/src/server.ts:158:19)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at runNextTicks (node:internal/process/task_queues:69:3)
+    at processImmediate (node:internal/timers:472:9)
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:15:39 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/services/kitchenAutoPrintService.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+❌ Server error: listen EADDRINUSE: address already in use 0.0.0.0:10000
+   Port 10000 is already in use. Kill existing process and try again.
+[INFO] 10:17:46 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  override existing env vars with { override: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+🔄 Fetching kitchen orders for restaurant: 1
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+[INFO] 10:18:03 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/services/kitchenAutoPrintService.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+[INFO] 10:18:09 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/waitlist.routes.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+[WebSocket] Client connected: b7U0gaAV3eFqjEkNAAAB
+[WebSocket] Client b7U0gaAV3eFqjEkNAAAB subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: b7U0gaAV3eFqjEkNAAAB
+[WebSocket] Client connected: Ydgr1frIKqfhnRIzAAAD
+[WebSocket] Client Ydgr1frIKqfhnRIzAAAD subscribed to restaurant-1-auto-print
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+[WebSocket] Client disconnected: Ydgr1frIKqfhnRIzAAAD
+🔄 Fetching kitchen orders for restaurant: 1
+[WebSocket] Client connected: -cpQOiO4d6ChJzohAAAF
+[WebSocket] Client -cpQOiO4d6ChJzohAAAF subscribed to restaurant-1-auto-print
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+[WebSocket] Client disconnected: -cpQOiO4d6ChJzohAAAF
+[WebSocket] Client connected: bpoGE9KmwU8JTytqAAAH
+[WebSocket] Client bpoGE9KmwU8JTytqAAAH subscribed to restaurant-1-auto-print
+[INFO] 10:21:13 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/printer.routes.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+[WebSocket] Client disconnected: bpoGE9KmwU8JTytqAAAH
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[WebSocket] Client connected: Oe6bX8_9JCxmNVErAAAB
+[WebSocket] Client Oe6bX8_9JCxmNVErAAAB subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: Oe6bX8_9JCxmNVErAAAB
+[WebSocket] Client connected: ZpKs_q3bv4nh8cmMAAAD
+[WebSocket] Client ZpKs_q3bv4nh8cmMAAAD subscribed to restaurant-1-auto-print
+[INFO] 10:22:36 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/routes/orders.routes.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+[WebSocket] Client disconnected: ZpKs_q3bv4nh8cmMAAAD
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[WebSocket] Client connected: J4iqU7sjfnSBrt_WAAAB
+[WebSocket] Client J4iqU7sjfnSBrt_WAAAB subscribed to restaurant-1-auto-print
+[WebSocket] Client connected: FFaOfaqcLUsyJfHpAAAD
+[WebSocket] Client FFaOfaqcLUsyJfHpAAAD subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: J4iqU7sjfnSBrt_WAAAB
+[WebSocket] Client connected: BzbXpzMs6A3pj3YaAAAF
+[WebSocket] Client BzbXpzMs6A3pj3YaAAAF subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: BzbXpzMs6A3pj3YaAAAF
+[WebSocket] Client connected: -2AFKt2SgEY0Yl_cAAAH
+[WebSocket] Client -2AFKt2SgEY0Yl_cAAAH subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: FFaOfaqcLUsyJfHpAAAD
+[WebSocket] Client connected: -dZ8HGHJQ-qqs_ViAAAJ
+[WebSocket] Client -dZ8HGHJQ-qqs_ViAAAJ subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: -dZ8HGHJQ-qqs_ViAAAJ
+[WebSocket] Client disconnected: -2AFKt2SgEY0Yl_cAAAH
+[WebSocket] Client connected: 61asogXWNjyrX3-TAAAL
+[WebSocket] Client 61asogXWNjyrX3-TAAAL subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: 61asogXWNjyrX3-TAAAL
+[WebSocket] Client connected: UaQimXW39XwmTuFQAAAN
+[WebSocket] Client UaQimXW39XwmTuFQAAAN subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: UaQimXW39XwmTuFQAAAN
+[WebSocket] Client connected: IE003w2I0YD2MWK8AAAP
+[WebSocket] Client IE003w2I0YD2MWK8AAAP subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: IE003w2I0YD2MWK8AAAP
+[WebSocket] Client connected: 9iHqBF_xFJOTUU_aAAAR
+[WebSocket] Client 9iHqBF_xFJOTUU_aAAAR subscribed to restaurant-1-auto-print
+[WebSocket] Client connected: QY9ijNco5QfpZBrlAAAT
+[WebSocket] Client QY9ijNco5QfpZBrlAAAT subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: 9iHqBF_xFJOTUU_aAAAR
+[WebSocket] Client connected: 7sOcZAkBS1Btybl4AAAV
+[WebSocket] Client 7sOcZAkBS1Btybl4AAAV subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: QY9ijNco5QfpZBrlAAAT
+[WebSocket] Client connected: 3YQGMBvAkruAavQHAAAX
+[WebSocket] Client 3YQGMBvAkruAavQHAAAX subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: 3YQGMBvAkruAavQHAAAX
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: 7sOcZAkBS1Btybl4AAAV
+[WebSocket] Client connected: amtBqiqnISLqS8nrAAAZ
+[WebSocket] Client amtBqiqnISLqS8nrAAAZ subscribed to restaurant-1-auto-print
+[WebSocket] Client connected: -lSwQQbmcs4sHeQyAAAb
+[WebSocket] Client -lSwQQbmcs4sHeQyAAAb subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: -lSwQQbmcs4sHeQyAAAb
+[WebSocket] Client connected: vhOuorP3FsdyFHINAAAd
+[WebSocket] Client vhOuorP3FsdyFHINAAAd subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: vhOuorP3FsdyFHINAAAd
+[WebSocket] Client connected: 0-gVvnaNuHEFEi64AAAf
+[WebSocket] Client 0-gVvnaNuHEFEi64AAAf subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: 0-gVvnaNuHEFEi64AAAf
+🔄 Fetching kitchen orders for restaurant: 1
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+🔄 Fetching kitchen orders for restaurant: 1
+📦 Found 66 kitchen orders for restaurant 1
+Sample order: {
+  order_item_id: 194,
+  status: 'pending',
+  quantity: 1,
+  item_name: 'Nasi Lemak',
+  category_id: 1,
+  table_name: 'T01a',
+  order_type: 'table',
+  order_id: 39,
+  restaurant_order_number: 36,
+  session_id: 76,
+  restaurant_id: 1,
+  created_at: '2026-03-30T03:34:45.939Z',
+  variants: 'Rice Portion: Normal Rice, Spicy Level: Not Spicy',
+  notes: null
+}
+[WebSocket] Client disconnected: amtBqiqnISLqS8nrAAAZ
+[WebSocket] Client connected: dB1FQQHn64d9X38_AAAh
+[WebSocket] Client dB1FQQHn64d9X38_AAAh subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: dB1FQQHn64d9X38_AAAh
+[WebSocket] Client connected: dLhxm87xCxpsUvnCAAAj
+[WebSocket] Client dLhxm87xCxpsUvnCAAAj subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: dLhxm87xCxpsUvnCAAAj
+[WebSocket] Client connected: g5mTANEJQuJGEE8HAAAl
+[WebSocket] Client g5mTANEJQuJGEE8HAAAl subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: g5mTANEJQuJGEE8HAAAl
+[WebSocket] Client connected: TIKHdNoYUWxvkuXlAAAn
+[WebSocket] Client TIKHdNoYUWxvkuXlAAAn subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: TIKHdNoYUWxvkuXlAAAn
+[WebSocket] Client connected: -SbaoXXofucacw0eAAAp
+[WebSocket] Client -SbaoXXofucacw0eAAAp subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[INFO] 11:04:35 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/services/thermalPrinterService.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+[WebSocket] Client disconnected: -SbaoXXofucacw0eAAAp
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[WebSocket] Client connected: 3KHi-NwDr_Gd-EIHAAAB
+[WebSocket] Client 3KHi-NwDr_Gd-EIHAAAB subscribed to restaurant-1-auto-print
+[INFO] 11:20:43 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/services/thermalPrinterService.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+[SessionNotifier] Stopped listening
+✅ Session notifier stopped
+[OrderNotifier] Stopped listening
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+[WebSocket] Client disconnected: 3KHi-NwDr_Gd-EIHAAAB
+Server closed
+[dotenv@17.2.3] injecting env (10) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+🔒 HTTPS Backend running on https://localhost:10000
+📱 Secure access: https://192.168.10.150:10000
+   ✅ Web Bluetooth API enabled!
+[WebSocket] Server initialized
+✅ WebSocket server initialized
+[SessionNotifier] Connected to PostgreSQL
+[SessionNotifier] Listening for new_session notifications
+✅ Session notifier started (listening to PostgreSQL NOTIFY)
+[WebSocket] Client connected: wDqQPjXcJkq8pUCjAAAB
+[WebSocket] Client wDqQPjXcJkq8pUCjAAAB subscribed to restaurant-1-auto-print
+[OrderNotifier] Connected to PostgreSQL
+[OrderNotifier] Listening for order notifications
+✅ Order notifier started (listening to PostgreSQL NOTIFY)
+[KitchenAutoPrint] ✅ Service initialized - listening for kitchen orders
+✅ Kitchen auto-print service started (always auto-prints orders)
+[PrinterQueue] Starting printer queue processor
+✅ Printer queue service started
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: wDqQPjXcJkq8pUCjAAAB
+[WebSocket] Client connected: otDrGWuT3JpmlpLGAAAD
+[WebSocket] Client otDrGWuT3JpmlpLGAAAD subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: otDrGWuT3JpmlpLGAAAD
+[WebSocket] Client connected: YlLO0J2Dq1Ysy7ZvAAAF
+[WebSocket] Client YlLO0J2Dq1Ysy7ZvAAAF subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: YlLO0J2Dq1Ysy7ZvAAAF
+[WebSocket] Client connected: 1t-Sid4v9q5Zc2dvAAAH
+[WebSocket] Client 1t-Sid4v9q5Zc2dvAAAH subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: 1t-Sid4v9q5Zc2dvAAAH
+[WebSocket] Client connected: OmaqICDnchAx2AtTAAAJ
+[WebSocket] Client OmaqICDnchAx2AtTAAAJ subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: OmaqICDnchAx2AtTAAAJ
+[WebSocket] Client connected: gEo7QlZyg6x0EDxzAAAL
+[WebSocket] Client gEo7QlZyg6x0EDxzAAAL subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: gEo7QlZyg6x0EDxzAAAL
+[WebSocket] Client connected: 0f2rqPURViTJqKGhAAAN
+[WebSocket] Client 0f2rqPURViTJqKGhAAAN subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: 0f2rqPURViTJqKGhAAAN
+[WebSocket] Client connected: lJm0W5GEaEuBMyZbAAAP
+[WebSocket] Client lJm0W5GEaEuBMyZbAAAP subscribed to restaurant-1-auto-print
+[PrinterQueue] Error processing queue: Error: read ETIMEDOUT
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at PrinterQueueService.processQueue (/Users/user/Documents/qr-restaurant-ai/backend/src/services/printerQueue.ts:229:20) {
+  errno: -60,
+  code: 'ETIMEDOUT',
+  syscall: 'read'
+}
+[WebSocket] Client disconnected: lJm0W5GEaEuBMyZbAAAP
+[WebSocket] Client connected: vyZjt9h5fF2AuvuaAAAR
+[WebSocket] Client vyZjt9h5fF2AuvuaAAAR subscribed to restaurant-1-auto-print
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[PrinterSettings] GET endpoint - Restaurant: 1, Found 3 printers
+[PrinterSettings] Raw DB Response: [
+  {
+    "id": 6,
+    "restaurant_id": 1,
+    "type": "Bill",
+    "printer_type": "bluetooth",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "bluetooth_device_name": "🙍🏻‍♀️🙍🏻‍♀️Airpod Pro",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "font_size": "medium",
+      "auto_print": false,
+      "footer_text": "Follow us on social media",
+      "header_text": "Thank You"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:14:43.901Z"
+  },
+  {
+    "id": 9,
+    "restaurant_id": 1,
+    "type": "Kitchen",
+    "printer_type": "none",
+    "printer_host": null,
+    "printer_port": 9100,
+    "bluetooth_device_id": null,
+    "bluetooth_device_name": null,
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "printers": [],
+      "auto_print": false
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.177Z"
+  },
+  {
+    "id": 3,
+    "restaurant_id": 1,
+    "type": "QR",
+    "printer_type": "none",
+    "printer_host": "68B62BA7-6C3B-CEED-9FAC-263DF47FB9DE",
+    "printer_port": 9100,
+    "bluetooth_device_id": "MPT-III",
+    "bluetooth_device_name": "MPT-III",
+    "menu_category_id": null,
+    "settings": {
+      "enabled": true,
+      "code_size": "medium",
+      "auto_print": false,
+      "text_above": "Scan to Order",
+      "text_below": "Let us know how we did!"
+    },
+    "created_at": "2026-04-02T07:32:06.309Z",
+    "updated_at": "2026-04-02T18:11:06.136Z"
+  }
+]
+[WebSocket] Client disconnected: vyZjt9h5fF2AuvuaAAAR
+[WebSocket] Client connected: 53mBqVHvvAJ2tiBGAAAT
+[WebSocket] Client 53mBqVHvvAJ2tiBGAAAT subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: 53mBqVHvvAJ2tiBGAAAT
+[WebSocket] Client connected: XuYgfbzhE0y_Ai1IAAAV
+[WebSocket] Client XuYgfbzhE0y_Ai1IAAAV subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: XuYgfbzhE0y_Ai1IAAAV
+[WebSocket] Client connected: OzU8Ivgl2LjiOEpvAAAX
+[WebSocket] Client OzU8Ivgl2LjiOEpvAAAX subscribed to restaurant-1-auto-print
+[WebSocket] Client disconnected: OzU8Ivgl2LjiOEpvAAAX
+[WebSocket] Client connected: AU2OQUINmtp2fhM5AAAZ
+[WebSocket] Client AU2OQUINmtp2fhM5AAAZ subscribed to restaurant-1-auto-print
+[PrinterQueue] Error processing queue: Error: read ETIMEDOUT
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at PrinterQueueService.processQueue (/Users/user/Documents/qr-restaurant-ai/backend/src/services/printerQueue.ts:229:20) {
+  errno: -60,
+  code: 'ETIMEDOUT',
+  syscall: 'read'
+}
+[PrinterQueue] Error processing queue: Error: Connection terminated unexpectedly
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at PrinterQueueService.processQueue (/Users/user/Documents/qr-restaurant-ai/backend/src/services/printerQueue.ts:229:20)
+[PrinterQueue] Error processing queue: Error: Connection terminated unexpectedly
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at PrinterQueueService.processQueue (/Users/user/Documents/qr-restaurant-ai/backend/src/services/printerQueue.ts:229:20)
+[PrinterQueue] Error processing queue: Error: Connection terminated unexpectedly
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at PrinterQueueService.processQueue (/Users/user/Documents/qr-restaurant-ai/backend/src/services/printerQueue.ts:229:20)
+[PrinterQueue] Error processing queue: Error: Connection terminated unexpectedly
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at PrinterQueueService.processQueue (/Users/user/Documents/qr-restaurant-ai/backend/src/services/printerQueue.ts:229:20)
+[PrinterQueue] Error processing queue: Error: Connection terminated unexpectedly
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg-pool/index.js:45:11
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at PrinterQueueService.processQueue (/Users/user/Documents/qr-restaurant-ai/backend/src/services/printerQueue.ts:229:20)
+[INFO] 15:51:08 Restarting: /Users/user/Documents/qr-restaurant-ai/backend/src/app.ts has been modified
+📴 SIGTERM received, shutting down gracefully
+❌ Uncaught Exception: read ECONNRESET
+❌ Uncaught Exception: Channel closed
+[SessionNotifier] Error stopping: Error: read ECONNRESET
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg/lib/client.js:545:17
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at runNextTicks (node:internal/process/task_queues:69:3)
+    at processImmediate (node:internal/timers:472:9)
+    at SessionNotifier.stop (/Users/user/Documents/qr-restaurant-ai/backend/src/services/sessionNotifier.ts:90:9)
+    at process.<anonymous> (/Users/user/Documents/qr-restaurant-ai/backend/src/server.ts:133:5) {
+  errno: -54,
+  code: 'ECONNRESET',
+  syscall: 'read'
+}
+✅ Session notifier stopped
+❌ Uncaught Exception: Connection terminated unexpectedly
+❌ Uncaught Exception: read ECONNRESET
+[OrderNotifier] Error stopping: Error: read ECONNRESET
+    at /Users/user/Documents/qr-restaurant-ai/backend/node_modules/pg/lib/client.js:545:17
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at OrderNotifier.stop (/Users/user/Documents/qr-restaurant-ai/backend/src/services/orderNotifier.ts:93:9)
+    at process.<anonymous> (/Users/user/Documents/qr-restaurant-ai/backend/src/server.ts:141:5) {
+  errno: -54,
+  code: 'ECONNRESET',
+  syscall: 'read'
+}
+✅ Order notifier stopped
+[KitchenAutoPrint] Service stopped
+✅ Kitchen auto-print service stopped
+[PrinterQueue] Stopping printer queue processor
+✅ Printer queue stopped
+❌ Uncaught Exception: Connection terminated unexpectedly

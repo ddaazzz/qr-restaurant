@@ -175,7 +175,7 @@ router.delete("/menu_categories/:id", async (req, res) => {
       [id]
     );
 
-    if (used?.rowCount > 0) {
+    if ((used?.rowCount ?? 0) > 0) {
       return res.status(400).json({
         error: "Cannot delete category with menu items"
       });
@@ -344,7 +344,7 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
         variantsByItem[row.menu_item_id] = [];
       }
 
-      let variant = variantsByItem[row?.menu_item_id].find(
+      let variant = variantsByItem[row.menu_item_id]!.find(
         v => v.id === row.variant_id
       );
 
@@ -356,7 +356,7 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
           max_select: row.max_select,
           options: []
         };
-        variantsByItem[row?.menu_item_id].push(variant);
+        variantsByItem[row.menu_item_id]!.push(variant);
       }
 
       if (row.option_id) {
@@ -610,7 +610,7 @@ router.delete("/menu-items/:itemId", async (req, res) => {
       [itemId]
     );
 
-    if (used?.rowCount > 0) {
+    if ((used?.rowCount ?? 0) > 0) {
       return res.status(400).json({
         error: "Cannot delete item already ordered"
       });

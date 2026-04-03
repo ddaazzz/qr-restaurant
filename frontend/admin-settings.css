@@ -185,34 +185,66 @@
   transition: all 0.2s ease;
 }
 
-/* POS Integration Specific */
-#pos-webhook-url,
-#pos-api-key,
-#pos-system-type {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 14px;
-  color: var(--text-dark);
+/* ============== SETTINGS PAGES (REPLACES MODALS) ============== */
+.settings-page {
+  display: none;
   background: white;
 }
 
-#pos-webhook-url:focus,
-#pos-api-key:focus,
-#pos-system-type:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+.settings-page.active {
+  display: block;
 }
 
-#pos-connection-status {
-  padding: 12px;
+.settings-page-inner {
+  /* transparent wrapper - layout handled by parent */
+}
+
+.settings-page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-page-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-dark);
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-page-content {
+  padding: 24px;
+}
+
+/* Action button pinned right in page header */
+.settings-page-header .btn-primary,
+.settings-page-header .btn-secondary {
+  flex-shrink: 0;
+  white-space: nowrap;
+  width: auto !important;
+  min-width: fit-content;
+  align-self: center;
+}
+
+.btn-back {
+  background: none;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: #f0fdf4;
-  border-left: 4px solid #22c55e;
-  color: #166534;
-  font-weight: 500;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-dark);
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-back:hover {
+  background: var(--bg-light);
 }
 
 /* Language Picker in Settings */
@@ -259,6 +291,7 @@
 
 /* PRINTER SETTINGS CONTAINER */
 #printer-settings-container-slot {
+  display: none;
   width: 100%;
   min-height: 400px;
   padding: 24px;

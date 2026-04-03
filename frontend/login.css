@@ -29,74 +29,85 @@ body {
   flex-direction: column;
 }
 
-/* NAVIGATION HEADER */
-nav {
-  background-color: var(--white);
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+/* NAVIGATION HEADER — matches home.html glass nav */
+.glass-nav {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .nav-container {
-  max-width: 1200px;
+  max-width: calc(100vw - 48px);
   margin: 0 auto;
-  padding: 0 20px;
-  display: flex;
-  justify-content: space-between;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  height: 70px;
+  height: 72px;
 }
 
 .logo {
-  font-size: 24px;
-  font-weight: bold;
-  color: var(--primary-color);
   text-decoration: none;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: opacity 0.3s ease;
+  gap: 10px;
 }
 
-.logo:hover {
-  opacity: 0.8;
+.logo img {
+  height: 40px;
+  width: auto;
 }
 
-.nav-links {
+.logo-text {
   display: flex;
-  list-style: none;
-  gap: 24px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-direction: column;
+  line-height: 1.2;
 }
 
-.nav-links a {
-  color: var(--text-dark);
-  text-decoration: none;
+.logo-name {
+  font-size: 16px;
   font-weight: 500;
-  transition: color 0.3s ease;
+  color: #1a1a1a;
+  letter-spacing: -0.2px;
 }
 
-.nav-links a:hover {
-  color: var(--primary-color);
+.logo-sub {
+  font-size: 9.5px;
+  font-weight: 300;
+  color: #666;
+  letter-spacing: 0.1px;
 }
 
-.home-btn {
-  background-color: var(--white);
-  color: var(--text-dark);
-  border: 2px solid var(--border-color);
+.nav-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.nav-login-btn {
+  background: rgba(0, 0, 0, 0.07);
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  color: #1a1a1a;
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: 8px;
   text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  cursor: pointer;
+  font-size: 14px;
+  font-weight: 400;
+  white-space: nowrap;
+  transition: all 0.22s ease;
+  display: inline-block;
 }
 
-.home-btn:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+.nav-login-btn:hover {
+  background: rgba(0, 0, 0, 0.13);
 }
+
 
 /* MAIN CONTENT */
 main {

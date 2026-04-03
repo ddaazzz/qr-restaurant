@@ -6,8 +6,20 @@ import { getPrinterZonesService } from "../services/printerZones";
 
 const router = Router();
 
+/**
+ * Helper function for payment method display
+ */
+function getPaymentMethodLabel(method: string | null, paid: boolean): string {
+  if (!paid) return 'Unpaid';
+  if (method === 'kpay') return 'Paid (KPay)';
+  if (method === 'payment-asia') return 'Paid (Payment Asia)';
+  return 'Paid';
+}
+
 // Place an order
 // POST place order (with variants)
+// ✅ IMPORTANT: All items in a session belong to a SINGLE order until bill is closed
+// If order already exists for session, add items to it. If not, create one.
 router.post("/sessions/:sessionId/orders", async (req, res) => {
   const { sessionId } = req.params;
   const { items } = req.body;
@@ -32,17 +44,40 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
 
     const restaurantId = sessionRes.rows[0].restaurant_id;
 
-    // Create order with restaurant_id
-    const orderRes = await pool.query(
+    // ============================================================
+    // SINGLE ORDER PER SESSION: Check if order already exists
+    // ============================================================
+    // All items in a session belong to ONE order
+    // This order is created when first items are added, then reused
+    let orderId: number;
+    const existingOrderRes = await pool.query(
       `
-      INSERT INTO orders (session_id, restaurant_id)
-      VALUES ($1, $2)
-      RETURNING id
+      SELECT o.id FROM orders o
+      JOIN table_sessions ts ON o.session_id = ts.id
+      WHERE o.session_id = $1 AND ts.ended_at IS NULL AND o.status <> 'completed'
+      ORDER BY o.created_at ASC
+      LIMIT 1
       `,
-      [sessionId, restaurantId]
+      [sessionId]
     );
 
-    const orderId = orderRes.rows[0].id;
+    if ((existingOrderRes.rowCount ?? 0) > 0) {
+      // Reuse existing order for this session
+      orderId = existingOrderRes.rows[0].id;
+      console.log(`[Orders] 📝 Using existing order ${orderId} for session ${sessionId}`);
+    } else {
+      // Create new order for this session (first time items are added)
+      const orderRes = await pool.query(
+        `
+        INSERT INTO orders (session_id, restaurant_id)
+        VALUES ($1, $2)
+        RETURNING id
+        `,
+        [sessionId, restaurantId]
+      );
+      orderId = orderRes.rows[0].id;
+      console.log(`[Orders] ✨ Created new order ${orderId} for session ${sessionId}`);
+    }
 
     // ✅ LOOP STARTS HERE — item is now defined
     for (const item of items) {
@@ -164,9 +199,9 @@ for (const v of variants) {
       const orderItemRes = await pool.query(
         `
         INSERT INTO order_items
-          (order_id, menu_item_id, quantity, price_cents, status, restaurant_id)
+          (order_id, menu_item_id, quantity, price_cents, status, restaurant_id, notes)
         VALUES
-          ($1, $2, $3, $4, 'pending', $5)
+          ($1, $2, $3, $4, 'pending', $5, $6)
         RETURNING id
         `,
         [
@@ -174,7 +209,8 @@ for (const v of variants) {
           item.menu_item_id,
           item.quantity,
           finalUnitPrice,
-          restaurantId
+          restaurantId,
+          item.notes || null
         ]
       );
 
@@ -247,7 +283,7 @@ for (const v of variants) {
         [restaurantId]
       );
 
-      if (restaurantConfigRes.rowCount > 0) {
+      if ((restaurantConfigRes.rowCount ?? 0) > 0) {
         const config = restaurantConfigRes.rows[0];
 
         if (config.kitchen_auto_print && config.printer_type && config.printer_type !== 'none') {
@@ -276,7 +312,7 @@ for (const v of variants) {
             [orderId, restaurantId]
           );
 
-          if (orderDetailsRes.rowCount > 0) {
+          if ((orderDetailsRes.rowCount ?? 0) > 0) {
             const allItems = orderDetailsRes.rows;
             const tableNumber = allItems[0].table_name || "To-Go";
             const zonesService = getPrinterZonesService(pool);
@@ -350,7 +386,7 @@ for (const v of variants) {
               const zone = await zonesService.getDefaultZone(restaurantId);
               await queue.addJob(restaurantId, printPayload, {
                 orderId: String(orderId),
-                printerZoneId: zone?.id,
+                ...(zone?.id !== undefined ? { printerZoneId: zone.id } : {}),
                 priority: 10, // Highest priority for auto-print
                 maxRetries: 3,
               }).catch(err => {
@@ -386,7 +422,10 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
       `
       SELECT
         o.id AS order_id,
+        o.status AS order_status,
+        o.payment_method AS order_payment_method,
         o.restaurant_order_number,
+        o.chuio_order_reference AS order_reference,
         oi.status AS item_status,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
 
@@ -421,6 +460,8 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
 
       GROUP BY
         o.id,
+        o.status,
+        o.payment_method,
         o.created_at,
         oi.id,
         oi.parent_order_item_id,
@@ -444,6 +485,10 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
       if (!ordersMap[row.order_id]) {
         ordersMap[row.order_id] = {
           order_id: row.order_id,
+          order_status: row.order_status,
+          order_payment_method: row.order_payment_method,
+          restaurant_order_number: row.restaurant_order_number,
+          order_reference: row.order_reference,
           created_at: row.created_at,
           restaurant_id: row.restaurant_id,
           items: [],
@@ -542,7 +587,9 @@ router.get("/kitchen/items", async (req, res) => {
             ', '
           ),
           ''
-        ) AS variants
+        ) AS variants,
+
+        oi.notes
 
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
@@ -570,7 +617,8 @@ router.get("/kitchen/items", async (req, res) => {
         o.restaurant_order_number,
         ts.id,
         ts.restaurant_id,
-        o.created_at
+        o.created_at,
+        oi.notes
 
       ORDER BY o.created_at ASC
       `,
@@ -593,6 +641,7 @@ router.get("/kitchen/items", async (req, res) => {
         quantity: row.quantity,
         status: row.status,
         variants: row.variants,
+        notes: row.notes,
         created_at: row.created_at,
         restaurant_id: row.restaurant_id
       }))
@@ -832,46 +881,85 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
       return res.status(400).json({ error: "Restaurant ID is required" });
     }
 
+    // Get orders from database
     const result = await pool.query(
-      `
-      SELECT
+      `SELECT
         o.id,
         o.restaurant_order_number,
         o.session_id,
         o.status,
+        (o.status = 'completed') AS payment_received,
+        o.payment_method AS payment_method_online,
+        o.chuio_order_reference AS kpay_reference_id,
+        o.payment_status,
         o.restaurant_id,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-        ts.order_type,
+        COALESCE(ts.order_type, 'counter') AS order_type,
         ts.table_id,
         COALESCE(t.name, '') as table_name,
-        ts.pax,
+        COALESCE(ts.pax, 0) as pax,
         COUNT(oi.id) as item_count,
-        SUM(oi.price_cents * oi.quantity) as total_cents
+        COALESCE(SUM(oi.price_cents * oi.quantity), 0) as subtotal_cents,
+        ROUND(COALESCE(SUM(oi.price_cents * oi.quantity), 0) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0)) as total_cents,
+        COALESCE(array_agg(DISTINCT mi.name) FILTER (WHERE mi.name IS NOT NULL), '{}') AS item_names,
+        COALESCE(array_agg(DISTINCT mc.name) FILTER (WHERE mc.name IS NOT NULL), '{}') AS category_names,
+        u.name AS closed_by_staff_name,
+        kt.status as kpay_status,
+        to_char(kt.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS kpay_completed_at,
+        kt.refund_amount_cents,
+        kt.pay_method AS kpay_pay_method,
+        COALESCE(
+          (SELECT pat.network FROM payment_asia_transactions pat WHERE pat.merchant_reference = o.chuio_order_reference AND pat.transaction_type = 'payment' ORDER BY pat.created_at DESC LIMIT 1),
+          (SELECT pcp.payment_method FROM chuio_payments pcp WHERE pcp.order_reference = o.chuio_order_reference AND pcp.payment_vendor = 'payment-asia' LIMIT 1)
+        ) AS payment_network,
+        cpay.payment_vendor AS cp_vendor,
+        cpay.payment_method AS cp_method,
+        cpay.status AS cp_status,
+        cpay.vendor_reference AS cp_vendor_ref,
+        cpay.total_cents AS cp_total_cents,
+        cpay.payment_gateway_env AS cp_env,
+        to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at
       FROM orders o
-      JOIN table_sessions ts ON o.session_id = ts.id
+      JOIN restaurants r ON r.id = o.restaurant_id
+      LEFT JOIN table_sessions ts ON o.session_id = ts.id
       LEFT JOIN tables t ON ts.table_id = t.id
       LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
+      LEFT JOIN users u ON u.id = ts.closed_by_staff_id
+      LEFT JOIN kpay_transactions kt ON kt.order_id = o.id
+      LEFT JOIN LATERAL (
+        SELECT payment_vendor, payment_method, status, vendor_reference, total_cents, payment_gateway_env, completed_at
+        FROM chuio_payments
+        WHERE order_id = o.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) cpay ON true
       WHERE o.restaurant_id = $1
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.restaurant_id, o.created_at, ts.order_type, ts.table_id, t.name, ts.pax
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, ts.order_type, ts.table_id, t.name, ts.pax, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
       ORDER BY o.created_at DESC
-      LIMIT $2
-      `,
+      LIMIT $2`,
       [restaurantId, limitVal]
     );
 
-    res.json(result.rows);
+    const orders = result.rows.map(order => ({
+      ...order,
+      payment_method_label: getPaymentMethodLabel(order.payment_method_online, order.payment_received)
+    }));
+
+    res.json(orders);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// ✅ GET specific order details (for cart restoration)
+// ✅ GET specific order details with unified payment handling
 router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
   try {
     const { restaurantId, orderId } = req.params;
 
-    // Get order header
+    // Get order header with payment information
     const orderRes = await pool.query(
       `
       SELECT
@@ -879,13 +967,37 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         o.restaurant_order_number,
         o.session_id,
         o.status,
+        (o.status = 'completed') AS payment_received,
+        o.payment_method AS payment_method_online,
+        o.chuio_order_reference AS kpay_reference_id,
+        o.payment_status,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-        SUM(oi.price_cents * oi.quantity) as total_cents
+        SUM(oi.price_cents * oi.quantity) as total_cents,
+        COALESCE(
+          (SELECT pat.network FROM payment_asia_transactions pat WHERE pat.merchant_reference = o.chuio_order_reference AND pat.transaction_type = 'payment' ORDER BY pat.created_at DESC LIMIT 1),
+          (SELECT pcp.payment_method FROM chuio_payments pcp WHERE pcp.order_reference = o.chuio_order_reference AND pcp.payment_vendor = 'payment-asia' LIMIT 1)
+        ) AS payment_network,
+        (SELECT kt2.pay_method FROM kpay_transactions kt2 WHERE kt2.order_id = o.id ORDER BY kt2.created_at DESC LIMIT 1) AS kpay_pay_method,
+        cpay.payment_vendor AS cp_vendor,
+        cpay.payment_method AS cp_method,
+        cpay.status AS cp_status,
+        cpay.vendor_reference AS cp_vendor_ref,
+        cpay.total_cents AS cp_total_cents,
+        cpay.payment_gateway_env AS cp_env,
+        to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at,
+        to_char(cpay.refunded_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_refunded_at,
+        cpay.refund_amount_cents AS cp_refund_amount_cents
       FROM orders o
       LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
-      JOIN table_sessions ts ON o.session_id = ts.id
-      WHERE o.id = $1 AND ts.restaurant_id = $2
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.created_at
+      LEFT JOIN LATERAL (
+        SELECT payment_vendor, payment_method, status, vendor_reference, total_cents, payment_gateway_env, completed_at, refunded_at, refund_amount_cents
+        FROM chuio_payments
+        WHERE order_id = o.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) cpay ON true
+      WHERE o.id = $1 AND o.restaurant_id = $2
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
       `,
       [orderId, restaurantId]
     );
@@ -930,7 +1042,96 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
 
     order.items = itemsRes.rows;
 
+    // Get all chuio_payments records for this order (full ledger)
+    const paymentsLedgerRes = await pool.query(
+      `SELECT
+        id,
+        payment_vendor,
+        payment_method,
+        payment_gateway_env,
+        order_reference,
+        vendor_reference,
+        amount_cents,
+        currency_code,
+        total_cents,
+        status,
+        refund_amount_cents,
+        to_char(refunded_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS refunded_at,
+        refund_reference,
+        to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+        to_char(completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS completed_at,
+        to_char(failed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS failed_at
+       FROM chuio_payments
+       WHERE order_id = $1
+       ORDER BY created_at ASC`,
+      [orderId]
+    );
+    order.payment_records = paymentsLedgerRes.rows;
+
+    // Add payment method label
+    order.payment_method_label = getPaymentMethodLabel(order.payment_method_online, order.payment_received);
+
     res.json(order);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * POST /restaurants/:restaurantId/orders/:orderId/void
+ * Mark a non-KPay order as voided (cash/card manual correction)
+ */
+router.post("/restaurants/:restaurantId/orders/:orderId/void", async (req, res) => {
+  try {
+    const { restaurantId, orderId } = req.params;
+    const orderRes = await pool.query(
+      `SELECT o.id, o.payment_method, o.payment_status
+       FROM orders o
+       WHERE o.id = $1 AND o.restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+    if (orderRes.rowCount === 0) return res.status(404).json({ error: "Order not found" });
+    const order = orderRes.rows[0];
+    if (order.payment_method === 'kpay') {
+      return res.status(400).json({ error: "Use the KPay void endpoint for KPay orders" });
+    }
+    await pool.query(
+      `UPDATE orders SET payment_status = 'voided' WHERE id = $1`,
+      [orderId]
+    );
+    res.json({ success: true, payment_status: 'voided' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * POST /restaurants/:restaurantId/orders/:orderId/refund
+ * Mark a non-KPay order as refunded (cash/card manual correction)
+ */
+router.post("/restaurants/:restaurantId/orders/:orderId/refund", async (req, res) => {
+  try {
+    const { restaurantId, orderId } = req.params;
+    const { refund_amount_cents } = req.body;
+    const orderRes = await pool.query(
+      `SELECT o.id, o.payment_method, o.payment_status
+       FROM orders o
+       WHERE o.id = $1 AND o.restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+    if (orderRes.rowCount === 0) return res.status(404).json({ error: "Order not found" });
+    const order = orderRes.rows[0];
+    if (order.payment_method === 'kpay') {
+      return res.status(400).json({ error: "Use the KPay refund endpoint for KPay orders" });
+    }
+    const newStatus = refund_amount_cents ? 'partial_refund' : 'refunded';
+    await pool.query(
+      `UPDATE orders SET payment_status = $1 WHERE id = $2`,
+      [newStatus, orderId]
+    );
+    res.json({ success: true, payment_status: newStatus });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -997,6 +1198,81 @@ router.post("/restaurants/:restaurantId/orders/:orderId/send-receipt", async (re
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+// ============================================================
+// ANALYTICS ENDPOINTS
+// ============================================================
+
+/**
+ * GET /restaurants/:restaurantId/reports/top-items
+ * Returns top 10 best-selling menu items by quantity ordered
+ */
+router.get("/restaurants/:restaurantId/reports/top-items", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { days } = req.query;
+    const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    const result = await pool.query(
+      `SELECT
+        mi.name AS item_name,
+        SUM(oi.quantity) AS total_qty,
+        SUM(oi.price_cents * oi.quantity) AS total_revenue_cents
+      FROM order_items oi
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.restaurant_id = $1
+        AND oi.removed = false
+        AND oi.is_addon = false
+        AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+      GROUP BY mi.name
+      ORDER BY total_qty DESC
+      LIMIT 10`,
+      [restaurantId, daysBack]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[top-items]", err);
+    res.status(500).json({ error: "Failed to load top items" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/top-tables
+ * Returns top 10 busiest tables by order count and revenue
+ */
+router.get("/restaurants/:restaurantId/reports/top-tables", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { days } = req.query;
+    const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    const result = await pool.query(
+      `SELECT
+        COALESCE(t.name, 'Counter') AS table_name,
+        COUNT(DISTINCT o.id) AS order_count,
+        SUM(oi.price_cents * oi.quantity) AS total_revenue_cents
+      FROM orders o
+      LEFT JOIN table_sessions ts ON o.session_id = ts.id
+      LEFT JOIN tables t ON ts.table_id = t.id
+      JOIN order_items oi ON oi.order_id = o.id
+      WHERE o.restaurant_id = $1
+        AND oi.removed = false
+        AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+      GROUP BY COALESCE(t.name, 'Counter')
+      ORDER BY order_count DESC
+      LIMIT 10`,
+      [restaurantId, daysBack]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[top-tables]", err);
+    res.status(500).json({ error: "Failed to load top tables" });
   }
 });
 

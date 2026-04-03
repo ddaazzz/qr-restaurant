@@ -65,15 +65,15 @@
       </div>
 
       <div class="food-item-panel-details">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <div style="flex: 1;">
+        <div class="food-item-panel-header-row">
+          <div class="food-item-panel-title-wrap">
             <h2 id="food-panel-name" class="food-item-panel-title"></h2>
-            <input id="food-panel-name-input" type="text" style="display: none; font-size: 20px; font-weight: bold; padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 100%; margin-bottom: 8px;" />
+            <input id="food-panel-name-input" type="text" class="food-item-panel-name-input" style="display: none;" />
           </div>
-          <div>
-            <button id="food-panel-edit-btn" class="btn-secondary" onclick="toggleFoodItemEdit()" data-i18n="admin.edit"><img src="/uploads/website/pencil.png" alt="edit" style="width: 16px; height: 16px; vertical-align: middle;"> Edit</button>
-            <button id="food-panel-save-btn" class="btn-primary" onclick="saveFoodItemEdit()" data-i18n="admin.save" style="display: none; margin-left: 8px;">✓ Save</button>
-            <button id="food-panel-cancel-btn" class="btn-secondary" onclick="cancelFoodItemEdit()" style="display: none; margin-left: 8px;">✕ Cancel</button>
+          <div class="food-item-panel-actions">
+            <button id="food-panel-edit-btn" class="btn-secondary btn-sm" onclick="toggleFoodItemEdit()" data-i18n="admin.edit"><img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px; vertical-align: middle;"> Edit</button>
+            <button id="food-panel-save-btn" class="btn-primary btn-sm" onclick="saveFoodItemEdit()" data-i18n="admin.save" style="display: none;">✓ Save</button>
+            <button id="food-panel-cancel-btn" class="btn-secondary btn-sm" onclick="cancelFoodItemEdit()" style="display: none;">✕</button>
           </div>
         </div>
         

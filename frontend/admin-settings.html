@@ -4,81 +4,75 @@
 <!-- Settings Cards Grid -->
 <div class="settings-cards-grid">
     <!-- Preferences Card -->
-    <div class="settings-card" onclick="openSettingsModal('preferences')">
+    <div class="settings-card" onclick="showSettingsPage('preferences')">
       <h3 data-i18n="admin.preferences">Preferences</h3>
       <p data-i18n="admin.language">Language</p>
     </div>
 
     <!-- Restaurant Information Card -->
-    <div class="settings-card" onclick="openSettingsModal('restaurant-info')">
+    <div class="settings-card" onclick="showSettingsPage('restaurant-info')">
       <h3 data-i18n="admin.restaurant-info">Restaurant Information</h3>
-      <p id="restaurant-info-preview">Restaurant details</p>
-    </div>
-
-    <!-- POS Integration Card -->
-    <div class="settings-card" onclick="openSettingsModal('pos-integration')">
-      <h3 data-i18n="admin.pos-integration">🔌 POS Integration</h3>
-      <p id="pos-status-preview">Not configured</p>
+      <p id="restaurant-info-preview" data-i18n="admin.restaurant-details">Restaurant details</p>
     </div>
 
     <!-- Printer Settings Card -->
     <div class="settings-card" onclick="showPrinterSettings()">
-      <h3>🖨️ Printer Settings</h3>
-      <p>Configure multiple printers</p>
+      <h3 data-i18n="admin.printer-settings">Printer Settings</h3>
+      <p data-i18n="admin.configure-printers">Configure multiple printers</p>
     </div>
 
     <!-- Staff Login Links Card -->
-    <div class="settings-card" onclick="openSettingsModal('staff-login-links')">
-      <h3 data-i18n="admin.staff-login-links">👥 Staff Login Links</h3>
+    <div class="settings-card" onclick="showSettingsPage('staff-login-links')">
+      <h3 data-i18n="admin.staff-login-links">Staff Login Links</h3>
       <p data-i18n="admin.share-with-staff">Share with staff</p>
     </div>
 
     <!-- QR Code Settings Card -->
-    <div class="settings-card" onclick="openSettingsModal('qr-settings')">
-      <h3 data-i18n="admin.qr-settings">QR Code Settings</h3>
-      <p id="qr-mode-preview">Configure QR modes</p>
+    <div class="settings-card" onclick="showSettingsPage('qr-settings')">
+      <h3 data-i18n="admin.qr-settings">Restaurant Settings</h3>
+      <p id="qr-mode-preview" data-i18n="admin.configure-qr-modes">Configure QR modes</p>
     </div>
 
     <!-- Coupons Card -->
-    <div class="settings-card" onclick="openSettingsModal('coupons')">
-      <h3>🎟️ Coupons</h3>
+    <div class="settings-card" onclick="showSettingsPage('coupons')">
+      <h3 data-i18n="admin.coupons">Coupons</h3>
       <p data-i18n="admin.manage-coupons">Manage coupons</p>
     </div>
 
     <!-- Booking Settings Card -->
-    <div class="settings-card" onclick="openSettingsModal('booking-settings')">
-      <h3>📅 Booking Settings</h3>
-      <p id="booking-settings-preview">Manage reservations</p>
+    <div class="settings-card" onclick="showSettingsPage('booking-settings')">
+      <h3 data-i18n="admin.booking-settings">Booking Settings</h3>
+      <p id="booking-settings-preview" data-i18n="admin.manage-reservations">Manage reservations</p>
     </div>
 
     <!-- Addon Presets Card -->
-    <div class="settings-card" onclick="openSettingsModal('addon-presets')">
-      <h3 data-i18n="admin.addon-presets">🎁 Addon Presets</h3>
+    <div class="settings-card" onclick="showSettingsPage('addon-presets')">
+      <h3 data-i18n="admin.addon-presets">Addon Presets</h3>
       <p data-i18n="admin.manage-presets">Manage preset addon and variant lists</p>
     </div>
 
     <!-- Variant Presets Card -->
-    <div class="settings-card" onclick="openSettingsModal('variant-presets')">
-      <h3 data-i18n="admin.variant-presets">⚙️ Variant Presets</h3>
+    <div class="settings-card" onclick="showSettingsPage('variant-presets')">
+      <h3 data-i18n="admin.variant-presets">Variant Presets</h3>
       <p data-i18n="admin.manage-presets">Manage preset addon and variant lists</p>
     </div>
 
     <!-- Payment Terminals Card -->
-    <div class="settings-card" onclick="openSettingsModal('payment-terminals')">
-      <h3>💳 Payment Terminals</h3>
-      <p id="payment-terminals-preview">Configure KPay and other payment terminals</p>
+    <div class="settings-card" onclick="showSettingsPage('payment-terminals')">
+      <h3 data-i18n="admin.payment-terminals">Payment Terminals</h3>
+      <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
     </div>
   </div>
 
   <!-- HIDDEN: Preferences Modal -->
-  <div id="modal-preferences" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('preferences')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 data-i18n="admin.preferences">Preferences</h3>
-        <button class="modal-close" onclick="closeSettingsModal('preferences')">✕</button>
-      </div>
-      <div class="modal-body">
+  <div id="page-preferences" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('preferences')">&#8592; Back</button>
+    <h3 data-i18n="admin.preferences">Preferences</h3>
+    
+  </div>
+      <div class="settings-page-content">
         <div class="form-group" style="margin-bottom: 20px;">
           <label data-i18n="admin.language" style="display: block; margin-bottom: 12px; font-weight: 600;">Language</label>
           <div data-language-picker class="language-picker-settings" style="display: flex; gap: 12px;">
@@ -88,21 +82,21 @@
         </div>
 
         <div style="border-top: 1px solid var(--border-color); padding-top: 20px;">
-          <button id="logout-btn-settings" class="btn-danger" onclick="handleLogout()" data-i18n="admin.logout" style="width: 100%; padding: 12px;">🚪 Logout</button>
+          <button id="logout-btn-settings" class="btn-danger" onclick="handleLogout()" data-i18n="admin.logout" style="width: 100%; padding: 12px;">Logout</button>
         </div>
       </div>
     </div>
   </div>
 
   <!-- HIDDEN: Restaurant Information Modal -->
-  <div id="modal-restaurant-info" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('restaurant-info')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 data-i18n="admin.restaurant-info">Restaurant Information</h3>
-        <button class="modal-close" onclick="closeSettingsModal('restaurant-info')">✕</button>
-      </div>
-      <div class="modal-body">
+  <div id="page-restaurant-info" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('restaurant-info')">&#8592; Back</button>
+    <h3 data-i18n="admin.restaurant-info">Restaurant Information</h3>
+    
+  </div>
+      <div class="settings-page-content">
         <div class="form-row">
           <div class="form-group">
             <label data-i18n="admin.rest-name">Restaurant Name</label>
@@ -129,23 +123,23 @@
             <label data-i18n="admin.rest-timezone">Timezone</label>
             <span id="view-timezone" class="view-mode"></span>
             <select id="timezone-select" class="hidden">
-              <option value="UTC">UTC (Coordinated Universal Time)</option>
-              <option value="America/New_York">Eastern Time (US & Canada)</option>
-              <option value="America/Chicago">Central Time (US & Canada)</option>
-              <option value="America/Denver">Mountain Time (US & Canada)</option>
-              <option value="America/Los_Angeles">Pacific Time (US & Canada)</option>
-              <option value="Europe/London">London</option>
-              <option value="Europe/Paris">Paris</option>
-              <option value="Europe/Berlin">Berlin</option>
-              <option value="Asia/Tokyo">Tokyo</option>
-              <option value="Asia/Shanghai">Shanghai</option>
-              <option value="Asia/Hong_Kong">Hong Kong</option>
-              <option value="Asia/Singapore">Singapore</option>
-              <option value="Asia/Bangkok">Bangkok</option>
-              <option value="Asia/Kolkata">India Standard Time</option>
-              <option value="Australia/Sydney">Sydney</option>
-              <option value="Australia/Melbourne">Melbourne</option>
-              <option value="Pacific/Auckland">Auckland</option>
+              <option value="UTC">UTC+0 — UTC (Coordinated Universal Time)</option>
+              <option value="America/New_York">UTC-5/-4 — Eastern Time (US & Canada)</option>
+              <option value="America/Chicago">UTC-6/-5 — Central Time (US & Canada)</option>
+              <option value="America/Denver">UTC-7/-6 — Mountain Time (US & Canada)</option>
+              <option value="America/Los_Angeles">UTC-8/-7 — Pacific Time (US & Canada)</option>
+              <option value="Europe/London">UTC+0/+1 — London</option>
+              <option value="Europe/Paris">UTC+1/+2 — Paris</option>
+              <option value="Europe/Berlin">UTC+1/+2 — Berlin</option>
+              <option value="Asia/Kolkata">UTC+5:30 — India Standard Time</option>
+              <option value="Asia/Bangkok">UTC+7 — Bangkok</option>
+              <option value="Asia/Shanghai">UTC+8 — Shanghai</option>
+              <option value="Asia/Hong_Kong">UTC+8 — Hong Kong</option>
+              <option value="Asia/Singapore">UTC+8 — Singapore</option>
+              <option value="Asia/Tokyo">UTC+9 — Tokyo</option>
+              <option value="Australia/Sydney">UTC+10/+11 — Sydney</option>
+              <option value="Australia/Melbourne">UTC+10/+11 — Melbourne</option>
+              <option value="Pacific/Auckland">UTC+12/+13 — Auckland</option>
             </select>
           </div>
           <div class="form-group">
@@ -171,97 +165,43 @@
         </div>
 
         <div class="form-group">
-          <label>Menu Background Image</label>
+          <label data-i18n="admin.menu-background">Menu Background Image</label>
           <img id="restaurant-background" class="logo-preview hidden" style="max-height: 150px; object-fit: cover;" />
           <input id="backgroundInput" type="file" accept="image/*" class="hidden" 
             onchange="uploadRestaurantBackground(this.files[0])" />
-          <button id="upload-background-btn" onclick="document.getElementById('backgroundInput').click()" class="btn-secondary hidden" style="width: 100%; margin-top: 10px;">📸 Upload Background</button>
+          <button id="upload-background-btn" onclick="document.getElementById('backgroundInput').click()" class="btn-secondary hidden" style="width: 100%; margin-top: 10px;" data-i18n="admin.upload-background">Upload Background</button>
         </div>
 
         <div class="form-actions">
-          <button id="edit-settings-btn" onclick="enterEditMode()" class="btn-primary" data-i18n="admin.edit-settings">✎ Edit Settings</button>
-          <button id="save-settings-btn" onclick="saveAdminSettings()" class="btn-primary hidden" data-i18n="admin.save-settings">✓ Save</button>
+          <button id="edit-settings-btn" onclick="enterEditMode()" class="btn-primary" data-i18n="admin.edit-settings">Edit Settings</button>
+          <button id="save-settings-btn" onclick="saveAdminSettings()" class="btn-primary hidden" data-i18n="admin.save-settings">Save</button>
           <button id="cancel-settings-btn" onclick="cancelEditMode()" class="btn-secondary hidden" data-i18n="admin.cancel-settings">Cancel</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- HIDDEN: POS Integration Modal -->
-  <div id="modal-pos-integration" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('pos-integration')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 data-i18n="admin.pos-integration">🔌 POS Integration</h3>
-        <button class="modal-close" onclick="closeSettingsModal('pos-integration')">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-row">
-          <div class="form-group">
-            <label data-i18n="admin.pos-webhook-url">Webhook URL</label>
-            <span id="view-webhook-url" class="view-mode"></span>
-            <input id="pos-webhook-url" type="url" placeholder="https://your-pos.com/webhook" class="hidden" />
-          </div>
-          <div class="form-group">
-            <label data-i18n="admin.pos-api-key">API Key</label>
-            <span id="view-api-key" class="view-mode" style="color:#999;">••••••••••••••••</span>
-            <input id="pos-api-key" type="password" placeholder="Your POS API Key" class="hidden" />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label data-i18n="admin.pos-system-type">POS System Type</label>
-            <span id="view-pos-system" class="view-mode"></span>
-            <select id="pos-system-type" class="hidden">
-              <option value="">-- Select POS System --</option>
-              <option value="webhook">REST API (Webhook)</option>
-              <option value="square">Square POS</option>
-              <option value="toast">Toast POS</option>
-              <option value="lightspeed">Lightspeed</option>
-              <option value="custom">Custom Integration</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label data-i18n="admin.pos-connection-status">Connection Status</label>
-          <div id="pos-connection-status" style="padding:10px; background:#f0fdf4; border-radius:6px; color:#166534; border-left:4px solid #22c55e;">
-            🟢 Not Configured
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button id="edit-pos-btn" onclick="enterEditModePOS()" class="btn-primary" data-i18n="admin.edit">✎ Edit</button>
-          <button id="save-pos-btn" onclick="savePOSSettings()" class="btn-primary hidden" data-i18n="admin.save">✓ Save</button>
-          <button id="test-pos-btn" onclick="testPOSConnection()" class="btn-secondary hidden" data-i18n="admin.test">🧪 Test Connection</button>
-          <button id="cancel-pos-btn" onclick="cancelEditModePOS()" class="btn-secondary hidden" data-i18n="admin.cancel">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- HIDDEN: Staff Login Links Modal -->
-  <div id="modal-staff-login-links" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('staff-login-links')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 data-i18n="admin.staff-login-links">👥 Staff & Kitchen Login QR Codes</h3>
-        <button class="modal-close" onclick="closeSettingsModal('staff-login-links')">✕</button>
-      </div>
-      <div class="modal-body">
+  <div id="page-staff-login-links" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('staff-login-links')">&#8592; Back</button>
+    <h3 data-i18n="admin.staff-login-links">Staff & Kitchen Login QR Codes</h3>
+    
+  </div>
+      <div class="settings-page-content">
         <p data-i18n="admin.staff-login-help" style="margin-bottom: 20px; font-size: 14px;">Share these QR codes with your staff members. Each staff member scans their unique QR code to login:</p>
         
         <!-- Table Staff QR Code -->
         <div class="form-row">
           <div class="form-group" style="grid-column: 1 / -1;">
-            <label data-i18n="admin.table-staff-link">👤 Table Staff Login QR Code</label>
+            <label data-i18n="admin.table-staff-link">Table Staff Login QR Code</label>
             <div style="display: flex; gap: 16px; align-items: flex-start;">
               <div id="qr-staff" style="display: flex; justify-content: center; align-items: center; min-width: 180px; min-height: 180px; background: #f5f5f5; border: 2px solid #ddd; border-radius: 8px;"></div>
               <div style="flex: 1;">
-                <p style="font-size: 12px; color: #666; margin-bottom: 12px;">Scan this code to access Table Staff login. Each staff member has a unique PIN.</p>
-                <button class="btn-primary" onclick="downloadQRCode('qr-staff', 'staff-qr.png')" style="width: 100%;">⬇️ Download QR Code</button>
-                <button class="btn-secondary" onclick="printQRCode('qr-staff')" style="width: 100%; margin-top: 8px;">🖨️ Print QR Code</button>
+                <p style="font-size: 12px; color: #666; margin-bottom: 12px;" data-i18n="admin.staff-qr-desc">Scan this code to access Table Staff login. Each staff member has a unique PIN.</p>
+                <button class="btn-primary" onclick="downloadQRCode('qr-staff', 'staff-qr.png')" style="width: 100%;" data-i18n="admin.download-qr-code">Download QR Code</button>
+                <button class="btn-secondary" onclick="printQRCode('qr-staff')" style="width: 100%; margin-top: 8px;" data-i18n="admin.print-qr-code">Print QR Code</button>
                 <div id="staff-link-display" style="margin-top: 12px; padding: 12px; background: #f9f9f9; border-radius: 6px; font-size: 11px; word-break: break-all; color: #666;"></div>
               </div>
             </div>
@@ -271,13 +211,13 @@
         <!-- Kitchen Staff QR Code -->
         <div class="form-row" style="margin-top: 24px;">
           <div class="form-group" style="grid-column: 1 / -1;">
-            <label data-i18n="admin.kitchen-staff-link">🍳 Kitchen Staff Login QR Code</label>
+            <label data-i18n="admin.kitchen-staff-link">Kitchen Staff Login QR Code</label>
             <div style="display: flex; gap: 16px; align-items: flex-start;">
               <div id="qr-kitchen" style="display: flex; justify-content: center; align-items: center; min-width: 180px; min-height: 180px; background: #f5f5f5; border: 2px solid #ddd; border-radius: 8px;"></div>
               <div style="flex: 1;">
-                <p style="font-size: 12px; color: #666; margin-bottom: 12px;">Scan this code to access Kitchen Dashboard. Each kitchen staff has a unique PIN.</p>
-                <button class="btn-primary" onclick="downloadQRCode('qr-kitchen', 'kitchen-qr.png')" style="width: 100%;">⬇️ Download QR Code</button>
-                <button class="btn-secondary" onclick="printQRCode('qr-kitchen')" style="width: 100%; margin-top: 8px;">🖨️ Print QR Code</button>
+                <p style="font-size: 12px; color: #666; margin-bottom: 12px;" data-i18n="admin.kitchen-qr-desc">Scan this code to access Kitchen Dashboard. Each kitchen staff has a unique PIN.</p>
+                <button class="btn-primary" onclick="downloadQRCode('qr-kitchen', 'kitchen-qr.png')" style="width: 100%;" data-i18n="admin.download-qr-code">Download QR Code</button>
+                <button class="btn-secondary" onclick="printQRCode('qr-kitchen')" style="width: 100%; margin-top: 8px;" data-i18n="admin.print-qr-code">Print QR Code</button>
                 <div id="kitchen-link-display" style="margin-top: 12px; padding: 12px; background: #f9f9f9; border-radius: 6px; font-size: 11px; word-break: break-all; color: #666;"></div>
               </div>
             </div>
@@ -288,16 +228,16 @@
   </div>
 
   <!-- HIDDEN: QR Code Settings Modal -->
-  <div id="modal-qr-settings" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('qr-settings')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 data-i18n="admin.qr-settings">QR Code Settings</h3>
-        <button class="modal-close" onclick="closeSettingsModal('qr-settings')">✕</button>
-      </div>
-      <div class="modal-body">
+  <div id="page-qr-settings" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('qr-settings')">&#8592; Back</button>
+    <h3 data-i18n="admin.qr-settings">Restaurant Settings</h3>
+    
+  </div>
+      <div class="settings-page-content">
         <div style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 0.9em; color: #856404;">
-          <strong>⚠️ Note:</strong> <span data-i18n="admin.qr-mode-warning">QR Code Mode can only be changed when there are no active sessions. Please close all sessions before making changes.</span>
+          <strong>Note:</strong> <span data-i18n="admin.qr-mode-warning">QR Code Mode can only be changed when there are no active sessions. Please close all sessions before making changes.</span>
         </div>
         <div class="form-row">
           <div class="form-group" style="grid-column: 1 / -1;">
@@ -314,41 +254,47 @@
             </p>
           </div>
         </div>
+
+        <div class="form-row" style="margin-top: 24px;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 6px;">
+              <span data-i18n="admin.display-kitchen-status">Display kitchen/order status for diners</span>
+              <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;">
+                <input type="checkbox" id="show-item-status-toggle" onchange="saveShowItemStatusSetting(this.checked)" style="opacity:0;width:0;height:0;">
+                <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;" id="show-item-status-slider"></span>
+              </label>
+            </label>
+            <p style="font-size: 0.85em; color: #666; margin-top: 4px; line-height: 1.5;" data-i18n="admin.display-kitchen-status-desc">When enabled, diners can see the kitchen status of each item (e.g. sending, preparing, delivered) in their Check Orders view.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- HIDDEN: Coupons Modal -->
-  <div id="modal-coupons" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('coupons')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>🎟️ Coupons</h3>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button id="coupon-edit-btn" class="btn-secondary" onclick="toggleCouponEditMode()" data-i18n="admin.edit" style="padding: 6px 12px; font-size: 13px;">✎ Edit</button>
-          <button class="modal-close" onclick="closeSettingsModal('coupons')">✕</button>
-        </div>
-      </div>
-      <div class="modal-body">
-        <!-- Coupons List View (shown by default) -->
-        <div id="coupon-list-view">
-          <div id="coupons-list" style="display: flex; flex-direction: column; gap: 12px;">
-            <!-- JS renders active coupons here -->
-          </div>
-          <p id="no-coupons-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;" data-i18n="admin.no-coupons">No active coupons</p>
-        </div>
+  <style>
+    #show-item-status-toggle:checked + span { background: var(--primary-color, #3b49df); }
+    #show-item-status-toggle:checked + span::before { transform: translateX(22px); }
+    #show-item-status-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
+  </style>
 
-        <!-- Coupon Creation Form (hidden until Edit is clicked) -->
-        <div id="coupon-edit-view" style="display: none;">
+  <!-- HIDDEN: Coupons Modal -->
+  <div id="page-coupons" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('coupons')">&#8592; Back</button>
+    <h3 data-i18n="admin.coupons">Coupons</h3>
+    <button onclick="openAddCouponForm()" class="btn-primary" style="padding: 6px 12px; font-size: 13px;" data-i18n="admin.add-coupon-btn">+ Add Coupon</button>
+  </div>
+      </div>
+      <div class="settings-page-content">
+
+        <!-- Coupon Add/Edit Form (hidden until triggered) -->
+        <div id="coupon-form-section" style="display: none; margin-bottom: 20px; background: #f9fafb; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+          <h4 id="coupon-form-title" style="margin: 0 0 16px 0; font-size: 14px; font-weight: 600;" data-i18n="admin.add-new-coupon">Add New Coupon</h4>
+
           <div id="coupon-error" class="error-message" style="display: none;"></div>
           <div id="coupon-success" class="success-message" style="display: none;"></div>
-          
-          <button onclick="clearCouponForm(); document.getElementById('new-coupon-code').focus();" class="btn-primary" style="width: 100%; margin-bottom: 20px; padding: 12px;" data-i18n="admin.add-new-coupon">➕ Add a new coupon</button>
-          
-          <div id="coupons-list-edit" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
-            <!-- Coupons will be rendered here in edit mode -->
-          </div>
-          
+
           <div class="form-row two-col">
             <div class="form-group">
               <label data-i18n="admin.coupon-code">Coupon Code</label>
@@ -393,54 +339,58 @@
           </div>
 
           <div class="form-actions">
-            <button onclick="createCoupon()" class="btn-primary" data-i18n="admin.create-coupon">➕ Create Coupon</button>
-            <button onclick="toggleCouponEditMode()" class="btn-secondary" data-i18n="admin.cancel">Cancel</button>
+            <button id="coupon-submit-btn" onclick="submitCouponForm()" class="btn-primary" data-i18n="admin.create-coupon">Create Coupon</button>
+            <button onclick="closeCouponForm()" class="btn-secondary" data-i18n="admin.cancel">Cancel</button>
           </div>
         </div>
+
+        <!-- Coupons List -->
+        <div id="coupons-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <!-- JS renders active coupons here -->
+        </div>
+        <p id="no-coupons-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;" data-i18n="admin.no-coupons">No active coupons</p>
       </div>
     </div>
   </div>
 
   <!-- HIDDEN: Booking Settings Modal -->
-  <div id="modal-booking-settings" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('booking-settings')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>📅 Booking Settings</h3>
-        <button class="modal-close" onclick="closeSettingsModal('booking-settings')">✕</button>
-      </div>
-      <div class="modal-body">
+  <div id="page-booking-settings" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('booking-settings')">&#8592; Back</button>
+    <h3 data-i18n="admin.booking-settings">Booking Settings</h3>
+    
+  </div>
+      <div class="settings-page-content">
         <div class="form-group" style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Reservation Time Allowance</label>
-          <p style="color: #666; font-size: 14px; margin-bottom: 12px;">How long a reservation is held past the booked time before it expires (in minutes)</p>
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.reservation-time-allowance">Reservation Time Allowance</label>
+          <p style="color: #666; font-size: 14px; margin-bottom: 12px;" data-i18n="admin.booking-time-desc">How long a reservation is held past the booked time before it expires (in minutes)</p>
           <div style="display: flex; align-items: center; gap: 12px;">
             <input id="booking-time-allowance" type="number" placeholder="15" min="5" max="120" step="5" value="15" style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;">
-            <span style="color: #666; font-weight: 500;">minutes</span>
+            <span style="color: #666; font-weight: 500;" data-i18n="admin.minutes">minutes</span>
           </div>
-          <p style="color: #999; font-size: 12px; margin-top: 8px;">Default: 15 minutes</p>
+          <p style="color: #999; font-size: 12px; margin-top: 8px;" data-i18n="admin.default-15-mins">Default: 15 minutes</p>
         </div>
 
         <div class="form-actions" style="margin-top: 24px;">
-          <button onclick="saveBookingSettings()" class="btn-primary">💾 Save Settings</button>
-          <button onclick="closeSettingsModal('booking-settings')" class="btn-secondary">Cancel</button>
+          <button onclick="saveBookingSettings()" class="btn-primary" data-i18n="admin.save-booking-settings">Save Settings</button>
+          <button onclick="hideSettingsPage('booking-settings')" class="btn-secondary" data-i18n="admin.cancel">Cancel</button>
         </div>
       </div>
     </div>
   </div>
 
   <!-- HIDDEN: Addon Presets Modal -->
-  <div id="modal-addon-presets" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('addon-presets')"></div>
-    <div class="modal-content" style="width: 90%; max-width: 700px;">
-      <div class="modal-header">
-        <h3 data-i18n="admin.addon-presets">🎁 Addon Presets</h3>
-        <button class="modal-close" onclick="closeSettingsModal('addon-presets')">✕</button>
+  <div id="page-addon-presets" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('addon-presets')">&#8592; Back</button>
+    <h3 data-i18n="admin.addon-presets">Addon Presets</h3>
+    <button onclick="startCreateAddonPreset()" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">+ Create Preset</button>
+  </div>
       </div>
-      <div class="modal-body">
-        <div style="margin-bottom: 20px;">
-          <button onclick="startCreateAddonPreset()" class="btn-primary" style="width: 100%; margin-bottom: 16px;">+ Create New Preset</button>
-        </div>
-        <div id="addon-presets-list" style="max-height: 400px; overflow-y: auto;">
+      <div class="settings-page-content">
+        <div id="addon-presets-list">
           <!-- Presets rendered here -->
         </div>
       </div>
@@ -448,18 +398,16 @@
   </div>
 
   <!-- HIDDEN: Variant Presets Modal -->
-  <div id="modal-variant-presets" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('variant-presets')"></div>
-    <div class="modal-content" style="width: 90%; max-width: 700px;">
-      <div class="modal-header">
-        <h3 data-i18n="admin.variant-presets">⚙️ Variant Presets</h3>
-        <button class="modal-close" onclick="closeSettingsModal('variant-presets')">✕</button>
+  <div id="page-variant-presets" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('variant-presets')">&#8592; Back</button>
+    <h3 data-i18n="admin.variant-presets">Variant Presets</h3>
+    <button onclick="startCreateVariantPreset()" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">+ Create Preset</button>
+  </div>
       </div>
-      <div class="modal-body">
-        <div style="margin-bottom: 20px;">
-          <button onclick="startCreateVariantPreset()" class="btn-primary" style="width: 100%; margin-bottom: 16px;">+ Create New Preset</button>
-        </div>
-        <div id="variant-presets-list" style="max-height: 400px; overflow-y: auto;">
+      <div class="settings-page-content">
+        <div id="variant-presets-list">
           <!-- Presets rendered here -->
         </div>
       </div>
@@ -467,73 +415,133 @@
   </div>
 
   <!-- HIDDEN: Payment Terminals Modal -->
-  <div id="modal-payment-terminals" class="settings-modal hidden">
-    <div class="modal-backdrop" onclick="closeSettingsModal('payment-terminals')"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>💳 Payment Terminals</h3>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button id="terminal-add-btn" class="btn-primary" onclick="openPaymentTerminalForm()" style="padding: 6px 12px; font-size: 13px;">+ Add Terminal</button>
-          <button class="modal-close" onclick="closeSettingsModal('payment-terminals')">✕</button>
-        </div>
+  <div id="page-payment-terminals" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('payment-terminals')">&#8592; Back</button>
+    <h3 data-i18n="admin.payment-terminals">Payment Terminals</h3>
+    <button id="terminal-add-btn" class="btn-primary" onclick="openPaymentTerminalForm()" style="padding: 6px 12px; font-size: 13px; display: none;" data-i18n="admin.add-terminal">+ Add Terminal</button>
+  </div>
       </div>
-      <div class="modal-body">
+      <div class="settings-page-content">
+        <!-- Premium feature notice for non-superadmins (shown via JS) -->
+        <div id="terminal-superadmin-notice" style="display: none; background: #fefce8; border: 1px solid #fbbf24; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: flex-start; gap: 12px;">
+            <span style="font-size: 16px; flex-shrink: 0; color: #d97706; font-weight: 700; margin-top: 1px;">&#9733;</span>
+            <div>
+              <p style="margin: 0 0 2px 0; font-weight: 600; font-size: 13px; color: #92400e;" data-i18n="admin.terminal-superadmin-only">Super Admin access required</p>
+              <p style="margin: 0; font-size: 12px; color: #78350f;" data-i18n="admin.terminal-superadmin-desc">Adding, enabling, and deleting payment terminals is a premium feature restricted to Super Admins. You can edit existing terminal configurations below.</p>
+            </div>
+          </div>
+        </div>
+        <!-- Order & Pay Feature Toggle -->
+        <div style="background: #f0f4f8; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+              <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600;" data-i18n="admin.order-pay-title">Order & Pay (Payment Asia)</h4>
+              <p style="margin: 0; font-size: 12px; color: #475569;" data-i18n="admin.order-pay-desc">Customers pay immediately after placing order via Payment Asia</p>
+              <div id="order-pay-status" style="margin-top: 6px; font-size: 11px; color: #64748b;"></div>
+            </div>
+            <div style="display: flex; gap: 8px; ml: 12px;">
+              <button id="order-pay-toggle-btn" onclick="toggleOrderPayFeature()" class="btn-secondary" style="padding: 8px 16px; font-size: 12px; width: 120px;">Loading...</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Payment Terminals List View -->
         <div id="payment-terminal-list-view">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600;" data-i18n="admin.payment-terminals">Payment Terminals</h4>
           <div id="payment-terminals-list" style="display: flex; flex-direction: column; gap: 12px;">
             <!-- JS renders payment terminals here -->
           </div>
-          <p id="no-terminals-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;">No payment terminals configured yet</p>
+          <p id="no-terminals-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;" data-i18n="admin.no-terminals">No payment terminals configured yet</p>
         </div>
 
         <!-- Payment Terminal Form (hidden) -->
         <div id="payment-terminal-form-view" style="display: none;">
-          <button onclick="closePaymentTerminalForm()" class="btn-secondary" style="width: 100%; margin-bottom: 16px; padding: 8px;">← Back to List</button>
+          <button onclick="closePaymentTerminalForm()" class="btn-secondary" style="width: 100%; margin-bottom: 16px; padding: 8px;" data-i18n="admin.back-to-list">← Back to List</button>
           
           <div id="terminal-error" class="error-message" style="display: none; margin-bottom: 16px;"></div>
           <div id="terminal-success" class="success-message" style="display: none; margin-bottom: 16px;"></div>
           
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Vendor</label>
-            <select id="new-terminal-vendor" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
-              <option value="kpay">KPay</option>
-              <option value="other">Other Vendor</option>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.vendor-label">Vendor</label>
+            <select id="new-terminal-vendor" onchange="updatePaymentTerminalFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+              <option value="kpay" data-i18n="admin.vendor-kpay">KPay (POS Terminal)</option>
+              <option value="payment-asia" data-i18n="admin.vendor-pa">Payment Asia (Cloud Gateway)</option>
+              <option value="other" data-i18n="admin.vendor-other">Other Vendor</option>
             </select>
           </div>
 
-          <div class="form-row two-col">
-            <div class="form-group">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600;">App ID</label>
-              <input id="new-terminal-app-id" type="text" placeholder="Enter app ID" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+          <!-- KPAY FIELDS (shown by default) -->
+          <div id="kpay-fields">
+            <div class="form-row two-col">
+              <div class="form-group">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.app-id">App ID</label>
+                <input id="new-terminal-app-id" type="text" placeholder="Enter app ID" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              </div>
+              <div class="form-group">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.app-secret">App Secret</label>
+                <input id="new-terminal-app-secret" type="password" placeholder="Enter app secret" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              </div>
             </div>
-            <div class="form-group">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600;">App Secret</label>
-              <input id="new-terminal-app-secret" type="password" placeholder="Enter app secret" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+
+            <div class="form-row two-col">
+              <div class="form-group">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.terminal-ip">Terminal IP</label>
+                <input id="new-terminal-ip" type="text" placeholder="e.g., 192.168.50.210" value="192.168.50.210" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              </div>
+              <div class="form-group">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.terminal-port">Terminal Port</label>
+                <input id="new-terminal-port" type="text" placeholder="e.g., 18080" value="18080" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.endpoint-path">Endpoint Path</label>
+              <input id="new-terminal-endpoint" type="text" placeholder="e.g., /v2/pos/sign" value="/v2/pos/sign" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
             </div>
           </div>
 
-          <div class="form-row two-col">
-            <div class="form-group">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Terminal IP</label>
-              <input id="new-terminal-ip" type="text" placeholder="e.g., 192.168.50.210" value="192.168.50.210" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+          <!-- PAYMENT ASIA FIELDS (hidden by default) -->
+          <div id="payment-asia-fields" style="display: none;">
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.merchant-token">Merchant Token</label>
+              <input id="new-terminal-merchant-token" type="text" placeholder="Enter your Payment Asia Merchant Token" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              <small style="color: #666; display: block; margin-top: 4px;" data-i18n="admin.merchant-token-help">Found in your Payment Asia dashboard</small>
             </div>
-            <div class="form-group">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600;">Terminal Port</label>
-              <input id="new-terminal-port" type="text" placeholder="e.g., 18080" value="18080" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
-            </div>
-          </div>
 
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Endpoint Path</label>
-            <input id="new-terminal-endpoint" type="text" placeholder="e.g., /v2/pos/sign" value="/v2/pos/sign" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.secret-code">Secret Code</label>
+              <input id="new-terminal-secret-code" type="password" placeholder="Enter your Payment Asia Secret Code" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              <small style="color: #666; display: block; margin-top: 4px;" data-i18n="admin.secret-code-help">Used for request signing (SHA512)</small>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.environment-label">Environment</label>
+              <select id="new-terminal-gateway-env" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <option value="sandbox" data-i18n="admin.env-sandbox">🧪 Sandbox (Testing)</option>
+                <option value="production" data-i18n="admin.env-production">🚀 Production</option>
+              </select>
+              <small style="color: #666; display: block; margin-top: 4px;" data-i18n="admin.env-sandbox-help">Start with Sandbox: https://payment-sandbox.pa-sys.com</small>
+            </div>
+
           </div>
 
           <div style="display: flex; gap: 8px; margin-top: 20px;">
-            <button onclick="testPaymentTerminal()" class="btn-secondary" style="flex: 1; padding: 10px;">🧪 Test Connection</button>
-            <button onclick="savePaymentTerminal()" class="btn-primary" style="flex: 1; padding: 10px;">💾 Save Terminal</button>
+            <!-- KPay Test Button - shown only when KPay is selected -->
+            <button id="kpay-test-btn" onclick="testPaymentTerminal()" class="btn-secondary" style="flex: 1; padding: 10px;" data-i18n="admin.test-connection">Test Connection</button>
+            
+            <!-- Payment Asia Test Button - shown only when Payment Asia is selected -->
+            <button id="payment-asia-test-btn" onclick="testPaymentAsia()" class="btn-secondary" style="flex: 1; padding: 10px; display: none;" data-i18n="admin.test-payment">Test Payment (Opens New Tab)</button>
+            
+            <button onclick="savePaymentTerminal()" class="btn-primary" style="flex: 1; padding: 10px;" data-i18n="admin.save-terminal">Save Terminal</button>
           </div>
 
           <div id="terminal-test-result" style="display: none; margin-top: 16px; padding: 12px; border-radius: 4px;"></div>
+        </div>
+      </div>
+    </div>
         </div>
       </div>
     </div>
@@ -543,39 +551,36 @@
 <!-- PRINTER SETTINGS FULL PAGE VIEW (MOVED OUTSIDE SETTINGS-CONTAINER) -->
 <!-- Printer Settings Container (loaded by admin-printer.html) -->
 <div id="printer-settings-container-slot"></div>
-    </div>
-  </div>
-</div>
 
 <!-- PRINTER CONFIGURATION MODAL (MOVED OUTSIDE SETTINGS-CONTAINER) -->
 <div id="printer-config-modal" class="settings-modal hidden">
   <div class="modal-backdrop" onclick="closePrinterConfigModal()"></div>
   <div class="modal-content">
     <div class="modal-header">
-      <h3 id="config-printer-title">Configure Printer</h3>
+      <h3 id="config-printer-title" data-i18n="admin.configure-printer">Configure Printer</h3>
       <button class="modal-close" onclick="closePrinterConfigModal()">✕</button>
     </div>
     <div class="modal-body">
       <!-- Printer Type -->
       <div class="form-group" style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Type</label>
+        <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.printer-type">Printer Type</label>
         <select id="config-printer-type" onchange="updateConfigPrinterTypeFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
-          <option value="thermal">🌐 Network Printer (Thermal)</option>
-          <option value="bluetooth">📱 Bluetooth Printer</option>
+          <option value="thermal" data-i18n="admin.printer-network">Network Printer (Thermal)</option>
+          <option value="bluetooth" data-i18n="admin.printer-bluetooth">Bluetooth Printer</option>
         </select>
       </div>
 
       <!-- Network Printer Fields -->
       <div id="config-printer-host-group" style="display: none;">
         <div class="form-group" style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Host/IP</label>
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.printer-host">Printer Host/IP</label>
           <input id="config-printer-host" type="text" placeholder="e.g., 192.168.1.100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
         </div>
       </div>
 
       <div id="config-printer-port-group" style="display: none;">
         <div class="form-group" style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Printer Port</label>
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.printer-port">Printer Port</label>
           <input id="config-printer-port" type="number" placeholder="e.g., 9100" value="9100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;" />
         </div>
       </div>
@@ -583,19 +588,19 @@
       <!-- Bluetooth Device Selection -->
       <div id="config-bluetooth-device-group" style="display: none;">
         <div class="form-group" style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bluetooth Device</label>
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.bluetooth-device">Bluetooth Device</label>
           <div style="display: flex; gap: 8px; margin-bottom: 12px;">
             <select id="config-bluetooth-device" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: white;">
               <option value="">-- No Device Selected --</option>
             </select>
-            <button id="config-scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 0 0 auto; padding: 8px 16px;">🔍 Scan</button>
+            <button id="config-scan-bluetooth-btn" onclick="scanBluetoothDevices()" class="btn-secondary" style="flex: 0 0 auto; padding: 8px 16px;" data-i18n="admin.scan-btn">Scan</button>
           </div>
         </div>
       </div>
     </div>
     <div class="modal-footer" style="display: flex; gap: 12px; padding: 16px; border-top: 1px solid var(--border-color); background: #f9fafb;">
-      <button onclick="closePrinterConfigModal()" class="btn-secondary" style="flex: 1;">Cancel</button>
-      <button onclick="savePrinterConfig()" class="btn-primary" style="flex: 1;">💾 Save</button>
+      <button onclick="closePrinterConfigModal()" class="btn-secondary" style="flex: 1;" data-i18n="admin.cancel">Cancel</button>
+      <button onclick="savePrinterConfig()" class="btn-primary" style="flex: 1;" data-i18n="admin.save">Save</button>
     </div>
   </div>
 </div>
@@ -609,7 +614,7 @@
 <!-- POS Status Template -->
 <template id="pos-status-template">
   <div style="padding: 10px; background: #f0fdf4; border-radius: 6px; color: #166534; border-left: 4px solid #22c55e;">
-    🟢 Configured
+    Configured
   </div>
 </template>
 
@@ -621,7 +626,10 @@
         <strong data-coupon-code>CODE</strong><br>
         <small style="color: #666;" data-coupon-discount>Off</small>
       </div>
-      <button data-coupon-delete class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
+      <div style="display: flex; gap: 8px;">
+        <button data-coupon-edit class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</button>
+        <button data-coupon-delete class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
+      </div>
     </div>
   </div>
 </template>

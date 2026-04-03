@@ -206,7 +206,7 @@ function renderKitchenPrintersList() {
   console.log('[admin-printer-kitchen.js] renderKitchenPrintersList - categories available:', window.availableMenuCategories.length, 'printers:', window.kitchenPrinters.length);
   
   if (window.kitchenPrinters.length === 0) {
-    container.innerHTML = '<p style="color: #6b7280; font-size: 13px; margin: 0;">No printers added yet. Click "Add Printer" to get started.</p>';
+    container.innerHTML = '<p class="kitchen-empty-state">No printers added yet. Click "+ Add Printer" to get started.</p>';
     return;
   }
   
@@ -217,58 +217,62 @@ function renderKitchenPrintersList() {
       ? printer.categories.map(catId => window.availableMenuCategories.find(c => c.id === catId)?.name || `ID ${catId}`).join(', ')
       : 'None selected';
     
+    const networkFields = `
+      <div class="kitchen-printer-field">
+        <label>Network Address</label>
+        <input type="text" placeholder="192.168.1.100 or printer.local" value="${printer.host || ''}" onchange="updatePrinterHost('${printer.id}', this.value)" />
+        <p class="field-hint">IP address or hostname of the network printer</p>
+      </div>
+    `;
+
+    const bluetoothFields = `
+      <div class="kitchen-printer-field">
+        <label>Bluetooth Device</label>
+        <button onclick="scanBluetoothDeviceForKitchen('${printer.id}')" class="btn-secondary" style="width:100%;">🔵 Scan Bluetooth Device</button>
+        ${printer.bluetoothDevice ? `<p class="field-hint success">✓ Connected: ${printer.bluetoothDevice}</p>` : ''}
+      </div>
+    `;
+
+    const categoryGrid = window.availableMenuCategories.length > 0
+      ? `<div class="kitchen-categories-grid">
+          ${window.availableMenuCategories.map(cat => {
+            const isChecked = printer.categories.some(c => Number(c) === Number(cat.id));
+            return `<label class="kitchen-category-label">
+              <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="togglePrinterCategory('${printer.id}', ${cat.id})" />
+              <span>${cat.name}</span>
+            </label>`;
+          }).join('')}
+        </div>`
+      : `<div class="kitchen-categories-loading">⏳ Loading menu categories...</div>`;
+
+    const categoryStatus = printer.categories.length === 0
+      ? '<p class="category-status-warning">⚠️ Select at least one category for this printer</p>'
+      : `<p class="category-status-ok">✓ Routing: ${selectedCategoriesDisplay}</p>`;
+
     html += `
-      <div style="background: white; border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div>
-            <input type="text" value="${printer.name}" onchange="updatePrinterName('${printer.id}', this.value)" style="font-weight: 600; border: 1px solid #d1d5db; border-radius: 4px; padding: 6px; font-size: 13px; width: 150px;" />
-            <span style="font-size: 11px; color: #6b7280; margin-left: 8px;">#${(idx + 1)}</span>
+      <div class="kitchen-printer-card">
+        <div class="kitchen-printer-card-header">
+          <div class="kitchen-printer-header-left">
+            <input type="text" class="kitchen-printer-name-input" value="${printer.name}" onchange="updatePrinterName('${printer.id}', this.value)" />
+            <span class="kitchen-printer-index">#${idx + 1}</span>
           </div>
-          <button onclick="removeKitchenPrinter('${printer.id}')" style="background: #fee2e2; border: 1px solid #ef4444; color: #dc2626; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;">Remove</button>
+          <button onclick="removeKitchenPrinter('${printer.id}')" class="btn-danger">Remove</button>
         </div>
-        
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 12px; color: #1f2937;">Printer Type</label>
-          <select onchange="updatePrinterType('${printer.id}', this.value)" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
+
+        <div class="kitchen-printer-field">
+          <label>Printer Type</label>
+          <select onchange="updatePrinterType('${printer.id}', this.value)">
             <option value="network" ${printer.type === 'network' ? 'selected' : ''}>Network Printer</option>
             <option value="bluetooth" ${printer.type === 'bluetooth' ? 'selected' : ''}>Bluetooth Printer</option>
           </select>
         </div>
-        
-        ${printer.type === 'network' ? `
-          <div style="margin-bottom: 12px;">
-            <input type="text" placeholder="192.168.1.100 or printer.local" value="${printer.host || ''}" onchange="updatePrinterHost('${printer.id}', this.value)" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; margin-bottom: 8px;" />
-            <p style="font-size: 11px; color: #6b7280; margin: 0;">Network address</p>
-          </div>
-        ` : `
-          <div style="margin-bottom: 12px;">
-            <button onclick="scanBluetoothDeviceForKitchen('${printer.id}')" class="btn-secondary" style="width: 100%; padding: 6px; font-size: 12px;">Scan Bluetooth Device</button>
-            ${printer.bluetoothDevice ? `<p style="font-size: 11px; color: #059669; margin: 6px 0 0 0;">✓ ${printer.bluetoothDevice}</p>` : ''}
-          </div>
-        `}
-        
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 12px; color: #1f2937;">📍 Route Categories (${printer.categories.length}/${window.availableMenuCategories.length})</label>
-          
-          ${window.availableMenuCategories.length > 0 ? `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-              ${window.availableMenuCategories.map(cat => {
-                const isChecked = printer.categories.some(c => Number(c) === Number(cat.id));
-                return `
-                  <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; padding: 6px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb;">
-                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="togglePrinterCategory('${printer.id}', ${cat.id})" />
-                    <span>${cat.name}</span>
-                  </label>
-                `;
-              }).join('')}
-            </div>
-          ` : `
-            <div style="padding: 8px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 4px; margin-bottom: 8px;">
-              <p style="font-size: 11px; color: #92400e; margin: 0;">⏳ Loading menu categories...</p>
-            </div>
-          `}
-          
-          ${printer.categories.length === 0 ? '<p style="font-size: 11px; color: #ef4444; margin: 0; font-weight: 600;">⚠️ You must select at least one category</p>' : '<p style="font-size: 11px; color: #059669; margin: 0;">✓ Routing: ' + selectedCategoriesDisplay + '</p>'}
+
+        ${printer.type === 'network' ? networkFields : bluetoothFields}
+
+        <div class="kitchen-printer-field">
+          <label>📍 Route Categories (${printer.categories.length}/${window.availableMenuCategories.length})</label>
+          ${categoryGrid}
+          ${categoryStatus}
         </div>
       </div>
     `;

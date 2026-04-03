@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KPay Test Payment</title>
+  <script src="/translations.js"></script>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .content {
+      padding: 24px;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .items-list {
+      background: #f8f9fa;
+      border-radius: 8px;
+      overflow: hidden;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e9ecef;
+      font-size: 14px;
+    }
+
+    .item:last-child {
+      border-bottom: none;
+    }
+
+    .item-name {
+      flex: 1;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .item-qty {
+      color: #666;
+      font-size: 12px;
+      margin: 0 12px;
+    }
+
+    .item-price {
+      color: #667eea;
+      font-weight: 600;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .summary {
+      background: #f0f4ff;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .summary-row.total {
+      font-size: 18px;
+      font-weight: 700;
+      color: #667eea;
+      padding-top: 12px;
+      border-top: 1px solid #d4d9ff;
+      margin-top: 8px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #e9ecef;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #dee2e6;
+    }
+
+    .terminal {
+      background: #1a1a1a;
+      color: #00ff00;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 16px;
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .terminal.show {
+      display: block;
+    }
+
+    .terminal-line {
+      margin: 4px 0;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+
+    .terminal-error {
+      color: #ff6b6b;
+    }
+
+    .terminal-success {
+      color: #51cf66;
+    }
+
+    .terminal-warning {
+      color: #ffd43b;
+    }
+
+    .status {
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .status.loading {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid #0c5460;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🍽️ Close Bill</h1>
+      <p>KPay Terminal Payment Test</p>
+      <p id="terminalInfo" style="font-size: 12px; opacity: 0.8; margin-top: 8px; font-weight: 600;">Terminal #<span id="terminalIdDisplay">-</span> | Restaurant #<span id="restaurantIdDisplay">-</span></p>
+    </div>
+
+    <div class="content">
+      <!-- Items Section -->
+      <div class="section">
+        <div class="section-title">Order Items</div>
+        <div class="items-list" id="itemsList">
+          <!-- Items will be populated here -->
+        </div>
+      </div>
+
+      <!-- Summary Section -->
+      <div class="section">
+        <div class="summary" id="summary">
+          <div class="summary-row">
+            <div>Subtotal</div>
+            <div id="subtotal">HKD 0.00</div>
+          </div>
+          <div class="summary-row">
+            <div>Tax (0%)</div>
+            <div id="tax">HKD 0.00</div>
+          </div>
+          <div class="summary-row total">
+            <div>Total</div>
+            <div id="total">HKD 0.00</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Messages -->
+      <div class="status" id="status"></div>
+
+      <!-- Terminal Output -->
+      <div class="terminal show" id="terminal">
+        <div class="terminal-line terminal-warning">> Initializing payment...</div>
+      </div>
+
+      <!-- Post-payment actions (shown after transaction is initiated) -->
+      <div id="txnActions" style="display:none; margin-bottom:16px;">
+        <div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:600;">Transaction Actions</div>
+        <div style="font-size:11px; color:#999; margin-bottom:8px;">
+          Pending: use <b>Close</b> to abort &nbsp;|&nbsp; Settled: use <b>Refund</b> to reverse
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn-secondary" id="btnVoid" onclick="voidTransaction()" style="flex:1; min-width:120px;" disabled>🚫 Void (settled only)</button>
+          <button class="btn-secondary" id="btnRefund" onclick="promptRefund()" style="flex:1; min-width:120px;" disabled>💸 Refund (settled only)</button>
+          <button class="btn-secondary" id="btnClose" onclick="closeActiveTransaction()" style="flex:1; min-width:120px;">⏹ Close (abort pending)</button>
+        </div>
+      </div>
+
+      <!-- Refund panel (hidden by default) -->
+      <div id="refundPanel" style="display:none; background:#f9f9f9; border:1px solid #ddd; border-radius:8px; padding:16px; margin-bottom:16px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px;">Refund Transaction</div>
+
+        <!-- Auto-fetched summary (read-only) -->
+        <div id="refundSummary" style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:10px; margin-bottom:12px; font-size:12px; font-family:monospace; color:#333; line-height:1.8;">
+          Fetching transaction details…
+        </div>
+
+        <label style="font-size:12px;">Partial Refund Amount <span style="color:#888;font-size:11px;">(leave blank to refund full amount)</span></label>
+        <input id="refundAmount" type="text" placeholder="e.g. 000000000100  (12-digit cents)" style="width:100%; margin:4px 0 10px; padding:6px; border-radius:4px; border:1px solid #ccc; box-sizing:border-box;"/>
+
+        <label style="font-size:12px;">Admin Password <span style="color:red">*</span></label>
+        <input id="refundPassword" type="password" placeholder="Admin password" style="width:100%; margin:4px 0 10px; padding:6px; border-radius:4px; border:1px solid #ccc; box-sizing:border-box;"/>
+
+        <div id="refundPanelError" style="display:none; color:#d32f2f; font-size:12px; margin-bottom:8px;"></div>
+
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" onclick="document.getElementById('refundPanel').style.display='none'" style="flex:1;">Cancel</button>
+          <button class="btn-primary" id="btnSubmitRefund" onclick="submitRefund()" style="flex:1;" disabled>Submit Refund</button>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="button-group">
+        <button class="btn-secondary" onclick="closeWindow()">Cancel</button>
+        <button class="btn-primary" id="closeBtn" onclick="closeBill()">Close Bill & Pay (HKD 1.00)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = window.location.origin;
+    let TAX_RATE = 0;
+
+    // Sample items for demo
+    const DEMO_ITEMS = [
+      { name: 'Chicken Rice Bowl', quantity: 1, price: 0.35 },
+      { name: 'Fried Spring Rolls', quantity: 2, price: 0.20 },
+      { name: 'Steamed Dumplings', quantity: 3, price: 0.15 },
+      { name: 'Green Tea', quantity: 1, price: 0.10 },
+    ];
+
+    // Initialize page
+    function init() {
+      renderItems();
+      calculateTotal();
+      
+      // Get parameters from URL query string
+      const params = new URLSearchParams(window.location.search);
+      const terminalId = params.get('terminalId');
+      const restaurantId = params.get('restaurantId');
+      
+      if (!terminalId || !restaurantId) {
+        showError('Missing terminal or restaurant ID');
+        return;
+      }
+
+      // Display terminal info for clarity
+      document.getElementById('terminalIdDisplay').textContent = terminalId;
+      document.getElementById('restaurantIdDisplay').textContent = restaurantId;
+
+      // Store in window for later use
+      window.terminalId = terminalId;
+      window.restaurantId = restaurantId;
+      
+      // Validate terminal is KPay type
+      validateTerminalIsKPay(terminalId, restaurantId);
+    }
+    
+    async function validateTerminalIsKPay(terminalId, restaurantId) {
+      try {
+        const response = await fetch(`${API}/api/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const terminal = await response.json();
+        
+        if (terminal.vendor_name !== 'kpay') {
+          showError(`❌ This is a ${terminal.vendor_name.toUpperCase()} terminal, not KPay! You opened the wrong payment page. Close this window and re-test from admin settings.`);
+          log(`WARNING: Terminal ${terminalId} is configured as ${terminal.vendor_name}, not kpay`, 'error');
+          document.getElementById('closeBtn').disabled = true;
+          return false;
+        }
+        
+        log(`✓ Terminal ${terminalId} is configured as KPay - Ready to process payment`, 'success');
+        return true;
+      } catch (err) {
+        log(`Could not verify terminal type: ${err.message}`, 'warning');
+        // Don't block payment, just warn
+      }
+    }
+
+    function renderItems() {
+      const itemsList = document.getElementById('itemsList');
+      let html = '';
+      
+      DEMO_ITEMS.forEach(item => {
+        const total = (item.price * item.quantity).toFixed(2);
+        html += `
+          <div class="item">
+            <div class="item-name">${item.name}</div>
+            <div class="item-qty">x${item.quantity}</div>
+            <div class="item-price">HKD ${total}</div>
+          </div>
+        `;
+      });
+      
+      itemsList.innerHTML = html;
+    }
+
+    function calculateTotal() {
+      let subtotal = DEMO_ITEMS.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      let tax = subtotal * TAX_RATE;
+      let total = subtotal + tax;
+      
+      document.getElementById('subtotal').textContent = `HKD ${subtotal.toFixed(2)}`;
+      document.getElementById('tax').textContent = `HKD ${tax.toFixed(2)}`;
+      document.getElementById('total').textContent = `HKD ${total.toFixed(2)}`;
+      
+      return { subtotal, tax, total };
+    }
+
+    function log(message, type = 'default') {
+      const terminal = document.getElementById('terminal');
+      terminal.classList.add('show');
+      
+      const line = document.createElement('div');
+      line.className = `terminal-line terminal-${type}`;
+      line.textContent = message;
+      terminal.appendChild(line);
+      
+      // Auto-scroll to bottom
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    /** Append logs received from the backend (service-level messages) */
+    function appendBackendLogs(logs) {
+      if (!logs || !logs.length) return;
+      logs.forEach(msg => {
+        const type = msg.includes('✅') ? 'success'
+                   : msg.includes('❌') ? 'error'
+                   : msg.includes('⚠️') ? 'warning'
+                   : 'default';
+        log(msg, type);
+      });
+    }
+
+    function showStatus(message, type = 'loading') {
+      const status = document.getElementById('status');
+      status.className = `status show ${type}`;
+      
+      if (type === 'loading') {
+        status.innerHTML = `<div><span class="spinner"></span>${message}</div>`;
+      } else {
+        status.innerHTML = message;
+      }
+    }
+
+    function showError(message) {
+      showStatus(message, 'error');
+      log(`✗ ERROR: ${message}`, 'error');
+    }
+
+    function showSuccess(message) {
+      showStatus(message, 'success');
+      log(`✓ SUCCESS: ${message}`, 'success');
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // KPay Test Payment — signs in + initiates sale + polls for actual result
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    let _pollTimer = null;
+    let _currentOutTradeNo = null;  // tracks the active transaction reference
+    let _currentTxnData = null;     // full response from successful payment query (has refNo, transactionNo, etc.)
+
+    function stopPolling() {
+      if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; }
+    }
+
+    async function pollStatus(outTradeNo, terminalId, restaurantId, attempts, maxAttempts) {
+      if (attempts >= maxAttempts) {
+        stopPolling();
+        showStatus('⏱ Timeout: No response from terminal after 65 seconds. Check the terminal directly.', 'error');
+        log('> TIMEOUT — no definitive result after 65s', 'warning');
+        // On timeout the terminal state is unknown — only Close is safe to try
+        document.getElementById('btnVoid').disabled = true;
+        document.getElementById('btnRefund').disabled = true;
+        document.getElementById('btnClose').disabled = false;
+        document.getElementById('closeBtn').disabled = false;
+        return;
+      }
+
+      log(`> Polling status (attempt ${attempts + 1}/${maxAttempts})...`);
+
+      try {
+        const resp = await fetch(`${API}/api/restaurants/${restaurantId}/payment-terminals/${terminalId}/test-status?outTradeNo=${encodeURIComponent(outTradeNo)}`);
+        const data = await resp.json();
+
+        appendBackendLogs(data.logs);
+        log(`  Code: ${data.code ?? '?'}  Status: ${data.status}`);
+
+        if (data.status === 'success') {
+          stopPolling();
+          _currentTxnData = data;  // store for refund/void use
+          showSuccess(`✅ Payment successful! (code ${data.code})`);
+          log(`> PAID — code ${data.code}`, 'success');
+          if (data.refNo) log(`  refNo: ${data.refNo}  (use for Card refund)`, 'success');
+          if (data.transactionNo) log(`  transactionNo: ${data.transactionNo}  (use for QR refund)`, 'success');
+          // Payment settled — Void not applicable, Close no longer needed, Refund is available
+          document.getElementById('btnVoid').disabled = true;
+          document.getElementById('btnVoid').title = 'Transaction already settled — use Refund instead';
+          document.getElementById('btnRefund').disabled = false;
+          document.getElementById('btnRefund').title = '';
+          document.getElementById('btnClose').disabled = true;
+          document.getElementById('btnClose').title = 'Transaction already completed';
+          document.getElementById('closeBtn').disabled = false;
+          return;
+        }
+
+        if (data.status === 'cancelled') {
+          stopPolling();
+          showStatus(`⚠️ Payment cancelled by customer (code ${data.code}).`, 'error');
+          log(`> CANCELLED — code ${data.code}`, 'error');
+          document.getElementById('btnVoid').disabled = true;
+          document.getElementById('btnRefund').disabled = true;
+          document.getElementById('btnClose').disabled = true;
+          document.getElementById('closeBtn').disabled = false;
+          return;
+        }
+
+        if (data.status === 'failed') {
+          stopPolling();
+          showStatus(`❌ Payment failed (code ${data.code}): ${data.message || ''}`, 'error');
+          log(`> FAILED — code ${data.code}`, 'error');
+          document.getElementById('btnVoid').disabled = true;
+          document.getElementById('btnRefund').disabled = true;
+          document.getElementById('btnClose').disabled = true;
+          document.getElementById('closeBtn').disabled = false;
+          return;
+        }
+
+        // Still pending — poll again in 3 seconds
+        _pollTimer = setTimeout(() => pollStatus(outTradeNo, terminalId, restaurantId, attempts + 1, maxAttempts), 3000);
+
+      } catch (err) {
+        log(`  Poll error: ${err.message} — retrying...`, 'warning');
+        _pollTimer = setTimeout(() => pollStatus(outTradeNo, terminalId, restaurantId, attempts + 1, maxAttempts), 3000);
+      }
+    }
+
+    async function closeBill() {
+      const btn = document.getElementById('closeBtn');
+      const terminalId = window.terminalId;
+      const restaurantId = window.restaurantId;
+
+      if (!terminalId || !restaurantId) {
+        showError('Missing configuration: terminalId or restaurantId');
+        return;
+      }
+
+      stopPolling();
+      btn.disabled = true;
+      showStatus('Initiating payment on terminal...', 'loading');
+      log('> Signing in and initiating sale on KPay terminal...');
+
+      try {
+        const apiUrl = `${API}/api/restaurants/${restaurantId}/payment-terminals/${terminalId}/test`;
+
+        const { total } = calculateTotal();
+        const amountInCents = Math.round(total * 100).toString().padStart(12, '0');
+        const requestBody = { payAmount: amountInCents, tipsAmount: '000000000000', payCurrency: '344' };
+
+        log(`> Amount: HKD ${total.toFixed(2)} → payAmount: ${amountInCents}`);
+        log(`> POST ${apiUrl}`);
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+        const result = await response.json();
+
+        appendBackendLogs(result.logs);
+        log(`[RESPONSE] code=${result.code}  status=${result.status}  success=${result.success}`);
+
+        if (!result.initiated) {
+          showStatus(`❌ ${result.message || 'Failed to initiate payment'}`, 'error');
+          btn.disabled = false;
+          return;
+        }
+
+        // Payment initiated — start polling for actual result (max 22 polls × 3s ≈ 66s)
+        showStatus('💳 Terminal is awaiting payment. Please complete the transaction on the device...', 'loading');
+        log(`\n> Payment initiated. outTradeNo: ${result.outTradeNo}`);
+        log('> Polling terminal for payment result every 3 seconds (max 65s)...');
+        _currentOutTradeNo = result.outTradeNo;
+        // Show transaction action buttons — Void is ONLY valid on a completed-but-unsettled
+        // transaction. While still pending the terminal is busy, so only Close is valid.
+        document.getElementById('txnActions').style.display = 'block';
+        document.getElementById('btnVoid').disabled = true;
+        document.getElementById('btnVoid').title = 'Transaction is pending — use Close Transaction to abort, or wait for payment to complete';
+        document.getElementById('btnRefund').disabled = true;
+        document.getElementById('btnRefund').title = 'Wait for payment to complete before refunding';
+        document.getElementById('btnClose').disabled = false;
+        pollStatus(result.outTradeNo, terminalId, restaurantId, 0, 22);
+
+      } catch (err) {
+        showError(`Request failed: ${err.message}`);
+        log(`Exception: ${err.message}`, 'error');
+        btn.disabled = false;
+      }
+    }
+
+    function closeWindow() {
+      window.close();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Transaction action handlers
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    async function voidTransaction() {
+      if (!_currentOutTradeNo) { showError('No active transaction to void'); return; }
+      const terminalId = window.terminalId;
+      const restaurantId = window.restaurantId;
+      if (!confirm(`Void transaction ${_currentOutTradeNo}?\n\nThis only works for same-day, unsettled transactions.`)) return;
+      stopPolling();
+      document.getElementById('btnVoid').disabled = true;
+      showStatus('Sending void request to terminal...', 'loading');
+      log(`> Voiding ${_currentOutTradeNo}...`);
+      try {
+        const voidOutTradeNo = `VOID-${Date.now()}`;
+        const resp = await fetch(`${API}/api/restaurants/${restaurantId}/payment-terminals/${terminalId}/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outTradeNo: voidOutTradeNo, originOutTradeNo: _currentOutTradeNo }),
+        });
+        const data = await resp.json();
+        appendBackendLogs(data.logs);
+        log(`[VOID RESPONSE] success=${data.success}  message=${data.message || ''}`, data.success ? 'success' : 'error');
+        if (data.success) {
+          showSuccess('✅ Void initiated — check terminal to complete the cancellation.');
+          document.getElementById('btnRefund').disabled = true;  // void and refund are mutually exclusive
+          document.getElementById('btnClose').disabled = true;
+        } else {
+          showStatus(`❌ Void failed: ${data.message || data.error}`, 'error');
+          log(`  Hint: transaction may already be settled — use Refund instead.`, 'warning');
+          document.getElementById('btnVoid').disabled = false;
+        }
+      } catch (e) {
+        showError(`Void request failed: ${e.message}`);
+        document.getElementById('btnVoid').disabled = false;
+      }
+    }
+
+    // Stores auto-fetched refund fields so submitRefund() doesn't need any manual inputs
+    let _refundType = null;       // 1=Card, 2=QR (auto-detected)
+    let _refundRefNo = null;
+    let _refundCommitTime = null;
+    let _refundTransactionNo = null;
+
+    async function promptRefund() {
+      if (!_currentOutTradeNo) { showError('No active transaction to refund'); return; }
+      const terminalId = window.terminalId;
+      const restaurantId = window.restaurantId;
+
+      // Show panel immediately with loading state
+      const summary = document.getElementById('refundSummary');
+      summary.textContent = '⏳ Querying transaction details…';
+      document.getElementById('refundPanelError').style.display = 'none';
+      document.getElementById('btnSubmitRefund').disabled = true;
+      document.getElementById('refundPassword').value = '';
+      document.getElementById('refundAmount').value = '';
+      document.getElementById('refundPanel').style.display = 'block';
+
+      try {
+        log(`> Fetching latest transaction data for ${_currentOutTradeNo}…`);
+        const resp = await fetch(
+          `${API}/api/restaurants/${restaurantId}/payment-terminals/${terminalId}/test-status?outTradeNo=${encodeURIComponent(_currentOutTradeNo)}`
+        );
+        const data = await resp.json();
+        appendBackendLogs(data.logs);
+
+        if (!data.success && data.status !== 'success') {
+          summary.textContent = `❌ Could not fetch transaction details: ${data.message || data.error}`;
+          return;
+        }
+
+        // Auto-detect payment type from which identifier fields are present
+        const hasCard = !!(data.refNo && data.commitTime);
+        const hasQR   = !!data.transactionNo;
+
+        if (!hasCard && !hasQR) {
+          summary.textContent = '❌ Cannot determine payment type — refNo and transactionNo are both missing in the query response.';
+          return;
+        }
+
+        // Prefer Card if both somehow present; QR otherwise
+        _refundType          = hasCard ? 1 : 2;
+        _refundRefNo         = data.refNo || null;
+        _refundCommitTime    = data.commitTime || null;
+        _refundTransactionNo = data.transactionNo || null;
+
+        const amountHKD = data.amount ? (parseInt(data.amount) / 100).toFixed(2) : '—';
+        const typeLabel = _refundType === 1
+          ? `Card  |  refNo: ${_refundRefNo}  |  commitTime: ${_refundCommitTime}`
+          : `QR  |  transactionNo: ${_refundTransactionNo}`;
+
+        summary.innerHTML =
+          `<b>outTradeNo:</b> ${_currentOutTradeNo}<br>` +
+          `<b>Type:</b> ${typeLabel}<br>` +
+          `<b>Amount:</b> HKD ${amountHKD}  (${data.currency || '344'})<br>` +
+          `<b>Status:</b> ${data.status}`;
+
+        document.getElementById('btnSubmitRefund').disabled = false;
+        log(`  Auto-detected type: ${_refundType === 1 ? 'Card' : 'QR'}`, 'success');
+
+      } catch (e) {
+        summary.textContent = `❌ Request failed: ${e.message}`;
+        log(`  Error fetching refund data: ${e.message}`, 'error');
+      }
+    }
+
+    async function submitRefund() {
+      const terminalId = window.terminalId;
+      const restaurantId = window.restaurantId;
+      const managerPassword = document.getElementById('refundPassword').value.trim();
+      const refundAmount    = document.getElementById('refundAmount').value.trim() || undefined;
+      const errDiv = document.getElementById('refundPanelError');
+
+      if (!managerPassword) {
+        errDiv.textContent = 'Admin password is required';
+        errDiv.style.display = 'block';
+        return;
+      }
+      errDiv.style.display = 'none';
+
+      if (!_refundType) {
+        errDiv.textContent = 'Transaction details not loaded — close and reopen the refund panel';
+        errDiv.style.display = 'block';
+        return;
+      }
+
+      document.getElementById('refundPanel').style.display = 'none';
+      showStatus('Processing refund on terminal...', 'loading');
+      log(`> Refunding ${_currentOutTradeNo} (type=${_refundType === 1 ? 'Card' : 'QR'})…`);
+      try {
+        const refundOutTradeNo = `REF-${Date.now()}`;
+        const body = { outTradeNo: refundOutTradeNo, refundType: _refundType, managerPassword };
+        if (refundAmount) body.refundAmount = refundAmount;
+        if (_refundType === 1) {
+          body.refNo       = _refundRefNo;
+          body.commitTime  = _refundCommitTime;
+        } else {
+          body.transactionNo = _refundTransactionNo;
+        }
+        const resp = await fetch(`${API}/api/restaurants/${restaurantId}/payment-terminals/${terminalId}/refund`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        appendBackendLogs(data.logs);
+        log(`[REFUND RESPONSE] success=${data.success}  message=${data.message || ''}`, data.success ? 'success' : 'error');
+        if (data.success) {
+          showSuccess('✅ Refund initiated — check terminal to complete.');
+        } else {
+          showStatus(`❌ Refund failed: ${data.message || data.error}`, 'error');
+        }
+      } catch (e) {
+        showError(`Refund request failed: ${e.message}`);
+      }
+    }
+
+    async function closeActiveTransaction() {
+      if (!_currentOutTradeNo) { showError('No active transaction to close'); return; }
+      const terminalId = window.terminalId;
+      const restaurantId = window.restaurantId;
+      if (!confirm(`Close in-progress transaction ${_currentOutTradeNo}? This frees the terminal.`)) return;
+      stopPolling();
+      document.getElementById('btnClose').disabled = true;
+      showStatus('Closing transaction on terminal...', 'loading');
+      log(`> Closing ${_currentOutTradeNo}...`);
+      try {
+        const resp = await fetch(`${API}/api/restaurants/${restaurantId}/payment-terminals/${terminalId}/close-transaction`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outTradeNo: _currentOutTradeNo }),
+        });
+        const data = await resp.json();
+        appendBackendLogs(data.logs);
+        log(`[CLOSE RESPONSE] success=${data.success}  message=${data.message || ''}`, data.success ? 'success' : 'error');
+        if (data.success) {
+          showSuccess('✅ Transaction closed — terminal is now free.');
+        } else {
+          showStatus(`❌ Close failed: ${data.message || data.error}`, 'error');
+          document.getElementById('btnClose').disabled = false;
+        }
+      } catch (e) {
+        showError(`Close request failed: ${e.message}`);
+        document.getElementById('btnClose').disabled = false;
+      }
+    }
+
+    // Initialize on load
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>

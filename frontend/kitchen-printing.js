@@ -26,6 +26,11 @@ function generateKitchenOrderHTML(order, restaurantName = "Restaurant") {
         ? `<div class="item-variants">${item.variants}</div>`
         : ""
     }
+    ${
+      item.notes
+        ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${item.notes}</div>`
+        : ""
+    }
   `
     )
     .join("");

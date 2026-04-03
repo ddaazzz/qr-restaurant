@@ -70,13 +70,14 @@
     <div style="position: relative;">
       <button class="gear-icon-btn" onclick="toggleSessionGearMenu(event)">⚙️</button>
       <div id="session-gear-menu" class="session-gear-menu hidden">
-        <button onclick="changeSessionPaxModal({SESSION_ID}, {PAX})" data-i18n="admin.change-pax">👥 Change Pax</button>
-        <button onclick="moveTableModal({TABLE_ID})" data-i18n="admin.move-table">↔️ Move Table</button>
-        <button onclick="orderForTable('{QR_TOKEN}')" data-i18n="admin.order-for-table">📱 Order for Table</button>
-        <button onclick="printQR({SESSION_ID})" data-i18n="admin.print-qr">📋 Print QR</button>
-        <button onclick="printBill({SESSION_ID})" data-i18n="admin.print-bill">🖨️ Print Bill</button>
-        <button onclick="splitBill({SESSION_ID})" data-i18n="admin.split-bill">💵 Split Bill</button>
-        <button onclick="endTableSession({SESSION_ID})" style="color: #c33;" data-i18n="admin.delete-session">🗑️ Delete</button>
+        <button onclick="changeSessionPaxModal({SESSION_ID}, {PAX})" data-i18n="admin.change-pax">Change Pax</button>
+        <button onclick="moveTableModal({TABLE_ID})" data-i18n="admin.move-table">Move Table</button>
+        <button onclick="orderForTable('{QR_TOKEN}')" data-i18n="admin.order-for-table">Order for Table</button>
+        <button onclick="printQR({SESSION_ID})" data-i18n="admin.print-qr">Print QR</button>
+        <button onclick="printBill({SESSION_ID})" data-i18n="admin.print-bill">Print Bill</button>
+        <button onclick="splitBill({SESSION_ID})" data-i18n="admin.split-bill">Split Bill</button>
+        <button onclick="closeBillModal({SESSION_ID})" style="color: #b45309;">Close Bill (Manual)</button>
+        <button onclick="endTableSession({SESSION_ID})" style="color: #c33;" data-i18n="admin.delete-session">Delete</button>
       </div>
     </div>
   </div>
@@ -128,7 +129,7 @@
     <div style="flex:1;">
       <div><strong data-field="item-name">Item Name</strong></div>
       <div style="font-size:0.85em;color:#666;margin-top:2px;font-style:italic;" data-field="item-variants"></div>
-      <div style="color:#999;font-size:0.9em;" data-field="item-status">Status: pending</div>
+      <div style="color:#999;font-size:0.9em;" data-field="item-status">Status: sending</div>
     </div>
     <div style="text-align: right;">
       <div style="font-weight: bold;" data-field="item-total">$10.00</div>
@@ -223,12 +224,24 @@
 
     <label style="display: block; margin-bottom: 15px;">
       <span style="font-weight: 600; display: block; margin-bottom: 5px;" data-i18n="admin.payment-method">Payment Method</span>
-      <select id="payment-method" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      <select id="payment-method" onchange="handlePaymentMethodChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
         <option value="cash" data-i18n="admin.payment-cash">Cash</option>
         <option value="card" data-i18n="admin.payment-card">Card</option>
         <option value="online" data-i18n="admin.payment-online">Online</option>
+        <option value="kpay" data-i18n="admin.payment-kpay">💳 KPay Terminal</option>
       </select>
     </label>
+
+    <!-- KPay Terminal Selection (shown only when KPay is selected) -->
+    <div id="kpay-terminal-section" style="display: none; margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196f3;">
+      <label style="display: block; margin-bottom: 8px;">
+        <span style="font-weight: 600; display: block; margin-bottom: 5px; color: #1976d2;">Select KPay Terminal</span>
+        <select id="kpay-terminal-select" style="width: 100%; padding: 8px; border: 1px solid #2196f3; border-radius: 4px; background: white;">
+          <option value="">Loading terminals...</option>
+        </select>
+      </label>
+      <p style="margin: 8px 0 0 0; font-size: 12px; color: #555;">Payment will be sent to the KPay terminal for card payment</p>
+    </div>
 
     <label style="display: block; margin-bottom: 15px;">
       <span style="font-weight: 600; display: block; margin-bottom: 5px;" data-i18n="admin.discount-section">Discount / Coupon</span>

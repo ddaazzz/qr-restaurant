@@ -6,7 +6,7 @@
   <title>Chuio - QR Code Restaurant Ordering & Kitchen Management System</title>
   <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon (1).ico" />
   <link rel="apple-touch-icon" href="/uploads/chuio/Chuio_logo.png" />
-  <meta name="description" content="Chuio revolutionizes restaurant operations with QR code ordering, real-time kitchen management, table management, staff control, and promotions. Increase efficiency and customer satisfaction.">
+  <meta name="description" content="Chuio revolutionizes restaurant operations with QR code ordering, real-time kitchen management, table management, staff control, and promotions. 100% Free forever.">
   <meta name="keywords" content="QR ordering system, restaurant management software, kitchen display system, table management, digital menu ordering">
   <meta name="author" content="Chuio">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
@@ -15,13 +15,12 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://chuio.io" />
   <meta property="og:image" content="https://chuio.io/uploads/chuio/Chuio_logo.png" />
-  <meta property="og:image" content="/uploads/chuio/landing_splash.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Chuio - QR Code Restaurant Ordering System" />
   <meta name="twitter:description" content="Streamline your restaurant with QR code ordering and real-time kitchen management" />
   <meta name="theme-color" content="#2C3E50">
   <link rel="canonical" href="https://chuio.io">
-  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
+
   <link rel="stylesheet" href="home.css" />
   <link rel="stylesheet" href="language-switcher.css" />
   
@@ -65,27 +64,23 @@
   </script>
 </head>
 <body>
+  <!-- Fixed page background -->
+  <div class="page-bg"></div>
+
   <!-- NAVIGATION -->
-  <nav>
+  <nav class="glass-nav">
     <div class="nav-container">
       <a href="#home" class="logo">
-        <img src="/uploads/chuio/Chuio_logo.png" alt="Chuio Logo" style="height: 80px;" />
+        <img src="/uploads/chuio/V2/App%20Icon%20B%26W.png" alt="Chuio Logo" />
+        <div class="logo-text">
+          <span class="logo-name">Chuio</span>
+          <span class="logo-sub">All-in-One Restaurant Manager</span>
+        </div>
       </a>
       <ul class="nav-links" id="navLinks">
-        <li><a href="#home" data-i18n="nav.home">Home</a></li>
-        <li class="dropdown">
-          <a href="#products" data-i18n="nav.products">Products</a>
-          <div class="dropdown-menu">
-            <a href="products.html#qr-scan-order" data-i18n="nav.qr-scanning">QR Scanning</a>
-            <a href="products.html#smart-ordering" data-i18n="nav.ordering">Ordering System</a>
-            <a href="products.html#menu-management" data-i18n="nav.menu-management">Menu Management</a>
-            <a href="products.html#table-management" data-i18n="nav.table-management">Table Management</a>
-            <a href="products.html#staff-management" data-i18n="nav.staff-management">Staff Management</a>
-            <a href="products.html#kitchen-dashboard" data-i18n="nav.kitchen-dashboard">Kitchen Dashboard</a>
-          </div>
-        </li>
-        <li><a href="#pricing" data-i18n="nav.pricing">Pricing</a></li>
-        <li><a href="login.html" class="login-btn" data-i18n="nav.login">Login</a></li>
+        <li><a href="#who-are-we">Who?</a></li>
+        <li><a href="#products">What?</a></li>
+        <li><a href="#how-it-works">How?</a></li>
       </ul>
       <div class="nav-actions">
         <button class="hamburger" id="hamburger" aria-label="Toggle menu">
@@ -93,240 +88,178 @@
           <span></span>
           <span></span>
         </button>
+        <a href="login.html" class="nav-login-btn" data-i18n="nav.login">Login</a>
         <div data-language-picker></div>
       </div>
     </div>
   </nav>
 
-  <!-- HERO SECTION -->
-  <section id="home" class="hero">
-    <div class="hero-content">
-      <div>
-      <div class="hero-badge" data-i18n="home.hero-badge">⏰ Coming Soon - Join the Waitlist</div>
-        <h1><span data-i18n="home.title">Modern QR Restaurant Ordering</span></h1>
-        <p data-i18n="home.description">Empower your restaurant with modern QR code ordering, real-time kitchen management, and staff control. No monthly fees. No hidden charges. Coming very soon.</p>
-        <div class="hero-buttons">
-          <a href="#waitlist" class="hero-cta" style="background: white; color: var(--primary-color);" data-i18n="home.join-waitlist">Join Waitlist</a>
-          <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20learning%20more%20about%20your%20coming%20QR%20ordering%20system" target="_blank" class="hero-cta hero-cta-whatsapp" data-i18n="home.chat-whatsapp">Chat on WhatsApp</a>
-        </div>
-        <p class="hero-free-badge" data-i18n="home.free-badge">✓ 100% Free • ✓ Forever • ✓ No credit card • ✓ No hidden fees</p>
-      </div>
-      <div class="hero-image">
-        <img src="/uploads/chuio/New/hero.png" alt="Modern QR Restaurant Ordering System">
-      </div>
-    </div>
-  </section>
 
-  <!-- FEATURES SECTION -->
-  <section class="features">
-    <h2 class="section-title" data-i18n="home.why-choose">Why Restaurants Love Chuio</h2>
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3 data-i18n="home.faster-ordering">Faster Ordering</h3>
-        <p data-i18n="home.faster-ordering-desc">Customers order from their phones in seconds. No waiting for staff, no miscommunications.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">💰</div>
-        <h3 data-i18n="home.increase-revenue">Increase Revenue</h3>
-        <p data-i18n="home.increase-revenue-desc">Shorter ordering time means faster table turnover. Higher bill values through upselling in the app.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">👤</div>
-        <h3 data-i18n="home.happy-staff">Happy Staff</h3>
-        <p data-i18n="home.happy-staff-desc">Less time taking orders means more time for genuine service and building customer relationships.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📈</div>
-        <h3 data-i18n="home.real-time-insights">Real-Time Insights</h3>
-        <p data-i18n="home.real-time-insights-desc">Track what's selling, peak hours, and customer preferences with comprehensive analytics dashboard.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔒</div>
-        <h3 data-i18n="home.secure-payments">Secure Payments</h3>
-        <p data-i18n="home.secure-payments-desc">Bank-grade security for all transactions. Customers pay through their preferred methods.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📊</div>
-        <h3 data-i18n="home.scale-easily">Scale Easily</h3>
-        <p data-i18n="home.scale-easily-desc">From single tables to multiple restaurants. Grow without worrying about system limits.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- HOW IT WORKS SECTION -->
-  <section class="how-it-works">
-    <h2 class="section-title" data-i18n="home.how-it-works">The Chuio Experience</h2>
-    <div class="steps-grid">
-      <div class="step">
-        <div class="step-number">1</div>
-        <h4 data-i18n="home.customer-scans-qr">Customer Scans QR</h4>
-        <p data-i18n="home.no-app-download">No app download needed. One scan and they're viewing your menu.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">2</div>
-        <h4 data-i18n="home.browse-customize">Browse & Customize</h4>
-        <p data-i18n="home.beautiful-menu">Beautiful menu with photos, descriptions, and all available options.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">3</div>
-        <h4 data-i18n="home.order-pay">Order & Pay</h4>
-        <p data-i18n="home.secure-checkout">Secure checkout with multiple payment methods. No separate bill request.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">4</div>
-        <h4 data-i18n="home.kitchen-prepares">Kitchen Prepares</h4>
-        <p data-i18n="home.orders-print-instantly">Orders print instantly in kitchen. Customers see real-time order status.</p>
-      </div>
-    </div>
-    <div class="steps-screenshots">
-      <div class="steps-screenshots-grid">
-        <div class="image-placeholder image-placeholder-sm screenshot-white">
-          <img src="/uploads/chuio/New/customer app.png" alt="Customer App Screenshot">
+  <!-- ===== SECTION 1: HERO ===== -->
+  <section id="home" class="page-section hero-section">
+    <div class="glass-panel hero-panel">
+      <div class="hero-three-col">
+        <div class="hero-col-left">
+          <h1 class="hero-headline"><span class="hero-word-chuio">Chuio</span><span class="hero-word-sub">is an All&#8209;in&#8209;One<br>Restaurant Management System</span></h1>
         </div>
-        <div class="image-placeholder image-placeholder-sm screenshot-white">
-          <img src="/uploads/chuio/New/kitchen dashboard.png" alt="Kitchen Dashboard Screenshot">
+        <div class="hero-col-center">
+          <img src="/uploads/chuio/V2/hero image.png" alt="Chuio Restaurant Management" class="hero-device-img" />
+        </div>
+        <div class="hero-col-right">
+          <p class="hero-mission">We aim to digitise all restaurant operations to provide efficiency and transparency within the industry.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- PRODUCTS SECTION -->
-  <section class="products" id="products">
-    <div class="products-container">
-      <h2 class="section-title" data-i18n="home.all-in-one">All-In-One Restaurant Management</h2>
-      <p class="products-intro-text" data-i18n="home.products-intro">
-        Everything you need to run your restaurant efficiently, from customer ordering to kitchen operations to business insights.
-      </p>
-      <div class="products-grid">
-        <div class="product-item">
-          <h4 data-i18n="home.qr-order">📱 QR Scan & Order</h4>
-          <p data-i18n="home.qr-order-desc">Customers scan a QR code and access the full menu instantly. No app installation, no friction.</p>
+  <!-- ===== SECTION 2: WHO ARE WE ===== -->
+  <section id="who-are-we" class="page-section who-section">
+    <div class="glass-panel who-panel">
+      <h2 class="section-heading">WHO are we?</h2>
+      <div class="who-inner">
+        <div class="who-text">
+          <p class="who-intro">Chuio is your one-stop-shop to manage your restaurant with a fully digitised system for both your daily operations and customer relations.</p>
+          <p class="who-sub">From start to finish, we offer you a fully integrated package all under one platform.</p>
         </div>
-        <div class="product-item">
-          <h4 data-i18n="home.smart-menu">📋 Smart Menu Management</h4>
-          <p data-i18n="home.smart-menu-desc">Upload photos, set prices, manage variants, mark items unavailable—all with a single click.</p>
-        </div>
-        <div class="product-item">
-          <h4 data-i18n="home.table-mgmt">🍽️ Table Management</h4>
-          <p data-i18n="home.table-mgmt-desc">Organize tables by categories, track occupancy, set seating capacity, generate QR codes per table.</p>
-        </div>
-        <div class="product-item">
-          <h4 data-i18n="home.staff-mgmt">👥 Staff Management</h4>
-          <p data-i18n="home.staff-mgmt-desc">Role-based access control. Admin, staff, and kitchen roles with activity logging and permissions.</p>
-        </div>
-        <div class="product-item">
-          <h4 data-i18n="home.kitchen-display">🍳 Kitchen Display System</h4>
-          <p data-i18n="home.kitchen-display-desc">Real-time order queue optimized for kitchen screens. Update status and keep customers informed.</p>
-        </div>
-        <div class="product-item">
-          <h4 data-i18n="home.business-analytics">📊 Business Analytics</h4>
-          <p data-i18n="home.business-analytics-desc">Track revenue, popular items, peak hours, table performance, and make data-driven decisions.</p>
-        </div>
-        <div class="product-item">
-          <h4 data-i18n="home.promotions">🎟️ Promotions & Coupons</h4>
-          <p data-i18n="home.promotions-desc">Create discounts, run campaigns, and drive repeat business with built-in coupon management.</p>
-        </div>
-        <div class="product-item">
-          <h4 data-i18n="home.secure-pay">💳 Secure Payments</h4>
-          <p data-i18n="home.secure-pay-desc">Customers pay directly from their phones. Multiple payment methods, bank-level security.</p>
-        </div>
-      </div>
-      <div class="products-cta-wrapper">
-        <a href="products.html" class="products-cta-link" data-i18n="home.learn-more">Explore All Features →</a>
+        <ul class="who-features">
+          <li>Booking System</li>
+          <li>Queuing System</li>
+          <li>Food Ordering</li>
+          <li>Order Processing</li>
+          <li>Table Management</li>
+          <li>Staff Management</li>
+          <li>Secure Payments</li>
+          <li>Customer Loyalty Programmes</li>
+          <li>Business Management</li>
+        </ul>
       </div>
     </div>
   </section>
 
-  <!-- COMPARISON SECTION: FREE vs TRADITIONAL POS vs MODERN POS -->
-  <section class="comparison-section">
-    <h2 class="section-title" data-i18n="home.how-compares">How Chuio Compares</h2>
-    <div class="comparison-table-wrapper">
-      <table class="comparison-table">
-        <thead>
-          <tr>
-            <th data-i18n="home.table-feature">Feature</th>
-            <th><span class="chuio-header" data-i18n="home.chuio-title">Chuio</span><br/><span class="free-badge" data-i18n="home.hundred-free">100% FREE</span></th>
-            <th><span data-i18n="home.traditional-pos">Traditional POS</span><br/><span class="price-badge">$200-400/mo</span></th>
-            <th><span data-i18n="home.modern-pos">Modern Cloud POS</span><br/><span class="price-badge">$80-150/mo</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>QR Code Ordering</td>
-            <td>✓</td>
-            <td>✗</td>
-            <td>✓</td>
-          </tr>
-          <tr>
-            <td>Kitchen Display System</td>
-            <td>✓</td>
-            <td>Partial</td>
-            <td>✓</td>
-          </tr>
-          <tr>
-            <td>Table Management</td>
-            <td>✓</td>
-            <td>✓</td>
-            <td>✓</td>
-          </tr>
-          <tr>
-            <td>Staff Management</td>
-            <td>✓</td>
-            <td>✓</td>
-            <td>✓</td>
-          </tr>
-          <tr>
-            <td>Analytics Dashboard</td>
-            <td>✓</td>
-            <td>Basic</td>
-            <td>✓</td>
-          </tr>
-          <tr>
-            <td>Coupons & Promotions</td>
-            <td>✓</td>
-            <td>Limited</td>
-            <td>✓</td>
-          </tr>
-          <tr>
-            <td>Multi-Restaurant Support</td>
-            <td>✓</td>
-            <td>✗</td>
-            <td>✓</td>
-          </tr>
-          <tr>
-            <td>No Monthly Fee</td>
-            <td>✓</td>
-            <td>✗</td>
-            <td>✗</td>
-          </tr>
-          <tr>
-            <td>No Hidden Charges</td>
-            <td>✓</td>
-            <td>✗</td>
-            <td>Some</td>
-          </tr>
-        </tbody>
-      </table>
+  <!-- ===== SECTION 3: WHAT WE PROVIDE ===== -->
+  <section id="products" class="page-section provides-section">
+    <div class="glass-panel provides-panel">
+      <h2 class="section-heading">WHAT do we provide?</h2>
+
+      <div class="carousel-stage" id="carouselStage">
+        <div class="carousel-track" id="carouselTrack">
+          <div class="carousel-slide" data-index="0">
+            <img src="/uploads/chuio/New/Orders.png" alt="Orders Management" loading="lazy" />
+          </div>
+          <div class="carousel-slide" data-index="1">
+            <img src="/uploads/chuio/New/Menu Management.png" alt="Menu Management" loading="lazy" />
+          </div>
+          <div class="carousel-slide" data-index="2">
+            <img src="/uploads/chuio/New/Tables.png" alt="Table Management" loading="lazy" />
+          </div>
+          <div class="carousel-slide" data-index="3">
+            <div class="slide-dual">
+              <img src="/uploads/chuio/New/QR scan.png" alt="QR Scan Ordering" loading="lazy" />
+              <img src="/uploads/chuio/New/customer menu iphone.png" alt="Customer Menu" loading="lazy" />
+              <img src="/uploads/chuio/New/Mobile Payment.png" alt="Mobile Payment" loading="lazy" />
+            </div>
+          </div>
+          <div class="carousel-slide" data-index="4">
+            <img src="/uploads/chuio/New/Staff management.png" alt="Staff Management" loading="lazy" />
+          </div>
+          <div class="carousel-slide" data-index="5">
+            <img src="/uploads/chuio/New/kitchen dashboard.png" alt="Kitchen Dashboard" loading="lazy" />
+          </div>
+          <div class="carousel-slide" data-index="6">
+            <img src="/uploads/chuio/New/multiple ipad.png" alt="Multi-Device Support" loading="lazy" />
+          </div>
+          <div class="carousel-slide" data-index="7">
+            <img src="/uploads/chuio/New/reports.png" alt="Business Analytics" loading="lazy" />
+          </div>
+        </div>
+      </div>
+
+      <div class="carousel-label" id="carouselLabel">
+        <h3 id="carouselTitle">Orders Management</h3>
+        <p id="carouselDesc">This is where the staff and/or customer manages the food order. We provide a flexible and widely customisable menu for you to edit as you see fit.</p>
+      </div>
+
+      <div class="carousel-controls">
+        <button class="carousel-btn" id="carouselPrev" aria-label="Previous">&#8592;</button>
+        <button class="carousel-btn" id="carouselNext" aria-label="Next">&#8594;</button>
+      </div>
+      <div class="carousel-dots" id="carouselDots"></div>
     </div>
   </section>
-  
-  <!-- WAITLIST SECTION -->
-  <section id="waitlist" class="waitlist-section">
-    <h2 data-i18n="home.ready-future">Ready for the Future?</h2>
-    <p data-i18n="home.waitlist-desc">Be among the first restaurants to experience modern QR ordering. Join our waitlist for exclusive early access—completely free.</p>
-    
-    <div class="waitlist-form-wrapper">
-      <form id="waitlist-form" class="waitlist-form">
-        <input type="text" placeholder="Restaurant Name" required>
-        <input type="email" placeholder="Email Address" required>
-        <input type="tel" placeholder="Phone Number" required>
-        <button type="submit" data-i18n="home.ready-launch">I'm Ready for Launch!</button>
-      </form>
-      <p class="waitlist-form-note" data-i18n="home.waitlist-note">✓ No spam • ✓ Free forever • ✓ Early access to beta features</p>
-    </div>
 
-    <p class="waitlist-whatsapp-link">Or connect with us directly:<br/><a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20joining%20the%20waitlist" data-i18n="home.whatsapp-contact">Message us on WhatsApp</a></p>
+  <!-- ===== SECTION 4: HOW IT WORKS ===== -->
+  <section id="how-it-works" class="page-section how-section">
+    <div class="how-panels-wrap">
+
+      <div class="glass-panel how-panel">
+        <h2 class="section-heading">HOW does it work?</h2>
+
+        <div class="bills-comparison">
+          <div class="bill-side">
+            <div class="bill-tag bill-tag-chuio">Chuio</div>
+            <img src="/uploads/chuio/V2/chuio bill.jpg" alt="Chuio — Free" class="bill-img" />
+          </div>
+          <div class="bills-center">
+            <p class="how-free-headline">
+              <span class="how-word-big">CHUIO</span>
+              is completely
+              <span class="how-word-big">FREE</span>
+              to use.
+            </p>
+            <p class="how-free-sub">We don't charge anything other than processing payments. Please see the table below for details:</p>
+          </div>
+          <div class="bill-side">
+            <div class="bill-tag bill-tag-pos">Traditional P.O.S</div>
+            <img src="/uploads/chuio/V2/pos bill.jpg" alt="Traditional POS costs — over $30,000" class="bill-img" />
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-panel rates-panel">
+        <h3 class="fee-table-heading">Payment Processing Rates</h3>
+        <div class="fee-table-wrap">
+          <table class="fee-table">
+            <thead>
+              <tr>
+                <th>Payment Method</th>
+                <th>Online Channel</th>
+                <th>Offline Channel</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Alipay</td><td>2.40%</td><td>2.05%</td></tr>
+              <tr><td>WeChat Pay</td><td>2.40%</td><td>2.05%</td></tr>
+              <tr><td>UnionPay</td><td>3.20%</td><td>3.20%</td></tr>
+              <tr><td>Faster Payment System (FPS)</td><td>2.20%</td><td>2.05%</td></tr>
+              <tr><td>Visa / Mastercard / Apple Pay / Google Pay (Local)</td><td>3.65%</td><td>2.40%</td></tr>
+              <tr><td>Visa / Mastercard / Apple Pay / Google Pay (Overseas)</td><td>4.65%</td><td>3.40%</td></tr>
+              <tr><td>Octopus</td><td>2.40%</td><td>2.30%</td></tr>
+              <tr><td>Payme</td><td>2.40%</td><td>2.30%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== SECTION 5: WAITLIST / CONTACT ===== -->
+  <section id="waitlist" class="page-section waitlist-section">
+    <div class="glass-panel waitlist-panel">
+      <h2 data-i18n="home.ready-future">Ready for the Future?</h2>
+      <p data-i18n="home.waitlist-desc">Be among the first restaurants to experience modern QR ordering. Join our waitlist for exclusive early access — completely free.</p>
+
+      <div class="waitlist-form-wrapper">
+        <form id="waitlist-form" class="waitlist-form">
+          <input type="text" placeholder="Restaurant Name" required />
+          <input type="email" placeholder="Email Address" required />
+          <input type="tel" placeholder="Phone Number" required />
+          <button type="submit" data-i18n="home.ready-launch">I'm Ready for Launch!</button>
+        </form>
+        <p class="waitlist-note" data-i18n="home.waitlist-note">✓ No spam &nbsp;·&nbsp; ✓ Free forever &nbsp;·&nbsp; ✓ Early access to beta features</p>
+      </div>
+      <p class="waitlist-whatsapp-link">Or connect directly: <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20joining%20the%20waitlist" data-i18n="home.whatsapp-contact">Message us on WhatsApp</a></p>
+    </div>
   </section>
 
   <!-- FOOTER -->
@@ -357,7 +290,7 @@
           <h4 data-i18n="footer.support-title">Support</h4>
           <ul>
             <li><a href="mailto:support@chuio.io" data-i18n="footer.email-support">Email Support</a></li>
-            <li><a href="https://wa.me/message" data-i18n="footer.whatsapp-support">WhatsApp Support</a></li>
+            <li><a href="https://wa.me/85267455358" data-i18n="footer.whatsapp-support">WhatsApp Support</a></li>
             <li><a href="login.html" data-i18n="footer.admin-portal">Admin Portal</a></li>
           </ul>
         </div>

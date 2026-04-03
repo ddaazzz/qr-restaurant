@@ -307,7 +307,6 @@ export class PrinterQueueService {
 
     console.log(`[PrinterQueue] Executing job #${job.id}:`, {
       orderId: job.order_id,
-      billId: job.bill_id,
       printerZoneId: job.printer_zone_id,
       payloadSize: JSON.stringify(job.payload).length,
     });
@@ -395,7 +394,7 @@ export class PrinterQueueService {
       id: row.id,
       restaurant_id: row.restaurant_id,
       order_id: row.order_id,
-      bill_id: row.bill_id,
+      job_type: row.job_type || 'kitchen',
       status: row.status,
       priority: row.priority,
       printer_zone_id: row.printer_zone_id,
@@ -404,7 +403,7 @@ export class PrinterQueueService {
       payload: typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload,
       created_at: new Date(row.created_at),
       next_retry_at: row.next_retry_at ? new Date(row.next_retry_at) : (undefined as any),
-      error_message: row.error_message,
+      last_error_message: row.last_error_message || row.error_message,
     };
   }
 

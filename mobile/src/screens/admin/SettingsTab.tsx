@@ -748,7 +748,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <Text style={styles.printerPageTitle}>
             {editingPrinterType === 'qr' && '📋 QR Code Printer'}
             {editingPrinterType === 'bill' && '🧾 Bill Printer'}
-            {editingPrinterType === 'kitchen' && '🍳 Kitchen Order Printer'}
+            {editingPrinterType === 'kitchen' && 'Kitchen Order Printer'}
           </Text>
           <TouchableOpacity onPress={() => setEditingPrinterType(null)}>
             <Text style={styles.backButton}>← Back</Text>
@@ -1273,7 +1273,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {/* Kitchen Printer */}
             <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>🍳 Kitchen Order Printer</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>Kitchen Order Printer</Text>
               </View>
               {printerSettings?.kitchen_printer_type && (
                 <>

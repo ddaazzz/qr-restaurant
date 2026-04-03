@@ -6,7 +6,7 @@ import fs from "fs";
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
     let folder = "uploads";
-    let restaurantId: string | null = null;
+    let restaurantId: string | null | undefined = undefined;
 
     // Extract restaurantId from URL path for restaurant-specific folders
     if (req.originalUrl.includes("/logo")) {

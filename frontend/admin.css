@@ -113,16 +113,12 @@ h1, h2, h3, h4, h5, h6 {
 .app-container > .main-content {
   flex: 1;
   overflow: hidden;
-  margin-left: 0px;
+  margin-left: 0; /* sidebar overlays content, no offset needed */
 }
 
 @media (max-width: 768px) {
   .app-container > .sidebar {
     width: 100px;
-  }
-
-  .app-container > .main-content {
-    margin-left: 0;
   }
 }
 
@@ -228,7 +224,7 @@ h1, h2, h3, h4, h5, h6 {
 /* ============== ADMIN DROPDOWN MENU ============== */
 .admin-menu-btn {
   position: relative;
-  background: #5a5a5a;
+  background: var(--primary-color);
   color: white;
   border: none;
   padding: 8px 12px;
@@ -250,7 +246,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .admin-menu-btn:hover {
-  background: #4a4a4a;
+  background: #1a252f;
 }
 
 .dropdown-arrow {
@@ -380,6 +376,8 @@ h1, h2, h3, h4, h5, h6 {
   gap: 16px;
   padding: 24px 8px;
   flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .sidebar-footer {
@@ -537,15 +535,15 @@ h1, h2, h3, h4, h5, h6 {
 /* Orders section styling (same as tables for consistency) */
 #section-orders {
   padding: 0;
-  flex-direction: column;
-  overflow: hidden;
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
+  /* flex-direction, flex, min-height applied only when active via .content-section.active */
 }
 
 #section-orders.active {
   display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #section-orders .orders-container {
@@ -555,6 +553,10 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+#section-orders .orders-container.history-mode {
+  flex-direction: row;
 }
 
 .admin-only {
@@ -727,6 +729,7 @@ button {
   align-items: center;
   gap: 8px;
   letter-spacing: -0.2px;
+  white-space: nowrap;
 }
 
 .btn-primary:hover {
@@ -753,6 +756,7 @@ button {
   align-items: center;
   gap: 6px;
   letter-spacing: -0.2px;
+  white-space: nowrap;
 }
 
 .btn-secondary:hover {
@@ -834,16 +838,60 @@ img.heading-icon {
   background: var(--error-color);
   color: var(--white);
   border: none;
-  padding: 10px 16px;
+  padding: 8px 12px;
   border-radius: 6px;
   font-weight: 600;
+  font-size: 14px;
+  font-family: 'Poppins', sans-serif;
   cursor: pointer;
   transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
 }
 
 .btn-danger:hover {
   background: #b91c1c;
   box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-danger:active {
+  transform: translateY(0);
+}
+
+/* Success button styles */
+.btn-success {
+  background: #22c55e;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-success:hover {
+  background: #16a34a;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.btn-success:active {
+  transform: translateY(0);
+}
+
+.btn-success:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Icon button styles for action buttons */
@@ -1942,6 +1990,12 @@ button.btn-icon.danger:hover {
   .sidebar.collapsed {
     width: 0;
     overflow: hidden;
+  }
+
+  /* Sidebar is in-flow at mobile, no margin needed */
+  .app-container > .main-content,
+  .sidebar.collapsed + .main-content {
+    margin-left: 0;
   }
 
   .menu-text {

@@ -208,7 +208,7 @@ const getConfirmationTemplate = (restaurantName: string): string => {
           
           <p>In the meantime, you can:</p>
           <ul>
-            <li>Learn more about our features at <a href="https://chuio.io/products.html">chuio.io/products</a></li>
+            <li>Learn more about our features at <a href="https://chuio.io/">chuio.io</a></li>
             <li>Connect with us on WhatsApp: <a href="https://wa.me/85267455358">+852 6745 5358</a></li>
             <li>Email us directly: support@chuio.io</li>
           </ul>
@@ -268,7 +268,7 @@ router.post("/api/waitlist", async (req: Request, res: Response) => {
       from: fromAddress,
       to: "support@chuio.io",
       subject: `New Chuio Waitlist Submission: ${restaurantName}`,
-      html: getWaitlistTemplate({ restaurantName, email, phone, message }),
+      html: getWaitlistTemplate({ restaurantName, email, phone, ...(message ? { message } : {}) }),
       replyTo: email,
     });
 

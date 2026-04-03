@@ -8,12 +8,6 @@
 </head>
 <body>
   <div class="bookings-container">
-    <!-- Header -->
-    <div class="bookings-header">
-      <h1 data-i18n="admin.reservations">📅 Reservations</h1>
-      <button id="btn-new-booking" class="btn btn-primary btn-new-booking" data-i18n="admin.new-booking">+ New Booking</button>
-    </div>
-
     <!-- Calendar Navigation -->
     <div class="calendar-nav">
       <button id="btn-prev-month" class="btn-month-nav" data-i18n="admin.prev-month">← Previous</button>
@@ -38,7 +32,10 @@
 
     <!-- Bookings List for Selected Date -->
     <div class="bookings-list-section">
-      <h3><span data-i18n="admin.bookings-for">Bookings for</span> <span id="selected-date-display">Today</span></h3>
+      <div class="bookings-list-header">
+        <h3><span data-i18n="admin.bookings-for">Bookings for</span> <span id="selected-date-display">Today</span></h3>
+        <input type="search" id="booking-search-input" class="booking-search-input" placeholder="Search name or phone…">
+      </div>
       <div id="bookings-list" class="bookings-list">
         <p class="empty-state" data-i18n="admin.no-bookings">No bookings for this date</p>
       </div>
@@ -62,6 +59,13 @@
           <div class="form-group">
             <label for="booking-phone" data-i18n="admin.phone">Phone</label>
             <input type="tel" id="booking-phone" placeholder="Enter phone number">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="booking-email" data-i18n="admin.guest-email">Email</label>
+            <input type="email" id="booking-email" placeholder="Enter email address">
           </div>
         </div>
 
@@ -136,40 +140,18 @@
 
   <!-- Templates for Booking Cards -->
   <template id="booking-card-template">
-    <div class="booking-card reserved">
-      <div class="booking-header">
-        <div>
-          <div class="booking-guest"></div>
-          <div class="booking-number"></div>
-        </div>
-        <div class="booking-status-badge">Reserved</div>
+    <div class="booking-row">
+      <div class="booking-row-name">
+        <strong class="booking-guest"></strong>
+        <span class="booking-number"></span>
       </div>
-      <div class="booking-time-until"></div>
-      <div class="booking-details">
-        <div class="booking-details-item">
-          <span>Guests:</span>
-          <strong class="booking-pax"></strong>
-        </div>
-        <div class="booking-details-item">
-          <span>Table:</span>
-          <strong class="booking-table"></strong>
-        </div>
-        <div class="booking-details-item">
-          <span>Time:</span>
-          <strong class="booking-time"></strong>
-        </div>
-        <div class="booking-details-item booking-phone" style="display: none;">
-          <span>Phone:</span>
-          <strong class="booking-phone-val"></strong>
-        </div>
-        <div class="booking-details-item booking-notes" style="display: none;">
-          <span>Notes:</span>
-          <strong class="booking-notes-val"></strong>
-        </div>
-      </div>
+      <span class="booking-row-phone">—</span>
+      <span class="booking-row-pax"></span>
+      <span class="booking-row-time booking-time"></span>
+      <span class="booking-status-badge"></span>
       <div class="booking-actions">
         <button class="btn-edit-booking">Edit</button>
-        <button class="btn-delete-booking-inline">Delete</button>
+        <button class="btn-delete-booking-inline">✕</button>
       </div>
     </div>
   </template>
@@ -197,6 +179,7 @@
 
   <script src="translations.js"></script>
   <script src="timezone-utils.js"></script>
+  <script src="admin.js"></script>
   <script src="admin-bookings.js"></script>
 </body>
 </html>

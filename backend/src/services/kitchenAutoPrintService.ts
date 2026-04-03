@@ -77,6 +77,7 @@ export class KitchenAutoPrintService {
               'name', mi.name,
               'quantity', oi.quantity,
               'category_id', mi.category_id,
+              'notes', oi.notes,
               'variants', (
                 SELECT json_agg(json_build_object('name', v.name, 'option', vo.name))
                 FROM order_item_variants oiv

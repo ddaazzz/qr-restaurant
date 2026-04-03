@@ -46,7 +46,7 @@ function selectPrinterType(type) {
   console.log('[admin-printer.js] Current settings from database:', window.currentPrinterSettings);
   
   // Show the database state before showing UI
-  const prefix = type === 'qr' ? 'qr_' : type === 'bill' ? 'bill_' : 'kitchen_';
+  const prefix = type === 'qr' ? 'qr_' : type === 'bill' ? 'bill_' : type === 'kpay' ? 'kpay_' : 'kitchen_';
   const dbDevice = window.currentPrinterSettings ? window.currentPrinterSettings[`${prefix}bluetooth_device`] : null;
   const dbPrinterType = window.currentPrinterSettings ? window.currentPrinterSettings[`${prefix}printer_type`] : null;
   
@@ -75,9 +75,10 @@ function selectPrinterType(type) {
   
   // Update title
   const titles = {
-    'qr': '📋 QR Code Printing',
-    'bill': '🧾 Bill Receipt Printing',
-    'kitchen': '🍳 Kitchen Order Printing'
+    'qr': t('admin.printer-qr-title') || 'QR Code Printing',
+    'bill': t('admin.printer-bill-title') || 'Bill Receipt Printing',
+    'kitchen': t('admin.printer-kitchen-title') || 'Kitchen Order Printing',
+    'kpay': t('admin.printer-kpay-title') || 'KPay Receipt Printing'
   };
   
   if (detailTitle) detailTitle.textContent = titles[type] || 'Configuration';
@@ -86,7 +87,6 @@ function selectPrinterType(type) {
   if (qrFormatSection) {
     if (type === 'qr') {
       qrFormatSection.style.display = 'block';
-      loadQRCodeFormatUI();
     } else {
       qrFormatSection.style.display = 'none';
     }
@@ -99,7 +99,6 @@ function selectPrinterType(type) {
       billFormatSection.style.display = 'block';
       console.log('[admin-printer.js] Bill section display style:', billFormatSection.style.display);
       console.log('[admin-printer.js] Bill section computed display:', window.getComputedStyle(billFormatSection).display);
-      loadBillFormatUI();
     } else {
       billFormatSection.style.display = 'none';
     }
@@ -122,18 +121,31 @@ function selectPrinterType(type) {
       kitchenFormatSection.style.display = 'none';
     }
   }
-  
+
+  // Handle KPay format section
+  const kpayFormatSection = document.getElementById('kpay-format-section');
+  if (kpayFormatSection) {
+    if (type === 'kpay') {
+      kpayFormatSection.style.display = 'block';
+      loadKPayFormatUI();
+    } else {
+      kpayFormatSection.style.display = 'none';
+    }
+  }
+
   // Store current type
   window.currentEditingPrinterType = type;
   
-  // For kitchen type, don't show the single printer config card - use kitchen-format-section instead
-  if (type !== 'kitchen') {
-    // For QR and Bill, render the single printer config card
+  // Kitchen and KPay manage their own printer config inside their format sections
+  if (type !== 'kitchen' && type !== 'kpay') {
+    // QR and Bill use the shared printer-config-card
     if (printerConfigCard) {
+      printerConfigCard.style.display = 'block';
       console.log(`[admin-printer.js] Calling renderPrinterConfigCard for type: ${type}`);
       renderPrinterConfigCard(type, printerConfigCard);
-      console.log(`[admin-printer.js] After renderPrinterConfigCard, innerHTML:`, printerConfigCard.innerHTML.substring(0, 50));
-      
+      // Load format UI AFTER renderPrinterConfigCard so auto-print checkbox exists in DOM
+      if (type === 'qr') loadQRCodeFormatUI();
+      if (type === 'bill') loadBillFormatUI();
       // Check if there's an active session and display status
       const sessionStatus = document.getElementById(`bluetooth-session-status-${type}`);
       if (sessionStatus && window.bluetoothSessions && window.bluetoothSessions[type.toUpperCase()]) {
@@ -146,9 +158,12 @@ function selectPrinterType(type) {
       console.error('[admin-printer.js] CRITICAL: printer-config-card element not found!');
     }
   } else {
-    // For kitchen type, just hide the config card - kitchen-format-section will be shown
-    if (printerConfigCard) printerConfigCard.style.display = 'none';
-    console.log('[admin-printer.js] Kitchen type selected - using multi-printer format section instead');
+    // Kitchen and KPay hide the shared config card — their own section handles it
+    if (printerConfigCard) {
+      printerConfigCard.style.display = 'none';
+      printerConfigCard.innerHTML = '';
+    }
+    console.log('[admin-printer.js] ' + type + ' type selected - using dedicated format section');
   }
   
   console.log('[admin-printer.js] Detail view shown for type:', type);
@@ -222,7 +237,7 @@ function renderPrinterConfigCard(type, container) {
   }
 
   const settings = window.currentPrinterSettings || {};
-  const prefix = type === 'qr' ? 'qr_' : type === 'bill' ? 'bill_' : 'kitchen_';
+  const prefix = type === 'qr' ? 'qr_' : type === 'bill' ? 'bill_' : type === 'kpay' ? 'kpay_' : 'kitchen_';
   const printerType = settings[`${prefix}printer_type`] || 'none';
   const printerHost = settings[`${prefix}printer_host`] || '';
   
@@ -242,14 +257,15 @@ function renderPrinterConfigCard(type, container) {
   const labels = {
     'qr': 'QR Code Printer',
     'bill': 'Bill Receipt Printer',
-    'kitchen': 'Kitchen Order Printer'
+    'kitchen': 'Kitchen Order Printer',
+    'kpay': 'KPay Receipt Printer'
   };
 
   let html = `
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
-      <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600; color: #1f2937;">🖨️ Printer Configuration</h3>
+    <div style="background: white; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; padding: 20px;">
+      <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600; color: var(--text-dark, #1f2937);">${t('admin.printer-config-heading') || 'Printer Configuration'}</h3>
       <div style="margin-bottom: 20px;">
-        <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;">Printer Type</label>
+        <label style="display: block; margin-bottom: 12px; font-weight: 600; color: var(--text-dark, #1f2937);">${t('admin.printer-type') || 'Printer Type'}</label>
         <select id="printer-type-select-${type}" onchange="updatePrinterTypeSelection('${type}')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;">
           <option value="none" ${printerType === 'none' ? 'selected' : ''}>No Printer</option>
           <option value="network" ${printerType === 'network' ? 'selected' : ''}>Network Printer (LAN/WiFi)</option>
@@ -273,7 +289,6 @@ function renderPrinterConfigCard(type, container) {
     const isConfigured = savedDevice && savedDevice.length > 0;
     const deviceStatusHTML = bluetoothDevice 
       ? `<div style="background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 6px; padding: 12px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-          <span style="color: #059669; font-weight: 600; font-size: 16px;">✓</span>
           <div style="flex: 1;">
             <p style="margin: 0; font-weight: 600; color: #047857;">${bluetoothDevice}</p>
             <p style="margin: 2px 0 0 0; font-size: 12px; color: #10b981;">${isConfigured ? '(Configured) Saved from database' : 'Newly scanned'}</p>
@@ -294,9 +309,27 @@ function renderPrinterConfigCard(type, container) {
     `;
   }
   
+  const saveFn = type === 'qr' ? 'saveQRPrinterConfiguration' :
+                  type === 'bill' ? 'saveBillPrinterConfiguration' :
+                  type === 'kpay' ? 'saveKPayPrinterConfiguration' : 'saveKitchenPrinterConfiguration';
+
+  const autoLabels = { 'qr': t('admin.printer-auto-qr') || 'Auto-Print QR Codes', 'bill': t('admin.printer-auto-bill') || 'Auto-Print Bills' };
+  const testFns = { 'qr': 'testPrintQRCode', 'bill': 'testPrintBillCode' };
+  const autoId = type === 'qr' ? 'qr-auto-print' : 'bill-auto-print';
+  const autoPrint = settings[`${prefix}auto_print`] || false;
+
   html += `
       </div>
-      <button onclick="save${type === 'qr' ? 'QR' : type === 'bill' ? 'Bill' : 'Kitchen'}PrinterConfiguration()" class="btn-primary" style="width: 100%; padding: 12px; font-weight: 600;">✓ Save ${labels[type]}</button>
+      <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 20px; margin-top: 10px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+          <input id="${autoId}" type="checkbox" ${autoPrint ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;" />
+          <label for="${autoId}" style="cursor: pointer; font-weight: 500; color: var(--text-dark, #1f2937); margin: 0;">${autoLabels[type] || ''}</label>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <button onclick="${saveFn}()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;">${t('admin.printer-save-' + type) || 'Save ' + (labels[type] || type)}</button>
+          <button onclick="${testFns[type] || 'testPrintQRCode'}()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;">${t('admin.printer-test-print') || 'Test Print'}</button>
+        </div>
+      </div>
     </div>
   `;
   
@@ -316,35 +349,39 @@ function updatePrinterTypeSelection(type) {
       configDiv.innerHTML = '';
       
       if (selectedType === 'network') {
+        const settings = window.currentPrinterSettings || {};
+        const typeKey = type === 'qr' ? 'qr' : type === 'bill' ? 'bill' : type === 'kpay' ? 'kpay' : 'kitchen';
+        const savedHost = settings[`${typeKey}_printer_host`] || '';
         configDiv.innerHTML = `
           <div class="form-group">
             <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">Printer IP Address</label>
-            <input id="printer-host-${type}" type="text" placeholder="192.168.1.100 or printer.local" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; margin-bottom: 8px;" />
+            <input id="printer-host-${type}" type="text" placeholder="192.168.1.100 or printer.local" value="${savedHost}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; margin-bottom: 8px;" />
             <p style="font-size: 12px; color: #6b7280; margin: 8px 0 0 0;">Format: IP address or hostname</p>
           </div>
         `;
       } else if (selectedType === 'bluetooth') {
         const settings = window.currentPrinterSettings || {};
-        const savedDevice = settings[`${type === 'qr' ? 'qr' : type === 'bill' ? 'bill' : 'kitchen'}_bluetooth_device`] || '';
+        const typeKey = type === 'qr' ? 'qr' : type === 'bill' ? 'bill' : type === 'kpay' ? 'kpay' : 'kitchen';
+        const savedDevice = settings[`${typeKey}_bluetooth_device`] || '';
         const temporaryDevice = (window.selectedBluetoothDevices && window.selectedBluetoothDevices[type]) || '';
         const currentDevice = savedDevice || temporaryDevice;
         
         const deviceStatusHTML = currentDevice 
           ? `<div style="background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
-              <p style="margin: 0; font-weight: 600; color: #047857;">✓ ${currentDevice}</p>
+              <p style="margin: 0; font-weight: 600; color: #047857;">${currentDevice}</p>
               <p style="margin: 2px 0 0 0; font-size: 12px; color: #10b981;">Connected</p>
             </div>`
           : `<div style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
-              <p style="margin: 0; color: #6b7280; font-size: 14px;">No device selected</p>
+              <p style="margin: 0; color: var(--text-light, #6b7280); font-size: 14px;">No device selected</p>
             </div>`;
         
         configDiv.innerHTML = `
           <div class="form-group">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">Bluetooth Device</label>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-dark, #1f2937);">Bluetooth Device</label>
             <div id="bluetooth-device-status-${type}">${deviceStatusHTML}</div>
             <div id="bluetooth-session-status-${type}" style="margin-bottom: 12px;"></div>
             <button onclick="scanBluetoothDevices('${type}')" class="btn-secondary" style="width: 100%; padding: 10px; margin-bottom: 8px;">Scan for Devices</button>
-            <p style="font-size: 12px; color: #6b7280; margin: 0;">💻 Works on Chrome, Edge, Opera. Or use the mobile app.</p>
+            <p style="font-size: 12px; color: var(--text-light, #6b7280); margin: 0;">Works on Chrome, Edge, Opera. Or use the mobile app.</p>
           </div>
         `;
       }
@@ -392,6 +429,16 @@ function updateStatusCards() {
         });
         return result;
       }
+    },
+    'kpay': {
+      element: document.getElementById('kpay-status'),
+      check: () => {
+        const autoPrint = settings.kpay_auto_print;
+        const hasPrinter = settings.kpay_printer_type && settings.kpay_printer_type !== 'none';
+        const result = autoPrint || hasPrinter;
+        console.log('[admin-printer.js] KPay Status Check:', { auto_print: autoPrint, printer_type: settings.kpay_printer_type, result });
+        return result;
+      }
     }
   };
   
@@ -399,26 +446,33 @@ function updateStatusCards() {
     if (status.element) {
       const isConfigured = status.check();
       const printerType = type === 'qr' ? settings.qr_printer_type :
-                         type === 'bill' ? settings.bill_printer_type : 
+                         type === 'bill' ? settings.bill_printer_type :
+                         type === 'kpay' ? settings.kpay_printer_type :
                          settings.kitchen_printer_type;
       
-      // Get device info to display (for QR and Bill)
+      // Get device info to display (for QR, Bill, KPay)
       let deviceDisplay = '';
       if (isConfigured && type !== 'kitchen') {
         if (printerType === 'bluetooth') {
           const deviceName = type === 'qr' ? settings.qr_bluetooth_device :
-                            type === 'bill' ? settings.bill_bluetooth_device : null;
+                            type === 'bill' ? settings.bill_bluetooth_device :
+                            type === 'kpay' ? settings.kpay_bluetooth_device : null;
           if (deviceName) {
             deviceDisplay = deviceName;
             console.log(`[admin-printer.js] ${type} Bluetooth device:`, deviceName);
           }
         } else if (printerType === 'network') {
           const printerHost = type === 'qr' ? settings.qr_printer_host :
-                             type === 'bill' ? settings.bill_printer_host : null;
+                             type === 'bill' ? settings.bill_printer_host :
+                             type === 'kpay' ? settings.kpay_printer_host : null;
           if (printerHost) {
             deviceDisplay = printerHost;
             console.log(`[admin-printer.js] ${type} Network device:`, printerHost);
           }
+        }
+        // For kpay, also show auto-print status
+        if (type === 'kpay' && settings.kpay_auto_print) {
+          deviceDisplay = (deviceDisplay ? deviceDisplay + ' · ' : '') + 'Auto-print ON';
         }
       }
       
@@ -429,13 +483,13 @@ function updateStatusCards() {
           // For kitchen, show number of printers and categories
           const printerCount = settings.kitchen_printers?.length || 0;
           const totalCategories = settings.kitchen_printers?.reduce((sum, p) => sum + (p.categories?.length || 0), 0) || 0;
-          let html = `✓ ${printerCount} Printer${printerCount !== 1 ? 's' : ''}`;
+          let html = `${printerCount} Printer${printerCount !== 1 ? 's' : ''}`;
           if (totalCategories > 0) {
             html += `<div style="font-size: 11px; color: #059669; margin-top: 4px; font-weight: 500;">${totalCategories} categor${totalCategories !== 1 ? 'ies' : 'y'} routed</div>`;
           }
           statusHTML = html;
         } else {
-          let html = `✓ Configured`;
+          let html = `Configured`;
           if (deviceDisplay) {
             html += `<div style="font-size: 11px; color: #059669; margin-top: 4px; font-weight: 500;">${deviceDisplay}</div>`;
           }
@@ -574,7 +628,7 @@ async function saveQRCodeFormat() {
     }
 
     window.currentPrinterSettings = await response.json();
-    alert('✅ QR Code Format saved successfully!');
+    alert('QR Code Format saved successfully!');
   } catch (err) {
     console.error('[admin-printer.js] Failed to save QR format:', err);
     alert('Failed to save: ' + err.message);
@@ -625,12 +679,12 @@ async function testPrintQRCode() {
       
       const success = await window.handleBluetoothPrint(payload);
       if (success) {
-        alert('✅ Test print sent to printer!');
+        alert('Test print sent to printer!');
       } else {
-        alert('❌ Failed to send test print');
+        alert('Failed to send test print');
       }
     } else {
-      alert('⚠️ No Bluetooth printer connected. Please connect a printer first.');
+      alert('No Bluetooth printer connected. Please connect a printer first.');
     }
   } catch (err) {
     console.error('[admin-printer.js] Failed to test print:', err);
@@ -692,12 +746,12 @@ async function testPrintBillCode() {
       
       const success = await window.handleBluetoothPrint(payload);
       if (success) {
-        alert('✅ Bill test print sent to printer!');
+        alert('Bill test print sent to printer!');
       } else {
-        alert('❌ Failed to send bill test print');
+        alert('Failed to send bill test print');
       }
     } else {
-      alert('⚠️ No Bluetooth printer connected. Please connect a printer first.');
+      alert('No Bluetooth printer connected. Please connect a printer first.');
     }
   } catch (err) {
     console.error('[admin-printer.js] Failed to test print bill:', err);
@@ -802,7 +856,7 @@ async function saveBillFormat() {
     }
 
     window.currentPrinterSettings = await response.json();
-    alert('✅ Bill Format saved successfully!');
+    alert('Bill Format saved successfully!');
   } catch (err) {
     console.error('[admin-printer.js] Failed to save bill format:', err);
     alert('Failed to save: ' + err.message);
@@ -931,7 +985,7 @@ async function saveBillFormat() {
     }
 
     window.currentPrinterSettings = await response.json();
-    alert('✅ Bill Format saved successfully!');
+    alert('Bill Format saved successfully!');
   } catch (err) {
     console.error('[admin-printer.js] Failed to save bill format:', err);
     alert('Failed to save: ' + err.message);
@@ -945,7 +999,7 @@ async function scanBluetoothDevices(printerType) {
   try {
     // Check if Web Bluetooth API is supported
     if (!navigator.bluetooth) {
-      alert('❌ Web Bluetooth API is not supported on this browser.\n\nSupported browsers:\n• Chrome/Edge (desktop & Android)\n• Opera\n\nPlease try on a supported browser or use the mobile app.');
+      alert('Web Bluetooth API is not supported on this browser.\n\nSupported browsers:\n• Chrome/Edge (desktop & Android)\n• Opera\n\nPlease try on a supported browser or use the mobile app.');
       return;
     }
 
@@ -972,7 +1026,6 @@ async function scanBluetoothDevices(printerType) {
       if (statusDiv) {
         statusDiv.innerHTML = `
           <div style="background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 6px; padding: 12px; display: flex; align-items: center; gap: 8px;">
-            <span style="color: #059669; font-weight: 600; font-size: 16px;">✓</span>
             <div style="flex: 1;">
               <p style="margin: 0; font-weight: 600; color: #047857;">${device.name}</p>
               <p style="margin: 2px 0 0 0; font-size: 12px; color: #10b981;">Connected</p>
@@ -1155,7 +1208,7 @@ async function initializeBluetoothSession(device, printerType) {
     return true;
   } catch (err) {
     console.error('[admin-printer.js] Failed to initialize session:', err);
-    alert(`⚠️ Failed to establish session with ${device.name}: ${err.message}`);
+    alert(`Failed to establish session with ${device.name}: ${err.message}`);
     if (window.bluetoothSessions && window.bluetoothSessions[printerType]) {
       delete window.bluetoothSessions[printerType];
     }
@@ -1172,7 +1225,7 @@ function displayBluetoothSessionStatus(printerType, deviceName) {
   if (statusElement) {
     statusElement.innerHTML = `
       <div style="margin-top: 10px; padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724;">
-        <strong>📡 Session Active</strong><br>
+        <strong>Session Active</strong><br>
         Connected to: ${deviceName}<br>
         <small>Continuous printing enabled</small>
       </div>
@@ -1266,7 +1319,7 @@ async function savePrinterConfig(printerType) {
     const result = await response.json();
     window.currentPrinterSettings = result;
     updateStatusCards();
-    alert("✅ Printer settings saved successfully!");
+    alert("Printer settings saved successfully!");
   } catch (err) {
     console.error("[admin-printer.js] Failed to save printer settings:", err);
     alert("Failed to save printer settings: " + err.message);
@@ -1307,7 +1360,7 @@ async function saveQRPrinterConfiguration() {
       code_size: qrSize,
       text_above: qrTextAbove,
       text_below: qrTextBelow,
-      auto_print: window.currentPrinterSettings?.qr_auto_print || false
+      auto_print: document.getElementById('qr-auto-print')?.checked ?? (window.currentPrinterSettings?.qr_auto_print || false)
     };
 
     // New unified printers table format
@@ -1360,7 +1413,7 @@ async function saveQRPrinterConfiguration() {
     }
     
     updateStatusCards();
-    alert('✅ QR Code Printer saved successfully!');
+    alert('QR Code Printer saved successfully!');
     backToSelection();
   } catch (err) {
     console.error('[admin-printer.js] Failed to save QR printer configuration:', err);
@@ -1402,7 +1455,7 @@ async function saveBillPrinterConfiguration() {
       font_size: billFontSize,
       header_text: billHeaderText,
       footer_text: billFooterText,
-      auto_print: window.currentPrinterSettings?.bill_auto_print || false
+      auto_print: document.getElementById('bill-auto-print')?.checked ?? (window.currentPrinterSettings?.bill_auto_print || false)
     };
 
     // New unified printers table format
@@ -1455,7 +1508,7 @@ async function saveBillPrinterConfiguration() {
     }
     
     updateStatusCards();
-    alert('✅ Bill Receipt Printer saved successfully!');
+    alert('Bill Receipt Printer saved successfully!');
     backToSelection();
   } catch (err) {
     console.error('[admin-printer.js] Failed to save bill printer configuration:', err);
@@ -1476,13 +1529,13 @@ async function saveKitchenPrinterConfiguration() {
 
     // Validate that at least one printer exists and each has categories selected
     if (!window.kitchenPrinters || window.kitchenPrinters.length === 0) {
-      alert('⚠️ Please add at least one printer');
+      alert('Please add at least one printer');
       return;
     }
 
     for (const printer of window.kitchenPrinters) {
       if (!printer.categories || printer.categories.length === 0) {
-        alert(`⚠️ Printer "${printer.name}" must have at least one category assigned`);
+        alert(`Printer "${printer.name}" must have at least one category assigned`);
         return;
       }
     }
@@ -1537,11 +1590,189 @@ async function saveKitchenPrinterConfiguration() {
     }
     
     updateStatusCards();
-    alert('✅ Kitchen Printers saved successfully!');
+    alert('Kitchen Printers saved successfully!');
     backToSelection();
   } catch (err) {
     console.error('[admin-printer.js] Failed to save kitchen printer configuration:', err);
     alert('Failed to save: ' + err.message);
+  }
+}
+
+/**
+ * Load KPay Receipt Format UI with saved settings
+ */
+function loadKPayFormatUI() {
+  const settings = window.currentPrinterSettings || {};
+
+  // Auto-print toggle
+  const autoPrintCheckbox = document.getElementById('kpay-auto-print');
+  if (autoPrintCheckbox) autoPrintCheckbox.checked = settings.kpay_auto_print || false;
+
+  // Printer type selector (static HTML in kpay-format-section)
+  const printerTypeSelect = document.getElementById('printer-type-select-kpay');
+  if (printerTypeSelect) {
+    printerTypeSelect.value = settings.kpay_printer_type || 'none';
+    updatePrinterTypeSelection('kpay');
+  }
+
+  // If there is an active bluetooth session for kpay, show status
+  if (window.bluetoothSessions && window.bluetoothSessions['KPAY']) {
+    const session = window.bluetoothSessions['KPAY'];
+    if (session.connected && session.device) {
+      if (typeof displayBluetoothSessionStatus === 'function') {
+        displayBluetoothSessionStatus('kpay', session.device.name);
+      }
+    }
+  }
+
+  // Update preview restaurant name from cache
+  const restaurantNameEl = document.getElementById('kpay-preview-restaurant-name');
+  if (restaurantNameEl && window.ADMIN_SETTINGS_CACHE?.name) {
+    restaurantNameEl.textContent = window.ADMIN_SETTINGS_CACHE.name;
+  }
+
+  // Update preview date
+  const previewDateEl = document.getElementById('kpay-preview-date');
+  if (previewDateEl) previewDateEl.textContent = new Date().toLocaleString();
+}
+
+/**
+ * Called when auto-print toggle is changed - updates local state without saving
+ */
+function onKPayAutoPrintToggle() {
+  if (!window.currentPrinterSettings) window.currentPrinterSettings = {};
+  const checkbox = document.getElementById('kpay-auto-print');
+  window.currentPrinterSettings.kpay_auto_print = checkbox ? checkbox.checked : false;
+}
+
+/**
+ * Save KPay Printer Configuration
+ */
+async function saveKPayPrinterConfiguration() {
+  try {
+    const restaurantId = localStorage.getItem('restaurantId');
+    if (!restaurantId) {
+      alert('Restaurant ID not found');
+      return;
+    }
+
+    const autoPrint = document.getElementById('kpay-auto-print')?.checked || false;
+
+    // Get printer config from config card
+    const printerTypeSelect = document.getElementById('printer-type-select-kpay');
+    let kpayPrinterType = printerTypeSelect ? printerTypeSelect.value : window.currentPrinterSettings?.kpay_printer_type || 'none';
+    const printerHostInput = document.getElementById('printer-host-kpay');
+    const kpayPrinterHost = kpayPrinterType === 'network' && printerHostInput ? printerHostInput.value : null;
+    const kpayBluetoothDevice = (window.selectedBluetoothDevices && window.selectedBluetoothDevices.kpay) || window.currentPrinterSettings?.kpay_bluetooth_device || null;
+
+    if (kpayBluetoothDevice && kpayPrinterType === 'none') {
+      kpayPrinterType = 'bluetooth';
+    }
+
+    const settings = { auto_print: autoPrint };
+
+    const payload = {
+      type: 'KPAY',
+      printer_type: kpayPrinterType,
+      printer_host: kpayPrinterHost,
+      printer_port: 9100,
+      bluetooth_device_id: kpayBluetoothDevice || null,
+      bluetooth_device_name: kpayBluetoothDevice || null,
+      settings,
+    };
+
+    console.log('[admin-printer.js] saveKPayPrinterConfiguration:', payload);
+
+    const response = await fetch(
+      `${API}/restaurants/${restaurantId}/printer-settings`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to save KPay printer configuration');
+    }
+
+    const result = await response.json();
+    console.log('[admin-printer.js] KPay save response:', result);
+
+    const prefix = 'kpay_';
+    window.currentPrinterSettings[`${prefix}printer_type`] = result.printer_type;
+    window.currentPrinterSettings[`${prefix}printer_host`] = result.printer_host;
+    window.currentPrinterSettings[`${prefix}bluetooth_device_id`] = result.bluetooth_device_id;
+    window.currentPrinterSettings[`${prefix}bluetooth_device_name`] = result.bluetooth_device_name;
+    window.currentPrinterSettings[`${prefix}bluetooth_device`] = result.bluetooth_device_name || result.bluetooth_device_id;
+    window.currentPrinterSettings[`${prefix}auto_print`] = autoPrint;
+
+    if (result.settings) {
+      Object.entries(result.settings).forEach(([key, value]) => {
+        window.currentPrinterSettings[`${prefix}${key}`] = value;
+      });
+    }
+
+    if (!window.selectedBluetoothDevices) window.selectedBluetoothDevices = {};
+    if (result.bluetooth_device_id || result.bluetooth_device_name) {
+      window.selectedBluetoothDevices.kpay = result.bluetooth_device_name || result.bluetooth_device_id;
+    }
+
+    updateStatusCards();
+    alert('KPay Receipt Printer saved successfully!');
+    backToSelection();
+  } catch (err) {
+    console.error('[admin-printer.js] Failed to save KPay printer configuration:', err);
+    alert('Failed to save: ' + err.message);
+  }
+}
+
+/**
+ * Test KPay receipt print
+ */
+async function testPrintKPayReceipt() {
+  try {
+    const restaurantId = localStorage.getItem('restaurantId');
+    if (!restaurantId) {
+      alert('Restaurant ID not found');
+      return;
+    }
+
+    const response = await fetch(`${API}/restaurants/${restaurantId}/test-print-kpay-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to generate KPay test print');
+    }
+
+    const data = await response.json();
+    const escposArray = data.escposArray;
+
+    // Send to connected KPay Bluetooth printer, or fall back to bill/qr printer
+    const kpaySession = window.bluetoothSessions && window.bluetoothSessions.KPAY;
+    const fallbackSession = window.bluetoothSessions && (window.bluetoothSessions.BILL || window.bluetoothSessions.QR);
+    const session = (kpaySession && kpaySession.connected) ? kpaySession : (fallbackSession && fallbackSession.connected ? fallbackSession : null);
+
+    if (session && session.connected) {
+      const payload = {
+        type: 'kpay',
+        data: { escposArray, escposBase64: data.escposBase64 }
+      };
+      const success = await window.handleBluetoothPrint(payload);
+      if (success) {
+        alert('KPay receipt test print sent!');
+      } else {
+        alert('Failed to send KPay test print');
+      }
+    } else {
+      alert('No Bluetooth printer connected. Please connect a printer first.');
+    }
+  } catch (err) {
+    console.error('[admin-printer.js] Failed to test print KPay receipt:', err);
+    alert('KPay test print failed: ' + err.message);
   }
 }
 
@@ -1656,11 +1887,17 @@ async function loadPrinterSettings() {
       window.selectedBluetoothDevices.kitchen = window.currentPrinterSettings.kitchen_bluetooth_device;
       console.log('[admin-printer.js] ✓ Kitchen device loaded from DB:', window.currentPrinterSettings.kitchen_bluetooth_device);
     }
+
+    if (window.currentPrinterSettings.kpay_bluetooth_device) {
+      window.selectedBluetoothDevices.kpay = window.currentPrinterSettings.kpay_bluetooth_device;
+      console.log('[admin-printer.js] ✓ KPay device loaded from DB:', window.currentPrinterSettings.kpay_bluetooth_device);
+    }
     
     // Ensure all defaults are set
     if (!window.currentPrinterSettings.qr_printer_type) window.currentPrinterSettings.qr_printer_type = 'none';
     if (!window.currentPrinterSettings.bill_printer_type) window.currentPrinterSettings.bill_printer_type = 'none';
     if (!window.currentPrinterSettings.kitchen_printer_type) window.currentPrinterSettings.kitchen_printer_type = 'none';
+    if (!window.currentPrinterSettings.kpay_printer_type) window.currentPrinterSettings.kpay_printer_type = 'none';
     
     updateStatusCards();
     window.currentPrinterSettings = window.currentPrinterSettings;
@@ -1686,7 +1923,7 @@ console.log('[admin-printer.js] Module loaded, ready to initialize');
 async function testPrintKitchenOrder() {
   try {
     if (!window.bluetoothSessions || !window.bluetoothSessions.KITCHEN || !window.bluetoothSessions.KITCHEN.connected) {
-      alert('⚠️ No Bluetooth printer connected. Please initialize the kitchen printer session first.');
+      alert('No Bluetooth printer connected. Please initialize the kitchen printer session first.');
       return;
     }
 
@@ -1718,9 +1955,9 @@ async function testPrintKitchenOrder() {
     
     const success = await window.handleBluetoothPrint(payload);
     if (success) {
-      alert('✅ Kitchen test print sent to printer!');
+      alert('Kitchen test print sent to printer!');
     } else {
-      alert('❌ Failed to send kitchen test print');
+      alert('Failed to send kitchen test print');
     }
   } catch (err) {
     console.error('[admin-printer.js] Failed to test print kitchen:', err);

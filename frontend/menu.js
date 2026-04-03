@@ -9,12 +9,13 @@
   const API_BASE = (() => {
     const hostname = window.location.hostname;
     const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-    const isLocalIP = hostname.startsWith("10.") || hostname.startsWith("192.") || hostname.startsWith("172.");
+    const protocol = window.location.protocol; // "https:" or "http:"
     
-    if (isLocalhost || isLocalIP) {
+    if (isLocalhost) {
       return `http://${window.location.host}/api`;
     }
-    return "https://chuio.io/api";
+    // For all other cases (including private IPs), use the same protocol as the page
+    return `${protocol}//${window.location.host}/api`;
   })();
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -29,10 +30,83 @@ let restaurantName = null;
 let pax = null;
 let serviceChargePct = 0;
 let orderPollerStarted = false;
+let orderingInitialized = false;
+let orderPayEnabled = false;
+let showItemStatusToDiners = true;
+let lastOrderId = null;
+let paymentPageActive = false; // prevents polling from overwriting the inline payment page
+let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
+
+async function fetchAndApplyPaymentSettings() {
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/payment-settings`);
+    const data = await res.json();
+    orderPayEnabled = data.order_pay_enabled === true;
+    showItemStatusToDiners = data.show_item_status_to_diners !== false; // default true
+  } catch (e) {
+    orderPayEnabled = false;
+    showItemStatusToDiners = true;
+  }
+}
+
+function applyThemeColor(hex) {
+  if (!hex) return;
+  document.documentElement.style.setProperty('--restaurant-color', hex);
+  try {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const d = (v, f) => Math.max(0, Math.floor(v * f)).toString(16).padStart(2, '0');
+    document.documentElement.style.setProperty('--secondary-color', `#${d(r,0.8)}${d(g,0.8)}${d(b,0.8)}`);
+    document.documentElement.style.setProperty('--restaurant-color-10', `rgba(${r},${g},${b},0.10)`);
+    document.documentElement.style.setProperty('--restaurant-color-20', `rgba(${r},${g},${b},0.20)`);
+    document.documentElement.style.setProperty('--restaurant-color-30', `rgba(${r},${g},${b},0.30)`);
+  } catch (e) {}
+}
 
 // cart, variants — unchanged
 let cart = { items: [], total: 0 };
 const variantSelections = {};
+
+// Search filter
+function filterMenu(query) {
+  const q = (query || '').trim().toLowerCase();
+  document.querySelectorAll('.menu-item').forEach(el => {
+    const name = el.querySelector('.menu-item-name')?.textContent?.toLowerCase() || '';
+    el.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
+  document.querySelectorAll('.category').forEach(catTitle => {
+    const grid = catTitle.nextElementSibling;
+    if (!grid) return;
+    const anyVisible = Array.from(grid.querySelectorAll('.menu-item')).some(i => i.style.display !== 'none');
+    catTitle.style.display = anyVisible ? '' : 'none';
+    grid.style.display = anyVisible ? '' : 'none';
+  });
+}
+
+// Cart quantity badges — update all food card & category badges
+function updateCartBadges() {
+  if (!window.menu) return;
+  // Per-item badges on food cards
+  window.menu.items.forEach(item => {
+    const qty = cart.items.filter(c => c.menuItemId === item.id).reduce((s, c) => s + c.quantity, 0);
+    const badge = document.getElementById(`cart-badge-${item.id}`);
+    if (badge) {
+      badge.textContent = qty > 0 ? qty : '';
+      badge.style.display = qty > 0 ? 'flex' : 'none';
+    }
+  });
+  // Per-category badges in sidebar
+  window.menu.categories.forEach(cat => {
+    const catItemIds = window.menu.items.filter(i => i.category_id === cat.id).map(i => i.id);
+    const catQty = cart.items.filter(c => catItemIds.includes(c.menuItemId)).reduce((s, c) => s + c.quantity, 0);
+    const catBadge = document.getElementById(`cat-badge-${cat.id}`);
+    if (catBadge) {
+      catBadge.textContent = catQty > 0 ? catQty : '';
+      catBadge.style.display = catQty > 0 ? 'flex' : 'none';
+    }
+  });
+}
 
 // Language switching for customer menu
 function setLanguageFromMenu(lang) {
@@ -71,6 +145,9 @@ async function initLanding() {
   tableName = session.table_name;
   pax = session.pax;
   serviceChargePct = session.service_charge_percent || 0;
+
+  // Apply restaurant theme color
+  if (session.theme_color) applyThemeColor(session.theme_color);
   
   // Apply restaurant language preference if available
   if (session.language_preference) {
@@ -92,10 +169,13 @@ console.log("Session data:", session, "Pax value:", session.pax);
   const logoEl = document.getElementById("logo")
   if (logoEl){
     // Use session.logo_url if available, fallback to placeholder
-    const logoUrl = session.logo_url || "https://via.placeholder.com/200";
-    logoEl.src = logoUrl;
-    // Add error handler in case URL is invalid
-    logoEl.onerror = () => { logoEl.src = "https://via.placeholder.com/200"; };
+    const logoUrl = session.logo_url;
+    if (logoUrl) {
+      logoEl.src = logoUrl;
+      logoEl.onerror = () => { logoEl.style.display = 'none'; };
+    } else {
+      logoEl.style.display = 'none';
+    }
     console.log("Logo URL set to:", logoUrl);
   }
 
@@ -150,6 +230,28 @@ console.log("Session data:", session, "Pax value:", session.pax);
     openOrdersDrawer();
   };
 
+  // Show payment result banner if returning from Payment Asia
+  const paymentStatus = urlParams.get('payment_status');
+  if (paymentStatus) {
+    const ref = urlParams.get('ref') || '';
+    const isSuccess = paymentStatus === 'success';
+    const banner = document.createElement('div');
+    banner.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:9999;padding:16px 20px;text-align:center;font-size:15px;font-weight:bold;color:white;background:${isSuccess ? '#16a34a' : '#dc2626'};box-shadow:0 2px 8px rgba(0,0,0,0.3);`;
+    banner.textContent = isSuccess ? '\u2705 Payment successful! Your order is confirmed.' : '\u274c Payment was not completed. Please try again or pay at the counter.';
+    document.body.prepend(banner);
+    // Clean payment params from URL without reloading
+    history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => banner.remove(), 6000);
+    // Auto-open orders drawer so the diner sees their paid order and can add more
+    if (isSuccess) {
+      startOrdering().then(() => {
+        fetch(`${API_BASE}/restaurants/${restaurantId}/settings/payment`)
+          .then(r => r.json()).then(s => { orderPayEnabled = s.order_pay_enabled === true; }).catch(() => {});
+        openOrdersDrawer();
+      });
+    }
+  }
+
   // Initialize active language button for landing page
   const currentLang = localStorage.getItem('language') || 'zh';
   setLanguage(currentLang);
@@ -157,37 +259,39 @@ console.log("Session data:", session, "Pax value:", session.pax);
 
 async function startOrdering() {
   document.getElementById("landing-page").style.display = "none";
-  document.getElementById("app").style.display = "block";
+  document.getElementById("app").style.display = "flex";
 
   // Initialize language button for menu page
   const currentLang = localStorage.getItem('language') || 'zh';
   setLanguage(currentLang);
 
   document.getElementById("table-indicator").textContent = `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
-  document.getElementById("restaurant").textContent = restaurantName || "Welcome";
-  document.getElementById("status").textContent = "";
 
-  // Cart bar click handlers
-  document
-    .getElementById("confirm-order-btn")
-    .addEventListener("click", openCartDrawer);
+  // Cart bar click handlers — only attach once
+  if (!orderingInitialized) {
+    orderingInitialized = true;
 
-  document
-    .getElementById("cart-count")
-    .addEventListener("click", openCartDrawer);
+    document
+      .getElementById("confirm-order-btn")
+      .addEventListener("click", openCartDrawer);
 
-  document
-    .getElementById("cart-total")
-    .addEventListener("click", openCartDrawer);
+    document
+      .getElementById("cart-count")
+      .addEventListener("click", openCartDrawer);
 
-  document
-    .getElementById("orders-btn")
-    .addEventListener("click", openOrdersDrawer);
+    document
+      .getElementById("cart-total")
+      .addEventListener("click", openCartDrawer);
 
-  // Overlay click to close drawer
-  document
-    .getElementById("drawer-overlay")
-    .addEventListener("click", closeAllDrawers);
+    document
+      .getElementById("orders-btn")
+      .addEventListener("click", openOrdersDrawer);
+
+    // Overlay click to close drawer
+    document
+      .getElementById("drawer-overlay")
+      .addEventListener("click", closeAllDrawers);
+  }
 
   // 🔥 load menu
   const menuRes = await fetch(
@@ -201,12 +305,12 @@ async function startOrdering() {
 
   // Load cart from localStorage if exists
   loadCartFromStorage();
+  updateCartBadges();
 
-  initDrawerSwipe();
-  initOrdersDrawerSwipe();
   initCategoryObserver(window.menu.categories);
   startOrderPolling();
   updateCartBar();
+  await fetchAndApplyPaymentSettings();
 }
 
 function renderCategories(categories) {
@@ -218,7 +322,7 @@ function renderCategories(categories) {
   categories.forEach(cat => {
     const el = document.createElement("div");
     el.className = "category-item";
-    el.textContent = cat.name;
+    el.innerHTML = `${cat.name}<span class="cat-badge" id="cat-badge-${cat.id}"></span>`;
     el.dataset.categoryId = cat.id;
 
     el.onclick = () => {
@@ -227,7 +331,7 @@ function renderCategories(categories) {
 
       // Use scrollIntoView for reliable scrolling
       target.scrollIntoView({
-        behavior: "smooth",
+        behavior: "instant",
         block: "start"
       });
 
@@ -283,11 +387,12 @@ function renderMenuItem(item) {
   }
 
  card.innerHTML = `
+  <span class="cart-badge" id="cart-badge-${item.id}"></span>
   <img 
-    src="${item.image_url || "https://via.placeholder.com/300"}" 
+    src="${item.image_url || '/uploads/website/placeholder.png'}" 
     data-item-id="${item.id}"
     data-item-name="${item.name}"
-    onerror="console.warn('Image failed to load for:', this.dataset.itemName, 'URL:', this.src); this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22120%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22300%22 height=%22120%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2216%22 fill=%22%23999%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22%3ENo Image%3C/text%3E%3C/svg%3E';"
+    onerror="this.src='/uploads/website/placeholder.png';"
     alt="${item.name}"
   />
 
@@ -323,10 +428,10 @@ function renderMenuItemWithVariants(item){
 
     card.innerHTML = `
     <img 
-      src="${item.image_url || "https://via.placeholder.com/300"}"
+      src="${item.image_url || '/uploads/website/placeholder.png'}"
       data-item-id="${item.id}"
       data-item-name="${item.name}"
-      onerror="console.warn('Drawer image failed to load for:', this.dataset.itemName, 'URL:', this.src); this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22200%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22300%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2220%22 fill=%22%23999%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22%3ENo Image%3C/text%3E%3C/svg%3E';"
+      onerror="this.src='/uploads/website/placeholder.png';"
       alt="${item.name}"
     />
 
@@ -425,26 +530,38 @@ function setActiveCategory(categoryId) {
     `.category-item[data-category-id="${categoryId}"]`
   );
 
-  if (active) active.classList.add("active");
+  if (active) {
+    active.classList.add("active");
+    active.scrollIntoView({ block: "nearest", behavior: "instant" });
+  }
 }
 
 function initCategoryObserver(categories) {
-  const observer = new IntersectionObserver(
-    entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const id = entry.target.id.replace("category-", "");
-          setActiveCategory(id);
-        }
-      });
-    },
-    { rootMargin: "-40% 0px -55% 0px" }
-  );
+  const menuEl = document.getElementById('menu');
+  if (!menuEl) return;
 
-  categories.forEach(cat => {
-    const el = document.getElementById(`category-${cat.id}`);
-    if (el) observer.observe(el);
-  });
+  // Highlight the category whose header has most recently scrolled past
+  // 25% from the top of the #menu element.
+  const update = () => {
+    const menuTop = menuEl.getBoundingClientRect().top;
+    const triggerY = menuTop + menuEl.clientHeight * 0.25;
+    let activeId = null;
+
+    categories.forEach(cat => {
+      const el = document.getElementById(`category-${cat.id}`);
+      if (!el) return;
+      if (el.getBoundingClientRect().top <= triggerY) {
+        activeId = String(cat.id);
+      }
+    });
+
+    if (activeId !== null) setActiveCategory(activeId);
+  };
+
+  menuEl.addEventListener('scroll', update, { passive: true });
+
+  // Set initial highlight
+  if (categories.length > 0) setActiveCategory(String(categories[0].id));
 }
 
 function addToCart(item) {
@@ -491,10 +608,12 @@ function addToCart(item) {
     closeAllDrawers();
     saveCartToStorage();
     updateCartBar();
+    updateCartBadges();
   } else {
     const cartItem = {
       menuItemId: item.id,
       name: item.name,
+      image_url: item.image_url || null,
       quantity: 1,
       basePriceCents: item.price_cents,
       totalPriceCents: item.price_cents + extraPrice,
@@ -509,6 +628,7 @@ function addToCart(item) {
     closeAllDrawers();
     saveCartToStorage();
     updateCartBar();
+    updateCartBadges();
     showAddonModal(item, cartItem);
   }
 }
@@ -788,12 +908,22 @@ async function submitOrder() {
     return;
   }
 
-    cart.items = [];
-    saveCartToStorage();
-    updateCartBar();
-    closeAllDrawers();
-    alert("Order sent to kitchen!");
+  const orderData = await res.json();
+  const orderId = orderData.order_id;
 
+  cart.items = [];
+  saveCartToStorage();
+  updateCartBar();
+  closeAllDrawers();
+
+  // Store the latest order ID for Pay Now
+  lastOrderId = orderId;
+
+  // Refresh payment settings then navigate to orders drawer
+  await fetchAndApplyPaymentSettings();
+
+  // Always navigate to orders drawer after placing order
+  openOrdersDrawer();
 }
 
 function onVariantChange(itemId, variantId, optionId, checked) {
@@ -876,6 +1006,7 @@ async function loadOrderStatus() {
     console.warn("❌ loadOrderStatus: No sessionId");
     return;
   }
+  if (paymentPageActive) return; // don't overwrite the inline payment page
 
   try {
     const url = `${API_BASE}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`;
@@ -908,13 +1039,8 @@ function renderOrdersDrawer(orders, tableName) {
 
   let subtotal = 0;
 
-  // Drawer header
   let html = `
-    <div class="orders-drawer-header">
-      <button class="hide-drawer" onclick="closeAllDrawers()">Hide</button>
-      <div class="orders-title">${t('menu.check-orders')}</div>
-      <div class="table-name">${t('menu.table-label')} ${tableName}</div>
-    </div>
+    <div class="orders-body">
     <div class="orders-items">
   `;
 
@@ -923,17 +1049,46 @@ function renderOrdersDrawer(orders, tableName) {
   } else {
     orders.forEach((order, oIdx) => {
       console.log(`📦 Order ${oIdx}:`, order);
+      const isCompleted = order.order_status === 'completed';
+      const isPAPayment = order.order_payment_method === 'payment-asia';
+      const isPAInProgress = isPAPayment && !isCompleted; // PA initiated, webhook not yet confirmed
+      const isPaid = isCompleted;                          // fully confirmed by DB
+      const isHandledByPA = isPAPayment;                  // PA initiated (paid or processing)
+
+      if (isHandledByPA) {
+        const payLabel = isCompleted ? '💳 Paid via Payment Asia' : '⏳ Payment Processing via Payment Asia';
+        const bg = isCompleted ? '#d1fae5' : '#fef3c7';
+        const border = isCompleted ? '#10b981' : '#f59e0b';
+        const color = isCompleted ? '#065f46' : '#92400e';
+        html += `<div style="margin:12px 0 0;padding:6px 10px;background:${bg};border-left:3px solid ${border};border-radius:0 4px 4px 0;font-size:12px;color:${color};font-weight:600;">📦 Order #${order.order_id} — ${payLabel}</div>`;
+        html += `<div style="opacity:0.65;">`;
+      } else if (isPaid) {
+        html += `<div style="margin:12px 0 0;padding:6px 10px;background:#d1fae5;border-left:3px solid #10b981;border-radius:0 4px 4px 0;font-size:12px;color:#065f46;font-weight:600;">📦 Order #${order.order_id} — ✅ Paid</div>`;
+        html += `<div style="opacity:0.65;">`;
+      } else if (oIdx > 0) {
+        html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">Order #${order.order_id} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">Unpaid</span></div>`;
+      }
+
       order.items.forEach(item => {
         const line = item.item_total_cents || (item.unit_price_cents * item.quantity) || 0;
         subtotal += line;
 
         const itemName = item.menu_item_name || item.name || 'Unknown';
+        const menuItem = window.menu && window.menu.items
+          ? window.menu.items.find(i => i.id === item.menu_item_id || i.name === itemName)
+          : null;
+        const thumbUrl = menuItem && menuItem.image_url ? menuItem.image_url : null;
+        const thumbHtml = thumbUrl
+          ? `<img class="order-item-thumb" src="${thumbUrl}" alt="${itemName}" loading="lazy">`
+          : `<div class="order-item-thumb order-item-thumb-placeholder"></div>`;
         const addonsHtml = item.addons && item.addons.length > 0 
           ? item.addons.map(addon => `<div style="font-size: 11px; color: #666; margin-left: 12px; margin-top: 2px;">+ ${(addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity}</div>`).join('')
           : '';
 
         html += `
           <div class="order-item">
+            ${thumbHtml}
+            <div class="order-item-body">
             <div class="order-line">
               <span class="item-name">${itemName}</span>
               <span class="item-quantity">×${item.quantity}</span>
@@ -941,18 +1096,23 @@ function renderOrdersDrawer(orders, tableName) {
             </div>
             ${item.variants ? `<div class="item-variants">${item.variants}</div>` : ""}
             ${addonsHtml}
-            <div class="item-status status-${item.status}">(${item.status})</div>
+            <div class="item-status status-${item.status}">${showItemStatusToDiners ? `(${({'pending':'sending','preparing':'preparing','served':'delivered','completed':'delivered'})[item.status]||item.status})` : ''}</div>
+            </div>
           </div>
         `;
       });
+
+      if (isHandledByPA || isPaid) html += `</div>`; // end opacity wrapper
     });
   }
   serviceCharge = subtotal/100 * serviceChargePct;
-  const total = subtotal + serviceCharge;
+  const discountCents = appliedCoupon ? appliedCoupon.discount_cents : 0;
+  const total = subtotal + serviceCharge - discountCents;
 
   html += `
     </div>
-    <hr/>
+    </div>
+    <div class="orders-footer">
     <div class="orders-summary">
       <div class="summary-line">
         <span>${t('menu.subtotal-label')}</span>
@@ -962,19 +1122,57 @@ function renderOrdersDrawer(orders, tableName) {
         <span>${t('menu.service-charge-label')} (${serviceChargePct}%)</span>
         <span>$${(serviceCharge / 100).toFixed(2)}</span>
       </div>
+      ${discountCents > 0 ? `
+      <div class="summary-line" style="color:#059669;">
+        <span>Coupon (${appliedCoupon.code})</span>
+        <span>-$${(discountCents / 100).toFixed(2)}</span>
+      </div>` : ''}
       <div class="summary-line total">
         <strong>${t('menu.total-label')}</strong>
         <strong id="orders-total-display">$${(total / 100).toFixed(2)}</strong>
       </div>
     </div>
     <div class="coupon-section">
-      <input type="text" id="orders-coupon-input" placeholder="${t('menu.enter-coupon-code')}" />
-      <button onclick="applyCouponToOrders()" class="btn-secondary">${t('menu.apply-coupon')}</button>
-      <div id="orders-coupon-display"></div>
+      <div class="coupon-row">
+        <span class="coupon-label">${t('menu.coupon-code') || 'Coupon Code'}</span>
+        <div class="coupon-input-group">
+          <input type="text" id="orders-coupon-input" placeholder="CODE" value="${appliedCoupon ? appliedCoupon.code : ''}" />
+          <button onclick="applyCouponToOrders()" class="coupon-apply-btn">${t('menu.apply-coupon') || 'Apply'}</button>
+        </div>
+      </div>
+      <div id="orders-coupon-display">${appliedCoupon ? `<div class="coupon-applied">${t('menu.coupon-applied').replace('{0}', '-$' + (appliedCoupon.discount_cents/100).toFixed(2))}</div>` : ''}</div>
     </div>
     <div class="orders-actions">
-      <button class="btn-primary" id="close-bill-btn" onclick="closeBill()">${t('menu.close-bill')}</button>
-      <button class="btn-secondary" onclick="closeAllDrawers()">${t('menu.back-to-menu')}</button>
+      ${(() => {
+        // Exclude orders where PA payment was already initiated (payment_method = 'payment-asia')
+        const unpaidNonPAOrder = orders.filter(o =>
+          o.order_status !== 'completed' && o.order_payment_method !== 'payment-asia'
+        ).slice(-1)[0];
+        const allPACompleted = orders.length > 0 && orders.every(o =>
+          o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
+        );
+        // PA orders that are genuinely in-flight (not failed — backend clears payment_method on failure)
+        const hasPendingPAOrder = orders.some(o =>
+          o.order_payment_method === 'payment-asia' && o.order_status !== 'completed'
+        );
+        if (orderPayEnabled && unpaidNonPAOrder) {
+          return `<button class="btn-primary" onclick="showPaymentPage(${unpaidNonPAOrder.order_id})">Pay Now</button>`;
+        }
+        if (allPACompleted) {
+          return `<button class="btn-primary" style="background:#059669;" onclick="endSessionFromMenu()">✅ End Session</button>`;
+        }
+        if (hasPendingPAOrder) {
+          // PA initiated but webhook not yet confirmed — prevent double-pay
+          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>`;
+        }
+        if (orderPayEnabled) {
+          // Order & Pay mode but no unpaid order yet — nothing to pay
+          return `<button class="btn-primary" disabled style="opacity:0.5;">Pay Now</button>`;
+        }
+        return `<button class="btn-primary" id="close-bill-btn" onclick="closeBill()">${t('menu.close-bill')}</button>`;
+      })()}
+      <button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>
+    </div>
     </div>
   `;
 
@@ -998,16 +1196,21 @@ function renderCartDrawer() {
 
     return `
       <div class="cart-item">
-        <div class="cart-item-header">
-          <strong>${item.name}</strong>
-          <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
-        </div>
-        ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}
-        <div class="qty-controls">
-          <button class="qty-btn" onclick="updateCartQty(${idx}, -1)">−</button>
-          <span class="qty-display">${item.quantity}</span>
-          <button class="qty-btn" onclick="updateCartQty(${idx}, 1)">+</button>
-          <button class="qty-btn danger" onclick="removeCartItem(${idx})">🗑</button>
+        <div class="cart-item-body">
+          ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${item.name}" loading="lazy">` : ''}
+          <div class="cart-item-details">
+            <div class="cart-item-header">
+              <strong>${item.name}</strong>
+              <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
+            </div>
+            ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}
+            <div class="qty-controls">
+              <button class="qty-btn" onclick="updateCartQty(${idx}, -1)">−</button>
+              <span class="qty-display">${item.quantity}</span>
+              <button class="qty-btn" onclick="updateCartQty(${idx}, 1)">+</button>
+              <button class="qty-btn danger" onclick="removeCartItem(${idx})">🗑</button>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -1072,7 +1275,7 @@ function openCartDrawer() {
 
   activeDrawer.classList.add("open");
   overlay.classList.add("open");
-  document.body.style.overflow = "hidden";
+  setCartBarVisible(false);
 
   renderCartDrawer();
   initDrawerSwipe("cart-drawer");
@@ -1095,18 +1298,16 @@ function updateCartBar() {
   totalEl.textContent = `$${(totalCents / 100).toFixed(2)}`;
 
   btn.disabled = count === 0;
+  updateCartBadges();
 }
 
 function openDrawer(itemId) {
-
-    closeAllDrawers();
-  
+  closeAllDrawers();
 
   const item = window.menu.items.find(i => i.id === itemId);
   if (!item) return;
 
   activeDrawer = document.getElementById("item-drawer");
-   const overlay = document.getElementById("drawer-overlay");
   const content = activeDrawer.querySelector(".drawer-content");
 
   content.innerHTML = ""; // FULL RESET
@@ -1115,55 +1316,114 @@ function openDrawer(itemId) {
   itemUI.classList.add("drawer-item"); // important
   content.appendChild(itemUI);
 
-  overlay.classList.add("open");
   activeDrawer.classList.add("open");
-  activeDrawer.style.transform = ""; // Reset transform before opening
-
-  document.body.style.overflow = "hidden";
+  setCartBarVisible(false);
 
   content.scrollTop = 0;
 }
 
 function initDrawerSwipe(drawerId = "item-drawer") {
-  const drawer = document.getElementById(drawerId);
-  if (!drawer || drawer.dataset.swipeInit) return;
+  // Swipe disabled — drawers use instant display:none/flex
+}
 
-  drawer.dataset.swipeInit = "true";
+// ============ HEADER MODE (orders/payment vs normal menu) ============
 
-  if (isTouchDevice()) {
-    initTouchSwipe(drawer);
+function setCartBarVisible(visible) {
+  const bar = document.getElementById('cart-bar');
+  if (!bar) return;
+  if (visible) bar.classList.remove('hidden');
+  else bar.classList.add('hidden');
+}
+function setHeaderOrdersMode(active, isPayment = false) {
+  const backBtn        = document.getElementById('header-back-btn');
+  const pageTitle      = document.getElementById('header-page-title');
+  const tableIndicator = document.getElementById('table-indicator');
+  const searchContainer= document.getElementById('search-container');
+  const headerRight    = document.querySelector('.header-right-menu');
+  const headerTableName= document.getElementById('header-table-name');
+
+  const show = el => el && (el.style.display = '');
+  const hide = el => el && (el.style.display = 'none');
+
+  if (active) {
+    show(backBtn);
+    show(pageTitle);
+    show(headerTableName);
+    hide(tableIndicator);
+    hide(searchContainer);
+    hide(headerRight);
+
+    pageTitle.textContent = isPayment ? t('menu.payment') || 'Payment' : t('menu.check-orders') || 'Check Orders';
+    headerTableName.textContent = `${t('menu.table-label') || 'Table'} ${tableName}`;
   } else {
-    initMouseSwipe(drawer);
+    hide(backBtn);
+    hide(pageTitle);
+    hide(headerTableName);
+    show(tableIndicator);
+    show(searchContainer);
+    show(headerRight);
+  }
+}
+
+function headerBackAction() {
+  if (paymentPageActive) {
+    showPaymentPageBack();
+  } else {
+    closeAllDrawers();
   }
 }
 
 function openOrdersDrawer() {
+  // Don't disrupt an active payment screen session
+  if (paymentPageActive) return;
+
   closeAllDrawers();
 
   activeDrawer = document.getElementById("orders-drawer");
-  const overlay = document.getElementById("drawer-overlay");
 
   activeDrawer.classList.add("open");
-  overlay.classList.remove("open"); // Don't show overlay for fullscreen orders
-  document.body.style.overflow = "hidden";
+
+  setHeaderOrdersMode(true, false);
+  setCartBarVisible(false);
 
   // 🔥 render immediately using latest polled data
   loadOrderStatus();
 }
 
 
-
-function initOrdersDrawerSwipe() {
+function initOrdersDrawerSwipe_disabled() {
   const drawer = document.getElementById("orders-drawer");
   if (!drawer || drawer.dataset.swipeInit) return;
-
   drawer.dataset.swipeInit = "true";
 
-  if (isTouchDevice()) {
-    initTouchSwipe(drawer);
-  } else {
-    initMouseSwipe(drawer);
-  }
+  // Orders drawer slides in from the RIGHT (translateX), not bottom.
+  // Swipe right-to-close only — do NOT reuse initTouchSwipe (which applies
+  // translateX(-50%) translateY(delta) and breaks the layout).
+  let startX = 0;
+  drawer.addEventListener("touchstart", e => {
+    if (drawer !== activeDrawer) return;
+    if (isInteractiveElement(e.target)) return;
+    startX = e.touches[0].clientX;
+    drawer.style.transition = "none";
+  }, { passive: true });
+
+  drawer.addEventListener("touchmove", e => {
+    if (drawer !== activeDrawer) return;
+    const delta = e.touches[0].clientX - startX;
+    if (delta <= 0) return; // only allow rightward drag
+    drawer.style.transform = `translateX(${delta}px)`;
+  }, { passive: true });
+
+  drawer.addEventListener("touchend", e => {
+    if (drawer !== activeDrawer) return;
+    const delta = e.changedTouches[0].clientX - startX;
+    drawer.style.transition = "transform 0.3s ease";
+    if (delta > 100) {
+      closeActiveDrawer();
+    } else {
+      drawer.style.transform = "";
+    }
+  });
 }
 
 function isInteractiveElement(el) {
@@ -1182,7 +1442,7 @@ function isTouchDevice() {
   );
 }
 
-function initTouchSwipe(drawer) {
+function initTouchSwipe_disabled(drawer) {
   drawer.addEventListener("touchstart", e => {
     if (drawer !== activeDrawer) return;
     if (isInteractiveElement(e.target)) return;
@@ -1217,7 +1477,7 @@ function initTouchSwipe(drawer) {
   });
 }
 
-function initMouseSwipe(drawer) {
+function initMouseSwipe_disabled(drawer) {
   drawer.addEventListener("mousedown", e => {
     if (drawer !== activeDrawer) return;
 
@@ -1257,25 +1517,38 @@ function closeAllDrawers() {
     const d = document.getElementById(id);
     if (!d) return;
     d.classList.remove("open");
-    d.style.transform = "";
   });
+
+  // Also close payment screen
+  const paymentScreen = document.getElementById('payment-screen');
+  if (paymentScreen) {
+    paymentScreen.classList.remove('open');
+    document.getElementById('payment-screen-content').innerHTML = '';
+  }
+  paymentPageActive = false;
 
   const drawerOverlay = document.getElementById("drawer-overlay");
   if (drawerOverlay) drawerOverlay.classList.remove("open");
-  document.body.style.overflow = "";
   activeDrawer = null;
+
+  setHeaderOrdersMode(false);
+  setCartBarVisible(true);
 }
 
 function closeActiveDrawer() {
   if (!activeDrawer) return;
 
   activeDrawer.classList.remove("open");
-  activeDrawer.style.transform = "";
 
   document.getElementById("drawer-overlay")?.classList.remove("open");
-  document.body.style.overflow = "";
+
+  // Clear payment page flag when orders drawer is closed
+  if (activeDrawer.id === "orders-drawer") {
+    paymentPageActive = false;
+  }
 
   activeDrawer = null;
+  setCartBarVisible(true);
 }
 
 function startOrderPolling() {
@@ -1309,8 +1582,6 @@ function applyCouponToOrders() {
     return;
   }
   
-  // Get current session ID from somewhere (may need to modify based on your app structure)
-  const sessionId = sessionStorage.getItem("sessionId");
   if (!sessionId) {
     alert(t('menu.session-not-found'));
     return;
@@ -1321,7 +1592,7 @@ function applyCouponToOrders() {
 
 async function applyCouponToSession(sessionId, couponCode) {
   try {
-    const response = await fetch(`/api/sessions/${sessionId}/apply-coupon`, {
+    const response = await fetch(`${API_BASE}/sessions/${sessionId}/apply-coupon`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ coupon_code: couponCode })
@@ -1331,9 +1602,15 @@ async function applyCouponToSession(sessionId, couponCode) {
     const displayEl = document.getElementById("orders-coupon-display");
     
     if (response.ok) {
-      displayEl.innerHTML = `<div class="coupon-applied">${t('menu.coupon-applied').replace('{0}', data.message)}</div>`;
-      // Refresh orders to show updated total
-      loadOrdersDrawer();
+      appliedCoupon = {
+        code: data.coupon_code,
+        discount_cents: data.discount_applied_cents,
+        discount_type: data.discount_type,
+        discount_value: data.discount_value
+      };
+      displayEl.innerHTML = `<div class="coupon-applied">${t('menu.coupon-applied').replace('{0}', '-$' + (data.discount_applied_cents/100).toFixed(2))}</div>`;
+      // Refresh orders drawer to show updated total
+      loadOrderStatus();
     } else {
       displayEl.innerHTML = `<div class="coupon-error">${t('menu.coupon-error').replace('{0}', data.error)}</div>`;
     }
@@ -1343,20 +1620,43 @@ async function applyCouponToSession(sessionId, couponCode) {
   }
 }
 
-async function removeCouponFromSession(sessionId) {
+async function removeCouponFromSession(sid) {
   try {
-    const response = await fetch(`/api/sessions/${sessionId}/remove-coupon`, {
+    const response = await fetch(`${API_BASE}/sessions/${sid}/remove-coupon`, {
       method: "POST",
       headers: { "Content-Type": "application/json" }
     });
     
     if (response.ok) {
-      document.getElementById("orders-coupon-input").value = "";
-      document.getElementById("orders-coupon-display").innerHTML = "";
-      loadOrdersDrawer();
+      appliedCoupon = null;
+      loadOrderStatus();
     }
   } catch (error) {
     console.error("Error removing coupon:", error);
+  }
+}
+
+async function callStaff() {
+  if (!sessionId || !restaurantId) return;
+  try {
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}/call-staff`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restaurantId, call_staff_requested: true })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error('Failed to call staff:', err);
+      return;
+    }
+    const btn = document.getElementById('call-staff-btn');
+    if (btn) {
+      btn.textContent = t('menu.call-staff-sent');
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+    }
+  } catch (e) {
+    console.error('Error calling staff:', e);
   }
 }
 
@@ -1406,6 +1706,30 @@ async function closeBill() {
   } catch (error) {
     console.error("❌ Error closing bill:", error);
     alert("Error requesting bill closure");
+  }
+}
+
+async function endSessionFromMenu() {
+  if (!sessionId) return;
+  const msg = t('menu.end-session-confirm') || 'Your payment is complete. End your dining session now?';
+  if (!confirm(msg)) return;
+  try {
+    const res = await fetch(`${API_BASE}/table-sessions/${sessionId}/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed to end session: ' + (err.error || 'Unknown error'));
+      return;
+    }
+    closeAllDrawers();
+    // Return to landing page
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('landing-page').style.display = 'flex';
+  } catch (e) {
+    console.error('❌ Error ending session:', e);
+    alert('Error ending session');
   }
 }
 
@@ -1498,6 +1822,182 @@ async function printMenuBill() {
   } catch (error) {
     console.error("Error printing bill:", error);
     alert("Failed to print bill");
+  }
+}
+
+// ============= PAYMENT ASIA INTEGRATION =============
+
+async function showPaymentPage(orderId) {
+  const screen = document.getElementById('payment-screen');
+  const el = document.getElementById('payment-screen-content');
+  if (!screen || !el) return;
+
+  paymentPageActive = true; // pause polling while payment page is shown
+
+  // Show loading state
+  el.innerHTML = '<div style="padding: 24px; text-align: center; color: #666;">⏳ Loading payment…</div>';
+  screen.classList.add('open');
+  setHeaderOrdersMode(true, true); // switch header to Payment mode
+  setCartBarVisible(false);
+
+  try {
+    // Fetch order details for the payment summary
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`);
+    const data = await res.json();
+    const allOrders = data.items || [];
+    const order = allOrders.find(o => o.order_id === orderId) || allOrders[allOrders.length - 1];
+
+    if (!order) throw new Error('Order not found');
+
+    const items = order.items || [];
+    let subtotalCents = items.reduce((s, i) => s + (i.item_total_cents || (i.unit_price_cents * i.quantity) || 0), 0);
+    const serviceChargeCents = Math.round(subtotalCents * serviceChargePct / 100);
+    const totalCents = subtotalCents + serviceChargeCents;
+
+    // Fetch restaurant info for name
+    let restaurantName = tableName ? `Table ${tableName}` : 'Your Order';
+    try {
+      const rRes = await fetch(`${API_BASE}/restaurants/${restaurantId}`);
+      const rData = await rRes.json();
+      restaurantName = rData.name || restaurantName;
+    } catch (e) {}
+
+    const orderTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const networkOptions = [
+      { value: 'CreditCard', icons: ['visa','mastercard'],  label: 'Credit / Debit Card' },
+      { value: 'Fps',        icons: ['fps'],               label: 'FPS' },
+      { value: 'Alipay',     icons: ['alipay'],            label: 'Alipay' },
+      { value: 'Wechat',     icons: ['wechat-pay'],        label: 'WeChat Pay' },
+      { value: 'CUP',        icons: ['unionpay'],          label: 'UnionPay' },
+      { value: 'Octopus',    icons: ['octopus.png'],       label: 'Octopus' },
+    ];
+
+    el.innerHTML = `
+      <div class="pay-screen-wrapper">
+        <div class="pay-screen-restaurant">
+          <div class="pay-screen-restaurant-name">${restaurantName}</div>
+          <div class="pay-screen-meta">Order #${orderId} · ${orderTime} · Table ${tableName}</div>
+        </div>
+
+        <div class="pay-screen-items-card">
+          ${items.map(item => {
+            const name = item.menu_item_name || item.name || 'Item';
+            const line = item.item_total_cents || (item.unit_price_cents * item.quantity) || 0;
+            return `<div class="pay-screen-item-line">
+              <span>${name} <span class="pay-screen-item-qty">×${item.quantity}</span></span>
+              <span class="pay-screen-item-price">$${(line/100).toFixed(2)}</span>
+            </div>`;
+          }).join('')}
+          ${serviceChargePct > 0 ? `
+          <div class="pay-screen-charge-line">
+            <span>Service Charge (${serviceChargePct}%)</span>
+            <span>$${(serviceChargeCents/100).toFixed(2)}</span>
+          </div>` : ''}
+          <div class="pay-screen-total-line">
+            <span>Total</span>
+            <span>HKD $${(totalCents/100).toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div class="pay-screen-method-section">
+          <div class="pay-screen-method-title">Payment Method</div>
+          <div class="pay-screen-methods">
+            ${networkOptions.map((opt, i) => `
+            <label class="pay-method-option${i===0?' selected':''}" id="pay-method-label-${opt.value}">
+              <input type="radio" name="pay-network" value="${opt.value}" ${i===0?'checked':''} onchange="highlightPayMethod()">
+              <span class="pay-method-icon">${opt.icons.map(ic => { const src = ic.includes('.') ? `/uploads/website/payments/${ic}` : `/uploads/website/payments/${ic}.svg`; return `<img src="${src}" alt="${ic}" width="56" height="36">`; }).join('')}</span>
+              <span>${opt.label}</span>
+            </label>`).join('')}
+          </div>
+        </div>
+
+        <div class="pay-screen-actions">
+          <button id="pay-now-btn" class="btn-pay-now" onclick="submitPaymentInline(${orderId}, ${totalCents})">
+            Pay HKD $${(totalCents/100).toFixed(2)}
+          </button>
+          <button class="btn-go-back" onclick="showPaymentPageBack()">Go Back</button>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:24px; text-align:center; color:#dc2626;">❌ Failed to load order: ${err.message}</div>
+      <div style="padding:16px;"><button class="btn-go-back" onclick="showPaymentPageBack()">Go Back</button></div>`;
+  }
+}
+
+function highlightPayMethod() {
+  document.querySelectorAll('[id^="pay-method-label-"]').forEach(label => {
+    const radio = label.querySelector('input[type=radio]');
+    label.classList.toggle('selected', !!(radio && radio.checked));
+  });
+}
+
+function showPaymentPageBack() {
+  const screen = document.getElementById('payment-screen');
+  if (screen) {
+    screen.classList.remove('open');
+    document.getElementById('payment-screen-content').innerHTML = '';
+  }
+  paymentPageActive = false;
+  setHeaderOrdersMode(true, false); // back to Check Orders header
+  setCartBarVisible(false);         // still in orders view, not menu
+  loadOrderStatus();
+}
+
+async function submitPaymentInline(orderId, totalCents) {
+  const btn = document.getElementById('pay-now-btn');
+  const selected = document.querySelector('input[name="pay-network"]:checked');
+  if (!selected) { alert('Please select a payment method'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Processing…'; }
+
+  const network = selected.value;
+
+  try {
+    const paymentRes = await fetch(
+      `${API_BASE}/restaurants/${restaurantId}/sessions/${sessionId}/orders/${orderId}/initiate-payment`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: 'Guest',
+          customer_email: `guest@table-${tableName || 'unknown'}.local`,
+          customer_phone: '',
+          customer_ip: window.location.hostname,
+          customer_address: tableName || 'N/A',
+          customer_state: 'HK',
+          customer_country: 'HK',
+          menu_return_url: window.location.origin + window.location.pathname + window.location.search,
+          network,
+        })
+      }
+    );
+
+    if (!paymentRes.ok) {
+      const err = await paymentRes.json();
+      throw new Error(err.error || 'Failed to initiate payment');
+    }
+
+    const paymentData = await paymentRes.json();
+
+    // Submit form to Payment Asia (same page navigation, not new tab)
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = paymentData.paymentUrl;
+    form.style.display = 'none';
+    Object.entries(paymentData.formData).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(value);
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = `Pay HKD $${(totalCents/100).toFixed(2)}`; }
+    alert('Payment failed: ' + err.message);
   }
 }
 

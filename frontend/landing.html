@@ -16,6 +16,7 @@
 </head>
 
 <body>
+<div id="phone-frame">
 
   <!-- ================= LANDING PAGE ================= -->
   <div id="landing-page" class="landing">
@@ -41,11 +42,15 @@
 
     <!-- Header -->
     <div class="app-header">
+      <!-- Back button — shown when orders/payment screen is active -->
+      <button id="header-back-btn" class="header-back-btn" style="display:none" onclick="headerBackAction()">‹</button>
+      <span id="header-page-title" class="header-page-title" style="display:none"></span>
+
+      <!-- Normal menu header -->
       <span id="table-indicator"></span>
 
-      <div class="header-main">
-        <span id="restaurant"></span>
-        <span id="status"></span>
+      <div id="search-container">
+        <input type="text" id="search-input" placeholder="🔍 Search…" oninput="filterMenu(this.value)" autocomplete="off" />
       </div>
 
       <div class="header-right-menu">
@@ -55,6 +60,9 @@
         </div>
         <button id="orders-btn" title="Check Orders">🧾</button>
       </div>
+
+      <!-- Table name shown in header right when orders drawer is active -->
+      <span id="header-table-name" class="header-table-name" style="display:none"></span>
     </div>
 
     <!-- Main layout -->
@@ -73,23 +81,37 @@
         Confirm Order
       </button>
     </div>
-  </div>
 
-  <!-- ================= DRAWERS & OVERLAY ================= -->
-  <div id="drawer-overlay"></div>
+    <!-- ================= DRAWERS & OVERLAY ================= -->
+    <div id="drawer-overlay"></div>
 
-  <div id="item-drawer">
-    <div class="drawer-handle"></div>
-    <div class="drawer-content"></div>
-  </div>
+    <div id="item-drawer">
+      <div class="item-page-header">
+        <button class="item-page-back" onclick="closeAllDrawers()">‹ Back</button>
+      </div>
+      <div class="drawer-content"></div>
+    </div>
 
-  <div id="cart-drawer">
-    <div class="drawer-content" id="cart-drawer-content"></div>
-  </div>
+    <div id="cart-drawer">
+      <div class="drawer-panel-header">
+        <button class="drawer-back-btn" onclick="closeActiveDrawer()">‹</button>
+        <span class="drawer-panel-title" data-i18n="menu.your-cart">Your Cart</span>
+        <span class="drawer-panel-spacer"></span>
+      </div>
+      <div class="drawer-content" id="cart-drawer-content"></div>
+    </div>
 
-  <div id="orders-drawer">
-    <div class="drawer-content" id="orders-drawer-content"></div>
-  </div>
+    <div id="orders-drawer">
+      <div class="drawer-content" id="orders-drawer-content"></div>
+    </div>
+
+    <div id="payment-screen">
+      <div id="payment-screen-content"></div>
+    </div>
+
+  </div><!-- #app -->
+
+</div><!-- #phone-frame -->
 
   <!-- ================= SCRIPTS ================= -->
   <script src="menu.js" defer></script>

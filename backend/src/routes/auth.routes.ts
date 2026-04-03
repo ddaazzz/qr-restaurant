@@ -401,7 +401,9 @@ router.post("/auth/staff-login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, role, access_rights FROM users WHERE pin=$1 AND restaurant_id=$2 AND role='staff'",
+      `SELECT id, role, access_rights,
+        (SELECT COUNT(*) FROM staff_timekeeping WHERE user_id = users.id AND restaurant_id = $2 AND clock_out_at IS NULL) > 0 AS currently_clocked_in
+       FROM users WHERE pin=$1 AND restaurant_id=$2 AND role='staff'`,
       [pin, restaurantId]
     );
 
@@ -430,7 +432,7 @@ router.post("/auth/staff-login", async (req, res) => {
       accessRights = typeof user.access_rights === 'string' ? JSON.parse(user.access_rights) : user.access_rights;
     }
 
-    res.json({ token, role: user.role, restaurantId, access_rights: accessRights });
+    res.json({ token, role: user.role, restaurantId, access_rights: accessRights, user_id: user.id, currently_clocked_in: user.currently_clocked_in });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -443,7 +445,9 @@ router.post("/auth/kitchen-login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, role, access_rights FROM users WHERE pin=$1 AND restaurant_id=$2 AND role='kitchen'",
+      `SELECT id, role, access_rights,
+        (SELECT COUNT(*) FROM staff_timekeeping WHERE user_id = users.id AND restaurant_id = $2 AND clock_out_at IS NULL) > 0 AS currently_clocked_in
+       FROM users WHERE pin=$1 AND restaurant_id=$2 AND role='kitchen'`,
       [pin, restaurantId]
     );
 
@@ -472,7 +476,7 @@ router.post("/auth/kitchen-login", async (req, res) => {
       accessRights = typeof user.access_rights === 'string' ? JSON.parse(user.access_rights) : user.access_rights;
     }
 
-    res.json({ token, role: user.role, restaurantId, access_rights: accessRights });
+    res.json({ token, role: user.role, restaurantId, access_rights: accessRights, user_id: user.id, currently_clocked_in: user.currently_clocked_in });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });

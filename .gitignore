@@ -5,3 +5,28 @@ dist/
 .DS_Store
 
 backend/.env
+
+# Logs and error files
+*.log
+*.err
+dev.err
+
+# Local dev SSL certificates
+*.pem
+*.crt
+*.key
+server.crt
+server.key
+
+# Local SQLite database
+*.db
+
+# PDF specification files
+*.pdf
+
+# Test/scratch scripts
+backend/pa-query-test.js
+frontend/payment-test.html
+
+# Uploads (user-generated content)
+backend/uploads/

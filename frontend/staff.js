@@ -2,12 +2,12 @@
 const API_BASE = (() => {
   const hostname = window.location.hostname;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  const isLocalIP = hostname.startsWith("192.") || hostname.startsWith("10.") || hostname.startsWith("172.");
   
-  if (isLocalhost || isLocalIP) {
+  if (isLocalhost) {
     return `http://${window.location.host}/api`;
   }
-  return "https://chuio.io/api";
+  // For local IPs and remote: use the same protocol as the page (avoids http→https mismatch)
+  return `${window.location.protocol}//${window.location.host}/api`;
 })();
 
 // Reset menu background when on staff page
@@ -30,6 +30,7 @@ const ACCESS_RIGHTS_MAP = {
   4: { name: 'staff', label: 'Staff', navId: 'staff-nav-btn' },
   5: { name: 'settings', label: 'Settings', navId: 'settings-nav-btn' },
   6: { name: 'bookings', label: 'Bookings', navId: 'bookings-nav-btn' },
+  7: { name: 'reports', label: 'Reports', navId: 'reports-nav-btn' },
 };
 
 // Helper function to check if staff has access to a feature
@@ -182,11 +183,12 @@ async function submitPin() {
     sessionStorage.setItem("restaurantId", window.restaurantId);
     sessionStorage.setItem("staffStaffLogged", "true");
 
-    // Hide login screen and show app
-    document.getElementById("login-screen").style.display = "none";
-    document.getElementById("app-container").style.display = "grid";
+    // Store staff user ID for placed_by tracking and clock in/out
+    window.staffUserId = data.user_id || null;
+    window.staffCurrentlyClockedIn = data.currently_clocked_in || false;
 
-    // Initialize the admin app interface
+    // Keep login screen visible until app is fully initialized
+    // initializeStaffApp() will hide it when ready
     initializeStaffApp();
   } catch (err) {
     console.error(err);
@@ -207,19 +209,16 @@ async function initializeStaffApp() {
   window.IS_SUPERADMIN = false;
   window.IS_KITCHEN = false;
 
-  // Set default timezone (can be overridden by admin.js if needed)
+  // Set default timezone
   window.restaurantTimezone = localStorage.getItem("restaurantTimezone") || 'UTC';
 
-  // Load modular HTML content FIRST
-  console.log("Loading modular content...");
-  await loadModularContent();
-  console.log("Modular content loaded, waiting for DOM to settle...");
-  
-  // Give DOM a moment to settle
-  await new Promise(resolve => setTimeout(resolve, 100));
+  // Apply language preference before showing content
+  const savedLang = localStorage.getItem('language') || 'zh';
+  if (typeof setLanguage === 'function') {
+    setLanguage(savedLang);
+  }
 
   // ============== APPLY ACCESS CONTROL ==============
-  // Define all nav buttons with their feature IDs
   const navButtonMap = [
     { id: 'orders-nav-btn', featureId: 1, name: 'Orders' },
     { id: 'tables-nav-btn', featureId: 2, name: 'Tables' },
@@ -227,22 +226,13 @@ async function initializeStaffApp() {
     { id: 'staff-nav-btn', featureId: 4, name: 'Staff' },
     { id: 'settings-nav-btn', featureId: 5, name: 'Settings' },
     { id: 'bookings-nav-btn', featureId: 6, name: 'Bookings' },
+    { id: 'reports-nav-btn', featureId: 7, name: 'Reports' },
   ];
 
-  console.log("🔐 Checking access rights for:", staffAccessRights);
-  console.log("🔐 hasAccessRight function test:");
-  for (let i = 1; i <= 6; i++) {
-    console.log(`   hasAccessRight(${i}): ${hasAccessRight(i)}`);
-  }
-  
-  // Show only nav buttons that user has access to
+  // Show only nav buttons the user has access to
   navButtonMap.forEach(({ id, featureId, name }) => {
     const btn = document.getElementById(id);
-    if (!btn) {
-      console.log(`❌ ${name} button (${id}) not found in DOM`);
-      return;
-    }
-    
+    if (!btn) return;
     if (hasAccessRight(featureId)) {
       btn.classList.add('visible');
       console.log(`✅ ${name} tab shown (feature ${featureId})`);
@@ -251,142 +241,61 @@ async function initializeStaffApp() {
       console.log(`❌ No access to ${name} (feature ${featureId})`);
     }
   });
-  
-  // Hide menu edit button (staff can only view)
-  const menuEditBtn = document.getElementById("menu-edit-btn");
-  if (menuEditBtn) menuEditBtn.style.display = "none";
 
-  // Hide table edit button (staff can only view)
-  const tableEditBtn = document.getElementById("table-edit-btn");
-  if (tableEditBtn) tableEditBtn.style.display = "none";
+  // Load settings (theme colour, service charge etc.) before showing app
+  if (typeof initializeSettingsOnPageLoad === 'function') {
+    try {
+      await initializeSettingsOnPageLoad();
+    } catch (err) {
+      console.warn('[Staff] initializeSettingsOnPageLoad failed:', err.message);
+    }
+  }
 
-  // Now initialize the admin interface
+  // Initialize the admin interface (loads tables, switches to tables section)
   console.log("Calling initializeApp()...");
   await initializeApp();
-  console.log("Staff app initialized with feature-based access control");
-}
 
-// Load modular HTML content into sections
-async function loadModularContent() {
-  try {
-    console.log("Fetching admin-tables.html...");
-    const tablesRes = await fetch("/admin-tables.html");
-    if (tablesRes.ok) {
-      const tablesHtml = await tablesRes.text();
-      const tablesSection = document.getElementById("section-tables");
-      if (tablesSection) {
-        tablesSection.innerHTML = tablesHtml;
-        console.log("✅ Admin tables HTML loaded");
-      } else {
-        console.error("section-tables not found!");
-      }
-    } else {
-      console.error("Failed to fetch admin-tables.html:", tablesRes.status);
-    }
+  // Now show the app and hide login screen
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app-container").style.display = "";
 
-    console.log("Fetching admin-orders.html...");
-    const ordersRes = await fetch("/admin-orders.html");
-    if (ordersRes.ok) {
-      const ordersHtml = await ordersRes.text();
-      const ordersSection = document.getElementById("section-orders");
-      if (ordersSection) {
-        ordersSection.innerHTML = ordersHtml;
-        console.log("✅ Admin orders HTML loaded");
-      } else {
-        console.error("section-orders not found!");
-      }
-    } else {
-      console.error("Failed to fetch admin-orders.html:", ordersRes.status);
-    }
+  // Update clock button state
+  updateClockBtn(window.staffCurrentlyClockedIn);
 
-    console.log("Fetching admin-menu.html...");
-    const menuRes = await fetch("/admin-menu.html");
-    if (menuRes.ok) {
-      const menuHtml = await menuRes.text();
-      const menuSection = document.getElementById("section-menu");
-      if (menuSection) {
-        menuSection.innerHTML = menuHtml;
-        console.log("✅ Admin menu HTML loaded");
-      } else {
-        console.error("section-menu not found!");
-      }
-    } else {
-      console.error("Failed to fetch admin-menu.html:", menuRes.status);
-    }
-
-    console.log("Fetching admin-staff.html...");
-    const staffRes = await fetch("/admin-staff.html");
-    if (staffRes.ok) {
-      const staffHtml = await staffRes.text();
-      const staffSection = document.getElementById("section-staff");
-      if (staffSection) {
-        staffSection.innerHTML = staffHtml;
-        console.log("✅ Admin staff HTML loaded");
-      } else {
-        console.error("section-staff not found!");
-      }
-    } else {
-      console.error("Failed to fetch admin-staff.html:", staffRes.status);
-    }
-
-    console.log("Fetching admin-settings.html...");
-    const settingsRes = await fetch("/admin-settings.html");
-    if (settingsRes.ok) {
-      const settingsHtml = await settingsRes.text();
-      const settingsSection = document.getElementById("section-settings");
-      if (settingsSection) {
-        settingsSection.innerHTML = settingsHtml;
-        console.log("✅ Admin settings HTML loaded");
-      } else {
-        console.error("section-settings not found!");
-      }
-    } else {
-      console.error("Failed to fetch admin-settings.html:", settingsRes.status);
-    }
-
-    console.log("✅ All modular content loaded");
-  } catch (err) {
-    console.error("Error loading modular content:", err);
+  // Show clock-in prompt if staff hasn't clocked in yet
+  if (!window.staffCurrentlyClockedIn) {
+    showClockInPrompt();
   }
+
+  // Initialize WebSocket for auto-print / real-time session detection
+  if (typeof autoPrintClient !== 'undefined' && window.restaurantId) {
+    try {
+      autoPrintClient.initialize(parseInt(window.restaurantId), (event) => {
+        console.log('[Staff] Auto-print event received:', event);
+      });
+    } catch (err) {
+      console.warn('[Staff] Failed to initialize auto-print client:', err);
+    }
+  }
+
+  console.log("✅ Staff app fully initialized");
 }
 
 // ============== LOGOUT ==============
-function logout() {
+function staffLogout() {
   localStorage.removeItem("token");
   localStorage.removeItem("role");
   localStorage.removeItem("restaurantId");
   sessionStorage.removeItem("staffStaffLogged");
-  window.location.href = "/staff.html";
+  // Preserve the rid parameter so staff can log back in
+  const rid = window.restaurantId || new URLSearchParams(window.location.search).get("rid");
+  window.location.href = rid ? `/staff.html?rid=${rid}` : "/login.html";
 }
+
+// Alias for backward compatibility
+function logout() { staffLogout(); }
 
 // Override admin.js functions to add staff access control filtering
-
-// Hook into loadTablesCategoryTable to filter by staff access rights if needed
-const originalLoadTablesCategoryTable = window.loadTablesCategoryTable;
-if (originalLoadTablesCategoryTable) {
-  window.loadTablesCategoryTable = async function() {
-    await originalLoadTablesCategoryTable.call(this);
-    // Staff can see all tables in their assigned categories
-    console.log("✅ Tables loaded for staff view");
-  };
-}
-
-// Hook into loadMenuItems to filter by staff allowed categories
-const originalLoadMenuItems = window.loadMenuItems;
-if (originalLoadMenuItems) {
-  window.loadMenuItems = async function(categoryId) {
-    // Check if staff has access to this category
-    if (staffAccessRights && staffAccessRights.allowed_categories) {
-      if (!staffAccessRights.allowed_categories.includes(parseInt(categoryId, 10))) {
-        console.warn("Staff does not have access to this menu category");
-        document.getElementById("menu-items").innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">You do not have access to this menu category</p>';
-        return;
-      }
-    }
-    
-    await originalLoadMenuItems.call(this, categoryId);
-  };
-}
 
 console.log("✅ Staff portal ready");
 
@@ -512,6 +421,82 @@ window.addEventListener("languageChanged", (e) => {
 });
 
 // Initialize language button states when page loads
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // Fetch restaurant language preference and apply it to the PIN login page
+  const rid = window.restaurantId;
+  if (rid) {
+    try {
+      const res = await fetch(`${API_BASE}/restaurants/${rid}/settings`);
+      if (res.ok) {
+        const settings = await res.json();
+        if (settings.language_preference && typeof setLanguage === 'function') {
+          setLanguage(settings.language_preference);
+        }
+      }
+    } catch (err) {
+      // Network error - fall back to cached language preference
+      const cached = localStorage.getItem('language') || 'zh';
+      if (typeof setLanguage === 'function') setLanguage(cached);
+    }
+  }
   updateLanguageButtonStates();
 });
+
+// ============== CLOCK IN / OUT ==============
+function updateClockBtn(isClockedIn) {
+  const btn = document.getElementById("clock-btn");
+  if (!btn) return;
+  btn.style.display = "inline-flex";
+  btn.textContent = isClockedIn ? t('admin.clock-out') : t('admin.clock-in');
+  btn.className = isClockedIn ? "btn-danger" : "btn-secondary";
+  window.staffCurrentlyClockedIn = isClockedIn;
+}
+
+async function toggleClockInOut() {
+  if (!window.staffUserId || !window.restaurantId) return;
+  const action = window.staffCurrentlyClockedIn ? "clock-out" : "clock-in";
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${window.restaurantId}/staff/${window.staffUserId}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${window.token}` }
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || `Failed to ${action.replace("-", " ")}`);
+      return;
+    }
+    const newState = !window.staffCurrentlyClockedIn;
+    updateClockBtn(newState);
+    alert(newState ? "Clocked in successfully." : "Clocked out successfully.");
+  } catch (err) {
+    console.error(err);
+    alert("Connection error");
+  }
+}
+
+function showClockInPrompt() {
+  const overlay = document.createElement("div");
+  overlay.id = "clock-in-prompt";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;";
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:340px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.25);">
+      <p style="font-size:20px;margin:0 0 8px;">⏱</p>
+      <h3 style="margin:0 0 10px;font-size:18px;">You haven't clocked in yet</h3>
+      <p style="color:#666;font-size:14px;margin:0 0 20px;">Would you like to clock in now?</p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button onclick="clockInFromPrompt()" style="flex:1;padding:10px 16px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;">✅ Clock In</button>
+        <button onclick="dismissClockInPrompt()" style="flex:1;padding:10px 16px;background:#f3f4f6;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;">Skip</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function clockInFromPrompt() {
+  dismissClockInPrompt();
+  await toggleClockInOut();
+}
+
+function dismissClockInPrompt() {
+  const el = document.getElementById("clock-in-prompt");
+  if (el) el.remove();
+}

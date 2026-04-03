@@ -2,6 +2,7 @@ import { Router } from "express";
 import pool from "../config/db";
 import crypto from "crypto";
 import { getCustomerReceiptService } from "../services/customerReceipt";
+import * as paymentTerminalService from "../services/paymentTerminalService";
 
 const router = Router();
 
@@ -13,7 +14,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
     await client.query("BEGIN");
 
     const { tableId } = req.params;
-    const { pax } = req.body;
+    const { pax, booking_id } = req.body;
 
     if (!pax || pax <= 0) {
       return res.status(400).json({ error: "Invalid pax" });
@@ -44,7 +45,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
     // 4️⃣ Find used seats + used units
     const activeRes = await client.query(
       `
-      SELECT table_unit_id, pax
+      SELECT id, table_unit_id, pax
       FROM table_sessions
       WHERE table_id = $1
         AND ended_at IS NULL
@@ -59,6 +60,21 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
 
     const remaining = table.seat_count - usedSeats;
     if (pax > remaining) {
+      // If a booking_id was supplied and the table is full, auto-link the booking
+      // to the existing active session (covers the case where the session was
+      // started manually before the booking Start button was clicked).
+      if (booking_id && activeRes.rows.length > 0) {
+        await client.query("ROLLBACK");
+        const existingSessionId = activeRes.rows[0].id;
+        await pool.query(
+          `UPDATE bookings SET session_id = $1, updated_at = NOW() WHERE id = $2`,
+          [existingSessionId, booking_id]
+        );
+        const linkedSession = await pool.query(
+          `SELECT * FROM table_sessions WHERE id = $1`, [existingSessionId]
+        );
+        return res.status(200).json({ ...linkedSession.rows[0], linked: true });
+      }
       return res.status(400).json({ error: "Not enough seats" });
     }
 
@@ -102,6 +118,15 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    // If a booking_id was provided, link this session to the booking
+    if (booking_id) {
+      await pool.query(
+        `UPDATE bookings SET session_id = $1, updated_at = NOW() WHERE id = $2`,
+        [insertRes.rows[0].id, booking_id]
+      );
+    }
+
     res.status(201).json(insertRes.rows[0]);
   } catch (err) {
     await client.query("ROLLBACK");
@@ -168,7 +193,10 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
         ts.pax,
         to_char(ts.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at,
         CASE WHEN ts.ended_at IS NULL THEN NULL ELSE to_char(ts.ended_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS ended_at,
-        ts.bill_closure_requested
+        ts.bill_closure_requested,
+        ts.call_staff_requested,
+
+        b.guest_name    AS booking_guest_name
 
       FROM tables t
       JOIN table_units tu
@@ -176,6 +204,8 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
       LEFT JOIN table_sessions ts
         ON ts.table_unit_id = tu.id
        AND ts.ended_at IS NULL
+      LEFT JOIN bookings b
+        ON b.session_id = ts.id
 
       WHERE t.restaurant_id = $1
       ORDER BY t.name, tu.unit_code
@@ -263,6 +293,32 @@ router.post("/table-units/:tableUnitId/sessions", async (req, res) => {
 });
 
 /**
+ * GET /sessions/:sessionId
+ * Returns session details (table, pax, started/ended, payment info)
+ */
+router.get("/sessions/:sessionId", async (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT ts.id, ts.pax, ts.restaurant_session_number,
+              to_char(ts.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at,
+              CASE WHEN ts.ended_at IS NULL THEN NULL ELSE to_char(ts.ended_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS ended_at,
+              ts.payment_method,
+              t.name AS table_name, t.id AS table_id
+       FROM table_sessions ts
+       LEFT JOIN tables t ON ts.table_id = t.id
+       WHERE ts.id = $1`,
+      [sessionId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Session not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load session' });
+  }
+});
+
+/**
  * GET /sessions/:sessionId/bill
  * Returns aggregated bill for a session
  */
@@ -342,99 +398,8 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
   }
 });
 
-/**
- * GET /sessions/:sessionId/orders?restaurantId=X
- * Returns all orders with items for a session
- */
-router.get("/sessions/:sessionId/orders", async (req, res) => {
-  const sessionId = Number(req.params.sessionId);
-  const restaurantId = Number(req.query.restaurantId);
-
-  if (!sessionId || !restaurantId) {
-    return res.status(400).json({ error: "Invalid session id or restaurant id" });
-  }
-
-  try {
-    // Verify session belongs to this restaurant
-    const sessionRes = await pool.query(
-      `SELECT id, restaurant_id FROM table_sessions WHERE id = $1 AND restaurant_id = $2`,
-      [sessionId, restaurantId]
-    );
-
-    if (sessionRes.rowCount === 0) {
-      return res.status(403).json({ error: "Session not found or doesn't belong to this restaurant" });
-    }
-
-    // Get all orders with items for this session
-    const { rows } = await pool.query(
-      `
-      SELECT
-        o.id as order_id,
-        oi.id as order_item_id,
-        mi.name as item_name,
-        oi.quantity,
-        oi.price_cents,
-        oi.status,
-        COALESCE(
-          STRING_AGG(
-            DISTINCT v.name || ': ' || vo.name,
-            ', '
-          ),
-          ''
-        ) AS variants
-      FROM orders o
-      JOIN order_items oi ON oi.order_id = o.id
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
-      LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
-      LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
-      LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
-      WHERE o.session_id = $1
-        AND o.status <> 'cancelled'
-        AND (oi.removed IS FALSE OR oi.removed IS NULL)
-      GROUP BY
-        o.id,
-        oi.id,
-        mi.name,
-        oi.quantity,
-        oi.price_cents,
-        oi.status
-      ORDER BY o.id ASC, oi.id ASC
-      `,
-      [sessionId]
-    );
-
-    // Group into orders
-    const ordersMap: any = {};
-
-    for (const row of rows) {
-      if (!ordersMap[row.order_id]) {
-        ordersMap[row.order_id] = {
-          order_id: row.order_id,
-          items: []
-        };
-      }
-
-      const itemTotal = Number(row.quantity) * Number(row.price_cents);
-
-      ordersMap[row.order_id].items.push({
-        order_item_id: row.order_item_id,
-        name: row.item_name,
-        quantity: row.quantity,
-        status: row.status,
-        unit_price_cents: row.price_cents,
-        item_total_cents: itemTotal,
-        variants: row.variants || ''
-      });
-    }
-
-    res.json({
-      items: Object.values(ordersMap)
-    });
-  } catch (err) {
-    console.error("Get session orders failed", err);
-    res.status(500).json({ error: "Failed to get session orders" });
-  }
-});
+// NOTE: GET /sessions/:sessionId/orders is handled by orders.routes.ts (mounted first in app.ts).
+// The duplicate handler was removed from here to avoid confusion.
 
 /**
  * END session (staff only)
@@ -480,6 +445,82 @@ router.get("/restaurants/:restaurantId/sessions", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: "Failed to load sessions" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/sessions-with-orders
+ * Fetch all sessions for a restaurant with their nested orders
+ * Used for "Sessions" tab in order history - shows closed sessions grouped with their orders
+ */
+router.get("/restaurants/:restaurantId/sessions-with-orders", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { limit = '50' } = req.query;
+    const limitVal = parseInt(limit as string);
+
+    // Fetch all closed sessions with their orders
+    const sessionsRes = await pool.query(
+      `
+      SELECT 
+        ts.id AS session_id,
+        t.id AS table_id,
+        t.name AS table_name,
+        ts.order_type,
+        ts.pax,
+        to_char(ts.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at,
+        to_char(ts.ended_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS ended_at,
+        ts.payment_method,
+        ts.payment_status,
+        COUNT(DISTINCT o.id) AS order_count,
+        COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS total_cents,
+        BOOL_OR(o.status = 'completed') AS session_payment_received
+      FROM table_sessions ts
+      LEFT JOIN tables t ON t.id = ts.table_id
+      LEFT JOIN orders o ON o.session_id = ts.id
+      LEFT JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
+      WHERE ts.restaurant_id = $1 AND ts.ended_at IS NOT NULL
+      GROUP BY ts.id, t.id, t.name, ts.order_type, ts.pax, ts.started_at, ts.ended_at, ts.payment_method
+      ORDER BY ts.ended_at DESC
+      LIMIT $2
+      `,
+      [restaurantId, limitVal]
+    );
+
+    // For each session, fetch detailed orders
+    const sessionsWithOrders = await Promise.all(
+      sessionsRes.rows.map(async (session) => {
+        // Fetch orders for this session
+        const ordersRes = await pool.query(
+          `
+          SELECT 
+            o.id,
+            o.restaurant_order_number,
+            o.status,
+            (o.status = 'completed') AS payment_received,
+            o.payment_method AS payment_method_online,
+            to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+            SUM(oi.price_cents * oi.quantity) AS total_cents
+          FROM orders o
+          LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
+          WHERE o.session_id = $1
+          GROUP BY o.id, o.restaurant_order_number, o.status, o.payment_method, o.created_at
+          ORDER BY o.created_at ASC
+          `,
+          [session.session_id]
+        );
+
+        return {
+          ...session,
+          orders: ordersRes.rows
+        };
+      })
+    );
+
+    res.json(sessionsWithOrders);
+  } catch (err) {
+    console.error('[Sessions] Error fetching sessions with orders:', err);
     res.status(500).json({ error: "Failed to load sessions" });
   }
 });
@@ -547,21 +588,57 @@ router.patch("/sessions/:sessionId/request-bill-closure", async (req, res) => {
 });
 
 /**
- * CLOSE BILL - ✅ MULTI-RESTAURANT SUPPORT
+ * CALL STAFF — customer-triggered notification
+ * PATCH /sessions/:sessionId/call-staff
+ * Body: { restaurantId, call_staff_requested: boolean }
+ */
+router.patch("/sessions/:sessionId/call-staff", async (req, res) => {
+  const { sessionId } = req.params;
+  const { restaurantId, call_staff_requested } = req.body;
+
+  if (!sessionId) return res.status(400).json({ error: "Missing session id" });
+  if (!restaurantId) return res.status(400).json({ error: "Restaurant ID is required" });
+
+  try {
+    const result = await pool.query(
+      `UPDATE table_sessions
+         SET call_staff_requested = $1
+         WHERE id = $2
+         RETURNING id, table_id, call_staff_requested`,
+      [call_staff_requested, sessionId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Session not found or access denied" });
+    }
+
+    const s = result.rows[0];
+    return res.json({ success: true, session: { id: s.id, table_id: s.table_id, call_staff_requested: s.call_staff_requested } });
+  } catch (err: any) {
+    // Graceful fallback if column doesn't exist yet (before migration runs)
+    if (err.message?.includes("column") && err.message?.includes("call_staff_requested")) {
+      return res.json({ success: true, message: "pending migration" });
+    }
+    console.error("Error calling staff:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * CLOSE BILL - Cash & Credit Card only
  * POST /sessions/:sessionId/close-bill
- * Supports POS integration via webhooks
  */
 router.post("/sessions/:sessionId/close-bill", async (req, res) => {
   const { sessionId } = req.params;
   const { 
     payment_method = 'cash', 
     amount_paid = 0, 
-    discount_applied = 0, 
+    discount_applied = 0,
+    service_charge = 0,
     notes = '',
-    send_to_pos = false,
-    pos_system = null,
     staff_id = null,
-    restaurantId
+    restaurantId,
+    kpay_reference_id = null,
   } = req.body;
 
   if (!sessionId) {
@@ -577,31 +654,18 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Get session data - works for table, counter, and to-go orders
+    // Get session
     const sessionRes = await client.query(
-      `SELECT ts.id, ts.table_id, ts.order_type, to_char(ts.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at, ts.restaurant_id
-       FROM table_sessions ts
-       WHERE ts.id = $1 AND ts.restaurant_id = $2`,
+      `SELECT id, table_id, order_type FROM table_sessions WHERE id = $1 AND restaurant_id = $2`,
       [sessionId, restaurantId]
     );
-
-    const session = sessionRes.rows[0];
-    if (!session) {
+    if (sessionRes.rowCount === 0) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Session not found or doesn't belong to this restaurant" });
+      return res.status(404).json({ error: "Session not found" });
     }
+    const session = sessionRes.rows[0];
 
-    // Get table name if it exists (for table orders)
-    let tableName = '';
-    if (session.table_id) {
-      const tableRes = await client.query(
-        `SELECT name FROM tables WHERE id = $1`,
-        [session.table_id]
-      );
-      tableName = tableRes.rows[0]?.name || '';
-    }
-
-    // Get all orders with items for this session
+    // Get orders and calculate total
     const ordersRes = await client.query(
       `SELECT o.id, oi.id as item_id, oi.quantity, oi.price_cents
        FROM orders o
@@ -611,7 +675,6 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
       [sessionId]
     );
 
-    // Calculate totals from order items
     const orders = ordersRes.rows;
     let subtotal = 0;
     orders.forEach(item => {
@@ -620,10 +683,11 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
       }
     });
 
-    const total = subtotal - discount_applied;
+    const total = subtotal - discount_applied + service_charge;
     const posReference = `CHUIO-${Date.now()}-${sessionId}`;
+    const finalAmountPaid = amount_paid || total;
 
-    // Update session status
+    // Update session - CLOSE IT
     await client.query(
       `UPDATE table_sessions SET 
         ended_at = NOW() AT TIME ZONE 'UTC',
@@ -631,21 +695,36 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
         amount_paid = $2,
         discount_applied = $3,
         notes = $4,
-        closed_by_staff_id = $5,
-        pos_reference = $6,
-        bill_closure_requested = FALSE
-       WHERE id = $7`,
-      [payment_method, amount_paid, discount_applied, notes, staff_id, posReference, sessionId]
+        closed_by_staff_id = $5
+       WHERE id = $6`,
+      [payment_method, finalAmountPaid, discount_applied, notes, staff_id, sessionId]
     );
 
-    // Create bill closure record with restaurant_id
+    // Mark orders as completed
     await client.query(
-      `INSERT INTO bill_closures (session_id, closed_by_staff_id, payment_method, amount_paid, discount_applied, total_amount, pos_reference, restaurant_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [sessionId, staff_id, payment_method, amount_paid, discount_applied, total, posReference, restaurantId]
+      `UPDATE orders 
+       SET payment_method = $1,
+           status = 'completed'
+       WHERE session_id = $2`,
+      [payment_method, sessionId]
     );
 
-    // Free up the table if it's a table order
+    // If KPay: mark the transaction as completed and store reference on orders
+    if (payment_method === 'kpay' && kpay_reference_id) {
+      await client.query(
+        `UPDATE kpay_transactions
+         SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC'
+         WHERE kpay_reference_id = $1 AND restaurant_id = $2`,
+        [kpay_reference_id, restaurantId]
+      );
+      // Store the outTradeNo on orders so history can look up the transaction
+      await client.query(
+        `UPDATE orders SET chuio_order_reference = $1 WHERE session_id = $2`,
+        [kpay_reference_id, sessionId]
+      );
+    }
+
+    // Free up table
     if (session.table_id) {
       await client.query(
         `UPDATE tables SET available = true WHERE id = $1`,
@@ -653,105 +732,36 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
       );
     }
 
+    // Mark linked bookings as completed (keep session_id so order history is still accessible)
+    await client.query(
+      `UPDATE bookings SET status = 'completed' WHERE session_id = $1 AND status = 'confirmed'`,
+      [sessionId]
+    );
+
     await client.query("COMMIT");
 
-    // Send customer receipt if enabled
-    try {
-      const receiptService = getCustomerReceiptService(pool);
-      const { customerEmail, customerPhone } = req.body;
-
-      const receiptPayload = {
-        customerEmail,
-        customerPhone,
-        items: orders
-          .filter((o: any) => o.item_id) // Only items
-          .map((o: any) => ({
-            name: o.item_id || 'Item',
-            quantity: o.quantity || 1,
-            price: o.price_cents || 0,
-          })),
-        subtotal,
-        serviceCharge: 0, // Could be added to dining programs
-        total,
-        tableNumber: tableName || session.order_type,
-      };
-
-      // Send receipt asynchronously (don't block the response)
-      receiptService.sendCustomerReceipt(restaurantId, parseInt(sessionId), receiptPayload).catch(err => {
-        console.warn('[Sessions] Error sending customer receipt:', err.message);
-      });
-    } catch (receiptErr: any) {
-      console.warn('[Sessions] Customer receipt disabled or error:', receiptErr.message);
-    }
-
-    // Send to POS if requested
-    let webhookSent = false;
-    let webhookError = null;
-
-    if (send_to_pos && pos_system) {
-      try {
-        // Get restaurant POS webhook URL from settings
-        const settingsRes = await pool.query(
-          `SELECT pos_webhook_url, pos_api_key FROM restaurants WHERE id = $1`,
-          [session.restaurant_id]
-        );
-
-        const settings = settingsRes.rows[0];
-        if (settings?.pos_webhook_url) {
-          const billData = {
-            external_id: posReference,
-            session_id: sessionId,
-            table_number: tableName || session.order_type,
-            order_type: session.order_type,
-            payment_method,
-            amount_paid,
-            discount_applied,
-            subtotal,
-            total,
-            items: orders,
-            timestamp: new Date().toISOString(),
-            notes
-          };
-
-          // Send webhook
-          const webhookRes = await fetch(settings.pos_webhook_url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${settings.pos_api_key}`,
-              'X-Webhook-Signature': `chuio-v1=${posReference}`
-            },
-            body: JSON.stringify(billData)
-          });
-
-          webhookSent = webhookRes.ok;
-          if (!webhookSent) {
-            webhookError = `POS webhook failed: ${webhookRes.status}`;
-            console.error(webhookError);
-          }
-        }
-      } catch (err) {
-        webhookError = err instanceof Error ? err.message : String(err);
-        console.error("Error sending to POS:", err);
-        // Don't fail the bill closure if webhook fails
-      }
-    }
-
+    // Success response
     res.json({
       success: true,
       session_id: sessionId,
       pos_reference: posReference,
+      subtotal_cents: subtotal,
+      discount_applied,
+      service_charge,
       total_cents: total,
       payment_method,
-      closed_at: new Date().toISOString(),
-      webhook_sent: webhookSent,
-      webhook_error: webhookError
+      message: 'Bill closed successfully'
     });
 
+    console.log(`[CloseBill] ✅ Bill closed for session ${sessionId} (${payment_method})`);
+
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("Error closing bill:", err);
-    res.status(500).json({ error: "Failed to close bill" });
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error(`[CloseBill] ❌ Error:`, errorMessage);
+    res.status(500).json({ error: "Failed to close bill", details: errorMessage });
   } finally {
     client.release();
   }
@@ -765,7 +775,7 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
 // Creates a "counter" order (order-now, no table)
 router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
   const { restaurantId } = req.params;
-  const { pax, items, payment_method, payment_status } = req.body;
+  const { pax, items, payment_method, payment_status, placed_by_user_id } = req.body;
 
   const client = await pool.connect();
   try {
@@ -788,11 +798,11 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
     if (items && items.length > 0) {
       const orderRes = await client.query(
         `
-        INSERT INTO orders (session_id, restaurant_id, status, created_at)
-        VALUES ($1, $2, 'pending', NOW() AT TIME ZONE 'UTC')
+        INSERT INTO orders (session_id, restaurant_id, status, created_at, placed_by_user_id)
+        VALUES ($1, $2, 'pending', NOW() AT TIME ZONE 'UTC', $3)
         RETURNING id
         `,
-        [session.id, restaurantId]
+        [session.id, restaurantId, placed_by_user_id || null]
       );
 
       order = { id: orderRes.rows[0].id };
@@ -835,14 +845,20 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
         }
       }
 
-      // If payment_status provided (immediate payment), close the bill
+      // If payment_status provided (immediate payment), close the session and mark order complete
       if (payment_status === 'settled') {
+        const totalRes = await client.query(
+          `SELECT COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS total FROM order_items oi WHERE oi.order_id = $1`,
+          [order.id]
+        );
+        const total = totalRes.rows[0].total;
         await client.query(
-          `
-          INSERT INTO bill_closures (session_id, restaurant_id, closed_at, amount_paid, payment_method, total_amount)
-          VALUES ($1, $2, NOW() AT TIME ZONE 'UTC', (SELECT COALESCE(SUM(oi.price_cents * oi.quantity), 0) FROM order_items oi WHERE oi.order_id = $3), $4, (SELECT COALESCE(SUM(oi.price_cents * oi.quantity), 0) FROM order_items oi WHERE oi.order_id = $3))
-          `,
-          [session.id, restaurantId, order.id, payment_method || 'card']
+          `UPDATE table_sessions SET ended_at = NOW() AT TIME ZONE 'UTC', payment_method = $1, amount_paid = $2 WHERE id = $3`,
+          [payment_method || 'cash', total, session.id]
+        );
+        await client.query(
+          `UPDATE orders SET status = 'completed', payment_method = $1 WHERE id = $2`,
+          [payment_method || 'cash', order.id]
         );
       }
     }
@@ -943,5 +959,7 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
     client.release();
   }
 });
+
+
 
 export default router;

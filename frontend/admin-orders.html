@@ -8,6 +8,15 @@
             <!-- History list view (when history button clicked) -->
         <div id="orders-history-left-view" class="orders-history-view">
           <h4 data-i18n="admin.order-history">Order History</h4>
+          
+          <!-- Order History Filter Tabs -->
+          <div id="orders-history-filters" style="display: flex; gap: 4px; margin-bottom: 12px; padding: 0 12px; border-bottom: 1px solid #e0e0e0; overflow-x: auto;">
+            <button onclick="setOrderHistoryFilter('all')" class="history-filter-tab active" data-filter="all" style="flex-shrink: 0; padding: 8px 12px; background: none; border: none; border-bottom: 3px solid #667eea; color: #667eea; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap;">
+              <span data-i18n="admin.all-orders">All Orders</span>
+            </button>
+
+          </div>
+          
           <div id="orders-history-list-left">
             <p data-i18n="admin.loading">Loading...</p>
           </div>
@@ -124,7 +133,7 @@
     </div>
 
     <!-- ============= TEMPLATES FOR SESSION AND ORDER DETAILS ============= -->
-
+    
     <!-- Session Details Template -->
     <template id="session-details-template">
       <div style="margin-bottom: 20px;">
@@ -210,65 +219,6 @@
           <!-- Close Bill Button -->
           <div class="session-button-container">
             <!-- Will be populated with either close or closed button -->
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- Order Details Template -->
-    <template id="order-details-template">
-      <div>
-        <!-- Order Header -->
-        <div style="margin-bottom: 20px;">
-          <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
-              <div>
-                <div style="font-size: 12px; color: #666;" data-i18n="admin.order-number">Order Number</div>
-                <div style="font-size: 20px; font-weight: 700; color: #2c3e50; margin-top: 2px;">#<span class="order-id">1</span></div>
-              </div>
-              <div style="text-align: right;">
-                <div style="font-size: 12px; padding: 6px 12px; border-radius: 4px; display: inline-block; font-weight: 600;" class="order-status-badge">Pending</div>
-              </div>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-              <div>
-                <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;" data-i18n="admin.order-time-label">Order Time</div>
-                <div style="font-size: 14px; color: #333; margin-top: 4px;" class="order-time">Now</div>
-              </div>
-              <div>
-                <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;" data-i18n="admin.order-total-items">Total Items</div>
-                <div style="font-size: 14px; color: #333; margin-top: 4px;"><span class="order-item-count">0</span> <span data-i18n="admin.items">items</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Order Items -->
-        <div style="margin-bottom: 20px;">
-          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #333;" data-i18n="admin.order-items-label">Order Items</h4>
-          <div class="order-items-list">
-            <!-- Items will be inserted here -->
-          </div>
-        </div>
-        
-        <!-- Order Summary -->
-        <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #333;" data-i18n="admin.order-summary">Order Summary</h4>
-          
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;">
-            <div style="color: #666; font-size: 13px;" data-i18n="admin.subtotal">Subtotal</div>
-            <div style="color: #333; font-weight: 500; font-size: 13px;">$<span class="order-subtotal">0.00</span></div>
-          </div>
-          
-          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
-            <div style="color: #666; font-size: 13px;" data-i18n="admin.service-charge">Service Charge (10%)</div>
-            <div style="color: #333; font-weight: 500; font-size: 13px;">$<span class="order-service-charge">0.00</span></div>
-          </div>
-          
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="color: #333; font-size: 14px; font-weight: 600;" data-i18n="admin.total">Total</div>
-            <div style="color: #2c3e50; font-size: 20px; font-weight: 700;">$<span class="order-total">0.00</span></div>
           </div>
         </div>
       </div>

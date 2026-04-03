@@ -19,6 +19,11 @@
   padding: 0;
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   max-width: 430px;
   margin: 0 auto;

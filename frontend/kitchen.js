@@ -1,12 +1,12 @@
 const API_BASE = (() => {
   const hostname = window.location.hostname;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  const isLocalIP = hostname.startsWith("192.") || hostname.startsWith("10.") || hostname.startsWith("172.");
   
-  if (isLocalhost || isLocalIP) {
+  if (isLocalhost) {
     return `http://${window.location.host}/api`;
   }
-  return "https://chuio.io/api";
+  // For local IPs and remote: use the same protocol as the page (avoids http→https mismatch)
+  return `${window.location.protocol}//${window.location.host}/api`;
 })();
 
 let pin = "";
@@ -56,10 +56,10 @@ async function submitPin() {
   errorEl.style.display = "none";
 
   try {
-    const res = await fetch(`${API_BASE}/auth/staff-login`, {
+    const res = await fetch(`${API_BASE}/auth/kitchen-login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin, restaurantId, role: "kitchen" })
+      body: JSON.stringify({ pin, restaurantId })
     });
 
     const data = await res.json();
@@ -86,6 +86,10 @@ async function submitPin() {
     localStorage.setItem("role", "kitchen");
     localStorage.setItem("restaurantId", restaurantId);
 
+    // Store kitchen user ID for clock in/out
+    window.kitchenUserId = data.user_id || null;
+    window.kitchenCurrentlyClockedIn = data.currently_clocked_in || false;
+
     // Extract allowed categories from access_rights if they exist
     if (data.access_rights && data.access_rights.allowed_categories) {
       allowedCategoryIds = data.access_rights.allowed_categories.map(id => parseInt(id, 10));
@@ -94,6 +98,12 @@ async function submitPin() {
     // Show kitchen dashboard
     document.getElementById("login-screen").style.display = "none";
     document.getElementById("kitchen-app").classList.add("active");
+
+    // Update clock button state and show prompt if needed
+    updateKitchenClockBtn(window.kitchenCurrentlyClockedIn);
+    if (!window.kitchenCurrentlyClockedIn) {
+      showKitchenClockInPrompt();
+    }
 
     // Start loading orders (polling)
     loadKitchenOrders();
@@ -254,7 +264,7 @@ async function loadKitchenOrders() {
       orderMap[orderId].items.push(item);
     });
 
-    renderKitchenOrders(Object.values(orderMap));
+    renderKitchenOrders(Object.values(orderMap).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
   } catch (err) {
     console.error("❌ Failed to load kitchen items:", err);
   }
@@ -303,7 +313,8 @@ function renderKitchenOrders(orders) {
                 <span class="item-qty">×${item.quantity}</span>
               </div>
               ${item.variants ? `<div class="item-variants">${item.variants}</div>` : ""}
-              <span class="item-status ${item.status}">${item.status.charAt(0).toUpperCase() + item.status.slice(1)}</span>
+              ${item.notes ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${item.notes}</div>` : ""}
+              <span class="item-status ${item.status}">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[item.status] || item.status.charAt(0).toUpperCase() + item.status.slice(1)}</span>
             </div>
           `).join("")}
           
@@ -404,13 +415,30 @@ function handleLogout() {
 }
 
 // ============== INIT ============== 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   // Check if user came from login.html with email/password
   const emailLoginFlag = sessionStorage.getItem("kitchenStaffLogged");
   
   // Use stored restaurantId from sessionStorage if available, otherwise use URL param
   if (!restaurantId && sessionStorage.getItem("restaurantId")) {
     restaurantId = sessionStorage.getItem("restaurantId");
+  }
+
+  // Fetch restaurant language preference and apply it to the PIN login page
+  if (restaurantId) {
+    try {
+      const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/settings`);
+      if (res.ok) {
+        const settings = await res.json();
+        if (settings.language_preference && typeof setLanguage === 'function') {
+          setLanguage(settings.language_preference);
+        }
+      }
+    } catch (err) {
+      // Network error - fall back to cached language preference
+      const cached = localStorage.getItem('language') || 'zh';
+      if (typeof setLanguage === 'function') setLanguage(cached);
+    }
   }
 
   console.log("Kitchen.html DOMContentLoaded - emailLoginFlag:", emailLoginFlag, "restaurantId:", restaurantId);
@@ -490,3 +518,62 @@ function updateLanguageButtonStates() {
 window.addEventListener("languageChanged", (e) => {
   updateLanguageButtonStates();
 });
+
+// ============== CLOCK IN / OUT (KITCHEN) ==============
+function updateKitchenClockBtn(isClockedIn) {
+  const btn = document.getElementById("clock-btn");
+  if (!btn) return;
+  btn.style.display = "inline-flex";
+  btn.textContent = isClockedIn ? t('admin.clock-out') : t('admin.clock-in');
+  btn.className = isClockedIn ? "btn-danger" : "btn-secondary";
+  window.kitchenCurrentlyClockedIn = isClockedIn;
+}
+
+async function toggleKitchenClockInOut() {
+  if (!window.kitchenUserId || !restaurantId) return;
+  const action = window.kitchenCurrentlyClockedIn ? "clock-out" : "clock-in";
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/staff/${window.kitchenUserId}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || `Failed to ${action.replace("-", " ")}`);
+      return;
+    }
+    const newState = !window.kitchenCurrentlyClockedIn;
+    updateKitchenClockBtn(newState);
+    alert(newState ? "Clocked in successfully." : "Clocked out successfully.");
+  } catch (err) {
+    console.error(err);
+    alert("Connection error");
+  }
+}
+
+function showKitchenClockInPrompt() {
+  const overlay = document.createElement("div");
+  overlay.id = "clock-in-prompt";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;";
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:340px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.25);">
+      <p style="font-size:20px;margin:0 0 8px;">⏱</p>
+      <h3 style="margin:0 0 10px;font-size:18px;">You haven't clocked in yet</h3>
+      <p style="color:#666;font-size:14px;margin:0 0 20px;">Would you like to clock in now?</p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button onclick="kitchenClockInFromPrompt()" style="flex:1;padding:10px 16px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;">✅ Clock In</button>
+        <button onclick="dismissKitchenClockInPrompt()" style="flex:1;padding:10px 16px;background:#f3f4f6;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;">Skip</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function kitchenClockInFromPrompt() {
+  dismissKitchenClockInPrompt();
+  await toggleKitchenClockInOut();
+}
+
+function dismissKitchenClockInPrompt() {
+  const el = document.getElementById("clock-in-prompt");
+  if (el) el.remove();
+}

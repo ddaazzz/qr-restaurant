@@ -128,9 +128,12 @@ router.post("/sessions/:sessionId/apply-coupon", async (req, res) => {
       return res.status(400).json({ error: "Coupon code is required" });
     }
 
-    // Get session and restaurant info
+    // Get session and restaurant info from table_sessions
     const sessionResult = await db.query(
-      "SELECT id, restaurant_id, total_price_cents FROM sessions WHERE id = $1",
+      `SELECT ts.id, t.restaurant_id
+       FROM table_sessions ts
+       JOIN tables t ON t.id = ts.table_id
+       WHERE ts.id = $1`,
       [sessionId]
     );
 
@@ -139,6 +142,16 @@ router.post("/sessions/:sessionId/apply-coupon", async (req, res) => {
     }
 
     const session = sessionResult.rows[0];
+
+    // Calculate order total from order items
+    const totalResult = await db.query(
+      `SELECT COALESCE(SUM(oi.unit_price_cents * oi.quantity), 0) AS total_cents
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       WHERE o.session_id = $1`,
+      [sessionId]
+    );
+    const totalCents = parseInt(totalResult.rows[0].total_cents, 10);
 
     // Get coupon
     const couponResult = await db.query(
@@ -166,24 +179,24 @@ router.post("/sessions/:sessionId/apply-coupon", async (req, res) => {
       return res.status(400).json({ error: "Coupon usage limit reached" });
     }
 
-    if (session.total_price_cents < coupon.minimum_order_value * 100) {
+    if (totalCents < coupon.minimum_order_value * 100) {
       return res.status(400).json({ error: `Minimum order value of $${coupon.minimum_order_value.toFixed(2)} required` });
     }
 
     // Calculate discount
     let discount_cents = 0;
     if (coupon.discount_type === "percentage") {
-      discount_cents = Math.floor((session.total_price_cents * coupon.discount_value) / 100);
+      discount_cents = Math.floor((totalCents * coupon.discount_value) / 100);
     } else {
       discount_cents = Math.floor(coupon.discount_value * 100);
     }
 
-    discount_cents = Math.min(discount_cents, session.total_price_cents);
+    discount_cents = Math.min(discount_cents, totalCents);
 
-    // Apply coupon to session
+    // Apply coupon to table_sessions
     await db.query(
-      "UPDATE sessions SET coupon_id = $1, discount_applied_cents = $2 WHERE id = $3",
-      [coupon.id, discount_cents, sessionId]
+      "UPDATE table_sessions SET discount_applied = $1 WHERE id = $2",
+      [discount_cents, sessionId]
     );
 
     // Increment coupon usage
@@ -212,7 +225,7 @@ router.post("/sessions/:sessionId/remove-coupon", async (req, res) => {
     const { sessionId } = req.params;
 
     const sessionResult = await db.query(
-      "SELECT coupon_id FROM sessions WHERE id = $1",
+      "SELECT discount_applied FROM table_sessions WHERE id = $1",
       [sessionId]
     );
 
@@ -220,21 +233,11 @@ router.post("/sessions/:sessionId/remove-coupon", async (req, res) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    const couponId = sessionResult.rows[0].coupon_id;
-
-    // Remove coupon from session
+    // Remove coupon discount from table_sessions
     await db.query(
-      "UPDATE sessions SET coupon_id = NULL, discount_applied_cents = 0 WHERE id = $1",
+      "UPDATE table_sessions SET discount_applied = 0 WHERE id = $1",
       [sessionId]
     );
-
-    // Decrement coupon usage if it was applied
-    if (couponId) {
-      await db.query(
-        "UPDATE coupons SET current_uses = GREATEST(current_uses - 1, 0) WHERE id = $1",
-        [couponId]
-      );
-    }
 
     res.json({ success: true, message: "Coupon removed" });
   } catch (error: any) {

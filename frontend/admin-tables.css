@@ -31,6 +31,11 @@
   border: 2px solid #ffeb3b;
 }
 
+.table-card.table-card-green {
+  background: #4caf50;
+  border: 2px solid #4caf50;
+}
+
 /* Text color overrides by color variant */
 /* White and yellow cards: black text */
 .table-card.table-card-white .table-card-sessions,
@@ -60,7 +65,11 @@
 .table-card.table-card-orange .table-card-sessions,
 .table-card.table-card-orange .table-card-seats,
 .table-card.table-card-orange .table-card-name,
-.table-card.table-card-orange .session-time-item {
+.table-card.table-card-orange .session-time-item,
+.table-card.table-card-green .table-card-sessions,
+.table-card.table-card-green .table-card-seats,
+.table-card.table-card-green .table-card-name,
+.table-card.table-card-green .session-time-item {
   color: white !important;
 }
 
@@ -72,7 +81,9 @@
 .table-card.table-card-purple .table-card-seats img,
 .table-card.table-card-purple .session-time-item img,
 .table-card.table-card-orange .table-card-seats img,
-.table-card.table-card-orange .session-time-item img {
+.table-card.table-card-orange .session-time-item img,
+.table-card.table-card-green .table-card-seats img,
+.table-card.table-card-green .session-time-item img {
   filter: invert(1) brightness(1.2);
 }
 
@@ -388,7 +399,7 @@
   flex: 1 1 100%;
   background: var(--bg-light);
   border-radius: 0;
-  padding: 12px 12px 12px 0;
+  padding: 12px;
   box-shadow: none;
   position: relative;
   justify-content: start;
@@ -1349,8 +1360,8 @@ body.edit-mode .table-edit-controls {
 
 @media (min-width: 1024px) {
   #tables-grid {
-    grid-template-columns: repeat(auto-fill, 240px);
-    gap: 28px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
   }
 
   .main-content {
@@ -1361,11 +1372,8 @@ body.edit-mode .table-edit-controls {
 
 @media (min-width: 769px) and (max-width: 1023px) {
   #tables-grid {
-    grid-template-columns: repeat(auto-fill, 200px);
-  }
-
-  .session-panel {
-    margin-top: 20px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
   }
 
   .main-content {
@@ -1376,21 +1384,12 @@ body.edit-mode .table-edit-controls {
 }
 
 @media (max-width: 479px) {
-  .tables-container {
-    grid-template-columns: 1fr 0.12fr 1fr;
-    gap: 4px;
-    height: auto;
-    min-height: 300px;
-  }
-
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
 
   .table-card {
-    width: auto;
-    height: 120px;
     padding: 8px 6px;
   }
 
@@ -1425,21 +1424,12 @@ body.edit-mode .table-edit-controls {
 }
 
 @media (min-width: 480px) and (max-width: 768px) {
-  .tables-container {
-    grid-template-columns: 1fr 0.14fr 1fr;
-    gap: 5px;
-    height: calc(100vh - 280px);
-    min-height: 400px;
-  }
-
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
 
   .table-card {
-    width: auto;
-    height: 140px;
     padding: 9px 7px;
   }
 
@@ -1473,21 +1463,12 @@ body.edit-mode .table-edit-controls {
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
-  .tables-container {
-    grid-template-columns: 1fr 0.16fr 1fr;
-    gap: 6px;
-    height: calc(100vh - 300px);
-    min-height: 450px;
-  }
-
   #tables-grid {
-    grid-template-columns: repeat(auto-fill, 200px);
-    gap: 24px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
   }
 
   .table-card {
-    width: 200px;
-    height: 200px;
     padding: 10px 8px;
   }
 
@@ -1503,21 +1484,12 @@ body.edit-mode .table-edit-controls {
 }
 
 @media (min-width: 1025px) {
-  .tables-container {
-    grid-template-columns: 1fr 0.18fr 1fr;
-    gap: 6px;
-    height: calc(100vh - 300px);
-    min-height: 500px;
-  }
-
   #tables-grid {
-    grid-template-columns: repeat(auto-fill, 240px);
-    gap: 6px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
   }
 
   .table-card {
-    width: 240px;
-    height: 240px;
     padding: 10px 8px;
   }
 

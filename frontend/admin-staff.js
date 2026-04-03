@@ -317,6 +317,7 @@ async function createOrUpdateStaff() {
     const actionText = STAFF_EDIT_ID ? 'updated' : 'created';
     successEl.textContent = `Staff member ${actionText} successfully`;
     successEl.style.display = "flex";
+    showToast(`Staff member ${actionText}`);
     
     setTimeout(() => {
       successEl.style.display = "none";

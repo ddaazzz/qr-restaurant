@@ -1,4 +1,87 @@
-// Smooth scroll for internal links
+// ================================================================
+// 3D PERSPECTIVE CAROUSEL
+// ================================================================
+(function () {
+  const slides = Array.from(document.querySelectorAll('.carousel-slide'));
+  const prevBtn = document.getElementById('carouselPrev');
+  const nextBtn = document.getElementById('carouselNext');
+  const titleEl = document.getElementById('carouselTitle');
+  const descEl  = document.getElementById('carouselDesc');
+  const dotsContainer = document.getElementById('carouselDots');
+
+  if (!slides.length) return;
+
+  // Build dots
+  const dots = slides.map((_, i) => {
+    const dot = document.createElement('button');
+    dot.className = 'carousel-dot';
+    dot.setAttribute('aria-label', `Go to slide ${i + 1}`);
+    dot.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(dot);
+    return dot;
+  });
+
+  const data = [
+    { title: 'Orders Management',    desc: 'This is where the staff and/or customer manages the food order. We provide a flexible and widely customisable menu for you to edit as you see fit.' },
+    { title: 'Menu Management',       desc: 'Upload photos, set prices, manage variants and control item availability — all in one place.' },
+    { title: 'Table Management',      desc: 'Visualise your floor plan, manage sessions, reservations and occupancy at a glance.' },
+    { title: 'QR Scan, Order & Pay',  desc: 'Customers scan a QR code, browse the full menu, and complete payment on their phone directly — no app download needed.' },
+    { title: 'Staff Management',      desc: 'Role-based access for admin, staff and kitchen with activity logging and PIN control.' },
+    { title: 'Kitchen Dashboard',     desc: 'Real-time order display optimised for kitchen screens. Update status instantly.' },
+    { title: 'Multi-Device Support',  desc: 'Works seamlessly across devices — from iPads to phones, everywhere in your restaurant.' },
+    { title: 'Business Analytics',    desc: 'Track revenue, popular items, peak hours and table performance with detailed reports.' },
+  ];
+
+  let current = 0;
+  const total = slides.length;
+
+  function update() {
+    slides.forEach((slide, i) => {
+      const pos = ((i - current) % total + total) % total;
+      const relPos = pos > total / 2 ? pos - total : pos;
+      slide.removeAttribute('data-pos-far');
+      // Only show center + immediate neighbours
+      if (relPos >= -1 && relPos <= 1) {
+        slide.setAttribute('data-pos', relPos);
+      } else {
+        slide.removeAttribute('data-pos');
+      }
+    });
+    dots.forEach((dot, i) => dot.classList.toggle('active', i === current));
+    if (titleEl) titleEl.textContent = data[current].title;
+    if (descEl)  descEl.textContent  = data[current].desc;
+  }
+
+  function goTo(index) {
+    current = ((index % total) + total) % total;
+    update();
+  }
+
+  if (prevBtn) prevBtn.addEventListener('click', () => goTo(current - 1));
+  if (nextBtn) nextBtn.addEventListener('click', () => goTo(current + 1));
+
+  // Click side slides to navigate
+  slides.forEach((slide, i) => {
+    slide.addEventListener('click', () => { if (i !== current) goTo(i); });
+  });
+
+  // Touch swipe
+  const stage = document.getElementById('carouselStage');
+  if (stage) {
+    let touchStartX = 0;
+    stage.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].clientX; }, { passive: true });
+    stage.addEventListener('touchend', e => {
+      const diff = touchStartX - e.changedTouches[0].clientX;
+      if (Math.abs(diff) > 40) goTo(diff > 0 ? current + 1 : current - 1);
+    }, { passive: true });
+  }
+
+  update();
+})();
+
+// ================================================================
+// SMOOTH SCROLL for internal links
+// ================================================================
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   anchor.addEventListener('click', function (e) {
     e.preventDefault();
@@ -233,3 +316,33 @@ if (typeof getCurrentLanguage === 'function' && typeof t === 'function') {
     translateOnLoad();
   }
 }
+
+// ================================================================
+// ACTIVE NAV LINK — highlight on scroll
+// ================================================================
+(function () {
+  const sectionMap = [
+    { id: 'who-are-we',  href: '#who-are-we' },
+    { id: 'products',    href: '#products' },
+    { id: 'how-it-works',href: '#how-it-works' },
+  ];
+
+  const links = sectionMap.map(s => ({
+    id: s.id,
+    el: document.querySelector(`.nav-links a[href="${s.href}"]`),
+  })).filter(s => s.el);
+
+  if (!links.length) return;
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const match = links.find(s => s.id === entry.target.id);
+      if (match) match.el.classList.toggle('active', entry.isIntersecting);
+    });
+  }, { threshold: 0.35 });
+
+  links.forEach(s => {
+    const el = document.getElementById(s.id);
+    if (el) observer.observe(el);
+  });
+})();

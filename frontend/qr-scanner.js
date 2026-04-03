@@ -96,42 +96,28 @@ async function startQRScanning() {
     showQRScannerLoading(true);
     hideQRScannerError();
 
-    // Step 1: Request camera permissions explicitly
-    console.log("📷 Requesting camera permissions...");
-    try {
-      const permissionStatus = await navigator.permissions.query({ name: 'camera' });
-      console.log("Camera permission status:", permissionStatus.state);
-      
-      // If already denied, inform user
-      if (permissionStatus.state === 'denied') {
-        throw new Error("Camera permission previously denied. Please enable in browser settings.");
-      }
-    } catch (permError) {
-      console.log("Permissions API not available, will request via getUserMedia:", permError.message);
+    // Step 1: Create scanner instance
+    // Clean up any existing instance from a previous attempt
+    if (QR_SCANNER_INSTANCE) {
+      try { await QR_SCANNER_INSTANCE.clear(); } catch (e) {}
+      QR_SCANNER_INSTANCE = null;
     }
-
-    // Step 2: Create scanner instance
+    const qrReaderEl = document.getElementById('qr-reader');
+    if (qrReaderEl) qrReaderEl.innerHTML = '';
     QR_SCANNER_INSTANCE = new Html5Qrcode("qr-reader", { 
       formatsToSupport: [
         Html5QrcodeSupportedFormats.QR_CODE,
       ]
     });
 
-    // Step 3: Get available cameras - this will trigger permission prompt if needed
-    console.log("🎥 Getting camera list...");
-    const cameras = await Html5Qrcode.getCameras();
-    
-    if (!cameras || cameras.length === 0) {
-      throw new Error("No camera devices found");
-    }
-
-    console.log("Available cameras:", cameras);
-    const cameraId = cameras[0].id; // Use first camera (usually rear on mobile)
-
-    // Step 4: Start scanning directly
+    // Step 2: Start scanning using ideal rear camera (environment).
+    // Using facingMode avoids a separate getCameras() call that internally
+    // triggers its own getUserMedia request before start() makes another one,
+    // which caused duplicate permission prompts and a second NotAllowedError.
+    // { ideal: "environment" } falls back to any available camera on desktop.
     console.log("▶️ Starting camera stream...");
     await QR_SCANNER_INSTANCE.start(
-      cameraId,
+      { facingMode: "environment" },
       {
         fps: 10,
         qrbox: { width: 250, height: 250 },
@@ -154,7 +140,21 @@ async function startQRScanning() {
     
     if (typeof errorMsg === "string") {
       if (errorMsg.includes("NotAllowedError") || errorMsg.includes("Permission denied") || errorMsg.includes("previously denied")) {
-        errorMsg = "📱 Step 1: Click the camera icon (🎥) in your browser's address bar\n📱 Step 2: Select 'Allow' to grant camera access\n📱 Step 3: Click the 'Retry Camera' button below";
+        const ua = navigator.userAgent;
+        const isIOS = /iPhone|iPad|iPod/.test(ua);
+        const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+        const isFirefox = /Firefox/.test(ua);
+
+        if (isIOS && isSafari) {
+          errorMsg = "📵 Camera blocked on this site.\n\n1. Open the iOS Settings app\n2. Go to Safari → Camera\n3. Set to Allow\n4. Come back and tap 'Reload Page'";
+        } else if (isIOS) {
+          errorMsg = "📵 Camera blocked on this site.\n\n1. Open the iOS Settings app\n2. Find your browser → Camera\n3. Set to Allow\n4. Come back and tap 'Reload Page'";
+        } else if (isFirefox) {
+          errorMsg = "📵 Camera blocked on this site.\n\n1. Click the 🔒 lock icon in the address bar\n2. Click the Camera permission → Allow\n3. Tap 'Reload Page' below";
+        } else {
+          // Chrome, Edge, and other Chromium browsers
+          errorMsg = "📵 Camera blocked on this site.\n\n1. Click the 🔒 or 📷 icon in the address bar\n2. Set Camera to 'Allow'\n3. Tap 'Reload Page' below";
+        }
       } else if (errorMsg.includes("NotFoundError") || errorMsg.includes("No camera")) {
         errorMsg = "📷 No camera device found. Ensure your device has a camera and it's not in use by another app.";
       } else if (errorMsg.includes("NotReadableError")) {
@@ -354,7 +354,7 @@ function showQRScannerError(message) {
     errorEl.classList.remove("hidden");
     
     // Show retry button for permission or recoverable errors
-    if (retryBtn && (message.includes("permission") || message.includes("Allow") || message.includes("Retry"))) {
+    if (retryBtn && (message.toLowerCase().includes("permission") || message.includes("Allow") || message.includes("Retry") || message.includes("denied"))) {
       retryBtn.classList.remove("hidden");
     }
   }

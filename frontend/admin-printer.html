@@ -3,82 +3,84 @@
   <!-- Main Selection Screen -->
   <div id="printer-type-selection" style="display: block; height: 100%; overflow-y: auto;">
     <div style="position: sticky; top: 0; background: white; z-index: 10;">
-      <button onclick="hidePrinterSettings()" class="btn-back">← Back</button>
+      <button onclick="hidePrinterSettings()" class="btn-back" data-i18n="admin.printer-back">← Back</button>
     </div>
     
-    <div class="page-header" style="margin-bottom: 30px; padding: 20px 0;">
-      <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 700; color: #1f2937;">🖨️ Printer Settings</h1>
-      <p style="margin: 0; font-size: 14px; color: #666;">Configure independent printers for different document types. Select a document type to customize its format and printer settings.</p>
+    <div class="printer-selection-header">
+      <h2 data-i18n="admin.printer-page-title">Printer Settings</h2>
+      <p data-i18n="admin.printer-page-desc">Configure independent printers for different document types. Select a document type to customize its format and printer settings.</p>
     </div>
     
     <!-- Three Document Type Cards -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
       <!-- QR Code Printing -->
-      <div class="printer-type-card" onclick="selectPrinterType('qr')" style="background: white; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s;">
-        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #1f2937;">📋 QR Code Printing</h3>
-        <p style="margin: 0 0 16px 0; font-size: 14px; color: #6b7280;">Configure QR code format and printer</p>
-        <div id="qr-status" style="padding: 10px; background: #f3f4f6; border-radius: 4px; font-size: 12px; color: #666;">Not configured</div>
+      <div class="printer-type-card" onclick="selectPrinterType('qr')">
+        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-qr-title">QR Code Printing</h3>
+        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-qr-desc">Configure QR code format and printer</p>
+        <div id="qr-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
       </div>
 
       <!-- Bill Receipt Printing -->
-      <div class="printer-type-card" onclick="selectPrinterType('bill')" style="background: white; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s;">
-        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #1f2937;">🧾 Bill Receipt Printing</h3>
-        <p style="margin: 0 0 16px 0; font-size: 14px; color: #6b7280;">Configure bill format and printer</p>
-        <div id="bill-status" style="padding: 10px; background: #f3f4f6; border-radius: 4px; font-size: 12px; color: #666;">Not configured</div>
+      <div class="printer-type-card" onclick="selectPrinterType('bill')">
+        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-bill-title">Bill Receipt Printing</h3>
+        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-bill-desc">Configure bill format and printer</p>
+        <div id="bill-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
       </div>
 
       <!-- Kitchen Order Printing -->
-      <div class="printer-type-card" onclick="selectPrinterType('kitchen')" style="background: white; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s;">
-        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #1f2937;">🍳 Kitchen Order Printing</h3>
-        <p style="margin: 0 0 16px 0; font-size: 14px; color: #6b7280;">Configure kitchen printer</p>
-        <div id="kitchen-status" style="padding: 10px; background: #f3f4f6; border-radius: 4px; font-size: 12px; color: #666;">Not configured</div>
+      <div class="printer-type-card" onclick="selectPrinterType('kitchen')">
+        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kitchen-title">Kitchen Order Printing</h3>
+        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-kitchen-desc">Configure kitchen printer</p>
+        <div id="kitchen-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
+      </div>
+
+      <!-- KPay Receipt Printing -->
+      <div class="printer-type-card" onclick="selectPrinterType('kpay')">
+        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kpay-title">KPay Receipt Printing</h3>
+        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-kpay-desc">Auto-print receipt after KPay terminal payment</p>
+        <div id="kpay-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
       </div>
     </div>
   </div>
 
   <!-- Detailed Configuration Screen (Hidden by Default) -->
   <div id="printer-detail-view" style="display: none; height: 100%; overflow-y: auto;">
-    <div style="position: sticky; top: 0; background: white; z-index: 10; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-      <button onclick="backToSelection()" class="btn-back">← Back</button>
-      <h2 id="detail-title" style="margin: 16px 0 0 0; font-size: 20px; font-weight: 600; color: #1f2937;">Configuration</h2>
+    <div class="settings-page-header" style="position: sticky; top: 0; background: white; z-index: 10;">
+      <button onclick="backToSelection()" class="btn-back" data-i18n="admin.printer-back">&#8592; Back</button>
+      <h3 id="detail-title">Configuration</h3>
     </div>
 
     <div style="padding: 20px; width: 100%; box-sizing: border-box;">
     <!-- QR Code Format Section (Only for QR Type) -->
-    <div id="qr-format-section" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 30px; display: none;">
-      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;">📋 QR Code Format</h3>
+    <div id="qr-format-section" class="printer-format-section" style="display: none;">
+      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-qr-format">QR Code Format</h3>
       
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
         <!-- Form Fields -->
         <div>
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">QR Code Size</label>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-qr-size">QR Code Size</label>
             <div style="display: flex; gap: 8px;">
-              <button id="qr-size-small" onclick="setQRCodeSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;">Small</button>
-              <button id="qr-size-medium" onclick="setQRCodeSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;">Medium</button>
-              <button id="qr-size-large" onclick="setQRCodeSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;">Large</button>
+              <button id="qr-size-small" onclick="setQRCodeSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-small">Small</button>
+              <button id="qr-size-medium" onclick="setQRCodeSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-medium">Medium</button>
+              <button id="qr-size-large" onclick="setQRCodeSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-large">Large</button>
             </div>
-            <div id="qr-size-display" style="font-size: 12px; color: #6b7280; margin-top: 8px;">Selected: Medium</div>
           </div>
 
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">Text Above QR Code</label>
-            <input oninput="updateLivePreview()" id="qr-text-above" type="text" placeholder="e.g., Scan to Order" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-text-above">Text Above QR Code</label>
+            <input oninput="updateLivePreview()" id="qr-text-above" type="text" placeholder="e.g., Scan to Order" style="width: 100%; padding: 8px; border: 1px solid var(--border-color, #d1d5db); border-radius: 4px; font-size: 14px;" />
           </div>
 
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">Text Below QR Code</label>
-            <input oninput="updateLivePreview()" id="qr-text-below" type="text" placeholder="e.g., Let us know how we did!" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-text-below">Text Below QR Code</label>
+            <input oninput="updateLivePreview()" id="qr-text-below" type="text" placeholder="e.g., Let us know how we did!" style="width: 100%; padding: 8px; border: 1px solid var(--border-color, #d1d5db); border-radius: 4px; font-size: 14px;" />
           </div>
         </div>
 
         <!-- Preview -->
         <div>
-          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;">📄 Preview</label>
-          <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
-            <div style="border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
-              <p style="margin: 0; font-weight: bold; font-size: 13px; color: #1f2937;">La Cave Restaurant</p>
-            </div>
+          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-preview">Preview</label>
             
             <div style="text-align: left; margin: 8px 0; font-size: 11px;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -109,51 +111,41 @@
           </div>
         </div>
       </div>
-
-      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px; display: flex; gap: 12px;">
-        <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
-          <input id="qr-auto-print" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;" />
-          <label for="qr-auto-print" style="cursor: pointer; font-weight: 500; color: #1f2937; margin: 0;">Auto-Print QR Codes</label>
-        </div>
-        <button onclick="saveQRCodeFormat()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;">✓ Save Format</button>
-        <button onclick="testPrintQRCode()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;">🧪 Test Print</button>
-      </div>
     </div>
 
     <!-- Bill Receipt Format Section (Only for Bill Type) -->
-    <div id="bill-format-section" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 30px; display: none;">
-      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;">🧾 Bill Receipt Format</h3>
+    <div id="bill-format-section" class="printer-format-section" style="display: none;">
+      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-bill-format">Bill Receipt Format</h3>
       
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
         <!-- Form Fields -->
         <div>
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">Font Size</label>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-font-size">Font Size</label>
             <div style="display: flex; gap: 8px;">
-              <button id="bill-font-small" onclick="setBillFontSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;">Small</button>
-              <button id="bill-font-medium" onclick="setBillFontSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;">Medium</button>
-              <button id="bill-font-large" onclick="setBillFontSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;">Large</button>
+              <button id="bill-font-small" onclick="setBillFontSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-small">Small</button>
+              <button id="bill-font-medium" onclick="setBillFontSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-medium">Medium</button>
+              <button id="bill-font-large" onclick="setBillFontSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-large">Large</button>
             </div>
-            <div id="bill-font-display" style="font-size: 12px; color: #6b7280; margin-top: 8px;">Selected: Medium</div>
+            <div id="bill-font-display" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
           </div>
 
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">Header Text</label>
-            <input oninput="updateBillPreview()" id="bill-header-text" type="text" placeholder="e.g., Thank You" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-header-text">Header Text</label>
+            <input oninput="updateBillPreview()" id="bill-header-text" type="text" placeholder="e.g., Thank You" style="width: 100%; padding: 8px; border: 1px solid var(--border-color, #d1d5db); border-radius: 4px; font-size: 14px;" />
           </div>
 
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;">Footer Text</label>
-            <input oninput="updateBillPreview()" id="bill-footer-text" type="text" placeholder="e.g., Follow us on social media" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-footer-text">Footer Text</label>
+            <input oninput="updateBillPreview()" id="bill-footer-text" type="text" placeholder="e.g., Follow us on social media" style="width: 100%; padding: 8px; border: 1px solid var(--border-color, #d1d5db); border-radius: 4px; font-size: 14px;" />
           </div>
         </div>
 
-        <!-- Preview -->
+        <!-- Bill Preview -->
         <div>
-          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;">📄 Preview</label>
-          <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
-            <div style="border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
-              <p style="margin: 0 0 4px 0; font-weight: bold; font-size: 13px; color: #1f2937;">La Cave Restaurant</p>
+          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-preview">Preview</label>
+          <div style="border: 2px dashed var(--border-color, #d1d5db); border-radius: 6px; padding: 8px; background: white; font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.6; text-align: center;">
+            <div>
               <p style="margin: 0 0 2px 0; font-size: 10px; color: #6b7280;">123 Main Street</p>
               <p style="margin: 0; font-size: 10px; color: #6b7280;">+1 (555) 123-4567</p>
             </div>
@@ -204,37 +196,28 @@
           </div>
         </div>
       </div>
-
-      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px; display: flex; gap: 12px;">
-        <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
-          <input id="bill-auto-print" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;" />
-          <label for="bill-auto-print" style="cursor: pointer; font-weight: 500; color: #1f2937; margin: 0;">Auto-Print Bills</label>
-        </div>
-        <button onclick="saveBillFormat()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;">✓ Save Format</button>
-        <button onclick="testPrintBillCode()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;">🧪 Test Print</button>
-      </div>
     </div>
 
     <!-- Kitchen Order Format Section (Only for Kitchen Type) -->
-    <div id="kitchen-format-section" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 30px; display: none;">
-      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;">🍳 Kitchen Order Format</h3>
+    <div id="kitchen-format-section" class="printer-format-section" style="display: none;">
+      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kitchen-format">Kitchen Order Format</h3>
       
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
         <!-- Multi-Printer Configuration -->
         <div>
-          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;">📍 Kitchen Printers (Max 3)</label>
+          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kitchen-printers">Kitchen Printers (Max 3)</label>
           <div id="kitchen-printers-list" style="margin-bottom: 16px;">
             <!-- Will be populated by JavaScript -->
           </div>
           
-          <button onclick="addKitchenPrinter()" id="add-kitchen-printer-btn" class="btn-secondary" style="width: 100%; padding: 10px; margin-bottom: 16px;">+ Add Printer (Limit: 3)</button>
+          <button onclick="addKitchenPrinter()" id="add-kitchen-printer-btn" class="btn-secondary" style="width: 100%; padding: 10px; margin-bottom: 16px;" data-i18n="admin.printer-add-printer">+ Add Printer (Limit: 3)</button>
           
-          <p style="font-size: 12px; color: #6b7280; margin: 0;">Each printer can be assigned menu categories. Orders will be routed to the appropriate printer based on the item's category.</p>
+          <p style="font-size: 12px; color: #6b7280; margin: 0;" data-i18n="admin.printer-kitchen-hint">Each printer can be assigned menu categories. Orders will be routed to the appropriate printer based on the item's category.</p>
         </div>
 
         <!-- Preview -->
         <div>
-          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;">📄 Kitchen Preview</label>
+          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kitchen-preview">Kitchen Preview</label>
           <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
             <div style="border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
               <p style="margin: 0; font-weight: bold; font-size: 13px; color: #1f2937;">La Cave Restaurant</p>
@@ -273,15 +256,79 @@
         </div>
       </div>
 
-      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px;"></div>
+      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px; display: flex; gap: 12px;">
+        <button onclick="saveKitchenPrinterConfiguration()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-save-kitchen">Save Kitchen Printers</button>
+        <button onclick="testPrintKitchenOrder()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-test-print">Test Print</button>
+      </div>
+    </div>
 
-      <button onclick="saveKitchenPrinterConfiguration()" class="btn-primary" style="width: 100%; padding: 12px; font-weight: 600; margin-top: 20px;">✓ Save Kitchen Printers</button>
+    <!-- KPay Receipt Format Section -->
+    <div id="kpay-format-section" class="printer-format-section" style="display: none;">
+      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kpay-format">KPay Receipt Format</h3>
+
+      <!-- Auto-print toggle (full width) -->
+      <div class="printer-auto-print-box">
+        <input id="kpay-auto-print" type="checkbox" style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; margin-top: 2px;" onchange="onKPayAutoPrintToggle()" />
+        <div>
+          <label for="kpay-auto-print" style="cursor: pointer; font-weight: 600; color: var(--text-dark, #1f2937); margin: 0; font-size: 15px; display: block;" data-i18n="admin.printer-auto-kpay">Auto-Print KPay Receipt</label>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-auto-kpay-desc">When enabled, a receipt is automatically printed after every successful KPay terminal payment.</p>
+        </div>
+      </div>
+
+      <!-- Two-column: Receipt preview + Printer config -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+
+        <!-- Left: Sample Receipt Preview -->
+        <div>
+          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kpay-receipt-preview">Sample Receipt Preview</label>
+          <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.7; max-width: 240px;">
+            <p style="margin: 0 0 2px 0; font-weight: bold; font-size: 12px;" id="kpay-preview-restaurant-name">La Cave Restaurant</p>
+            <p style="margin: 0; color: #888; font-size: 10px;">================================</p>
+            <p style="margin: 2px 0; font-weight: bold; font-size: 11px;">PAYMENT RECEIPT</p>
+            <p style="margin: 0; color: #888; font-size: 10px;">================================</p>
+            <div style="text-align: left; margin: 8px 2px; font-size: 10px; line-height: 1.9;">
+              <div>Date:&nbsp;&nbsp;&nbsp;&nbsp;<span id="kpay-preview-date" style="color:#555;">03/04/2026 14:35</span></div>
+              <div>Table:&nbsp;&nbsp;&nbsp;T02</div>
+              <div>Order:&nbsp;&nbsp;&nbsp;ORD-1-2-17436…</div>
+              <div style="border-top: 1px dashed #bbb; margin: 6px 0;"></div>
+              <div>Payment: KPay Terminal</div>
+              <div style="font-weight: bold;">Amount:&nbsp;&nbsp;HKD 408.00</div>
+              <div>Status:&nbsp;&nbsp;APPROVED ✓</div>
+              <div>Ref No:&nbsp;&nbsp;ORD-1-2-17436…</div>
+            </div>
+            <p style="margin: 0; color: #888; font-size: 10px;">================================</p>
+            <p style="margin: 2px 0; font-size: 10px;">Thank you for dining!</p>
+            <p style="margin: 0; color: #888; font-size: 10px;">================================</p>
+          </div>
+        </div>
+
+        <!-- Right: Printer Configuration -->
+        <div>
+          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-config-heading">Printer Configuration</label>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Printer Type</label>
+            <select id="printer-type-select-kpay" onchange="updatePrinterTypeSelection('kpay')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white;">
+              <option value="none">No Printer</option>
+              <option value="network">Network Printer (LAN/WiFi)</option>
+              <option value="bluetooth">Bluetooth Printer</option>
+            </select>
+          </div>
+
+          <div id="printer-config-kpay" style="margin-bottom: 16px;"></div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; display: flex; gap: 12px;">
+        <button onclick="saveKPayPrinterConfiguration()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-save-kpay">Save KPay Settings</button>
+        <button onclick="testPrintKPayReceipt()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-test-print">Test Print</button>
+      </div>
     </div>
 
     <div id="printer-config-card"></div>
     </div>
   </div>
-</div>
 
 <!-- Initialize printer settings when this HTML loads -->
 <script>

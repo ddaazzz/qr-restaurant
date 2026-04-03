@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import pool from "../config/db";
 import { printOrder, testPrinterConnection, generateReceiptHTML } from "../services/printerService";
 import { PrinterQueueService } from "../services/printerQueue";
-import { generateESCPOS, ReceiptData } from "../services/thermalPrinterService";
+import { generateESCPOS, generateKPayReceiptESCPOS, ReceiptData, KPayReceiptData } from "../services/thermalPrinterService";
 
 const router = express.Router();
 
@@ -84,12 +84,14 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
   try {
     // If type is specified, update/insert single printer
     if (type) {
-      // Merge new settings with existing settings (don't lose other JSONB fields)
-      const mergedSettingsSQL = settings ? `printers.settings || $9::jsonb` : `printers.settings`;
-      
+      // Always include 'enabled: true' in settings to satisfy check_settings_enabled constraint.
+      // PostgreSQL evaluates CHECK constraints against the proposed INSERT row (EXCLUDED) even
+      // when ON CONFLICT DO UPDATE fires, so the INSERT VALUES must satisfy the constraint too.
+      const settingsWithEnabled = settings ? { enabled: true, ...settings } : { enabled: true };
+
       const result = await pool.query(
         `INSERT INTO printers (restaurant_id, type, printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, menu_category_id, settings)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::jsonb, '{}'))
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
          ON CONFLICT (restaurant_id, type) DO UPDATE SET
            printer_type = COALESCE(EXCLUDED.printer_type, printers.printer_type),
            printer_host = COALESCE(EXCLUDED.printer_host, printers.printer_host),
@@ -97,13 +99,10 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
            bluetooth_device_id = COALESCE(EXCLUDED.bluetooth_device_id, printers.bluetooth_device_id),
            bluetooth_device_name = COALESCE(EXCLUDED.bluetooth_device_name, printers.bluetooth_device_name),
            menu_category_id = COALESCE(EXCLUDED.menu_category_id, printers.menu_category_id),
-           settings = CASE 
-             WHEN $9::jsonb IS NOT NULL THEN printers.settings || $9::jsonb
-             ELSE printers.settings
-           END,
+           settings = printers.settings || $9::jsonb,
            updated_at = now()
          RETURNING *`,
-        [restaurantId, type, printer_type, printer_host, printer_port || 9100, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settings) || null]
+        [restaurantId, type, printer_type, printer_host, printer_port || 9100, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settingsWithEnabled)]
       );
 
       return res.json(result.rows[0]);
@@ -331,7 +330,7 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
       `SELECT name FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
-    const restaurantName = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
 
     // Get QR text customization from database
     let textAboveQR = qrTextAbove || 'Scan to Order';
@@ -345,7 +344,7 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
       [restaurantId, 'QR']
     );
 
-    if (settingsResult.rowCount > 0) {
+    if (((settingsResult.rowCount ?? 0) > 0)) {
       const settings = settingsResult.rows[0];
       if (settings.text_above) textAboveQR = settings.text_above;
       if (settings.text_below) textBelowQR = settings.text_below;
@@ -406,7 +405,7 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
       `SELECT name FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
-    const restaurantName = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
 
     // Get QR text customization from database
     let textAboveQR = 'Scan to Order';
@@ -420,7 +419,7 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
       [restaurantId, 'QR']
     );
 
-    if (settingsResult.rowCount > 0) {
+    if (((settingsResult.rowCount ?? 0) > 0)) {
       const settings = settingsResult.rows[0];
       if (settings.text_above) textAboveQR = settings.text_above;
       if (settings.text_below) textBelowQR = settings.text_below;
@@ -472,9 +471,9 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
       `SELECT name, address, phone FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
-    const restaurantName = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].name : 'La Cave Restaurant';
-    const restaurantAddress = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].address : '123 Main Street';
-    const restaurantPhone = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
+    const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
 
     // Get bill format settings from database
     let billHeaderText = headerText;
@@ -488,7 +487,7 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
       [restaurantId, 'BILL']
     );
 
-    if (settingsResult.rowCount > 0) {
+    if (((settingsResult.rowCount ?? 0) > 0)) {
       const settings = settingsResult.rows[0];
       if (settings.header_text) billHeaderText = settings.header_text;
       if (settings.footer_text) billFooterText = settings.footer_text;
@@ -567,9 +566,9 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
       `SELECT name, address, phone FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
-    const restaurantName = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].name : 'La Cave Restaurant';
-    const restaurantAddress = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].address : '123 Main Street';
-    const restaurantPhone = restaurantResult.rowCount > 0 ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
+    const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
 
     // Get bill format settings
     let billHeaderText = 'Thank You';
@@ -583,7 +582,7 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
       [restaurantId, 'BILL']
     );
 
-    if (settingsResult.rowCount > 0) {
+    if (((settingsResult.rowCount ?? 0) > 0)) {
       const settings = settingsResult.rows[0];
       if (settings.header_text) billHeaderText = settings.header_text;
       if (settings.footer_text) billFooterText = settings.footer_text;
@@ -656,7 +655,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       `SELECT name FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
-    if (restaurantResult.rowCount > 0) {
+    if (((restaurantResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantResult.rows[0].name;
     }
 
@@ -763,7 +762,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
            WHERE ts.id = $1`,
           [sessionId]
         );
-        if (sessionResult.rowCount > 0) {
+        if (((sessionResult.rowCount ?? 0) > 0)) {
           const row = sessionResult.rows[0];
           if (row.started_at) {
             startedTime = new Date(row.started_at).toLocaleString();
@@ -786,7 +785,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
         [restaurantId, 'QR']
       );
       
-      if (settingsResult.rowCount > 0) {
+      if (((settingsResult.rowCount ?? 0) > 0)) {
         const settings = settingsResult.rows[0];
         if (settings.text_above) textAboveQR = settings.text_above;
         if (settings.text_below) textBelowQR = settings.text_below;
@@ -848,8 +847,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
     if (queue) {
       const job = await queue.addJob(parseInt(restaurantId), jobData, {
         jobType: 'qr',
-        orderId: null,
-        sessionId: parseInt(sessionId) || undefined,
+        ...(parseInt(sessionId) ? { sessionId: parseInt(sessionId) } : {}),
         priority,
       });
       console.log('[PrintQR] Queued job:', job.id);
@@ -898,7 +896,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
       `SELECT name, address, phone FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
-    if (restaurantMetaResult.rowCount > 0) {
+    if (((restaurantMetaResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantMetaResult.rows[0].name;
       restaurantAddress = restaurantMetaResult.rows[0].address || '';
       restaurantPhone = restaurantMetaResult.rows[0].phone || '';
@@ -1149,9 +1147,13 @@ router.get("/restaurants/:restaurantId/bluetooth-devices", async (req: Request, 
  * Get device UUID for printing (loads from DB to avoid re-discovery)
  */
 router.get("/restaurants/:restaurantId/bluetooth-device-uuid/:printerType", async (req: Request, res: Response) => {
-  const { restaurantId, printerType } = req.params;
+  let { restaurantId, printerType } = req.params;
+  const safeType = printerType ?? '';
 
   try {
+    // Extract just the type part if it has a suffix (e.g., "bill:1" -> "bill")
+    const typeOnly = safeType.split(':')[0] ?? safeType;
+    
     // Normalize printer type to match database constraint: 'QR', 'Bill', 'Kitchen'
     const typeMap: {[key: string]: string} = {
       'QR': 'QR',
@@ -1161,7 +1163,7 @@ router.get("/restaurants/:restaurantId/bluetooth-device-uuid/:printerType", asyn
       'bill': 'Bill',
       'kitchen': 'Kitchen'
     };
-    const normalizedType = typeMap[printerType] || printerType;
+    const normalizedType = typeMap[typeOnly] || typeOnly;
 
     const result = await pool.query(
       `SELECT bluetooth_device_id as device_id, 
@@ -1188,6 +1190,181 @@ router.get("/restaurants/:restaurantId/bluetooth-device-uuid/:printerType", asyn
   } catch (err) {
     console.error("[GetDeviceUUID] Error:", err);
     res.status(500).json({ error: "Failed to fetch device UUID" });
+  }
+});
+
+/**
+ * Generate KPay receipt preview (HTML + ESC/POS)
+ */
+router.post("/restaurants/:restaurantId/preview-kpay-receipt", async (req: Request, res: Response) => {
+  const { restaurantId } = req.params;
+
+  try {
+    const restaurantResult = await pool.query(
+      `SELECT name FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'Restaurant';
+
+    const now = new Date();
+    const sampleData: KPayReceiptData = {
+      restaurantName,
+      tableName: 'T02',
+      orderRef: `ORD-${restaurantId}-1-${now.getTime()}`,
+      refNo: `ORD-${restaurantId}-1-${now.getTime()}`,
+      paymentMethod: 'KPay Terminal',
+      amountCents: 40800,
+      currency: 'HKD',
+      timestamp: now.toLocaleString(),
+      status: 'APPROVED ✓',
+    };
+
+    const escposArray = generateKPayReceiptESCPOS(sampleData);
+
+    return res.json({
+      success: true,
+      escposArray: Array.from(escposArray),
+      escposBase64: Buffer.from(escposArray).toString('base64'),
+      sampleData,
+    });
+  } catch (err) {
+    console.error('[PreviewKPay] Error:', err);
+    res.status(500).json({ error: 'Failed to generate KPay receipt preview' });
+  }
+});
+
+/**
+ * Test-print KPay receipt (returns ESC/POS for Bluetooth/network printing)
+ */
+router.post("/restaurants/:restaurantId/test-print-kpay-receipt", async (req: Request, res: Response) => {
+  const { restaurantId } = req.params;
+
+  try {
+    const restaurantResult = await pool.query(
+      `SELECT name FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'Restaurant';
+
+    const now = new Date();
+    const testData: KPayReceiptData = {
+      restaurantName,
+      tableName: 'TEST',
+      orderRef: `TEST-${now.getTime()}`,
+      refNo: `TEST-${now.getTime()}`,
+      paymentMethod: 'KPay Terminal',
+      amountCents: 10000,
+      currency: 'HKD',
+      timestamp: now.toLocaleString(),
+      status: 'APPROVED ✓',
+    };
+
+    const escposArray = generateKPayReceiptESCPOS(testData);
+
+    return res.json({
+      success: true,
+      type: 'test',
+      escposArray: Array.from(escposArray),
+      escposBase64: Buffer.from(escposArray).toString('base64'),
+      message: 'KPay receipt ESC/POS generated. Send to printer for testing.',
+    });
+  } catch (err) {
+    console.error('[TestPrintKPay] Error:', err);
+    res.status(500).json({ error: 'Failed to generate KPay test print' });
+  }
+});
+
+/**
+ * Print KPay payment receipt after successful transaction
+ */
+router.post("/restaurants/:restaurantId/print-kpay-receipt", async (req: Request, res: Response) => {
+  const { restaurantId } = req.params;
+  const { sessionId, outTradeNo, amountCents, currency = 'HKD', transactionNo, tableName, timestamp } = req.body;
+
+  if (!amountCents) {
+    return res.status(400).json({ error: 'amountCents is required' });
+  }
+
+  try {
+    // Get restaurant name
+    const restaurantResult = await pool.query(
+      `SELECT name FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'Restaurant';
+
+    // Get KPAY printer config
+    const printerResult = await pool.query(
+      `SELECT printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name
+       FROM printers WHERE restaurant_id = $1 AND type = $2`,
+      [restaurantId, 'KPAY']
+    );
+
+    if (printerResult.rowCount === 0 || !printerResult.rows[0].printer_type || printerResult.rows[0].printer_type === 'none') {
+      return res.status(400).json({ error: 'No KPay printer configured' });
+    }
+
+    const printerConfig = printerResult.rows[0];
+
+    const receiptData: KPayReceiptData = {
+      restaurantName,
+      tableName: tableName || undefined,
+      orderRef: outTradeNo || undefined,
+      refNo: outTradeNo || undefined,
+      transactionNo: transactionNo || undefined,
+      paymentMethod: 'KPay Terminal',
+      amountCents: Number(amountCents),
+      currency,
+      timestamp: timestamp || new Date().toLocaleString(),
+      status: 'APPROVED ✓',
+    };
+
+    const escposArray = generateKPayReceiptESCPOS(receiptData);
+
+    if (printerConfig.printer_type === 'bluetooth') {
+      return res.json({
+        success: true,
+        bluetoothPayload: {
+          printerConfig: {
+            bluetoothDeviceId: printerConfig.bluetooth_device_id,
+            bluetoothDeviceName: printerConfig.bluetooth_device_name,
+          },
+          escposBase64: Buffer.from(escposArray).toString('base64'),
+        },
+        message: 'Ready for Bluetooth printing',
+      });
+    }
+
+    if (printerConfig.printer_type === 'network') {
+      const net = await import('net');
+      const host = printerConfig.printer_host;
+      const port = printerConfig.printer_port || 9100;
+
+      await new Promise<void>((resolve, reject) => {
+        const client = new net.Socket();
+        client.setTimeout(5000);
+        client.connect(port, host, () => {
+          client.write(Buffer.from(escposArray), () => {
+            client.end();
+            resolve();
+          });
+        });
+        client.on('error', reject);
+        client.on('timeout', () => { client.destroy(); reject(new Error('Printer connection timed out')); });
+      });
+
+      return res.json({ success: true, message: 'KPay receipt sent to network printer' });
+    }
+
+    return res.json({
+      success: true,
+      escposArray: Array.from(escposArray),
+      escposBase64: Buffer.from(escposArray).toString('base64'),
+      message: 'KPay receipt generated',
+    });
+  } catch (err) {
+    console.error('[PrintKPay] Error:', err);
+    res.status(500).json({ error: 'Failed to print KPay receipt' });
   }
 });
 

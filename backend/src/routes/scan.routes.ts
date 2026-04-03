@@ -44,12 +44,12 @@ router.post("/scan/:qrToken", async (req, res) => {
       [unit.table_unit_id]
     );
 
-    let session = sessionResult.rowCount > 0 ? sessionResult.rows[0] : null;
+    let session = ((sessionResult.rowCount ?? 0) > 0) ? sessionResult.rows[0] : null;
     console.log("Restaurant ID:", unit.restaurant_id);
 
     // 3️⃣ Get restaurant details (logo, address, phone, etc)
     const restaurantResult = await pool.query(
-      `SELECT id, name, address, phone, logo_url, background_url, service_charge_percent FROM restaurants WHERE id = $1`,
+      `SELECT id, name, address, phone, logo_url, background_url, theme_color, service_charge_percent FROM restaurants WHERE id = $1`,
       [unit.restaurant_id]
     );
     const restaurant = restaurantResult.rows[0];
@@ -63,6 +63,7 @@ router.post("/scan/:qrToken", async (req, res) => {
       restaurant_name: restaurant?.name || "",
       logo_url: restaurant?.logo_url || "",
       background_url: restaurant?.background_url || "",
+      theme_color: restaurant?.theme_color || "",
       address: restaurant?.address || "",
       phone: restaurant?.phone || "",
       service_charge_percent: restaurant?.service_charge_percent || 0,

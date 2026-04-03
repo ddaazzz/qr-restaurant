@@ -20,13 +20,16 @@ import customerReceiptsRoutes from "./routes/customerReceipts.routes";
 import addonsRoutes from "./routes/addons.routes";
 import presetsRoutes from "./routes/presets.routes";
 import paymentTerminalsRoutes from "./routes/payment-terminals.routes";
+import paymentTransactionsRoutes from "./routes/payment-transactions.routes";
 
 const app = express();
 
 /* ======================
    MIDDLEWARE
 ====================== */
+// Parse JSON and form-encoded request bodies
 app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use(
   cors({
@@ -102,9 +105,12 @@ app.get("/sitemap.xml", (_req, res) => {
 /* ======================
    STATIC UPLOADS
 ====================== */
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-app.use("/uploads", express.static("uploads"));
+
+/* ======================
+   PAYMENT GATEWAY STATIC FILES
+====================== */
+app.use(express.static(path.join(__dirname, "../../public")));
 
 /* ======================
    NODE_MODULES LIBS (QR Scanner)
@@ -117,6 +123,9 @@ app.use("/lib", express.static(path.join(__dirname, "../../node_modules/html5-qr
 app.use("/api", settingsRoutes);
 app.use("/api", printerRoutes);
 app.use("/api", paymentTerminalsRoutes);
+app.use("/api", paymentTransactionsRoutes);
+// Also mount payment transaction routes at root for webhook callbacks (e.g., /payment-callback)
+app.use("/", paymentTransactionsRoutes);
 app.use("/api", customerReceiptsRoutes);
 app.use("/api", addonsRoutes);
 app.use("/api", presetsRoutes);
@@ -159,26 +168,6 @@ app.get("/en", (_req, res) => {
 
 app.get("/login", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "login.html"));
-});
-
-/* ======================
-   DEBUG ROUTES
-====================== */
-app.get("/__debug/version", (_req, res) => {
-  res.json({
-    service: "qr-restaurant-backend",
-    env: process.env.NODE_ENV,
-    version: "2026-01-21-01",
-    time: new Date().toISOString(),
-  });
-});
-
-app.get("/__debug/source", (_req, res) => {
-  res.json({
-    source: "LOCAL BACKEND",
-    port: process.env.PORT,
-    time: new Date().toISOString(),
-  });
 });
 
 /* ======================

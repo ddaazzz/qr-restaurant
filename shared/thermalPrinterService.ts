@@ -347,4 +347,111 @@ function appendText(commands: number[], text: string): void {
   }
 }
 
-export default { generateESCPOS };
+export interface KPayReceiptData {
+  restaurantName: string;
+  tableName?: string;
+  orderRef?: string;
+  transactionNo?: string;
+  refNo?: string;
+  paymentMethod?: string;
+  amountCents: number;
+  currency: string;
+  timestamp: string;
+  status: string;
+  approvalCode?: string;
+  printerPaperWidth?: number;
+}
+
+/**
+ * Generate ESC/POS commands for a KPay payment receipt
+ */
+export function generateKPayReceiptESCPOS(data: KPayReceiptData): Uint8Array {
+  const commands: number[] = [];
+  const sep = '================================';
+
+  // === INITIALIZE ===
+  commands.push(27, 64); // ESC @ - Initialize
+
+  // === HEADER: Restaurant name centered bold ===
+  commands.push(27, 97, 1); // Center
+  commands.push(27, 33, 8); // Bold
+  appendText(commands, data.restaurantName);
+  commands.push(27, 33, 0); // Bold off
+  commands.push(10);
+
+  // === TITLE ===
+  commands.push(27, 97, 1); // Center
+  appendText(commands, sep);
+  commands.push(10);
+  commands.push(27, 33, 8); // Bold
+  appendText(commands, '     PAYMENT RECEIPT');
+  commands.push(27, 33, 0); // Bold off
+  commands.push(10);
+  appendText(commands, sep);
+  commands.push(10, 10);
+
+  // === DETAILS - LEFT ALIGNED ===
+  commands.push(27, 97, 0); // Left
+
+  appendText(commands, `Date:    ${data.timestamp}`);
+  commands.push(10);
+
+  if (data.tableName) {
+    appendText(commands, `Table:   ${data.tableName}`);
+    commands.push(10);
+  }
+
+  if (data.orderRef) {
+    appendText(commands, `Order:   ${data.orderRef}`);
+    commands.push(10);
+  }
+
+  appendText(commands, '--------------------------------');
+  commands.push(10);
+
+  appendText(commands, `Payment: ${data.paymentMethod || 'KPay Terminal'}`);
+  commands.push(10);
+
+  // Amount in bold
+  const amountStr = `${data.currency} ${(data.amountCents / 100).toFixed(2)}`;
+  commands.push(27, 33, 8); // Bold
+  appendText(commands, `Amount:  ${amountStr}`);
+  commands.push(27, 33, 0); // Bold off
+  commands.push(10);
+
+  appendText(commands, `Status:  ${data.status}`);
+  commands.push(10);
+
+  if (data.refNo) {
+    appendText(commands, `Ref No:  ${data.refNo}`);
+    commands.push(10);
+  }
+
+  if (data.transactionNo) {
+    appendText(commands, `Trans No:${data.transactionNo}`);
+    commands.push(10);
+  }
+
+  if (data.approvalCode) {
+    appendText(commands, `Approval:${data.approvalCode}`);
+    commands.push(10);
+  }
+
+  // === FOOTER ===
+  commands.push(10);
+  commands.push(27, 97, 1); // Center
+  appendText(commands, sep);
+  commands.push(10);
+  appendText(commands, '    Thank you for dining!');
+  commands.push(10);
+  appendText(commands, sep);
+  commands.push(10, 10);
+
+  // Feed + cut
+  commands.push(27, 100, 5); // Feed 5 lines
+  commands.push(27, 105);    // Full cut
+
+  return new Uint8Array(commands);
+}
+
+export default { generateESCPOS, generateKPayReceiptESCPOS };

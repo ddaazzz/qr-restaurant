@@ -135,7 +135,7 @@ export class WebSocketServer {
   /**
    * Broadcast order status change event to kitchen clients
    */
-  private broadcastOrderStatusChange(event: any) {
+  broadcastOrderStatusChange(event: any) {
     if (!this.io) {
       console.warn('[WebSocket] Server not initialized');
       return;

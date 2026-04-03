@@ -52,6 +52,7 @@
           <button id="edit-settings-header" class="btn-primary" onclick="enterEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
           <button id="orders-history-header-btn" class="btn-tertiary" onclick="toggleOrdersHistoryMode()" style="display: none;"><img src="/uploads/website/history.png" alt="history" style="width: 16px; height: 16px; filter: brightness(0) invert(1);"/> <span data-i18n="admin.header-history">History</span></button>
           <button id="scan-qr-btn" class="btn-secondary" onclick="openScanQRModal()" style="display: none;"><img src="/uploads/website/qrcode.png" alt="scan" class="btn-icon" style="width: 16px; height: 16px;"> <span data-i18n="admin.scan-qr">Scan Table</span></button>
+          <button id="header-new-booking-btn" class="btn-primary" onclick="openNewBookingModal()" style="display: none;" data-i18n="admin.new-booking">+ New Booking</button>
           <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
             <img src="/uploads/website/user.png" alt="admin" class="btn-icon"> <span data-i18n="admin.header-admin">Admin</span>
             <span class="dropdown-arrow">▼</span>
@@ -153,8 +154,9 @@
         <div class="qr-scanner-container">
           <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden;"></div>
           <div id="qr-scanner-error" class="qr-scanner-error hidden" style="color: #ef4444; margin-top: 10px; text-align: center; white-space: pre-wrap; font-size: 13px; line-height: 1.5; padding: 10px;"></div>
-          <div id="qr-scanner-retry" class="hidden" style="margin-top: 15px; text-align: center;">
-            <button class="btn-primary" onclick="startQRScanning()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">🔄 Retry Camera</button>
+          <div id="qr-scanner-retry" class="hidden" style="margin-top: 15px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+            <button class="btn-primary" onclick="startQRScanning()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 200px;">🔄 Retry Camera</button>
+            <button onclick="location.reload()" style="background: #6b7280; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 200px; font-size: 14px;">↺ Reload Page</button>
           </div>
           <div id="qr-scanner-loading" class="qr-scanner-loading hidden" style="color: #666; margin-top: 10px; text-align: center;">Initializing camera...</div>
         </div>
@@ -182,7 +184,6 @@
   <script src="/admin-settings.js"></script>
   <script src="/admin-settings-presets.js"></script>
   <script src="/admin-printer.js"></script>
-  <script src="/admin-printer-kitchen.js"></script>
   <script src="/admin-bookings.js"></script>
   <!-- QR scanning functionality -->
   <script src="/qr-scanner.js"></script>

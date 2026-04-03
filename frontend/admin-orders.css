@@ -463,8 +463,96 @@
 
 .cart-item-actions {
   display: flex;
+  flex-direction: column;
   margin: 4px;
   flex-shrink: 0;
+  gap: 4px;
+}
+
+.cart-item-qty-editor {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cart-qty-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 1;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  background: white;
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.cart-qty-btn:hover {
+  background: #e0e0e0;
+  border-color: #999;
+}
+
+.cart-qty-value {
+  min-width: 24px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cart-remove-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff8f8;
+  color: #c62828;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.cart-remove-btn:hover {
+  background: #ffebee;
+  border-color: #c62828;
+}
+
+.cart-item-remarks-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cart-remarks-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid #b0bec5;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #eceff1;
+  color: #37474f;
+  transition: all 0.2s ease;
+}
+
+.cart-remarks-btn:hover {
+  background: #cfd8dc;
+}
+
+.cart-remarks-textarea {
+  width: 100%;
+  min-width: 120px;
+  font-size: 11px;
+  border: 1px solid #b0bec5;
+  border-radius: 4px;
+  padding: 4px 6px;
+  resize: vertical;
+  min-height: 44px;
 }
 
 .cart-item-actions button {
@@ -763,7 +851,32 @@
   overflow: hidden;
   background: white;
   padding: 16px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+}
+
+#orders-history-list-left {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  padding-right: 8px;
+}
+
+#orders-history-list-left::-webkit-scrollbar {
+  width: 6px;
+}
+
+#orders-history-list-left::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+#orders-history-list-left::-webkit-scrollbar-thumb {
+  background: #999;
+  border-radius: 3px;
+}
+
+#orders-history-list-left::-webkit-scrollbar-thumb:hover {
+  background: #666;
 }
 
 /* Show when active class is added */
@@ -773,9 +886,11 @@
 
 /* Show when active class is added in history mode - override flex for side-by-side */
 .orders-container.history-mode #orders-history-left-view.active {
+  display: flex;
   flex: 1 1 50%;
   min-width: 0;
   border-right: 1px solid #e0e0e0;
+  overflow: hidden;
 }
 
 /* Hide details view by default */
@@ -788,7 +903,32 @@
   overflow: hidden;
   background: white;
   padding: 16px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+}
+
+#order-details-content {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  padding-right: 8px;
+}
+
+#order-details-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+#order-details-content::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+#order-details-content::-webkit-scrollbar-thumb {
+  background: #999;
+  border-radius: 3px;
+}
+
+#order-details-content::-webkit-scrollbar-thumb:hover {
+  background: #666;
 }
 
 /* Show when active class is added */
@@ -1528,6 +1668,14 @@
   transition: all 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
+  /* Hidden on wide screens — history stays visible alongside details */
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .details-close-btn {
+    display: inline-block;
+  }
 }
 
 .details-close-btn:hover {

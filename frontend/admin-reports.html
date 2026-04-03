@@ -20,43 +20,55 @@
       <div class="metric-label" data-i18n="admin.sessions">Active Sessions</div>
       <div class="metric-value" id="metric-active-sessions">0</div>
     </div>
+    <div class="metric-card">
+      <div class="metric-label" data-i18n="admin.total-bookings">Total Bookings</div>
+      <div class="metric-value" id="metric-total-bookings">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label" data-i18n="admin.bookings-confirmed">Confirmed</div>
+      <div class="metric-value" id="metric-bookings-confirmed" style="color: #059669;">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label" data-i18n="admin.bookings-cancelled">Cancelled</div>
+      <div class="metric-value" id="metric-bookings-cancelled" style="color: #dc2626;">0</div>
+    </div>
   </div>
 
   <!-- Revenue Filters -->
   <div class="section-card" style="margin-bottom: 24px;">
     <h3 style="margin-bottom: 16px;" data-i18n="admin.orders-bills">Revenue Report</h3>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
-      <div>
-        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter-date">Date Range</label>
-        <select id="revenue-filter-daterange" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+      <div class="form-group">
+        <label data-i18n="admin.filter-date">Date Range</label>
+        <select id="revenue-filter-daterange" onchange="filterRevenueReport()">
           <option value="today" data-i18n="admin.today">Today</option>
           <option value="week" data-i18n="admin.weekly-sales">Last 7 Days</option>
           <option value="month" selected data-i18n="admin.monthly-sales">Last 30 Days</option>
           <option value="all" data-i18n="admin.all-orders">All Time</option>
         </select>
       </div>
-      <div>
-        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter">Filter by Category</label>
-        <select id="revenue-filter-category" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-          <option value="">All Categories</option>
+      <div class="form-group">
+        <label data-i18n="admin.filter-by-category">Filter by Category</label>
+        <select id="revenue-filter-category" onchange="filterRevenueReport()">
+          <option value="" data-i18n="admin.all-categories">All Categories</option>
         </select>
       </div>
-      <div>
-        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter">Filter by Waiter</label>
-        <select id="revenue-filter-waiter" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-          <option value="">All Waiters</option>
+      <div class="form-group">
+        <label data-i18n="admin.filter-by-staff">Filter by Staff</label>
+        <select id="revenue-filter-staff" onchange="filterRevenueReport()">
+          <option value="" data-i18n="admin.all-staff">All Staff</option>
         </select>
       </div>
-      <div>
-        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter-by-table">Filter by Table</label>
-        <select id="revenue-filter-table" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-          <option value="">All Tables</option>
+      <div class="form-group">
+        <label data-i18n="admin.filter-by-table">Filter by Table</label>
+        <select id="revenue-filter-table" onchange="filterRevenueReport()">
+          <option value="" data-i18n="admin.all-tables">All Tables</option>
         </select>
       </div>
-      <div>
-        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #666;" data-i18n="admin.filter">Filter by Product</label>
-        <select id="revenue-filter-product" onchange="filterRevenueReport()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-          <option value="">All Products</option>
+      <div class="form-group">
+        <label data-i18n="admin.filter-by-product">Filter by Product</label>
+        <select id="revenue-filter-product" onchange="filterRevenueReport()">
+          <option value="" data-i18n="admin.all-products">All Products</option>
         </select>
       </div>
     </div>
@@ -65,20 +77,20 @@
 
   <!-- Busiest Tables -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-tables">Busiest Tables</h3>
-    <div id="chart-busiest-tables" style="height: 250px;"></div>
+    <h3 data-i18n="admin.report-tables">Busiest Tables <span style="font-size: 12px; color: #9ca3af; font-weight: 400;">(last 30 days)</span></h3>
+    <div id="chart-busiest-tables" style="height: 250px; overflow-x: auto;"></div>
   </div>
 
   <!-- Hourly Revenue -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-hourly">Hourly Revenue</h3>
-    <div id="chart-hourly-revenue" style="height: 300px;"></div>
+    <h3 data-i18n="admin.report-hourly">Hourly Revenue <span style="font-size: 12px; color: #9ca3af; font-weight: 400;">(all time)</span></h3>
+    <div id="chart-hourly-revenue" style="height: 270px; overflow-x: auto;"></div>
   </div>
 
   <!-- Top Items -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-items">Top Items</h3>
-    <div id="chart-top-items" style="height: 300px;"></div>
+    <h3 data-i18n="admin.report-items">Top Selling Items <span style="font-size: 12px; color: #9ca3af; font-weight: 400;">(last 30 days)</span></h3>
+    <div id="chart-top-items" style="min-height: 100px;"></div>
   </div>
 
   <!-- Daily Trends Table -->
@@ -93,6 +105,42 @@
     </div>
     <div id="table-daily-trends" style="overflow-x: auto;"></div>
   </div>
+
+  <!-- ===== BOOKINGS ANALYTICS ===== -->
+  <div class="section-card" style="margin-top: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0;" data-i18n="admin.report-bookings">Bookings Analytics</h3>
+      <div style="display: flex; gap: 8px;">
+        <button id="bookings-daily-btn" style="padding: 8px 12px; background: #e67e22; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderBookingsTrends('daily')" data-i18n="admin.daily-sales">Daily</button>
+        <button id="bookings-weekly-btn" style="padding: 8px 12px; background: transparent; color: #e67e22; border: 2px solid #e67e22; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderBookingsTrends('weekly')" data-i18n="admin.weekly-sales">Weekly</button>
+        <button id="bookings-monthly-btn" style="padding: 8px 12px; background: transparent; color: #e67e22; border: 2px solid #e67e22; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderBookingsTrends('monthly')" data-i18n="admin.monthly-sales">Monthly</button>
+      </div>
+    </div>
+
+    <!-- Booking summary stats row -->
+    <div id="bookings-summary-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
+
+    <!-- Bookings trend table -->
+    <div id="bookings-trend-table" style="overflow-x: auto; margin-bottom: 24px;"></div>
+
+    <!-- Two-column row: peak hours + top tables -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+      <div>
+        <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px;" data-i18n="admin.bookings-peak-hours">Peak Booking Hours</h4>
+        <div id="bookings-peak-hours" style="height: 160px; display: flex; align-items: flex-end; gap: 3px; overflow-x: auto;"></div>
+      </div>
+      <div>
+        <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px;" data-i18n="admin.bookings-top-tables">Most Booked Tables</h4>
+        <div id="bookings-top-tables" style="min-height: 80px;"></div>
+      </div>
+    </div>
+
+    <!-- Status breakdown bar -->
+    <div>
+      <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px;" data-i18n="admin.bookings-status">Booking Status Breakdown</h4>
+      <div id="bookings-status-bar" style="min-height: 40px;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- Loading Message -->
@@ -106,15 +154,15 @@
 <template id="revenue-report-template">
   <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 6px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
     <div>
-      <span style="font-size: 12px; color: #666;">Total Revenue:</span>
+      <span style="font-size: 12px; color: #666;" data-i18n="admin.revenue-total-label">Total Revenue:</span>
       <div style="font-size: 18px; font-weight: 700; color: #059669;" data-field="total-revenue">$0.00</div>
     </div>
     <div>
-      <span style="font-size: 12px; color: #666;">Orders:</span>
+      <span style="font-size: 12px; color: #666;" data-i18n="admin.orders-label">Orders:</span>
       <div style="font-size: 18px; font-weight: 700; color: #667eea;" data-field="total-orders">0</div>
     </div>
     <div>
-      <span style="font-size: 12px; color: #666;">Avg Bill:</span>
+      <span style="font-size: 12px; color: #666;" data-i18n="admin.avg-bill-label">Avg Bill:</span>
       <div style="font-size: 18px; font-weight: 700; color: #6b7280;" data-field="avg-bill">$0.00</div>
     </div>
   </div>
@@ -155,28 +203,28 @@
 
 <!-- Hourly Revenue Chart Template -->
 <template id="hourly-revenue-chart-template">
-  <div style="display: flex; align-items: flex-end; gap: 6px; height: 250px;" data-columns-container></div>
+  <div style="display: flex; align-items: flex-end; gap: 4px; height: 250px; padding-bottom: 0;" data-columns-container></div>
 </template>
 
 <!-- Hourly Revenue Column Template -->
 <template id="hourly-revenue-column-template">
-  <div style="flex: 1; display: flex; flex-direction: column; align-items: center; position: relative;">
-    <div style="background: linear-gradient(to top, #667eea, #764ba2); width: 100%; cursor: pointer; transition: all 0.3s; position: relative; border-radius: 4px 4px 0 0;" data-field="bar" onmouseover="this.style.opacity='0.8'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)'" onmouseout="this.style.opacity='1'; this.style.boxShadow='none'"></div>
-    <div style="font-size: 10px; color: #999; margin-top: 4px;" data-field="hour"></div>
+  <div style="flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 18px; position: relative;">
+    <div style="background: linear-gradient(to top, #667eea, #764ba2); width: 100%; cursor: pointer; transition: all 0.3s; position: relative; border-radius: 3px 3px 0 0; min-height: 2px;" data-field="bar" onmouseover="this.style.opacity='0.75'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.4)'" onmouseout="this.style.opacity='1'; this.style.boxShadow='none'"></div>
+    <div style="font-size: 9px; color: #999; margin-top: 4px; white-space: nowrap;" data-field="hour"></div>
   </div>
 </template>
 
 <!-- Top Items Cards Template -->
 <template id="top-items-cards-template">
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;" data-cards-container></div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px;" data-cards-container></div>
 </template>
 
 <!-- Top Items Card Template -->
 <template id="top-items-card-template">
-  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px; border-radius: 12px; color: white;">
-    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">💰 <span data-field="date"></span></div>
-    <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px;" data-field="revenue">$0.00</div>
-    <div style="font-size: 12px; opacity: 0.8;" data-field="orders">0 orders</div>
+  <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%); padding: 14px 16px; border-radius: 12px; color: white;">
+    <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px; line-height: 1.3; opacity: 0.95;" data-field="item-name"></div>
+    <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #93c5fd;" data-field="item-qty">0 sold</div>
+    <div style="font-size: 12px; opacity: 0.75;" data-field="item-revenue">$0.00</div>
   </div>
 </template>
 

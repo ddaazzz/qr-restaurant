@@ -9,12 +9,15 @@ router.get("/restaurants/:restaurantId/bookings", async (req, res) => {
   const { date, table_id } = req.query;
 
   try {
+    // booking_date is a DATE column — no timezone conversion needed
     let query = `
       SELECT 
         b.*,
         b.restaurant_booking_number,
-        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as booking_date_formatted
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as booking_date_str,
+        t.name AS table_name
       FROM bookings b
+      LEFT JOIN tables t ON t.id = b.table_id
       WHERE b.restaurant_id = $1
     `;
     const params: any[] = [restaurantId];
@@ -32,16 +35,13 @@ router.get("/restaurants/:restaurantId/bookings", async (req, res) => {
     query += ` ORDER BY b.booking_date DESC, b.booking_time DESC`;
 
     const res_data = await pool.query(query, params);
-    
-    // Format response to use the formatted date string and remove the temporary formatted field
+
+    // Return booking_date as YYYY-MM-DD string (not JS Date object)
     const formattedRows = res_data.rows.map(row => {
-      const { booking_date_formatted, ...rest } = row;
-      return {
-        ...rest,
-        booking_date: booking_date_formatted
-      };
+      const { booking_date_str, ...rest } = row;
+      return { ...rest, booking_date: booking_date_str };
     });
-    
+
     res.json(formattedRows);
   } catch (err) {
     console.error("Error fetching bookings:", err);
@@ -152,7 +152,7 @@ router.post("/restaurants/:restaurantId/bookings", async (req, res) => {
 // PATCH update booking status - ✅ MULTI-RESTAURANT SUPPORT
 router.patch("/bookings/:bookingId", async (req, res) => {
   const { bookingId } = req.params;
-  const { guest_name, phone, pax, table_id, booking_date, booking_time, status, notes, restaurantId } = req.body;
+  const { guest_name, phone, pax, table_id, booking_date, booking_time, status, notes, restaurantId, session_id } = req.body;
 
   if (!restaurantId) {
     return res.status(400).json({ error: "Restaurant ID is required" });
@@ -214,6 +214,10 @@ router.patch("/bookings/:bookingId", async (req, res) => {
       updates.push(`notes = $${paramCount++}`);
       values.push(notes);
     }
+    if (session_id !== undefined) {
+      updates.push(`session_id = $${paramCount++}`);
+      values.push(session_id);
+    }
 
     updates.push(`updated_at = NOW()`);
 
@@ -271,9 +275,7 @@ router.delete("/bookings/:bookingId", async (req, res) => {
     }
 
     const res_data = await pool.query(
-      `UPDATE bookings SET status = 'cancelled', updated_at = NOW()
-       WHERE id = $1 AND restaurant_id = $2
-       RETURNING *`,
+      `DELETE FROM bookings WHERE id = $1 AND restaurant_id = $2 RETURNING *`,
       [bookingId, restaurantId]
     );
 

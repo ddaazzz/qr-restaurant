@@ -50,15 +50,43 @@ function renderAddonPresetsList() {
 }
 
 /**
- * Start creating a new addon preset
+ * Start creating a new addon preset — shows app-styled modal instead of browser prompt
  */
 function startCreateAddonPreset() {
-  const name = prompt('Preset Name (e.g., "Drinks", "Appetizers"):');
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3>${t('admin.create-addon-preset')}</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 24px;">
+        <div class="form-group">
+          <label>${t('admin.preset-name-label')}</label>
+          <input id="addon-preset-name" type="text" placeholder="${t('admin.preset-name-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit;" />
+        </div>
+        <div class="form-group" style="margin-top: 14px;">
+          <label>${t('admin.preset-desc-label')}</label>
+          <textarea id="addon-preset-desc" placeholder="${t('admin.preset-desc-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit; min-height: 64px; resize: vertical;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding: 16px 24px;">
+        <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">${t('admin.cancel-button')}</button>
+        <button onclick="_submitCreateAddonPreset()" class="btn-primary">${t('admin.create-preset-btn')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  setTimeout(() => modal.querySelector('#addon-preset-name')?.focus(), 50);
+}
+
+async function _submitCreateAddonPreset() {
+  const name = document.getElementById('addon-preset-name')?.value?.trim();
+  const description = document.getElementById('addon-preset-desc')?.value?.trim();
   if (!name) return;
-  
-  const description = prompt('Description (optional):');
-  
-  createAddonPreset(name, description);
+  document.querySelector('.modal-overlay')?.remove();
+  await createAddonPreset(name, description);
 }
 
 /**
@@ -82,7 +110,6 @@ async function createAddonPreset(name, description) {
     }
     
     const preset = await res.json();
-    alert('Preset created! Now add items to it.');
     await editAddonPreset(preset.id);
   } catch (err) {
     alert('Error creating preset: ' + err.message);
@@ -105,39 +132,51 @@ async function editAddonPreset(presetId) {
     modal.innerHTML = `
       <div class="modal-content" style="max-width: 600px;">
         <div class="modal-header">
-          <h3>Edit Preset: ${preset.name}</h3>
+          <h3>${t('admin.edit-addon-preset').replace('{0}', escapeHtml ? escapeHtml(preset.name) : preset.name)}</h3>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" style="padding: 20px 24px;">
           <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Add Items to Preset:</label>
-            <div style="display: flex; gap: 8px;">
-              <select id="addon-item-select-${presetId}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">-- Select menu item --</option>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: #374151;">${t('admin.add-items-to-preset')}</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <select id="addon-item-select-${presetId}" style="flex: 1; min-width: 160px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-family: inherit;">
+                <option value="">${t('admin.select-menu-item')}</option>
               </select>
-              <input id="addon-price-input-${presetId}" type="number" placeholder="Discount price" style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"/>
-              <button onclick="addItemToAddonPreset(${presetId})" style="padding: 8px 16px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer;">Add</button>
+              <input id="addon-price-input-${presetId}" type="number" placeholder="${t('admin.discount-price-label')}" style="width: 130px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-family: inherit;"/>
+              <button onclick="addItemToAddonPreset(${presetId})" class="btn-primary">${t('admin.preset-add-btn')}</button>
             </div>
           </div>
           
-          <div style="margin-top: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Preset Items:</label>
-            <div id="preset-items-${presetId}" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: #374151;">${t('admin.preset-items-label')}</label>
+            <div id="preset-items-${presetId}" style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px;">
               <!-- Items rendered here -->
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">Close</button>
+        <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end;">
+          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">${t('admin.close')}</button>
         </div>
       </div>
     `;
     
     document.body.appendChild(modal);
     
-    // Populate item dropdown
+    // Populate item dropdown — fetch if menu section hasn't been loaded yet
     const select = document.getElementById(`addon-item-select-${presetId}`);
-    MENU_ITEMS.forEach(item => {
+    let menuItems = MENU_ITEMS;
+    if (!menuItems || menuItems.length === 0) {
+      try {
+        const menuRes = await fetch(`${API}/restaurants/${restaurantId}/menu/staff`);
+        if (menuRes.ok) {
+          menuItems = await menuRes.json();
+          MENU_ITEMS = menuItems;
+        }
+      } catch (e) {
+        console.warn('Could not fetch menu items for preset dropdown', e);
+      }
+    }
+    menuItems.forEach(item => {
       const option = document.createElement('option');
       option.value = item.id;
       option.textContent = item.name;
@@ -163,17 +202,17 @@ async function loadAndRenderPresetItems(presetId) {
     const container = document.getElementById(`preset-items-${presetId}`);
     
     if (!items || items.length === 0) {
-      container.innerHTML = '<div style="padding: 12px; text-align: center; color: #999;">No items in this preset</div>';
+      container.innerHTML = `<div style="padding: 12px; text-align: center; color: #9ca3af; font-size: 13px;">${t('admin.no-items-in-preset')}</div>`;
       return;
     }
     
     container.innerHTML = items.map(item => `
-      <div style="padding: 10px; background: white; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+      <div style="padding: 10px 12px; background: white; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 4px;">
         <div>
-          <div style="font-weight: 500; font-size: 13px;">${item.menu_item?.name || 'Unknown'}</div>
-          <div style="font-size: 11px; color: #666;">Discount: $${(item.addon_discount_price_cents / 100).toFixed(2)}</div>
+          <div style="font-weight: 600; font-size: 13px; color: #1f2937;">${item.menu_item?.name || 'Unknown'}</div>
+          <div style="font-size: 11px; color: #6b7280;">${t('admin.discount-display').replace('{0}', (item.addon_discount_price_cents / 100).toFixed(2))}</div>
         </div>
-        <button onclick="removeItemFromAddonPreset(${presetId}, ${item.id})" class="btn-danger" style="padding: 4px 8px; font-size: 11px;">Remove</button>
+        <button onclick="removeItemFromAddonPreset(${presetId}, ${item.id})" class="btn-danger" style="padding: 4px 10px; font-size: 11px;">${t('admin.item-remove-btn')}</button>
       </div>
     `).join('');
   } catch (err) {
@@ -223,7 +262,7 @@ async function addItemToAddonPreset(presetId) {
  * Remove an item from an addon preset
  */
 async function removeItemFromAddonPreset(presetId, itemId) {
-  if (!confirm('Remove this item from the preset?')) return;
+  if (!confirm(t('admin.remove-item-from-preset'))) return;
   
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets/${presetId}/items/${itemId}`, {
@@ -245,7 +284,7 @@ async function removeItemFromAddonPreset(presetId, itemId) {
  * Delete an addon preset
  */
 async function deleteAddonPreset(presetId, presetName) {
-  if (!confirm(`Delete preset "${presetName}"? This cannot be undone.`)) return;
+  if (!confirm(t('admin.preset-delete-confirm').replace('{0}', presetName))) return;
   
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets/${presetId}`, {
@@ -321,28 +360,28 @@ function startCreateVariantPreset() {
   modal.className = 'modal-overlay';
   modal.innerHTML = `
     <div class="modal-content" style="max-width: 500px;">
-      <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
-        <h3 style="margin: 0; color: white;">Create New Variant Preset</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
+      <div class="modal-header">
+        <h3>${t('admin.create-variant-preset')}</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
       </div>
       <div class="modal-body" style="padding: 24px;">
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Variant Title (e.g., "Drink Size", "Temperature")</label>
-          <input id="preset-name" type="text" placeholder="e.g., Drink Size" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+        <div class="form-group">
+          <label>${t('admin.variant-title-label')}</label>
+          <input id="preset-name" type="text" placeholder="${t('admin.variant-title-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit;">
         </div>
-        
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Description (optional)</label>
-          <textarea id="preset-description" placeholder="e.g., Available drink sizes" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box; min-height: 60px; font-family: inherit;"></textarea>
+        <div class="form-group" style="margin-top: 14px;">
+          <label>${t('admin.preset-desc-label')}</label>
+          <textarea id="preset-description" placeholder="${t('admin.preset-desc-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; min-height: 60px; font-family: inherit; resize: vertical;"></textarea>
         </div>
       </div>
-      <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
-        <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600;">Cancel</button>
-        <button onclick="createVariantPreset()" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Create Preset</button>
+      <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding: 16px 24px;">
+        <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">${t('admin.cancel-button')}</button>
+        <button onclick="createVariantPreset()" class="btn-primary">${t('admin.create-preset-btn')}</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+  setTimeout(() => modal.querySelector('#preset-name')?.focus(), 50);
 }
 
 /**
@@ -353,7 +392,7 @@ async function createVariantPreset() {
   const description = document.getElementById('preset-description')?.value;
   
   if (!name) {
-    alert('Please enter a variant title');
+    alert(t('admin.preset-name-label') + '?');
     return;
   }
   
@@ -380,7 +419,6 @@ async function createVariantPreset() {
     
     // Reload presets and open the new preset for adding options
     await loadVariantPresets();
-    alert('Preset created! Now add variant options.');
     editVariantPreset(preset.id);
   } catch (err) {
     alert('Error creating preset: ' + err.message);
@@ -401,26 +439,26 @@ async function editVariantPreset(presetId) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = `
-      <div class="modal-content" style="max-width: 700px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
-          <h3 style="margin: 0; color: white; display: flex; align-items: center; gap: 10px;"><span>🏷️</span> ${preset.name}</h3>
-          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
+      <div class="modal-content" style="max-width: 680px;">
+        <div class="modal-header">
+          <h3>🏷️ ${escapeHtml ? escapeHtml(preset.name) : preset.name}</h3>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
-        <div class="modal-body" style="padding: 24px;">
-          <div style="margin-bottom: 24px; padding: 16px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 6px;">
-            <label style="display: block; margin-bottom: 10px; font-weight: 700; font-size: 14px; color: #1f2937;">➕ Add New Option:</label>
-            <button onclick="showCreateOptionForm(${presetId})" style="width: 100%; padding: 10px 18px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">+ Add Option</button>
+        <div class="modal-body" style="padding: 20px 24px;">
+          <div style="margin-bottom: 20px; padding: 14px 16px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 6px;">
+            <label style="display: block; margin-bottom: 10px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: #1f2937;">${t('admin.add-new-option')}</label>
+            <button onclick="showCreateOptionForm(${presetId})" class="btn-primary" style="width: 100%;">${t('admin.add-option-btn')}</button>
           </div>
           
           <div>
-            <label style="display: block; margin-bottom: 12px; font-weight: 700; font-size: 14px; color: #1f2937;">📋 Options:</label>
-            <div id="preset-options-${presetId}" style="max-height: 350px; overflow-y: auto; border: 2px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fafbfc;">
+            <label style="display: block; margin-bottom: 10px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: #1f2937;">${t('admin.options-label')}</label>
+            <div id="preset-options-${presetId}" style="max-height: 350px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; background: #fafbfc;">
               <!-- Options rendered here -->
             </div>
           </div>
         </div>
-        <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
-          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.borderColor='#1f2937'; this.style.background='#f3f4f6';" onmouseout="this.style.borderColor='#d1d5db'; this.style.background='white';">Close</button>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; padding: 16px 24px;">
+          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">${t('admin.close')}</button>
         </div>
       </div>
     `;
@@ -441,29 +479,29 @@ function showCreateOptionForm(presetId) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `
-    <div class="modal-content" style="max-width: 600px;">
-      <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
-        <h3 style="margin: 0; color: white;">Add Option</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
+    <div class="modal-content" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3>${t('admin.add-option-title')}</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
       </div>
       <div class="modal-body" style="padding: 24px;">
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Option Name (e.g., "Small", "Medium", "Large")</label>
-          <input id="new-option-name-${presetId}" type="text" placeholder="e.g., Small" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+        <div class="form-group">
+          <label>${t('admin.option-name-input')}</label>
+          <input id="new-option-name-${presetId}" type="text" placeholder="${t('admin.option-name-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit;">
         </div>
-        
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Price/Upcharge (optional, in cents)</label>
-          <input id="new-option-price-${presetId}" type="number" placeholder="e.g., 0 or 100 for $1.00" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+        <div class="form-group" style="margin-top: 14px;">
+          <label>${t('admin.option-price-input')}</label>
+          <input id="new-option-price-${presetId}" type="number" placeholder="${t('admin.option-price-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit;">
         </div>
       </div>
-      <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
-        <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600;">Cancel</button>
-        <button onclick="createOptionInPreset(${presetId})" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Add Option</button>
+      <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding: 16px 24px;">
+        <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">${t('admin.cancel-button')}</button>
+        <button onclick="createOptionInPreset(${presetId})" class="btn-primary">${t('admin.add-option-btn')}</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+  setTimeout(() => modal.querySelector(`#new-option-name-${presetId}`)?.focus(), 50);
 }
 
 /**
@@ -514,22 +552,22 @@ async function loadAndRenderPresetOptions(presetId) {
     const container = document.getElementById(`preset-options-${presetId}`);
     
     if (!options || options.length === 0) {
-      container.innerHTML = '<div style="padding: 24px; text-align: center;"><p style="color: #999; font-size: 13px; margin: 0;">No options added yet</p><p style="color: #bbb; font-size: 12px; margin-top: 8px;">Click "Add Option" to add the first one</p></div>';
+      container.innerHTML = `<div style="padding: 20px; text-align: center;"><p style="color: #9ca3af; font-size: 13px; margin: 0;">${t('admin.no-options-in-preset')}</p><p style="color: #d1d5db; font-size: 12px; margin-top: 6px;">${t('admin.no-options-hint')}</p></div>`;
       return;
     }
     
     container.innerHTML = options.map(opt => {
-      const price = opt.price_cents > 0 ? `+$${(opt.price_cents / 100).toFixed(2)}` : 'No charge';
+      const price = opt.price_cents > 0 ? t('admin.option-price-plus').replace('{0}', (opt.price_cents / 100).toFixed(2)) : t('admin.option-price-display');
       
       return `
-        <div style="padding: 14px; background: white; border-bottom: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: all 0.2s ease; border-left: 4px solid #10b981;">
+        <div style="padding: 12px 14px; background: white; border-bottom: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-left: 4px solid #10b981;">
           <div style="flex: 1; min-width: 0;">
             <div style="font-weight: 600; font-size: 13px; color: #1f2937;">${opt.name}</div>
-            <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${price}</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 3px;">${price}</div>
           </div>
           <div style="display: flex; gap: 6px; flex-shrink: 0;">
-            <button onclick="editOptionInPreset(${presetId}, ${opt.id})" style="padding: 6px 10px; background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;" onmouseover="this.style.background='#93c5fd';" onmouseout="this.style.background='#dbeafe';">✏️ Edit</button>
-            <button onclick="deleteOptionFromPreset(${presetId}, ${opt.id})" style="padding: 6px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;" onmouseover="this.style.background='#fca5a5'; this.style.color='#7c2d12';" onmouseout="this.style.background='#fee2e2'; this.style.color='#991b1b';">🗑️ Delete</button>
+            <button onclick="editOptionInPreset(${presetId}, ${opt.id})" class="btn-secondary" style="padding: 5px 10px; font-size: 11px;">✏️ ${t('admin.header-edit')}</button>
+            <button onclick="deleteOptionFromPreset(${presetId}, ${opt.id})" class="btn-danger" style="padding: 5px 10px; font-size: 11px;">🗑️</button>
           </div>
         </div>
       `;
@@ -552,25 +590,24 @@ async function editOptionInPreset(presetId, optionId) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = `
-      <div class="modal-content" style="max-width: 600px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
-          <h3 style="margin: 0; color: white;">Edit Option</h3>
-          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 28px; background: none; border: none; cursor: pointer;">✕</button>
+      <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">
+          <h3>${t('admin.edit-option-title')}</h3>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body" style="padding: 24px;">
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Option Name</label>
-            <input id="edit-option-name-${optionId}" type="text" value="${option.name || ''}" placeholder="e.g., Small" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+          <div class="form-group">
+            <label>${t('admin.option-name-input')}</label>
+            <input id="edit-option-name-${optionId}" type="text" value="${option.name || ''}" placeholder="${t('admin.option-name-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit;">
           </div>
-          
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Price/Upcharge (optional, in cents)</label>
-            <input id="edit-option-price-${optionId}" type="number" value="${option.price_cents || 0}" placeholder="e.g., 0 or 100 for $1.00" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+          <div class="form-group" style="margin-top: 14px;">
+            <label>${t('admin.option-price-input')}</label>
+            <input id="edit-option-price-${optionId}" type="number" value="${option.price_cents || 0}" placeholder="${t('admin.option-price-placeholder')}" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit;">
           </div>
         </div>
-        <div class="modal-footer" style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
-          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary" style="padding: 10px 20px; background: white; color: #1f2937; border: 2px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600;">Cancel</button>
-          <button onclick="saveEditedOptionInPreset(${presetId}, ${optionId})" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Save Changes</button>
+        <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding: 16px 24px;">
+          <button onclick="this.closest('.modal-overlay').remove()" class="btn-secondary">${t('admin.cancel-button')}</button>
+          <button onclick="saveEditedOptionInPreset(${presetId}, ${optionId})" class="btn-primary">${t('admin.save-option-changes')}</button>
         </div>
       </div>
     `;
@@ -618,7 +655,7 @@ async function saveEditedOptionInPreset(presetId, optionId) {
  * Delete an option from a preset
  */
 async function deleteOptionFromPreset(presetId, optionId) {
-  if (!confirm('Delete this option?')) return;
+  if (!confirm(t('admin.delete-option-confirm'))) return;
   
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options/${optionId}`, {
@@ -640,7 +677,7 @@ async function deleteOptionFromPreset(presetId, optionId) {
  * Delete a variant preset
  */
 async function deleteVariantPreset(presetId, presetName) {
-  if (!confirm(`Delete preset "${presetName}"? This cannot be undone.`)) return;
+  if (!confirm(t('admin.preset-delete-confirm').replace('{0}', presetName))) return;
   
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}`, {
