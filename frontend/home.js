@@ -21,16 +21,18 @@
     return dot;
   });
 
-  const data = [
-    { title: 'Orders Management',    desc: 'This is where the staff and/or customer manages the food order. We provide a flexible and widely customisable menu for you to edit as you see fit.' },
-    { title: 'Menu Management',       desc: 'Upload photos, set prices, manage variants and control item availability — all in one place.' },
-    { title: 'Table Management',      desc: 'Visualise your floor plan, manage sessions, reservations and occupancy at a glance.' },
-    { title: 'QR Scan, Order & Pay',  desc: 'Customers scan a QR code, browse the full menu, and complete payment on their phone directly — no app download needed.' },
-    { title: 'Staff Management',      desc: 'Role-based access for admin, staff and kitchen with activity logging and PIN control.' },
-    { title: 'Kitchen Dashboard',     desc: 'Real-time order display optimised for kitchen screens. Update status instantly.' },
-    { title: 'Multi-Device Support',  desc: 'Works seamlessly across devices — from iPads to phones, everywhere in your restaurant.' },
-    { title: 'Business Analytics',    desc: 'Track revenue, popular items, peak hours and table performance with detailed reports.' },
-  ];
+  function getCarouselData() {
+    return [
+      { title: t('home.carousel-0-title'), desc: t('home.carousel-0-desc') },
+      { title: t('home.carousel-1-title'), desc: t('home.carousel-1-desc') },
+      { title: t('home.carousel-2-title'), desc: t('home.carousel-2-desc') },
+      { title: t('home.carousel-3-title'), desc: t('home.carousel-3-desc') },
+      { title: t('home.carousel-4-title'), desc: t('home.carousel-4-desc') },
+      { title: t('home.carousel-5-title'), desc: t('home.carousel-5-desc') },
+      { title: t('home.carousel-6-title'), desc: t('home.carousel-6-desc') },
+      { title: t('home.carousel-7-title'), desc: t('home.carousel-7-desc') },
+    ];
+  }
 
   let current = 0;
   const total = slides.length;
@@ -48,8 +50,9 @@
       }
     });
     dots.forEach((dot, i) => dot.classList.toggle('active', i === current));
-    if (titleEl) titleEl.textContent = data[current].title;
-    if (descEl)  descEl.textContent  = data[current].desc;
+    const carouselData = getCarouselData();
+    if (titleEl) titleEl.textContent = carouselData[current].title;
+    if (descEl)  descEl.textContent  = carouselData[current].desc;
   }
 
   function goTo(index) {
@@ -77,7 +80,10 @@
   }
 
   update();
-})();
+
+  // Re-render carousel labels when language changes
+  window.addEventListener('pageTranslationUpdated', () => update());
+})()
 
 // ================================================================
 // SMOOTH SCROLL for internal links
