@@ -98,13 +98,52 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     process.exit(1);
   }
 } else {
-  console.error("❌ SSL certificates not found!");
-  console.error(`   Expected: ${certPath}`);
-  console.error(`   Expected: ${keyPath}`);
-  console.error("\n   Generate them with:");
-  console.error("   cd /Users/user/Documents/qr-restaurant-ai/backend");
-  console.error('   openssl req -x509 -newkey rsa:2048 -keyout localhost-key.pem -out localhost-cert.pem -days 365 -nodes -subj "/CN=localhost"');
-  process.exit(1);
+  // No local SSL certs — fall back to HTTP (production: SSL terminated at reverse proxy)
+  server = http.createServer(app);
+
+  server.listen(PORT, "0.0.0.0", async () => {
+    console.log(`🌐 HTTP Backend running on http://localhost:${PORT}`);
+
+    // Initialize WebSocket server
+    try {
+      webSocketServer.initialize(server);
+      console.log(`✅ WebSocket server initialized`);
+    } catch (err: any) {
+      console.warn(`⚠️  WebSocket initialization failed: ${err.message}`);
+    }
+
+    // Initialize session notifier for real-time auto-print
+    try {
+      await sessionNotifier.start();
+      console.log(`✅ Session notifier started (listening to PostgreSQL NOTIFY)`);
+    } catch (err: any) {
+      console.warn(`⚠️  Session notifier failed to start: ${err.message}`);
+    }
+
+    // Initialize order notifier for real-time kitchen auto-print
+    try {
+      await orderNotifier.start();
+      console.log(`✅ Order notifier started (listening to PostgreSQL NOTIFY)`);
+    } catch (err: any) {
+      console.warn(`⚠️  Order notifier failed to start: ${err.message}`);
+    }
+
+    // Initialize kitchen auto-print service
+    try {
+      kitchenAutoPrintService.initialize();
+      console.log(`✅ Kitchen auto-print service started`);
+    } catch (err: any) {
+      console.warn(`⚠️  Kitchen auto-print service failed to start: ${err.message}`);
+    }
+
+    // Initialize printer queue
+    try {
+      const printerQueue = initializePrinterQueue();
+      console.log(`✅ Printer queue service started`);
+    } catch (err: any) {
+      console.warn(`⚠️  Printer queue initialization failed: ${err.message}`);
+    }
+  });
 }
 
 server.on("error", (err: any) => {
