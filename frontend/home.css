@@ -975,7 +975,6 @@ footer {
 ================================================================ */
 @media (max-width: 768px) {
   .hamburger { display: flex !important; }
-  .logo-sub { display: none; }
 
   body { padding-top: 64px; }
   .nav-container { padding: 0 16px; height: 64px; grid-template-columns: auto 1fr auto; }
