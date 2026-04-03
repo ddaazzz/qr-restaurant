@@ -28,5 +28,6 @@ server.key
 backend/pa-query-test.js
 frontend/payment-test.html
 
-# Uploads (user-generated content)
-backend/uploads/
+# Uploads (user-generated restaurant content only)
+backend/uploads/menu/
+backend/uploads/restaurants/
