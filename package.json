@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "cd backend && npx ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "cd backend && tsc",
+    "build": "cd backend && npm install && tsc",
     "start": "node backend/dist/server.js"
   },
   "keywords": [],
