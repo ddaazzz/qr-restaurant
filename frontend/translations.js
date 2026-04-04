@@ -1736,9 +1736,9 @@ const translations = {
 
     // Home page - Who/What/How sections (Chinese)
     'home.logo-sub': '一站式餐廳管理系統',
-    'home.nav-who': '關於我們',
-    'home.nav-what': '我們提供',
-    'home.nav-how': '如何運作',
+    'home.nav-who': 'Who?',
+    'home.nav-what': 'What?',
+    'home.nav-how': 'How?',
     'home.hero-tagline': '是一站式餐廳管理系統',
     'home.hero-mission': '我們致力於將所有餐廳運營數字化，為業界提供效率和透明度。',
     'home.who-heading': '我們是誰？',
@@ -3497,7 +3497,7 @@ const translations = {
 
 // Get translation by key
 function t(key, lang = null) {
-  const currentLang = lang || (localStorage.getItem('language') || 'zh');
+  const currentLang = lang || (localStorage.getItem('language') || 'en');
   
   // Direct key lookup (keys are stored as strings like 'nav.home', not nested objects)
   let value = translations[currentLang] && translations[currentLang][key];
@@ -3582,6 +3582,6 @@ function getCurrentLanguage() {
     return 'en';
   }
   
-  const lang = localStorage.getItem('language') || 'zh';
+  const lang = localStorage.getItem('language') || 'en';
   return lang;
 }
