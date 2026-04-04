@@ -721,8 +721,6 @@ body {
 
 .how-cta-text strong { color: var(--white); }
 
-.fee-table-section { margin-top: 16px; }
-
 .fee-table-heading {
   font-size: 20px;
   font-weight: 400;
@@ -732,51 +730,74 @@ body {
   letter-spacing: -0.3px;
 }
 
-.fee-table-wrap {
-  overflow-x: auto;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+/* ================================================================
+   PAYMENT RATES CARDS
+================================================================ */
+.rates-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
 }
 
-.fee-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  color: var(--white);
+.rates-card {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  border-radius: 20px;
+  padding: 32px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.fee-table thead tr {
-  background: rgba(255, 255, 255, 0.14);
+.rates-card-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 96px;
 }
 
-.fee-table th {
-  padding: 14px 20px;
-  text-align: left;
-  font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+.rates-card-logos img {
+  height: 36px;
+  width: auto;
+  max-width: 90px;
+  object-fit: contain;
+  background: white;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.rates-logo-text {
+  background: white;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a1a;
   white-space: nowrap;
 }
 
-.fee-table td {
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.88);
+.rates-card-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding-top: 16px;
+  line-height: 1.5;
 }
 
-.fee-table td:nth-child(2),
-.fee-table td:nth-child(3) {
-  text-align: center;
-  font-weight: 600;
+.rates-card-fee {
+  font-size: 42px;
+  font-weight: 300;
   color: #6ee7b7;
+  letter-spacing: -1.5px;
+  line-height: 1.0;
 }
 
-.fee-table tbody tr:last-child td { border-bottom: none; }
-
-.fee-table tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+.rates-card-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.50);
+  min-height: 16px;
+}
 
 .fee-sme-note {
   text-align: center;
@@ -1077,7 +1098,7 @@ footer {
   .carousel-stage { margin-top: 32px; margin-bottom: 0; }
   .carousel-label { padding: 0 16px; margin-top: 8px; }
   .bill-img { max-height: 360px; }
-  .fee-table th, .fee-table td { padding: 10px 12px; font-size: 12px; }
+  .rates-cards { grid-template-columns: 1fr; gap: 16px; }
 
   .waitlist-panel { padding: 40px 24px; }
   .waitlist-panel h2 { font-size: 28px; }
@@ -1091,5 +1112,5 @@ footer {
 @media (max-width: 480px) {
   .hero-word-chuio { font-size: 64px; letter-spacing: -2.5px; }
   .bills-comparison { gap: 24px; }
-  .fee-table { font-size: 11px; }
+  .rates-card-fee { font-size: 36px; }
 }
