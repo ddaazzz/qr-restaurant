@@ -118,6 +118,50 @@ const getOrderTypeLabel = (orderType?: string) => {
   return 'Order';
 };
 
+// KPay payMethod integer → label
+const KPAY_METHOD_MAP: Record<number, string> = {
+  1: 'Visa', 2: 'Mastercard', 3: 'Amex', 4: 'UnionPay',
+  5: 'Alipay', 6: 'WeChat Pay', 7: 'FPS', 8: 'Octopus',
+  10: 'JCB', 11: 'Octopus', 12: 'PayMe', 14: 'FPS',
+};
+
+// KPay payResult integer → label
+const KPAY_RESULT_MAP: Record<number, string> = {
+  '-1': 'Timeout', 1: 'Pending', 2: 'Success', 3: 'Failed',
+  4: 'Refunded', 5: 'Cancelled', 6: 'Cancelled',
+};
+
+// Payment Asia status → label
+const PA_STATUS_MAP: Record<string, string> = {
+  '1': 'Completed', '2': 'Pending', '3': 'Failed',
+  '4': 'Processing', '5': 'Refunded',
+};
+
+// Resolve the display payment method for an order
+const getPaymentMethodLabel = (order: Order) => {
+  if (order.cp_method) return order.cp_method;
+  if (order.cp_vendor === 'kpay' && order.kpay_pay_method) {
+    return KPAY_METHOD_MAP[Number(order.kpay_pay_method)] || 'Terminal';
+  }
+  if (order.cp_vendor === 'payment-asia' && order.payment_network) {
+    return order.payment_network;
+  }
+  if (order.payment_method_online === 'kpay' && order.kpay_pay_method) {
+    return KPAY_METHOD_MAP[Number(order.kpay_pay_method)] || 'Terminal';
+  }
+  if (order.payment_method_online === 'payment-asia' && order.payment_network) {
+    return order.payment_network;
+  }
+  if (order.payment_method_online === 'card') return 'Credit Card';
+  if (order.payment_method_online === 'cash' || !order.payment_method_online) return 'Cash';
+  return order.payment_method_online;
+};
+
+// Resolve the vendor for display (from cp_vendor or payment_method_online)
+const resolveVendor = (order: Order) => {
+  return order.cp_vendor || order.payment_method_online || null;
+};
+
 export interface OrdersTabRef {
   toggleHistory: () => void;
 }
@@ -177,6 +221,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [kpayManagerPassword, setKpayManagerPassword] = useState('');
     const [showPaRefundModal, setShowPaRefundModal] = useState(false);
     const [paRefundAmount, setPaRefundAmount] = useState('');
+
+    // Live transaction details
+    const [kpayTxDetails, setKpayTxDetails] = useState<any>(null);
+    const [paTxDetails, setPaTxDetails] = useState<any>(null);
+    const [txLoading, setTxLoading] = useState(false);
 
     // Expose toggleHistory through ref
     useImperativeHandle(ref, () => ({
@@ -291,6 +340,44 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         }
       } catch (err) {
         // No KPay terminal configured — that's fine
+      }
+    };
+
+    // Load live transaction details for the selected order
+    const loadTransactionDetails = async (order: Order) => {
+      setKpayTxDetails(null);
+      setPaTxDetails(null);
+      const vendor = resolveVendor(order);
+      const ref = order.kpay_reference_id || order.cp_vendor_ref;
+      if (!ref) return;
+
+      setTxLoading(true);
+      try {
+        if (vendor === 'kpay') {
+          const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
+          setKpayTxDetails(res.data);
+        } else if (vendor === 'payment-asia') {
+          const merchantRef = order.cp_vendor_ref || ref;
+          const res = await apiClient.post(`/api/restaurants/${restaurantId}/payment-asia/query`, { merchant_reference: merchantRef });
+          setPaTxDetails(res.data);
+        }
+      } catch (err) {
+        // Query failed — we still show what we have from the order record
+      } finally {
+        setTxLoading(false);
+      }
+    };
+
+    const selectHistoryOrder = async (order: Order) => {
+      setSelectedHistoryOrder(order);
+      // Also fetch full order detail (with items, payment_records, etc.)
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/orders/${order.id}`);
+        setSelectedHistoryOrder(res.data);
+        loadTransactionDetails(res.data);
+      } catch (err) {
+        // Use the list data if detail fetch fails
+        loadTransactionDetails(order);
       }
     };
 
@@ -646,6 +733,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       try {
         const res = await apiClient.get(`/api/restaurants/${restaurantId}/orders/${orderId}`);
         setSelectedHistoryOrder(res.data);
+        loadTransactionDetails(res.data);
       } catch (err) {
         // fallback: find from reloaded list
       }
@@ -710,7 +798,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               const items = order.items || [];
               const isSelected = selectedHistoryOrder?.id === order.id;
               return (
-                <TouchableOpacity onPress={() => setSelectedHistoryOrder(order)}>
+                <TouchableOpacity onPress={() => selectHistoryOrder(order)}>
                 <View style={[styles.orderCard, isSelected && { borderColor: '#3b82f6', borderWidth: 2 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
@@ -737,27 +825,20 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           <Text style={styles.statusText}>{paymentBadge.label}</Text>
                         </View>
                       )}
+                      <Text style={{ fontSize: 10, color: '#9ca3af' }}>
+                        {getPaymentMethodLabel(order)}
+                        {(() => {
+                          const v = resolveVendor(order);
+                          if (v && v !== 'cash' && v !== 'card') {
+                            const vLabel = getVendorLabel(v);
+                            const mLabel = getPaymentMethodLabel(order);
+                            if (vLabel && mLabel !== vLabel) return ` · ${vLabel}`;
+                          }
+                          return '';
+                        })()}
+                      </Text>
                     </View>
                   </View>
-
-                  {/* Payment details inline */}
-                  {(order.cp_method || order.cp_vendor) && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
-                      {order.cp_vendor && (
-                        <Text style={{ fontSize: 11, color: getVendorColor(order.cp_vendor), fontWeight: '600' }}>
-                          {getVendorLabel(order.cp_vendor)}
-                        </Text>
-                      )}
-                      {order.cp_method && (
-                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{order.cp_method}</Text>
-                      )}
-                      {order.cp_env === 'sandbox' && (
-                        <View style={[styles.statusBadge, { backgroundColor: '#f59e0b' }]}>
-                          <Text style={styles.statusText}>sandbox</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
 
                   {/* Items summary */}
                   {items.length > 0 && (
@@ -872,53 +953,233 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   </View>
 
                   {/* Payment Information */}
-                  {(selectedHistoryOrder.cp_vendor || selectedHistoryOrder.payment_status || selectedHistoryOrder.payment_received) && (
-                    <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Information</Text>
-                      {selectedHistoryOrder.cp_vendor && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Vendor</Text>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: getVendorColor(selectedHistoryOrder.cp_vendor) }}>
-                            {getVendorLabel(selectedHistoryOrder.cp_vendor)}
-                          </Text>
+                  {(() => {
+                    const vendor = resolveVendor(selectedHistoryOrder);
+                    const effectiveStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status || (selectedHistoryOrder.payment_received ? 'completed' : null);
+                    const methodLabel = getPaymentMethodLabel(selectedHistoryOrder);
+                    const vendorLabel = vendor ? getVendorLabel(vendor) : (selectedHistoryOrder.payment_received ? 'Cash' : null);
+
+                    // Status badge helper
+                    const statusBadge = (status: string | null) => {
+                      if (!status) return null;
+                      const map: Record<string, { label: string; bg: string; fg: string }> = {
+                        completed: { label: '✓ Paid', bg: '#d1fae5', fg: '#065f46' },
+                        paid: { label: '✓ Paid', bg: '#d1fae5', fg: '#065f46' },
+                        voided: { label: '🚫 Voided', bg: '#fef3c7', fg: '#92400e' },
+                        cancelled: { label: '🚫 Voided', bg: '#fef3c7', fg: '#92400e' },
+                        refunded: { label: '↩ Refunded', bg: '#fee2e2', fg: '#991b1b' },
+                        partial_refund: { label: '↩ Partial', bg: '#fef3c7', fg: '#92400e' },
+                        pending: { label: 'Pending', bg: '#dbeafe', fg: '#1e40af' },
+                        failed: { label: 'Failed', bg: '#fee2e2', fg: '#991b1b' },
+                      };
+                      return map[status] || { label: status, bg: '#f3f4f6', fg: '#374151' };
+                    };
+                    const badge = statusBadge(effectiveStatus);
+
+                    return (
+                      <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Information</Text>
+
+                        {/* Payment Status */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Status</Text>
+                          {badge ? (
+                            <View style={{ backgroundColor: badge.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: badge.fg }}>{badge.label}</Text>
+                            </View>
+                          ) : (
+                            <View style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>Unpaid</Text>
+                            </View>
+                          )}
                         </View>
-                      )}
-                      {selectedHistoryOrder.cp_method && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Method</Text>
-                          <Text style={{ fontSize: 13, color: '#1f2937' }}>{selectedHistoryOrder.cp_method}</Text>
-                        </View>
-                      )}
-                      {selectedHistoryOrder.cp_status && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Status</Text>
-                          <View style={{ backgroundColor: selectedHistoryOrder.cp_status === 'completed' ? '#d1fae5' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: selectedHistoryOrder.cp_status === 'completed' ? '#065f46' : '#92400e' }}>
-                              {selectedHistoryOrder.cp_status.toUpperCase()}
+
+                        {/* Payment Vendor */}
+                        {vendorLabel && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Vendor</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: vendor ? getVendorColor(vendor) : '#374151' }}>
+                              💳 {vendorLabel}
                             </Text>
                           </View>
-                        </View>
-                      )}
-                      {selectedHistoryOrder.cp_vendor_ref && (
+                        )}
+
+                        {/* Payment Method */}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Reference</Text>
-                          <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: 'monospace' }}>{selectedHistoryOrder.cp_vendor_ref}</Text>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Method</Text>
+                          <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
                         </View>
-                      )}
-                      {selectedHistoryOrder.cp_completed_at && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Paid At</Text>
-                          <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.cp_completed_at)}</Text>
+
+                        {/* Vendor Reference */}
+                        {selectedHistoryOrder.cp_vendor_ref && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Reference</Text>
+                            <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.cp_vendor_ref}</Text>
+                          </View>
+                        )}
+
+                        {/* Paid At */}
+                        {selectedHistoryOrder.cp_completed_at && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Paid At</Text>
+                            <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.cp_completed_at)}</Text>
+                          </View>
+                        )}
+
+                        {/* Refund info */}
+                        {selectedHistoryOrder.cp_refund_amount_cents && selectedHistoryOrder.cp_refund_amount_cents > 0 && (
+                          <View style={{ backgroundColor: '#fef2f2', borderRadius: 8, padding: 8, marginTop: 4 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 13, color: '#ef4444' }}>Refunded</Text>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#ef4444' }}>{formatPrice(selectedHistoryOrder.cp_refund_amount_cents)}</Text>
+                            </View>
+                            {selectedHistoryOrder.cp_refunded_at && (
+                              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>at {formatDate(selectedHistoryOrder.cp_refunded_at)}</Text>
+                            )}
+                          </View>
+                        )}
+
+                        {/* Sandbox badge */}
+                        {selectedHistoryOrder.cp_env === 'sandbox' && (
+                          <View style={{ backgroundColor: '#fef3c7', borderRadius: 6, padding: 4, alignSelf: 'flex-start', marginTop: 6 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#92400e' }}>SANDBOX</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })()}
+
+                  {/* KPay Transaction Details */}
+                  {(() => {
+                    const vendor = resolveVendor(selectedHistoryOrder);
+                    if (vendor !== 'kpay' || !selectedHistoryOrder.kpay_reference_id) return null;
+
+                    return (
+                      <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 8 }}>KPay Transaction Details</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 12, color: '#6b7280' }}>Order Ref</Text>
+                          <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
                         </View>
-                      )}
-                      {selectedHistoryOrder.cp_refund_amount_cents && selectedHistoryOrder.cp_refund_amount_cents > 0 && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#ef4444' }}>Refunded</Text>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#ef4444' }}>{formatPrice(selectedHistoryOrder.cp_refund_amount_cents)}</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
+                        {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
+                        {kpayTxDetails && (
+                          <>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <Text style={{ fontSize: 12, color: '#6b7280' }}>Amount</Text>
+                              <Text style={{ fontSize: 12, color: '#1f2937' }}>
+                                {kpayTxDetails.payCurrency || 'HKD'} {((Number(kpayTxDetails.payAmount) || kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
+                                {kpayTxDetails.payAmount ? ` (${kpayTxDetails.payAmount})` : ''}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <Text style={{ fontSize: 12, color: '#6b7280' }}>Status</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{kpayTxDetails.status || '—'}</Text>
+                            </View>
+                            {kpayTxDetails.payResult !== undefined && (
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>payResult</Text>
+                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{(KPAY_RESULT_MAP as any)[kpayTxDetails.payResult] || kpayTxDetails.payResult}</Text>
+                              </View>
+                            )}
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <Text style={{ fontSize: 12, color: '#6b7280' }}>outTradeNo</Text>
+                              <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.outTradeNo || '—'}</Text>
+                            </View>
+                            {kpayTxDetails.transactionNo && (
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>transactionNo</Text>
+                                <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.transactionNo}</Text>
+                              </View>
+                            )}
+                            {kpayTxDetails.refNo && (
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>refNo</Text>
+                                <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refNo}</Text>
+                              </View>
+                            )}
+                            {kpayTxDetails.commitTime && (
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>commitTime</Text>
+                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{kpayTxDetails.commitTime}</Text>
+                              </View>
+                            )}
+                            {kpayTxDetails.payMethod !== undefined && (
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>payMethod</Text>
+                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{KPAY_METHOD_MAP[kpayTxDetails.payMethod] || kpayTxDetails.payMethod}</Text>
+                              </View>
+                            )}
+                            {kpayTxDetails.refund_amount_cents > 0 && (
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <Text style={{ fontSize: 12, color: '#ef4444' }}>Refunded</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#ef4444' }}>{formatPrice(kpayTxDetails.refund_amount_cents)}</Text>
+                              </View>
+                            )}
+                          </>
+                        )}
+                      </View>
+                    );
+                  })()}
+
+                  {/* Payment Asia Transaction Details */}
+                  {(() => {
+                    const vendor = resolveVendor(selectedHistoryOrder);
+                    if (vendor !== 'payment-asia') return null;
+                    const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
+                    if (!merchantRef) return null;
+
+                    return (
+                      <View style={{ backgroundColor: '#fefce8', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#fde68a' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 8 }}>Payment Asia Transaction Details</Text>
+                        {txLoading && <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 8 }} />}
+                        {paTxDetails?.records?.map((rec: any, idx: number) => {
+                          const isSale = rec.type === '1' || rec.type === 'Sale';
+                          return (
+                            <View key={idx} style={{ marginBottom: idx < (paTxDetails.records.length - 1) ? 8 : 0 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>
+                                {isSale ? 'Sale' : `Record #${idx + 1}`}
+                              </Text>
+                              {selectedHistoryOrder.payment_network && (
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Method</Text>
+                                  <Text style={{ fontSize: 12, color: '#1f2937' }}>{selectedHistoryOrder.payment_network}</Text>
+                                </View>
+                              )}
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>Amount</Text>
+                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{rec.currency || 'HKD'} {rec.amount}</Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>Status</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{PA_STATUS_MAP[rec.status] || rec.status}</Text>
+                              </View>
+                              {rec.request_reference && (
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Request Ref</Text>
+                                  <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{rec.request_reference}</Text>
+                                </View>
+                              )}
+                              {rec.created_time && (
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Created</Text>
+                                  <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.created_time) * 1000).toLocaleString()}</Text>
+                                </View>
+                              )}
+                              {rec.completed_time && (
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Completed</Text>
+                                  <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.completed_time) * 1000).toLocaleString()}</Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                        {paTxDetails && !paTxDetails.records?.length && (
+                          <Text style={{ fontSize: 12, color: '#9ca3af' }}>No transaction records found</Text>
+                        )}
+                      </View>
+                    );
+                  })()}
 
                   {/* Payment Records Ledger */}
                   {selectedHistoryOrder.payment_records && selectedHistoryOrder.payment_records.length > 0 && (
@@ -941,7 +1202,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           )}
                           <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{formatPrice(record.amount_cents)} {record.currency_code || ''}</Text>
                           {record.vendor_reference && (
-                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontFamily: 'monospace' }}>Ref: {record.vendor_reference}</Text>
+                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>Ref: {record.vendor_reference}</Text>
                           )}
                           {record.completed_at && (
                             <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Completed: {formatDate(record.completed_at)}</Text>
@@ -956,9 +1217,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                   {/* Void / Refund Actions */}
                   {(() => {
-                    const vendor = selectedHistoryOrder.cp_vendor || selectedHistoryOrder.payment_method_online;
-                    const pStatus = selectedHistoryOrder.payment_status || selectedHistoryOrder.cp_status;
-                    const isVoided = pStatus === 'voided';
+                    const vendor = resolveVendor(selectedHistoryOrder);
+                    const pStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status;
+                    const isVoided = pStatus === 'voided' || pStatus === 'cancelled';
                     const isRefunded = pStatus === 'refunded';
                     if (isVoided || isRefunded) return null;
 
@@ -966,7 +1227,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       // KPay: Void + Refund (calls terminal)
                       return (
                         <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>KPay Actions</Text>
                           <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity
                               style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
@@ -989,7 +1249,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       // Payment Asia: Refund only (calls PA API)
                       return (
                         <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Asia Actions</Text>
                           <TouchableOpacity
                             style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
                             onPress={openPaRefund}
@@ -1000,28 +1259,24 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       );
                     }
 
-                    // Manual (cash/card): Void + Refund (record update only)
-                    if (!vendor || (vendor !== 'kpay' && vendor !== 'payment-asia')) {
+                    // Cash/Card (manual): Refund only
+                    if (!vendor || vendor === 'cash' || vendor === 'card') {
                       const effStatus = pStatus || '';
                       if (effStatus === 'completed' || effStatus === 'paid' || !effStatus) {
                         return (
                           <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Actions</Text>
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                              <TouchableOpacity
-                                style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
-                                onPress={() => handleVoidOrder(selectedHistoryOrder.id)}
-                              >
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>🚫 Void</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
-                                onPress={() => handleRefundOrder(selectedHistoryOrder.id)}
-                              >
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>💸 Refund</Text>
-                              </TouchableOpacity>
-                            </View>
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                              onPress={() => handleRefundOrder(selectedHistoryOrder.id)}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>💸 Refund</Text>
+                            </TouchableOpacity>
                           </View>
+                        );
+                      }
+                    }
+                    return null;
+                  })()}
                         );
                       }
                     }
@@ -1608,22 +1863,20 @@ export const OrdersTab = React.forwardRef(OrdersTabComponent) as React.ForwardRe
 
 // Helper for order payment badge
 const getPaymentBadge = (order: Order) => {
-  if (order.cp_status === 'refunded' || order.cp_refunded_at) {
-    return { label: 'Refunded', color: '#ef4444' };
+  const effStatus = order.cp_status || order.payment_status;
+  if (effStatus === 'refunded' || order.cp_refunded_at) {
+    return { label: '↩ Refunded', color: '#ef4444' };
   }
-  if (order.cp_status === 'voided') {
-    return { label: 'Voided', color: '#6b7280' };
+  if (effStatus === 'voided' || effStatus === 'cancelled') {
+    return { label: '🚫 Voided', color: '#6b7280' };
   }
   if (order.cp_refund_amount_cents && order.cp_refund_amount_cents > 0) {
-    return { label: 'Partial Refund', color: '#f97316' };
+    return { label: '↩ Partial', color: '#f97316' };
   }
-  if (order.payment_received || order.cp_status === 'completed') {
-    return { label: 'Paid', color: '#10b981' };
+  if (order.payment_received || effStatus === 'completed' || effStatus === 'paid') {
+    return { label: '✓ Paid', color: '#10b981' };
   }
-  if (order.status === 'completed' && !order.payment_received) {
-    return { label: 'Unpaid', color: '#f59e0b' };
-  }
-  return null;
+  return { label: 'Unpaid', color: '#9ca3af' };
 };
 
 const getVendorLabel = (vendor?: string) => {
