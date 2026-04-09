@@ -373,10 +373,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const getPrinterTypeLabel = (type?: string): string => {
     const labels: Record<string, string> = {
-      'thermal': 'Thermal Network Printer',
-      'network': 'Network Printer',
-      'bluetooth': 'Bluetooth Printer',
-      'none': 'Not Configured',
+      'thermal': t('settings.thermal-network'),
+      'network': t('settings.network-printer'),
+      'bluetooth': t('settings.bluetooth-printer'),
+      'none': t('settings.not-configured'),
     };
     const label = labels[type || ''] || '—';
     console.log('[Printer] getPrinterTypeLabel called with:', type, '-> result:', label);
@@ -403,9 +403,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       setSettings(formData);
       setEditMode(false);
-      Alert.alert('Success', 'Settings saved successfully!');
+      Alert.alert(t('common.success'), t('settings.settings-saved'));
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to save settings');
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.settings-failed'));
     }
   };
 
@@ -463,10 +463,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setEditingPrinterType(null);
       setActiveModal(null);
       setShowingPrinterSettingsPage(false);
-      Alert.alert('Success', `${editingPrinterType.toUpperCase()} printer settings saved!`);
+      Alert.alert(t('common.success'), t('settings.printer-saved'));
     } catch (err: any) {
       console.error('[SettingsTab] Error saving printer settings:', err);
-      Alert.alert('Error', err.response?.data?.error || 'Failed to save printer settings');
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.printer-failed'));
     }
   };
 
@@ -489,10 +489,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       // Invalidate cache so next fetch gets fresh data from backend
       printerSettingsService.invalidateCache(restaurantId);
       
-      Alert.alert('Success', 'QR Code Format settings saved!');
+      Alert.alert(t('common.success'), t('settings.qr-format-saved'));
     } catch (err: any) {
       console.error('[SettingsTab] Error saving QR Code Format settings:', err);
-      Alert.alert('Error', err.response?.data?.error || 'Failed to save QR Code Format settings');
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.qr-format-failed'));
     }
   };
 
@@ -511,7 +511,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         console.log('[Bluetooth] Manager state:', state);
         
         if (state !== 'PoweredOn') {
-          Alert.alert('Bluetooth', 'Please enable Bluetooth on your device and try again');
+          Alert.alert(t('settings.bluetooth-enable'), t('settings.bluetooth-msg'));
           return;
         }
       } catch (err) {
@@ -555,13 +555,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         console.log(`✓ Bluetooth scan completed. Found ${foundDevices.size} devices`);
         
         if (foundDevices.size === 0) {
-          Alert.alert('No Devices Found', 'No Bluetooth devices detected. Make sure your printer is powered on and in pairing mode.\n\nTip: On iOS, ensure Location permission is granted. On Android, ensure Bluetooth permission is granted.');
+          Alert.alert(t('settings.no-devices'), t('settings.no-devices-msg'));
         }
       }, 10000);
     } catch (err: any) {
       console.error('❌ Bluetooth search error:', err);
       setBluetoothSearching(false);
-      Alert.alert('Error', 'Failed to search for Bluetooth devices: ' + err.message + '\n\nMake sure Bluetooth permissions are granted.');
+      Alert.alert(t('common.error'), t('settings.bluetooth-error') + ': ' + err.message);
     }
   };
 
@@ -580,7 +580,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     setPrinterFormData(payload as PrinterSettings);
 
     setActiveModal('printer');
-    Alert.alert('Device Selected', `"${device.name}" has been selected for your ${editingPrinterType.toUpperCase()} printer.`);
+    Alert.alert(t('settings.device-selected'), t('settings.device-selected-msg', { '0': device.name }));
   };
 
   // Bluetooth device selection is now handled at runtime during printing
@@ -588,7 +588,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const createCoupon = async () => {
     try {
       if (!couponForm.code || !couponForm.discount_value) {
-        Alert.alert('Validation', 'Please fill in all required fields');
+        Alert.alert(t('settings.validation'), t('settings.fill-required'));
         return;
       }
 
@@ -609,24 +609,24 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         description: '',
       });
       setShowCouponModal(false);
-      Alert.alert('Success', 'Coupon created!');
+      Alert.alert(t('common.success'), t('settings.coupon-created'));
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to create coupon');
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.coupon-failed'));
     }
   };
 
   const deleteCoupon = async (couponId: number) => {
-    Alert.alert('Delete Coupon', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('settings.delete-coupon'), t('settings.delete-coupon-msg'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         onPress: async () => {
           try {
             await apiClient.delete(`/api/coupons/${couponId}`);
             await fetchSettings();
-            Alert.alert('Success', 'Coupon deleted!');
+            Alert.alert(t('common.success'), t('settings.coupon-deleted'));
           } catch (err: any) {
-            Alert.alert('Error', 'Failed to delete coupon');
+            Alert.alert(t('common.error'), t('settings.coupon-delete-failed'));
           }
         },
         style: 'destructive',
@@ -640,12 +640,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       // Validation differs by vendor
       if (terminalForm.vendor_name === 'payment-asia') {
         if (!terminalForm.merchant_token || !terminalForm.secret_code) {
-          Alert.alert('Validation', 'Please fill in Merchant Token and Secret Code');
+          Alert.alert(t('settings.pa-validation'), t('settings.pa-validation-msg'));
           return;
         }
       } else {
         if (!terminalForm.app_id || !terminalForm.app_secret || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
-          Alert.alert('Validation', 'Please fill in all required fields');
+          Alert.alert(t('settings.validation'), t('settings.fill-required'));
           return;
         }
       }
@@ -669,25 +669,25 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       if (editingTerminalId) {
         // Update existing terminal
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
-        Alert.alert('Success', 'Payment terminal updated successfully!');
+        Alert.alert(t('common.success'), t('settings.terminal-updated'));
       } else {
         // Create new terminal
         await apiClient.post(`/api/restaurants/${restaurantId}/payment-terminals`, payload);
-        Alert.alert('Success', 'Payment terminal created successfully!');
+        Alert.alert(t('common.success'), t('settings.terminal-created'));
       }
 
       await fetchPaymentTerminals();
       resetTerminalForm();
       setShowPaymentTerminalModal(false);
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to save payment terminal');
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.terminal-failed'));
     }
   };
 
   const testPaymentTerminal = async () => {
     try {
       if (!editingTerminalId) {
-        Alert.alert('Error', 'Please save the terminal configuration first');
+        Alert.alert(t('common.error'), t('settings.save-first'));
         return;
       }
 
@@ -700,34 +700,34 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       
       if (response.data.success) {
         Alert.alert(
-          'Connection Successful',
-          `Connected to ${terminalForm.vendor_name.toUpperCase()} terminal at ${terminalForm.terminal_ip}:${terminalForm.terminal_port}`
+          t('settings.connection-success'),
+          t('settings.connected-to', { '0': terminalForm.vendor_name.toUpperCase(), '1': `${terminalForm.terminal_ip}:${terminalForm.terminal_port}` })
         );
       } else {
         Alert.alert(
-          'Connection Failed',
+          t('settings.connection-failed'),
           response.data.error || response.data.message
         );
       }
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to test terminal connection');
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.test-failed'));
     } finally {
       setTestingTerminal(false);
     }
   };
 
   const deletePaymentTerminal = async (terminalId: number) => {
-    Alert.alert('Delete Payment Terminal', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('settings.delete-terminal'), t('settings.delete-terminal-msg'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         onPress: async () => {
           try {
             await apiClient.delete(`/api/restaurants/${restaurantId}/payment-terminals/${terminalId}`);
             await fetchPaymentTerminals();
-            Alert.alert('Success', 'Payment terminal deleted!');
+            Alert.alert(t('common.success'), t('settings.terminal-deleted'));
           } catch (err: any) {
-            Alert.alert('Error', 'Failed to delete payment terminal');
+            Alert.alert(t('common.error'), t('settings.terminal-delete-failed'));
           }
         },
         style: 'destructive',
@@ -770,7 +770,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const copyToClipboard = async (text: string, label: string) => {
     // In React Native, we'd use a library like @react-native-clipboard/clipboard
-    Alert.alert('Copied', `${label} copied to clipboard`);
+    Alert.alert(t('settings.copied'), t('settings.copied-msg'));
   };
 
   const getWebOrigin = () => {
@@ -790,15 +790,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const shareQRCode = async (type: 'staff' | 'kitchen') => {
     try {
       const url = type === 'staff' ? generateStaffQRUrl() : generateKitchenQRUrl();
-      const title = type === 'staff' ? 'Staff Login QR Code' : 'Kitchen Login QR Code';
+      const title = type === 'staff' ? t('settings.staff-qr-title') : t('settings.kitchen-qr-title');
       
       await Share.share({
-        message: `${title}\n\nScan this link with your phone to login:\n${url}`,
+        message: `${title}\n\n${t('settings.share-login')}\n${url}`,
         url: url, // For iOS
         title: title,
       });
     } catch (error) {
-      Alert.alert('Error', 'Failed to share QR code');
+      Alert.alert(t('common.error'), t('settings.share-failed'));
     }
   };
 
@@ -821,7 +821,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Search Bluetooth Devices</Text>
+            <Text style={styles.modalTitle}>{t('settings.bluetooth-title')}</Text>
             <TouchableOpacity onPress={() => setActiveModal(null)}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
@@ -832,7 +832,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             onPress={startBluetoothSearch}
             disabled={bluetoothSearching}
           >
-            <Text style={styles.btnText}>{bluetoothSearching ? 'Scanning...' : 'Scan for Devices'}</Text>
+            <Text style={styles.btnText}>{bluetoothSearching ? t('settings.scanning') : t('settings.scan-devices')}</Text>
           </TouchableOpacity>
 
           <ScrollView style={{ flex: 1, marginHorizontal: 0 }}>
@@ -849,13 +849,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   onPress={() => selectBluetoothDevice(device)}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '500', color: '#1f2937' }}>{device.name}</Text>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Signal: {device.signal} dBm</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('settings.signal')}: {device.signal} dBm</Text>
                 </TouchableOpacity>
               ))
             ) : bluetoothSearching ? (
-              <Text style={[styles.helperText, { marginHorizontal: 16, marginTop: 20 }]}>Searching for devices...</Text>
+              <Text style={[styles.helperText, { marginHorizontal: 16, marginTop: 20 }]}>{t('settings.searching')}</Text>
             ) : (
-              <Text style={[styles.helperText, { marginHorizontal: 16, marginTop: 20 }]}>Click "Scan for Devices" to search for nearby Bluetooth devices</Text>
+              <Text style={[styles.helperText, { marginHorizontal: 16, marginTop: 20 }]}>{t('settings.search-hint')}</Text>
             )}
           </ScrollView>
 
@@ -864,7 +864,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               style={[styles.btn, styles.btnSecondary]}
               onPress={() => setActiveModal(null)}
             >
-              <Text style={styles.btnText}>Cancel</Text>
+              <Text style={styles.btnText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.btnPrimary]}
@@ -873,7 +873,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 setShowingPrinterSettingsPage(false);
               }}
             >
-              <Text style={styles.btnText}>Done</Text>
+              <Text style={styles.btnText}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -889,13 +889,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         {/* Page Header */}
         <View style={{ padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.printerPageTitle}>
-            {editingPrinterType === 'qr' && 'QR Code Printer'}
-            {editingPrinterType === 'bill' && 'Bill Printer'}
-            {editingPrinterType === 'kitchen' && 'Kitchen Order Printer'}
-            {editingPrinterType === 'kpay' && 'KPay Receipt Printer'}
+            {editingPrinterType === 'qr' && t('settings.qr-printer')}
+            {editingPrinterType === 'bill' && t('settings.bill-printer')}
+            {editingPrinterType === 'kitchen' && t('settings.kitchen-printer')}
+            {editingPrinterType === 'kpay' && t('settings.kpay-printer')}
           </Text>
           <TouchableOpacity onPress={() => { setEditingPrinterType(null); setShowingPrinterSettingsPage(false); }}>
-            <Text style={styles.backButton}>← Back</Text>
+            <Text style={styles.backButton}>{t('settings.back-arrow')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -904,7 +904,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {/* Auto-Print Toggle */}
             <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>Auto-Print</Text>
+                <Text style={styles.label}>{t('settings.auto-print')}</Text>
                 <Switch
                   value={
                     editingPrinterType === 'bill'
@@ -934,7 +934,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             {/* Printer Type Selector */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Printer Type</Text>
+              <Text style={styles.label}>{t('settings.printer-type')}</Text>
               <View>
                 {['none', 'network', 'bluetooth'].map((type) => (
                   <TouchableOpacity
@@ -971,7 +971,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {printerFormData?.printer_type === 'network' && (
               <>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>IP Address</Text>
+                  <Text style={styles.label}>{t('settings.ip-address')}</Text>
                   <TextInput
                     style={styles.input}
                     value={printerFormData?.printer_host?.toString() || ''}
@@ -982,7 +982,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   />
                 </View>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Port</Text>
+                  <Text style={styles.label}>{t('settings.port')}</Text>
                   <TextInput
                     style={styles.input}
                     value={printerFormData?.printer_port?.toString() || '9100'}
@@ -1004,7 +1004,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   style={[styles.btn, styles.btnPrimary, { marginBottom: 16 }]}
                   onPress={() => setActiveModal('bluetooth')}
                 >
-                  <Text style={styles.btnText}>Scan for Bluetooth Devices</Text>
+                  <Text style={styles.btnText}>{t('settings.scan-bluetooth')}</Text>
                 </TouchableOpacity>
 
                 {(printerFormData?.bluetooth_device_name || 
@@ -1013,7 +1013,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   (editingPrinterType === 'kitchen' && printerSettings?.kitchen_bluetooth_device_name) ||
                   (editingPrinterType === 'kpay' && printerSettings?.kpay_bluetooth_device_name)) && (
                   <View style={{ backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#86efac', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669', marginBottom: 4 }}>Connected Device</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669', marginBottom: 4 }}>{t('settings.connected-device')}</Text>
                     <Text style={{ fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
                       {printerFormData?.bluetooth_device_name || 
                       (editingPrinterType === 'qr' ? printerSettings?.qr_bluetooth_device_name : '') ||
@@ -1038,13 +1038,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             style={[styles.btn, styles.btnSecondary]}
             onPress={() => { setEditingPrinterType(null); setShowingPrinterSettingsPage(false); }}
           >
-            <Text style={styles.btnText}>Cancel</Text>
+            <Text style={styles.btnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnPrimary]}
             onPress={() => savePrinterSettings()}
           >
-            <Text style={styles.btnText}>Save</Text>
+            <Text style={styles.btnText}>{t('settings.save')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1062,17 +1062,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={{ padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.printerPageTitle}>{t('admin.printer-settings')}</Text>
           <TouchableOpacity onPress={() => setShowingPrinterSettingsPage(false)}>
-            <Text style={styles.backButton}>← Back</Text>
+            <Text style={styles.backButton}>{t('settings.back-arrow')}</Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
           {/* QR Code Format Section */}
           <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>QR Code Format</Text>
+            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.qr-format')}</Text>
             
             <View style={styles.formGroup}>
-              <Text style={styles.label}>QR Code Size</Text>
+              <Text style={styles.label}>{t('settings.qr-size')}</Text>
               <View style={styles.toggleGroup}>
                 {['small', 'medium', 'large'].map((size) => (
                   <TouchableOpacity
@@ -1097,27 +1097,27 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Text Above QR Code</Text>
+              <Text style={styles.label}>{t('settings.text-above')}</Text>
               <TextInput
                 style={styles.input}
                 value={qrTextAbove}
                 onChangeText={setQrTextAbove}
-                placeholder="e.g., Scan to Order"
+                placeholder={t('settings.text-above')}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Text Below QR Code</Text>
+              <Text style={styles.label}>{t('settings.text-below')}</Text>
               <TextInput
                 style={styles.input}
                 value={qrTextBelow}
                 onChangeText={setQrTextBelow}
-                placeholder="e.g., Let us know how we did!"
+                placeholder={t('settings.text-below')}
               />
             </View>
 
             <View style={[styles.formGroup, { marginBottom: 20 }]}>
-              <Text style={styles.label}>Preview</Text>
+              <Text style={styles.label}>{t('settings.preview')}</Text>
               <View style={{
                 borderColor: '#ddd',
                 borderWidth: 2,
@@ -1140,7 +1140,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   alignItems: 'center',
                   marginBottom: 12,
                 }}>
-                  <Text style={{ fontSize: 11, color: '#999' }}>QR Code</Text>
+                  <Text style={{ fontSize: 11, color: '#999' }}>QR</Text>
                 </View>
                 <Text style={{ fontSize: 11, fontWeight: '600', marginBottom: 4 }}>{qrTextAbove}</Text>
                 <Text style={{ fontSize: 10, marginBottom: 8, textAlign: 'center' }}>{qrTextBelow}</Text>
@@ -1153,10 +1153,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
           {/* Bill Format Section */}
           <View style={{ marginHorizontal: 16 }}>
-            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>Bill Format</Text>
+            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.bill-format')}</Text>
             
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Paper Width</Text>
+              <Text style={styles.label}>{t('settings.paper-width')}</Text>
               <View style={styles.toggleGroup}>
                 {['58', '80'].map((width) => (
                   <TouchableOpacity
@@ -1182,51 +1182,51 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>Show Phone</Text>
+                <Text style={styles.label}>{t('settings.show-phone')}</Text>
                 <Switch value={billShowPhone} onValueChange={setBillShowPhone} />
               </View>
             </View>
 
             <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>Show Address</Text>
+                <Text style={styles.label}>{t('settings.show-address')}</Text>
                 <Switch value={billShowAddress} onValueChange={setBillShowAddress} />
               </View>
             </View>
 
             <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>Show Order Time</Text>
+                <Text style={styles.label}>{t('settings.show-order-time')}</Text>
                 <Switch value={billShowTime} onValueChange={setBillShowTime} />
               </View>
             </View>
 
             <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>Show Items</Text>
+                <Text style={styles.label}>{t('settings.show-items')}</Text>
                 <Switch value={billShowItems} onValueChange={setBillShowItems} />
               </View>
             </View>
 
             <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>Show Total</Text>
+                <Text style={styles.label}>{t('settings.show-total')}</Text>
                 <Switch value={billShowTotal} onValueChange={setBillShowTotal} />
               </View>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Footer Message</Text>
+              <Text style={styles.label}>{t('settings.footer-message')}</Text>
               <TextInput
                 style={styles.input}
                 value={billFooterMsg}
                 onChangeText={setBillFooterMsg}
-                placeholder="Thank you for your business!"
+                placeholder={t('settings.footer-placeholder')}
               />
             </View>
 
             <View style={[styles.formGroup, { marginBottom: 20 }]}>
-              <Text style={styles.label}>Preview</Text>
+              <Text style={styles.label}>{t('settings.preview')}</Text>
               <View style={{
                 borderColor: '#ddd',
                 borderWidth: 2,
@@ -1336,12 +1336,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
           {/* Printer Configuration - Separate for each type */}
           <View style={{ marginHorizontal: 16 }}>
-            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>Printer Configuration</Text>
+            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.printer-config')}</Text>
             
             {/* QR Code Printer */}
             <View style={{ backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>QR Code Printer</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.qr-printer')}</Text>
               </View>
               {printerSettings?.qr_printer_type && (
                 <>
@@ -1376,14 +1376,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   setPrinterFormData(qrSettings);
                 }}
               >
-                <Text style={styles.btnText}>Configure</Text>
+                <Text style={styles.btnText}>{t('settings.configure')}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Bill Printer */}
             <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>Bill Printer</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.bill-printer')}</Text>
               </View>
               {printerSettings?.bill_printer_type && (
                 <>
@@ -1418,14 +1418,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   setPrinterFormData(billSettings);
                 }}
               >
-                <Text style={styles.btnText}>Configure</Text>
+                <Text style={styles.btnText}>{t('settings.configure')}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Kitchen Printer */}
             <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>Kitchen Order Printer</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kitchen-printer')}</Text>
               </View>
               {printerSettings?.kitchen_printer_type && (
                 <>
@@ -1460,7 +1460,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   setPrinterFormData(kitchenSettings);
                 }}
               >
-                <Text style={styles.btnText}>Configure</Text>
+                <Text style={styles.btnText}>{t('settings.configure')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -1469,7 +1469,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               style={[styles.btn, styles.btnSecondary, { paddingVertical: 10 }]}
               onPress={() => setShowingPrinterSettingsPage(false)}
             >
-              <Text style={styles.btnText}>← Back</Text>
+              <Text style={styles.btnText}>{t('settings.back-arrow')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -1479,7 +1479,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               style={[styles.btn, styles.btnPrimary]}
               onPress={saveQRFormatSettings}
             >
-              <Text style={styles.btnText}>Save QR Format</Text>
+              <Text style={styles.btnText}>{t('settings.save-qr-format')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1491,17 +1491,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Settings card grid items
   const settingsCards: { page: SettingsPage; iconName: keyof typeof Ionicons.glyphMap; label: string; description: string }[] = [
-    { page: 'profile', iconName: 'person-circle-outline', label: 'My Profile', description: currentUser?.role || 'View profile' },
+    { page: 'profile', iconName: 'person-circle-outline', label: t('settings.my-profile'), description: currentUser?.role || t('settings.view-profile') },
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
-    { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: 'QR, Bill, Kitchen' },
-    { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: `${paymentTerminals.length} configured` },
+    { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
+    { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
-    { page: 'staff-links', iconName: 'key-outline', label: 'Staff & Kitchen Links', description: 'QR codes for staff login' },
-    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: `${coupons.length} coupons` },
-    { page: 'variant-presets', iconName: 'pricetags-outline', label: 'Variant Presets', description: `${variantPresets.length} presets` },
-    { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: `${addonPresets.length} presets` },
-    ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: 'Users & Restaurants', description: 'Manage users & roles' }] : []),
+    { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
+    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
+    { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
+    { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
+    ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
   ];
 
   // Sub-page header
@@ -1509,7 +1509,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     <View style={styles.subPageHeader}>
       <TouchableOpacity onPress={navigateBack} style={styles.backBtn}>
         <Ionicons name="arrow-back" size={20} color="#4f46e5" />
-        <Text style={styles.backBtnText}> Back</Text>
+        <Text style={styles.backBtnText}> {t('settings.back')}</Text>
       </TouchableOpacity>
       <Text style={styles.subPageTitle}>{title}</Text>
       <View style={{ width: 60 }} />
@@ -1548,7 +1548,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Restaurant Information</Text>
+            <Text style={styles.sectionTitle}>{t('settings.restaurant-info')}</Text>
             {!editMode && (
               <TouchableOpacity
                 onPress={() => {
@@ -1573,22 +1573,22 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={styles.form}>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('admin.restaurant-name')}</Text>
-            <TextInput style={styles.input} value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Enter restaurant name" />
+            <TextInput style={styles.input} value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder={t('settings.enter-name')} />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Phone</Text>
-            <TextInput style={styles.input} value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder="Enter phone number" keyboardType="phone-pad" />
+            <Text style={styles.label}>{t('settings.phone')}</Text>
+            <TextInput style={styles.input} value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder={t('settings.enter-phone')} keyboardType="phone-pad" />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Address</Text>
-            <TextInput style={[styles.input, { minHeight: 80 }]} value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder="Enter address" multiline />
+            <Text style={styles.label}>{t('settings.address')}</Text>
+            <TextInput style={[styles.input, { minHeight: 80 }]} value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder={t('settings.enter-address')} multiline />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Timezone</Text>
+            <Text style={styles.label}>{t('settings.timezone')}</Text>
             <TextInput style={styles.input} value={formData.timezone} onChangeText={(text) => setFormData({ ...formData, timezone: text })} placeholder="e.g., UTC, EST, PST" />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Preferred Language</Text>
+            <Text style={styles.label}>{t('settings.preferred-language')}</Text>
             <TextInput style={styles.input} value={formData.language_preference} onChangeText={(text) => setFormData({ ...formData, language_preference: text })} placeholder="e.g., en, es, fr" />
           </View>
           <View style={styles.formGroup}>
@@ -1596,15 +1596,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <TextInput style={styles.input} value={formData.service_charge_percent?.toString() || '0'} onChangeText={(text) => setFormData({ ...formData, service_charge_percent: parseFloat(text) || 0 })} placeholder="0" keyboardType="decimal-pad" inputAccessoryViewID="numpadDone" />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Logo URL</Text>
+            <Text style={styles.label}>{t('settings.logo-url')}</Text>
             <TextInput style={styles.input} value={formData.logo_url || ''} onChangeText={(text) => setFormData({ ...formData, logo_url: text })} placeholder="https://..." />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Background URL</Text>
+            <Text style={styles.label}>{t('settings.background-url')}</Text>
             <TextInput style={styles.input} value={formData.background_url || ''} onChangeText={(text) => setFormData({ ...formData, background_url: text })} placeholder="https://..." />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Booking Time Allowance (minutes)</Text>
+            <Text style={styles.label}>{t('settings.booking-allowance')}</Text>
             <TextInput style={styles.input} value={formData.booking_time_allowance_mins?.toString() || '30'} onChangeText={(text) => setFormData({ ...formData, booking_time_allowance_mins: parseInt(text) || 30 })} keyboardType="number-pad" inputAccessoryViewID="numpadDone" />
           </View>
           <View style={styles.formActions}>
@@ -1622,13 +1622,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       return (
         <>
           <View style={styles.settingItem}><Text style={styles.label}>{t('common.name')}</Text><Text style={styles.value}>{settings.name}</Text></View>
-          <View style={styles.settingItem}><Text style={styles.label}>Phone</Text><Text style={styles.value}>{settings.phone || '—'}</Text></View>
-          <View style={styles.settingItem}><Text style={styles.label}>Address</Text><Text style={styles.value}>{settings.address || '—'}</Text></View>
-          <View style={styles.settingItem}><Text style={styles.label}>Timezone</Text><Text style={styles.value}>{settings.timezone || 'UTC'}</Text></View>
-          <View style={styles.settingItem}><Text style={styles.label}>Preferred Language</Text><Text style={styles.value}>{settings.language_preference || '—'}</Text></View>
-          <View style={styles.settingItem}><Text style={styles.label}>Service Charge</Text><Text style={styles.value}>{settings.service_charge_percent || 0} %</Text></View>
-          {settings.logo_url && (<View style={styles.settingItem}><Text style={styles.label}>Logo</Text><Text style={styles.value}>Uploaded</Text></View>)}
-          {settings.background_url && (<View style={styles.settingItem}><Text style={styles.label}>Background</Text><Text style={styles.value}>Uploaded</Text></View>)}
+          <View style={styles.settingItem}><Text style={styles.label}>{t('settings.phone')}</Text><Text style={styles.value}>{settings.phone || '—'}</Text></View>
+          <View style={styles.settingItem}><Text style={styles.label}>{t('settings.address')}</Text><Text style={styles.value}>{settings.address || '—'}</Text></View>
+          <View style={styles.settingItem}><Text style={styles.label}>{t('settings.timezone')}</Text><Text style={styles.value}>{settings.timezone || 'UTC'}</Text></View>
+          <View style={styles.settingItem}><Text style={styles.label}>{t('settings.preferred-language')}</Text><Text style={styles.value}>{settings.language_preference || '—'}</Text></View>
+          <View style={styles.settingItem}><Text style={styles.label}>{t('settings.service-charge')}</Text><Text style={styles.value}>{settings.service_charge_percent || 0} %</Text></View>
+          {settings.logo_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.logo')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
+          {settings.background_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.background')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
         </>
       );
     }
@@ -1652,10 +1652,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     };
 
     const printerCards: { type: 'qr' | 'bill' | 'kitchen' | 'kpay'; label: string; bg: string; border: string }[] = [
-      { type: 'qr', label: 'QR Code Printer', bg: '#f0f9ff', border: '#93c5fd' },
-      { type: 'bill', label: 'Bill Printer', bg: '#fef3c7', border: '#fcd34d' },
-      { type: 'kitchen', label: 'Kitchen Order Printer', bg: '#fce7f3', border: '#fbcfe8' },
-      { type: 'kpay', label: 'KPay Receipt Printer', bg: '#ecfdf5', border: '#6ee7b7' },
+      { type: 'qr', label: t('settings.qr-printer'), bg: '#f0f9ff', border: '#93c5fd' },
+      { type: 'bill', label: t('settings.bill-printer'), bg: '#fef3c7', border: '#fcd34d' },
+      { type: 'kitchen', label: t('settings.kitchen-printer'), bg: '#fce7f3', border: '#fbcfe8' },
+      { type: 'kpay', label: t('settings.kpay-printer'), bg: '#ecfdf5', border: '#6ee7b7' },
     ];
 
     return (
@@ -1663,7 +1663,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         {renderSubPageHeader(t('admin.printer-settings') || 'Printers')}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Printer Configuration</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>{t('settings.printer-config')}</Text>
             {printerCards.map(({ type, label, bg, border }) => {
               const pType = printerSettings?.[`${type}_printer_type`];
               const pHost = printerSettings?.[`${type}_printer_host`];
@@ -1679,10 +1679,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       {pHost && <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>{pHost}:{pPort}</Text>}
                     </>
                   ) : (
-                    <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>Not configured</Text>
+                    <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{t('settings.not-configured')}</Text>
                   )}
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]} onPress={() => configurePrinter(type)}>
-                    <Text style={styles.btnText}>Configure</Text>
+                    <Text style={styles.btnText}>{t('settings.configure')}</Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -1691,7 +1691,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4 }}
               onPress={() => setShowingPrinterSettingsPage(true)}
             >
-              <Text style={styles.label}>Format Settings (QR & Bill)</Text>
+              <Text style={styles.label}>{t('settings.format-settings')}</Text>
               <Text style={{ fontSize: 18, color: '#6b7280' }}>→</Text>
             </TouchableOpacity>
           </View>
@@ -1709,7 +1709,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('admin.payment-terminal')}</Text>
             <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => { resetTerminalForm(); setShowPaymentTerminalModal(true); }}>
-              <Text style={styles.btnSmallText}>+ Add</Text>
+              <Text style={styles.btnSmallText}>{t('settings.add-terminal')}</Text>
             </TouchableOpacity>
           </View>
           {paymentTerminals.length > 0 ? (
@@ -1745,7 +1745,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               scrollEnabled={false}
             />
           ) : (
-            <Text style={styles.emptyText}>No payment terminals configured yet</Text>
+            <Text style={styles.emptyText}>{t('settings.no-terminals')}</Text>
           )}
         </View>
       </ScrollView>
@@ -1763,25 +1763,25 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {settings && (
             <>
               <View style={styles.settingItem}>
-                <Text style={styles.label}>QR Mode</Text>
+                <Text style={styles.label}>{t('settings.qr-mode')}</Text>
                 <Text style={styles.value}>
-                  {settings.qr_mode === 'static_table' ? 'Static (Per Table)'
-                    : settings.qr_mode === 'static_seat' ? 'Static (Per Seat)'
-                    : 'Regenerate (Per Order)'}
+                  {settings.qr_mode === 'static_table' ? t('settings.static-table')
+                    : settings.qr_mode === 'static_seat' ? t('settings.static-seat')
+                    : t('settings.regenerate')}
                 </Text>
               </View>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8, lineHeight: 18 }}>
                 {settings.qr_mode === 'static_table'
-                  ? 'Each table has a fixed QR code sticker. Only one active order is allowed per table at a time. When the order is closed, the same QR code can be reused for the next customer.'
+                  ? t('settings.static-table-desc')
                   : settings.qr_mode === 'static_seat'
-                  ? 'Each seat has its own fixed QR code sticker (e.g. T01A, T01B). When starting a new order, you select which seats are occupied. Guests scanning different seat QR codes at the same table share the same order.'
-                  : 'A new QR code is generated for each order. Old QR codes become invalid when the session ends. Best for restaurants that print QR codes on receipts or table tents.'}
+                  ? t('settings.static-seat-desc')
+                  : t('settings.regenerate-desc')}
               </Text>
               <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowQRModal(true)}>
-                <Text style={styles.btnText}>Change QR Mode</Text>
+                <Text style={styles.btnText}>{t('settings.change-qr-mode')}</Text>
               </TouchableOpacity>
               <View style={[styles.settingItem, { marginTop: 12 }]}>
-                <Text style={styles.label}>Show Item Status to Diners</Text>
+                <Text style={styles.label}>{t('settings.show-item-status')}</Text>
                 <TouchableOpacity
                   style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.show_item_status_to_diners ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
                   onPress={async () => {
@@ -1790,14 +1790,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       await apiClient.put(`/api/restaurants/${restaurantId}/settings`, { show_item_status_to_diners: newVal });
                       setSettings({ ...settings, show_item_status_to_diners: newVal });
                     } catch (err) {
-                      Alert.alert('Error', 'Failed to update setting');
+                      Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
                     }
                   }}
                 >
                   <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.show_item_status_to_diners ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
                 </TouchableOpacity>
               </View>
-              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>When enabled, diners can see the preparation status of their items on the QR menu page</Text>
+              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.item-status-desc')}</Text>
             </>
           )}
         </View>
@@ -1808,20 +1808,20 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // Staff Links page
   const renderStaffLinksPage = () => (
     <View style={styles.container}>
-      {renderSubPageHeader('Staff & Kitchen Links')}
+      {renderSubPageHeader(t('settings.staff-kitchen-links'))}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Staff & Kitchen Login QR Codes</Text>
-          <Text style={styles.sectionDescription}>Share these QR codes with your staff. Each staff member scans their unique QR code to login with their PIN.</Text>
+          <Text style={styles.sectionTitle}>{t('settings.login-qr-codes')}</Text>
+          <Text style={styles.sectionDescription}>{t('settings.qr-share-desc')}</Text>
           <View style={styles.qrCodeContainer}>
             <TouchableOpacity style={styles.qrCodeButton} onPress={() => setShowStaffQRModal(true)}>
-              <Text style={styles.qrCodeButtonText}>View Staff QR Code</Text>
+              <Text style={styles.qrCodeButtonText}>{t('settings.view-staff-qr')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.qrCodeButton, styles.kitchenQRButton]} onPress={() => setShowKitchenQRModal(true)}>
-              <Text style={styles.qrCodeButtonText}>View Kitchen QR Code</Text>
+              <Text style={styles.qrCodeButtonText}>{t('settings.view-kitchen-qr')}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.qrCodeHint}>Tap the buttons above to view the QR codes and share them with your staff.</Text>
+          <Text style={styles.qrCodeHint}>{t('settings.tap-view-hint')}</Text>
         </View>
       </ScrollView>
     </View>
@@ -1836,7 +1836,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('admin.coupons')}</Text>
             <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => setShowCouponModal(true)}>
-              <Text style={styles.btnSmallText}>+ New</Text>
+              <Text style={styles.btnSmallText}>{t('common.new')}</Text>
             </TouchableOpacity>
           </View>
           {coupons.length > 0 ? (
@@ -1856,7 +1856,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               scrollEnabled={false}
             />
           ) : (
-            <Text style={styles.emptyText}>No coupons yet</Text>
+            <Text style={styles.emptyText}>{t('settings.no-coupons')}</Text>
           )}
         </View>
       </ScrollView>
@@ -1866,21 +1866,21 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // Variant Presets page
   const renderVariantPresetsPage = () => (
     <View style={styles.container}>
-      {renderSubPageHeader('Variant Presets')}
+      {renderSubPageHeader(t('settings.variant-presets-title'))}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Variant Presets</Text>
+            <Text style={styles.sectionTitle}>{t('settings.variant-presets-title')}</Text>
             <TouchableOpacity
               style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
               onPress={() => {
-                Alert.prompt('Create Variant Preset', 'Enter variant title (e.g., "Drink Size", "Temperature")', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Create', onPress: (name: string | undefined) => { if (name) Alert.alert('Success', `Preset "${name}" created!`); } },
+                Alert.prompt(t('settings.create-variant'), t('settings.variant-title-prompt'), [
+                  { text: t('common.cancel'), style: 'cancel' },
+                  { text: t('settings.create'), onPress: (name: string | undefined) => { if (name) Alert.alert(t('common.success'), `${name}`); } },
                 ], 'plain-text');
               }}
             >
-              <Text style={styles.btnSmallText}>+ New</Text>
+              <Text style={styles.btnSmallText}>{t('common.new')}</Text>
             </TouchableOpacity>
           </View>
           {variantPresets.length > 0 ? (
@@ -1903,7 +1903,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               scrollEnabled={false}
             />
           ) : (
-            <Text style={styles.emptyText}>No variant presets yet</Text>
+            <Text style={styles.emptyText}>{t('settings.no-variant-presets')}</Text>
           )}
         </View>
       </ScrollView>
@@ -1921,25 +1921,25 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <TouchableOpacity
               style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
               onPress={() => {
-                Alert.prompt('Create Addon Preset', 'Enter preset name (e.g., "Drinks Bundle", "Sides Pack")', [
-                  { text: 'Cancel', style: 'cancel' },
+                Alert.prompt(t('settings.create-addon'), t('settings.addon-name-prompt'), [
+                  { text: t('common.cancel'), style: 'cancel' },
                   {
                     text: 'Create',
                     onPress: async (name: string | undefined) => {
                       if (!name) return;
                       try {
                         await apiClient.post(`/api/restaurants/${restaurantId}/addon-presets`, { name, description: '' });
-                        Alert.alert('Success', `Preset "${name}" created!`);
+                        Alert.alert(t('common.success'), `${name}`);
                         fetchAddonPresets();
                       } catch (err: any) {
-                        Alert.alert('Error', err.response?.data?.error || 'Failed to create preset');
+                        Alert.alert(t('common.error'), err.response?.data?.error || t('settings.addon-create-failed'));
                       }
                     },
                   },
                 ], 'plain-text');
               }}
             >
-              <Text style={styles.btnSmallText}>+ New</Text>
+              <Text style={styles.btnSmallText}>{t('common.new')}</Text>
             </TouchableOpacity>
           </View>
           {addonPresets.length > 0 ? (
@@ -1951,22 +1951,22 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.presetName}>{preset.name}</Text>
                       {preset.description ? <Text style={styles.presetDescription}>{preset.description}</Text> : null}
-                      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Items: {preset.items_count || 0}</Text>
+                      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{t('settings.items-label')} {preset.items_count || 0}</Text>
                     </View>
                     <TouchableOpacity
                       style={{ padding: 6 }}
                       onPress={() => {
-                        Alert.alert('Delete Preset', `Delete "${preset.name}"?`, [
-                          { text: 'Cancel', style: 'cancel' },
+                        Alert.alert(t('settings.delete-preset'), `${preset.name}?`, [
+                          { text: t('common.cancel'), style: 'cancel' },
                           {
-                            text: 'Delete',
+                            text: t('common.delete'),
                             style: 'destructive',
                             onPress: async () => {
                               try {
                                 await apiClient.delete(`/api/restaurants/${restaurantId}/addon-presets/${preset.id}`);
                                 fetchAddonPresets();
                               } catch (err: any) {
-                                Alert.alert('Error', err.response?.data?.error || 'Failed to delete preset');
+                                Alert.alert(t('common.error'), err.response?.data?.error || t('settings.addon-delete-failed'));
                               }
                             },
                           },
@@ -1982,7 +1982,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               scrollEnabled={false}
             />
           ) : (
-            <Text style={styles.emptyText}>No addon presets yet</Text>
+            <Text style={styles.emptyText}>{t('settings.no-addon-presets')}</Text>
           )}
         </View>
       </ScrollView>
@@ -2003,7 +2003,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         pin: data.pin || '',
       });
     } catch (err: any) {
-      setProfileError(err.message || 'Failed to load profile');
+      setProfileError(err.message || t('settings.profile-load-failed'));
     } finally {
       setProfileLoading(false);
     }
@@ -2021,15 +2021,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         if (profileForm.pin !== (profileData?.pin || '')) payload.pin = profileForm.pin;
       }
       if (Object.keys(payload).length === 0) {
-        Alert.alert('No Changes', 'No fields were modified.');
+        Alert.alert(t('settings.no-changes'), t('settings.no-changes-msg'));
         setProfileSaving(false);
         return;
       }
       await apiClient.updateProfile(payload);
-      Alert.alert('Success', 'Profile updated!');
+      Alert.alert(t('common.success'), t('settings.profile-updated'));
       await loadProfile();
     } catch (err: any) {
-      setProfileError(err.message || 'Failed to update profile');
+      setProfileError(err.message || t('settings.profile-save-failed'));
     } finally {
       setProfileSaving(false);
     }
@@ -2039,7 +2039,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     if (profileLoading && !profileData) {
       return (
         <View style={styles.container}>
-          {renderSubPageHeader('My Profile')}
+          {renderSubPageHeader(t('settings.profile-title'))}
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#4f46e5" />
           </View>
@@ -2049,7 +2049,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
     return (
       <View style={styles.container}>
-        {renderSubPageHeader('My Profile')}
+        {renderSubPageHeader(t('settings.profile-title'))}
         <ScrollView style={{ padding: 16 }}>
           {profileError && (
             <View style={{ backgroundColor: '#fee2e2', padding: 12, borderRadius: 8, marginBottom: 12 }}>
@@ -2069,23 +2069,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
           {/* Name */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={styles.label}>Name</Text>
+            <Text style={styles.label}>{t('settings.name')}</Text>
             <TextInput
               style={styles.input}
               value={profileForm.name}
               onChangeText={(text) => setProfileForm({ ...profileForm, name: text })}
-              placeholder="Your name"
+              placeholder={t('settings.name-placeholder')}
             />
           </View>
 
           {/* Email */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t('settings.email')}</Text>
             <TextInput
               style={styles.input}
               value={profileForm.email}
               onChangeText={(text) => setProfileForm({ ...profileForm, email: text })}
-              placeholder="Email address"
+              placeholder={t('settings.email-placeholder')}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -2094,12 +2094,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {/* Password (for admin/superadmin) */}
           {(profileData?.role === 'admin' || profileData?.role === 'superadmin') && (
             <View style={{ marginBottom: 16 }}>
-              <Text style={styles.label}>New Password</Text>
+              <Text style={styles.label}>{t('settings.new-password')}</Text>
               <TextInput
                 style={styles.input}
                 value={profileForm.password}
                 onChangeText={(text) => setProfileForm({ ...profileForm, password: text })}
-                placeholder="Leave blank to keep current"
+                placeholder={t('settings.password-placeholder')}
                 secureTextEntry
               />
             </View>
@@ -2108,12 +2108,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {/* PIN (for staff/kitchen) */}
           {(profileData?.role === 'staff' || profileData?.role === 'kitchen') && (
             <View style={{ marginBottom: 16 }}>
-              <Text style={styles.label}>PIN (6 digits)</Text>
+              <Text style={styles.label}>{t('settings.pin-label')}</Text>
               <TextInput
                 style={styles.input}
                 value={profileForm.pin}
                 onChangeText={(text) => setProfileForm({ ...profileForm, pin: text })}
-                placeholder="6-digit PIN"
+                placeholder={t('settings.pin-placeholder')}
                 keyboardType="number-pad"
                 maxLength={6}
               />
@@ -2125,7 +2125,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             onPress={saveProfile}
             disabled={profileSaving}
           >
-            <Text style={styles.btnText}>{profileSaving ? 'Saving...' : 'Save Changes'}</Text>
+            <Text style={styles.btnText}>{profileSaving ? t('settings.saving') : t('settings.save-changes')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -2156,13 +2156,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <TouchableOpacity
         style={[styles.btn, styles.btnDanger, { marginVertical: 12 }]}
         onPress={() => {
-          Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Logout', onPress: () => navigation.navigate('Login'), style: 'destructive' },
+          Alert.alert(t('settings.logout'), t('settings.logout-msg'), [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('settings.logout'), onPress: () => navigation.navigate('Login'), style: 'destructive' },
           ]);
         }}
       >
-        <Text style={styles.btnText}>Logout</Text>
+        <Text style={styles.btnText}>{t('settings.logout')}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -2197,10 +2197,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Create Coupon</Text>
+            <Text style={styles.modalTitle}>{t('settings.create-coupon')}</Text>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Coupon Code</Text>
+              <Text style={styles.label}>{t('settings.coupon-code')}</Text>
               <TextInput
                 style={styles.input}
                 value={couponForm.code}
@@ -2213,7 +2213,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Discount Type</Text>
+              <Text style={styles.label}>{t('settings.discount-type')}</Text>
               <View style={styles.toggleGroup}>
                 <TouchableOpacity
                   style={[
@@ -2228,7 +2228,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       couponForm.discount_type === 'percentage' && styles.typeBtnTextActive,
                     ]}
                   >
-                    Percentage
+                    {t('settings.percentage')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -2244,49 +2244,49 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       couponForm.discount_type === 'fixed' && styles.typeBtnTextActive,
                     ]}
                   >
-                    Fixed
+                    {t('settings.fixed')}
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Discount Value</Text>
+              <Text style={styles.label}>{t('settings.discount-value')}</Text>
               <TextInput
                 style={styles.input}
                 value={couponForm.discount_value}
                 onChangeText={(text) =>
                   setCouponForm({ ...couponForm, discount_value: text })
                 }
-                placeholder="Amount"
+                placeholder={t('settings.amount')}
                 keyboardType="decimal-pad"
                 inputAccessoryViewID="numpadDone"
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Min Order Value (optional)</Text>
+              <Text style={styles.label}>{t('settings.min-order')}</Text>
               <TextInput
                 style={styles.input}
                 value={couponForm.min_order_value}
                 onChangeText={(text) =>
                   setCouponForm({ ...couponForm, min_order_value: text })
                 }
-                placeholder="Minimum order amount"
+                placeholder={t('settings.min-order-placeholder')}
                 keyboardType="decimal-pad"
                 inputAccessoryViewID="numpadDone"
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Description (optional)</Text>
+              <Text style={styles.label}>{t('settings.coupon-desc')}</Text>
               <TextInput
                 style={[styles.input, { minHeight: 60 }]}
                 value={couponForm.description}
                 onChangeText={(text) =>
                   setCouponForm({ ...couponForm, description: text })
                 }
-                placeholder="Coupon description"
+                placeholder={t('settings.coupon-desc-placeholder')}
                 multiline
               />
             </View>
@@ -2305,13 +2305,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   });
                 }}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createCoupon}
               >
-                <Text style={styles.btnText}>Create</Text>
+                <Text style={styles.btnText}>{t('settings.create')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2323,7 +2323,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Coupon Details</Text>
+              <Text style={styles.modalTitle}>{t('settings.coupon-details')}</Text>
               <TouchableOpacity onPress={() => { setShowCouponDetailModal(false); setSelectedCoupon(null); }}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -2331,24 +2331,24 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {selectedCoupon && (
               <View style={styles.modalBody}>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Code</Text>
+                  <Text style={styles.label}>{t('settings.code')}</Text>
                   <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', letterSpacing: 1 }}>{selectedCoupon.code}</Text>
                 </View>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Discount</Text>
+                  <Text style={styles.label}>{t('settings.discount')}</Text>
                   <Text style={{ fontSize: 16, fontWeight: '600', color: '#059669' }}>
                     {selectedCoupon.discount_type === 'percentage' ? `${selectedCoupon.discount_value}% off` : `$${selectedCoupon.discount_value} off`}
                   </Text>
                 </View>
                 {selectedCoupon.min_order_value > 0 && (
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Minimum Order</Text>
+                    <Text style={styles.label}>{t('settings.min-order-label')}</Text>
                     <Text style={{ fontSize: 14, color: '#1f2937' }}>${selectedCoupon.min_order_value}</Text>
                   </View>
                 )}
                 {selectedCoupon.description ? (
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Description</Text>
+                    <Text style={styles.label}>{t('settings.description')}</Text>
                     <Text style={{ fontSize: 14, color: '#6b7280' }}>{selectedCoupon.description}</Text>
                   </View>
                 ) : null}
@@ -2357,14 +2357,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     style={[styles.btn, styles.btnSecondary]}
                     onPress={() => { setShowCouponDetailModal(false); setSelectedCoupon(null); }}
                   >
-                    <Text style={styles.btnText}>Close</Text>
+                    <Text style={styles.btnText}>{t('settings.close')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.btn, { backgroundColor: '#fee2e2' }]}
                     onPress={() => {
-                      Alert.alert('Delete Coupon', `Delete coupon "${selectedCoupon.code}"?`, [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete', style: 'destructive', onPress: async () => {
+                      Alert.alert(t('settings.delete-coupon'), `${selectedCoupon.code}?`, [
+                        { text: t('common.cancel'), style: 'cancel' },
+                        { text: t('common.delete'), style: 'destructive', onPress: async () => {
                           await deleteCoupon(selectedCoupon.id);
                           setShowCouponDetailModal(false);
                           setSelectedCoupon(null);
@@ -2386,12 +2386,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingBottom: 0 }]}>
             <Text style={styles.modalTitle}>
-              {editingTerminalId ? 'Edit Payment Terminal' : 'Add Payment Terminal'}
+              {editingTerminalId ? t('settings.edit-terminal') : t('settings.add-terminal-title')}
             </Text>
 
             <ScrollView style={{ maxHeight: 440 }} keyboardShouldPersistTaps="handled">
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Payment Vendor</Text>
+              <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
               <View>
                 {(['kpay', 'payment-asia', 'other'] as const).map((vendor) => (
                   <TouchableOpacity
@@ -2416,7 +2416,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         )}
                       </View>
                       <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
-                        {vendor === 'kpay' ? 'KPay' : vendor === 'payment-asia' ? 'Payment Asia' : 'Other'}
+                        {vendor === 'kpay' ? 'KPay' : vendor === 'payment-asia' ? 'Payment Asia' : t('settings.other')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -2426,23 +2426,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             {/* App ID */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>App ID / Terminal ID</Text>
+              <Text style={styles.label}>{t('settings.app-id')}</Text>
               <TextInput
                 style={styles.input}
                 value={terminalForm.app_id}
                 onChangeText={(text) => setTerminalForm({ ...terminalForm, app_id: text })}
-                placeholder="Enter app ID"
+                placeholder={t('settings.enter-app-id')}
               />
             </View>
 
             {/* App Secret */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>App Secret / Token</Text>
+              <Text style={styles.label}>{t('settings.app-secret')}</Text>
               <TextInput
                 style={styles.input}
                 value={terminalForm.app_secret}
                 onChangeText={(text) => setTerminalForm({ ...terminalForm, app_secret: text })}
-                placeholder="Enter app secret"
+                placeholder={t('settings.enter-app-secret')}
                 secureTextEntry
               />
             </View>
@@ -2451,7 +2451,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {terminalForm.vendor_name === 'kpay' && (
               <>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Terminal IP Address</Text>
+                  <Text style={styles.label}>{t('settings.terminal-ip')}</Text>
                   <TextInput
                     style={styles.input}
                     value={terminalForm.terminal_ip}
@@ -2461,7 +2461,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Terminal Port</Text>
+                  <Text style={styles.label}>{t('settings.terminal-port')}</Text>
                   <TextInput
                     style={styles.input}
                     value={terminalForm.terminal_port}
@@ -2473,7 +2473,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>API Endpoint Path</Text>
+                  <Text style={styles.label}>{t('settings.api-endpoint')}</Text>
                   <TextInput
                     style={styles.input}
                     value={terminalForm.endpoint_path}
@@ -2488,28 +2488,28 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {terminalForm.vendor_name === 'payment-asia' && (
               <>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Merchant Token</Text>
+                  <Text style={styles.label}>{t('settings.merchant-token')}</Text>
                   <TextInput
                     style={styles.input}
                     value={terminalForm.merchant_token}
                     onChangeText={(text) => setTerminalForm({ ...terminalForm, merchant_token: text })}
-                    placeholder="Enter merchant token"
+                    placeholder={t('settings.enter-merchant-token')}
                   />
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Secret Code</Text>
+                  <Text style={styles.label}>{t('settings.secret-code')}</Text>
                   <TextInput
                     style={styles.input}
                     value={terminalForm.secret_code}
                     onChangeText={(text) => setTerminalForm({ ...terminalForm, secret_code: text })}
-                    placeholder="Enter secret code"
+                    placeholder={t('settings.enter-secret-code')}
                     secureTextEntry
                   />
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Environment</Text>
+                  <Text style={styles.label}>{t('settings.environment')}</Text>
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     {(['sandbox', 'production'] as const).map((env) => (
                       <TouchableOpacity
@@ -2552,7 +2552,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   color: terminalTestResult.success ? '#059669' : '#dc2626',
                   marginBottom: 4
                 }}>
-                  {terminalTestResult.success ? 'Connection Successful' : 'Connection Failed'}
+                  {terminalTestResult.success ? t('settings.connection-success') : t('settings.connection-failed')}
                 </Text>
                 <Text style={{ fontSize: 12, color: '#1f2937' }}>
                   {terminalTestResult.message}
@@ -2570,7 +2570,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   resetTerminalForm();
                 }}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               
               {editingTerminalId && (
@@ -2579,7 +2579,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   onPress={testPaymentTerminal}
                   disabled={testingTerminal}
                 >
-                  <Text style={styles.btnText}>{testingTerminal ? 'Testing...' : 'Test'}</Text>
+                  <Text style={styles.btnText}>{testingTerminal ? t('settings.testing') : t('settings.test')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -2587,7 +2587,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={savePaymentTerminal}
               >
-                <Text style={styles.btnText}>{editingTerminalId ? 'Update' : 'Create'}</Text>
+                <Text style={styles.btnText}>{editingTerminalId ? t('settings.update') : t('settings.create')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2598,12 +2598,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showQRModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select QR Mode</Text>
+            <Text style={styles.modalTitle}>{t('settings.select-qr-mode')}</Text>
 
             {([
-              { mode: 'regenerate' as const, label: 'Regenerate (Per Order)', desc: 'A new QR code is generated for each order. Old codes expire when the session ends. Best for printed receipts or table tents.' },
-              { mode: 'static_table' as const, label: 'Static (Per Table)', desc: 'Each table has a fixed QR code sticker. Only one active order per table at a time.' },
-              { mode: 'static_seat' as const, label: 'Static (Per Seat)', desc: 'Each seat has its own QR sticker (e.g. T01A, T01B). Select occupied seats when starting an order. Guests at the same table share one order.' },
+              { mode: 'regenerate' as const, label: t('settings.regenerate'), desc: t('settings.regenerate-desc') },
+              { mode: 'static_table' as const, label: t('settings.static-table'), desc: t('settings.static-table-desc') },
+              { mode: 'static_seat' as const, label: t('settings.static-seat'), desc: t('settings.static-seat-desc') },
             ]).map(({ mode, label, desc }) => (
               <TouchableOpacity
                 key={mode}
@@ -2615,9 +2615,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     });
                     setSettings({ ...settings!, qr_mode: mode });
                     setShowQRModal(false);
-                    Alert.alert('Success', 'QR mode updated!');
+                    Alert.alert(t('common.success'), t('settings.qr-mode-updated'));
                   } catch {
-                    Alert.alert('Error', 'Failed to update QR mode');
+                    Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
                   }
                 }}
               >
@@ -2639,7 +2639,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               style={[styles.btn, styles.btnSecondary, { marginTop: 12 }]}
               onPress={() => setShowQRModal(false)}
             >
-              <Text style={styles.btnText}>Close</Text>
+              <Text style={styles.btnText}>{t('settings.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2650,7 +2650,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={styles.qrModalOverlay}>
           <View style={styles.qrModalContent}>
             <View style={styles.qrModalHeader}>
-              <Text style={styles.qrModalTitle}>Staff Login QR Code</Text>
+              <Text style={styles.qrModalTitle}>{t('settings.staff-qr-title')}</Text>
               <TouchableOpacity onPress={() => setShowStaffQRModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -2658,7 +2658,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             <View style={styles.qrModalBody}>
               <Text style={styles.qrModalDescription}>
-                Table staff can scan this QR code to access the staff login. Share this code with your table staff members.
+                {t('settings.staff-qr-desc')}
               </Text>
 
               <View style={styles.qrCodeWrapper}>
@@ -2677,7 +2677,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={() => shareQRCode('staff')}
                 >
-                  <Text style={styles.btnText}>Share QR Code</Text>
+                  <Text style={styles.btnText}>{t('settings.share-qr')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2686,7 +2686,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               style={[styles.btn, styles.btnSecondary]}
               onPress={() => setShowStaffQRModal(false)}
             >
-              <Text style={styles.btnText}>Close</Text>
+              <Text style={styles.btnText}>{t('settings.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2697,7 +2697,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={styles.qrModalOverlay}>
           <View style={styles.qrModalContent}>
             <View style={styles.qrModalHeader}>
-              <Text style={styles.qrModalTitle}>Kitchen Login QR Code</Text>
+              <Text style={styles.qrModalTitle}>{t('settings.kitchen-qr-title')}</Text>
               <TouchableOpacity onPress={() => setShowKitchenQRModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -2705,7 +2705,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             <View style={styles.qrModalBody}>
               <Text style={styles.qrModalDescription}>
-                Kitchen staff can scan this QR code to access the kitchen dashboard. Share this code with your kitchen staff members.
+                {t('settings.kitchen-qr-desc')}
               </Text>
 
               <View style={styles.qrCodeWrapper}>
@@ -2724,7 +2724,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={() => shareQRCode('kitchen')}
                 >
-                  <Text style={styles.btnText}>Share QR Code</Text>
+                  <Text style={styles.btnText}>{t('settings.share-qr')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2733,7 +2733,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               style={[styles.btn, styles.btnSecondary]}
               onPress={() => setShowKitchenQRModal(false)}
             >
-              <Text style={styles.btnText}>Close</Text>
+              <Text style={styles.btnText}>{t('settings.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2744,7 +2744,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: '80%' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Variant Presets</Text>
+              <Text style={styles.modalTitle}>{t('settings.variant-modal-title')}</Text>
               <TouchableOpacity onPress={() => setShowVariantPresetsModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -2764,18 +2764,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       onPress={() => {
                         // Show create option dialog
                         Alert.prompt(
-                          'Add New Option',
-                          'Enter option name (e.g., "Small", "Medium", "Large")',
+                          t('settings.add-option-title'),
+                          t('settings.option-name-prompt'),
                           [
                             {
-                              text: 'Cancel',
+                              text: t('common.cancel'),
                               style: 'cancel',
                             },
                             {
-                              text: 'Add',
+                              text: t('common.add'),
                               onPress: (name: string | undefined) => {
                                 if (name) {
-                                  Alert.alert('Success', `Option "${name}" added to "${selectedVariantPreset.name}"`);
+                                  Alert.alert(t('common.success'), `${name}`);
                                 }
                               },
                             },
@@ -2784,10 +2784,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         );
                       }}
                     >
-                      <Text style={styles.btnText}>+ Add Option</Text>
+                      <Text style={styles.btnText}>{t('settings.add-option')}</Text>
                     </TouchableOpacity>
 
-                    <Text style={styles.variantsLabel}>Options in "{selectedVariantPreset.name}":</Text>
+                    <Text style={styles.variantsLabel}>{t('settings.options-in', { '0': selectedVariantPreset.name })}</Text>
                     {selectedVariantPreset.variants && selectedVariantPreset.variants.length > 0 ? (
                       selectedVariantPreset.variants.map((option, idx) => (
                         <View key={idx} style={styles.variantDetailItem}>
@@ -2802,30 +2802,30 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                           <View style={{ flexDirection: 'row', gap: 6, marginLeft: 10 }}>
                             <TouchableOpacity
                               style={[styles.btn, styles.btnSmall, { backgroundColor: '#dbeafe', borderColor: '#93c5fd' }]}
-                              onPress={() => Alert.alert('Edit', `Edit option: ${option.name}`)}
+                              onPress={() => Alert.alert(t('common.edit'), option.name)}
                             >
-                              <Text style={[styles.btnSmallText, { color: '#1e40af' }]}>Edit</Text>
+                              <Text style={[styles.btnSmallText, { color: '#1e40af' }]}>{t('common.edit')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[styles.btn, styles.btnSmall, { backgroundColor: '#fee2e2', borderColor: '#fecaca' }]}
                               onPress={() =>
                                 Alert.alert(
-                                  'Delete',
-                                  `Delete option "${option.name}"?`,
+                                  t('common.delete'),
+                                  `${option.name}?`,
                                   [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    { text: 'Delete', style: 'destructive', onPress: () => {} },
+                                    { text: t('common.cancel'), style: 'cancel' },
+                                    { text: t('common.delete'), style: 'destructive', onPress: () => {} },
                                   ]
                                 )
                               }
                             >
-                              <Text style={[styles.btnSmallText, { color: '#991b1b' }]}>Delete</Text>
+                              <Text style={[styles.btnSmallText, { color: '#991b1b' }]}>{t('common.delete')}</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
                       ))
                     ) : (
-                      <Text style={styles.emptyText}>No options yet. Click "Add Option" to add one.</Text>
+                      <Text style={styles.emptyText}>{t('settings.no-options')}</Text>
                     )}
                   </View>
                 </ScrollView>
@@ -2835,7 +2835,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     style={[styles.btn, styles.btnSecondary]}
                     onPress={() => setSelectedVariantPreset(null)}
                   >
-                    <Text style={styles.btnText}>Back</Text>
+                    <Text style={styles.btnText}>{t('settings.back-btn')}</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -2862,7 +2862,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         </TouchableOpacity>
                       ))
                     ) : (
-                      <Text style={styles.emptyText}>No variant presets created yet</Text>
+                      <Text style={styles.emptyText}>{t('settings.no-variant-presets-modal')}</Text>
                     )}
                   </View>
                 </ScrollView>
@@ -2872,7 +2872,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     style={[styles.btn, styles.btnSecondary]}
                     onPress={() => setShowVariantPresetsModal(false)}
                   >
-                    <Text style={styles.btnText}>Close</Text>
+                    <Text style={styles.btnText}>{t('settings.close')}</Text>
                   </TouchableOpacity>
                 </View>
               </>
