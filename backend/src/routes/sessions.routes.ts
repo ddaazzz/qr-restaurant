@@ -14,7 +14,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
     await client.query("BEGIN");
 
     const { tableId } = req.params;
-    const { pax, booking_id } = req.body;
+    const { pax, booking_id, unit_ids } = req.body;
 
     if (!pax || pax <= 0) {
       return res.status(400).json({ error: "Invalid pax" });
@@ -30,15 +30,16 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
 
     // 2️⃣ Get restaurant QR preference
     const restaurantRes = await client.query(
-      `SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`,
+      `SELECT regenerate_qr_per_session, qr_mode FROM restaurants WHERE id = $1`,
       [table.restaurant_id]
     );
     const restaurantSettings = restaurantRes.rows[0];
     const shouldRegenerateQR = restaurantSettings?.regenerate_qr_per_session !== false;
+    const qrMode = restaurantSettings?.qr_mode || 'regenerate';
 
     // 3️⃣ Find all units for table
     const unitsRes = await client.query(
-      `SELECT id FROM table_units WHERE table_id = $1 ORDER BY id`,
+      `SELECT id, display_name FROM table_units WHERE table_id = $1 ORDER BY id`,
       [tableId]
     );
 
@@ -57,6 +58,24 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       (s, r) => s + Number(r.pax),
       0
     );
+
+    // Enforce static_table mode: only one session per table at a time
+    if (qrMode === 'static_table' && activeRes.rows.length > 0) {
+      // If a booking, link to existing session
+      if (booking_id) {
+        await client.query("ROLLBACK");
+        const existingSessionId = activeRes.rows[0].id;
+        await pool.query(
+          `UPDATE bookings SET session_id = $1, updated_at = NOW() WHERE id = $2`,
+          [existingSessionId, booking_id]
+        );
+        const linkedSession = await pool.query(
+          `SELECT * FROM table_sessions WHERE id = $1`, [existingSessionId]
+        );
+        return res.status(200).json({ ...linkedSession.rows[0], linked: true });
+      }
+      return res.status(400).json({ error: "Static QR per table mode: only one session allowed per table. End the current session first." });
+    }
 
     const remaining = table.seat_count - usedSeats;
     if (pax > remaining) {
@@ -79,18 +98,35 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
     }
 
     const usedUnitIds = activeRes.rows.map(r => r.table_unit_id);
-    const freeUnit = unitsRes.rows.find(
-      u => !usedUnitIds.includes(u.id)
-    );
 
-    if (!freeUnit) {
+    // For static_seat mode with unit_ids specified, validate the chosen seats
+    let assignedUnit;
+    if (qrMode === 'static_seat' && unit_ids && Array.isArray(unit_ids) && unit_ids.length > 0) {
+      // Validate all specified units belong to this table and are free
+      const tableUnitIds = unitsRes.rows.map(u => u.id);
+      for (const uid of unit_ids) {
+        if (!tableUnitIds.includes(uid)) {
+          return res.status(400).json({ error: `Unit ${uid} does not belong to this table` });
+        }
+        if (usedUnitIds.includes(uid)) {
+          const unitName = unitsRes.rows.find(u => u.id === uid)?.display_name || uid;
+          return res.status(400).json({ error: `Seat ${unitName} is already occupied` });
+        }
+      }
+      // Use the first specified unit as the primary session unit
+      assignedUnit = unitsRes.rows.find(u => u.id === unit_ids[0]);
+    } else {
+      assignedUnit = unitsRes.rows.find(u => !usedUnitIds.includes(u.id));
+    }
+
+    if (!assignedUnit) {
       return res.status(400).json({ error: "No free table units" });
     }
 
     // 5️⃣ Fetch the current QR token for the unit
     const unitRes = await client.query(
       `SELECT qr_token FROM table_units WHERE id = $1`,
-      [freeUnit.id]
+      [assignedUnit.id]
     );
     const currentUnit = unitRes.rows[0];
 
@@ -102,7 +138,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       const newQRToken = crypto.randomBytes(16).toString("hex");
       await client.query(
         `UPDATE table_units SET qr_token = $1 WHERE id = $2`,
-        [newQRToken, freeUnit.id]
+        [newQRToken, assignedUnit.id]
       );
     }
     // Static mode: QR token was already generated at table creation, just use it
@@ -114,7 +150,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       VALUES ($1, $2, $3, NOW() AT TIME ZONE 'UTC', $4, 'table')
       RETURNING *
       `,
-      [tableId, freeUnit.id, pax, table.restaurant_id]
+      [tableId, assignedUnit.id, pax, table.restaurant_id]
     );
 
     // Auto-create a blank order for this session

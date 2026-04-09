@@ -4,6 +4,27 @@ import crypto from "crypto";
 
 const router = Router();
 
+// GET table units (seats) with availability status
+router.get("/tables/:tableId/units", async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    const result = await pool.query(
+      `SELECT tu.id, tu.unit_code, tu.display_name, tu.qr_token,
+              CASE WHEN ts.id IS NOT NULL THEN true ELSE false END AS occupied,
+              ts.id AS session_id, ts.pax
+       FROM table_units tu
+       LEFT JOIN table_sessions ts ON ts.table_unit_id = tu.id AND ts.ended_at IS NULL
+       WHERE tu.table_id = $1
+       ORDER BY tu.id`,
+      [tableId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch table units" });
+  }
+});
+
 // GET derived table categories
 router.get("/restaurants/:restaurantId/table-categories",
   async (req, res) => {

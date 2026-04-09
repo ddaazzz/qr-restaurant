@@ -1764,8 +1764,19 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <>
               <View style={styles.settingItem}>
                 <Text style={styles.label}>QR Mode</Text>
-                <Text style={styles.value}>{settings.qr_mode || 'regenerate'}</Text>
+                <Text style={styles.value}>
+                  {settings.qr_mode === 'static_table' ? 'Static (Per Table)'
+                    : settings.qr_mode === 'static_seat' ? 'Static (Per Seat)'
+                    : 'Regenerate (Per Order)'}
+                </Text>
               </View>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8, lineHeight: 18 }}>
+                {settings.qr_mode === 'static_table'
+                  ? 'Each table has a fixed QR code sticker. Only one active order is allowed per table at a time. When the order is closed, the same QR code can be reused for the next customer.'
+                  : settings.qr_mode === 'static_seat'
+                  ? 'Each seat has its own fixed QR code sticker (e.g. T01A, T01B). When starting a new order, you select which seats are occupied. Guests scanning different seat QR codes at the same table share the same order.'
+                  : 'A new QR code is generated for each order. Old QR codes become invalid when the session ends. Best for restaurants that print QR codes on receipts or table tents.'}
+              </Text>
               <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowQRModal(true)}>
                 <Text style={styles.btnText}>Change QR Mode</Text>
               </TouchableOpacity>
@@ -2589,7 +2600,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select QR Mode</Text>
 
-            {(['regenerate', 'static_table', 'static_seat'] as const).map((mode) => (
+            {([
+              { mode: 'regenerate' as const, label: 'Regenerate (Per Order)', desc: 'A new QR code is generated for each order. Old codes expire when the session ends. Best for printed receipts or table tents.' },
+              { mode: 'static_table' as const, label: 'Static (Per Table)', desc: 'Each table has a fixed QR code sticker. Only one active order per table at a time.' },
+              { mode: 'static_seat' as const, label: 'Static (Per Seat)', desc: 'Each seat has its own QR sticker (e.g. T01A, T01B). Select occupied seats when starting an order. Guests at the same table share one order.' },
+            ]).map(({ mode, label, desc }) => (
               <TouchableOpacity
                 key={mode}
                 style={[styles.option, settings?.qr_mode === mode && styles.optionActive]}
@@ -2612,11 +2627,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     settings?.qr_mode === mode && styles.optionTextActive,
                   ]}
                 >
-                  {mode === 'regenerate'
-                    ? 'Regenerate (Per Order)'
-                    : mode === 'static_table'
-                      ? 'Static (Per Table)'
-                      : 'Static (Per Seat)'}
+                  {label}
+                </Text>
+                <Text style={{ fontSize: 11, color: settings?.qr_mode === mode ? 'rgba(255,255,255,0.8)' : '#9ca3af', marginTop: 4, lineHeight: 16 }}>
+                  {desc}
                 </Text>
               </TouchableOpacity>
             ))}

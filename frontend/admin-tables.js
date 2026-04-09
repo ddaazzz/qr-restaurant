@@ -1223,6 +1223,8 @@ function startNewSessionModal(tableId) {
     return;
   }
 
+  const qrMode = ADMIN_SETTINGS_CACHE?.qr_mode || 'regenerate';
+
   // Create modal for entering pax
   const modal = document.createElement("div");
   modal.className = "modal-overlay";
@@ -1236,6 +1238,11 @@ function startNewSessionModal(tableId) {
         <input type="number" id="session-pax-input" min="1" max="${remaining}" value="1" class="modal-input">
       </label>
 
+      <div id="seat-picker-container" style="display: none; margin-bottom: 16px;">
+        <span class="modal-content-label">Select Seats</span>
+        <div id="seat-picker-grid" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;"></div>
+      </div>
+
       <div class="modal-button-group">
         <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
         <button onclick="submitStartSession(${tableId})" class="modal-btn-primary">${t('admin.start-session')}</button>
@@ -1245,6 +1252,67 @@ function startNewSessionModal(tableId) {
 
   document.body.appendChild(modal);
   document.getElementById("session-pax-input").focus();
+
+  // Load seat picker for static_seat mode
+  if (qrMode === 'static_seat') {
+    loadSeatPicker(tableId);
+  }
+}
+
+let _selectedSeatIds = [];
+
+async function loadSeatPicker(tableId) {
+  const container = document.getElementById("seat-picker-container");
+  const grid = document.getElementById("seat-picker-grid");
+  if (!container || !grid) return;
+
+  container.style.display = "block";
+  grid.innerHTML = '<span style="color: #888; font-size: 13px;">Loading seats...</span>';
+  _selectedSeatIds = [];
+
+  try {
+    const res = await fetch(`${API}/tables/${tableId}/units`);
+    if (!res.ok) throw new Error("Failed to load seats");
+    const units = await res.json();
+
+    grid.innerHTML = "";
+    units.forEach(unit => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.unitId = unit.id;
+      btn.textContent = unit.display_name || unit.unit_code;
+      btn.style.cssText = `
+        padding: 8px 14px; border-radius: 8px; border: 2px solid ${unit.occupied ? '#ccc' : '#ddd'};
+        background: ${unit.occupied ? '#f0f0f0' : '#fff'}; cursor: ${unit.occupied ? 'not-allowed' : 'pointer'};
+        font-weight: 600; color: ${unit.occupied ? '#999' : '#333'}; opacity: ${unit.occupied ? '0.5' : '1'};
+        font-size: 14px; transition: all 0.15s;
+      `;
+      if (unit.occupied) {
+        const occLabel = document.createElement("div");
+        occLabel.textContent = "Occupied";
+        occLabel.style.cssText = "font-size: 10px; color: #999; font-weight: normal;";
+        btn.appendChild(occLabel);
+      } else {
+        btn.addEventListener("click", () => {
+          const idx = _selectedSeatIds.indexOf(unit.id);
+          if (idx >= 0) {
+            _selectedSeatIds.splice(idx, 1);
+            btn.style.borderColor = "#ddd";
+            btn.style.background = "#fff";
+            btn.style.color = "#333";
+          } else {
+            _selectedSeatIds.push(unit.id);
+            btn.style.borderColor = "#007AFF";
+            btn.style.background = "#007AFF";
+            btn.style.color = "#fff";
+          }
+        });
+      }
+      grid.appendChild(btn);
+    });
+  } catch (err) {
+    grid.innerHTML = '<span style="color: #e74c3c; font-size: 13px;">Failed to load seats</span>';
+  }
 }
 
 async function submitStartSession(tableId) {
@@ -1252,11 +1320,21 @@ async function submitStartSession(tableId) {
   const pax = Number(paxInput ? paxInput.value : 0);
   if (!pax || pax <= 0) return alert("Invalid number of guests");
 
+  const qrMode = ADMIN_SETTINGS_CACHE?.qr_mode || 'regenerate';
+  if (qrMode === 'static_seat' && _selectedSeatIds.length === 0) {
+    return alert("Please select at least one seat");
+  }
+
+  const body = { pax };
+  if (qrMode === 'static_seat' && _selectedSeatIds.length > 0) {
+    body.unit_ids = [..._selectedSeatIds];
+  }
+
   try {
     const res = await fetch(`${API}/tables/${tableId}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pax })
+      body: JSON.stringify(body)
     });
 
     if (!res.ok) {

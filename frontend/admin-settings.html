@@ -254,9 +254,9 @@
               <option value="static_seat" data-i18n="admin.qr-static-seat-option">Static QR Code Per Seat</option>
             </select>
             <p style="font-size: 0.85em; color: #666; margin-top: 12px; line-height: 1.6;">
-              <strong data-i18n="admin.qr-regenerate-desc">Regenerate QR Code Each Session:</strong> <span data-i18n="admin.qr-regenerate-desc-text">New QR code generated each time session starts</span><br><br>
-              <strong data-i18n="admin.qr-static-table-desc">Static QR Code Per Table:</strong> <span data-i18n="admin.qr-static-table-desc-text">One session per table, cannot start new session</span><br><br>
-              <strong data-i18n="admin.qr-static-seat-desc">Static QR Code Per Seat:</strong> <span data-i18n="admin.qr-static-seat-desc-text">Each seat has independent QR code and session</span>
+              <strong data-i18n="admin.qr-regenerate-desc">Regenerate (Per Order):</strong> <span data-i18n="admin.qr-regenerate-desc-text">A new QR code is generated for each order. Old QR codes become invalid when the session ends. Best for restaurants that print QR codes on receipts or table tents.</span><br><br>
+              <strong data-i18n="admin.qr-static-table-desc">Static (Per Table):</strong> <span data-i18n="admin.qr-static-table-desc-text">Each table has a fixed QR code sticker. Only one active order is allowed per table at a time. When the order is closed, the same QR code can be reused for the next customer.</span><br><br>
+              <strong data-i18n="admin.qr-static-seat-desc">Static (Per Seat):</strong> <span data-i18n="admin.qr-static-seat-desc-text">Each seat has its own fixed QR code sticker (e.g. T01A, T01B). When starting a new order, you select which seats are occupied. Guests scanning different seat QR codes at the same table share the same order.</span>
             </p>
           </div>
         </div>

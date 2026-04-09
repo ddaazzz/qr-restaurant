@@ -98,6 +98,9 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
     if (qr_mode !== undefined) {
       updates.push(`qr_mode = $${paramCount++}`);
       values.push(qr_mode);
+      // Sync regenerate_qr_per_session: regenerate = true, static modes = false
+      updates.push(`regenerate_qr_per_session = $${paramCount++}`);
+      values.push(qr_mode === 'regenerate');
     }
     if (booking_time_allowance_mins !== undefined) {
       updates.push(`booking_time_allowance_mins = $${paramCount++}`);

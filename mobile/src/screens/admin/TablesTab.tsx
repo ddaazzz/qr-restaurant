@@ -50,7 +50,7 @@ interface Table {
   sessions: Session[];
   reserved?: boolean;
   booking_time?: string;
-  units: Array<{ id: number; qr_token: string }>;
+  units: Array<{ id: number; qr_token: string; display_name?: string }>;
 }
 
 interface TableState {
@@ -134,6 +134,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [restaurantName, setRestaurantName] = useState<string>('');
+  const [qrMode, setQrMode] = useState<string>('regenerate');
 
   // View state
   const [currentView, setCurrentView] = useState<ViewType>('grid');
@@ -190,6 +191,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [tableName, setTableName] = useState('');
   const [tableSeats, setTableSeats] = useState('4');
   const [sessionPax, setSessionPax] = useState('1');
+  const [seatUnits, setSeatUnits] = useState<Array<{ id: number; unit_code: string; display_name: string; occupied: boolean }>>([]);
+  const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
+  const [loadingSeats, setLoadingSeats] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -307,6 +311,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         const settingsRes = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
         if (settingsRes.data && settingsRes.data.service_charge_percent) {
           setServiceCharge(settingsRes.data.service_charge_percent);
+        }
+        if (settingsRes.data?.qr_mode) {
+          setQrMode(settingsRes.data.qr_mode);
         }
       } catch (e) {
         console.warn('Could not load service charge settings');
@@ -766,18 +773,55 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     }
   };
 
+  const loadSeatsForTable = async (tableId: number) => {
+    setLoadingSeats(true);
+    try {
+      const res = await apiClient.get(`/api/tables/${tableId}/units`);
+      setSeatUnits(res.data || []);
+      setSelectedSeatIds([]);
+    } catch (err: any) {
+      console.warn('[TablesTab] Failed to load seats:', err.message);
+      setSeatUnits([]);
+    } finally {
+      setLoadingSeats(false);
+    }
+  };
+
+  const openNewOrderModal = async () => {
+    if (qrMode === 'static_seat' && selectedTable) {
+      await loadSeatsForTable(selectedTable.id);
+    }
+    setShowSessionModal(true);
+  };
+
+  const toggleSeat = (unitId: number) => {
+    setSelectedSeatIds(prev =>
+      prev.includes(unitId) ? prev.filter(id => id !== unitId) : [...prev, unitId]
+    );
+  };
+
   const startSession = async () => {
     if (!selectedTable || !sessionPax || parseInt(sessionPax) <= 0) {
       Alert.alert('Error', 'Valid pax count required');
       return;
     }
 
+    if (qrMode === 'static_seat' && selectedSeatIds.length === 0) {
+      Alert.alert('Error', 'Please select at least one seat');
+      return;
+    }
+
     try {
       Keyboard.dismiss();
       
+      const body: any = { pax: parseInt(sessionPax) };
+      if (qrMode === 'static_seat' && selectedSeatIds.length > 0) {
+        body.unit_ids = selectedSeatIds;
+      }
+
       const createRes = await apiClient.post(
         `/api/tables/${selectedTable.id}/sessions`,
-        { pax: parseInt(sessionPax) }
+        body
       );
 
       // Check if QR auto-print is enabled
@@ -800,6 +844,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       }
 
       setSessionPax('1');
+      setSelectedSeatIds([]);
+      setSeatUnits([]);
       setShowSessionModal(false);
       await loadTableData();
       setSelectedTable(null);
@@ -2210,7 +2256,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={styles.sectionTitle}>{t('admin.options')}</Text>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
-                onPress={() => setShowSessionModal(true)}
+                onPress={openNewOrderModal}
               >
                 <Text style={styles.btnText}>New Order</Text>
               </TouchableOpacity>
@@ -2246,6 +2292,39 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 onChangeText={setSessionPax}
                 placeholder="1"
               />
+
+              {qrMode === 'static_seat' && (
+                <>
+                  <Text style={[styles.label, { marginTop: 12 }]}>Select Seats</Text>
+                  {loadingSeats ? (
+                    <Text style={{ color: '#888', marginBottom: 8 }}>Loading seats...</Text>
+                  ) : (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                      {seatUnits.map(unit => {
+                        const isSelected = selectedSeatIds.includes(unit.id);
+                        return (
+                          <TouchableOpacity
+                            key={unit.id}
+                            onPress={() => !unit.occupied && toggleSeat(unit.id)}
+                            style={{
+                              paddingVertical: 8, paddingHorizontal: 14,
+                              borderRadius: 8, borderWidth: 2,
+                              borderColor: unit.occupied ? '#ccc' : isSelected ? '#007AFF' : '#ddd',
+                              backgroundColor: unit.occupied ? '#f0f0f0' : isSelected ? '#007AFF' : '#fff',
+                              opacity: unit.occupied ? 0.5 : 1,
+                            }}
+                          >
+                            <Text style={{ fontWeight: '600', color: unit.occupied ? '#999' : isSelected ? '#fff' : '#333' }}>
+                              {unit.display_name || unit.unit_code}
+                            </Text>
+                            {unit.occupied && <Text style={{ fontSize: 10, color: '#999' }}>Occupied</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </>
+              )}
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -2557,7 +2636,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             {selectedTable.sessions.length < selectedTable.seat_count && (
               <>
                 <Text style={styles.sectionTitle}>{t('admin.options')}</Text>
-                <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => setShowSessionModal(true)}>
+                <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={openNewOrderModal}>
                   <Text style={styles.btnText}>New Order</Text>
                 </TouchableOpacity>
               </>
@@ -2573,6 +2652,38 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   <Text style={styles.modalTitle}>New Order</Text>
                   <Text style={styles.label}>{t('admin.number-of-guests')}</Text>
                   <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={sessionPax} onChangeText={setSessionPax} placeholder="1" />
+                  {qrMode === 'static_seat' && (
+                    <>
+                      <Text style={[styles.label, { marginTop: 12 }]}>Select Seats</Text>
+                      {loadingSeats ? (
+                        <Text style={{ color: '#888', marginBottom: 8 }}>Loading seats...</Text>
+                      ) : (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                          {seatUnits.map(unit => {
+                            const isSelected = selectedSeatIds.includes(unit.id);
+                            return (
+                              <TouchableOpacity
+                                key={unit.id}
+                                onPress={() => !unit.occupied && toggleSeat(unit.id)}
+                                style={{
+                                  paddingVertical: 8, paddingHorizontal: 14,
+                                  borderRadius: 8, borderWidth: 2,
+                                  borderColor: unit.occupied ? '#ccc' : isSelected ? '#007AFF' : '#ddd',
+                                  backgroundColor: unit.occupied ? '#f0f0f0' : isSelected ? '#007AFF' : '#fff',
+                                  opacity: unit.occupied ? 0.5 : 1,
+                                }}
+                              >
+                                <Text style={{ fontWeight: '600', color: unit.occupied ? '#999' : isSelected ? '#fff' : '#333' }}>
+                                  {unit.display_name || unit.unit_code}
+                                </Text>
+                                {unit.occupied && <Text style={{ fontSize: 10, color: '#999' }}>Occupied</Text>}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </>
+                  )}
                   <View style={styles.modalActions}>
                     <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { Keyboard.dismiss(); setShowSessionModal(false); }}>
                       <Text style={styles.btnText}>{t('common.cancel')}</Text>
