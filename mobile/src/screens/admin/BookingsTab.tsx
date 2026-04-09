@@ -151,7 +151,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
       if (err.response?.status === 404) {
         setError('Bookings endpoint not available');
       } else {
-        setError(err.message || 'Failed to load bookings');
+        setError(err.message || t('bookings.failed-load'));
       }
     } finally {
       setLoading(false);
@@ -296,7 +296,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
             <>
               <Text style={styles.calendarDayDot}>●</Text>
               <Text style={[styles.calendarDayBookingsText, isSelected && { color: 'rgba(255,255,255,0.8)' }]}>
-                {bookingsForDay.length} booking{bookingsForDay.length > 1 ? 's' : ''}
+                {t('bookings.booking-count').replace('{0}', String(bookingsForDay.length))}
               </Text>
             </>
           )}
@@ -352,15 +352,15 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
 
   const saveBooking = async () => {
     if (!formData.guest_name.trim()) {
-      setFormError('Guest name is required');
+      setFormError(t('bookings.guest-name-required'));
       return;
     }
     if (!formData.party_size || parseInt(formData.party_size) < 1) {
-      setFormError('Party size must be at least 1');
+      setFormError(t('bookings.party-size-min'));
       return;
     }
     if (!formData.date || !formData.time) {
-      setFormError('Date and time are required');
+      setFormError(t('bookings.date-time-required'));
       return;
     }
 
@@ -398,7 +398,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
       await fetchBookings();
     } catch (err: any) {
       console.error('Error saving booking:', err);
-      let errorMsg = 'Failed to save booking';
+      let errorMsg = t('bookings.failed-save');
       if (err.response?.data?.message) {
         errorMsg = err.response.data.message;
       } else if (err.response?.data?.error) {
@@ -454,6 +454,17 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
 
   const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
+  const getStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      confirmed: t('bookings.confirmed'),
+      pending: t('bookings.pending'),
+      completed: t('bookings.completed'),
+      cancelled: t('bookings.cancelled'),
+      'no-show': t('bookings.no-show'),
+    };
+    return map[status] || status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
   const loadBookingSessionDetails = async (sessionId: number) => {
     setLoadingSession(true);
     try {
@@ -504,20 +515,20 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
         {/* Calendar Navigation */}
         <View style={styles.calendarNav}>
           <TouchableOpacity onPress={previousMonth} style={styles.navBtn}>
-            <Text style={styles.navBtnText}>← Prev</Text>
+            <Text style={styles.navBtnText}>{t('bookings.prev')}</Text>
           </TouchableOpacity>
           <Text style={styles.calendarMonth}>{monthYear}</Text>
           <TouchableOpacity onPress={nextMonth} style={styles.navBtn}>
-            <Text style={styles.navBtnText}>Next →</Text>
+            <Text style={styles.navBtnText}>{t('bookings.next')}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={goToToday} style={[styles.navBtn, styles.todayBtn]}>
-            <Text style={styles.todayBtnText}>Today</Text>
+            <Text style={styles.todayBtnText}>{t('bookings.today')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Calendar Grid */}
         <View style={styles.calendarGrid}>
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          {t('bookings.weekdays').split(',').map((day: string) => (
             <View key={day} style={styles.weekdayHeader}>
               <Text style={styles.weekdayText}>{day}</Text>
             </View>
@@ -529,7 +540,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity onPress={fetchBookings} style={styles.retryBtn}>
-              <Text style={styles.retryBtnText}>Retry</Text>
+              <Text style={styles.retryBtnText}>{t('bookings.retry')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -538,7 +549,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
         <View style={styles.inlineBookingsSection}>
             <View style={styles.inlineBookingsHeader}>
               <Text style={styles.inlineBookingsTitle}>
-                Bookings for {formatDateDisplay(selectedDate)}
+                {t('bookings.bookings-for')}{formatDateDisplay(selectedDate)}
               </Text>
             </View>
 
@@ -546,58 +557,54 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               /* Inline detail view - matches webapp */
               <View style={styles.inlineDetailCard}>
                 <TouchableOpacity onPress={() => setSelectedBookingDetail(null)} style={{ marginBottom: 8 }}>
-                  <Text style={styles.panelBackBtnText}>← Back to list</Text>
+                  <Text style={styles.panelBackBtnText}>{t('bookings.back-to-list')}</Text>
                 </TouchableOpacity>
 
                 {/* Header: Booking # + Status */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
-                    Booking #{(selectedBookingDetail as any).restaurant_booking_number || selectedBookingDetail.id} — {selectedBookingDetail.guest_name}
+                    {t('bookings.booking-num').replace('{0}', String((selectedBookingDetail as any).restaurant_booking_number || selectedBookingDetail.id)).replace('{1}', selectedBookingDetail.guest_name)}
                   </Text>
                   <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedBookingDetail.status) }]}>
-                    <Text style={styles.detailStatusText}>{selectedBookingDetail.status}</Text>
+                    <Text style={styles.detailStatusText}>{getStatusLabel(selectedBookingDetail.status)}</Text>
                   </View>
                 </View>
 
                 {/* Customer & Booking Details section */}
                 <View style={styles.detailSectionCard}>
-                  <Text style={styles.detailSectionTitle}>Customer & Booking Details</Text>
+                  <Text style={styles.detailSectionTitle}>{t('bookings.customer-details')}</Text>
                   <View style={styles.detailGrid}>
                     <View style={styles.detailGridItem}>
-                      <Text style={styles.detailLabel}>Name</Text>
+                      <Text style={styles.detailLabel}>{t('bookings.name')}</Text>
                       <Text style={styles.detailValue}>{selectedBookingDetail.guest_name}</Text>
                     </View>
                     <View style={styles.detailGridItem}>
-                      <Text style={styles.detailLabel}>Phone</Text>
+                      <Text style={styles.detailLabel}>{t('bookings.phone')}</Text>
                       <Text style={styles.detailValue}>{selectedBookingDetail.phone || '—'}</Text>
                     </View>
                     <View style={styles.detailGridItem}>
-                      <Text style={styles.detailLabel}>Email</Text>
+                      <Text style={styles.detailLabel}>{t('bookings.email')}</Text>
                       <Text style={styles.detailValue}>{selectedBookingDetail.email || '—'}</Text>
                     </View>
                     <View style={styles.detailGridItem}>
-                      <Text style={styles.detailLabel}>Pax</Text>
+                      <Text style={styles.detailLabel}>{t('bookings.pax')}</Text>
                       <Text style={styles.detailValue}>{selectedBookingDetail.party_size}</Text>
                     </View>
                     <View style={styles.detailGridItem}>
-                      <Text style={styles.detailLabel}>Table</Text>
-                      <Text style={styles.detailValue}>
-                        {selectedBookingDetail.table_id
+                      <Text style={styles.detailLabel}>{t('bookings.table')}</Text>
                           ? tables.find(t => t.id === selectedBookingDetail.table_id)?.name || `#${selectedBookingDetail.table_id}`
                           : '—'}
                       </Text>
                     </View>
                     <View style={styles.detailGridItem}>
-                      <Text style={styles.detailLabel}>Date</Text>
-                      <Text style={styles.detailValue}>{(selectedBookingDetail.date || (selectedBookingDetail as any).booking_date || '—').split('T')[0]}</Text>
+                      <Text style={styles.detailLabel}>{t('bookings.date')}</Text>
                     </View>
                     <View style={styles.detailGridItem}>
-                      <Text style={styles.detailLabel}>Time</Text>
-                      <Text style={styles.detailValue}>{selectedBookingDetail.time || (selectedBookingDetail as any).booking_time || '—'}</Text>
+                      <Text style={styles.detailLabel}>{t('bookings.time')}</Text>
                     </View>
                     {(selectedBookingDetail as any).notes ? (
                       <View style={[styles.detailGridItem, { width: '100%' }]}>
-                        <Text style={styles.detailLabel}>Notes</Text>
+                        <Text style={styles.detailLabel}>{t('bookings.notes')}</Text>
                         <Text style={styles.detailValue}>{(selectedBookingDetail as any).notes}</Text>
                       </View>
                     ) : null}
@@ -607,7 +614,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                 {/* Session & Orders section */}
                 {selectedBookingDetail.session_id ? (
                   <View style={styles.detailSectionCard}>
-                    <Text style={styles.detailSectionTitle}>Session & Orders</Text>
+                    <Text style={styles.detailSectionTitle}>{t('bookings.session-orders')}</Text>
                     {loadingSession ? (
                       <ActivityIndicator size="small" color="#3b82f6" style={{ paddingVertical: 12 }} />
                     ) : sessionData ? (
@@ -623,26 +630,26 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                             <Text style={styles.detailValue}>{sessionData.table_name || '—'}</Text>
                           </View>
                           <View style={styles.detailGridItem}>
-                            <Text style={styles.detailLabel}>Guests</Text>
+                            <Text style={styles.detailLabel}>{t('bookings.guests')}</Text>
                             <Text style={styles.detailValue}>{sessionData.pax}</Text>
                           </View>
                           <View style={styles.detailGridItem}>
-                            <Text style={styles.detailLabel}>Started</Text>
+                            <Text style={styles.detailLabel}>{t('bookings.started')}</Text>
                             <Text style={styles.detailValue}>{new Date(sessionData.started_at).toLocaleString('en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
                           </View>
                           <View style={styles.detailGridItem}>
-                            <Text style={styles.detailLabel}>Ended</Text>
+                            <Text style={styles.detailLabel}>{t('bookings.ended')}</Text>
                             <Text style={[styles.detailValue, !sessionData.ended_at && { color: '#22c55e' }]}>
                               {sessionData.ended_at
                                 ? new Date(sessionData.ended_at).toLocaleString('en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                                : 'Active'}
+                                : t('bookings.active')}
                             </Text>
                           </View>
                         </View>
 
                         {/* Orders */}
                         {sessionOrders.length === 0 ? (
-                          <Text style={{ color: '#9ca3af', fontSize: 13, paddingVertical: 8 }}>No orders in this session</Text>
+                          <Text style={{ color: '#9ca3af', fontSize: 13, paddingVertical: 8 }}>{t('bookings.no-orders-session')}</Text>
                         ) : (
                           <>
                             {sessionOrders.map((order, oi) => {
@@ -653,15 +660,15 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                                 <View key={oi} style={styles.orderBlock}>
                                   <View style={styles.orderBlockHeader}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                      <Text style={{ fontWeight: '700', color: '#1f2937', fontSize: 13 }}>Order #{orderNum}</Text>
+                                      <Text style={{ fontWeight: '700', color: '#1f2937', fontSize: 13 }}>{t('bookings.order-num').replace('{0}', String(orderNum))}</Text>
                                       <View style={[styles.detailStatusBadge, { backgroundColor: isPaid ? '#10b981' : '#d1d5db' }]}>
-                                        <Text style={[styles.detailStatusText, { fontSize: 10 }]}>{isPaid ? 'Paid' : order.order_status || 'Pending'}</Text>
+                                        <Text style={[styles.detailStatusText, { fontSize: 10 }]}>{isPaid ? t('bookings.paid') : order.order_status || t('bookings.pending')}</Text>
                                       </View>
                                     </View>
                                     {order.order_payment_method ? (
                                       <Text style={{ fontSize: 11, color: '#6b7280' }}>
                                         {order.order_payment_method.charAt(0).toUpperCase() + order.order_payment_method.slice(1)}
-                                        {order.order_reference ? ` · Ref: ${order.order_reference}` : ''}
+                                        {order.order_reference ? ` · ${t('bookings.ref').replace('{0}', order.order_reference)}` : ''}
                                       </Text>
                                     ) : null}
                                   </View>
@@ -687,7 +694,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                                   ))}
                                   <View style={styles.orderBlockTotal}>
                                     <Text style={{ fontWeight: '600', color: '#1f2937', fontSize: 13 }}>
-                                      Order Total: {formatMoney(order.total_cents || 0)}
+                                      {t('bookings.order-total')}{formatMoney(order.total_cents || 0)}
                                     </Text>
                                   </View>
                                 </View>
@@ -695,14 +702,14 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                             })}
                             <View style={styles.grandTotalRow}>
                               <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>
-                                Grand Total: {formatMoney(sessionOrders.reduce((sum, o) => sum + (o.total_cents || 0), 0))}
+                                {t('bookings.grand-total')}{formatMoney(sessionOrders.reduce((sum, o) => sum + (o.total_cents || 0), 0))}
                               </Text>
                             </View>
                           </>
                         )}
                       </>
                     ) : (
-                      <Text style={{ color: '#ef4444', fontSize: 13 }}>Error loading session</Text>
+                      <Text style={{ color: '#ef4444', fontSize: 13 }}>{t('bookings.error-loading')}</Text>
                     )}
                   </View>
                 ) : null}
@@ -713,13 +720,13 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                     style={[styles.actionBtn, styles.editBtn, { flex: 1 }]}
                     onPress={() => { setSelectedBookingDetail(null); openEditBookingModal(selectedBookingDetail); }}
                   >
-                    <Text style={styles.actionBtnText}>Edit Booking</Text>
+                    <Text style={styles.actionBtnText}>{t('bookings.edit-booking')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.deleteBtn, { flex: 1 }]}
                     onPress={() => { setSelectedBookingDetail(null); deleteBooking(selectedBookingDetail.id); }}
                   >
-                    <Text style={styles.actionBtnText}>Delete</Text>
+                    <Text style={styles.actionBtnText}>{t('bookings.delete')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -728,17 +735,17 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               <>
                 {/* Table header row */}
                 <View style={styles.bookingRowHeader}>
-                  <Text style={[styles.bookingRowCell, { flex: 1 }]}>Date</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 2 }]}>Guest</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 1.5 }]}>Phone</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>Pax</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>Time</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>Status</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>Actions</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 1 }]}>{t('bookings.date')}</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 2 }]}>{t('bookings.guest')}</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 1.5 }]}>{t('bookings.phone')}</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>{t('bookings.pax')}</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>{t('bookings.time')}</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>{t('bookings.status')}</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>{t('bookings.actions')}</Text>
                 </View>
 
                 {selectedDateBookings.length === 0 ? (
-                  <Text style={styles.noBookings}>No bookings for this date</Text>
+                  <Text style={styles.noBookings}>{t('bookings.no-bookings')}</Text>
                 ) : (
                   selectedDateBookings.map((item) => {
                     const statusColor = getStatusColor(item.status);
@@ -770,7 +777,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                         </Text>
                         <View style={{ flex: 1, alignItems: 'center' }}>
                           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                            <Text style={styles.statusText}>{item.status}</Text>
+                            <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
                           </View>
                         </View>
                         <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
@@ -778,7 +785,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                             style={styles.inlineEditBtn}
                             onPress={() => openEditBookingModal(item)}
                           >
-                            <Text style={{ color: '#3b82f6', fontSize: 12, fontWeight: '600' }}>Edit</Text>
+                            <Text style={{ color: '#3b82f6', fontSize: 12, fontWeight: '600' }}>{t('bookings.edit')}</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.inlineDeleteBtn}
@@ -803,7 +810,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {editingBookingId ? 'Edit Booking' : 'New Booking'}
+                {editingBookingId ? t('bookings.edit-booking') : t('bookings.new-booking')}
               </Text>
               <TouchableOpacity onPress={closeModal}>
                 <Text style={styles.modalCloseBtn}>✕</Text>
@@ -816,10 +823,10 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               {/* Row 1: Guest Name + Phone */}
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Guest Name *</Text>
+                  <Text style={styles.formLabel}>{t('bookings.guest-name-label')}</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder="Guest name"
+                    placeholder={t('bookings.guest-name-placeholder')}
                     value={formData.guest_name}
                     onChangeText={(text) =>
                       setFormData({ ...formData, guest_name: text })
@@ -827,10 +834,10 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                   />
                 </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Phone</Text>
+                  <Text style={styles.formLabel}>{t('bookings.phone-label')}</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder="Phone number"
+                    placeholder={t('bookings.phone-placeholder')}
                     value={formData.phone}
                     onChangeText={(text) =>
                       setFormData({ ...formData, phone: text })
@@ -842,10 +849,10 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               {/* Row 2: Email + Party Size */}
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Email</Text>
+                  <Text style={styles.formLabel}>{t('bookings.email-label')}</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder="Email"
+                    placeholder={t('bookings.email-placeholder')}
                     value={formData.email}
                     onChangeText={(text) =>
                       setFormData({ ...formData, email: text })
@@ -853,10 +860,10 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                   />
                 </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Party Size *</Text>
+                  <Text style={styles.formLabel}>{t('bookings.party-size-label')}</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder="Guests"
+                    placeholder={t('bookings.party-size-placeholder')}
                     keyboardType="number-pad"
                     value={formData.party_size}
                     onChangeText={(text) =>
@@ -872,23 +879,20 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               {/* Row 3: Table + Date */}
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Table</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownBtn}
-                    onPress={() => {
+                  <Text style={styles.formLabel}>{t('bookings.table-label')}</Text>
                       console.log('[Debug] Table button pressed, current state:', showTableDropdown);
                       setShowTableDropdown(true);
                     }}
                   >
                     <Text style={styles.dropdownBtnText}>
                       {formData.table_id
-                        ? tables.find(t => t.id.toString() === formData.table_id)?.name || 'Select table'
-                        : 'Select table'}
+                        ? tables.find(t => t.id.toString() === formData.table_id)?.name || t('bookings.select-table')
+                        : t('bookings.select-table')}
                     </Text>
                   </TouchableOpacity>
                 </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Date *</Text>
+                  <Text style={styles.formLabel}>{t('bookings.date-label')}</Text>
                   <TextInput
                     style={styles.formInput}
                     placeholder="YYYY-MM-DD"
@@ -903,7 +907,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               {/* Row 4: Time + Status */}
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Time *</Text>
+                  <Text style={styles.formLabel}>{t('bookings.time-label')}</Text>
                   <TextInput
                     style={styles.formInput}
                     placeholder="HH:MM"
@@ -914,13 +918,13 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                   />
                 </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Status *</Text>
+                  <Text style={styles.formLabel}>{t('bookings.status-label')}</Text>
                   <TouchableOpacity
                     style={styles.dropdownBtn}
                     onPress={() => setShowStatusDropdown(!showStatusDropdown)}
                   >
                     <Text style={styles.dropdownBtnText}>
-                      {formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
+                      {getStatusLabel(formData.status)}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -929,10 +933,10 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               {/* Row 5: Remarks/Notes */}
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>Remarks / Notes</Text>
+                  <Text style={styles.formLabel}>{t('bookings.notes-label')}</Text>
                   <TextInput
                     style={[styles.formInput, { minHeight: 60, textAlignVertical: 'top' }]}
-                    placeholder="Any special requests or notes"
+                    placeholder={t('bookings.notes-placeholder')}
                     value={formData.notes}
                     onChangeText={(text) =>
                       setFormData({ ...formData, notes: text })
@@ -950,14 +954,14 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                 style={[styles.formBtn, styles.formBtnCancel]}
                 onPress={closeModal}
               >
-                <Text style={styles.formBtnText}>Cancel</Text>
+                <Text style={styles.formBtnText}>{t('bookings.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.formBtn, styles.formBtnSave]}
                 onPress={saveBooking}
               >
                 <Text style={[styles.formBtnText, styles.formBtnSaveText]}>
-                  Save
+                  {t('bookings.save')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -977,11 +981,11 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
             <View style={styles.absoluteDropdownMenuContainer}>
               {tables.length === 0 ? (
                 <View style={styles.dropdownItem}>
-                  <Text style={styles.dropdownItemText}>No tables available</Text>
+                  <Text style={styles.dropdownItemText}>{t('bookings.no-tables')}</Text>
                 </View>
               ) : (
                 <FlatList
-                  data={[{ id: -1, name: '— Select table —', seat_count: 0 }, ...tables]}
+                  data={[{ id: -1, name: t('bookings.select-table-option'), seat_count: 0 }, ...tables]}
                   keyExtractor={(item) => item.id.toString()}
                   scrollEnabled={tables.length > 10}
                   nestedScrollEnabled={true}
@@ -999,7 +1003,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                       style={styles.dropdownItem}
                     >
                       <Text style={styles.dropdownItemText}>
-                        {item.id === -1 ? item.name : `${item.name} (${item.seat_count} seats)`}
+                        {item.id === -1 ? item.name : `${item.name} (${item.seat_count} ${t('bookings.seats')})`}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1035,7 +1039,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                     style={styles.dropdownItem}
                   >
                     <Text style={styles.dropdownItemText}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      {getStatusLabel(status)}
                     </Text>
                   </TouchableOpacity>
                 )}

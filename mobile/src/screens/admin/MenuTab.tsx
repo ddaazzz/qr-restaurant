@@ -213,7 +213,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         }
       } catch (err: any) {
         console.error('Error fetching menu data:', err);
-        setError(err.response?.data?.error || 'Failed to load menu');
+        setError(err.response?.data?.error || t('menu.failed-load'));
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -233,7 +233,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     const createCategory = async () => {
       if (!categoryName.trim()) {
-        Alert.alert('Error', 'Category name required');
+        Alert.alert(t('common.error'), t('menu.category-required'));
         return;
       }
 
@@ -246,13 +246,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setShowCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to create category');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-create-cat'));
       }
     };
 
     const updateCategory = async (categoryId: number) => {
       if (!editingCategoryName.trim()) {
-        Alert.alert('Error', 'Category name required');
+        Alert.alert(t('common.error'), t('menu.category-required'));
         return;
       }
 
@@ -266,18 +266,18 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setShowEditCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to update category');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-update-cat'));
       }
     };
 
     const deleteCategory = (categoryId: number, categoryName: string) => {
       Alert.alert(
-        'Delete Category',
-        `Are you sure you want to delete "${categoryName}"?`,
+        t('menu.delete-category'),
+        t('menu.delete-category-confirm').replace('{0}', categoryName),
         [
-          { text: 'Cancel' },
+          { text: t('common.cancel') },
           {
-            text: 'Delete',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -287,7 +287,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 );
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete category');
+                Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-delete-cat'));
               }
             },
           },
@@ -299,12 +299,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     const createItem = async () => {
       if (!itemName.trim() || !itemPrice.trim()) {
-        Alert.alert('Error', 'Item name and price required');
+        Alert.alert(t('common.error'), t('menu.item-name-price-required'));
         return;
       }
 
       if (!selectedCategory) {
-        Alert.alert('Error', 'Select a category first');
+        Alert.alert(t('common.error'), t('menu.select-category-first'));
         return;
       }
 
@@ -327,13 +327,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setShowItemModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to create item');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-create-item'));
       }
     };
 
     const updateItem = async (itemId: number) => {
       if (!editingItemName.trim() || !editingItemPrice.trim()) {
-        Alert.alert('Error', 'Item name and price required');
+        Alert.alert(t('common.error'), t('menu.item-name-price-required'));
         return;
       }
 
@@ -357,18 +357,18 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
           if (updated) setSelectedItem(updated);
         }
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to update item');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-update-item'));
       }
     };
 
     const deleteItem = (itemId: number, itemName: string) => {
       Alert.alert(
-        'Delete Item',
-        `Are you sure you want to delete "${itemName}"?`,
+        t('menu.delete-item'),
+        t('menu.delete-item-msg').replace('{0}', itemName),
         [
-          { text: 'Cancel' },
+          { text: t('common.cancel') },
           {
-            text: 'Delete',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -382,7 +382,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   setSelectedItem(null);
                 }
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete item');
+                Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-delete-item'));
               }
             },
           },
@@ -404,7 +404,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         }
       } catch (err: any) {
         console.error('Error updating availability:', err);
-        Alert.alert('Error', 'Failed to update availability');
+        Alert.alert(t('common.error'), t('menu.failed-avail'));
       }
     };
 
@@ -412,7 +412,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     const createVariant = async () => {
       if (!variantName.trim() || !editingItemForVariant) {
-        Alert.alert('Error', 'Variant name required');
+        Alert.alert(t('common.error'), t('menu.variant-name-required'));
         return;
       }
 
@@ -437,13 +437,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setEditingItemForVariant(null);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to create variant');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-create-variant'));
       }
     };
 
     const updateVariant = async (variantId: number) => {
       if (!editingVariantName.trim()) {
-        Alert.alert('Error', 'Variant name required');
+        Alert.alert(t('common.error'), t('menu.variant-name-required'));
         return;
       }
 
@@ -468,25 +468,25 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setShowEditVariantModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to update variant');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-update-variant'));
       }
     };
 
     const deleteVariant = (variantId: number, variantName: string) => {
       Alert.alert(
-        'Delete Variant',
-        `Are you sure you want to delete "${variantName}"?`,
+        t('menu.delete-variant'),
+        t('menu.delete-variant-msg'),
         [
-          { text: 'Cancel' },
+          { text: t('common.cancel') },
           {
-            text: 'Delete',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.delete(`/api/variants/${variantId}`);
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete variant');
+                Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-delete-variant'));
               }
             },
           },
@@ -498,7 +498,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     const createVariantOption = async () => {
       if (!optionName.trim() || !editingVariantForOption) {
-        Alert.alert('Error', 'Option name required');
+        Alert.alert(t('common.error'), t('menu.option-name-required'));
         return;
       }
 
@@ -516,13 +516,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setEditingVariantForOption(null);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to create option');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-create-option'));
       }
     };
 
     const updateVariantOption = async (optionId: number) => {
       if (!editingOptionName.trim()) {
-        Alert.alert('Error', 'Option name required');
+        Alert.alert(t('common.error'), t('menu.option-name-required'));
         return;
       }
 
@@ -540,25 +540,25 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setShowEditVariantOptionModal(false);
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to update option');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-update-option'));
       }
     };
 
     const deleteVariantOption = (optionId: number, optionName: string) => {
       Alert.alert(
-        'Delete Option',
-        `Are you sure you want to delete "${optionName}"?`,
+        t('menu.delete-option'),
+        t('menu.delete-option-msg'),
         [
-          { text: 'Cancel' },
+          { text: t('common.cancel') },
           {
-            text: 'Delete',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.delete(`/api/variant-options/${optionId}`);
                 await loadMenuData();
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete option');
+                Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-delete-option'));
               }
             },
           },
@@ -575,7 +575,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setAddons(itemAddons);
       } catch (err: any) {
         console.error('Error loading addons:', err);
-        Alert.alert('Error', 'Failed to load addons');
+        Alert.alert(t('common.error'), t('menu.failed-load-addons'));
       } finally {
         setLoadingAddons(false);
       }
@@ -596,14 +596,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     const createAddon = async () => {
       if (!editingItemId || !selectedAddonItemId || !addonDiscountPrice.trim()) {
-        Alert.alert('Error', 'Please select an item and enter discount price');
+        Alert.alert(t('common.error'), t('menu.select-item-price'));
         return;
       }
 
       try {
         const addonItem = items.find(i => i.id === selectedAddonItemId);
         if (!addonItem) {
-          Alert.alert('Error', 'Selected item not found');
+          Alert.alert(t('common.error'), t('menu.item-not-found'));
           return;
         }
 
@@ -623,25 +623,25 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         // Reload addons
         await loadAddonsForItem(editingItemId);
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to add addon');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-add-addon'));
       }
     };
 
     const deleteAddon = (addonId: number, addonName: string) => {
       Alert.alert(
-        'Delete Addon',
-        `Are you sure you want to remove "${addonName}"?`,
+        t('menu.delete-addon'),
+        t('menu.delete-addon-msg'),
         [
-          { text: 'Cancel' },
+          { text: t('common.cancel') },
           {
-            text: 'Delete',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: async () => {
               try {
                 await addonService.deleteAddon(restaurantId, addonId);
                 setAddons(addons.filter(a => a.id !== addonId));
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete addon');
+                Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-delete-addon'));
               }
             },
           },
@@ -660,13 +660,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setInlineEditVariantPresets(presets);
       } catch (err: any) {
         console.error('Error loading variant presets:', err);
-        Alert.alert('Error', 'Failed to load variant presets');
+        Alert.alert(t('common.error'), t('menu.failed-presets'));
       }
     };
 
     const applyVariantPresetToInlineItem = async () => {
       if (!inlineEditSelectedVariantPresetId || !selectedItem) {
-        Alert.alert('Error', 'Please select a variant preset');
+        Alert.alert(t('common.error'), t('menu.select-preset-required'));
         return;
       }
 
@@ -678,7 +678,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         const variants = Array.isArray(variantsRes.data) ? variantsRes.data : [];
 
         if (variants.length === 0) {
-          Alert.alert('Error', 'This preset has no variants');
+          Alert.alert(t('common.error'), t('menu.no-preset-variants'));
           return;
         }
 
@@ -717,14 +717,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
           }
         }
 
-        Alert.alert('Success', 'Variant preset added successfully');
+        Alert.alert(t('common.success'), t('menu.preset-added'));
         setInlineEditSelectedVariantPresetId(null);
         setShowVariantPresetsDropdown(false);
 
         // Reload menu data to show the new variants
         await loadMenuData();
       } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to add variant preset');
+        Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-presets'));
       }
     };
 
@@ -739,7 +739,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
     };
 
     const uploadItemImage = async (itemId: number, context: 'inline' | 'new' | 'edit') => {
-      Alert.alert('Not Available', 'Image upload is not available in this version');
+      Alert.alert(t('common.error'), t('menu.image-not-available'));
     };
 
     const filteredItems = items.filter(i => {
@@ -777,7 +777,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 onPress={() => setShowCategoryModal(true)}
               >
                 <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
-                  + Add
+                  {t('menu.add')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -813,13 +813,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         setShowEditCategoryModal(true);
                       }}
                     >
-                      <Text style={styles.categoryActionBtnText}>Edit</Text>
+                      <Text style={styles.categoryActionBtnText}>{t('menu.edit')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.categoryActionBtn, styles.categoryActionBtnDelete]}
                       onPress={() => deleteCategory(cat.id, cat.name)}
                     >
-                      <Text style={styles.categoryActionBtnText}>Del</Text>
+                      <Text style={styles.categoryActionBtnText}>{t('menu.del')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -832,7 +832,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <View style={styles.itemsGridWrapper}>
           <FlatList
             data={selectedCategory && showAvailabilityToggles
-              ? [...filteredItems, { id: 'add-item', name: '+ Add Item', isAddButton: true } as any]
+              ? [...filteredItems, { id: 'add-item', name: t('menu.add-item-card'), isAddButton: true } as any]
               : filteredItems
             }
             keyExtractor={(item: any) => (item.isAddButton ? 'add-item' : item.id.toString())}
@@ -845,7 +845,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       onPress={() => setShowItemModal(true)}
                     >
                       <View style={styles.addItemPlaceholder}>
-                        <Text style={styles.addItemText}>+ Add Item</Text>
+                        <Text style={styles.addItemText}>{t('menu.add-item-card')}</Text>
                       </View>
                     </TouchableOpacity>
                   </View>
@@ -929,7 +929,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
               <TouchableOpacity onPress={() => { setEditingItemInlineId(null); setShowInlineVariantForm(false); setShowDetailPanel(false); }}>
                 <Text style={styles.detailCloseBtn}>✕</Text>
               </TouchableOpacity>
-              <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? 'Edit Item' : selectedItem.name}</Text>
+              <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? t('menu.edit-item') : selectedItem.name}</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {editingItemInlineId !== selectedItem.id && (
                   <TouchableOpacity
@@ -948,7 +948,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     }}
                     style={styles.categoryActionBtn}
                   >
-                    <Text style={styles.detailHeaderActionBtn}>Edit</Text>
+                    <Text style={styles.detailHeaderActionBtn}>{t('menu.edit')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -959,39 +959,39 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
               {editingItemInlineId === selectedItem.id ? (
                 <View style={styles.inlineEditForm}>
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Name</Text>
+                    <Text style={styles.label}>{t('menu.name')}</Text>
                     <TextInput
                       style={styles.input}
                       value={inlineEditName}
                       onChangeText={setInlineEditName}
-                      placeholder="Item name"
+                      placeholder={t('menu.item-name-placeholder')}
                     />
                   </View>
 
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Description</Text>
+                    <Text style={styles.label}>{t('menu.description')}</Text>
                     <TextInput
                       style={[styles.input, styles.multilineInput]}
                       value={inlineEditDescription}
                       onChangeText={setInlineEditDescription}
-                      placeholder="Item description"
+                      placeholder={t('menu.item-description-placeholder')}
                       multiline
                     />
                   </View>
 
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Price ($)</Text>
+                    <Text style={styles.label}>{t('menu.price-dollar')}</Text>
                     <TextInput
                       style={styles.input}
                       value={inlineEditPrice}
                       onChangeText={setInlineEditPrice}
-                      placeholder="Price"
+                      placeholder={t('menu.price-placeholder')}
                       keyboardType="decimal-pad"
                     />
                   </View>
 
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Image</Text>
+                    <Text style={styles.label}>{t('menu.image')}</Text>
                     {inlineEditImageUrl && (
                       <View style={styles.imagePreview}>
                         <Image
@@ -1007,14 +1007,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     >
                       <Text style={styles.btnText}>
                         {uploadingImageItemId === selectedItem!.id && uploadingImageContext === 'inline'
-                          ? 'Uploading...'
-                          : 'Upload Image'}
+                          ? t('menu.uploading')
+                          : t('menu.upload-image')}
                       </Text>
                     </TouchableOpacity>
                   </View>
 
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Has Variants</Text>
+                    <Text style={styles.label}>{t('menu.has-variants')}</Text>
                     <TouchableOpacity
                       style={[styles.checkboxRow]}
                       onPress={async () => {
@@ -1029,7 +1029,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       <View style={[styles.checkbox, inlineEditHasVariants && styles.checkboxChecked]}>
                         {inlineEditHasVariants && <Text style={styles.checkboxCheck}>✓</Text>}
                       </View>
-                      <Text style={styles.checkboxLabel}>Enable variants for this item</Text>
+                      <Text style={styles.checkboxLabel}>{t('menu.enable-variants')}</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -1047,33 +1047,33 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                           setShowInlineVariantForm(!showInlineVariantForm);
                         }}
                       >
-                        <Text style={styles.btnText}>{showInlineVariantForm ? '- Cancel Add Variant' : '+ Add Variant'}</Text>
+                        <Text style={styles.btnText}>{showInlineVariantForm ? t('menu.cancel-add-variant') : t('menu.add-variant')}</Text>
                       </TouchableOpacity>
 
                       {showInlineVariantForm && (
                         <View style={styles.inlineVariantForm}>
-                          <Text style={styles.label}>Variant Name</Text>
+                          <Text style={styles.label}>{t('menu.variant-name')}</Text>
                           <TextInput
                             style={styles.input}
                             value={variantName}
                             onChangeText={setVariantName}
-                            placeholder="e.g., Size, Temperature"
+                            placeholder={t('menu.variant-name-placeholder')}
                             autoFocus
                           />
-                          <Text style={styles.label}>Min Select (optional)</Text>
+                          <Text style={styles.label}>{t('menu.min-select-label')}</Text>
                           <TextInput
                             style={styles.input}
                             value={variantMinSelect}
                             onChangeText={setVariantMinSelect}
-                            placeholder="e.g., 1"
+                            placeholder={t('menu.min-placeholder')}
                             keyboardType="number-pad"
                           />
-                          <Text style={styles.label}>Max Select (optional)</Text>
+                          <Text style={styles.label}>{t('menu.max-select-label')}</Text>
                           <TextInput
                             style={styles.input}
                             value={variantMaxSelect}
                             onChangeText={setVariantMaxSelect}
-                            placeholder="e.g., 3"
+                            placeholder={t('menu.max-placeholder')}
                             keyboardType="number-pad"
                           />
                           <TouchableOpacity
@@ -1083,7 +1083,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
                               {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
                             </View>
-                            <Text style={styles.checkboxLabel}>Required</Text>
+                            <Text style={styles.checkboxLabel}>{t('menu.required-label')}</Text>
                           </TouchableOpacity>
                           <View style={styles.modalActions}>
                             <TouchableOpacity
@@ -1096,7 +1096,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                 setVariantRequired(false);
                               }}
                             >
-                              <Text style={styles.btnText}>Cancel</Text>
+                              <Text style={styles.btnText}>{t('common.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[styles.btn, styles.btnPrimary]}
@@ -1105,7 +1105,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                 setShowInlineVariantForm(false);
                               }}
                             >
-                              <Text style={styles.btnText}>Add Variant</Text>
+                              <Text style={styles.btnText}>{t('menu.add-variant')}</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1116,7 +1116,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   {/* Variant Preset Selection - shown only if has variants */}
                   {inlineEditHasVariants && (
                     <View style={styles.addonSection}>
-                      <Text style={styles.label}>Variant Presets</Text>
+                      <Text style={styles.label}>{t('menu.variant-presets')}</Text>
                       
                       {inlineEditVariantPresets.length > 0 ? (
                         <TouchableOpacity
@@ -1154,10 +1154,10 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             }
                           }}
                         >
-                          <Text style={styles.btnText}>Browse Presets ({inlineEditVariantPresets.length})</Text>
+                          <Text style={styles.btnText}>{t('menu.browse-presets').replace('{0}', String(inlineEditVariantPresets.length))}</Text>
                         </TouchableOpacity>
                       ) : (
-                        <Text style={styles.emptyText}>No variant presets available</Text>
+                        <Text style={styles.emptyText}>{t('menu.no-presets')}</Text>
                       )}
                     </View>
                   )}
@@ -1165,7 +1165,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   {/* Is Combo/Meal Checkbox - right above addon section */}
                   {selectedItem && (
                     <View style={styles.formGroup}>
-                      <Text style={styles.label}>Is Combo/Meal</Text>
+                      <Text style={styles.label}>{t('menu.is-combo')}</Text>
                       <TouchableOpacity
                         style={[styles.checkboxRow]}
                         onPress={async () => {
@@ -1180,7 +1180,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         <View style={[styles.checkbox, inlineEditIsMealCombo && styles.checkboxChecked]}>
                           {inlineEditIsMealCombo && <Text style={styles.checkboxCheck}>✓</Text>}
                         </View>
-                        <Text style={styles.checkboxLabel}>Enable addon selection</Text>
+                        <Text style={styles.checkboxLabel}>{t('menu.enable-addons')}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -1188,7 +1188,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   {/* Addon Selection - shown only if is combo/meal */}
                   {inlineEditIsMealCombo && (
                     <View style={styles.addonSection}>
-                      <Text style={styles.label}>Select Addon Items</Text>
+                      <Text style={styles.label}>{t('menu.select-addons')}</Text>
                       
                       {/* Addon list */}
                       {addons.length > 0 ? (
@@ -1198,8 +1198,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                               <View style={styles.addonInfo}>
                                 <Text style={styles.addonName}>{addon.addon_name}</Text>
                                 <Text style={styles.addonPrice}>
-                                  Regular: {formatPrice(addon.regular_price_cents)} → 
-                                  Addon: {formatPrice(addon.addon_discount_price_cents)}
+                                  {t('menu.regular-price').replace('{0}', formatPrice(addon.regular_price_cents))} → 
+                                  {t('menu.addon-price').replace('{0}', formatPrice(addon.addon_discount_price_cents))}
                                 </Text>
                               </View>
                               <TouchableOpacity
@@ -1210,18 +1210,18 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                       await loadAddonsForItem(selectedItem.id);
                                     }
                                   } catch (err: any) {
-                                    Alert.alert('Error', 'Failed to remove addon');
+                                    Alert.alert(t('common.error'), t('menu.failed-remove-addon'));
                                   }
                                 }}
                                 style={styles.addonDeleteBtn}
                               >
-                                <Text style={styles.addonDeleteBtnText}>Del</Text>
+                                <Text style={styles.addonDeleteBtnText}>{t('menu.del')}</Text>
                               </TouchableOpacity>
                             </View>
                           ))}
                         </View>
                       ) : (
-                        <Text style={styles.emptyText}>No addons yet</Text>
+                        <Text style={styles.emptyText}>{t('menu.no-addons')}</Text>
                       )}
 
                       {/* Add addon button */}
@@ -1234,7 +1234,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                           setShowAddonSelectorModal(true);
                         }}
                       >
-                        <Text style={styles.btnText}>+ Add Addon Item</Text>
+                        <Text style={styles.btnText}>{t('menu.add-addon')}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -1252,29 +1252,29 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   )}
 
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Name</Text>
+                    <Text style={styles.detailLabel}>{t('menu.name')}</Text>
                     <Text style={styles.detailValue}>{selectedItem.name}</Text>
                   </View>
 
                   {selectedItem.description && (
                     <View style={styles.detailSection}>
-                      <Text style={styles.detailLabel}>Description</Text>
+                      <Text style={styles.detailLabel}>{t('menu.description')}</Text>
                       <Text style={styles.detailValue}>{selectedItem.description}</Text>
                     </View>
                   )}
 
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Price</Text>
+                    <Text style={styles.detailLabel}>{t('menu.price-label')}</Text>
                     <Text style={styles.detailValue}>{formatPrice(selectedItem.price_cents)}</Text>
                   </View>
 
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Availability</Text>
+                    <Text style={styles.detailLabel}>{t('menu.availability')}</Text>
                     <Text style={[
                       styles.detailValue,
                       { color: selectedItem.available ? '#2d7a2d' : '#c33' }
                     ]}>
-                      {selectedItem.available ? '✓ Available' : '✕ Out of Stock'}
+                      {selectedItem.available ? t('menu.available') : t('menu.out-of-stock')}
                     </Text>
                   </View>
 
@@ -1282,7 +1282,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   {selectedItem.variants && selectedItem.variants.length > 0 && (
                     <View style={styles.variantsSection}>
                       <View style={styles.variantsSectionHeader}>
-                        <Text style={styles.detailLabel}>Variants</Text>
+                        <Text style={styles.detailLabel}>{t('menu.variants')}</Text>
                         <TouchableOpacity
                           onPress={() => {
                             setVariantName('');
@@ -1293,34 +1293,34 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             setShowInlineVariantForm(!showInlineVariantForm);
                           }}
                         >
-                          <Text style={styles.addBtn}>{showInlineVariantForm ? '- Cancel' : '+ Add'}</Text>
+                          <Text style={styles.addBtn}>{showInlineVariantForm ? t('menu.cancel-add') : t('menu.add')}</Text>
                         </TouchableOpacity>
                       </View>
 
                       {showInlineVariantForm && (
                         <View style={styles.inlineVariantForm}>
-                          <Text style={styles.label}>Variant Name</Text>
+                          <Text style={styles.label}>{t('menu.variant-name')}</Text>
                           <TextInput
                             style={styles.input}
                             value={variantName}
                             onChangeText={setVariantName}
-                            placeholder="e.g., Size, Temperature"
+                            placeholder={t('menu.variant-name-placeholder')}
                             autoFocus
                           />
-                          <Text style={styles.label}>Min Select (optional)</Text>
+                          <Text style={styles.label}>{t('menu.min-select-label')}</Text>
                           <TextInput
                             style={styles.input}
                             value={variantMinSelect}
                             onChangeText={setVariantMinSelect}
-                            placeholder="e.g., 1"
+                            placeholder={t('menu.min-placeholder')}
                             keyboardType="number-pad"
                           />
-                          <Text style={styles.label}>Max Select (optional)</Text>
+                          <Text style={styles.label}>{t('menu.max-select-label')}</Text>
                           <TextInput
                             style={styles.input}
                             value={variantMaxSelect}
                             onChangeText={setVariantMaxSelect}
-                            placeholder="e.g., 3"
+                            placeholder={t('menu.max-placeholder')}
                             keyboardType="number-pad"
                           />
                           <TouchableOpacity
@@ -1330,7 +1330,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
                               {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
                             </View>
-                            <Text style={styles.checkboxLabel}>Required</Text>
+                            <Text style={styles.checkboxLabel}>{t('menu.required-label')}</Text>
                           </TouchableOpacity>
                           <View style={styles.modalActions}>
                             <TouchableOpacity
@@ -1343,7 +1343,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                 setVariantRequired(false);
                               }}
                             >
-                              <Text style={styles.btnText}>Cancel</Text>
+                              <Text style={styles.btnText}>{t('common.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[styles.btn, styles.btnPrimary]}
@@ -1352,7 +1352,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                 setShowInlineVariantForm(false);
                               }}
                             >
-                              <Text style={styles.btnText}>Add Variant</Text>
+                              <Text style={styles.btnText}>{t('menu.add-variant')}</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1377,7 +1377,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             }}
                           >
                             <Text style={styles.variantToggleBtn}>
-                              {isVariantInEditMode ? '▼ Hide' : '▶ Show'}
+                              {isVariantInEditMode ? t('menu.hide') : t('menu.show')}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -1386,13 +1386,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         {(variant.required || variant.min_select != null || variant.max_select != null) && (
                           <View style={{ marginBottom: 8, paddingLeft: 0 }}>
                             {variant.required && (
-                              <Text style={{ fontSize: 12, color: '#d32f2f', fontWeight: '600' }}>* Required</Text>
+                              <Text style={{ fontSize: 12, color: '#d32f2f', fontWeight: '600' }}>{t('menu.required-badge')}</Text>
                             )}
                             {(variant.min_select != null || variant.max_select != null) && (
                               <Text style={{ fontSize: 12, color: '#666' }}>
-                                {variant.min_select != null && `Min: ${variant.min_select}`}
+                                {variant.min_select != null && t('menu.min-select').replace('{0}', String(variant.min_select))}
                                 {variant.min_select != null && variant.max_select != null && ', '}
-                                {variant.max_select != null && `Max: ${variant.max_select}`}
+                                {variant.max_select != null && t('menu.max-select').replace('{0}', String(variant.max_select))}
                               </Text>
                             )}
                           </View>
@@ -1411,13 +1411,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                 setShowEditVariantModal(true);
                               }}
                             >
-                              <Text style={styles.actionSmallBtn}>Edit</Text>
+                              <Text style={styles.actionSmallBtn}>{t('menu.edit')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[styles.variantActionBtn, styles.variantActionBtnDelete]}
                               onPress={() => deleteVariant(variant.id, variant.name)}
                             >
-                              <Text style={styles.actionSmallBtnDelete}>Delete</Text>
+                              <Text style={styles.actionSmallBtnDelete}>{t('menu.delete')}</Text>
                             </TouchableOpacity>
                           </View>
                         )}
@@ -1443,12 +1443,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                         setShowEditVariantOptionModal(true);
                                       }}
                                     >
-                                      <Text style={styles.actionSmallBtn}>Edit</Text>
+                                      <Text style={styles.actionSmallBtn}>{t('menu.edit')}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       onPress={() => deleteVariantOption(option.id, option.name)}
                                     >
-                                      <Text style={styles.actionSmallBtnDelete}>Del</Text>
+                                      <Text style={styles.actionSmallBtnDelete}>{t('menu.del')}</Text>
                                     </TouchableOpacity>
                                   </View>
                                 )}
@@ -1465,7 +1465,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                               setShowVariantOptionModal(true);
                             }}
                           >
-                            <Text style={styles.addOptionBtnText}>+ Add Option</Text>
+                            <Text style={styles.addOptionBtnText}>{t('menu.add-option')}</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1487,33 +1487,33 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       setShowInlineVariantForm(!showInlineVariantForm);
                     }}
                   >
-                    <Text style={styles.btnText}>{showInlineVariantForm ? '- Cancel' : '+ Add Variant'}</Text>
+                    <Text style={styles.btnText}>{showInlineVariantForm ? t('menu.cancel-add') : t('menu.add-variant')}</Text>
                   </TouchableOpacity>
 
                   {showInlineVariantForm && (
                     <View style={styles.inlineVariantForm}>
-                      <Text style={styles.label}>Variant Name</Text>
+                      <Text style={styles.label}>{t('menu.variant-name')}</Text>
                       <TextInput
                         style={styles.input}
                         value={variantName}
                         onChangeText={setVariantName}
-                        placeholder="e.g., Size, Temperature"
+                        placeholder={t('menu.variant-name-placeholder')}
                         autoFocus
                       />
-                      <Text style={styles.label}>Min Select (optional)</Text>
+                      <Text style={styles.label}>{t('menu.min-select-label')}</Text>
                       <TextInput
                         style={styles.input}
                         value={variantMinSelect}
                         onChangeText={setVariantMinSelect}
-                        placeholder="e.g., 1"
+                        placeholder={t('menu.min-placeholder')}
                         keyboardType="number-pad"
                       />
-                      <Text style={styles.label}>Max Select (optional)</Text>
+                      <Text style={styles.label}>{t('menu.max-select-label')}</Text>
                       <TextInput
                         style={styles.input}
                         value={variantMaxSelect}
                         onChangeText={setVariantMaxSelect}
-                        placeholder="e.g., 3"
+                        placeholder={t('menu.max-placeholder')}
                         keyboardType="number-pad"
                       />
                       <TouchableOpacity
@@ -1523,7 +1523,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
                           {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
                         </View>
-                        <Text style={styles.checkboxLabel}>Required</Text>
+                        <Text style={styles.checkboxLabel}>{t('menu.required-label')}</Text>
                       </TouchableOpacity>
                       <View style={styles.modalActions}>
                         <TouchableOpacity
@@ -1536,7 +1536,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             setVariantRequired(false);
                           }}
                         >
-                          <Text style={styles.btnText}>Cancel</Text>
+                          <Text style={styles.btnText}>{t('common.cancel')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.btn, styles.btnPrimary]}
@@ -1545,7 +1545,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             setShowInlineVariantForm(false);
                           }}
                         >
-                          <Text style={styles.btnText}>Add Variant</Text>
+                          <Text style={styles.btnText}>{t('menu.add-variant')}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1565,7 +1565,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setEditingItemInlineId(null);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('menu.cancel-edit')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary, { flex: 2 }]}
@@ -1588,22 +1588,22 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         setSelectedItem(updatedItems[0]);
                       }
                     } catch (err: any) {
-                      Alert.alert('Error', err.response?.data?.error || 'Failed to update item');
+                      Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-update-item'));
                     }
                   }}
                 >
-                  <Text style={styles.btnText}>Save Changes</Text>
+                  <Text style={styles.btnText}>{t('menu.save-changes')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, { backgroundColor: '#fee' }]}
                   onPress={() => {
                     Alert.alert(
-                      'Delete Item',
-                      `Are you sure you want to delete "${selectedItem.name}"?`,
+                      t('menu.delete-item'),
+                      t('menu.delete-item-msg').replace('{0}', selectedItem.name),
                       [
-                        { text: 'Cancel' },
+                        { text: t('common.cancel') },
                         {
-                          text: 'Delete',
+                          text: t('common.delete'),
                           style: 'destructive',
                           onPress: async () => {
                             try {
@@ -1611,7 +1611,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                               setShowDetailPanel(false);
                               setEditingItemInlineId(null);
                             } catch (err: any) {
-                              Alert.alert('Error', 'Failed to delete item');
+                              Alert.alert(t('common.error'), t('menu.failed-delete-item'));
                             }
                           },
                         },
@@ -1619,7 +1619,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     );
                   }}
                 >
-                  <Text style={{ color: '#c33', fontWeight: '600', fontSize: 13 }}>Delete</Text>
+                  <Text style={{ color: '#c33', fontWeight: '600', fontSize: 13 }}>{t('menu.delete')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1635,9 +1635,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         >
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { maxHeight: '80%', width: '85%' }]}>
-              <Text style={styles.modalTitle}>Variant Presets</Text>
+              <Text style={styles.modalTitle}>{t('menu.variant-presets-title')}</Text>
               <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
-                Select a preset to view its variants and options. Tap "Apply" to add all variants to this item.
+                {t('menu.select-preset-msg')}
               </Text>
 
               <ScrollView style={{ maxHeight: 400 }}>
@@ -1687,7 +1687,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       ) : loadingPresetDetails === preset.id ? (
                         <ActivityIndicator size="small" style={{ marginTop: 8 }} />
                       ) : details && details.length === 0 ? (
-                        <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>No variants in this preset</Text>
+                        <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{t('menu.no-variants-preset')}</Text>
                       ) : null}
                     </TouchableOpacity>
                   );
@@ -1702,7 +1702,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setInlineEditSelectedVariantPresetId(null);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary, !inlineEditSelectedVariantPresetId && { opacity: 0.5 }]}
@@ -1712,12 +1712,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       (p) => p.id === inlineEditSelectedVariantPresetId
                     );
                     Alert.alert(
-                      'Apply Preset',
-                      `Apply "${selectedPreset?.name}" to this item? This will add all variants and options from the preset.`,
+                      t('menu.apply-preset'),
+                      t('menu.apply-preset-msg').replace('{0}', selectedPreset?.name || ''),
                       [
-                        { text: 'Cancel' },
+                        { text: t('common.cancel') },
                         {
-                          text: 'Apply',
+                          text: t('menu.apply'),
                           onPress: async () => {
                             setShowPresetPickerModal(false);
                             await applyVariantPresetToInlineItem();
@@ -1727,7 +1727,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     );
                   }}
                 >
-                  <Text style={styles.btnText}>Apply Preset</Text>
+                  <Text style={styles.btnText}>{t('menu.apply-preset')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1740,14 +1740,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Category</Text>
+              <Text style={styles.modalTitle}>{t('menu.new-category')}</Text>
 
-              <Text style={styles.label}>Category Name</Text>
+              <Text style={styles.label}>{t('menu.category-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={categoryName}
                 onChangeText={setCategoryName}
-                placeholder="e.g., Appetizers"
+                placeholder={t('menu.category-placeholder')}
                 autoFocus
               />
 
@@ -1756,13 +1756,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowCategoryModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={createCategory}
                 >
-                  <Text style={styles.btnText}>Create</Text>
+                  <Text style={styles.btnText}>{t('menu.create')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1772,14 +1772,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Category</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-category')}</Text>
 
-              <Text style={styles.label}>Category Name</Text>
+              <Text style={styles.label}>{t('menu.category-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingCategoryName}
                 onChangeText={setEditingCategoryName}
-                placeholder="e.g., Appetizers"
+                placeholder={t('menu.category-placeholder')}
                 autoFocus
               />
 
@@ -1791,13 +1791,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setEditingCategoryId(null);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={() => editingCategoryId && updateCategory(editingCategoryId)}
                 >
-                  <Text style={styles.btnText}>Save</Text>
+                  <Text style={styles.btnText}>{t('menu.save')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1808,37 +1808,37 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Food Item</Text>
+              <Text style={styles.modalTitle}>{t('menu.new-food-item')}</Text>
 
-              <Text style={styles.label}>Item Name</Text>
+              <Text style={styles.label}>{t('menu.item-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={itemName}
                 onChangeText={setItemName}
-                placeholder="e.g., Grilled Salmon"
+                placeholder={t('menu.item-name-placeholder')}
                 autoFocus
               />
 
-              <Text style={styles.label}>Description</Text>
+              <Text style={styles.label}>{t('menu.description')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 value={itemDescription}
                 onChangeText={setItemDescription}
-                placeholder="Item description"
+                placeholder={t('menu.item-description-placeholder')}
                 multiline
               />
 
-              <Text style={styles.label}>Price ($)</Text>
+              <Text style={styles.label}>{t('menu.price-dollar')}</Text>
               <TextInput
                 style={styles.input}
                 value={itemPrice}
                 onChangeText={setItemPrice}
-                placeholder="12.99"
+                placeholder={t('menu.price-placeholder-example')}
                 keyboardType="decimal-pad"
               />
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Image (Optional)</Text>
+                <Text style={styles.label}>{t('menu.price-optional-image')}</Text>
                 {itemImageUrl && (
                   <View style={styles.imagePreview}>
                     <Image
@@ -1854,8 +1854,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 >
                   <Text style={styles.btnText}>
                     {uploadingImageItemId === 0 && uploadingImageContext === 'new'
-                      ? 'Uploading...'
-                      : 'Upload Image'}
+                      ? t('menu.uploading')
+                      : t('menu.upload-image')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1865,13 +1865,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowItemModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={createItem}
                 >
-                  <Text style={styles.btnText}>Create</Text>
+                  <Text style={styles.btnText}>{t('menu.create')}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -1881,37 +1881,37 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Item</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-modal-title')}</Text>
 
-              <Text style={styles.label}>Item Name</Text>
+              <Text style={styles.label}>{t('menu.item-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingItemName}
                 onChangeText={setEditingItemName}
-                placeholder="e.g., Grilled Salmon"
+                placeholder={t('menu.item-name-placeholder')}
                 autoFocus
               />
 
-              <Text style={styles.label}>Description</Text>
+              <Text style={styles.label}>{t('menu.description')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 value={editingItemDescription}
                 onChangeText={setEditingItemDescription}
-                placeholder="Item description"
+                placeholder={t('menu.item-description-placeholder')}
                 multiline
               />
 
-              <Text style={styles.label}>Price ($)</Text>
+              <Text style={styles.label}>{t('menu.price-dollar')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingItemPrice}
                 onChangeText={setEditingItemPrice}
-                placeholder="12.99"
+                placeholder={t('menu.price-placeholder-example')}
                 keyboardType="decimal-pad"
               />
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Image (Optional)</Text>
+                <Text style={styles.label}>{t('menu.price-optional-image')}</Text>
                 {editingItemImageUrl && (
                   <View style={styles.imagePreview}>
                     <Image
@@ -1927,8 +1927,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 >
                   <Text style={styles.btnText}>
                     {uploadingImageItemId === editingItemId && uploadingImageContext === 'edit'
-                      ? 'Uploading...'
-                      : 'Upload Image'}
+                      ? t('menu.uploading')
+                      : t('menu.upload-image')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1953,7 +1953,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     }}>
                       {editingItemIsMealCombo && <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
                     </View>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#333' }}>Is Meal/Combo (Enable Add-ons)</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#333' }}>{t('menu.is-meal-combo')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1962,12 +1962,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
               {editingItemIsMealCombo && (
               <View style={[styles.formGroup, { marginTop: 16, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={[styles.label, { fontSize: 14, fontWeight: '600', margin: 0 }]}>Available Add-ons</Text>
+                  <Text style={[styles.label, { fontSize: 14, fontWeight: '600', margin: 0 }]}>{t('menu.available-addons')}</Text>
                   <TouchableOpacity
                     style={[styles.btn, styles.btnPrimary, { paddingHorizontal: 12, paddingVertical: 6 }]}
                     onPress={() => setShowAddonSelectorModal(true)}
                   >
-                    <Text style={[styles.btnText, { fontSize: 12 }]}>+ Add</Text>
+                    <Text style={[styles.btnText, { fontSize: 12 }]}>{t('menu.add-addon-btn')}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1975,7 +1975,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   <ActivityIndicator size="small" color="#3b82f6" />
                 ) : addons.length === 0 ? (
                   <Text style={{ fontSize: 12, color: '#999', textAlign: 'center', paddingVertical: 15 }}>
-                    No add-ons configured
+                    {t('menu.no-addons-config')}
                   </Text>
                 ) : (
                   <View style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 4, overflow: 'hidden' }}>
@@ -1986,7 +1986,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 13, fontWeight: '500', marginBottom: 4 }}>{addon.addon_name}</Text>
                           <Text style={{ fontSize: 11, color: '#666' }}>
-                            Regular: ${(addon.regular_price_cents / 100).toFixed(2)} | Addon: ${(addon.addon_discount_price_cents / 100).toFixed(2)}
+                            {t('menu.regular-price').replace('{0}', '$' + (addon.regular_price_cents / 100).toFixed(2))} | {t('menu.addon-price').replace('{0}', '$' + (addon.addon_discount_price_cents / 100).toFixed(2))}
                           </Text>
                         </View>
                         <TouchableOpacity
@@ -2007,13 +2007,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowEditItemModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={() => editingItemId && updateItem(editingItemId)}
                 >
-                  <Text style={styles.btnText}>Save</Text>
+                  <Text style={styles.btnText}>{t('menu.save')}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -2024,17 +2024,17 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAddonSelectorModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>Add Addon Item</Text>
+              <Text style={styles.modalTitle}>{t('menu.add-addon-item')}</Text>
 
-              <Text style={styles.label}>Search Items</Text>
+              <Text style={styles.label}>{t('menu.search-items')}</Text>
               <TextInput
                 style={styles.input}
                 value={addonSearchQuery}
                 onChangeText={setAddonSearchQuery}
-                placeholder="Search by name..."
+                placeholder={t('menu.search-placeholder')}
               />
 
-              <Text style={styles.label}>Select Item</Text>
+              <Text style={styles.label}>{t('menu.select-item')}</Text>
               <View style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 4, maxHeight: 250 }}>
                 <FlatList
                   data={items.filter(i => 
@@ -2073,7 +2073,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   )}
                   ListEmptyComponent={
                     <Text style={{ paddingVertical: 20, textAlign: 'center', color: '#999', fontSize: 12 }}>
-                      No items available
+                      {t('menu.no-items-available')}
                     </Text>
                   }
                 />
@@ -2081,12 +2081,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
               {selectedAddonItemId && (
                 <>
-                  <Text style={styles.label}>Addon Discount Price ($)</Text>
+                  <Text style={styles.label}>{t('menu.addon-discount-price')}</Text>
                   <TextInput
                     style={styles.input}
                     value={addonDiscountPrice}
                     onChangeText={setAddonDiscountPrice}
-                    placeholder="0.00"
+                    placeholder={t('menu.price-placeholder-decimal')}
                     keyboardType="decimal-pad"
                   />
                 </>
@@ -2102,14 +2102,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setAddonSearchQuery('');
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 {selectedAddonItemId && (
                   <TouchableOpacity
                     style={[styles.btn, styles.btnPrimary]}
                     onPress={createAddon}
                   >
-                    <Text style={styles.btnText}>Confirm</Text>
+                    <Text style={styles.btnText}>{t('menu.confirm-btn')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -2119,32 +2119,32 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showVariantModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Variant</Text>
+              <Text style={styles.modalTitle}>{t('menu.new-variant')}</Text>
 
-              <Text style={styles.label}>Variant Name</Text>
+              <Text style={styles.label}>{t('menu.variant-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={variantName}
                 onChangeText={setVariantName}
-                placeholder="e.g., Size, Temperature"
+                placeholder={t('menu.variant-name-placeholder')}
                 autoFocus
               />
 
-              <Text style={styles.label}>Min Select (optional)</Text>
+              <Text style={styles.label}>{t('menu.min-select-label')}</Text>
               <TextInput
                 style={styles.input}
                 value={variantMinSelect}
                 onChangeText={setVariantMinSelect}
-                placeholder="e.g., 1"
+                placeholder={t('menu.min-placeholder')}
                 keyboardType="number-pad"
               />
 
-              <Text style={styles.label}>Max Select (optional)</Text>
+              <Text style={styles.label}>{t('menu.max-select-label')}</Text>
               <TextInput
                 style={styles.input}
                 value={variantMaxSelect}
                 onChangeText={setVariantMaxSelect}
-                placeholder="e.g., 3"
+                placeholder={t('menu.max-placeholder')}
                 keyboardType="number-pad"
               />
 
@@ -2155,7 +2155,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
                   {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
                 </View>
-                <Text style={styles.checkboxLabel}>Required</Text>
+                <Text style={styles.checkboxLabel}>{t('menu.required-label')}</Text>
               </TouchableOpacity>
 
               <View style={styles.modalActions}>
@@ -2170,13 +2170,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setVariantRequired(false);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={createVariant}
                 >
-                  <Text style={styles.btnText}>Create</Text>
+                  <Text style={styles.btnText}>{t('menu.create')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2186,32 +2186,32 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditVariantModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Variant</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-variant')}</Text>
 
-              <Text style={styles.label}>Variant Name</Text>
+              <Text style={styles.label}>{t('menu.variant-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingVariantName}
                 onChangeText={setEditingVariantName}
-                placeholder="e.g., Size, Temperature"
+                placeholder={t('menu.variant-name-placeholder')}
                 autoFocus
               />
 
-              <Text style={styles.label}>Min Select (optional)</Text>
+              <Text style={styles.label}>{t('menu.min-select-label')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingVariantMinSelect}
                 onChangeText={setEditingVariantMinSelect}
-                placeholder="e.g., 1"
+                placeholder={t('menu.min-placeholder')}
                 keyboardType="number-pad"
               />
 
-              <Text style={styles.label}>Max Select (optional)</Text>
+              <Text style={styles.label}>{t('menu.max-select-label')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingVariantMaxSelect}
                 onChangeText={setEditingVariantMaxSelect}
-                placeholder="e.g., 3"
+                placeholder={t('menu.max-placeholder')}
                 keyboardType="number-pad"
               />
 
@@ -2222,7 +2222,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 <View style={[styles.checkbox, editingVariantRequired && styles.checkboxChecked]}>
                   {editingVariantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
                 </View>
-                <Text style={styles.checkboxLabel}>Required</Text>
+                <Text style={styles.checkboxLabel}>{t('menu.required-label')}</Text>
               </TouchableOpacity>
 
               <View style={styles.modalActions}>
@@ -2237,13 +2237,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setEditingVariantRequired(false);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={() => editingVariantId && updateVariant(editingVariantId)}
                 >
-                  <Text style={styles.btnText}>Save</Text>
+                  <Text style={styles.btnText}>{t('menu.save')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2254,23 +2254,23 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>New Option</Text>
+              <Text style={styles.modalTitle}>{t('menu.new-option')}</Text>
 
-              <Text style={styles.label}>Option Name</Text>
+              <Text style={styles.label}>{t('menu.option-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={optionName}
                 onChangeText={setOptionName}
-                placeholder="e.g., Small, Medium, Large"
+                placeholder={t('menu.option-name-placeholder')}
                 autoFocus
               />
 
-              <Text style={styles.label}>Price Add-on ($)</Text>
+              <Text style={styles.label}>{t('menu.price-addon')}</Text>
               <TextInput
                 style={styles.input}
                 value={optionPrice}
                 onChangeText={setOptionPrice}
-                placeholder="0.00"
+                placeholder={t('menu.price-placeholder-decimal')}
                 keyboardType="decimal-pad"
               />
 
@@ -2282,13 +2282,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setEditingVariantForOption(null);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={createVariantOption}
                 >
-                  <Text style={styles.btnText}>Create</Text>
+                  <Text style={styles.btnText}>{t('menu.create')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2298,23 +2298,23 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Edit Option</Text>
+              <Text style={styles.modalTitle}>{t('menu.edit-option')}</Text>
 
-              <Text style={styles.label}>Option Name</Text>
+              <Text style={styles.label}>{t('menu.option-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingOptionName}
                 onChangeText={setEditingOptionName}
-                placeholder="e.g., Small, Medium, Large"
+                placeholder={t('menu.option-name-placeholder')}
                 autoFocus
               />
 
-              <Text style={styles.label}>Price Add-on ($)</Text>
+              <Text style={styles.label}>{t('menu.price-addon')}</Text>
               <TextInput
                 style={styles.input}
                 value={editingOptionPrice}
                 onChangeText={setEditingOptionPrice}
-                placeholder="0.00"
+                placeholder={t('menu.price-placeholder-decimal')}
                 keyboardType="decimal-pad"
               />
 
@@ -2326,13 +2326,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     setEditingOptionId(null);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={() => editingOptionId && updateVariantOption(editingOptionId)}
                 >
-                  <Text style={styles.btnText}>Save</Text>
+                  <Text style={styles.btnText}>{t('menu.save')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

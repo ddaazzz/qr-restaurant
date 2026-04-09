@@ -504,15 +504,15 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const handleSubmitOrder = async () => {
       if (cart.length === 0) {
-        Alert.alert('Empty Cart', 'Please add items before submitting');
+        Alert.alert(t('orders.empty-cart'), t('orders.empty-cart-msg'));
         return;
       }
       if (!orderType) {
-        Alert.alert('Missing Info', 'Please select an order type');
+        Alert.alert(t('orders.missing-info'), t('orders.select-order-type'));
         return;
       }
       if (orderType === 'table' && !selectedTable) {
-        Alert.alert('Missing Table', 'Please select a table');
+        Alert.alert(t('orders.missing-table'), t('orders.select-table-msg'));
         return;
       }
 
@@ -549,21 +549,21 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             { items }
           );
           console.log('[OrderSubmit] Table order submitted:', res);
-          Alert.alert('Success', `Order submitted with ${cart.length} items`);
+          Alert.alert(t('orders.success'), t('orders.table-order-success').replace('{0}', String(cart.length)));
         } else if (orderType === 'pay-now') {
           const res = await apiClient.post(
             `/api/restaurants/${restaurantId}/counter-order`,
             { pax: 1, items }
           );
           console.log('[OrderSubmit] Counter order submitted:', res);
-          Alert.alert('Success', `Counter order submitted with ${cart.length} items`);
+          Alert.alert(t('orders.success'), t('orders.counter-order-success').replace('{0}', String(cart.length)));
         } else if (orderType === 'to-go') {
           const res = await apiClient.post(
             `/api/restaurants/${restaurantId}/to-go-order`,
             { pax: 1, items }
           );
           console.log('[OrderSubmit] To-go order submitted:', res);
-          Alert.alert('Success', `To-go order submitted with ${cart.length} items`);
+          Alert.alert(t('orders.success'), t('orders.togo-order-success').replace('{0}', String(cart.length)));
         }
 
         // Clear cart and reset
@@ -573,8 +573,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       } catch (err: any) {
         console.error('[OrderSubmit] Error:', err);
         Alert.alert(
-          'Error',
-          err.response?.data?.error || err.message || 'Failed to submit order. Make sure table has an active session.'
+          t('orders.error'),
+          err.response?.data?.error || err.message || t('orders.submit-failed')
         );
       }
     };
@@ -582,19 +582,19 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // === Manual Void/Refund (non-vendor orders) ===
     const handleVoidOrder = (orderId: number) => {
       Alert.alert(
-        'Void Order',
-        'Mark this order as Voided?\nThis is a manual record update only — no payment system will be called.',
+        t('orders.void-order'),
+        t('orders.void-manual-msg'),
         [
-          { text: 'Cancel' },
+          { text: t('orders.cancel') },
           {
-            text: 'Void',
+            text: t('orders.void'),
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.post(`/api/restaurants/${restaurantId}/orders/${orderId}/void`);
                 await reloadSelectedOrder(orderId);
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Void failed');
+                Alert.alert(t('orders.error'), err.response?.data?.error || t('orders.void-failed'));
               }
             },
           },
@@ -604,19 +604,19 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const handleRefundOrder = (orderId: number) => {
       Alert.alert(
-        'Refund Order',
-        'Mark this order as Refunded?\nThis is a manual record update only — no payment system will be called.',
+        t('orders.refund-order'),
+        t('orders.refund-manual-msg'),
         [
-          { text: 'Cancel' },
+          { text: t('orders.cancel') },
           {
-            text: 'Refund',
+            text: t('orders.refund'),
             style: 'destructive',
             onPress: async () => {
               try {
                 await apiClient.post(`/api/restaurants/${restaurantId}/orders/${orderId}/refund`);
                 await reloadSelectedOrder(orderId);
               } catch (err: any) {
-                Alert.alert('Error', err.response?.data?.error || 'Refund failed');
+                Alert.alert(t('orders.error'), err.response?.data?.error || t('orders.refund-failed'));
               }
             },
           },
@@ -627,21 +627,21 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // === KPay Void ===
     const handleKpayVoid = (order: Order) => {
       if (!kpayTerminal) {
-        Alert.alert('Error', 'No KPay terminal configured');
+        Alert.alert(t('orders.error'), t('orders.no-kpay-terminal'));
         return;
       }
       const outTradeNo = order.kpay_reference_id;
       if (!outTradeNo) {
-        Alert.alert('Error', 'No KPay reference found for this order');
+        Alert.alert(t('orders.error'), t('orders.no-kpay-ref'));
         return;
       }
       Alert.alert(
-        'Void KPay Transaction',
-        `Void transaction ${outTradeNo}?\nOnly works for same-day unsettled transactions.`,
+        t('orders.void-kpay'),
+        t('orders.void-kpay-msg').replace('{0}', outTradeNo),
         [
-          { text: 'Cancel' },
+          { text: t('orders.cancel') },
           {
-            text: 'Void',
+            text: t('orders.void'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -649,10 +649,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/cancel`,
                   { outTradeNo: `VOID-${Date.now()}`, originOutTradeNo: outTradeNo }
                 );
-                Alert.alert('Success', 'Void request sent to KPay terminal');
+                Alert.alert(t('orders.success'), t('orders.void-success'));
                 await reloadSelectedOrder(order.id);
               } catch (err: any) {
-                Alert.alert('Void Failed', err.response?.data?.error || err.message);
+                Alert.alert(t('orders.void-failed'), err.response?.data?.error || err.message);
               }
             },
           },
@@ -671,7 +671,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       if (!selectedHistoryOrder || !kpayTerminal) return;
       const outTradeNo = selectedHistoryOrder.kpay_reference_id;
       if (!outTradeNo || !kpayManagerPassword) {
-        Alert.alert('Error', 'Manager password is required');
+        Alert.alert(t('orders.error'), t('orders.password-required'));
         return;
       }
       try {
@@ -688,10 +688,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           body
         );
         setShowKpayRefundModal(false);
-        Alert.alert('Success', 'Refund request sent to KPay terminal');
+        Alert.alert(t('orders.success'), t('orders.refund-kpay-success'));
         await reloadSelectedOrder(selectedHistoryOrder.id);
       } catch (err: any) {
-        Alert.alert('Refund Failed', err.response?.data?.error || err.message);
+        Alert.alert(t('orders.refund-failed'), err.response?.data?.error || err.message);
       }
     };
 
@@ -707,11 +707,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       if (!selectedHistoryOrder) return;
       const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
       if (!merchantRef) {
-        Alert.alert('Error', 'No merchant reference found for this order');
+        Alert.alert(t('orders.error'), t('orders.no-pa-ref'));
         return;
       }
       if (!paRefundAmount || parseFloat(paRefundAmount) <= 0) {
-        Alert.alert('Error', 'Please enter a valid refund amount');
+        Alert.alert(t('orders.error'), t('orders.invalid-amount'));
         return;
       }
       try {
@@ -720,10 +720,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           { merchant_reference: merchantRef, amount: parseFloat(paRefundAmount) }
         );
         setShowPaRefundModal(false);
-        Alert.alert('Success', 'Refund request sent to Payment Asia');
+        Alert.alert(t('orders.success'), t('orders.refund-pa-success'));
         await reloadSelectedOrder(selectedHistoryOrder.id);
       } catch (err: any) {
-        Alert.alert('Refund Failed', err.response?.data?.error || err.message);
+        Alert.alert(t('orders.refund-failed'), err.response?.data?.error || err.message);
       }
     };
 
@@ -795,6 +795,25 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             renderItem={({ item }) => {
               const order = item as Order;
               const paymentBadge = getPaymentBadge(order);
+              const badgeLabelMap: Record<string, string> = {
+                '↩ Refunded': t('orders.refunded'),
+                '🚫 Voided': t('orders.voided'),
+                '↩ Partial': t('orders.partial-refund'),
+                '✓ Paid': t('orders.paid'),
+                'Unpaid': t('orders.unpaid'),
+              };
+              const translatedBadgeLabel = badgeLabelMap[paymentBadge.label] || paymentBadge.label;
+              const orderTypeLabelMap: Record<string, string> = {
+                'Order': t('orders.order'), 'Table': t('orders.table'),
+                'Order Now': t('orders.order-now'), 'To-Go': t('orders.to-go'),
+              };
+              const vendorLabelMap: Record<string, string> = {
+                'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'),
+                'Cash': t('orders.cash'), 'Card': t('orders.card'),
+              };
+              const methodLabelMap: Record<string, string> = {
+                'Credit Card': t('orders.credit-card'), 'Cash': t('orders.cash'), 'Terminal': t('orders.terminal'),
+              };
               const items = order.items || [];
               const isSelected = selectedHistoryOrder?.id === order.id;
               return (
@@ -802,7 +821,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 <View style={[styles.orderCard, isSelected && { borderColor: '#3b82f6', borderWidth: 2 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.orderId}>Order #{order.id}</Text>
+                      <Text style={styles.orderId}>{t('orders.order-num').replace('{0}', String(order.id))}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                         <Ionicons 
                           name={order.order_type === 'table' ? 'restaurant-outline' : order.order_type === 'to-go' ? 'bag-handle-outline' : 'cart-outline'} 
@@ -810,7 +829,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           color="#6b7280" 
                         />
                         <Text style={styles.orderDetails}>
-                          {getOrderTypeLabel(order.order_type)}
+                          {orderTypeLabelMap[getOrderTypeLabel(order.order_type)] || getOrderTypeLabel(order.order_type)}
                           {order.order_type === 'table' && order.table_name ? ` ${order.table_name}` : ''}
                         </Text>
                       </View>
@@ -822,15 +841,15 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <Text style={styles.orderTotal}>{formatPrice(order.total_cents)}</Text>
                       {paymentBadge && (
                         <View style={[styles.statusBadge, { backgroundColor: paymentBadge.color }]}>
-                          <Text style={styles.statusText}>{paymentBadge.label}</Text>
+                          <Text style={styles.statusText}>{translatedBadgeLabel}</Text>
                         </View>
                       )}
                       <Text style={{ fontSize: 10, color: '#9ca3af' }}>
-                        {getPaymentMethodLabel(order)}
+                        {methodLabelMap[getPaymentMethodLabel(order)] || getPaymentMethodLabel(order)}
                         {(() => {
                           const v = resolveVendor(order);
                           if (v && v !== 'cash' && v !== 'card') {
-                            const vLabel = getVendorLabel(v);
+                            const vLabel = vendorLabelMap[getVendorLabel(v)] || getVendorLabel(v);
                             const mLabel = getPaymentMethodLabel(order);
                             if (vLabel && mLabel !== vLabel) return ` · ${vLabel}`;
                           }
@@ -874,7 +893,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   {/* Header */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>
-                      Order #{selectedHistoryOrder.id}
+                      {t('orders.order-num').replace('{0}', String(selectedHistoryOrder.id))}
                     </Text>
                     <View style={{ backgroundColor: selectedHistoryOrder.status === 'completed' ? '#d1fae5' : selectedHistoryOrder.status === 'cancelled' ? '#fee2e2' : '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                       <Text style={{ fontSize: 11, fontWeight: '600', color: selectedHistoryOrder.status === 'completed' ? '#065f46' : selectedHistoryOrder.status === 'cancelled' ? '#991b1b' : '#1e40af' }}>
@@ -885,24 +904,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                   {/* Order Info */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Type</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
-                      {getOrderTypeLabel(selectedHistoryOrder.order_type)}
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.type')}</Text>
                       {selectedHistoryOrder.order_type === 'table' && selectedHistoryOrder.table_name ? ` — ${selectedHistoryOrder.table_name}` : ''}
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Date</Text>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.date')}</Text>
                     <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.created_at)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Items</Text>
-                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{(selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.quantity || 1), 0)} items</Text>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.items')}</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{t('orders.items-count').replace('{0}', String((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.quantity || 1), 0)))}</Text>
                   </View>
 
                   {/* Items Section */}
                   <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginVertical: 12, paddingTop: 12 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Items</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-items')}</Text>
                     {(selectedHistoryOrder.items || []).map((item: any, idx: number) => (
                       <View key={idx} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -913,7 +930,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                               <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.variants}</Text>
                             ) : null}
                             {item.notes ? (
-                              <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>Note: {item.notes}</Text>
+                              <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>{t('orders.note-prefix')}{item.notes}</Text>
                             ) : null}
                           </View>
                           <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
@@ -926,9 +943,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                   {/* Order Summary */}
                   <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 12 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Summary</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-summary')}</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 13, color: '#6b7280' }}>Subtotal</Text>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
                       <Text style={{ fontSize: 13, color: '#1f2937' }}>
                         {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0))}
                       </Text>
@@ -939,7 +956,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       if (serviceCharge > 0) {
                         return (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Service Charge</Text>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.service-charge')}</Text>
                             <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
                           </View>
                         );
@@ -947,7 +964,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       return null;
                     })()}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>Grand Total</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
                     </View>
                   </View>
@@ -956,21 +973,21 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   {(() => {
                     const vendor = resolveVendor(selectedHistoryOrder);
                     const effectiveStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status || (selectedHistoryOrder.payment_received ? 'completed' : null);
-                    const methodLabel = getPaymentMethodLabel(selectedHistoryOrder);
-                    const vendorLabel = vendor ? getVendorLabel(vendor) : (selectedHistoryOrder.payment_received ? 'Cash' : null);
+                    const methodLabel = (() => { const raw = getPaymentMethodLabel(selectedHistoryOrder); const map: Record<string, string> = { 'Credit Card': t('orders.credit-card'), 'Cash': t('orders.cash'), 'Terminal': t('orders.terminal') }; return map[raw] || raw; })();
+                    const vendorLabel = (() => { if (vendor) { const raw = getVendorLabel(vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; } return selectedHistoryOrder.payment_received ? t('orders.cash') : null; })();
 
                     // Status badge helper
                     const statusBadge = (status: string | null) => {
                       if (!status) return null;
                       const map: Record<string, { label: string; bg: string; fg: string }> = {
-                        completed: { label: '✓ Paid', bg: '#d1fae5', fg: '#065f46' },
-                        paid: { label: '✓ Paid', bg: '#d1fae5', fg: '#065f46' },
-                        voided: { label: '🚫 Voided', bg: '#fef3c7', fg: '#92400e' },
-                        cancelled: { label: '🚫 Voided', bg: '#fef3c7', fg: '#92400e' },
-                        refunded: { label: '↩ Refunded', bg: '#fee2e2', fg: '#991b1b' },
-                        partial_refund: { label: '↩ Partial', bg: '#fef3c7', fg: '#92400e' },
-                        pending: { label: 'Pending', bg: '#dbeafe', fg: '#1e40af' },
-                        failed: { label: 'Failed', bg: '#fee2e2', fg: '#991b1b' },
+                        completed: { label: t('orders.paid'), bg: '#d1fae5', fg: '#065f46' },
+                        paid: { label: t('orders.paid'), bg: '#d1fae5', fg: '#065f46' },
+                        voided: { label: t('orders.voided'), bg: '#fef3c7', fg: '#92400e' },
+                        cancelled: { label: t('orders.voided'), bg: '#fef3c7', fg: '#92400e' },
+                        refunded: { label: t('orders.refunded'), bg: '#fee2e2', fg: '#991b1b' },
+                        partial_refund: { label: t('orders.partial-refund'), bg: '#fef3c7', fg: '#92400e' },
+                        pending: { label: t('orders.pending'), bg: '#dbeafe', fg: '#1e40af' },
+                        failed: { label: t('orders.failed'), bg: '#fee2e2', fg: '#991b1b' },
                       };
                       return map[status] || { label: status, bg: '#f3f4f6', fg: '#374151' };
                     };
@@ -978,18 +995,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                     return (
                       <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Information</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.payment-info')}</Text>
 
                         {/* Payment Status */}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Status</Text>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-status')}</Text>
                           {badge ? (
                             <View style={{ backgroundColor: badge.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
                               <Text style={{ fontSize: 12, fontWeight: '600', color: badge.fg }}>{badge.label}</Text>
                             </View>
                           ) : (
                             <View style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>Unpaid</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>{t('orders.unpaid')}</Text>
                             </View>
                           )}
                         </View>
@@ -997,7 +1014,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         {/* Payment Vendor */}
                         {vendorLabel && (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Vendor</Text>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-vendor')}</Text>
                             <Text style={{ fontSize: 13, fontWeight: '600', color: vendor ? getVendorColor(vendor) : '#374151' }}>
                               💳 {vendorLabel}
                             </Text>
@@ -1006,14 +1023,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                         {/* Payment Method */}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Method</Text>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-method')}</Text>
                           <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
                         </View>
 
                         {/* Vendor Reference */}
                         {selectedHistoryOrder.cp_vendor_ref && (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Reference</Text>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.reference')}</Text>
                             <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.cp_vendor_ref}</Text>
                           </View>
                         )}
@@ -1021,7 +1038,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         {/* Paid At */}
                         {selectedHistoryOrder.cp_completed_at && (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Paid At</Text>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.paid-at')}</Text>
                             <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.cp_completed_at)}</Text>
                           </View>
                         )}
@@ -1030,8 +1047,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         {selectedHistoryOrder.cp_refund_amount_cents && selectedHistoryOrder.cp_refund_amount_cents > 0 && (
                           <View style={{ backgroundColor: '#fef2f2', borderRadius: 8, padding: 8, marginTop: 4 }}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                              <Text style={{ fontSize: 13, color: '#ef4444' }}>Refunded</Text>
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#ef4444' }}>{formatPrice(selectedHistoryOrder.cp_refund_amount_cents)}</Text>
+                              <Text style={{ fontSize: 13, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
                             </View>
                             {selectedHistoryOrder.cp_refunded_at && (
                               <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>at {formatDate(selectedHistoryOrder.cp_refunded_at)}</Text>
@@ -1042,7 +1058,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         {/* Sandbox badge */}
                         {selectedHistoryOrder.cp_env === 'sandbox' && (
                           <View style={{ backgroundColor: '#fef3c7', borderRadius: 6, padding: 4, alignSelf: 'flex-start', marginTop: 6 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#92400e' }}>SANDBOX</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#92400e' }}>{t('orders.sandbox')}</Text>
                           </View>
                         )}
                       </View>
@@ -1056,24 +1072,21 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                     return (
                       <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 8 }}>KPay Transaction Details</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 8 }}>{t('orders.kpay-details')}</Text>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280' }}>Order Ref</Text>
+                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.order-ref')}</Text>
                           <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
                         </View>
                         {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
                         {kpayTxDetails && (
                           <>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <Text style={{ fontSize: 12, color: '#6b7280' }}>Amount</Text>
-                              <Text style={{ fontSize: 12, color: '#1f2937' }}>
-                                {kpayTxDetails.payCurrency || 'HKD'} {((Number(kpayTxDetails.payAmount) || kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
+                              <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
                                 {kpayTxDetails.payAmount ? ` (${kpayTxDetails.payAmount})` : ''}
                               </Text>
                             </View>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <Text style={{ fontSize: 12, color: '#6b7280' }}>Status</Text>
-                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{kpayTxDetails.status || '—'}</Text>
+                              <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
                             </View>
                             {kpayTxDetails.payResult !== undefined && (
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -1111,8 +1124,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                             )}
                             {kpayTxDetails.refund_amount_cents > 0 && (
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12, color: '#ef4444' }}>Refunded</Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#ef4444' }}>{formatPrice(kpayTxDetails.refund_amount_cents)}</Text>
+                                <Text style={{ fontSize: 12, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
                               </View>
                             )}
                           </>
@@ -1130,44 +1142,43 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                     return (
                       <View style={{ backgroundColor: '#fefce8', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#fde68a' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 8 }}>Payment Asia Transaction Details</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 8 }}>{t('orders.pa-details')}</Text>
                         {txLoading && <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 8 }} />}
                         {paTxDetails?.records?.map((rec: any, idx: number) => {
                           const isSale = rec.type === '1' || rec.type === 'Sale';
                           return (
                             <View key={idx} style={{ marginBottom: idx < (paTxDetails.records.length - 1) ? 8 : 0 }}>
                               <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>
-                                {isSale ? 'Sale' : `Record #${idx + 1}`}
+                                {isSale ? t('orders.sale') : t('orders.record-num').replace('{0}', String(idx + 1))}
                               </Text>
                               {selectedHistoryOrder.payment_network && (
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Method</Text>
-                                  <Text style={{ fontSize: 12, color: '#1f2937' }}>{selectedHistoryOrder.payment_network}</Text>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.method')}</Text>
                                 </View>
                               )}
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>Amount</Text>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
                                 <Text style={{ fontSize: 12, color: '#1f2937' }}>{rec.currency || 'HKD'} {rec.amount}</Text>
                               </View>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>Status</Text>
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
                                 <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{PA_STATUS_MAP[rec.status] || rec.status}</Text>
                               </View>
                               {rec.request_reference && (
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Request Ref</Text>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.request-ref')}</Text>
                                   <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{rec.request_reference}</Text>
                                 </View>
                               )}
                               {rec.created_time && (
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Created</Text>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.created')}</Text>
                                   <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.created_time) * 1000).toLocaleString()}</Text>
                                 </View>
                               )}
                               {rec.completed_time && (
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Completed</Text>
+                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.completed')}</Text>
                                   <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.completed_time) * 1000).toLocaleString()}</Text>
                                 </View>
                               )}
@@ -1175,7 +1186,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           );
                         })}
                         {paTxDetails && !paTxDetails.records?.length && (
-                          <Text style={{ fontSize: 12, color: '#9ca3af' }}>No transaction records found</Text>
+                          <Text style={{ fontSize: 12, color: '#9ca3af' }}>{t('orders.no-records')}</Text>
                         )}
                       </View>
                     );
@@ -1184,31 +1195,31 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   {/* Payment Records Ledger */}
                   {selectedHistoryOrder.payment_records && selectedHistoryOrder.payment_records.length > 0 && (
                     <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Ledger</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.payment-ledger')}</Text>
                       {selectedHistoryOrder.payment_records.map((record: PaymentRecord, idx: number) => (
                         <View key={record.id || idx} style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                             <Text style={{ fontSize: 12, fontWeight: '600', color: getVendorColor(record.payment_vendor) }}>
-                              {getVendorLabel(record.payment_vendor)}
+                              {(() => { const raw = getVendorLabel(record.payment_vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; })()}
                             </Text>
                             <View style={{ backgroundColor: record.status === 'completed' ? '#d1fae5' : record.status === 'failed' ? '#fee2e2' : '#fef3c7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
                               <Text style={{ fontSize: 10, fontWeight: '600', color: record.status === 'completed' ? '#065f46' : record.status === 'failed' ? '#991b1b' : '#92400e' }}>
-                                {record.status?.toUpperCase()}
+                                {(() => { const map: Record<string, string> = { completed: t('orders.paid'), paid: t('orders.paid'), failed: t('orders.failed'), pending: t('orders.pending'), refunded: t('orders.refunded'), voided: t('orders.voided'), cancelled: t('orders.voided') }; return map[record.status || ''] || record.status?.toUpperCase(); })()}
                               </Text>
                             </View>
                           </View>
                           {record.payment_method && (
-                            <Text style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>Method: {record.payment_method}</Text>
+                            <Text style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>{t('orders.method-prefix')}{record.payment_method}</Text>
                           )}
                           <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{formatPrice(record.amount_cents)} {record.currency_code || ''}</Text>
                           {record.vendor_reference && (
-                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>Ref: {record.vendor_reference}</Text>
+                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{t('orders.ref-prefix')}{record.vendor_reference}</Text>
                           )}
                           {record.completed_at && (
-                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Completed: {formatDate(record.completed_at)}</Text>
+                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{t('orders.completed-prefix')}{formatDate(record.completed_at)}</Text>
                           )}
                           {record.refund_amount_cents && record.refund_amount_cents > 0 && (
-                            <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>Refunded: {formatPrice(record.refund_amount_cents)}</Text>
+                            <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>{t('orders.refunded-prefix')}{formatPrice(record.refund_amount_cents)}</Text>
                           )}
                         </View>
                       ))}
@@ -1232,13 +1243,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                               style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
                               onPress={() => handleKpayVoid(selectedHistoryOrder)}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>🚫 Void</Text>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>{t('orders.void-btn')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
                               onPress={openKpayRefund}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>💸 Refund</Text>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1253,7 +1264,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                             style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
                             onPress={openPaRefund}
                           >
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>↩️ Refund via Payment Asia</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-pa-btn')}</Text>
                           </TouchableOpacity>
                         </View>
                       );
@@ -1269,7 +1280,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                               style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
                               onPress={() => handleRefundOrder(selectedHistoryOrder.id)}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>💸 Refund</Text>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
                             </TouchableOpacity>
                           </View>
                         );
@@ -1286,7 +1297,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               ) : (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                   <Ionicons name="receipt-outline" size={36} color="#d1d5db" />
-                  <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>Select an order to view details</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>{t('orders.select-order')}</Text>
                 </View>
               )}
             </View>
@@ -1306,18 +1317,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       <ScrollView style={{ flex: 1 }}>
         {/* Cart Header */}
         <View style={styles.cartHeader}>
-          <Text style={styles.cartHeaderTitle}>Cart</Text>
+          <Text style={styles.cartHeaderTitle}>{t('orders.cart')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {cart.length > 0 && (
               <TouchableOpacity onPress={() => setCartEditMode(!cartEditMode)} style={[styles.cartEditToggle, cartEditMode && { backgroundColor: '#667eea' }]}>
                 <Ionicons name="pencil" size={14} color={cartEditMode ? '#fff' : '#667eea'} />
                 <Text style={[styles.cartEditToggleText, cartEditMode && styles.cartEditToggleTextActive]}>
-                  {cartEditMode ? 'Done' : 'Edit'}
+                  {cartEditMode ? t('orders.done') : t('orders.edit')}
                 </Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => { setCart([]); setCartEditMode(false); }}>
-              <Text style={styles.cartClearBtn}>Clear</Text>
+              <Text style={styles.cartClearBtn}>{t('orders.clear')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1326,7 +1337,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {cart.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 32 }}>
             <Ionicons name="cart-outline" size={36} color="#d1d5db" />
-            <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>No items in cart</Text>
+            <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>{t('orders.no-items')}</Text>
           </View>
         ) : (
         <View style={styles.cartItemsList}>
@@ -1367,7 +1378,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     </View>
                     <TextInput
                       style={styles.cartRemarksInput}
-                      placeholder="Add remarks..."
+                      placeholder={t('orders.add-remarks')}
                       placeholderTextColor="#9ca3af"
                       value={item.notes || ''}
                       onChangeText={(text) => handleUpdateNotes(idx, text)}
@@ -1390,7 +1401,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {/* Order type selection + total - sticky at bottom */}
         <ScrollView style={{ flexShrink: 1, maxHeight: 200 }} bounces={false}>
         <View style={styles.orderTypeSection}>
-          <Text style={styles.sectionLabel}>Order Type</Text>
+          <Text style={styles.sectionLabel}>{t('orders.order-type')}</Text>
           <View style={menuIsTablet ? styles.orderTypeButtonsVertical : styles.orderTypeButtons}>
             <TouchableOpacity
               style={[styles.orderTypeBtn, orderType === 'table' && styles.orderTypeBtnActive]}
@@ -1399,7 +1410,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               }}
             >
               <Text style={[styles.orderTypeBtnText, orderType === 'table' && styles.orderTypeBtnTextActive]}>
-                {selectedTableName ? `Table — ${selectedTableName}${selectedOrderId ? `, #${selectedOrderId}` : ''}` : (selectedTableOnInit ? `Table — ${selectedTableOnInit.tableName || 'Selected'}` : 'Table')}
+                {selectedTableName ? `${t('orders.table')} — ${selectedTableName}${selectedOrderId ? `, #${selectedOrderId}` : ''}` : (selectedTableOnInit ? `${t('orders.table')} — ${selectedTableOnInit.tableName || 'Selected'}` : t('orders.table'))}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1407,7 +1418,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               onPress={() => setOrderType('pay-now')}
             >
               <Text style={[styles.orderTypeBtnText, orderType === 'pay-now' && styles.orderTypeBtnTextActive]}>
-                Order Now
+                {t('orders.order-now')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1415,7 +1426,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               onPress={() => setOrderType('to-go')}
             >
               <Text style={[styles.orderTypeBtnText, orderType === 'to-go' && styles.orderTypeBtnTextActive]}>
-                To-Go
+                {t('orders.to-go')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1425,7 +1436,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {/* Cart total and submit */}
         <View style={styles.cartFooterSection}>
           <View style={styles.cartTotalRow}>
-            <Text style={styles.cartTotalLabel}>Total ({cart.length} items)</Text>
+            <Text style={styles.cartTotalLabel}>{t('orders.total-items').replace('{0}', String(cart.length))}</Text>
             <Text style={styles.cartTotalPrice}>{formatPrice(cartTotal)}</Text>
           </View>
           <TouchableOpacity 
@@ -1436,7 +1447,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             disabled={!orderType || (orderType === 'table' && !selectedTable)}
             onPress={handleSubmitOrder}
           >
-            <Text style={styles.submitBtnText}>SUBMIT ORDER</Text>
+            <Text style={styles.submitBtnText}>{t('orders.submit-order')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1568,7 +1579,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <View key={variant.id} style={styles.variantGroup}>
                       <View style={styles.variantGroupHeader}>
                         <Text style={styles.variantGroupName}>{variant.name}</Text>
-                        {variant.required && <Text style={styles.requiredBadge}>Required</Text>}
+                        {variant.required && <Text style={styles.requiredBadge}>{t('orders.required')}</Text>}
                       </View>
 
                       <View style={styles.variantOptionsGrid}>
@@ -1649,13 +1660,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   style={styles.cancelBtn}
                   onPress={() => setShowVariantModal(false)}
                 >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                  <Text style={styles.cancelBtnText}>{t('orders.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.addBtn}
                   onPress={handleVariantSubmit}
                 >
-                  <Text style={styles.addBtnText}>Add to Cart</Text>
+                  <Text style={styles.addBtnText}>{t('orders.add-to-cart')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1673,7 +1684,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '90%', maxWidth: 500, maxHeight: '80%', padding: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>Select Table</Text>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>{t('orders.select-table-title')}</Text>
                 <TouchableOpacity onPress={() => setShowTablePicker(false)}>
                   <Ionicons name="close" size={24} color="#374151" />
                 </TouchableOpacity>
@@ -1688,14 +1699,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         <View>
                           <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937' }}>{table.name}</Text>
                           <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                            {table.sessions.length > 0 ? `${table.sessions.length} active order${table.sessions.length > 1 ? 's' : ''}` : 'No active orders'}
+                            {table.sessions.length > 0 ? t('orders.active-orders').replace('{0}', String(table.sessions.length)) : t('orders.no-active-orders')}
                           </Text>
                         </View>
                         <TouchableOpacity
                           style={{ backgroundColor: '#3b82f6', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 6 }}
                           onPress={() => startNewOrderOnTable(table)}
                         >
-                          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>New Order</Text>
+                          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{t('orders.new-order')}</Text>
                         </TouchableOpacity>
                       </View>
                       {table.sessions.map((session: any) => {
@@ -1708,7 +1719,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           >
                             <View>
                               <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151' }}>
-                                {session.order_id ? `Order #${session.order_id}` : `Order`} • {session.pax} pax
+                                {session.order_id ? t('orders.order-num').replace('{0}', String(session.order_id)) : t('orders.order')} • {session.pax} pax
                               </Text>
                               <Text style={{ fontSize: 12, color: '#9ca3af' }}>⏱ {elapsed}m</Text>
                             </View>
@@ -1719,7 +1730,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     </View>
                   ))}
                   {tablePickerData.length === 0 && (
-                    <Text style={{ textAlign: 'center', color: '#9ca3af', paddingVertical: 20 }}>No tables found</Text>
+                    <Text style={{ textAlign: 'center', color: '#9ca3af', paddingVertical: 20 }}>{t('orders.no-tables-found')}</Text>
                   )}
                 </ScrollView>
               )}
@@ -1738,9 +1749,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 360, padding: 20 }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 16 }}>
-                New Order — {pendingTableForNewOrder?.name}
+                {t('orders.new-order-for').replace('{0}', pendingTableForNewOrder?.name)}
               </Text>
-              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 6 }}>Number of guests</Text>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 6 }}>{t('orders.number-guests')}</Text>
               <TextInput
                 style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
                 keyboardType="number-pad"
@@ -1753,13 +1764,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
                   onPress={() => setShowNewOrderPaxModal(false)}
                 >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
                   onPress={confirmNewOrderOnTable}
                 >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>Start Order</Text>
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.start-order')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1776,38 +1787,38 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>KPay Refund</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
                 Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
               </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund Amount (leave blank for full)</Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
               <TextInput
                 style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
                 keyboardType="numeric"
                 value={kpayRefundAmount}
                 onChangeText={setKpayRefundAmount}
-                placeholder="Full refund"
+                placeholder={t('orders.full-refund')}
               />
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Manager Password *</Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
               <TextInput
                 style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
                 secureTextEntry
                 value={kpayManagerPassword}
                 onChangeText={setKpayManagerPassword}
-                placeholder="Required"
+                placeholder={t('orders.required-field')}
               />
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
                   style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
                   onPress={() => setShowKpayRefundModal(false)}
                 >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
                   onPress={submitKpayRefund}
                 >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>Submit Refund</Text>
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1824,11 +1835,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>Payment Asia Refund</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.pa-refund')}</Text>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
                 Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
               </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund Amount ($)</Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-dollar')}</Text>
               <TextInput
                 style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
                 keyboardType="numeric"
@@ -1841,13 +1852,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
                   onPress={() => setShowPaRefundModal(false)}
                 >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
                   onPress={submitPaRefund}
                 >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>Submit Refund</Text>
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
