@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput } from 'react-native';
 import { apiClient, API_URL } from '../../services/apiClient';
+import { useTranslation } from '../../contexts/TranslationContext';
+import { useToast } from '../../components/ToastProvider';
+import { Ionicons } from '@expo/vector-icons';
 
 interface MenuItem {
   id: number;
@@ -34,6 +37,7 @@ interface Category {
 interface CartItem extends MenuItem {
   quantity: number;
   variants?: SelectedVariant[];
+  notes?: string;
 }
 
 interface SelectedVariant {
@@ -53,6 +57,46 @@ interface Order {
   items?: any[];
   table_id?: number;
   table_name?: string;
+  // Payment fields from backend
+  payment_status?: string;
+  payment_received?: boolean;
+  payment_method_online?: string;
+  payment_method_label?: string;
+  kpay_reference_id?: string;
+  kpay_status?: string;
+  kpay_completed_at?: string;
+  kpay_pay_method?: string;
+  refund_amount_cents?: number;
+  payment_network?: string;
+  cp_vendor?: string;
+  cp_method?: string;
+  cp_status?: string;
+  cp_vendor_ref?: string;
+  cp_total_cents?: number;
+  cp_env?: string;
+  cp_completed_at?: string;
+  cp_refunded_at?: string;
+  cp_refund_amount_cents?: number;
+  payment_records?: PaymentRecord[];
+}
+
+interface PaymentRecord {
+  id: number;
+  payment_vendor: string;
+  payment_method: string;
+  payment_gateway_env?: string;
+  order_reference?: string;
+  vendor_reference?: string;
+  amount_cents: number;
+  currency_code?: string;
+  total_cents: number;
+  status: string;
+  refund_amount_cents?: number;
+  refunded_at?: string;
+  refund_reference?: string;
+  created_at: string;
+  completed_at?: string;
+  failed_at?: string;
 }
 
 interface Session {
@@ -64,6 +108,16 @@ interface Session {
   ended_at?: string;
 }
 
+// Shared helpers (used by main component + SessionDetails + OrderDetails)
+const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const getOrderTypeLabel = (orderType?: string) => {
+  if (!orderType) return 'Order';
+  if (orderType === 'table') return 'Table';
+  if (orderType === 'counter' || orderType === 'pay-now') return 'Order Now';
+  if (orderType === 'to-go') return 'To-Go';
+  return 'Order';
+};
+
 export interface OrdersTabRef {
   toggleHistory: () => void;
 }
@@ -71,10 +125,13 @@ export interface OrdersTabRef {
 interface OrdersTabProps {
   restaurantId: string;
   selectedTableOnInit?: any;
+  searchQuery?: string;
+  onNavigateToTables?: () => void;
 }
 
 const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<OrdersTabRef>) => {
   const { restaurantId, selectedTableOnInit } = props;
+    const { t } = useTranslation();
     // Menu state
     const [categories, setCategories] = useState<Category[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -91,21 +148,35 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     
     // Cart state
     const [cart, setCart] = useState<CartItem[]>([]);
+    const [cartEditMode, setCartEditMode] = useState(false);
     const [orderType, setOrderType] = useState<'table' | 'pay-now' | 'to-go' | null>(null);
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [tables, setTables] = useState<any[]>([]);
     
+    // Table picker state
+    const [showTablePicker, setShowTablePicker] = useState(false);
+    const [tablePickerData, setTablePickerData] = useState<any[]>([]);
+    const [tablePickerLoading, setTablePickerLoading] = useState(false);
+    const [selectedTableName, setSelectedTableName] = useState<string | null>(null);
+    const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+    const [newOrderPax, setNewOrderPax] = useState('1');
+    const [showNewOrderPaxModal, setShowNewOrderPaxModal] = useState(false);
+    const [pendingTableForNewOrder, setPendingTableForNewOrder] = useState<any>(null);
+
     // History state
     const [showHistory, setShowHistory] = useState(false);
     const [orders, setOrders] = useState<Order[]>([]);
-    const [sessions, setSessions] = useState<Session[]>([]);
-    const [historyFilter, setHistoryFilter] = useState<'all' | 'pay-now' | 'to-go' | 'sessions'>('all');
-    const [selectedOrder, setSelectedOrder] = useState<Order | Session | null>(null);
+    const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<Order | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [sessionBillData, setSessionBillData] = useState<any>(null);
-    const [orderBillData, setOrderBillData] = useState<any>(null);
-    const [loadingBill, setLoadingBill] = useState(false);
+
+    // Payment terminal state for refund/void
+    const [kpayTerminal, setKpayTerminal] = useState<any>(null);
+    const [showKpayRefundModal, setShowKpayRefundModal] = useState(false);
+    const [kpayRefundAmount, setKpayRefundAmount] = useState('');
+    const [kpayManagerPassword, setKpayManagerPassword] = useState('');
+    const [showPaRefundModal, setShowPaRefundModal] = useState(false);
+    const [paRefundAmount, setPaRefundAmount] = useState('');
 
     // Expose toggleHistory through ref
     useImperativeHandle(ref, () => ({
@@ -118,9 +189,85 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     useEffect(() => {
       if (selectedTableOnInit) {
         setOrderType('table');
-        setSelectedTable(selectedTableOnInit.name);
+        // selectedTableOnInit can be { sessionId, tableName } or { name }
+        if (selectedTableOnInit.sessionId) {
+          setSelectedTable(selectedTableOnInit.sessionId.toString());
+        } else if (selectedTableOnInit.name) {
+          setSelectedTable(selectedTableOnInit.name);
+        }
       }
     }, [selectedTableOnInit]);
+
+    const loadTablePickerData = async () => {
+      try {
+        setTablePickerLoading(true);
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/table-state`);
+        const rows = res.data || [];
+        // Group by table
+        const tableMap: Record<number, any> = {};
+        rows.forEach((row: any) => {
+          if (!tableMap[row.table_id]) {
+            tableMap[row.table_id] = {
+              id: row.table_id,
+              name: row.table_name,
+              sessions: [],
+            };
+          }
+          if (row.session_id) {
+            tableMap[row.table_id].sessions.push({
+              id: row.session_id,
+              pax: row.pax,
+              started_at: row.started_at,
+              order_id: row.order_id,
+            });
+          }
+        });
+        setTablePickerData(Object.values(tableMap));
+      } catch (err) {
+        console.error('Error loading table picker data:', err);
+      } finally {
+        setTablePickerLoading(false);
+      }
+    };
+
+    const openTablePicker = async () => {
+      setShowTablePicker(true);
+      await loadTablePickerData();
+    };
+
+    const selectTableOrder = (table: any, session: any) => {
+      setSelectedTable(session.id.toString());
+      setSelectedTableName(table.name);
+      setSelectedOrderId(session.order_id || null);
+      setOrderType('table');
+      setShowTablePicker(false);
+    };
+
+    const startNewOrderOnTable = (table: any) => {
+      setPendingTableForNewOrder(table);
+      setNewOrderPax('1');
+      setShowNewOrderPaxModal(true);
+    };
+
+    const confirmNewOrderOnTable = async () => {
+      if (!pendingTableForNewOrder || !newOrderPax || parseInt(newOrderPax) <= 0) return;
+      try {
+        const res = await apiClient.post(
+          `/api/tables/${pendingTableForNewOrder.id}/sessions`,
+          { pax: parseInt(newOrderPax) }
+        );
+        const newSession = res.data;
+        setSelectedTable(newSession.id.toString());
+        setSelectedTableName(pendingTableForNewOrder.name);
+        setSelectedOrderId(newSession.order_id || null);
+        setOrderType('table');
+        setShowNewOrderPaxModal(false);
+        setShowTablePicker(false);
+        setPendingTableForNewOrder(null);
+      } catch (err: any) {
+        Alert.alert('Error', err.response?.data?.error || 'Failed to create order');
+      }
+    };
 
     // Load menu and tables on mount
     useEffect(() => {
@@ -132,8 +279,20 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     useEffect(() => {
       if (showHistory) {
         loadOrdersAndSessions();
+        loadKpayTerminal();
       }
-    }, [showHistory, historyFilter]);
+    }, [showHistory]);
+
+    const loadKpayTerminal = async () => {
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-terminal/active`);
+        if (res.data?.configured) {
+          setKpayTerminal(res.data.terminal);
+        }
+      } catch (err) {
+        // No KPay terminal configured — that's fine
+      }
+    };
 
     const loadMenu = async () => {
       try {
@@ -166,22 +325,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       try {
         setRefreshing(true);
         setError(null);
-
-        if (historyFilter === 'sessions') {
-          const response = await apiClient.get(`/api/restaurants/${restaurantId}/sessions`);
-          setSessions(response.data || []);
-        } else {
-          const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders`);
-          let filteredOrders = Array.isArray(response.data) ? response.data : [];
-
-          if (historyFilter === 'pay-now') {
-            filteredOrders = filteredOrders.filter(o => o.order_type === 'counter' || o.order_type === 'pay-now');
-          } else if (historyFilter === 'to-go') {
-            filteredOrders = filteredOrders.filter(o => o.order_type === 'to-go');
-          }
-
-          setOrders(filteredOrders);
-        }
+        const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders?limit=500`);
+        const allOrders = Array.isArray(response.data) ? response.data : [];
+        setOrders(allOrders);
       } catch (err: any) {
         console.error('Error loading orders:', err);
         setError(err.message || 'Failed to load data');
@@ -189,32 +335,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         setRefreshing(false);
       }
     }
-
-    const loadSessionBill = async (sessionId: number) => {
-      try {
-        setLoadingBill(true);
-        const response = await apiClient.get(`/api/sessions/${sessionId}/bill`);
-        setSessionBillData(response.data);
-      } catch (err: any) {
-        console.error('Error loading session bill:', err);
-        setSessionBillData(null);
-      } finally {
-        setLoadingBill(false);
-      }
-    };
-
-    const loadOrderBill = async (orderId: number) => {
-      try {
-        setLoadingBill(true);
-        const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders/${orderId}`);
-        setOrderBillData(response.data);
-      } catch (err: any) {
-        console.error('Error loading order details:', err);
-        setOrderBillData(null);
-      } finally {
-        setLoadingBill(false);
-      }
-    };
 
     const handleItemPress = async (item: MenuItem) => {
       try {
@@ -289,6 +409,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
+    const handleUpdateNotes = (index: number, notes: string) => {
+      setCart(prevCart =>
+        prevCart.map((item, i) => i === index ? { ...item, notes } : item)
+      );
+    };
+
     const handleSubmitOrder = async () => {
       if (cart.length === 0) {
         Alert.alert('Empty Cart', 'Please add items before submitting');
@@ -308,6 +434,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         const items = cart.map(cartItem => ({
           menu_item_id: cartItem.id,
           quantity: cartItem.quantity,
+          notes: cartItem.notes || null,
           selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
         }));
 
@@ -335,17 +462,21 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             { items }
           );
           console.log('[OrderSubmit] Table order submitted:', res);
-          Alert.alert('✓ Success', `Order submitted with ${cart.length} items`);
+          Alert.alert('Success', `Order submitted with ${cart.length} items`);
         } else if (orderType === 'pay-now') {
-          // For pay-now orders, create an order without a session
-          // Backend might need a different endpoint for this
-          // For now, alert user that they need to use a different flow
-          Alert.alert('Order Now', 'Please use the counter/pay-now flow from the Tables tab');
-          return;
+          const res = await apiClient.post(
+            `/api/restaurants/${restaurantId}/counter-order`,
+            { pax: 1, items }
+          );
+          console.log('[OrderSubmit] Counter order submitted:', res);
+          Alert.alert('Success', `Counter order submitted with ${cart.length} items`);
         } else if (orderType === 'to-go') {
-          // For to-go orders, similar approach
-          Alert.alert('To-Go Order', 'Please use the to-go flow from the Tables tab');
-          return;
+          const res = await apiClient.post(
+            `/api/restaurants/${restaurantId}/to-go-order`,
+            { pax: 1, items }
+          );
+          console.log('[OrderSubmit] To-go order submitted:', res);
+          Alert.alert('Success', `To-go order submitted with ${cart.length} items`);
         }
 
         // Clear cart and reset
@@ -355,20 +486,181 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       } catch (err: any) {
         console.error('[OrderSubmit] Error:', err);
         Alert.alert(
-          '❌ Error',
+          'Error',
           err.response?.data?.error || err.message || 'Failed to submit order. Make sure table has an active session.'
         );
       }
     };
 
+    // === Manual Void/Refund (non-vendor orders) ===
+    const handleVoidOrder = (orderId: number) => {
+      Alert.alert(
+        'Void Order',
+        'Mark this order as Voided?\nThis is a manual record update only — no payment system will be called.',
+        [
+          { text: 'Cancel' },
+          {
+            text: 'Void',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await apiClient.post(`/api/restaurants/${restaurantId}/orders/${orderId}/void`);
+                await reloadSelectedOrder(orderId);
+              } catch (err: any) {
+                Alert.alert('Error', err.response?.data?.error || 'Void failed');
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    const handleRefundOrder = (orderId: number) => {
+      Alert.alert(
+        'Refund Order',
+        'Mark this order as Refunded?\nThis is a manual record update only — no payment system will be called.',
+        [
+          { text: 'Cancel' },
+          {
+            text: 'Refund',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await apiClient.post(`/api/restaurants/${restaurantId}/orders/${orderId}/refund`);
+                await reloadSelectedOrder(orderId);
+              } catch (err: any) {
+                Alert.alert('Error', err.response?.data?.error || 'Refund failed');
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    // === KPay Void ===
+    const handleKpayVoid = (order: Order) => {
+      if (!kpayTerminal) {
+        Alert.alert('Error', 'No KPay terminal configured');
+        return;
+      }
+      const outTradeNo = order.kpay_reference_id;
+      if (!outTradeNo) {
+        Alert.alert('Error', 'No KPay reference found for this order');
+        return;
+      }
+      Alert.alert(
+        'Void KPay Transaction',
+        `Void transaction ${outTradeNo}?\nOnly works for same-day unsettled transactions.`,
+        [
+          { text: 'Cancel' },
+          {
+            text: 'Void',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await apiClient.post(
+                  `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/cancel`,
+                  { outTradeNo: `VOID-${Date.now()}`, originOutTradeNo: outTradeNo }
+                );
+                Alert.alert('Success', 'Void request sent to KPay terminal');
+                await reloadSelectedOrder(order.id);
+              } catch (err: any) {
+                Alert.alert('Void Failed', err.response?.data?.error || err.message);
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    // === KPay Refund ===
+    const openKpayRefund = () => {
+      setKpayRefundAmount('');
+      setKpayManagerPassword('');
+      setShowKpayRefundModal(true);
+    };
+
+    const submitKpayRefund = async () => {
+      if (!selectedHistoryOrder || !kpayTerminal) return;
+      const outTradeNo = selectedHistoryOrder.kpay_reference_id;
+      if (!outTradeNo || !kpayManagerPassword) {
+        Alert.alert('Error', 'Manager password is required');
+        return;
+      }
+      try {
+        const body: any = {
+          outTradeNo: `REF-${Date.now()}`,
+          refundType: 2, // default QR
+          managerPassword: kpayManagerPassword,
+        };
+        if (kpayRefundAmount) {
+          body.refundAmount = kpayRefundAmount;
+        }
+        await apiClient.post(
+          `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/refund`,
+          body
+        );
+        setShowKpayRefundModal(false);
+        Alert.alert('Success', 'Refund request sent to KPay terminal');
+        await reloadSelectedOrder(selectedHistoryOrder.id);
+      } catch (err: any) {
+        Alert.alert('Refund Failed', err.response?.data?.error || err.message);
+      }
+    };
+
+    // === Payment Asia Refund ===
+    const openPaRefund = () => {
+      if (!selectedHistoryOrder) return;
+      const totalDollars = ((selectedHistoryOrder.cp_total_cents || selectedHistoryOrder.total_cents || 0) / 100).toFixed(2);
+      setPaRefundAmount(totalDollars);
+      setShowPaRefundModal(true);
+    };
+
+    const submitPaRefund = async () => {
+      if (!selectedHistoryOrder) return;
+      const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
+      if (!merchantRef) {
+        Alert.alert('Error', 'No merchant reference found for this order');
+        return;
+      }
+      if (!paRefundAmount || parseFloat(paRefundAmount) <= 0) {
+        Alert.alert('Error', 'Please enter a valid refund amount');
+        return;
+      }
+      try {
+        await apiClient.post(
+          `/api/restaurants/${restaurantId}/payment-asia/refund`,
+          { merchant_reference: merchantRef, amount: parseFloat(paRefundAmount) }
+        );
+        setShowPaRefundModal(false);
+        Alert.alert('Success', 'Refund request sent to Payment Asia');
+        await reloadSelectedOrder(selectedHistoryOrder.id);
+      } catch (err: any) {
+        Alert.alert('Refund Failed', err.response?.data?.error || err.message);
+      }
+    };
+
+    // Helper to reload selected order after void/refund
+    const reloadSelectedOrder = async (orderId: number) => {
+      await loadOrdersAndSessions();
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/orders/${orderId}`);
+        setSelectedHistoryOrder(res.data);
+      } catch (err) {
+        // fallback: find from reloaded list
+      }
+    };
+
     const cartTotal = cart.reduce((sum, item) => sum + (item.price_cents * item.quantity), 0);
 
-    const filteredMenuItems = selectedCategory
-      ? menuItems.filter(item => item.category_id === selectedCategory)
-      : menuItems;
+    const filteredMenuItems = menuItems.filter(item => {
+      if (selectedCategory && item.category_id !== selectedCategory) return false;
+      if (props.searchQuery && props.searchQuery.trim()) {
+        return item.name.toLowerCase().includes(props.searchQuery.trim().toLowerCase());
+      }
+      return true;
+    });
 
-    const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-    
     const getFullImageUrl = (imageUrl?: string) => {
       if (!imageUrl) return null;
       if (imageUrl.startsWith('http')) return imageUrl;
@@ -385,185 +677,363 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       });
     };
 
-    const getOrderTypeLabel = (orderType?: string) => {
-      if (!orderType) return 'Order';
-      if (orderType === 'table') return '🎯 Table';
-      if (orderType === 'counter' || orderType === 'pay-now') return '🛒 Order Now';
-      if (orderType === 'to-go') return '🎁 To-Go';
-      return 'Order';
-    };
-
     if (loading && !showHistory) {
       return (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#5a5a5a" />
+          <ActivityIndicator size="large" color="#3b82f6" />
         </View>
       );
     }
 
     // ============= HISTORY VIEW =============
     if (showHistory) {
-      const displayOrders = historyFilter === 'sessions' ? [] : orders;
-      const displaySessions = historyFilter === 'sessions' ? sessions : [];
-
+      const historyIsTablet = (Platform as any).isPad;
       return (
         <>
-          <View style={styles.container}>
+          <View style={[styles.container, historyIsTablet && { flexDirection: 'row' }]}>
+          <View style={{ flex: 1 }}>
           {/* Header with back button */}
           <View style={styles.historyHeader}>
             <TouchableOpacity onPress={() => setShowHistory(false)}>
-              <Text style={styles.backButton}>← Back</Text>
+              <Text style={styles.backButton}>← {t('common.back')}</Text>
             </TouchableOpacity>
-            <Text style={styles.historyTitle}>Order History</Text>
+            <Text style={styles.historyTitle}>{t('admin.order-history')}</Text>
           </View>
 
-          {/* Filter buttons */}
-          <View style={styles.filterBar}>
-            {[
-              { id: 'all', label: 'All', count: orders.length },
-              { id: 'pay-now', label: 'Order Now', count: orders.filter(o => o.order_type === 'counter' || o.order_type === 'pay-now').length },
-              { id: 'to-go', label: 'To-Go', count: orders.filter(o => o.order_type === 'to-go').length },
-              { id: 'sessions', label: 'Sessions', count: sessions.length },
-            ].map((filter: any) => (
-              <TouchableOpacity
-                key={filter.id}
-                style={[styles.filterBtn, historyFilter === filter.id && styles.filterBtnActive]}
-                onPress={() => setHistoryFilter(filter.id)}
-              >
-                <Text style={[styles.filterBtnText, historyFilter === filter.id && styles.filterBtnTextActive]}>
-                  {filter.label} ({filter.count})
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Orders or Sessions List */}
+          {/* Orders List — all orders descending */}
           <FlatList
-            key={`history-${historyFilter}`}
-            data={historyFilter === 'sessions' ? displaySessions : displayOrders}
-            keyExtractor={(item: any) => (historyFilter === 'sessions' ? item.session_id : item.id).toString()}
+            data={orders}
+            keyExtractor={(item: any) => item.id.toString()}
             renderItem={({ item }) => {
-              if (historyFilter === 'sessions' && item) {
-                const session = item as Session;
-                if (!session || !session.session_id) return null;
-                const isEnded = session.ended_at ? true : false;
-                return (
-                  <TouchableOpacity
-                    style={styles.orderCard}
-                    onPress={() => {
-                      setSelectedOrder(session);
-                      loadSessionBill(session.session_id);
-                    }}
-                  >
-                    <View style={styles.orderHeader}>
-                      <Text style={styles.orderId}>🪑 {session.table_name || 'Table'}</Text>
-                      <View style={[styles.statusBadge, { backgroundColor: isEnded ? '#9ca3af' : '#10b981' }]}>
-                        <Text style={styles.statusText}>{isEnded ? 'Closed' : 'Active'}</Text>
+              const order = item as Order;
+              const paymentBadge = getPaymentBadge(order);
+              const items = order.items || [];
+              const isSelected = selectedHistoryOrder?.id === order.id;
+              return (
+                <TouchableOpacity onPress={() => setSelectedHistoryOrder(order)}>
+                <View style={[styles.orderCard, isSelected && { borderColor: '#3b82f6', borderWidth: 2 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.orderId}>Order #{order.id}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                        <Ionicons 
+                          name={order.order_type === 'table' ? 'restaurant-outline' : order.order_type === 'to-go' ? 'bag-handle-outline' : 'cart-outline'} 
+                          size={13} 
+                          color="#6b7280" 
+                        />
+                        <Text style={styles.orderDetails}>
+                          {getOrderTypeLabel(order.order_type)}
+                          {order.order_type === 'table' && order.table_name ? ` ${order.table_name}` : ''}
+                        </Text>
                       </View>
+                      <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>
+                        {formatDate(order.created_at)}
+                      </Text>
                     </View>
-                    <Text style={styles.orderDetails}>👥 {session.pax || 0} people • Started {formatDate(session.started_at)}</Text>
-                  </TouchableOpacity>
-                );
-              } else {
-                const order = item as Order;
-                return (
-                  <TouchableOpacity
-                    style={styles.orderCard}
-                    onPress={() => {
-                      setSelectedOrder(order);
-                      loadOrderBill(order.id);
-                    }}
-                  >
-                    <View style={styles.orderHeader}>
-                      <View>
-                        <Text style={styles.orderId}>Order #{order.id}</Text>
-                        <Text style={styles.orderDetails}>{getOrderTypeLabel(order.order_type)}</Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                        <Text style={styles.statusText}>{order.status}</Text>
-                      </View>
+                    <View style={{ alignItems: 'flex-end', gap: 4, marginLeft: 12 }}>
+                      <Text style={styles.orderTotal}>{formatPrice(order.total_cents)}</Text>
+                      {paymentBadge && (
+                        <View style={[styles.statusBadge, { backgroundColor: paymentBadge.color }]}>
+                          <Text style={styles.statusText}>{paymentBadge.label}</Text>
+                        </View>
+                      )}
                     </View>
-                    <Text style={styles.orderDetails}>{formatDate(order.created_at)}</Text>
-                    <Text style={styles.orderTotal}>{formatPrice(order.total_cents)}</Text>
-                  </TouchableOpacity>
-                );
-              }
+                  </View>
+
+                  {/* Payment details inline */}
+                  {(order.cp_method || order.cp_vendor) && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
+                      {order.cp_vendor && (
+                        <Text style={{ fontSize: 11, color: getVendorColor(order.cp_vendor), fontWeight: '600' }}>
+                          {getVendorLabel(order.cp_vendor)}
+                        </Text>
+                      )}
+                      {order.cp_method && (
+                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{order.cp_method}</Text>
+                      )}
+                      {order.cp_env === 'sandbox' && (
+                        <View style={[styles.statusBadge, { backgroundColor: '#f59e0b' }]}>
+                          <Text style={styles.statusText}>sandbox</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Items summary */}
+                  {items.length > 0 && (
+                    <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }} numberOfLines={2}>
+                      {items.map((i: any) => `${i.menu_item_name || i.name} ×${i.quantity}`).join(', ')}
+                    </Text>
+                  )}
+                </View>
+                </TouchableOpacity>
+              );
             }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No {historyFilter === 'sessions' ? 'sessions' : 'orders'} found</Text>
+                <Text style={styles.emptyText}>{t('admin.no-orders-found')}</Text>
               </View>
             }
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadOrdersAndSessions} />}
             contentContainerStyle={styles.listContent}
           />
 
-          {/* Order Details Modal */}
-          <Modal
-            visible={selectedOrder !== null}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => {
-              setSelectedOrder(null);
-              setSessionBillData(null);
-              setOrderBillData(null);
-            }}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <TouchableOpacity onPress={() => {
-                    setSelectedOrder(null);
-                    setSessionBillData(null);
-                    setOrderBillData(null);
-                  }}>
-                    <Text style={styles.closeButton}>✕</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.modalTitle}>
-                    {historyFilter === 'sessions' ? 'Session Details' : 'Order Details'}
-                  </Text>
-                  <View style={{ width: 24 }} />
-                </View>
-
-                {selectedOrder && (
-                  <ScrollView style={styles.modalBody}>
-                    {historyFilter === 'sessions' ? (
-                      <SessionDetails session={selectedOrder as Session} billData={sessionBillData} />
-                    ) : (
-                      <OrderDetails order={selectedOrder as Order} billData={orderBillData} />
-                    )}
-                  </ScrollView>
-                )}
-
-                <View style={styles.modalActions}>
-                  {historyFilter === 'sessions' && selectedOrder ? (
-                    <>
-                      <TouchableOpacity 
-                        style={[styles.modalActionBtn, styles.printBtn]}
-                      >
-                        <Text style={styles.modalActionBtnText}>🖨️ Print Bill</Text>
-                      </TouchableOpacity>
-                      {selectedOrder && !(selectedOrder as Session).ended_at && (
-                        <TouchableOpacity style={[styles.modalActionBtn, styles.closeBtn]}>
-                          <Text style={styles.modalActionBtnText}>✓ Close Bill</Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  ) : selectedOrder ? (
-                    <TouchableOpacity 
-                      style={[styles.modalActionBtn, styles.printBtn]}
-                    >
-                      <Text style={styles.modalActionBtnText}>🖨️ Print Receipt</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </View>
-            </View>
-          </Modal>
-
           {error && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+          </View>
+
+          {/* Right panel: Order detail (iPad only) */}
+          {historyIsTablet && (
+            <View style={styles.historyDetailPanel}>
+              {selectedHistoryOrder ? (
+                <ScrollView>
+                  {/* Header */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>
+                      Order #{selectedHistoryOrder.id}
+                    </Text>
+                    <View style={{ backgroundColor: selectedHistoryOrder.status === 'completed' ? '#d1fae5' : selectedHistoryOrder.status === 'cancelled' ? '#fee2e2' : '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: selectedHistoryOrder.status === 'completed' ? '#065f46' : selectedHistoryOrder.status === 'cancelled' ? '#991b1b' : '#1e40af' }}>
+                        {selectedHistoryOrder.status?.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Order Info */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Type</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
+                      {getOrderTypeLabel(selectedHistoryOrder.order_type)}
+                      {selectedHistoryOrder.order_type === 'table' && selectedHistoryOrder.table_name ? ` — ${selectedHistoryOrder.table_name}` : ''}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Date</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.created_at)}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Items</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{(selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.quantity || 1), 0)} items</Text>
+                  </View>
+
+                  {/* Items Section */}
+                  <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginVertical: 12, paddingTop: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Items</Text>
+                    {(selectedHistoryOrder.items || []).map((item: any, idx: number) => (
+                      <View key={idx} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, color: '#1f2937' }}>{item.menu_item_name || item.name}</Text>
+                            <Text style={{ fontSize: 11, color: '#9ca3af' }}>×{item.quantity}</Text>
+                            {item.variants ? (
+                              <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.variants}</Text>
+                            ) : null}
+                            {item.notes ? (
+                              <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>Note: {item.notes}</Text>
+                            ) : null}
+                          </View>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
+                            {formatPrice(item.item_total_cents || (item.price_cents || 0) * (item.quantity || 1))}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Order Summary */}
+                  <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Summary</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>Subtotal</Text>
+                      <Text style={{ fontSize: 13, color: '#1f2937' }}>
+                        {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0))}
+                      </Text>
+                    </View>
+                    {(() => {
+                      const subtotal = (selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0);
+                      const serviceCharge = selectedHistoryOrder.total_cents - subtotal;
+                      if (serviceCharge > 0) {
+                        return (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text style={{ fontSize: 13, color: '#6b7280' }}>Service Charge</Text>
+                            <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
+                          </View>
+                        );
+                      }
+                      return null;
+                    })()}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>Grand Total</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
+                    </View>
+                  </View>
+
+                  {/* Payment Information */}
+                  {(selectedHistoryOrder.cp_vendor || selectedHistoryOrder.payment_status || selectedHistoryOrder.payment_received) && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Information</Text>
+                      {selectedHistoryOrder.cp_vendor && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Vendor</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: getVendorColor(selectedHistoryOrder.cp_vendor) }}>
+                            {getVendorLabel(selectedHistoryOrder.cp_vendor)}
+                          </Text>
+                        </View>
+                      )}
+                      {selectedHistoryOrder.cp_method && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Method</Text>
+                          <Text style={{ fontSize: 13, color: '#1f2937' }}>{selectedHistoryOrder.cp_method}</Text>
+                        </View>
+                      )}
+                      {selectedHistoryOrder.cp_status && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Status</Text>
+                          <View style={{ backgroundColor: selectedHistoryOrder.cp_status === 'completed' ? '#d1fae5' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: selectedHistoryOrder.cp_status === 'completed' ? '#065f46' : '#92400e' }}>
+                              {selectedHistoryOrder.cp_status.toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      {selectedHistoryOrder.cp_vendor_ref && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Reference</Text>
+                          <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: 'monospace' }}>{selectedHistoryOrder.cp_vendor_ref}</Text>
+                        </View>
+                      )}
+                      {selectedHistoryOrder.cp_completed_at && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Paid At</Text>
+                          <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.cp_completed_at)}</Text>
+                        </View>
+                      )}
+                      {selectedHistoryOrder.cp_refund_amount_cents && selectedHistoryOrder.cp_refund_amount_cents > 0 && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, color: '#ef4444' }}>Refunded</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#ef4444' }}>{formatPrice(selectedHistoryOrder.cp_refund_amount_cents)}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Payment Records Ledger */}
+                  {selectedHistoryOrder.payment_records && selectedHistoryOrder.payment_records.length > 0 && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Ledger</Text>
+                      {selectedHistoryOrder.payment_records.map((record: PaymentRecord, idx: number) => (
+                        <View key={record.id || idx} style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: getVendorColor(record.payment_vendor) }}>
+                              {getVendorLabel(record.payment_vendor)}
+                            </Text>
+                            <View style={{ backgroundColor: record.status === 'completed' ? '#d1fae5' : record.status === 'failed' ? '#fee2e2' : '#fef3c7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: record.status === 'completed' ? '#065f46' : record.status === 'failed' ? '#991b1b' : '#92400e' }}>
+                                {record.status?.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          {record.payment_method && (
+                            <Text style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>Method: {record.payment_method}</Text>
+                          )}
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{formatPrice(record.amount_cents)} {record.currency_code || ''}</Text>
+                          {record.vendor_reference && (
+                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontFamily: 'monospace' }}>Ref: {record.vendor_reference}</Text>
+                          )}
+                          {record.completed_at && (
+                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Completed: {formatDate(record.completed_at)}</Text>
+                          )}
+                          {record.refund_amount_cents && record.refund_amount_cents > 0 && (
+                            <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>Refunded: {formatPrice(record.refund_amount_cents)}</Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Void / Refund Actions */}
+                  {(() => {
+                    const vendor = selectedHistoryOrder.cp_vendor || selectedHistoryOrder.payment_method_online;
+                    const pStatus = selectedHistoryOrder.payment_status || selectedHistoryOrder.cp_status;
+                    const isVoided = pStatus === 'voided';
+                    const isRefunded = pStatus === 'refunded';
+                    if (isVoided || isRefunded) return null;
+
+                    if (vendor === 'kpay' && kpayTerminal) {
+                      // KPay: Void + Refund (calls terminal)
+                      return (
+                        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>KPay Actions</Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity
+                              style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
+                              onPress={() => handleKpayVoid(selectedHistoryOrder)}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>🚫 Void</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                              onPress={openKpayRefund}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>💸 Refund</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    }
+
+                    if (vendor === 'payment-asia') {
+                      // Payment Asia: Refund only (calls PA API)
+                      return (
+                        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Asia Actions</Text>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                            onPress={openPaRefund}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>↩️ Refund via Payment Asia</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    }
+
+                    // Manual (cash/card): Void + Refund (record update only)
+                    if (!vendor || (vendor !== 'kpay' && vendor !== 'payment-asia')) {
+                      const effStatus = pStatus || '';
+                      if (effStatus === 'completed' || effStatus === 'paid' || !effStatus) {
+                        return (
+                          <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Actions</Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <TouchableOpacity
+                                style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
+                                onPress={() => handleVoidOrder(selectedHistoryOrder.id)}
+                              >
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>🚫 Void</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                                onPress={() => handleRefundOrder(selectedHistoryOrder.id)}
+                              >
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>💸 Refund</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        );
+                      }
+                    }
+                    return null;
+                  })()}
+                </ScrollView>
+              ) : (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="receipt-outline" size={36} color="#d1d5db" />
+                  <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>Select an order to view details</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -572,227 +1042,269 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     }
 
     // ============= MENU VIEW (DEFAULT) =============
+    const menuScreenWidth = Dimensions.get('window').width;
+    const menuIsTablet = (Platform as any).isPad;
+    const menuNumColumns = menuIsTablet ? (menuScreenWidth > 1100 ? 4 : 3) : (menuScreenWidth > 500 ? 3 : 2);
+
+    const cartPanel = (
+      <View style={menuIsTablet ? styles.rightPanel : styles.bottomPanel}>
+      <ScrollView style={{ flex: 1 }}>
+        {/* Cart Header */}
+        <View style={styles.cartHeader}>
+          <Text style={styles.cartHeaderTitle}>Cart</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {cart.length > 0 && (
+              <TouchableOpacity onPress={() => setCartEditMode(!cartEditMode)} style={[styles.cartEditToggle, cartEditMode && { backgroundColor: '#667eea' }]}>
+                <Ionicons name="pencil" size={14} color={cartEditMode ? '#fff' : '#667eea'} />
+                <Text style={[styles.cartEditToggleText, cartEditMode && styles.cartEditToggleTextActive]}>
+                  {cartEditMode ? 'Done' : 'Edit'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => { setCart([]); setCartEditMode(false); }}>
+              <Text style={styles.cartClearBtn}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Cart items */}
+        {cart.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+            <Ionicons name="cart-outline" size={36} color="#d1d5db" />
+            <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>No items in cart</Text>
+          </View>
+        ) : (
+        <View style={styles.cartItemsList}>
+          {cart.map((item, idx) => (
+            <View key={idx} style={styles.cartItemRow}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.cartItemPreviewText} numberOfLines={1}>
+                    {item.name} x{item.quantity}
+                  </Text>
+                  <Text style={styles.cartItemPriceText}>
+                    {formatPrice(item.price_cents * item.quantity)}
+                  </Text>
+                </View>
+                {item.variants && item.variants.length > 0 && (
+                  <View style={{ marginTop: 2 }}>
+                    {item.variants.map((v, vi) => (
+                      <Text key={vi} style={styles.cartItemVariantText} numberOfLines={1}>
+                        {v.variantName}: {v.optionName}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+                {/* Edit mode controls */}
+                {cartEditMode && (
+                  <View style={styles.cartEditControls}>
+                    <View style={styles.cartQtyRow}>
+                      <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity - 1)}>
+                        <Text style={styles.cartQtyBtnText}>−</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.cartQtyValue}>{item.quantity}</Text>
+                      <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity + 1)}>
+                        <Text style={styles.cartQtyBtnText}>+</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.cartRemoveBtn} onPress={() => handleRemoveFromCart(idx)}>
+                        <Text style={{ fontSize: 16 }}>🗑</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={styles.cartRemarksInput}
+                      placeholder="Add remarks..."
+                      placeholderTextColor="#9ca3af"
+                      value={item.notes || ''}
+                      onChangeText={(text) => handleUpdateNotes(idx, text)}
+                      multiline
+                    />
+                  </View>
+                )}
+              </View>
+              {!cartEditMode && (
+                <TouchableOpacity onPress={() => handleRemoveFromCart(idx)} style={{ paddingLeft: 6 }}>
+                  <Text style={styles.removeItemBtn}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+        </View>
+        )}
+
+        </ScrollView>
+        {/* Order type selection + total - sticky at bottom */}
+        <ScrollView style={{ flexShrink: 1, maxHeight: 200 }} bounces={false}>
+        <View style={styles.orderTypeSection}>
+          <Text style={styles.sectionLabel}>Order Type</Text>
+          <View style={menuIsTablet ? styles.orderTypeButtonsVertical : styles.orderTypeButtons}>
+            <TouchableOpacity
+              style={[styles.orderTypeBtn, orderType === 'table' && styles.orderTypeBtnActive]}
+              onPress={() => {
+                openTablePicker();
+              }}
+            >
+              <Text style={[styles.orderTypeBtnText, orderType === 'table' && styles.orderTypeBtnTextActive]}>
+                {selectedTableName ? `Table — ${selectedTableName}${selectedOrderId ? `, #${selectedOrderId}` : ''}` : (selectedTableOnInit ? `Table — ${selectedTableOnInit.tableName || 'Selected'}` : 'Table')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.orderTypeBtn, orderType === 'pay-now' && styles.orderTypeBtnActive]}
+              onPress={() => setOrderType('pay-now')}
+            >
+              <Text style={[styles.orderTypeBtnText, orderType === 'pay-now' && styles.orderTypeBtnTextActive]}>
+                Order Now
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.orderTypeBtn, orderType === 'to-go' && styles.orderTypeBtnActive]}
+              onPress={() => setOrderType('to-go')}
+            >
+              <Text style={[styles.orderTypeBtnText, orderType === 'to-go' && styles.orderTypeBtnTextActive]}>
+                To-Go
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        </ScrollView>
+
+        {/* Cart total and submit */}
+        <View style={styles.cartFooterSection}>
+          <View style={styles.cartTotalRow}>
+            <Text style={styles.cartTotalLabel}>Total ({cart.length} items)</Text>
+            <Text style={styles.cartTotalPrice}>{formatPrice(cartTotal)}</Text>
+          </View>
+          <TouchableOpacity 
+            style={[
+              styles.submitBtn,
+              (!orderType || (orderType === 'table' && !selectedTable)) && styles.submitBtnDisabled
+            ]}
+            disabled={!orderType || (orderType === 'table' && !selectedTable)}
+            onPress={handleSubmitOrder}
+          >
+            <Text style={styles.submitBtnText}>SUBMIT ORDER</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+
     return (
       <>
-        <View style={styles.container}>
-          {/* Category Bar Wrapper - Separate Context */}
-          <View style={styles.categoryBarWrapper}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoriesBar}
-              contentContainerStyle={styles.categoriesContent}
-            >
-              {categories.map(cat => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryBtn,
-                    selectedCategory === cat.id && styles.categoryBtnActive
-                  ]}
-                  onPress={() => setSelectedCategory(cat.id)}
-                >
-                  <Text style={[
-                    styles.categoryBtnText,
-                    selectedCategory === cat.id && styles.categoryBtnTextActive
-                  ]}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Food Items Grid Wrapper - Separate Context */}
-          <View style={styles.foodItemsGridWrapper}>
-            <FlatList
-              key={`menu-${selectedCategory}`}
-              data={filteredMenuItems}
-              keyExtractor={(item) => item.id.toString()}
-              numColumns={2}
-              columnWrapperStyle={styles.gridRow}
-              renderItem={({ item }) => (
-              <View style={styles.menuItemContainer}>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => handleItemPress(item)}
-                >
-                  {item.image_url && item.image_url.trim() ? (
-                    <Image
-                      source={{ uri: getFullImageUrl(item.image_url)! }}
-                      style={styles.menuItemImage}
-                      onError={() => console.log('Image load error for:', item.name, 'URL:', getFullImageUrl(item.image_url))}
-                    />
-                  ) : (
-                    <View style={[styles.menuItemImage, styles.noImage]}>
-                      <Text style={styles.noImageText}>📸</Text>
-                    </View>
-                  )}
-                  <View style={styles.menuItemInfo}>
-                    <Text style={styles.menuItemName} numberOfLines={1}>{item.name}</Text>
-                    {item.description && (
-                      <Text style={styles.menuItemDescription} numberOfLines={1}>{item.description}</Text>
+        <View style={[styles.container, menuIsTablet && styles.containerRow]}>
+          {/* Left: Menu area */}
+          <View style={menuIsTablet ? styles.menuAreaTablet : { flex: 1 }}>
+            {/* Food Items Grid Wrapper */}
+            <View style={styles.foodItemsGridWrapper}>
+              <FlatList
+                key={`menu-${selectedCategory}-${menuNumColumns}`}
+                data={(() => {
+                  const remainder = filteredMenuItems.length % menuNumColumns;
+                  if (remainder === 0) return filteredMenuItems;
+                  const spacers = Array.from({ length: menuNumColumns - remainder }, (_, i) => ({ id: `spacer-${i}`, isSpacer: true }));
+                  return [...filteredMenuItems, ...spacers];
+                })()}
+                keyExtractor={(item: any) => item.id.toString()}
+                numColumns={menuNumColumns}
+                columnWrapperStyle={styles.gridRow}
+                renderItem={({ item }: any) => {
+                if (item.isSpacer) {
+                  return <View style={styles.menuItemContainer} />;
+                }
+                return (
+                <View style={styles.menuItemContainer}>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => handleItemPress(item)}
+                  >
+                    {item.image_url && item.image_url.trim() ? (
+                      <Image
+                        source={{ uri: getFullImageUrl(item.image_url)! }}
+                        style={styles.menuItemImage}
+                        onError={() => console.log('Image load error for:', item.name, 'URL:', getFullImageUrl(item.image_url))}
+                      />
+                    ) : (
+                      <Image
+                        source={{ uri: `${API_URL}/uploads/website/placeholder.png` }}
+                        style={styles.menuItemImage}
+                      />
                     )}
-                    <View style={styles.menuItemFooter}>
-                      <Text style={styles.menuItemPrice}>{formatPrice(item.price_cents)}</Text>
-                      <Text style={styles.addButton}>+ Add</Text>
+                    <View style={styles.menuItemInfo}>
+                      <Text style={styles.menuItemName} numberOfLines={2}>{item.name}</Text>
+                      <View style={styles.menuItemFooter}>
+                        <Text style={styles.menuItemPrice}>{formatPrice(item.price_cents)}</Text>
+                      </View>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            )}
-            contentContainerStyle={styles.menuGrid}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadMenu} />}
-          />
-          </View>
-
-          {/* Bottom panel: Cart + Order type */}
-          {cart.length > 0 && (
-            <View style={styles.bottomPanel}>
-              {/* Cart items preview */}
-              <View style={styles.cartPreview}>
-                {cart.slice(0, 2).map((item, idx) => (
-                <View key={idx} style={styles.cartItemPreviewWithPrice}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cartItemPreviewText} numberOfLines={1}>{item.name}</Text>
-                    {item.variants && item.variants.length > 0 && (
-                      <Text style={styles.cartItemVariantText} numberOfLines={1}>
-                        {(item.variants as any[]).map((v: any) => v.optionName).join(', ')}
-                      </Text>
-                    )}
-                    <Text style={styles.cartItemPriceText}>
-                      {item.quantity}x {formatPrice(item.price_cents)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleRemoveFromCart(idx)}>
-                    <Text style={styles.removeItemBtn}>✕</Text>
                   </TouchableOpacity>
                 </View>
-              ))}
-              {cart.length > 2 && (
-                <Text style={styles.cartItemCount}>+{cart.length - 2} more items</Text>
-              )}
+              );}}
+              contentContainerStyle={styles.menuGrid}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadMenu} />}
+            />
             </View>
 
-              {/* Order type selection */}
-              <View style={styles.orderTypeSection}>
-                <Text style={styles.sectionLabel}>Order Type</Text>
-                <View style={styles.orderTypeButtons}>
+            {/* Category Bar at bottom - matching webapp */}
+            <View style={styles.categoryBarWrapper}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoriesContent}
+              >
+                {categories.map(cat => (
                   <TouchableOpacity
-                    style={[styles.orderTypeBtn, orderType === 'table' && styles.orderTypeBtnActive]}
-                    onPress={() => setOrderType('table')}
+                    key={cat.id}
+                    style={[
+                      styles.categoryBtn,
+                      selectedCategory === cat.id && styles.categoryBtnActive
+                    ]}
+                    onPress={() => setSelectedCategory(cat.id)}
                   >
-                    <Text style={[styles.orderTypeBtnText, orderType === 'table' && styles.orderTypeBtnTextActive]}>
-                      🎯 Table
+                    <Text style={[
+                      styles.categoryBtnText,
+                      selectedCategory === cat.id && styles.categoryBtnTextActive
+                    ]}>
+                      {cat.name}
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.orderTypeBtn, orderType === 'pay-now' && styles.orderTypeBtnActive]}
-                    onPress={() => setOrderType('pay-now')}
-                  >
-                    <Text style={[styles.orderTypeBtnText, orderType === 'pay-now' && styles.orderTypeBtnTextActive]}>
-                      🛒 Order Now
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.orderTypeBtn, orderType === 'to-go' && styles.orderTypeBtnActive]}
-                    onPress={() => setOrderType('to-go')}
-                  >
-                    <Text style={[styles.orderTypeBtnText, orderType === 'to-go' && styles.orderTypeBtnTextActive]}>
-                      🎁 To-Go
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Table selection for table orders */}
-              {orderType === 'table' && (
-                <View style={styles.tableSelectionSection}>
-                  <Text style={styles.sectionLabel}>Select Table</Text>
-                  <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.tableList}
-                  >
-                    {tables.map(table => (
-                      <TouchableOpacity
-                        key={table.id}
-                        style={[
-                          styles.tableBtn,
-                          selectedTable === table.id.toString() && styles.tableBtnActive
-                        ]}
-                        onPress={() => setSelectedTable(table.id.toString())}
-                      >
-                        <Text style={[
-                          styles.tableBtnText,
-                          selectedTable === table.id.toString() && styles.tableBtnTextActive
-                        ]}>
-                          {table.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Cart total and submit */}
-              <View style={styles.cartFooter}>
-                <View>
-                  <Text style={styles.cartTotalLabel}>{cart.length} items</Text>
-                </View>
-                <Text style={styles.cartTotalPrice}>{formatPrice(cartTotal)}</Text>
-                <TouchableOpacity 
-                  style={[
-                    styles.submitBtn,
-                    (!orderType || (orderType === 'table' && !selectedTable)) && styles.submitBtnDisabled
-                  ]}
-                  disabled={!orderType || (orderType === 'table' && !selectedTable)}
-                  onPress={handleSubmitOrder}
-                >
-                  <Text style={styles.submitBtnText}>✓ Submit</Text>
-                </TouchableOpacity>
-              </View>
+                ))}
+              </ScrollView>
             </View>
-          )}
+
+            {/* Bottom panel for phone only */}
+            {!menuIsTablet && cart.length > 0 && cartPanel}
+          </View>
+
+          {/* Right panel: Cart (iPad only - always visible) */}
+          {menuIsTablet && cartPanel}
         </View>
 
         {/* Variant Modal */}
-        <Modal
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
           visible={showVariantModal}
           transparent={true}
           animationType="fade"
           onRequestClose={() => setShowVariantModal(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.variantModalContent}>
+          <View style={[styles.modalOverlay, menuIsTablet && { flexDirection: 'row', justifyContent: 'flex-end' }]}>
+            <View style={[styles.variantModalContent, menuIsTablet && { maxHeight: '100%', width: 380, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }]}>
+              {/* Header with image, name, price in one compact row */}
               <View style={styles.variantModalHeader}>
                 <TouchableOpacity onPress={() => setShowVariantModal(false)}>
                   <Text style={styles.closeButton}>✕</Text>
                 </TouchableOpacity>
-                <Text style={styles.variantModalTitle}>{selectedItem?.name}</Text>
-                <View style={{ width: 24 }} />
-              </View>
-
-              {selectedItem?.image_url && selectedItem.image_url.trim() && (
-                <Image
-                  source={{ uri: getFullImageUrl(selectedItem.image_url)! }}
-                  style={styles.variantImage}
-                  onError={() => console.log('Variant modal image error for:', selectedItem.name, 'URL:', getFullImageUrl(selectedItem.image_url))}
-                />
-              )}
-
-              {/* Item info: description and price */}
-              <View style={styles.itemInfoBanner}>
-                {selectedItem?.description && (
-                  <Text style={styles.itemDescription} numberOfLines={2}>
-                    {selectedItem.description}
-                  </Text>
-                )}
-                {selectedItem && (
-                  <Text style={styles.itemPrice}>
-                    {formatPrice(selectedItem.price_cents || 0)}
-                  </Text>
-                )}
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, marginLeft: 8 }}>
+                  {selectedItem?.image_url && selectedItem.image_url.trim() ? (
+                    <Image
+                      source={{ uri: getFullImageUrl(selectedItem.image_url)! }}
+                      style={{ width: 50, height: 50, borderRadius: 6, backgroundColor: '#f0f0f0' }}
+                    />
+                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.variantModalTitle} numberOfLines={1}>{selectedItem?.name}</Text>
+                    {selectedItem?.description ? (
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{selectedItem.description}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.itemPrice}>{formatPrice(selectedItem?.price_cents || 0)}</Text>
+                </View>
               </View>
 
               <ScrollView style={styles.variantContent}>
@@ -804,8 +1316,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         {variant.required && <Text style={styles.requiredBadge}>Required</Text>}
                       </View>
 
+                      <View style={styles.variantOptionsGrid}>
                       {variant.min_select === 1 && variant.max_select === 1 ? (
-                        // Radio buttons for single selection
                         variant.options.map((option) => (
                           <TouchableOpacity
                             key={option.id}
@@ -832,7 +1344,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           </TouchableOpacity>
                         ))
                       ) : (
-                        // Checkboxes for multiple selections
                         variant.options.map((option) => {
                           const selected = Array.isArray(variantSelections[variant.id])
                             ? (variantSelections[variant.id] as number[]).includes(option.id)
@@ -872,6 +1383,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           );
                         })
                       )}
+                      </View>
                     </View>
                   ))
                 ) : null}
@@ -894,6 +1406,198 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </Modal>
+
+        {/* Table Picker Modal */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showTablePicker}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowTablePicker(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '90%', maxWidth: 500, maxHeight: '80%', padding: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>Select Table</Text>
+                <TouchableOpacity onPress={() => setShowTablePicker(false)}>
+                  <Ionicons name="close" size={24} color="#374151" />
+                </TouchableOpacity>
+              </View>
+              {tablePickerLoading ? (
+                <ActivityIndicator size="large" color="#3b82f6" style={{ marginVertical: 40 }} />
+              ) : (
+                <ScrollView style={{ maxHeight: 500 }}>
+                  {tablePickerData.map((table) => (
+                    <View key={table.id} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: table.sessions.length > 0 ? '#f0fdf4' : '#f9fafb' }}>
+                        <View>
+                          <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937' }}>{table.name}</Text>
+                          <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                            {table.sessions.length > 0 ? `${table.sessions.length} active order${table.sessions.length > 1 ? 's' : ''}` : 'No active orders'}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#3b82f6', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 6 }}
+                          onPress={() => startNewOrderOnTable(table)}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>New Order</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {table.sessions.map((session: any) => {
+                        const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000);
+                        return (
+                          <TouchableOpacity
+                            key={session.id}
+                            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb', backgroundColor: '#fff' }}
+                            onPress={() => selectTableOrder(table, session)}
+                          >
+                            <View>
+                              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151' }}>
+                                {session.order_id ? `Order #${session.order_id}` : `Order`} • {session.pax} pax
+                              </Text>
+                              <Text style={{ fontSize: 12, color: '#9ca3af' }}>⏱ {elapsed}m</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ))}
+                  {tablePickerData.length === 0 && (
+                    <Text style={{ textAlign: 'center', color: '#9ca3af', paddingVertical: 20 }}>No tables found</Text>
+                  )}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* New Order Pax Modal */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showNewOrderPaxModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowNewOrderPaxModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 360, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 16 }}>
+                New Order — {pendingTableForNewOrder?.name}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 6 }}>Number of guests</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                keyboardType="number-pad"
+                value={newOrderPax}
+                onChangeText={setNewOrderPax}
+                placeholder="1"
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => setShowNewOrderPaxModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={confirmNewOrderOnTable}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>Start Order</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* KPay Refund Modal */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showKpayRefundModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowKpayRefundModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>KPay Refund</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund Amount (leave blank for full)</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
+                keyboardType="numeric"
+                value={kpayRefundAmount}
+                onChangeText={setKpayRefundAmount}
+                placeholder="Full refund"
+              />
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Manager Password *</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                secureTextEntry
+                value={kpayManagerPassword}
+                onChangeText={setKpayManagerPassword}
+                placeholder="Required"
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => setShowKpayRefundModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={submitKpayRefund}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>Submit Refund</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Payment Asia Refund Modal */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showPaRefundModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowPaRefundModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>Payment Asia Refund</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+                Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund Amount ($)</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                keyboardType="numeric"
+                value={paRefundAmount}
+                onChangeText={setPaRefundAmount}
+                placeholder="0.00"
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => setShowPaRefundModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={submitPaRefund}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>Submit Refund</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </>
     );
 };
@@ -902,140 +1606,46 @@ export const OrdersTab = React.forwardRef(OrdersTabComponent) as React.ForwardRe
   OrdersTabProps & React.RefAttributes<OrdersTabRef>
 >;
 
-// Helper component for session details
-const SessionDetails = ({ session, billData }: { session: Session | null; billData?: any }) => {
-  if (!session) return null;
-  
-  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const isEnded = session.ended_at ? true : false;
-  
-  return (
-    <View style={styles.detailsContainer}>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Table</Text>
-        <Text style={styles.detailValue}>{session.table_name || 'N/A'}</Text>
-      </View>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Pax</Text>
-        <Text style={styles.detailValue}>👥 {session.pax || 0} people</Text>
-      </View>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Started</Text>
-        <Text style={styles.detailValue}>{session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A'}</Text>
-      </View>
-      {session.ended_at && (
-        <View style={styles.detailSection}>
-          <Text style={styles.detailLabel}>Closed</Text>
-          <Text style={styles.detailValue}>{new Date(session.ended_at).toLocaleString()}</Text>
-        </View>
-      )}
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Status</Text>
-        <Text style={[styles.detailValue, { color: isEnded ? '#9ca3af' : '#10b981' }]}>
-          {isEnded ? 'Closed' : 'Active'}
-        </Text>
-      </View>
-      
-      {/* Bill Items and Total */}
-      {billData ? (
-        <>
-          {billData.items && billData.items.length > 0 && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Items ({billData.items.length})</Text>
-              {billData.items.map((item: any, idx: number) => (
-                <Text key={idx} style={styles.itemListText}>
-                  • {item.name || item.item_name} x{item.quantity} - {formatPrice((item.price_cents || item.unit_price_cents) * item.quantity)}
-                </Text>
-              ))}
-            </View>
-          )}
-          
-          {billData.subtotal_cents !== undefined && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Subtotal</Text>
-              <Text style={styles.detailValue}>{formatPrice(billData.subtotal_cents)}</Text>
-            </View>
-          )}
-          
-          {billData.service_charge_cents !== undefined && billData.service_charge_cents > 0 && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Service Charge</Text>
-              <Text style={styles.detailValue}>{formatPrice(billData.service_charge_cents)}</Text>
-            </View>
-          )}
-          
-          {billData.total_cents !== undefined && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Total</Text>
-              <Text style={[styles.detailValue, { fontSize: 18, fontWeight: 'bold', color: '#10b981' }]}>
-                {formatPrice(billData.total_cents)}
-              </Text>
-            </View>
-          )}
-        </>
-      ) : null}
-    </View>
-  );
-};
-
-// Helper component for order details
-const OrderDetails = ({ order, billData }: { order: Order | null; billData?: any }) => {
-  if (!order) return null;
-  
-  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const getOrderTypeLabel = (orderType?: string) => {
-    if (!orderType) return 'Order';
-    if (orderType === 'table') return '🎯 Table';
-    if (orderType === 'counter' || orderType === 'pay-now') return '🛒 Order Now';
-    if (orderType === 'to-go') return '🎁 To-Go';
-    return 'Order';
-  };
-
-  return (
-    <View style={styles.detailsContainer}>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Order ID</Text>
-        <Text style={styles.detailValue}>#{order.id}</Text>
-      </View>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Type</Text>
-        <Text style={styles.detailValue}>{getOrderTypeLabel(order.order_type)}</Text>
-      </View>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Status</Text>
-        <Text style={[styles.detailValue, { color: getStatusColor(order.status) }]}>{order.status}</Text>
-      </View>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Total</Text>
-        <Text style={[styles.detailValue, { fontSize: 18, fontWeight: 'bold', color: '#10b981' }]}>
-          {formatPrice(order.total_cents)}
-        </Text>
-      </View>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailLabel}>Created</Text>
-        <Text style={styles.detailValue}>{new Date(order.created_at).toLocaleString()}</Text>
-      </View>
-      {billData?.items && billData.items.length > 0 && (
-        <View style={styles.detailSection}>
-          <Text style={styles.detailLabel}>Items ({billData.items.length})</Text>
-          {billData.items.map((item: any, idx: number) => (
-            <Text key={idx} style={styles.itemListText}>
-              • {item.menu_item_name} x{item.quantity} - {formatPrice(item.price_cents * item.quantity)}
-            </Text>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-};
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'completed': return '#10b981';
-    case 'pending': return '#f59e0b';
-    case 'rejected': return '#ef4444';
-    default: return '#6b7280';
+// Helper for order payment badge
+const getPaymentBadge = (order: Order) => {
+  if (order.cp_status === 'refunded' || order.cp_refunded_at) {
+    return { label: 'Refunded', color: '#ef4444' };
   }
+  if (order.cp_status === 'voided') {
+    return { label: 'Voided', color: '#6b7280' };
+  }
+  if (order.cp_refund_amount_cents && order.cp_refund_amount_cents > 0) {
+    return { label: 'Partial Refund', color: '#f97316' };
+  }
+  if (order.payment_received || order.cp_status === 'completed') {
+    return { label: 'Paid', color: '#10b981' };
+  }
+  if (order.status === 'completed' && !order.payment_received) {
+    return { label: 'Unpaid', color: '#f59e0b' };
+  }
+  return null;
+};
+
+const getVendorLabel = (vendor?: string) => {
+  if (!vendor) return '';
+  const map: Record<string, string> = {
+    kpay: 'KPay Terminal',
+    'payment-asia': 'Payment Asia',
+    cash: 'Cash',
+    card: 'Card',
+  };
+  return map[vendor] || vendor;
+};
+
+const getVendorColor = (vendor?: string) => {
+  if (!vendor) return '#6b7280';
+  const map: Record<string, string> = {
+    kpay: '#1a73e8',
+    'payment-asia': '#7c3aed',
+    cash: '#059669',
+    card: '#2563eb',
+  };
+  return map[vendor] || '#6b7280';
 };
 
 const styles = StyleSheet.create({
@@ -1049,36 +1659,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Orders header with navigation
-  ordersHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ordersHeaderTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  historyBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#2196F3',
-    borderRadius: 6,
-    borderWidth: 0,
-  },
-  historyBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  
   // History view
+  historyDetailPanel: {
+    width: 320,
+    backgroundColor: '#fff',
+    borderLeftWidth: 1,
+    borderLeftColor: '#e5e7eb',
+    padding: 16,
+  },
   historyHeader: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1100,34 +1688,6 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     flex: 1,
   },
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    gap: 8,
-  },
-  filterBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
-  },
-  filterBtnActive: {
-    backgroundColor: '#2196F3',
-  },
-  filterBtnText: {
-    textAlign: 'center',
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  filterBtnTextActive: {
-    color: '#ffffff',
-  },
   listContent: {
     padding: 12,
   },
@@ -1140,6 +1700,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  orderCardSelected: {
+    borderColor: '#667eea',
+    backgroundColor: '#eef2ff',
   },
   orderHeader: {
     flexDirection: 'row',
@@ -1148,8 +1714,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   orderId: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#1f2937',
   },
   statusBadge: {
@@ -1168,10 +1734,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   orderTotal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#10b981',
-    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#667eea',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1196,44 +1761,36 @@ const styles = StyleSheet.create({
   // Menu view
   categoryBarWrapper: {
     flex: 0,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#f5f5f5',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
   foodItemsGridWrapper: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  categoriesBar: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    height: 48,
-    flexShrink: 0,
-  },
   categoriesContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    flexDirection: 'row',
+    flexGrow: 1,
   },
   categoryBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: '#f9fafb',
-    marginHorizontal: 6,
-    height: 36,
+    flex: 1,
+    minHeight: 48,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#f5f5f5',
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
   },
   categoryBtnActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#5a5a5a',
   },
   categoryBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#666',
   },
   categoryBtnTextActive: {
     color: '#ffffff',
@@ -1244,21 +1801,21 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   gridRow: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 12,
     gap: 12,
   },
   menuItemContainer: {
-    flex: 1,
+    width: '23%',
+    maxWidth: '23%',
   },
   menuItem: {
     backgroundColor: '#fff',
     borderRadius: 8,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    height: 200,
   },
   menuItemImage: {
     width: '100%',
@@ -1269,37 +1826,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  noImageText: {
-    fontSize: 32,
-  },
   menuItemInfo: {
     padding: 10,
+    flex: 1,
   },
   menuItemName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 3,
-  },
-  menuItemDescription: {
-    fontSize: 11,
-    color: '#999',
-    marginBottom: 6,
+    color: '#333',
+    marginBottom: 4,
   },
   menuItemFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 'auto' as any,
   },
   menuItemPrice: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#10b981',
-  },
-  addButton: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#5a5a5a',
+    color: '#2C3E50',
   },
 
   // Bottom panel
@@ -1310,55 +1856,101 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingBottom: 20,
   },
-  cartPreview: {
+  // Right panel (iPad cart)
+  rightPanel: {
+    width: 280,
+    backgroundColor: '#fff',
+    borderLeftWidth: 1,
+    borderLeftColor: '#e0e0e0',
+    padding: 12,
+    flexShrink: 0,
+    flexDirection: 'column',
+  },
+  containerRow: {
+    flexDirection: 'row',
+  },
+  menuAreaTablet: {
+    flex: 1,
+  },
+  cartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    marginBottom: 12,
+  },
+  cartHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  cartClearBtn: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '600',
+  },
+  cartItemsList: {
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  cartItemPreview: {
+  cartItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#fafafa',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  orderTypeButtonsVertical: {
+    flexDirection: 'column',
+    gap: 6,
+  },
+  tableListWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  cartFooterSection: {
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 12,
+    marginTop: 8,
+  },
+  cartTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   cartItemPreviewText: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: 12,
+    color: '#374151',
     flex: 1,
   },
   removeItemBtn: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#ef4444',
     fontWeight: 'bold',
-    paddingHorizontal: 8,
-  },
-  cartItemCount: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  cartItemPreviewWithPrice: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    backgroundColor: '#f9fafb',
-    borderRadius: 6,
-    marginBottom: 6,
   },
   cartItemVariantText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#999',
     fontStyle: 'italic',
-    marginVertical: 2,
+    marginTop: 1,
   },
   cartItemPriceText: {
     fontSize: 12,
-    color: '#10b981',
+    color: '#2C3E50',
     fontWeight: '600',
-    marginTop: 2,
+    marginLeft: 8,
   },
   sectionLabel: {
     fontSize: 14,
@@ -1377,21 +1969,23 @@ const styles = StyleSheet.create({
   },
   orderTypeBtn: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
     borderRadius: 6,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f9f9f9',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#ddd',
+    justifyContent: 'center',
+    minHeight: 40,
   },
   orderTypeBtnActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: '#2C3E50',
+    borderColor: '#2C3E50',
   },
   orderTypeBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#333',
     textAlign: 'center',
   },
   orderTypeBtnTextActive: {
@@ -1415,8 +2009,8 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   tableBtnActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
   tableBtnText: {
     fontSize: 13,
@@ -1428,15 +2022,6 @@ const styles = StyleSheet.create({
   },
 
   // Cart footer
-  cartFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    gap: 10,
-  },
   cartTotalLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -1445,24 +2030,28 @@ const styles = StyleSheet.create({
   cartTotalPrice: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#10b981',
+    color: '#2C3E50',
     minWidth: 60,
     textAlign: 'right',
   },
   submitBtn: {
-    backgroundColor: '#10b981',
-    paddingVertical: 10,
+    backgroundColor: '#2c3e50',
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 6,
     justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%' as any,
   },
   submitBtnDisabled: {
     backgroundColor: '#ccc',
   },
   submitBtnText: {
     color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase' as any,
   },
 
   // Modal styling
@@ -1471,56 +2060,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '90%',
-    paddingTop: 0,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
   closeButton: {
     fontSize: 24,
     color: '#666',
-    fontWeight: '600',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  modalBody: {
-    padding: 16,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  modalActionBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  printBtn: {
-    backgroundColor: '#5a5a5a',
-  },
-  closeBtn: {
-    backgroundColor: '#10b981',
-  },
-  modalActionBtnText: {
-    color: '#fff',
-    fontSize: 14,
     fontWeight: '600',
   },
 
@@ -1534,50 +2076,30 @@ const styles = StyleSheet.create({
   },
   variantModalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
   },
   variantModalTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#1f2937',
-    flex: 1,
-    textAlign: 'center',
-  },
-  variantImage: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#f0f0f0',
-  },
-  itemInfoBanner: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f9fafb',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  itemDescription: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginBottom: 6,
-    lineHeight: 18,
   },
   itemPrice: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
-    color: '#10b981',
+    color: '#2C3E50',
   },
   variantContent: {
-    padding: 16,
-    maxHeight: '50%',
+    padding: 12,
+    flex: 1,
   },
   variantGroup: {
-    marginBottom: 16,
-    paddingBottom: 16,
+    marginBottom: 10,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
@@ -1585,7 +2107,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
+  },
+  variantOptionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   variantGroupName: {
     fontSize: 14,
@@ -1604,27 +2130,28 @@ const styles = StyleSheet.create({
   variantOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    width: '50%',
   },
   radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     borderColor: '#5a5a5a',
-    marginRight: 12,
+    marginRight: 8,
   },
   radioButtonSelected: {
     backgroundColor: '#5a5a5a',
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     borderRadius: 4,
     borderWidth: 2,
     borderColor: '#5a5a5a',
-    marginRight: 12,
+    marginRight: 8,
   },
   checkboxSelected: {
     backgroundColor: '#5a5a5a',
@@ -1633,20 +2160,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   variantOptionName: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#1f2937',
-    marginBottom: 2,
   },
   variantOptionPrice: {
-    fontSize: 12,
-    color: '#10b981',
+    fontSize: 11,
+    color: '#2C3E50',
     fontWeight: '600',
   },
   variantModalFooter: {
     flexDirection: 'row',
     gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
   },
@@ -1676,30 +2202,71 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-
-  // Details styling
-  detailsContainer: {
-    paddingBottom: 12,
+  cartEditToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#667eea',
   },
-  detailSection: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  detailLabel: {
+  cartEditToggleText: {
     fontSize: 12,
-    color: '#999',
     fontWeight: '600',
-    marginBottom: 4,
+    color: '#667eea',
   },
-  detailValue: {
+  cartEditToggleTextActive: {
+    color: '#fff',
+  },
+  cartEditControls: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
+  },
+  cartQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cartQtyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 4,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartQtyBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  cartQtyValue: {
     fontSize: 14,
+    fontWeight: '700',
     color: '#1f2937',
-    fontWeight: '500',
+    minWidth: 20,
+    textAlign: 'center',
   },
-  itemListText: {
-    fontSize: 13,
-    color: '#666',
-    marginVertical: 2,
+  cartRemoveBtn: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  cartRemarksInput: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#374151',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minHeight: 32,
   },
 });

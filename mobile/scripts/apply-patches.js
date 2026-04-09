@@ -48,4 +48,56 @@ try {
   console.log('[Patches] ℹ️  Could not patch Expo.podspec:', err.message);
 }
 
+// Patch 3: engine.io-client - replace .node.js imports with browser equivalents
+// Metro with unstable_enablePackageExports doesn't honor the "browser" field file-level
+// remapping, so Node.js-specific transports/globals get loaded and crash React Native.
+const engineIoBase = path.join(__dirname, '../node_modules/engine.io-client/build');
+
+try {
+  const replacements = [
+    // Transport index files: replace .node.js transport imports with browser versions
+    { file: 'esm/transports/index.js', from: /\.\/polling-xhr\.node\.js/g, to: './polling-xhr.js' },
+    { file: 'esm/transports/index.js', from: /\.\/websocket\.node\.js/g, to: './websocket.js' },
+    { file: 'cjs/transports/index.js', from: /\.\/polling-xhr\.node\.js/g, to: './polling-xhr.js' },
+    { file: 'cjs/transports/index.js', from: /\.\/websocket\.node\.js/g, to: './websocket.js' },
+    // globals.node.js → globals.js (ESM)
+    { file: 'esm/util.js', from: /\.\/globals\.node\.js/g, to: './globals.js' },
+    { file: 'esm/socket.js', from: /\.\/globals\.node\.js/g, to: './globals.js' },
+    { file: 'esm/index.js', from: /\.\/globals\.node\.js/g, to: './globals.js' },
+    { file: 'esm/transports/webtransport.js', from: /\.\.\/globals\.node\.js/g, to: '../globals.js' },
+    { file: 'esm/transports/polling-xhr.js', from: /\.\.\/globals\.node\.js/g, to: '../globals.js' },
+    { file: 'esm/transports/websocket.js', from: /\.\.\/globals\.node\.js/g, to: '../globals.js' },
+    // globals.node.js → globals.js (CJS)
+    { file: 'cjs/util.js', from: /\.\/globals\.node\.js/g, to: './globals.js' },
+    { file: 'cjs/socket.js', from: /\.\/globals\.node\.js/g, to: './globals.js' },
+    { file: 'cjs/index.js', from: /\.\/globals\.node\.js/g, to: './globals.js' },
+    { file: 'cjs/transports/webtransport.js', from: /\.\.\/globals\.node\.js/g, to: '../globals.js' },
+    { file: 'cjs/transports/polling-xhr.js', from: /\.\.\/globals\.node\.js/g, to: '../globals.js' },
+    { file: 'cjs/transports/websocket.js', from: /\.\.\/globals\.node\.js/g, to: '../globals.js' },
+  ];
+
+  let patchedCount = 0;
+  for (const { file, from, to } of replacements) {
+    const filePath = path.join(engineIoBase, file);
+    if (fs.existsSync(filePath)) {
+      let content = fs.readFileSync(filePath, 'utf8');
+      if (from.test(content)) {
+        // Reset regex lastIndex since we used .test()
+        from.lastIndex = 0;
+        content = content.replace(from, to);
+        fs.writeFileSync(filePath, content);
+        patchedCount++;
+      }
+    }
+  }
+
+  if (patchedCount > 0) {
+    console.log(`[Patches] ✅ engine.io-client patched (${patchedCount} files)`);
+  } else {
+    console.log('[Patches] ℹ️  engine.io-client already patched or not found');
+  }
+} catch (err) {
+  console.log('[Patches] ℹ️  Could not patch engine.io-client:', err.message);
+}
+
 console.log('[Patches] ✅ All patches applied successfully');

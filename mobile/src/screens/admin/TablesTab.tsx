@@ -15,13 +15,18 @@ import {
   Image,
   Pressable,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  InputAccessoryView,
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
 import { apiClient, API_URL } from '../../services/apiClient';
+import { useTranslation } from '../../contexts/TranslationContext';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
+import { Ionicons } from '@expo/vector-icons';
 
 interface TableCategory {
   id: number;
@@ -34,6 +39,7 @@ interface Session {
   pax: number;
   started_at: string;
   bill_closure_requested?: boolean;
+  order_id?: number;
 }
 
 interface Table {
@@ -61,6 +67,7 @@ interface TableState {
   pax?: number;
   started_at?: string;
   bill_closure_requested?: boolean;
+  order_id?: number;
   booking_time?: string;
 }
 
@@ -68,7 +75,17 @@ interface Bill {
   total_cents: number;
   subtotal_cents: number;
   service_charge_cents?: number;
+  grand_total_cents?: number;
   items: Array<{ name: string; price_cents: number; quantity: number; status: string }>;
+}
+
+interface Coupon {
+  id: number;
+  code: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  description?: string;
+  is_active: boolean;
 }
 
 interface Order {
@@ -98,17 +115,18 @@ type ViewType = 'grid' | 'sessionDetail' | 'sessionList';
 
 export interface TablesTabRef {
   toggleEditMode: () => void;
-  navigateToScannedQR: (token: string) => void;
+  navigateToScannedQR: (sessionId: number) => void;
 }
 
 const getTableTextColor = (bgColor: string) => {
-  if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b') {
+  if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b' || bgColor === '#dddddd') {
     return { color: '#000' };
   }
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
+export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrderForTable?: (sessionId: number, tableName: string) => void; searchQuery?: string; selectedRoomId?: number | null; onCategoriesLoaded?: (cats: TableCategory[]) => void }>(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }, ref) => {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -180,7 +198,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [discountAmount, setDiscountAmount] = useState('0');
   const [closeReason, setCloseReason] = useState('');
-
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
+  const [showCouponPicker, setShowCouponPicker] = useState(false);
   // Service charge
   const [serviceCharge, setServiceCharge] = useState(0);
 
@@ -213,7 +233,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       }
       
       console.error('[TablesTab] Session not found with ID:', sessionId);
-      Alert.alert('Session Not Found', 'Could not find this session. Please try again.');
+      Alert.alert('Order Not Found', 'Could not find this order. Please try again.');
     }
   }), [tables]);
 
@@ -230,6 +250,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         `/api/restaurants/${restaurantId}/table-categories`
       );
       setCategories(categoriesRes.data);
+      onCategoriesLoaded?.(categoriesRes.data);
 
       // Load table state
       const tableStateRes = await apiClient.get(
@@ -269,6 +290,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             pax: row.pax || 0,
             started_at: row.started_at || '',
             bill_closure_requested: row.bill_closure_requested,
+            order_id: row.order_id,
           });
         }
       });
@@ -394,6 +416,29 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     ? tables.filter((t) => t.category_id === selectedCategory)
     : [];
 
+  // Build sections: all categories with their tables, filtered by room and search
+  const tableSections = categories
+    .filter(cat => !selectedRoomId || cat.id === selectedRoomId)
+    .map(cat => ({
+      category: cat,
+      tables: tables.filter(t => {
+        if (t.category_id !== cat.id) return false;
+        if (searchQuery && searchQuery.trim()) {
+          return t.name.toLowerCase().includes(searchQuery.trim().toLowerCase());
+        }
+        return true;
+      }),
+    }));
+
+  // Chunk an array into rows of N
+  const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+    const chunks: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) {
+      chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+  };
+
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   const formatDuration = (startedAt: string) => {
@@ -414,10 +459,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   };
 
   const getTableCardColor = (table: Table) => {
-    if (table.sessions.length === 0 && !table.reserved) return '#f3f4f6';
+    if (table.sessions.length === 0 && !table.reserved) return '#dddddd';
     if (table.sessions.length > 1) return '#2C3E50';
     if (table.sessions.length === 1) {
       const session = table.sessions[0];
+      if ((session as any).payment_received === true) return '#4caf50';
       if (session.bill_closure_requested) return '#ffeb3b';
 
       try {
@@ -433,8 +479,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         return '#2C3E50';
       }
     }
-    if (table.reserved) return '#f3f4f6';
-    return '#f3f4f6';
+    if (table.reserved) return '#e0e7ff';
+    return '#dddddd';
   };
 
   const handleTableClick = (table: Table) => {
@@ -459,7 +505,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setSessionBill(billRes.data);
     } catch (err) {
       console.error('Error loading session orders:', err);
-      Alert.alert('Error Loading Orders', 'Failed to load orders for this session');
+      Alert.alert('Error Loading Orders', 'Failed to load order details');
     }
   };
 
@@ -759,7 +805,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setSelectedTable(null);
       setCurrentView('grid');
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to start session');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to start order');
     }
   };
 
@@ -793,8 +839,22 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     }
   };
 
+  const getDiscountCents = () => {
+    const coupon = coupons.find(c => c.id === selectedCouponId);
+    if (!coupon) return 0;
+    const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
+    if (coupon.discount_type === 'percentage') {
+      return Math.round(grandTotal * coupon.discount_value / 100);
+    }
+    return coupon.discount_value;
+  };
+
   const closeBill = async () => {
     if (!selectedSession) return;
+
+    const discountCents = getDiscountCents();
+    const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
+    const finalAmount = grandTotal - discountCents;
 
     try {
       await apiClient.post(
@@ -802,8 +862,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         {
           restaurantId: parseInt(restaurantId),
           payment_method: paymentMethod,
-          amount_paid: (sessionBill?.total_cents || 0) - parseInt(discountAmount || '0'),
-          discount_applied: parseInt(discountAmount || '0'),
+          amount_paid: finalAmount,
+          discount_applied: discountCents,
+          service_charge: sessionBill?.service_charge_cents || 0,
           notes: closeReason,
         }
       );
@@ -827,7 +888,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       setPaymentMethod('cash');
       setDiscountAmount('0');
       setCloseReason('');
-      await loadTableData();
+      setSelectedCouponId(null);
+      setCoupons([]);      await loadTableData();
       setCurrentView('grid');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
@@ -835,7 +897,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   };
 
   const endSession = async (sessionId: number) => {
-    Alert.alert('End Session', 'Are you sure you want to end this session?', [
+    Alert.alert('End Order', 'Are you sure you want to end this order?', [
       { text: 'Cancel' },
       {
         text: 'End',
@@ -848,7 +910,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             await loadTableData();
             setCurrentView('grid');
           } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.error || 'Failed to end session');
+            Alert.alert('Error', err.response?.data?.error || 'Failed to end order');
           }
         },
       },
@@ -913,10 +975,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const orderForTable = () => {
     if (!selectedTable || !selectedSession) return;
-    // This would open the order screen for the table
-    // For now, just show an alert
-    Alert.alert('Order for Table', `Open order screen for ${selectedTable.name}`);
     setShowSessionGearMenu(false);
+    if (onOrderForTable) {
+      onOrderForTable(selectedSession.id, selectedTable.name);
+    } else {
+      Alert.alert('Order for Table', `Open order screen for ${selectedTable.name}`);
+    }
   };
 
   const generateQRHTML = async (tableName: string, qrToken: string, qrTextAbove?: string, qrTextBelow?: string) => {
@@ -1098,7 +1162,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       if (!qrPrinterType || qrPrinterType === 'none') {
         console.log('[PrintQR] No QR printer configured:', printerSettings);
         Alert.alert(
-          '🖨️ No QR Printer Configured',
+          'No QR Printer Configured',
           'Please configure a QR printer in Settings before printing. For now, showing QR code on screen.',
           [
             {
@@ -1117,7 +1181,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       const qrToken = selectedTable?.units?.[0]?.qr_token;
       if (!qrToken) {
         console.log('[PrintQR] No QR token available for table:', selectedTable?.name);
-        Alert.alert('❌ Error', 'No QR token available for this table');
+        Alert.alert('Error', 'No QR token available for this table');
         return;
       }
 
@@ -1151,7 +1215,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         if (printRes.data?.bluetoothPayload) {
           // Backend returned Bluetooth payload - send to local printer using BLE
           console.log('[PrintQR] Sending Bluetooth payload to device:', printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceName);
-          Alert.alert('⏳ Printing', 'Sending QR code to Bluetooth printer...');
+          Alert.alert('Printing', 'Sending QR code to Bluetooth printer...');
           
           try {
             // Import BLE manager needed for Bluetooth
@@ -1183,20 +1247,20 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               30000
             );
             
-            Alert.alert('✓ Sent', 'QR code sent to Bluetooth printer');
+            Alert.alert('Sent', 'QR code sent to Bluetooth printer');
           } catch (err: any) {
             console.error('[PrintQR] Bluetooth send error:', err);
-            Alert.alert('❌ Error', err.message || 'Failed to send to Bluetooth printer');
+            Alert.alert('Error', err.message || 'Failed to send to Bluetooth printer');
             setShowQRModal(true);
           }
         } else if (printRes.data?.success) {
-          Alert.alert('✓ Queued', 'QR code queued for network printer');
+          Alert.alert('Queued', 'QR code queued for network printer');
         } else if (printRes.data?.html) {
           // Backend returned HTML for browser printing
           await Print.printAsync({ html: printRes.data.html });
-          Alert.alert('✓ Printing', 'QR code sent to print');
+          Alert.alert('Printing', 'QR code sent to print');
         } else {
-          Alert.alert('❌ Error', 'Unexpected response from backend');
+          Alert.alert('Error', 'Unexpected response from backend');
           setShowQRModal(true);
         }
       }
@@ -1204,7 +1268,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       console.error('[PrintQR] Error:', err);
       console.error('[PrintQR] Full error:', err.response || err.message);
       Alert.alert(
-        '❌ Print Error',
+        'Print Error',
         `${err.response?.data?.error || err.message || 'Failed to print QR code'}`
       );
       // Fall back to showing the modal
@@ -1214,7 +1278,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
   const printBillWithPrinterSelection = () => {
     if (!selectedSession || !sessionBill) {
-      Alert.alert('❌ Error', 'No bill data available');
+      Alert.alert('Error', 'No bill data available');
       return;
     }
     console.log('[PrintBill] Opening printer selection for bill');
@@ -1283,7 +1347,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         console.log('[PrintBill] Backend response:', responseData);
         
         if (responseData?.success) {
-          Alert.alert('✓ Print Queued', 'Bill queued successfully for printing');
+          Alert.alert('Print Queued', 'Bill queued successfully for printing');
         } else if (responseData?.html) {
           // Backend returned HTML for browser printing
           await Print.printAsync({ html: responseData.html });
@@ -1293,7 +1357,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       console.error('[PrintBill] Error:', err.message || err);
       console.error('[PrintBill] Full error:', err);
       Alert.alert(
-        '❌ Print Error',
+        'Print Error',
         err.response?.data?.error || err.message || 'Failed to print bill'
       );
       throw err;
@@ -1329,7 +1393,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     if (!selectedSession || !sessionBill) {
       console.log('[PrintBill] Missing session or bill data, returning');
       if (!autoPrint) {
-        Alert.alert('❌ Error', 'No bill data available. Please open a table session first.');
+        Alert.alert('Error', 'No bill data available. Please open a table order first.');
       }
       return;
     }
@@ -1345,7 +1409,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       if (!printerRes.data || !printerRes.data.printer_type) {
         if (!autoPrint) {
           Alert.alert(
-            '🖨️ No Printer Configured',
+            'No Printer Configured',
             'Please configure a printer in Settings to enable printing. Would you like to set up a printer now?',
             [
               {
@@ -1402,12 +1466,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               html: printRes.data.html,
             });
             if (!autoPrint) {
-              Alert.alert('✓ Print Dialog Opened', `Bill for ${selectedTable?.name} ready to print`);
+              Alert.alert('Print Dialog Opened', `Bill for ${selectedTable?.name} ready to print`);
             }
           } catch (printErr: any) {
             console.error('[PrintBill] Print dialog error:', printErr);
             if (!autoPrint) {
-              Alert.alert('❌ Print Error', 'Failed to open print dialog: ' + printErr.message);
+              Alert.alert('Print Error', 'Failed to open print dialog: ' + printErr.message);
             }
           }
         } 
@@ -1417,7 +1481,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
           
           if (!autoPrint) {
-            Alert.alert('⏳ Printing...', 'Sending receipt to Bluetooth printer...');
+            Alert.alert('Printing...', 'Sending receipt to Bluetooth printer...');
           }
           
           try {
@@ -1485,13 +1549,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             
             console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
-              Alert.alert('✓ Printed', `Bill sent to printer "${device.name}"`);
+              Alert.alert('Printed', `Bill sent to printer "${device.name}"`);
             }
           } catch (bluetoothErr: any) {
             console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
             if (!autoPrint) {
               Alert.alert(
-                '⚠️ Print Issue',
+                'Print Issue',
                 `Could not connect to printer. Make sure it's powered on and nearby.\n\nError: ${bluetoothErr.message}`
               );
             }
@@ -1501,7 +1565,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
           // Printer type is thermal/network - sent to printer queue
           if (!autoPrint) {
             Alert.alert(
-              '✓ Print Sent',
+              'Print Sent',
               `Bill for ${selectedTable?.name} sent to printer successfully`
             );
           }
@@ -1509,7 +1573,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         setShowSessionGearMenu(false);
       } else {
         Alert.alert(
-          '❌ Printer Error',
+          'Printer Error',
           printRes.data?.error || 'Failed to send to printer'
         );
       }
@@ -1520,7 +1584,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       
       if (!autoPrint) {
         Alert.alert(
-          '❌ Error',
+          'Error',
           err.response?.data?.error || err.message || 'Failed to print bill'
         );
       }
@@ -1537,12 +1601,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       );
       
       if (!printerRes.data || !printerRes.data.printer_type) {
-        Alert.alert('🖨️ No Printer', 'Please configure a Bluetooth printer first');
+        Alert.alert('No Printer', 'Please configure a Bluetooth printer first');
         return;
       }
 
       if (printerRes.data.printer_type !== 'bluetooth') {
-        Alert.alert('ℹ️ Not Bluetooth', 'Test print only works with Bluetooth printers');
+        Alert.alert('Not Bluetooth', 'Test print only works with Bluetooth printers');
         return;
       }
 
@@ -1552,11 +1616,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       };
 
       if (!device.id) {
-        Alert.alert('❌ No Device', 'Bluetooth device not configured');
+        Alert.alert('No Device', 'Bluetooth device not configured');
         return;
       }
 
-      Alert.alert('⏳ Test Print', 'Sending minimal test sequence to printer...');
+      Alert.alert('Test Print', 'Sending minimal test sequence to printer...');
 
       // Import BleManager
       let BleManager: any = null;
@@ -1594,18 +1658,30 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       // Use 30 second timeout for authentication and test print
       await thermalPrinterService.sendTestPrint(manager, device.id, 30000);
       
-      Alert.alert('✓ Test Sent', 'Check printer - it should print "TEST" if working');
+      Alert.alert('Test Sent', 'Check printer - it should print "TEST" if working');
       setShowSessionGearMenu(false);
     } catch (err: any) {
       console.error('[TestPrint] Error:', err);
-      Alert.alert('❌ Test Failed', err.message || 'Could not send test print');
+      Alert.alert('Test Failed', err.message || 'Could not send test print');
     }
   };
 
-  const splitBill = () => {
+  // Split bill state
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitCount, setSplitCount] = useState(2);
+  const [splitBillData, setSplitBillData] = useState<any>(null);
+
+  const splitBill = async () => {
     if (!selectedSession) return;
-    Alert.alert('Split Bill', 'Split bill functionality - Coming soon');
     setShowSessionGearMenu(false);
+    try {
+      const response = await apiClient.get(`/api/sessions/${selectedSession.id}/bill`);
+      setSplitBillData(response.data);
+      setSplitCount(2);
+      setShowSplitModal(true);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to load bill for splitting');
+    }
   };
 
   const calculateTotal = () => {
@@ -1620,6 +1696,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     return { subtotal: total, serviceChargeAmount: chargeAmount, total: total + chargeAmount };
   };
 
+  const isTablet = (Platform as any).isPad;
+  const totals = calculateTotal();
+  const screenWidth = Dimensions.get('window').width;
+  const sidebarWidth = 130;
+  const contentWidth = screenWidth - sidebarWidth - 24; // 24 for padding
+  const tableNumColumns = isTablet ? (screenWidth > 1100 ? 5 : 4) : (screenWidth > 500 ? 3 : 2);
+  const tableCardMaxWidth = Math.floor(contentWidth / tableNumColumns) - 12; // 12 for gap
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -1628,8 +1712,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     );
   }
 
-  if (currentView === 'sessionDetail' && selectedSession && selectedTable) {
-    const totals = calculateTotal();
+  if (currentView === 'sessionDetail' && selectedSession && selectedTable && !isTablet) {
 
     return (
       <View style={styles.container}>
@@ -1638,11 +1721,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {selectedTable.name} • {selectedSession.pax} pax
+            {selectedTable.name} • {selectedSession.pax} pax{selectedSession.order_id ? ` • Order #${selectedSession.order_id}` : ''}
           </Text>
           <View style={{ position: 'relative' }}>
             <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
-              <Text style={styles.gearIcon}>⚙️</Text>
+              <Text style={styles.gearIcon}><Ionicons name="settings-outline" size={20} color="#374151" /></Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1660,43 +1743,43 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 style={styles.gearMenuItem}
                 onPress={() => changePax(selectedSession.id, selectedSession.pax)}
               >
-                <Text style={styles.gearMenuItemText}>👥 Change Pax</Text>
+                <Text style={styles.gearMenuItemText}>{t('admin.change-pax')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={moveTable}
               >
-                <Text style={styles.gearMenuItemText}>↔️ Move Table</Text>
+                <Text style={styles.gearMenuItemText}>{t('admin.move-table')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={orderForTable}
               >
-                <Text style={styles.gearMenuItemText}>📱 Order for Table</Text>
+                <Text style={styles.gearMenuItemText}>{t('admin.order-for-table')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={printQR}
               >
-                <Text style={styles.gearMenuItemText}>📋 Print QR</Text>
+                <Text style={styles.gearMenuItemText}>{t('admin.print-qr')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={printBillWithPrinterSelection}
               >
-                <Text style={styles.gearMenuItemText}>🖨️ Print Bill</Text>
+                <Text style={styles.gearMenuItemText}>{t('admin.print-bill')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]}
                 onPress={testPrintBill}
               >
-                <Text style={styles.gearMenuItemText}>🧪 Test Print</Text>
+                <Text style={styles.gearMenuItemText}>{t('admin.test-print')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
                 onPress={splitBill}
               >
-                <Text style={styles.gearMenuItemText}>💵 Split Bill</Text>
+                <Text style={styles.gearMenuItemText}>{t('admin.split-bill')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.gearMenuItem, styles.gearMenuItemDelete]}
@@ -1705,16 +1788,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   setShowSessionGearMenu(false);
                 }}
               >
-                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>🗑️ End Session</Text>
+                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>End Order</Text>
               </TouchableOpacity>
             </View>
           </>
         )}
 
         <ScrollView style={styles.content}>
-          <Text style={styles.sectionTitle}>Orders</Text>
+          <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
           {sessionOrders.length === 0 ? (
-            <Text style={styles.emptyText}>No orders</Text>
+            <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
           ) : (
             sessionOrders.map((order, idx) => {
               console.log(`[OrderRender] Order ${idx}:`, order);
@@ -1762,17 +1845,17 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
           <View style={styles.totalsSection}>
             <View style={styles.totalRow}>
-              <Text>Subtotal</Text>
+              <Text>{t('admin.subtotal')}</Text>
               <Text>{formatPrice(totals.subtotal)}</Text>
             </View>
             {serviceCharge > 0 && (
               <View style={styles.totalRow}>
-                <Text>Service Charge ({serviceCharge}%)</Text>
+                <Text>{t('admin.service-charge')} ({serviceCharge}%)</Text>
                 <Text>{formatPrice(totals.serviceChargeAmount)}</Text>
               </View>
             )}
             <View style={[styles.totalRow, styles.grandTotal]}>
-              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalLabel}>{t('admin.total')}</Text>
               <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
             </View>
           </View>
@@ -1781,25 +1864,61 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.btn, styles.btnPrimary]}
-            onPress={() => setShowCloseBillModal(true)}
+            onPress={async () => {
+              setShowCloseBillModal(true);
+              try {
+                const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
+                setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
+              } catch (e) {
+                setCoupons([]);
+              }
+            }}
           >
-            <Text style={styles.btnText}>Close Bill</Text>
+            <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
             onPress={() => endSession(selectedSession.id)}
           >
-            <Text style={styles.btnText}>End Session</Text>
+            <Text style={styles.btnText}>End Order</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Close Bill Modal */}
-        <Modal visible={showCloseBillModal} animationType="fade" transparent>
+        {/* Close Bill Modal */}}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Close Bill</Text>
+              <Text style={styles.modalTitle}>{t('admin.close-bill')}</Text>
 
-              <Text style={styles.label}>Payment Method</Text>
+              {/* Bill Summary */}
+              {sessionBill && (
+                <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ color: '#666' }}>Subtotal</Text>
+                    <Text>${((sessionBill.subtotal_cents || 0) / 100).toFixed(2)}</Text>
+                  </View>
+                  {(sessionBill.service_charge_cents || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ color: '#666' }}>Service Charge</Text>
+                      <Text>${(sessionBill.service_charge_cents! / 100).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {getDiscountCents() > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ color: '#e74c3c' }}>Discount</Text>
+                      <Text style={{ color: '#e74c3c' }}>-${(getDiscountCents() / 100).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
+                    <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                    <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
+                      ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.label}>{t('admin.payment-method')}</Text>
               <View style={styles.selectGroup}>
                 {['cash', 'card', 'online'].map((method) => (
                   <TouchableOpacity
@@ -1822,16 +1941,51 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 ))}
               </View>
 
-              <Text style={styles.label}>Discount (cents)</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={discountAmount}
-                onChangeText={setDiscountAmount}
-                placeholder="0"
-              />
+              {/* Coupon Picker */}
+              <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
+              <TouchableOpacity
+                style={[styles.input, { justifyContent: 'center' }]}
+                onPress={() => setShowCouponPicker(!showCouponPicker)}
+              >
+                <Text style={{ color: selectedCouponId ? '#333' : '#999' }}>
+                  {selectedCouponId
+                    ? (() => {
+                        const c = coupons.find(cp => cp.id === selectedCouponId);
+                        return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : 'No discount';
+                      })()
+                    : 'No discount'}
+                </Text>
+              </TouchableOpacity>
+              {showCouponPicker && (
+                <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginTop: -8, marginBottom: 8, maxHeight: 160 }}>
+                  <ScrollView nestedScrollEnabled>
+                    <TouchableOpacity
+                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }}
+                      onPress={() => { setSelectedCouponId(null); setShowCouponPicker(false); }}
+                    >
+                      <Text style={{ color: '#666' }}>No discount</Text>
+                    </TouchableOpacity>
+                    {coupons.map(c => (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: selectedCouponId === c.id ? '#e8f4fd' : '#fff' }}
+                        onPress={() => { setSelectedCouponId(c.id); setShowCouponPicker(false); }}
+                      >
+                        <Text style={{ fontWeight: '600' }}>{c.code}</Text>
+                        <Text style={{ color: '#666', fontSize: 12 }}>
+                          {c.discount_type === 'percentage' ? `${c.discount_value}% off` : `$${(c.discount_value / 100).toFixed(2)} off`}
+                          {c.description ? ` — ${c.description}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    {coupons.length === 0 && (
+                      <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>No coupons available</Text>
+                    )}
+                  </ScrollView>
+                </View>
+              )}
 
-              <Text style={styles.label}>Reason</Text>
+              <Text style={styles.label}>{t('admin.notes')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 multiline
@@ -1845,13 +1999,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowCloseBillModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={closeBill}
                 >
-                  <Text style={styles.btnText}>Close Bill</Text>
+                  <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1859,15 +2013,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </Modal>
 
         {/* Change Pax Modal */}
-        <Modal visible={showChangePaxModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showChangePaxModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Change Pax</Text>
+              <Text style={styles.modalTitle}>{t('admin.change-pax')}</Text>
 
               <Text style={styles.label}>New Pax Count</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
+                inputAccessoryViewID="numpadDone"
                 value={newPaxValue}
                 onChangeText={setNewPaxValue}
                 placeholder="1"
@@ -1892,7 +2047,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </Modal>
 
         {/* Move Table Modal */}
-        <Modal visible={showMoveTableModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showMoveTableModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Move to Table</Text>
@@ -1934,7 +2089,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </Modal>
 
         {/* Print QR Code Modal */}
-        <Modal visible={showQRModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showQRModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Print QR Code</Text>
@@ -1985,7 +2140,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                         );
                       }}
                     >
-                      <Text style={styles.btnText}>✓ Done</Text>
+                      <Text style={styles.btnText}>Done</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -2016,7 +2171,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
     );
   }
 
-  if (currentView === 'sessionList' && selectedTable) {
+  if (currentView === 'sessionList' && selectedTable && !isTablet) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -2027,9 +2182,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
         </View>
 
         <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          <Text style={styles.sectionTitle}>Active Sessions</Text>
+          <Text style={styles.sectionTitle}>Active Orders</Text>
           {selectedTable.sessions.length === 0 ? (
-            <Text style={styles.emptyText}>No active sessions</Text>
+            <Text style={styles.emptyText}>No active orders</Text>
           ) : (
             selectedTable.sessions.map((session, idx) => (
               <TouchableOpacity
@@ -2039,8 +2194,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               >
                 <View>
                   <Text style={styles.sessionTitle}>
-                    {selectedTable.name}
-                    {String.fromCharCode(65 + idx)}
+                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.order_id ? `, Order #${session.order_id}` : ''}
                   </Text>
                   <Text style={styles.sessionInfo}>
                     {session.pax} pax • Dining {formatDuration(session.started_at)}
@@ -2053,12 +2207,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
 
           {selectedTable.sessions.length < selectedTable.seat_count && (
             <>
-              <Text style={styles.sectionTitle}>Options</Text>
+              <Text style={styles.sectionTitle}>{t('admin.options')}</Text>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={() => setShowSessionModal(true)}
               >
-                <Text style={styles.btnText}>Start New Session</Text>
+                <Text style={styles.btnText}>New Order</Text>
               </TouchableOpacity>
             </>
           )}
@@ -2069,23 +2223,25 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
               setShowBookingModal(true);
             }}
           >
-            <Text style={styles.btnText}>Book Table</Text>
+            <Text style={styles.btnText}>{t('admin.book-table')}</Text>
           </TouchableOpacity>
         </ScrollView>
 
         {/* Session Modal */}
-        <Modal visible={showSessionModal} animationType="fade" transparent onDismiss={() => Keyboard.dismiss()}>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSessionModal} animationType="fade" transparent onDismiss={() => Keyboard.dismiss()}>
           <Pressable style={styles.modalOverlay} onPress={() => {
             Keyboard.dismiss();
             setShowSessionModal(false);
           }}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ justifyContent: 'center', flex: 1 }}>
             <Pressable style={styles.modalContent} onPress={() => {}}>
-              <Text style={styles.modalTitle}>Start New Session</Text>
+              <Text style={styles.modalTitle}>New Order</Text>
 
-              <Text style={styles.label}>Number of Guests</Text>
+              <Text style={styles.label}>{t('admin.number-of-guests')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
+                inputAccessoryViewID="numpadDone"
                 value={sessionPax}
                 onChangeText={setSessionPax}
                 placeholder="1"
@@ -2099,26 +2255,27 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                     setShowSessionModal(false);
                   }}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={startSession}
                 >
-                  <Text style={styles.btnText}>Start Session</Text>
+                  <Text style={styles.btnText}>Start Order</Text>
                 </TouchableOpacity>
               </View>
             </Pressable>
+            </KeyboardAvoidingView>
           </Pressable>
         </Modal>
 
         {/* Booking Modal */}
-        <Modal visible={showBookingModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalTitle}>Book Table</Text>
+              <Text style={styles.modalTitle}>{t('admin.book-table')}</Text>
 
-              <Text style={styles.label}>Guest Name</Text>
+              <Text style={styles.label}>{t('admin.guest-name')}</Text>
               <TextInput
                 style={styles.input}
                 value={guestName}
@@ -2126,7 +2283,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 placeholder="John Smith"
               />
 
-              <Text style={styles.label}>Phone</Text>
+              <Text style={styles.label}>{t('admin.phone')}</Text>
               <TextInput
                 style={styles.input}
                 value={guestPhone}
@@ -2135,7 +2292,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 keyboardType="phone-pad"
               />
 
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>{t('admin.email')}</Text>
               <TextInput
                 style={styles.input}
                 value={guestEmail}
@@ -2144,16 +2301,17 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                 keyboardType="email-address"
               />
 
-              <Text style={styles.label}>Guests</Text>
+              <Text style={styles.label}>{t('admin.guests')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
+                inputAccessoryViewID="numpadDone"
                 value={bookingPax}
                 onChangeText={setBookingPax}
                 placeholder="2"
               />
 
-              <Text style={styles.label}>Reservation Time</Text>
+              <Text style={styles.label}>{t('admin.reservation-time')}</Text>
               <TextInput
                 style={styles.input}
                 value={bookingTime}
@@ -2166,13 +2324,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowBookingModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={bookTable}
                 >
-                  <Text style={styles.btnText}>Book Table</Text>
+                  <Text style={styles.btnText}>{t('admin.book-table')}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -2183,199 +2341,545 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
   }
 
   return (
-    <View style={styles.container}>
-      {/* Category Bar Wrapper - Separate Context */}
-      <View style={styles.categoryBarWrapper}>
-        <ScrollView
-          horizontal
-          scrollEnabled={true}
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryScroll}
-          contentContainerStyle={styles.categoryContent}
-        >
-          {/* Add Category Button - Visible in Edit Mode */}
-          {isEditMode && (
-            <TouchableOpacity
-              style={[styles.categoryBtn, styles.categoryBtnAdd]}
-              onPress={() => setShowCategoryModal(true)}
-            >
-              <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
-                + Add
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {categories.map((cat) => (
-            <View key={cat.id} style={{ position: 'relative' }}>
-              <TouchableOpacity
-                style={[
-                  styles.categoryBtn,
-                  selectedCategory === cat.id && styles.categoryBtnActive,
-                  isEditMode && selectedCategoryForEditControls === cat.id && styles.categoryBtnSelected,
-                ]}
-                onPress={() => {
-                  // In edit mode, toggle controls visibility for this category
-                  if (isEditMode) {
-                    if (selectedCategoryForEditControls === cat.id) {
-                      // Clicking same category again toggles off
-                      setSelectedCategoryForEditControls(null);
-                    } else {
-                      // Clicking different category shows its controls
-                      setSelectedCategoryForEditControls(cat.id);
-                    }
-                  } else {
-                    // Normal mode: just switch category
-                    setSelectedCategory(cat.id);
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.categoryBtnText,
-                    selectedCategory === cat.id && styles.categoryBtnTextActive,
-                  ]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {cat.key || cat.name || `Cat ${cat.id}`}
-                </Text>
-              </TouchableOpacity>
-              {isEditMode && selectedCategoryForEditControls === cat.id && (
-                <View style={styles.categoryActionButtons}>
-                  <TouchableOpacity
-                    style={styles.categoryActionBtn}
-                    onPress={() => {
-                      setEditingCategoryId(cat.id);
-                      setEditingCategoryName(cat.name || cat.key || '');
-                      setShowEditCategoryModal(true);
-                    }}
-                  >
-                    <Text style={styles.categoryActionBtnText}>✏️</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.categoryActionBtn, styles.categoryActionBtnDelete]}
-                    onPress={() => deleteCategory(cat.id, cat.name || cat.key || `Category ${cat.id}`)}
-                  >
-                    <Text style={styles.categoryActionBtnText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Tables Grid Wrapper - Separate Context */}
-      <View style={styles.tablesGridWrapper}>
-        <FlatList
-          data={isEditMode && selectedCategory 
-            ? [...filteredTables, { id: 'add-table', name: '+ Add Table', isAddButton: true }]
-            : filteredTables
-          }
-          keyExtractor={(item: any) => (item.id === 'add-table' ? 'add-table' : item.id.toString())}
-          renderItem={({ item: tableOrAdd }: any) => {
-            if (tableOrAdd.isAddButton) {
-              return (
-                <View style={styles.tableCardWrapper}>
-                  <TouchableOpacity
-                    style={[styles.tableCard, { backgroundColor: '#e8e8e8' }]}
-                    onPress={() => setShowTableModal(true)}
-                  >
-                    <View style={styles.tableCardContent}>
-                      <Text style={[styles.tableCardName, { color: '#666' }]}>
-                        + Add Table
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-            const table = tableOrAdd as Table;
-            return (
-          <View style={styles.tableCardWrapper}>
-            <TouchableOpacity
-              style={[
-                styles.tableCard,
-                { backgroundColor: getTableCardColor(table) },
-                isEditMode && selectedTableForEditControls === table.id && styles.tableCardSelected,
-              ]}
-              onPress={() => {
-                if (isEditMode) {
-                  // In edit mode: only toggle edit controls visibility, don't open session panel
-                  setSelectedTableForEditControls(selectedTableForEditControls === table.id ? null : table.id);
-                } else {
-                  // Normal mode: open session panel
-                  handleTableClick(table);
-                }
-              }}
-            >
-              <View style={styles.tableCardContent}>
-                <Text style={[styles.tableCardName, getTableTextColor(getTableCardColor(table))]}>
-                  {table.name}
-                </Text>
-                {table.sessions.length > 0 && (
-                  <Text style={[{ fontSize: 12, marginTop: 6 }, getTableTextColor(getTableCardColor(table))]}>
-                    {table.sessions.length} active • {table.sessions[0].pax} pax
-                  </Text>
-                )}
-                {table.sessions.length === 0 && !table.reserved && (
-                  <Text style={[{ fontSize: 12, marginTop: 6 }, getTableTextColor(getTableCardColor(table))]}>
-                    ○ Available
-                  </Text>
-                )}
-              </View>
-            </TouchableOpacity>
-            {isEditMode && selectedTableForEditControls === table.id && (
-              <View style={styles.tableActionButtonsContainer}>
-                {/* Edit Table Button */}
-                <TouchableOpacity
-                  style={styles.tableActionBtn}
-                  onPress={() => {
-                    setEditingTableId(table.id);
-                    setEditingTableName(table.name);
-                    setEditingTableSeats(table.seat_count.toString());
-                    setShowEditTableModal(true);
-                  }}
-                >
-                  <Text style={styles.tableActionBtnText}>✏️</Text>
-                </TouchableOpacity>
-                {/* Change Pax/Seat Count Button - Always visible */}
-                <TouchableOpacity
-                  style={styles.tableActionBtn}
-                  onPress={() => {
-                    setEditingTablePaxId(table.id);
-                    setEditingPaxValue(table.seat_count.toString());
-                    setShowEditPaxModal(true);
-                  }}
-                >
-                  <Text style={styles.tableActionBtnText}>👥</Text>
-                </TouchableOpacity>
-                {/* Delete Table Button */}
-                <TouchableOpacity
-                  style={[styles.tableActionBtn, styles.tableActionBtnDelete]}
-                  onPress={() => deleteTable(table.id, table.name)}
-                >
-                  <Text style={styles.tableActionBtnText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-            );
-          }}
-        numColumns={3}
-        columnWrapperStyle={styles.gridRow}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No tables in this category</Text>
-          </View>
-        }
+    <View style={[styles.container, isTablet && currentView !== 'grid' ? { flexDirection: 'row' } : {}]}>
+      {/* Grid: Category Bar + Tables (wrapped for iPad split layout) */}
+      <View style={{ flex: 1 }}>
+      {/* Tables grouped by category */}
+      <ScrollView
+        style={styles.tablesGridWrapper}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      />
-      </View>
+      >
+        {/* Edit mode: Add Category button */}
+        {isEditMode && (
+          <TouchableOpacity
+            style={[styles.categoryBtn, styles.categoryBtnAdd, { alignSelf: 'flex-start', marginHorizontal: 12, marginTop: 8 }]}
+            onPress={() => setShowCategoryModal(true)}
+          >
+            <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>+ Add Category</Text>
+          </TouchableOpacity>
+        )}
+
+        {tableSections.map((section) => {
+          const sectionTables = section.tables;
+          if (sectionTables.length === 0 && !isEditMode) return null;
+          const dataForGrid = isEditMode
+            ? [...sectionTables, { id: 'add-table', name: '+ Add Table', isAddButton: true, category_id: section.category.id }]
+            : sectionTables;
+          const rows = chunkArray(dataForGrid, tableNumColumns);
+
+          return (
+            <View key={section.category.id} style={styles.tableSectionContainer}>
+              {/* Section Header */}
+              <View style={styles.tableSectionHeader}>
+                <Text style={styles.tableSectionTitle}>{section.category.key || section.category.name || `Category ${section.category.id}`}</Text>
+                {isEditMode && (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={styles.categoryActionBtn}
+                      onPress={() => {
+                        setEditingCategoryId(section.category.id);
+                        setEditingCategoryName(section.category.name || section.category.key || '');
+                        setShowEditCategoryModal(true);
+                      }}
+                    >
+                      <Text style={styles.categoryActionBtnText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.categoryActionBtn, styles.categoryActionBtnDelete]}
+                      onPress={() => deleteCategory(section.category.id, section.category.name || section.category.key || `Category ${section.category.id}`)}
+                    >
+                      <Text style={styles.categoryActionBtnText}>Del</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {/* Table cards grid */}
+              {rows.map((row, rowIdx) => (
+                <View key={rowIdx} style={styles.gridRow}>
+                  {row.map((tableOrAdd: any) => {
+                    if (tableOrAdd.isAddButton) {
+                      return (
+                        <View key="add-table" style={[styles.tableCardWrapper, { maxWidth: tableCardMaxWidth }]}>
+                          <TouchableOpacity
+                            style={[styles.tableCard, styles.tableAddCard]}
+                            onPress={() => {
+                              setSelectedCategory(section.category.id);
+                              setShowTableModal(true);
+                            }}
+                          >
+                            <Text style={styles.tableAddIcon}>+</Text>
+                            <Text style={styles.tableAddLabel}>Add Table</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    }
+                    const table = tableOrAdd as Table;
+                    const cardColor = getTableCardColor(table);
+                    const textColor = getTableTextColor(cardColor);
+                    const isEmpty = table.sessions.length === 0 && !table.reserved;
+                    return (
+                  <View key={table.id} style={[styles.tableCardWrapper, { maxWidth: tableCardMaxWidth }]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.tableCard,
+                        { backgroundColor: cardColor, borderColor: isEmpty ? '#ddd' : cardColor },
+                        isEditMode && selectedTableForEditControls === table.id && styles.tableCardSelected,
+                      ]}
+                      onPress={() => {
+                        if (isEditMode) {
+                          setSelectedTableForEditControls(selectedTableForEditControls === table.id ? null : table.id);
+                        } else {
+                          handleTableClick(table);
+                        }
+                      }}
+                    >
+                      {table.sessions.length > 0 && (
+                        <Text style={[styles.tableCardSessionsBadge, textColor]}>
+                          ● {table.sessions.length}
+                        </Text>
+                      )}
+                      <View style={[styles.tableCardSeats]}>
+                        <Ionicons name="person" size={12} color={isEmpty ? '#666' : (textColor as any)?.color || '#fff'} />
+                        <Text style={[styles.tableCardSeatsText, textColor]}>
+                          {table.sessions.reduce((sum: number, s: any) => sum + (s.pax || 0), 0)}/{table.seat_count}
+                        </Text>
+                      </View>
+                      <Text style={[styles.tableCardName, textColor]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                        {table.name}
+                      </Text>
+                      <View style={styles.tableCardBottomInfo}>
+                        {table.sessions.length > 0 ? (
+                          <View style={styles.tableCardSessionsList}>
+                            {table.sessions.map((session: any, sIdx: number) => (
+                              <View key={session.id} style={styles.sessionTimeItem}>
+                                <Ionicons name="timer-outline" size={13} color={(textColor as any)?.color || '#fff'} />
+                                <Text style={[styles.sessionTimeText, textColor]}>
+                                  {session.order_id ? `#${session.order_id}` : ''} {formatDuration(session.started_at)}
+                                </Text>
+                                {session.staff_called && (
+                                  <View style={styles.sessionBadgeStaff}>
+                                    <Text style={styles.sessionBadgeStaffText}>STAFF</Text>
+                                  </View>
+                                )}
+                                {session.bill_closure_requested && (
+                                  <View style={styles.sessionBadgeBill}>
+                                    <Text style={styles.sessionBadgeBillText}>BILL</Text>
+                                  </View>
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        ) : table.reserved ? (
+                          <Text style={[styles.tableCardAvailableText, { color: '#ffc107' }]}>Reserved</Text>
+                        ) : (
+                          <Text style={[styles.tableCardAvailableText, textColor]}>Available</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                    {isEditMode && selectedTableForEditControls === table.id && (
+                      <View style={styles.tableActionButtonsContainer}>
+                        <TouchableOpacity
+                          style={styles.tableActionBtn}
+                          onPress={() => {
+                            setEditingTableId(table.id);
+                            setEditingTableName(table.name);
+                            setEditingTableSeats(table.seat_count.toString());
+                            setShowEditTableModal(true);
+                          }}
+                        >
+                          <Text style={styles.tableActionBtnText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.tableActionBtn}
+                          onPress={() => {
+                            setEditingTablePaxId(table.id);
+                            setEditingPaxValue(table.seat_count.toString());
+                            setShowEditPaxModal(true);
+                          }}
+                        >
+                          <Text style={styles.tableActionBtnText}>Pax</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.tableActionBtn, styles.tableActionBtnDelete]}
+                          onPress={() => deleteTable(table.id, table.name)}
+                        >
+                          <Text style={styles.tableActionBtnText}>Del</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                    );
+                  })}
+                  {/* Fill remaining columns with empty spacers */}
+                  {row.length < tableNumColumns && Array.from({ length: tableNumColumns - row.length }).map((_, i) => (
+                    <View key={`spacer-${i}`} style={[styles.tableCardWrapper, { maxWidth: tableCardMaxWidth }]} />
+                  ))}
+                </View>
+              ))}
+            </View>
+          );
+        })}
+
+        {tableSections.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>{t('admin.no-tables')}</Text>
+          </View>
+        )}
+      </ScrollView>
+      </View>{/* end flex:1 grid wrapper */}
+
+      {/* iPad: Session List Side Panel */}
+      {isTablet && currentView === 'sessionList' && selectedTable && (
+        <View style={styles.sessionSidePanel}>
+          <View style={styles.sessionSidePanelHeader}>
+            <Text style={styles.sessionSidePanelTitle}>{selectedTable.name}</Text>
+            <TouchableOpacity onPress={() => setCurrentView('grid')}>
+              <Ionicons name="close" size={22} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+            <Text style={styles.sectionTitle}>Active Orders</Text>
+            {selectedTable.sessions.length === 0 ? (
+              <Text style={styles.emptyText}>No active orders</Text>
+            ) : (
+              selectedTable.sessions.map((session, idx) => (
+                <TouchableOpacity key={session.id} style={styles.sessionCard} onPress={() => handleSessionClick(session)}>
+                  <View>
+                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.order_id ? `, Order #${session.order_id}` : ''}</Text>
+                    <Text style={styles.sessionInfo}>{session.pax} pax • Dining {formatDuration(session.started_at)}</Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </TouchableOpacity>
+              ))
+            )}
+            {selectedTable.sessions.length < selectedTable.seat_count && (
+              <>
+                <Text style={styles.sectionTitle}>{t('admin.options')}</Text>
+                <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => setShowSessionModal(true)}>
+                  <Text style={styles.btnText}>New Order</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowBookingModal(true)}>
+              <Text style={styles.btnText}>{t('admin.book-table')}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSessionModal} animationType="fade" transparent onDismiss={() => Keyboard.dismiss()}>
+            <Pressable style={styles.modalOverlay} onPress={() => { Keyboard.dismiss(); setShowSessionModal(false); }}>
+              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ justifyContent: 'center', flex: 1 }}>
+                <Pressable style={styles.modalContent} onPress={() => {}}>
+                  <Text style={styles.modalTitle}>New Order</Text>
+                  <Text style={styles.label}>{t('admin.number-of-guests')}</Text>
+                  <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={sessionPax} onChangeText={setSessionPax} placeholder="1" />
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { Keyboard.dismiss(); setShowSessionModal(false); }}>
+                      <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={startSession}>
+                      <Text style={styles.btnText}>Start Order</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Pressable>
+              </KeyboardAvoidingView>
+            </Pressable>
+          </Modal>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingModal} animationType="fade" transparent>
+            <View style={styles.modalOverlay}>
+              <ScrollView contentContainerStyle={styles.modalContent}>
+                <Text style={styles.modalTitle}>{t('admin.book-table')}</Text>
+                <Text style={styles.label}>{t('admin.guest-name')}</Text>
+                <TextInput style={styles.input} value={guestName} onChangeText={setGuestName} placeholder="John Smith" />
+                <Text style={styles.label}>{t('admin.phone')}</Text>
+                <TextInput style={styles.input} value={guestPhone} onChangeText={setGuestPhone} placeholder="+1 (555) 123-4567" keyboardType="phone-pad" />
+                <Text style={styles.label}>{t('admin.email')}</Text>
+                <TextInput style={styles.input} value={guestEmail} onChangeText={setGuestEmail} placeholder="john@example.com" keyboardType="email-address" />
+                <Text style={styles.label}>{t('admin.guests')}</Text>
+                <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={bookingPax} onChangeText={setBookingPax} placeholder="2" />
+                <Text style={styles.label}>{t('admin.reservation-time')}</Text>
+                <TextInput style={styles.input} value={bookingTime} onChangeText={setBookingTime} placeholder="18:00" />
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowBookingModal(false)}>
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={bookTable}>
+                    <Text style={styles.btnText}>{t('admin.book-table')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </Modal>
+        </View>
+      )}
+
+      {/* iPad: Session Detail Side Panel */}
+      {isTablet && currentView === 'sessionDetail' && selectedSession && selectedTable && (
+        <View style={styles.sessionSidePanel}>
+          <View style={styles.sessionSidePanelHeader}>
+            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{selectedSession.order_id ? ` • Order #${selectedSession.order_id}` : ''}</Text>
+            <TouchableOpacity onPress={() => { setCurrentView('grid'); setSelectedSession(null); }}>
+              <Ionicons name="close" size={22} color="#374151" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
+              <Ionicons name="settings-outline" size={20} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          {showSessionGearMenu && (
+            <>
+              <Pressable style={styles.menuOverlay} onPress={() => setShowSessionGearMenu(false)} />
+              <View style={styles.gearMenuContainer}>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={() => changePax(selectedSession.id, selectedSession.pax)}>
+                  <Text style={styles.gearMenuItemText}>{t('admin.change-pax')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={moveTable}>
+                  <Text style={styles.gearMenuItemText}>{t('admin.move-table')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={orderForTable}>
+                  <Text style={styles.gearMenuItemText}>{t('admin.order-for-table')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={printQR}>
+                  <Text style={styles.gearMenuItemText}>{t('admin.print-qr')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={printBillWithPrinterSelection}>
+                  <Text style={styles.gearMenuItemText}>{t('admin.print-bill')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]} onPress={testPrintBill}>
+                  <Text style={styles.gearMenuItemText}>{t('admin.test-print')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={splitBill}>
+                  <Text style={styles.gearMenuItemText}>{t('admin.split-bill')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.gearMenuItem, styles.gearMenuItemDelete]} onPress={() => { endSession(selectedSession.id); setShowSessionGearMenu(false); }}>
+                  <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>End Order</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+          <ScrollView style={styles.content}>
+            <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
+            {sessionOrders.length === 0 ? (
+              <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
+            ) : (
+              sessionOrders.map((order, idx) => (
+                <View key={idx} style={styles.orderCard}>
+                  <Text style={styles.orderTitle}>Order #{order.order_id || order.id}</Text>
+                  {order.items && order.items.length > 0 ? (
+                    order.items.map((item, itemIdx) => (
+                      <View key={itemIdx}>
+                        <View style={styles.orderItem}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.itemName}>{item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}</Text>
+                            <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
+                            {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
+                          </View>
+                          <Text style={styles.itemPrice}>{formatPrice((item.item_total_cents || item.unit_price_cents || item.price_cents || 0))}</Text>
+                        </View>
+                        {item.addons && item.addons.length > 0 && (
+                          <View style={{ paddingLeft: 12, paddingTop: 4, paddingBottom: 4 }}>
+                            {item.addons.map((addon, addonIdx) => (
+                              <View key={addonIdx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
+                                <Text style={[styles.itemStatus, { color: '#999', fontStyle: 'italic', flex: 1 }]}>+ {addon.menu_item_name || addon.name || 'Addon'} x{addon.quantity}</Text>
+                                <Text style={[styles.itemStatus, { color: '#666', marginLeft: 8 }]}>{formatPrice((addon.item_total_cents || 0))}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.itemStatus}>No items in order</Text>
+                  )}
+                </View>
+              ))
+            )}
+            <View style={styles.totalsSection}>
+              <View style={styles.totalRow}>
+                <Text>{t('admin.subtotal')}</Text>
+                <Text>{formatPrice(totals.subtotal)}</Text>
+              </View>
+              {serviceCharge > 0 && (
+                <View style={styles.totalRow}>
+                  <Text>{t('admin.service-charge')} ({serviceCharge}%)</Text>
+                  <Text>{formatPrice(totals.serviceChargeAmount)}</Text>
+                </View>
+              )}
+              <View style={[styles.totalRow, styles.grandTotal]}>
+                <Text style={styles.totalLabel}>{t('admin.total')}</Text>
+                <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
+              </View>
+            </View>
+          </ScrollView>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary]}
+              onPress={async () => {
+                setShowCloseBillModal(true);
+                try {
+                  const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
+                  setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
+                } catch (e) { setCoupons([]); }
+              }}
+            >
+              <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => endSession(selectedSession.id)}>
+              <Text style={styles.btnText}>End Order</Text>
+            </TouchableOpacity>
+          </View>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>{t('admin.close-bill')}</Text>
+                {sessionBill && (
+                  <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ color: '#666' }}>Subtotal</Text>
+                      <Text>${((sessionBill.subtotal_cents || 0) / 100).toFixed(2)}</Text>
+                    </View>
+                    {(sessionBill.service_charge_cents || 0) > 0 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ color: '#666' }}>Service Charge</Text>
+                        <Text>${(sessionBill.service_charge_cents! / 100).toFixed(2)}</Text>
+                      </View>
+                    )}
+                    {getDiscountCents() > 0 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ color: '#e74c3c' }}>Discount</Text>
+                        <Text style={{ color: '#e74c3c' }}>-${(getDiscountCents() / 100).toFixed(2)}</Text>
+                      </View>
+                    )}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
+                      <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                      <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
+                        ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                <Text style={styles.label}>{t('admin.payment-method')}</Text>
+                <View style={styles.selectGroup}>
+                  {['cash', 'card', 'online'].map((method) => (
+                    <TouchableOpacity key={method} style={[styles.selectOption, paymentMethod === method && styles.selectOptionActive]} onPress={() => setPaymentMethod(method)}>
+                      <Text style={[styles.selectOptionText, paymentMethod === method && styles.selectOptionTextActive]}>{method.charAt(0).toUpperCase() + method.slice(1)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
+                <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowCouponPicker(!showCouponPicker)}>
+                  <Text style={{ color: selectedCouponId ? '#333' : '#999' }}>
+                    {selectedCouponId ? (() => { const c = coupons.find(cp => cp.id === selectedCouponId); return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : 'No discount'; })() : 'No discount'}
+                  </Text>
+                </TouchableOpacity>
+                {showCouponPicker && (
+                  <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginTop: -8, marginBottom: 8, maxHeight: 160 }}>
+                    <ScrollView nestedScrollEnabled>
+                      <TouchableOpacity style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }} onPress={() => { setSelectedCouponId(null); setShowCouponPicker(false); }}>
+                        <Text style={{ color: '#666' }}>No discount</Text>
+                      </TouchableOpacity>
+                      {coupons.map(c => (
+                        <TouchableOpacity key={c.id} style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: selectedCouponId === c.id ? '#e8f4fd' : '#fff' }} onPress={() => { setSelectedCouponId(c.id); setShowCouponPicker(false); }}>
+                          <Text style={{ fontWeight: '600' }}>{c.code}</Text>
+                          <Text style={{ color: '#666', fontSize: 12 }}>{c.discount_type === 'percentage' ? `${c.discount_value}% off` : `$${(c.discount_value / 100).toFixed(2)} off`}{c.description ? ` — ${c.description}` : ''}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      {coupons.length === 0 && <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>No coupons available</Text>}
+                    </ScrollView>
+                  </View>
+                )}
+                <Text style={styles.label}>{t('admin.notes')}</Text>
+                <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder="Optional notes" />
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowCloseBillModal(false)}>
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={closeBill}>
+                    <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showChangePaxModal} animationType="fade" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>{t('admin.change-pax')}</Text>
+                <Text style={styles.label}>New Pax Count</Text>
+                <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={newPaxValue} onChangeText={setNewPaxValue} placeholder="1" />
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowChangePaxModal(false)}>
+                    <Text style={styles.btnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submitChangePax}>
+                    <Text style={styles.btnText}>Update</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showMoveTableModal} animationType="fade" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Move to Table</Text>
+                <Text style={styles.label}>Select Available Table</Text>
+                <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
+                  {tables.filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id).map((table) => (
+                    <TouchableOpacity key={table.id} style={[styles.tableOption, selectedMoveTable === table.id && styles.tableOptionSelected]} onPress={() => setSelectedMoveTable(table.id)}>
+                      <Text style={styles.tableOptionText}>{table.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowMoveTableModal(false)}>
+                    <Text style={styles.btnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submitMoveTable}>
+                    <Text style={styles.btnText}>Move</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showQRModal} animationType="fade" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Print QR Code</Text>
+                {selectedTable && selectedSession && qrImageUrl ? (
+                  <>
+                    <ScrollView style={{ marginBottom: 16 }}>
+                      <View style={styles.qrHeader}>
+                        <Text style={styles.qrHeaderTable}>{selectedTable.name}</Text>
+                        <Text style={styles.qrHeaderPax}>Party of {selectedSession.pax}</Text>
+                      </View>
+                      <View style={styles.qrImageContainer}>
+                        {qrLoading ? <ActivityIndicator size="large" color="#3b82f6" /> : (
+                          <Image source={{ uri: qrImageUrl }} style={styles.qrImage} resizeMode="contain" onError={() => { Alert.alert('Error', 'Failed to load QR code image'); setShowQRModal(false); }} />
+                        )}
+                      </View>
+                      <View style={styles.qrFooter}><Text style={styles.qrFooterText}>{qrTextAbove}</Text></View>
+                    </ScrollView>
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowQRModal(false)}>
+                        <Text style={styles.btnText}>Close</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => Alert.alert('QR Code Ready', 'The QR code is displayed above. Users can scan it to place orders.', [{ text: 'OK', onPress: () => setShowQRModal(false) }])}>
+                        <Text style={styles.btnText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                    <ActivityIndicator size="large" color="#3b82f6" />
+                  </View>
+                )}
+              </View>
+            </View>
+          </Modal>
+        </View>
+      )}
 
       {/* Category Modal */}
-      <Modal visible={showCategoryModal} animationType="fade" transparent>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCategoryModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Category</Text>
@@ -2408,10 +2912,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Edit Category Modal */}
-      <Modal visible={editingCategoryId !== null} animationType="fade" transparent>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={editingCategoryId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Category</Text>
+            <Text style={styles.modalTitle}>{t('admin.edit-category')}</Text>
 
             <Text style={styles.label}>Category Name</Text>
             <TextInput
@@ -2444,7 +2948,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Table Modal */}
-      <Modal visible={showTableModal} animationType="fade" transparent>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showTableModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Table</Text>
@@ -2461,6 +2965,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
+              inputAccessoryViewID="numpadDone"
               value={tableSeats}
               onChangeText={setTableSeats}
               placeholder="4"
@@ -2485,10 +2990,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Edit Table Modal */}
-      <Modal visible={editingTableId !== null} animationType="fade" transparent>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={editingTableId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Table</Text>
+            <Text style={styles.modalTitle}>{t('admin.edit-table')}</Text>
 
             <Text style={styles.label}>Table Name</Text>
             <TextInput
@@ -2503,6 +3008,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
+              inputAccessoryViewID="numpadDone"
               value={editingTableSeats}
               onChangeText={setEditingTableSeats}
               placeholder="4"
@@ -2531,7 +3037,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
       </Modal>
 
       {/* Edit Table Pax Modal */}
-      <Modal visible={editingTablePaxId !== null} animationType="fade" transparent>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={editingTablePaxId !== null} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Table Capacity</Text>
@@ -2540,6 +3046,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
+              inputAccessoryViewID="numpadDone"
               value={editingPaxValue}
               onChangeText={setEditingPaxValue}
               placeholder="1"
@@ -2607,6 +3114,83 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string }>(({ r
             : 'Document'
         }
       />
+
+      {/* Split Bill Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSplitModal} transparent animationType="fade" onRequestClose={() => setShowSplitModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
+              Split Bill
+            </Text>
+
+            {splitBillData && (
+              <>
+                <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>
+                  Total: ${((splitBillData.total_cents || splitBillData.grand_total_cents || 0) / 100).toFixed(2)}
+                </Text>
+                <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
+                  Service Charge: ${((splitBillData.service_charge_cents || 0) / 100).toFixed(2)}
+                </Text>
+
+                <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600', marginBottom: 8 }}>
+                  Split between:
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <TouchableOpacity
+                    style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                    onPress={() => setSplitCount(Math.max(2, splitCount - 1))}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#374151' }}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#1f2937', width: 50, textAlign: 'center' }}>
+                    {splitCount}
+                  </Text>
+                  <TouchableOpacity
+                    style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                    onPress={() => setSplitCount(Math.min(20, splitCount + 1))}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#374151' }}>+</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 14, color: '#6b7280' }}>people</Text>
+                </View>
+
+                <View style={{
+                  backgroundColor: '#f0fdf4',
+                  borderRadius: 8,
+                  padding: 16,
+                  alignItems: 'center',
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: '#bbf7d0',
+                }}>
+                  <Text style={{ fontSize: 14, color: '#6b7280' }}>Each person pays</Text>
+                  <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#059669' }}>
+                    ${(((splitBillData.total_cents || splitBillData.grand_total_cents || 0) / splitCount) / 100).toFixed(2)}
+                  </Text>
+                </View>
+              </>
+            )}
+
+            <TouchableOpacity
+              style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+              onPress={() => setShowSplitModal(false)}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Done button for iOS number-pad */}
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID="numpadDone">
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', backgroundColor: '#f1f1f1', borderTopWidth: 1, borderTopColor: '#ccc', paddingHorizontal: 12, paddingVertical: 6 }}>
+            <TouchableOpacity onPress={() => Keyboard.dismiss()} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
+      )}
 
     </View>
   );
@@ -2720,6 +3304,45 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  tableSectionContainer: {
+    marginBottom: 8,
+  },
+  tableSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  tableSectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  sessionSidePanel: {
+    width: 380,
+    backgroundColor: '#fff',
+    borderLeftWidth: 1,
+    borderLeftColor: '#e5e7eb',
+    flexDirection: 'column',
+  },
+  sessionSidePanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    gap: 10,
+  },
+  sessionSidePanelTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
+  },
   tablesGridWrapper: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -2739,16 +3362,19 @@ const styles = StyleSheet.create({
   },
   categoryBtn: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: '#f9fafb',
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
     marginHorizontal: 4,
-    height: 44,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   categoryBtnActive: {
     backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
   categoryBtnSelected: {
     borderWidth: 2,
@@ -2758,16 +3384,18 @@ const styles = StyleSheet.create({
   categoryBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#64748b',
   },
   categoryBtnTextActive: {
     color: '#ffffff',
   },
   categoryBtnAdd: {
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#dbeafe',
+    borderColor: '#93c5fd',
+    borderStyle: 'dashed',
   },
   categoryBtnAddText: {
-    color: '#4b5563',
+    color: '#3b82f6',
   },
   categoryActionButtons: {
     position: 'absolute',
@@ -2795,6 +3423,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   gridRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
   },
@@ -2805,24 +3434,126 @@ const styles = StyleSheet.create({
   },
   tableCard: {
     flex: 1,
-    borderRadius: 8,
-    padding: 16,
-    paddingTop: 40,
+    aspectRatio: 1,
+    borderRadius: 12,
+    borderWidth: 2,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-    minHeight: 120,
+    shadowRadius: 4,
+    elevation: 3,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  tableAddCard: {
+    backgroundColor: 'rgba(74, 144, 226, 0.08)',
+    borderStyle: 'dashed',
+    borderColor: '#4a90e2',
+  },
+  tableAddIcon: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#4a90e2',
+  },
+  tableAddLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4a90e2',
+    marginTop: 4,
+    textAlign: 'center',
   },
   tableCardSelected: {
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#3b82f6',
     shadowColor: '#3b82f6',
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
     elevation: 8,
+  },
+  tableCardSessionsBadge: {
+    position: 'absolute',
+    top: 7,
+    left: 8,
+    fontSize: 18,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  tableCardSeats: {
+    position: 'absolute',
+    top: 7,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  tableCardSeatsText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tableCardBottomInfo: {
+    position: 'absolute',
+    bottom: 6,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    maxHeight: 60,
+    overflow: 'hidden',
+  },
+  tableCardSessionsList: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  sessionTimeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginVertical: 1,
+  },
+  sessionTimeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sessionBadgeStaff: {
+    backgroundColor: '#fbbf24',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  sessionBadgeStaffText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#000',
+  },
+  sessionBadgeBill: {
+    backgroundColor: '#f97316',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  sessionBadgeBillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  tableCardStatusBadge: {
+    backgroundColor: '#fbbf24',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tableCardStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#333',
+  },
+  tableCardAvailableText: {
+    fontSize: 11,
+    fontWeight: '600',
+    opacity: 0.85,
   },
   tableEditIconsContainer: {
     position: 'absolute',
@@ -2881,8 +3612,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tableCardName: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '900',
+    textAlign: 'center',
+    paddingHorizontal: 6,
+    lineHeight: 36,
   },
   content: {
     flex: 1,
@@ -3165,13 +3899,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   qrImageContainer: {
-    width: '100%',
-    aspectRatio: 1,
+    width: 250,
+    height: 250,
+    alignSelf: 'center',
     backgroundColor: '#f3f4f6',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 12,
   },
   qrImage: {
     width: '90%',

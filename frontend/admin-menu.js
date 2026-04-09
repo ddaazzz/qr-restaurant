@@ -1356,7 +1356,7 @@ async function deleteVariantFromPanel(variantId) {
   if (!confirm('Delete this variant?')) return;
   
   try {
-    const res = await fetch(`${API}/menu-items/${currentEditingItemId}/variants/${variantId}`, {
+    const res = await fetch(`${API}/variants/${variantId}`, {
       method: 'DELETE'
     });
     
@@ -2129,7 +2129,7 @@ async function updateVariant(itemId, groupId, changes) {
 async function deleteVariant(itemId, groupId) {
   if (!confirm("Delete this variant group?")) return;
 
-  const res = await fetch(`${API}/menu-items/${itemId}/variants/${groupId}`, {
+  const res = await fetch(`${API}/variants/${groupId}`, {
     method: "DELETE"
   });
 

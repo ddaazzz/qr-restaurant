@@ -14,27 +14,60 @@ import {
   ImageBackground,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { useTranslation } from '../contexts/TranslationContext';
+import { apiClient } from '../services/apiClient';
 
-// Asset imports
 const backgroundImage = require('../../assets/background.png');
 const logoImage = require('../../assets/logo.png');
 
-type LoginMode = 'choice' | 'admin' | 'kitchen' | 'staff' | 'scan-qr-staff' | 'scan-qr-kitchen' | 'pin-entry';
+type LoginMode =
+  | 'choice'
+  | 'admin'
+  | 'scan-qr'
+  | 'pin-entry'
+  | 'google-signup';
 
 export const LoginScreen = () => {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<LoginMode>('choice');
+
+  // Admin login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // PIN login
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
-  const [restaurantInput, setRestaurantInput] = useState('');
+  const [restaurantName, setRestaurantName] = useState<string | null>(null);
   const [currentLoginType, setCurrentLoginType] = useState<'staff' | 'kitchen' | null>(null);
-  const [scanned, setScanned] = useState(false);
-  const { login, kitchenLogin, staffLogin } = useAuth();
 
-  // Load saved restaurantId on mount
+  // QR Scanner
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
+  const [manualRid, setManualRid] = useState('');
+
+  // Google signup / onboarding
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [googleId, setGoogleId] = useState<string | undefined>();
+  const [regRestaurantName, setRegRestaurantName] = useState('');
+  const [regAddress, setRegAddress] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regServiceCharge, setRegServiceCharge] = useState('10');
+  const [regLanguage, setRegLanguage] = useState('en');
+  const [regTimezone, setRegTimezone] = useState('Asia/Hong_Kong');
+  const [regLogoUri, setRegLogoUri] = useState<string | null>(null);
+  const [regBgUri, setRegBgUri] = useState<string | null>(null);
+
+  const pinInputRef = useRef<TextInput>(null);
+
+  const { login, kitchenLogin, staffLogin, register, googleLogin } = useAuth();
+
   useEffect(() => {
     loadRestaurantId();
   }, []);
@@ -44,21 +77,38 @@ export const LoginScreen = () => {
       const saved = await SecureStore.getItemAsync('restaurantId');
       if (saved) {
         setRestaurantId(saved);
-        setRestaurantInput(saved);
+        setManualRid(saved);
+        fetchRestaurantName(saved);
       }
     } catch (error) {
       console.error('Failed to load restaurantId:', error);
     }
   };
 
+  const fetchRestaurantName = async (rid: string) => {
+    try {
+      const info = await apiClient.getRestaurantInfo(rid);
+      setRestaurantName(info.name);
+    } catch {
+      setRestaurantName(null);
+    }
+  };
+
+  // ---- QR scan handler ----
   const handleQRScanned = async (data: string) => {
     if (scanned) return;
     setScanned(true);
 
     try {
-      // Parse the QR code URL to extract restaurantId
-      const url = new URL(data);
-      const rid = url.searchParams.get('rid');
+      let rid: string | null = null;
+      try {
+        const url = new URL(data);
+        rid = url.searchParams.get('rid');
+      } catch {
+        if (/^\d+$/.test(data.trim())) {
+          rid = data.trim();
+        }
+      }
 
       if (!rid) {
         Alert.alert('Invalid QR Code', 'Could not extract restaurant ID from QR code');
@@ -66,28 +116,22 @@ export const LoginScreen = () => {
         return;
       }
 
-      // Store the restaurantId
       setRestaurantId(rid);
       await SecureStore.setItemAsync('restaurantId', rid);
-
-      // Move to PIN entry screen
-      if (currentLoginType === 'staff') {
-        setMode('pin-entry');
-      } else if (currentLoginType === 'kitchen') {
-        setMode('pin-entry');
-      }
+      await fetchRestaurantName(rid);
+      setMode('pin-entry');
     } catch (error) {
       Alert.alert('Error', 'Failed to process QR code');
       setScanned(false);
     }
   };
 
+  // ---- Admin login ----
   const handleAdminLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
       return;
     }
-
     setLoading(true);
     try {
       await login(email, password);
@@ -98,47 +142,26 @@ export const LoginScreen = () => {
     }
   };
 
-  const handleKitchenLogin = async () => {
-    if (pin.length !== 6) {
-      Alert.alert('Error', 'PIN must be 6 digits');
+  // ---- PIN handlers ----
+  const handlePINSubmitDirect = async (pinValue: string) => {
+    if (pinValue.length !== 6) return;
+    const rid = restaurantId;
+    if (!rid) {
+      Alert.alert('Error', 'Restaurant ID is required.');
       return;
     }
 
-    if (!restaurantId && !restaurantInput) {
-      Alert.alert('Error', 'Restaurant ID is required. Scan QR code or enter manually.');
-      return;
-    }
-
-    const rid = restaurantId || restaurantInput;
     setLoading(true);
     try {
-      await kitchenLogin(pin, rid);
+      if (currentLoginType === 'kitchen') {
+        await kitchenLogin(pinValue, rid);
+      } else {
+        await staffLogin(pinValue, rid);
+      }
     } catch (error) {
       Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
       setPin('');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStaffLogin = async () => {
-    if (pin.length !== 6) {
-      Alert.alert('Error', 'PIN must be 6 digits');
-      return;
-    }
-
-    if (!restaurantId && !restaurantInput) {
-      Alert.alert('Error', 'Restaurant ID is required. Scan QR code or enter manually.');
-      return;
-    }
-
-    const rid = restaurantId || restaurantInput;
-    setLoading(true);
-    try {
-      await staffLogin(pin, rid);
-    } catch (error) {
-      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
-      setPin('');
+      setTimeout(() => pinInputRef.current?.focus(), 100);
     } finally {
       setLoading(false);
     }
@@ -148,16 +171,93 @@ export const LoginScreen = () => {
     const numericValue = value.replace(/[^0-9]/g, '').slice(0, 6);
     setPin(numericValue);
     if (numericValue.length === 6) {
-      // Auto-submit when 6 digits entered
-      if (currentLoginType === 'kitchen') {
-        setTimeout(() => handleKitchenLogin(), 100);
-      } else if (currentLoginType === 'staff') {
-        setTimeout(() => handleStaffLogin(), 100);
-      }
+      setTimeout(() => handlePINSubmitDirect(numericValue), 150);
     }
   };
 
-  // Login Type Selection Screen
+  // ---- Google sign-in ----
+  const handleGoogleSignIn = () => {
+    Alert.prompt(
+      'Google Sign In',
+      'Enter your Google email address',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: async (inputEmail?: string) => {
+            if (!inputEmail || !inputEmail.includes('@')) {
+              Alert.alert('Error', 'Please enter a valid email');
+              return;
+            }
+            setGoogleEmail(inputEmail);
+            setLoading(true);
+            try {
+              await googleLogin(inputEmail);
+              // If we get here, login succeeded (existing user)
+            } catch {
+              // No account found -> go to onboarding
+              setOnboardingStep(0);
+              setMode('google-signup');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'email-address'
+    );
+  };
+
+  // ---- Registration submit ----
+  const handleRegisterSubmit = async () => {
+    if (!regRestaurantName.trim()) {
+      Alert.alert('Error', 'Restaurant name is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await register({
+        email: googleEmail,
+        google_id: googleId,
+        restaurant_name: regRestaurantName.trim(),
+        address: regAddress.trim() || undefined,
+        phone: regPhone.trim() || undefined,
+        service_charge_percent: parseFloat(regServiceCharge) || 0,
+        language_preference: regLanguage,
+        timezone: regTimezone,
+      });
+
+      // Upload logo/background if selected
+      if (regLogoUri) {
+        try { await apiClient.uploadImage(regLogoUri, 'logo'); } catch (e) { console.warn('Logo upload failed:', e); }
+      }
+      if (regBgUri) {
+        try { await apiClient.uploadImage(regBgUri, 'background'); } catch (e) { console.warn('Background upload failed:', e); }
+      }
+    } catch (error) {
+      Alert.alert('Registration Failed', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickImage = async (type: 'logo' | 'background') => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: type === 'logo' ? [1, 1] : [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      if (type === 'logo') setRegLogoUri(result.assets[0].uri);
+      else setRegBgUri(result.assets[0].uri);
+    }
+  };
+
+  // ===================== CHOICE SCREEN =====================
   if (mode === 'choice') {
     return (
       <ImageBackground
@@ -171,50 +271,59 @@ export const LoginScreen = () => {
         >
           <View style={styles.content}>
             <View style={styles.logoContainer}>
-              <Image
-                source={logoImage}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+              <Image source={logoImage} style={styles.logo} resizeMode="contain" />
             </View>
 
             <View style={styles.buttonContainer}>
               <TouchableOpacity
-                style={[styles.loginTypeButton, styles.adminButton]}
-                onPress={() => {
-                  setMode('admin');
-                  setEmail('');
-                  setPassword('');
-                }}
+                style={[styles.choiceButton, styles.adminButton]}
+                onPress={() => { setMode('admin'); setEmail(''); setPassword(''); }}
               >
-                <Text style={[styles.loginTypeButtonText, styles.adminButtonText]}>👨‍💼 Admin</Text>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#fff" />
+                <Text style={[styles.choiceButtonText, { color: '#fff' }]}>Admin Login</Text>
               </TouchableOpacity>
 
               <View style={styles.buttonRow}>
                 <TouchableOpacity
-                  style={[styles.loginTypeButton, styles.staffButton]}
+                  style={[styles.choiceButton, styles.outlineButton]}
                   onPress={() => {
                     setCurrentLoginType('staff');
                     setPin('');
                     setScanned(false);
-                    setMode('scan-qr-staff');
+                    setMode('scan-qr');
                   }}
                 >
-                  <Text style={styles.loginTypeButtonText}>👤 Staff</Text>
+                  <Ionicons name="people-outline" size={20} color="#2C3E50" />
+                  <Text style={styles.choiceButtonText}>Staff</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.loginTypeButton, styles.kitchenButton]}
+                  style={[styles.choiceButton, styles.outlineButton]}
                   onPress={() => {
                     setCurrentLoginType('kitchen');
                     setPin('');
                     setScanned(false);
-                    setMode('scan-qr-kitchen');
+                    setMode('scan-qr');
                   }}
                 >
-                  <Text style={styles.loginTypeButtonText}>🍳 Kitchen</Text>
+                  <Ionicons name="restaurant-outline" size={20} color="#2C3E50" />
+                  <Text style={styles.choiceButtonText}>Kitchen</Text>
                 </TouchableOpacity>
               </View>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.choiceButton, styles.googleButton]}
+                onPress={handleGoogleSignIn}
+              >
+                <Ionicons name="logo-google" size={20} color="#4285F4" />
+                <Text style={[styles.choiceButtonText, { color: '#333' }]}>Continue with Google</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -222,7 +331,7 @@ export const LoginScreen = () => {
     );
   }
 
-  // Admin Login Screen
+  // ===================== ADMIN LOGIN =====================
   if (mode === 'admin') {
     return (
       <KeyboardAvoidingView
@@ -230,13 +339,12 @@ export const LoginScreen = () => {
         style={styles.container}
       >
         <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setMode('choice')}
-            disabled={loading}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => setMode('choice')} disabled={loading}>
+            <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+            <Text style={styles.backButtonText}>Back</Text>
           </TouchableOpacity>
+
+          <Text style={styles.title}>Admin Login</Text>
 
           <TextInput
             style={styles.input}
@@ -246,8 +354,8 @@ export const LoginScreen = () => {
             editable={!loading}
             keyboardType="email-address"
             autoCapitalize="none"
+            placeholderTextColor="#999"
           />
-
           <TextInput
             style={styles.input}
             placeholder="Password"
@@ -255,293 +363,371 @@ export const LoginScreen = () => {
             onChangeText={setPassword}
             secureTextEntry
             editable={!loading}
+            placeholderTextColor="#999"
           />
 
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[styles.submitButton, loading && styles.buttonDisabled]}
             onPress={handleAdminLogin}
             disabled={loading}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Login</Text>
-            )}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Login</Text>}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     );
   }
 
-  // QR Scanner Screen for Staff or Kitchen (Fallback to manual input)
-  if (mode === 'scan-qr-staff' || mode === 'scan-qr-kitchen') {
-    const isKitchen = mode === 'scan-qr-kitchen';
-    const titleText = isKitchen ? '🍳 Kitchen Login' : '👤 Staff Login';
+  // ===================== QR SCANNER =====================
+  if (mode === 'scan-qr') {
+    const isKitchen = currentLoginType === 'kitchen';
+    const titleText = isKitchen ? 'Kitchen Login' : 'Staff Login';
 
-    const handleProceedToPin = async () => {
-      const rid = restaurantId || restaurantInput;
-      if (!rid) {
-        Alert.alert('Error', 'Please enter a restaurant ID');
-        return;
-      }
-      
-      if (!restaurantId) {
-        setRestaurantId(rid);
-        try {
-          await SecureStore.setItemAsync('restaurantId', rid);
-        } catch (error) {
-          console.error('Failed to save restaurantId:', error);
-        }
-      }
-      setMode('pin-entry');
-    };
+    return (
+      <View style={styles.scannerContainer}>
+        <View style={styles.scannerHeader}>
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: 6 }}
+            onPress={() => setMode('choice')}
+          >
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.scannerTitle}>{titleText}</Text>
+        </View>
+
+        {cameraPermission?.granted ? (
+          <View style={styles.cameraContainer}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={scanned ? undefined : (result) => handleQRScanned(result.data)}
+            />
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scannerFrame} />
+              <Text style={styles.scannerHint}>
+                Scan the Staff/Kitchen QR code{'\n'}from Settings &gt; Staff &amp; Kitchen Links
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.permissionContainer}>
+            <Ionicons name="camera-outline" size={48} color="#999" />
+            <Text style={styles.permissionText}>Camera permission is required to scan QR codes</Text>
+            <TouchableOpacity style={styles.submitButton} onPress={requestCameraPermission}>
+              <Text style={styles.submitButtonText}>Grant Camera Access</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={styles.manualEntrySection}>
+          <Text style={styles.manualEntryLabel}>Or enter Restaurant ID manually:</Text>
+          <View style={styles.manualEntryRow}>
+            <TextInput
+              style={[styles.input, { flex: 1, marginBottom: 0 }]}
+              placeholder="Restaurant ID"
+              value={manualRid}
+              onChangeText={setManualRid}
+              keyboardType="number-pad"
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity
+              style={[styles.submitButton, { marginTop: 0, marginLeft: 10, paddingHorizontal: 20 }]}
+              onPress={async () => {
+                if (!manualRid.trim()) {
+                  Alert.alert('Error', 'Please enter a restaurant ID');
+                  return;
+                }
+                const rid = manualRid.trim();
+                setRestaurantId(rid);
+                await SecureStore.setItemAsync('restaurantId', rid);
+                await fetchRestaurantName(rid);
+                setMode('pin-entry');
+              }}
+            >
+              <Text style={styles.submitButtonText}>Go</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ===================== PIN ENTRY =====================
+  if (mode === 'pin-entry') {
+    const isKitchen = currentLoginType === 'kitchen';
+    const accentColor = isKitchen ? '#FF9800' : '#27ae60';
 
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.content}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => setMode('choice')}
-            >
-              <Text style={styles.backButtonText}>← Back</Text>
-            </TouchableOpacity>
+        <View style={styles.pinContainer}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => { setMode('scan-qr'); setPin(''); }}
+            disabled={loading}
+          >
+            <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
 
-            <Text style={styles.title}>{titleText}</Text>
-            <Text style={styles.subtitle}>Enter Restaurant ID</Text>
-
-            <View style={styles.restaurantInputContainer}>
-              <Text style={styles.restaurantInputLabel}>Restaurant ID</Text>
-              <TextInput
-                style={styles.restaurantInputField}
-                placeholder="Enter restaurant ID"
-                value={restaurantInput}
-                onChangeText={setRestaurantInput}
-                placeholderTextColor="#999"
+          <View style={styles.pinHeader}>
+            <View style={[styles.pinIconCircle, { backgroundColor: accentColor + '20' }]}>
+              <Ionicons
+                name={isKitchen ? 'restaurant' : 'people'}
+                size={32}
+                color={accentColor}
               />
             </View>
-
-            <TouchableOpacity
-              style={[styles.button, isKitchen ? styles.kitchenButton : styles.staffLoginButton]}
-              onPress={handleProceedToPin}
-            >
-              <Text style={styles.buttonText}>Continue →</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSecondary, { marginTop: 12 }]}
-              onPress={() => setMode('choice')}
-            >
-              <Text style={styles.buttonText}>← Back</Text>
-            </TouchableOpacity>
+            <Text style={styles.pinTitle}>{isKitchen ? 'Kitchen' : 'Staff'}</Text>
+            <Text style={styles.pinSubtitle}>Enter your 6-digit PIN</Text>
+            {(restaurantName || restaurantId) && (
+              <Text style={styles.restaurantLabel}>
+                {restaurantName || `Restaurant ${restaurantId}`}
+              </Text>
+            )}
           </View>
+
+          {/* Hidden input */}
+          <TextInput
+            ref={pinInputRef}
+            style={styles.hiddenInput}
+            value={pin}
+            onChangeText={handlePINChange}
+            keyboardType="number-pad"
+            maxLength={6}
+            editable={!loading}
+            autoFocus
+            caretHidden
+          />
+
+          {/* PIN dots - tap to focus */}
+          <TouchableOpacity
+            style={styles.pinDotsRow}
+            activeOpacity={0.9}
+            onPress={() => pinInputRef.current?.focus()}
+          >
+            {Array(6).fill(0).map((_, i) => {
+              const filled = pin.length > i;
+              return (
+                <View
+                  key={i}
+                  style={[
+                    styles.pinDot,
+                    filled && { backgroundColor: accentColor, borderColor: accentColor },
+                  ]}
+                >
+                  {filled && <View style={styles.pinDotInner} />}
+                </View>
+              );
+            })}
+          </TouchableOpacity>
+
+          {loading && (
+            <ActivityIndicator size="large" color={accentColor} style={{ marginTop: 20 }} />
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              { backgroundColor: accentColor, width: '100%' },
+              (loading || pin.length !== 6) && styles.buttonDisabled,
+            ]}
+            onPress={() => handlePINSubmitDirect(pin)}
+            disabled={loading || pin.length !== 6}
+          >
+            <Text style={styles.submitButtonText}>Login</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ===================== GOOGLE SIGNUP / ONBOARDING =====================
+  if (mode === 'google-signup') {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <ScrollView contentContainerStyle={styles.onboardingScroll} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity style={styles.backButton} onPress={() => setMode('choice')} disabled={loading}>
+            <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+
+          <View style={{ marginTop: 40 }}>
+            <Text style={styles.title}>Create Your Restaurant</Text>
+            <Text style={styles.subtitle}>Setting up for: {googleEmail}</Text>
+          </View>
+
+          {/* Step indicator */}
+          <View style={styles.stepIndicator}>
+            {['Details', 'Preferences', 'Branding'].map((label, i) => (
+              <View key={i} style={styles.stepItem}>
+                <View style={[styles.stepCircle, onboardingStep >= i && styles.stepCircleActive]}>
+                  <Text style={[styles.stepCircleText, onboardingStep >= i && styles.stepCircleTextActive]}>
+                    {i + 1}
+                  </Text>
+                </View>
+                <Text style={[styles.stepLabel, onboardingStep >= i && styles.stepLabelActive]}>{label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Step 0: Restaurant details */}
+          {onboardingStep === 0 && (
+            <View style={styles.stepContent}>
+              <Text style={styles.fieldLabel}>Restaurant Name *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="My Restaurant"
+                value={regRestaurantName}
+                onChangeText={setRegRestaurantName}
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.fieldLabel}>Address</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="123 Main St, City"
+                value={regAddress}
+                onChangeText={setRegAddress}
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.fieldLabel}>Phone</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="+852 1234 5678"
+                value={regPhone}
+                onChangeText={setRegPhone}
+                keyboardType="phone-pad"
+                placeholderTextColor="#999"
+              />
+
+              <TouchableOpacity
+                style={[styles.submitButton, !regRestaurantName.trim() && styles.buttonDisabled]}
+                onPress={() => setOnboardingStep(1)}
+                disabled={!regRestaurantName.trim()}
+              >
+                <Text style={styles.submitButtonText}>Next</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Step 1: Preferences */}
+          {onboardingStep === 1 && (
+            <View style={styles.stepContent}>
+              <Text style={styles.fieldLabel}>Service Charge (%)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="10"
+                value={regServiceCharge}
+                onChangeText={setRegServiceCharge}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.fieldLabel}>Language</Text>
+              <View style={styles.optionRow}>
+                {[{ value: 'en', label: 'English' }, { value: 'zh', label: '中文' }].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.optionButton, regLanguage === opt.value && styles.optionButtonActive]}
+                    onPress={() => setRegLanguage(opt.value)}
+                  >
+                    <Text style={[styles.optionButtonText, regLanguage === opt.value && styles.optionButtonTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Timezone</Text>
+              <View style={styles.optionRow}>
+                {[
+                  { value: 'Asia/Hong_Kong', label: 'HKT' },
+                  { value: 'America/New_York', label: 'EST' },
+                  { value: 'Europe/London', label: 'GMT' },
+                  { value: 'UTC', label: 'UTC' },
+                ].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.optionButton, regTimezone === opt.value && styles.optionButtonActive]}
+                    onPress={() => setRegTimezone(opt.value)}
+                  >
+                    <Text style={[styles.optionButtonText, regTimezone === opt.value && styles.optionButtonTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.stepNavRow}>
+                <TouchableOpacity style={styles.stepBackBtn} onPress={() => setOnboardingStep(0)}>
+                  <Text style={styles.stepBackBtnText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.submitButton, { flex: 1 }]} onPress={() => setOnboardingStep(2)}>
+                  <Text style={styles.submitButtonText}>Next</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 2: Branding */}
+          {onboardingStep === 2 && (
+            <View style={styles.stepContent}>
+              <Text style={styles.fieldLabel}>Restaurant Logo</Text>
+              <TouchableOpacity style={styles.imagePickerBtn} onPress={() => pickImage('logo')}>
+                {regLogoUri ? (
+                  <Image source={{ uri: regLogoUri }} style={styles.imagePreview} />
+                ) : (
+                  <View style={styles.imagePickerPlaceholder}>
+                    <Ionicons name="camera-outline" size={32} color="#999" />
+                    <Text style={styles.imagePickerText}>Tap to select logo</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.fieldLabel}>Background Image</Text>
+              <TouchableOpacity style={styles.imagePickerBtn} onPress={() => pickImage('background')}>
+                {regBgUri ? (
+                  <Image source={{ uri: regBgUri }} style={[styles.imagePreview, { borderRadius: 8 }]} />
+                ) : (
+                  <View style={styles.imagePickerPlaceholder}>
+                    <Ionicons name="image-outline" size={32} color="#999" />
+                    <Text style={styles.imagePickerText}>Tap to select background</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.stepNavRow}>
+                <TouchableOpacity style={styles.stepBackBtn} onPress={() => setOnboardingStep(1)}>
+                  <Text style={styles.stepBackBtnText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.submitButton, { flex: 1, backgroundColor: '#27ae60' }, loading && styles.buttonDisabled]}
+                  onPress={handleRegisterSubmit}
+                  disabled={loading}
+                >
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Create Restaurant</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     );
   }
 
-  // PIN Entry Screen (shared for both staff and kitchen)
-  if (mode === 'pin-entry') {
-    const isKitchen = currentLoginType === 'kitchen';
-    const titleText = isKitchen ? '🍳 Kitchen' : '👤 Table Staff';
-    const buttonColor = isKitchen ? {} : styles.staffLoginButton;
-
-    return (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-      >
-        <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => {
-              setMode('choice');
-              setPin('');
-              setRestaurantId(null);
-              setCurrentLoginType(null);
-            }}
-            disabled={loading}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.title}>{titleText}</Text>
-          <Text style={styles.subtitle}>Enter PIN</Text>
-          <Text style={styles.restaurantInfo}>Restaurant: {restaurantId}</Text>
-
-          <TextInput
-            style={styles.pinInput}
-            placeholder="000000"
-            value={pin}
-            onChangeText={handlePINChange}
-            keyboardType="number-pad"
-            maxLength={6}
-            editable={!loading}
-            textAlign="center"
-            secureTextEntry
-            autoFocus
-          />
-
-          <View style={styles.digitDisplay}>
-            {Array(6)
-              .fill(0)
-              .map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.digit,
-                    pin.length > i && (isKitchen ? styles.digitFilled : styles.digitFilledStaff),
-                  ]}
-                >
-                  <Text style={isKitchen ? styles.digitText : styles.digitTextStaff}>●</Text>
-                </View>
-              ))}
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isKitchen && styles.kitchenButton,
-              !isKitchen && styles.staffLoginButton,
-              loading && styles.buttonDisabled,
-            ]}
-            onPress={isKitchen ? handleKitchenLogin : handleStaffLogin}
-            disabled={loading || pin.length !== 6}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Login</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  // Kitchen Login Screen
-  if (mode === 'kitchen') {
-    return (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-      >
-        <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setMode('choice')}
-            disabled={loading}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.title}>🍳 Kitchen</Text>
-          <Text style={styles.subtitle}>Enter PIN</Text>
-
-          <TextInput
-            style={styles.pinInput}
-            placeholder="000000"
-            value={pin}
-            onChangeText={handlePINChange}
-            keyboardType="number-pad"
-            maxLength={6}
-            editable={!loading}
-            textAlign="center"
-            secureTextEntry
-            autoFocus
-          />
-
-          <View style={styles.digitDisplay}>
-            {Array(6)
-              .fill(0)
-              .map((_, i) => (
-                <View key={i} style={[styles.digit, pin.length > i && styles.digitFilled]}>
-                  <Text style={styles.digitText}>●</Text>
-                </View>
-              ))}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleKitchenLogin}
-            disabled={loading || pin.length !== 6}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Login</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  // Staff Login Screen
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => setMode('choice')}
-          disabled={loading}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>👤 Table Staff</Text>
-        <Text style={styles.subtitle}>Enter PIN</Text>
-
-        <TextInput
-          style={styles.pinInput}
-          placeholder="000000"
-          value={pin}
-          onChangeText={handlePINChange}
-          keyboardType="number-pad"
-          maxLength={6}
-          editable={!loading}
-          textAlign="center"
-          secureTextEntry
-          autoFocus
-        />
-
-        <View style={styles.digitDisplay}>
-          {Array(6)
-            .fill(0)
-            .map((_, i) => (
-              <View key={i} style={[styles.digit, pin.length > i && styles.digitFilledStaff]}>
-                <Text style={styles.digitTextStaff}>●</Text>
-              </View>
-            ))}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.button, styles.staffLoginButton, loading && styles.buttonDisabled]}
-          onPress={handleStaffLogin}
-          disabled={loading || pin.length !== 6}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Login</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
-  );
+  return null;
 };
 
 const styles = StyleSheet.create({
-  screenContainer: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
   backgroundImage: {
     flex: 1,
     width: '100%',
@@ -554,214 +740,397 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 60,
-    marginTop: 40,
-  },
-  logo: {
-    width: 120,
-    height: 120,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'stretch',
-    paddingHorizontal: 20,
+    paddingHorizontal: 28,
   },
-  backButton: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    padding: 10,
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 50,
+    marginTop: 40,
   },
-  backButtonText: {
-    color: '#2C3E50',
-    fontSize: 16,
-    fontWeight: 'bold',
+  logo: {
+    width: 110,
+    height: 110,
   },
-  restaurantInputContainer: {
-    marginBottom: 20,
-    padding: 12,
-    backgroundColor: '#fff3cd',
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#ffc107',
-  },
-  restaurantInputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#856404',
-    marginBottom: 8,
-  },
-  restaurantInputField: {
-    backgroundColor: '#fff',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#ffc107',
-    fontSize: 14,
-  },
-  restaurantInfoContainer: {
-    marginBottom: 20,
-    padding: 12,
-    backgroundColor: '#e8f5e9',
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4caf50',
-  },
-  restaurantInfoText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2e7d32',
-    marginBottom: 8,
-  },
-  changeRestaurantLink: {
-    fontSize: 12,
-    color: '#2C3E50',
-    textDecorationLine: 'underline',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 30,
-    color: '#666',
-  },
+
+  // Choice screen
   buttonContainer: {
     alignItems: 'center',
-    marginTop: 40,
     width: '100%',
+  },
+  choiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    width: '100%',
+  },
+  adminButton: {
+    backgroundColor: '#2C3E50',
+  },
+  outlineButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#2C3E50',
+    flex: 1,
+  },
+  googleButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  choiceButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2C3E50',
   },
   buttonRow: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 20,
-    justifyContent: 'center',
+    marginTop: 14,
     width: '100%',
   },
-  loginTypeButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
+  divider: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginVertical: 20,
+    width: '100%',
   },
-  adminButton: {
-    backgroundColor: '#2C3E50',
-    width: '70%',
-    paddingHorizontal: 40,
-  },
-  staffButton: {
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#2C3E50',
+  dividerLine: {
     flex: 1,
-    paddingHorizontal: 20,
+    height: 1,
+    backgroundColor: '#ddd',
   },
-  kitchenButton: {
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#2C3E50',
-    flex: 1,
-    paddingHorizontal: 20,
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#999',
+    fontSize: 13,
   },
-  loginTypeButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+
+  // Back button
+  backButton: {
+    position: 'absolute',
+    top: 54,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    zIndex: 10,
+    padding: 6,
+  },
+  backButtonText: {
     color: '#2C3E50',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  adminButtonText: {
-    color: '#ffffff',
+
+  // Forms
+  title: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#1f2937',
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#6b7280',
   },
   input: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginBottom: 15,
+    backgroundColor: '#f9fafb',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#ddd',
-    fontSize: 16,
+    borderColor: '#e5e7eb',
+    fontSize: 15,
+    color: '#1f2937',
   },
-  pinInput: {
-    opacity: 0,
-    height: 0,
-  },
-  digitDisplay: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 40,
-    gap: 10,
-  },
-  digit: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  digitFilled: {
-    borderColor: '#2C3E50',
-    backgroundColor: '#FFF3E0',
-  },
-  digitFilledStaff: {
-    borderColor: '#2C3E50',
-    backgroundColor: '#E8F5E9',
-  },
-  digitText: {
-    fontSize: 24,
-    color: '#2C3E50',
-  },
-  digitTextStaff: {
-    fontSize: 24,
-    color: '#2C3E50',
-  },
-  button: {
+  submitButton: {
     backgroundColor: '#2C3E50',
-    borderRadius: 8,
-    paddingVertical: 12,
-    marginTop: 20,
+    borderRadius: 10,
+    paddingVertical: 14,
+    marginTop: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  staffLoginButton: {
-    backgroundColor: '#2C3E50',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
+  submitButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+  },
+  buttonDisabled: {
+    opacity: 0.45,
+  },
+
+  // Scanner
+  scannerContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  scannerHeader: {
+    paddingTop: 54,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  scannerTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
   },
   camera: {
     flex: 1,
-    display: 'none', // Camera no longer used in this screen
   },
   scannerOverlay: {
-    display: 'none', // Scanner overlay no longer used
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  restaurantInfo: {
+  scannerFrame: {
+    width: 220,
+    height: 220,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 16,
+    backgroundColor: 'transparent',
+  },
+  scannerHint: {
+    color: '#fff',
     fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 20,
+    marginTop: 20,
     textAlign: 'center',
+    opacity: 0.8,
+    lineHeight: 20,
   },
-  buttonSecondary: {
-    backgroundColor: '#6b7280',
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    backgroundColor: '#f9fafb',
+  },
+  permissionText: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  manualEntrySection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#f9fafb',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  manualEntryLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  manualEntryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // PIN Entry
+  pinContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+  },
+  pinHeader: {
+    alignItems: 'center',
+    marginBottom: 36,
+  },
+  pinIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pinTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 6,
+  },
+  pinSubtitle: {
+    fontSize: 15,
+    color: '#6b7280',
+  },
+  restaurantLabel: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  hiddenInput: {
+    position: 'absolute',
+    opacity: 0,
+    height: 0,
+    width: 0,
+  },
+  pinDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    marginBottom: 32,
+  },
+  pinDot: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+  },
+  pinDotInner: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+
+  // Onboarding
+  onboardingScroll: {
+    flexGrow: 1,
+    paddingHorizontal: 28,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  stepIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginBottom: 28,
+  },
+  stepItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepCircleActive: {
+    backgroundColor: '#2C3E50',
+  },
+  stepCircleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#9ca3af',
+  },
+  stepCircleTextActive: {
+    color: '#fff',
+  },
+  stepLabel: {
+    fontSize: 11,
+    color: '#9ca3af',
+    fontWeight: '500',
+  },
+  stepLabelActive: {
+    color: '#2C3E50',
+  },
+  stepContent: {
+    marginTop: 8,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 18,
+    flexWrap: 'wrap',
+  },
+  optionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  optionButtonActive: {
+    backgroundColor: '#2C3E50',
+    borderColor: '#2C3E50',
+  },
+  optionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  optionButtonTextActive: {
+    color: '#fff',
+  },
+  stepNavRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  stepBackBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    justifyContent: 'center',
+  },
+  stepBackBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  imagePickerBtn: {
+    marginBottom: 18,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderStyle: 'dashed',
+  },
+  imagePickerPlaceholder: {
+    paddingVertical: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f9fafb',
+    gap: 6,
+  },
+  imagePickerText: {
+    fontSize: 13,
+    color: '#9ca3af',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 120,
+    resizeMode: 'cover',
   },
 });

@@ -13,7 +13,7 @@
  */
 
 import { Device } from 'react-native-ble-plx';
-import { BluetoothService } from './bluetoothService';
+import { bluetoothService } from './bluetoothService';
 import { printerDeviceStorageService } from './printerDeviceStorageService';
 import { printerAutoConnectService } from './printerAutoConnectService';
 
@@ -32,11 +32,9 @@ export interface PrinterSession {
 
 class PrinterSessionService {
   private sessions: Map<string, PrinterSession> = new Map();
-  private bluetoothService: BluetoothService;
   private isInitialized = false;
 
   constructor() {
-    this.bluetoothService = new BluetoothService();
     this.initializeAutoConnect();
   }
 
@@ -50,7 +48,7 @@ class PrinterSessionService {
         const session = this.getSession(printerType);
         if (session && session.deviceId === deviceId) {
           console.log(`[PrinterSession] Auto-reconnect attempting ${printerType} ${deviceId}`);
-          const connected = await this.bluetoothService.connectToPrinter(deviceId);
+          const connected = await bluetoothService.connectToPrinter(deviceId);
           if (connected) {
             this.markConnected(printerType);
           }

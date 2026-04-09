@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,12 @@ import {
   RefreshControl,
   FlatList,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { apiClient } from '../../services/apiClient';
+import { useTranslation } from '../../contexts/TranslationContext';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface Order {
   id: number;
@@ -26,6 +30,18 @@ interface Order {
   }>;
   table_name?: string;
   waiter_name?: string;
+}
+
+interface TopItem {
+  item_name: string;
+  total_qty: number;
+  total_revenue_cents: number;
+}
+
+interface TopTable {
+  table_name: string;
+  order_count: number;
+  total_revenue_cents: number;
 }
 
 interface AnalyticsStats {
@@ -47,25 +63,66 @@ interface DailyTrend {
   average_bill: number;
 }
 
+type DateRange = 'today' | '7days' | '30days' | 'all';
+
 export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [topItems, setTopItems] = useState<TopItem[]>([]);
+  const [topTables, setTopTables] = useState<TopTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [trendMode, setTrendMode] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [showTrendModal, setShowTrendModal] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>('30days');
+  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+
+  // Date range days mapping
+  const dateRangeDays: Record<DateRange, number> = {
+    today: 1,
+    '7days': 7,
+    '30days': 30,
+    all: 9999,
+  };
+
+  const dateRangeLabels: Record<DateRange, string> = {
+    today: t('admin.report-today') || 'Today',
+    '7days': t('admin.report-last-7') || 'Last 7 Days',
+    '30days': t('admin.report-last-30') || 'Last 30 Days',
+    all: t('admin.report-all-time') || 'All Time',
+  };
 
   const fetchReports = async () => {
     try {
       setError(null);
-      const response = await apiClient.get(`/api/restaurants/${restaurantId}/orders?limit=1000`);
+      const days = dateRangeDays[dateRange];
+      
+      // Fetch orders + top items + top tables in parallel
+      const [ordersRes, topItemsRes, topTablesRes] = await Promise.all([
+        apiClient.get(`/api/restaurants/${restaurantId}/orders?limit=1000`),
+        apiClient.get(`/api/restaurants/${restaurantId}/reports/top-items?days=${days}`).catch(() => ({ data: [] })),
+        apiClient.get(`/api/restaurants/${restaurantId}/reports/top-tables?days=${days}`).catch(() => ({ data: [] })),
+      ]);
 
-      const allOrders = response.data || [];
-      setOrders(allOrders);
+      const allOrders: Order[] = ordersRes.data || [];
+      
+      // Filter orders by date range client-side
+      const now = Date.now();
+      const filteredOrders = dateRange === 'all'
+        ? allOrders
+        : allOrders.filter(order => {
+            const orderDate = new Date(order.created_at).getTime();
+            return (now - orderDate) / (1000 * 60 * 60 * 24) <= days;
+          });
 
-      if (allOrders.length > 0) {
-        const calculatedStats = calculateAnalyticsStats(allOrders);
+      setOrders(filteredOrders);
+      setTopItems(topItemsRes.data || []);
+      setTopTables(topTablesRes.data || []);
+
+      if (filteredOrders.length > 0) {
+        const calculatedStats = calculateAnalyticsStats(filteredOrders);
         setStats(calculatedStats);
       } else {
         setStats({
@@ -164,7 +221,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
   useEffect(() => {
     fetchReports();
-  }, [restaurantId]);
+  }, [restaurantId, dateRange]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -183,6 +240,11 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
   const dailyTrends = getDailyTrends(trendMode);
 
+  // Compute max hourly revenue for bar chart
+  const maxHourlyRevenue = stats
+    ? Math.max(...Object.values(stats.revenue_by_hour), 1)
+    : 1;
+
   return (
     <ScrollView
       style={styles.container}
@@ -190,37 +252,47 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
     >
       {stats && (
         <View style={styles.content}>
+          {/* Date Range Filter */}
+          <TouchableOpacity
+            style={styles.dateRangeBtn}
+            onPress={() => setShowDateRangeModal(true)}
+          >
+            <Text style={styles.dateRangeBtnText}>
+              {dateRangeLabels[dateRange]}
+            </Text>
+          </TouchableOpacity>
+
           {/* Key Metrics */}
           <View style={styles.metricsGrid}>
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Total Orders</Text>
+              <Text style={styles.metricLabel}>{t('admin.total-orders') || 'Total Orders'}</Text>
               <Text style={styles.metricValue}>{stats.total_orders}</Text>
             </View>
 
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Total Revenue</Text>
+            <View style={[styles.metricCard, { borderLeftColor: '#059669' }]}>
+              <Text style={styles.metricLabel}>{t('admin.total-revenue') || 'Total Revenue'}</Text>
               <Text style={styles.metricValue}>{formatPrice(stats.total_revenue)}</Text>
             </View>
 
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Avg Bill</Text>
+            <View style={[styles.metricCard, { borderLeftColor: '#f59e0b' }]}>
+              <Text style={styles.metricLabel}>{t('admin.average-bill') || 'Avg Bill'}</Text>
               <Text style={styles.metricValue}>{formatPrice(stats.average_bill)}</Text>
             </View>
 
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Active Sessions</Text>
+            <View style={[styles.metricCard, { borderLeftColor: '#8b5cf6' }]}>
+              <Text style={styles.metricLabel}>{t('admin.active-sessions') || 'Active Sessions'}</Text>
               <Text style={styles.metricValue}>{stats.active_sessions}</Text>
             </View>
           </View>
 
           {/* Revenue Report */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📊 Revenue</Text>
+            <Text style={styles.sectionTitle}>{t('admin.revenue-report') || 'Revenue'}</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Date</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('admin.date') || 'Date'}</Text>
+                <Text style={[styles.tableCell, { flex: 0.8 }]}>{t('admin.orders') || 'Orders'}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('admin.revenue') || 'Revenue'}</Text>
               </View>
               <FlatList
                 data={Object.entries(stats.revenue_by_day)
@@ -241,69 +313,76 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
             </View>
           </View>
 
-          {/* Busiest Tables (Daily Activity) */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📈 Daily Activity</Text>
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Date</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
-              </View>
-              <FlatList
-                data={Object.entries(stats.revenue_by_day)
-                  .sort(([a], [b]) => b.localeCompare(a))
-                  .slice(0, 7)}
-                renderItem={({ item: [date, revenue] }) => (
-                  <View style={styles.tableRow}>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{date}</Text>
-                    <Text style={[styles.tableCell, { flex: 0.8 }]}>
-                      {stats.daily_order_counts[date] || 0}
-                    </Text>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{formatPrice(revenue)}</Text>
+          {/* Top Selling Items */}
+          {topItems.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.top-selling-items') || 'Top Selling Items'}</Text>
+              {topItems.map((item, idx) => (
+                <View key={idx} style={styles.topItemRow}>
+                  <View style={styles.topItemRank}>
+                    <Text style={styles.topItemRankText}>#{idx + 1}</Text>
                   </View>
-                )}
-                keyExtractor={(item) => item[0]}
-                scrollEnabled={false}
-              />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.topItemName}>{item.item_name}</Text>
+                    <Text style={styles.topItemSub}>
+                      {item.total_qty} {t('admin.sold') || 'sold'} · {formatPrice(item.total_revenue_cents)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
             </View>
-          </View>
+          )}
 
-          {/* Hourly Revenue */}
+          {/* Busiest Tables */}
+          {topTables.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.busiest-tables') || 'Busiest Tables'}</Text>
+              {topTables.map((table, idx) => {
+                const maxOrders = topTables[0]?.order_count || 1;
+                const barWidth = (table.order_count / maxOrders) * 100;
+                return (
+                  <View key={idx} style={styles.tableBarRow}>
+                    <Text style={styles.tableBarLabel}>{table.table_name}</Text>
+                    <View style={styles.tableBarContainer}>
+                      <View style={[styles.tableBar, { width: `${barWidth}%` }]} />
+                    </View>
+                    <Text style={styles.tableBarValue}>
+                      {table.order_count} · {formatPrice(table.total_revenue_cents)}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Hourly Revenue (Bar Chart) */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🕐 Hourly Revenue</Text>
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Hour</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
-              </View>
-              <FlatList
-                data={Array.from({ length: 24 }, (_, i) => {
+            <Text style={styles.sectionTitle}>{t('admin.hourly-revenue') || 'Hourly Revenue'}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.hourlyChart}>
+                {Array.from({ length: 24 }, (_, i) => {
                   const hour = String(i).padStart(2, '0');
                   const hourKey = `${hour}:00`;
-                  return {
-                    hour: hourKey,
-                    orders: stats.orders_by_hour[hourKey] || 0,
-                    revenue: stats.revenue_by_hour[hourKey] || 0,
-                  };
-                }).filter((h) => h.orders > 0)}
-                renderItem={({ item }) => (
-                  <View style={styles.tableRow}>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{item.hour}</Text>
-                    <Text style={[styles.tableCell, { flex: 0.8 }]}>{item.orders}</Text>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{formatPrice(item.revenue)}</Text>
-                  </View>
-                )}
-                keyExtractor={(item) => item.hour}
-                scrollEnabled={false}
-              />
-            </View>
+                  const revenue = stats.revenue_by_hour[hourKey] || 0;
+                  const orders = stats.orders_by_hour[hourKey] || 0;
+                  const barHeight = revenue > 0 ? Math.max((revenue / maxHourlyRevenue) * 120, 4) : 0;
+                  return (
+                    <View key={hourKey} style={styles.hourlyBarCol}>
+                      <Text style={styles.hourlyBarValue}>
+                        {orders > 0 ? orders : ''}
+                      </Text>
+                      <View style={[styles.hourlyBar, { height: barHeight }]} />
+                      <Text style={styles.hourlyBarLabel}>{hour}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </View>
 
           {/* Top Revenue Days */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🏆 Top Revenue Days</Text>
+            <Text style={styles.sectionTitle}>{t('admin.top-revenue-days') || 'Top Revenue Days'}</Text>
             <View style={styles.cardsContainer}>
               {Object.entries(stats.revenue_by_day)
                 .sort(([, a], [, b]) => b - a)
@@ -314,7 +393,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                     <Text style={styles.cardDate}>{date}</Text>
                     <Text style={styles.cardRevenue}>{formatPrice(revenue)}</Text>
                     <Text style={styles.cardOrders}>
-                      {stats.daily_order_counts[date] || 0} orders
+                      {stats.daily_order_counts[date] || 0} {t('admin.orders') || 'orders'}
                     </Text>
                   </View>
                 ))}
@@ -324,7 +403,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
           {/* Daily Trends */}
           <View style={styles.section}>
             <View style={styles.trendHeader}>
-              <Text style={styles.sectionTitle}>📅 Daily Trends</Text>
+              <Text style={styles.sectionTitle}>{t('admin.daily-trends') || 'Trends'}</Text>
               <TouchableOpacity onPress={() => setShowTrendModal(true)} style={styles.trendBtn}>
                 <Text style={styles.trendBtnText}>{trendMode.toUpperCase()}</Text>
               </TouchableOpacity>
@@ -332,10 +411,10 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1.2 }]}>Period</Text>
-                <Text style={[styles.tableCell, { flex: 0.7 }]}>Orders</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>Revenue</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>Avg Bill</Text>
+                <Text style={[styles.tableCell, { flex: 1.2 }]}>{t('admin.period') || 'Period'}</Text>
+                <Text style={[styles.tableCell, { flex: 0.7 }]}>{t('admin.orders') || 'Orders'}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{t('admin.revenue') || 'Revenue'}</Text>
+                <Text style={[styles.tableCell, { flex: 0.8 }]}>{t('admin.avg-bill') || 'Avg Bill'}</Text>
               </View>
               <FlatList
                 data={dailyTrends}
@@ -359,7 +438,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
           {/* Order Status Breakdown */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🗯 Order Status</Text>
+            <Text style={styles.sectionTitle}>{t('admin.order-status') || 'Order Status'}</Text>
             {Object.entries(stats.order_count_by_status).map(([status, count]) => (
               <View key={status} style={styles.statusItem}>
                 <Text style={styles.statusLabel}>
@@ -376,16 +455,16 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity onPress={fetchReports} style={styles.retryBtn}>
-            <Text style={styles.retryBtnText}>Retry</Text>
+            <Text style={styles.retryBtnText}>{t('common.retry') || 'Retry'}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Trend Mode Modal */}
-      <Modal visible={showTrendModal} transparent animationType="fade">
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showTrendModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Trend View</Text>
+            <Text style={styles.modalTitle}>{t('admin.select-trend-view') || 'Select Trend View'}</Text>
 
             {(['daily', 'weekly', 'monthly'] as const).map((mode) => (
               <TouchableOpacity
@@ -411,7 +490,43 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               style={[styles.trendOption, { backgroundColor: '#e5e7eb', marginTop: 12 }]}
               onPress={() => setShowTrendModal(false)}
             >
-              <Text style={styles.trendOptionText}>Close</Text>
+              <Text style={styles.trendOptionText}>{t('common.close') || 'Close'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Range Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showDateRangeModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('admin.select-date-range-modal') || 'Select Date Range'}</Text>
+
+            {(['today', '7days', '30days', 'all'] as DateRange[]).map((range) => (
+              <TouchableOpacity
+                key={range}
+                style={[styles.trendOption, dateRange === range && styles.trendOptionActive]}
+                onPress={() => {
+                  setDateRange(range);
+                  setShowDateRangeModal(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.trendOptionText,
+                    dateRange === range && styles.trendOptionTextActive,
+                  ]}
+                >
+                  {dateRangeLabels[range]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={[styles.trendOption, { backgroundColor: '#e5e7eb', marginTop: 12 }]}
+              onPress={() => setShowDateRangeModal(false)}
+            >
+              <Text style={styles.trendOptionText}>{t('common.close') || 'Close'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -633,5 +748,112 @@ const styles = StyleSheet.create({
   },
   trendOptionTextActive: {
     color: '#fff',
+  },
+  // Date range button
+  dateRangeBtn: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
+  dateRangeBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Top items
+  topItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  topItemRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  topItemRankText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  topItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  topItemSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  // Busiest tables bar chart
+  tableBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 8,
+  },
+  tableBarLabel: {
+    width: 70,
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  tableBarContainer: {
+    flex: 1,
+    height: 20,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  tableBar: {
+    height: '100%',
+    backgroundColor: '#3b82f6',
+    borderRadius: 4,
+    minWidth: 4,
+  },
+  tableBarValue: {
+    width: 100,
+    fontSize: 11,
+    color: '#6b7280',
+    textAlign: 'right',
+  },
+  // Hourly bar chart
+  hourlyChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 160,
+    paddingTop: 20,
+  },
+  hourlyBarCol: {
+    alignItems: 'center',
+    width: 28,
+    marginHorizontal: 2,
+  },
+  hourlyBar: {
+    width: 20,
+    backgroundColor: '#3b82f6',
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+    minHeight: 0,
+  },
+  hourlyBarLabel: {
+    fontSize: 9,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  hourlyBarValue: {
+    fontSize: 9,
+    color: '#6b7280',
+    marginBottom: 2,
   },
 });

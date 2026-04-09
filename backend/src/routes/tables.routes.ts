@@ -539,6 +539,17 @@ router.delete("/tables/:tableId", async (req, res) => {
       });
     }
 
+    // Nullify kpay_transactions references to orders for this table's sessions
+    await client.query(
+      `UPDATE kpay_transactions SET order_id = NULL
+       WHERE order_id IN (
+         SELECT o.id FROM orders o
+         JOIN table_sessions ts ON o.session_id = ts.id
+         WHERE ts.table_id = $1
+       )`,
+      [tableId]
+    );
+
     const result = await client.query(
       `
       DELETE FROM tables

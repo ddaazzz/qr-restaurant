@@ -74,7 +74,7 @@ export const PrinterSettingsScreen = ({ route, navigation }: any) => {
           printer_port: parseInt(printerPort) || 9100,
         }
       );
-      Alert.alert('✅ Success', 'Printer settings saved successfully');
+      Alert.alert('Success', 'Printer settings saved successfully');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to save printer settings');
     } finally {
@@ -104,13 +104,13 @@ export const PrinterSettingsScreen = ({ route, navigation }: any) => {
       );
 
       if (res.data?.success) {
-        Alert.alert('✅ Connection Success', 'Printer is reachable and responding');
+        Alert.alert('Connection Success', 'Printer is reachable and responding');
       } else {
-        Alert.alert('⚠️ Connection Failed', res.data?.error || 'Unable to reach printer');
+        Alert.alert('Connection Failed', res.data?.error || 'Unable to reach printer');
       }
     } catch (err: any) {
       Alert.alert(
-        '❌ Connection Error',
+        'Connection Error',
         err.response?.data?.error || 'Failed to connect to printer. Check IP and port.'
       );
     } finally {
@@ -196,7 +196,7 @@ export const PrinterSettingsScreen = ({ route, navigation }: any) => {
                 <View style={styles.connectedPrinterCard}>
                   <View style={styles.connectedInfo}>
                     <Text style={styles.connectedName}>{item.name}</Text>
-                    <Text style={styles.connectedLocation}>📍 {item.location}</Text>
+                    <Text style={styles.connectedLocation}>{item.location}</Text>
                   </View>
                   <View style={styles.connectedActions}>
                     <TouchableOpacity
@@ -239,7 +239,7 @@ export const PrinterSettingsScreen = ({ route, navigation }: any) => {
       </ScrollView>
 
       {/* Location Modal */}
-      <Modal visible={showLocationModal} transparent animationType="fade">
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showLocationModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Printer Location</Text>

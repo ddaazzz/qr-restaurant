@@ -23,6 +23,8 @@ import {
   Pressable,
 } from 'react-native';
 import { apiClient, API_URL } from '../../services/apiClient';
+import { useTranslation } from '../../contexts/TranslationContext';
+import { Ionicons } from '@expo/vector-icons';
 import { addonService, Addon } from '../../services/addonService';
 
 // ==================== INTERFACES ====================
@@ -67,8 +69,9 @@ export interface MenuTabRef {
 
 // ==================== COMPONENT ====================
 
-export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
-  ({ restaurantId }, ref) => {
+export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuery?: string }>(
+  ({ restaurantId, searchQuery }, ref) => {
+    const { t } = useTranslation();
     // ==================== STATE MANAGEMENT ====================
     
     // Data
@@ -127,6 +130,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
     // Variant management modals
     const [showVariantModal, setShowVariantModal] = useState(false);
+    const [showInlineVariantForm, setShowInlineVariantForm] = useState(false);
     const [showEditVariantModal, setShowEditVariantModal] = useState(false);
     const [editingVariantId, setEditingVariantId] = useState<number | null>(null);
     const [editingItemForVariant, setEditingItemForVariant] = useState<MenuItem | null>(null);
@@ -166,6 +170,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
     const [editingItemIsMealCombo, setEditingItemIsMealCombo] = useState(false);
     const [showAddonPresetsDropdown, setShowAddonPresetsDropdown] = useState(false);
     const [showVariantPresetsDropdown, setShowVariantPresetsDropdown] = useState(false);
+    const [showPresetPickerModal, setShowPresetPickerModal] = useState(false);
+    const [presetPickerDetails, setPresetPickerDetails] = useState<Record<number, any[]>>({});
+    const [loadingPresetDetails, setLoadingPresetDetails] = useState<number | null>(null);
 
     // ==================== REF HANDLING ====================
 
@@ -735,9 +742,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
       Alert.alert('Not Available', 'Image upload is not available in this version');
     };
 
-    const filteredItems = selectedCategory
-      ? items.filter(i => i.category_id === selectedCategory)
-      : items;
+    const filteredItems = items.filter(i => {
+      if (selectedCategory && i.category_id !== selectedCategory) return false;
+      if (searchQuery && searchQuery.trim()) {
+        return i.name.toLowerCase().includes(searchQuery.trim().toLowerCase());
+      }
+      return true;
+    });
 
     // ==================== RENDER ====================
 
@@ -802,13 +813,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                         setShowEditCategoryModal(true);
                       }}
                     >
-                      <Text style={styles.categoryActionBtnText}>✏️</Text>
+                      <Text style={styles.categoryActionBtnText}>Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.categoryActionBtn, styles.categoryActionBtnDelete]}
                       onPress={() => deleteCategory(cat.id, cat.name)}
                     >
-                      <Text style={styles.categoryActionBtnText}>🗑️</Text>
+                      <Text style={styles.categoryActionBtnText}>Del</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -820,7 +831,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         {/* Items Grid */}
         <View style={styles.itemsGridWrapper}>
           <FlatList
-            data={selectedCategory
+            data={selectedCategory && showAvailabilityToggles
               ? [...filteredItems, { id: 'add-item', name: '+ Add Item', isAddButton: true } as any]
               : filteredItems
             }
@@ -830,7 +841,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 return (
                   <View style={styles.itemCardWrapper}>
                     <TouchableOpacity
-                      style={[styles.itemCard, { backgroundColor: '#e8e8e8' }]}
+                      style={[styles.itemCard, { backgroundColor: '#eff6ff', borderStyle: 'dashed' as any, borderColor: '#93c5fd' }]}
                       onPress={() => setShowItemModal(true)}
                     >
                       <View style={styles.addItemPlaceholder}>
@@ -861,9 +872,10 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                         }}
                       />
                     ) : (
-                      <View style={styles.noImage}>
-                        <Text style={styles.noImageText}>📸</Text>
-                      </View>
+                      <Image
+                        source={{ uri: `${API_URL}/uploads/website/placeholder.png` }}
+                        style={styles.noImage}
+                      />
                     )}
                     <View style={styles.itemContent}>
                       <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
@@ -891,18 +903,18 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                         style={styles.itemActionBtn}
                         onPress={() => toggleAvailability(item.id, item.available)}
                       >
-                        <Text style={styles.itemActionBtnText}>{item.available ? '👁️' : '🚫'}</Text>
+                        <Ionicons name={item.available ? 'eye-outline' : 'eye-off-outline'} size={16} color={item.available ? '#059669' : '#dc2626'} />
                       </TouchableOpacity>
                     </View>
                   )}
                 </View>
               );
             }}
-            numColumns={2}
+            numColumns={3}
             columnWrapperStyle={styles.gridRow}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No items in this category</Text>
+                <Text style={styles.emptyText}>{t('admin.no-items')}</Text>
               </View>
             }
             contentContainerStyle={styles.listContent}
@@ -914,33 +926,31 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         {showDetailPanel && selectedItem && (
           <View style={styles.detailPanel}>
             <View style={styles.detailHeader}>
-              <TouchableOpacity onPress={() => setShowDetailPanel(false)}>
+              <TouchableOpacity onPress={() => { setEditingItemInlineId(null); setShowInlineVariantForm(false); setShowDetailPanel(false); }}>
                 <Text style={styles.detailCloseBtn}>✕</Text>
               </TouchableOpacity>
-              <Text style={styles.detailTitle}>Item Details</Text>
+              <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? 'Edit Item' : selectedItem.name}</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {/* Item edit button - enables inline editing */}
-                <TouchableOpacity
-                  onPress={() => {
-                    // Initialize inline editing state
-                    setInlineEditName(selectedItem.name);
-                    setInlineEditDescription(selectedItem.description || '');
-                    setInlineEditPrice((selectedItem.price_cents / 100).toFixed(2));
-                    setInlineEditImageUrl(selectedItem.image_url || '');
-                    setInlineEditAvailable(selectedItem.available !== false);
-                    setInlineEditIsMealCombo(selectedItem.is_meal_combo || false);
-                    setInlineEditHasVariants(selectedItem.variants && selectedItem.variants.length > 0);
-                    setEditingItemInlineId(selectedItem.id);
-                    
-                    // Load addons if it's a combo/meal
-                    if (selectedItem.is_meal_combo) {
-                      loadAddonsForItem(selectedItem.id);
-                    }
-                  }}
-                  style={styles.categoryActionBtn}
-                >
-                  <Text style={styles.detailHeaderActionBtn}>✏️</Text>
-                </TouchableOpacity>
+                {editingItemInlineId !== selectedItem.id && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setInlineEditName(selectedItem.name);
+                      setInlineEditDescription(selectedItem.description || '');
+                      setInlineEditPrice((selectedItem.price_cents / 100).toFixed(2));
+                      setInlineEditImageUrl(selectedItem.image_url || '');
+                      setInlineEditAvailable(selectedItem.available !== false);
+                      setInlineEditIsMealCombo(selectedItem.is_meal_combo || false);
+                      setInlineEditHasVariants(selectedItem.variants && selectedItem.variants.length > 0);
+                      setEditingItemInlineId(selectedItem.id);
+                      if (selectedItem.is_meal_combo) {
+                        loadAddonsForItem(selectedItem.id);
+                      }
+                    }}
+                    style={styles.categoryActionBtn}
+                  >
+                    <Text style={styles.detailHeaderActionBtn}>Edit</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
@@ -997,22 +1007,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                     >
                       <Text style={styles.btnText}>
                         {uploadingImageItemId === selectedItem!.id && uploadingImageContext === 'inline'
-                          ? '⏳ Uploading...'
-                          : '📸 Upload Image'}
+                          ? 'Uploading...'
+                          : 'Upload Image'}
                       </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Availability</Text>
-                    <TouchableOpacity
-                      style={[styles.checkboxRow]}
-                      onPress={() => setInlineEditAvailable(!inlineEditAvailable)}
-                    >
-                      <View style={[styles.checkbox, inlineEditAvailable && styles.checkboxChecked]}>
-                        {inlineEditAvailable && <Text style={styles.checkboxCheck}>✓</Text>}
-                      </View>
-                      <Text style={styles.checkboxLabel}>Available</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -1038,80 +1035,129 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
 
                   {/* Add Variant Button - shown only if has variants is checked */}
                   {inlineEditHasVariants && (
-                    <TouchableOpacity
-                      style={[styles.btn, styles.btnSecondary, { marginBottom: 12 }]}
-                      onPress={() => {
-                        setVariantName('');
-                        setVariantMinSelect('');
-                        setVariantMaxSelect('');
-                        setVariantRequired(false);
-                        setEditingItemForVariant(selectedItem);
-                        setShowVariantModal(true);
-                      }}
-                    >
-                      <Text style={styles.btnText}>+ Add Variant</Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={[styles.btn, styles.btnSecondary, { marginBottom: 12 }]}
+                        onPress={() => {
+                          setVariantName('');
+                          setVariantMinSelect('');
+                          setVariantMaxSelect('');
+                          setVariantRequired(false);
+                          setEditingItemForVariant(selectedItem);
+                          setShowInlineVariantForm(!showInlineVariantForm);
+                        }}
+                      >
+                        <Text style={styles.btnText}>{showInlineVariantForm ? '- Cancel Add Variant' : '+ Add Variant'}</Text>
+                      </TouchableOpacity>
+
+                      {showInlineVariantForm && (
+                        <View style={styles.inlineVariantForm}>
+                          <Text style={styles.label}>Variant Name</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={variantName}
+                            onChangeText={setVariantName}
+                            placeholder="e.g., Size, Temperature"
+                            autoFocus
+                          />
+                          <Text style={styles.label}>Min Select (optional)</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={variantMinSelect}
+                            onChangeText={setVariantMinSelect}
+                            placeholder="e.g., 1"
+                            keyboardType="number-pad"
+                          />
+                          <Text style={styles.label}>Max Select (optional)</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={variantMaxSelect}
+                            onChangeText={setVariantMaxSelect}
+                            placeholder="e.g., 3"
+                            keyboardType="number-pad"
+                          />
+                          <TouchableOpacity
+                            style={styles.checkboxRow}
+                            onPress={() => setVariantRequired(!variantRequired)}
+                          >
+                            <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
+                              {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
+                            </View>
+                            <Text style={styles.checkboxLabel}>Required</Text>
+                          </TouchableOpacity>
+                          <View style={styles.modalActions}>
+                            <TouchableOpacity
+                              style={[styles.btn, styles.btnSecondary]}
+                              onPress={() => {
+                                setShowInlineVariantForm(false);
+                                setVariantName('');
+                                setVariantMinSelect('');
+                                setVariantMaxSelect('');
+                                setVariantRequired(false);
+                              }}
+                            >
+                              <Text style={styles.btnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.btn, styles.btnPrimary]}
+                              onPress={async () => {
+                                await createVariant();
+                                setShowInlineVariantForm(false);
+                              }}
+                            >
+                              <Text style={styles.btnText}>Add Variant</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </>
                   )}
 
                   {/* Variant Preset Selection - shown only if has variants */}
                   {inlineEditHasVariants && (
                     <View style={styles.addonSection}>
-                      <Text style={styles.label}>Select Variant Preset</Text>
+                      <Text style={styles.label}>Variant Presets</Text>
                       
-                      {/* Variant preset dropdown */}
                       {inlineEditVariantPresets.length > 0 ? (
-                        <View style={styles.formGroup}>
-                          <TouchableOpacity
-                            style={styles.dropdownButton}
-                            onPress={() => setShowVariantPresetsDropdown(!showVariantPresetsDropdown)}
-                          >
-                            <Text style={styles.dropdownButtonText}>
-                              {inlineEditSelectedVariantPresetId
-                                ? inlineEditVariantPresets.find(p => p.id === inlineEditSelectedVariantPresetId)?.name || 'Select Preset'
-                                : 'Select Preset'}
-                            </Text>
-                            <Text style={styles.dropdownIcon}>▼</Text>
-                          </TouchableOpacity>
-
-                          {showVariantPresetsDropdown && (
-                            <View style={styles.dropdownMenu}>
-                              {inlineEditVariantPresets.map((preset) => (
-                                <TouchableOpacity
-                                  key={preset.id}
-                                  style={[
-                                    styles.dropdownItem,
-                                    inlineEditSelectedVariantPresetId === preset.id && styles.dropdownItemSelected,
-                                  ]}
-                                  onPress={() => {
-                                    setInlineEditSelectedVariantPresetId(preset.id);
-                                    setShowVariantPresetsDropdown(false);
-                                  }}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.dropdownItemText,
-                                      inlineEditSelectedVariantPresetId === preset.id && styles.dropdownItemTextSelected,
-                                    ]}
-                                  >
-                                    {preset.name}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          )}
-                        </View>
+                        <TouchableOpacity
+                          style={[styles.btn, styles.btnSecondary, { marginTop: 4 }]}
+                          onPress={async () => {
+                            setShowPresetPickerModal(true);
+                            // Pre-load details for all presets
+                            for (const preset of inlineEditVariantPresets) {
+                              if (!presetPickerDetails[preset.id]) {
+                                try {
+                                  setLoadingPresetDetails(preset.id);
+                                  const res = await apiClient.get(
+                                    `/api/restaurants/${restaurantId}/variant-presets/${preset.id}/variants`
+                                  );
+                                  const variants = Array.isArray(res.data) ? res.data : [];
+                                  // Load options for each variant
+                                  const variantsWithOptions = await Promise.all(
+                                    variants.map(async (v: any) => {
+                                      try {
+                                        const optRes = await apiClient.get(
+                                          `/api/restaurants/${restaurantId}/variant-presets/${preset.id}/variants/${v.id}/options`
+                                        );
+                                        return { ...v, options: Array.isArray(optRes.data) ? optRes.data : [] };
+                                      } catch {
+                                        return { ...v, options: [] };
+                                      }
+                                    })
+                                  );
+                                  setPresetPickerDetails(prev => ({ ...prev, [preset.id]: variantsWithOptions }));
+                                } catch {
+                                  setPresetPickerDetails(prev => ({ ...prev, [preset.id]: [] }));
+                                }
+                                setLoadingPresetDetails(null);
+                              }
+                            }
+                          }}
+                        >
+                          <Text style={styles.btnText}>Browse Presets ({inlineEditVariantPresets.length})</Text>
+                        </TouchableOpacity>
                       ) : (
                         <Text style={styles.emptyText}>No variant presets available</Text>
-                      )}
-
-                      {/* Add preset button */}
-                      {inlineEditVariantPresets.length > 0 && (
-                        <TouchableOpacity
-                          style={[styles.btn, styles.btnSecondary, { marginTop: 12 }]}
-                          onPress={applyVariantPresetToInlineItem}
-                        >
-                          <Text style={styles.btnText}>+ Add Variant Preset</Text>
-                        </TouchableOpacity>
                       )}
                     </View>
                   )}
@@ -1169,7 +1215,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                                 }}
                                 style={styles.addonDeleteBtn}
                               >
-                                <Text style={styles.addonDeleteBtnText}>🗑️</Text>
+                                <Text style={styles.addonDeleteBtnText}>Del</Text>
                               </TouchableOpacity>
                             </View>
                           ))}
@@ -1193,70 +1239,6 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                     </View>
                   )}
 
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[styles.btn, styles.btnSecondary]}
-                      onPress={() => {
-                        setEditingItemInlineId(null);
-                      }}
-                    >
-                      <Text style={styles.btnText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.btn, styles.btnPrimary]}
-                      onPress={async () => {
-                        try {
-                          await apiClient.patch(
-                            `/api/menu-items/${selectedItem.id}`,
-                            {
-                              name: inlineEditName,
-                              description: inlineEditDescription,
-                              price_cents: Math.round(parseFloat(inlineEditPrice) * 100),
-                              available: inlineEditAvailable,
-                              is_meal_combo: inlineEditIsMealCombo,
-                            }
-                          );
-                          setEditingItemInlineId(null);
-                          await loadMenuData();
-                          // Reload selected item
-                          const updatedItems = items.filter(i => i.id === selectedItem.id);
-                          if (updatedItems.length > 0) {
-                            setSelectedItem(updatedItems[0]);
-                          }
-                        } catch (err: any) {
-                          Alert.alert('Error', err.response?.data?.error || 'Failed to update item');
-                        }
-                      }}
-                    >
-                      <Text style={styles.btnText}>Save</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.btn, { backgroundColor: '#fee' }]}
-                      onPress={() => {
-                        Alert.alert(
-                          'Delete Item',
-                          `Are you sure you want to delete "${selectedItem.name}"?`,
-                          [
-                            { text: 'Cancel' },
-                            {
-                              text: 'Delete',
-                              style: 'destructive',
-                              onPress: async () => {
-                                try {
-                                  await deleteItem(selectedItem.id, selectedItem.name);
-                                  setShowDetailPanel(false);
-                                } catch (err: any) {
-                                  Alert.alert('Error', 'Failed to delete item');
-                                }
-                              },
-                            },
-                          ]
-                        );
-                      }}
-                    >
-                      <Text style={{ color: '#c33', fontWeight: '600', fontSize: 13 }}>🗑️</Text>
-                    </TouchableOpacity>
-                  </View>
                 </View>
               ) : (
                 /* Display Mode */
@@ -1308,12 +1290,73 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                             setVariantMaxSelect('');
                             setVariantRequired(false);
                             setEditingItemForVariant(selectedItem);
-                            setShowVariantModal(true);
+                            setShowInlineVariantForm(!showInlineVariantForm);
                           }}
                         >
-                          <Text style={styles.addBtn}>+ Add</Text>
+                          <Text style={styles.addBtn}>{showInlineVariantForm ? '- Cancel' : '+ Add'}</Text>
                         </TouchableOpacity>
                       </View>
+
+                      {showInlineVariantForm && (
+                        <View style={styles.inlineVariantForm}>
+                          <Text style={styles.label}>Variant Name</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={variantName}
+                            onChangeText={setVariantName}
+                            placeholder="e.g., Size, Temperature"
+                            autoFocus
+                          />
+                          <Text style={styles.label}>Min Select (optional)</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={variantMinSelect}
+                            onChangeText={setVariantMinSelect}
+                            placeholder="e.g., 1"
+                            keyboardType="number-pad"
+                          />
+                          <Text style={styles.label}>Max Select (optional)</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={variantMaxSelect}
+                            onChangeText={setVariantMaxSelect}
+                            placeholder="e.g., 3"
+                            keyboardType="number-pad"
+                          />
+                          <TouchableOpacity
+                            style={styles.checkboxRow}
+                            onPress={() => setVariantRequired(!variantRequired)}
+                          >
+                            <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
+                              {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
+                            </View>
+                            <Text style={styles.checkboxLabel}>Required</Text>
+                          </TouchableOpacity>
+                          <View style={styles.modalActions}>
+                            <TouchableOpacity
+                              style={[styles.btn, styles.btnSecondary]}
+                              onPress={() => {
+                                setShowInlineVariantForm(false);
+                                setVariantName('');
+                                setVariantMinSelect('');
+                                setVariantMaxSelect('');
+                                setVariantRequired(false);
+                              }}
+                            >
+                              <Text style={styles.btnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.btn, styles.btnPrimary]}
+                              onPress={async () => {
+                                await createVariant();
+                                setShowInlineVariantForm(false);
+                              }}
+                            >
+                              <Text style={styles.btnText}>Add Variant</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
 
                       {selectedItem.variants.map((variant) => {
                         const isVariantInEditMode = editingVariantIds.has(variant.id);
@@ -1368,13 +1411,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                                 setShowEditVariantModal(true);
                               }}
                             >
-                              <Text style={styles.actionSmallBtn}>✏️ Edit</Text>
+                              <Text style={styles.actionSmallBtn}>Edit</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[styles.variantActionBtn, styles.variantActionBtnDelete]}
                               onPress={() => deleteVariant(variant.id, variant.name)}
                             >
-                              <Text style={styles.actionSmallBtnDelete}>🗑️ Delete</Text>
+                              <Text style={styles.actionSmallBtnDelete}>Delete</Text>
                             </TouchableOpacity>
                           </View>
                         )}
@@ -1432,30 +1475,269 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
               )}
 
               {(!selectedItem.variants || selectedItem.variants.length === 0) && (
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnPrimary, { marginTop: 16 }]}
-                  onPress={() => {
-                    setVariantName('');
-                    setVariantMinSelect('');
-                    setVariantMaxSelect('');
-                    setVariantRequired(false);
-                    setEditingItemForVariant(selectedItem);
-                    setShowVariantModal(true);
-                  }}
-                >
-                  <Text style={styles.btnText}>+ Add Variant</Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary, { marginTop: 16 }]}
+                    onPress={() => {
+                      setVariantName('');
+                      setVariantMinSelect('');
+                      setVariantMaxSelect('');
+                      setVariantRequired(false);
+                      setEditingItemForVariant(selectedItem);
+                      setShowInlineVariantForm(!showInlineVariantForm);
+                    }}
+                  >
+                    <Text style={styles.btnText}>{showInlineVariantForm ? '- Cancel' : '+ Add Variant'}</Text>
+                  </TouchableOpacity>
+
+                  {showInlineVariantForm && (
+                    <View style={styles.inlineVariantForm}>
+                      <Text style={styles.label}>Variant Name</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={variantName}
+                        onChangeText={setVariantName}
+                        placeholder="e.g., Size, Temperature"
+                        autoFocus
+                      />
+                      <Text style={styles.label}>Min Select (optional)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={variantMinSelect}
+                        onChangeText={setVariantMinSelect}
+                        placeholder="e.g., 1"
+                        keyboardType="number-pad"
+                      />
+                      <Text style={styles.label}>Max Select (optional)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={variantMaxSelect}
+                        onChangeText={setVariantMaxSelect}
+                        placeholder="e.g., 3"
+                        keyboardType="number-pad"
+                      />
+                      <TouchableOpacity
+                        style={styles.checkboxRow}
+                        onPress={() => setVariantRequired(!variantRequired)}
+                      >
+                        <View style={[styles.checkbox, variantRequired && styles.checkboxChecked]}>
+                          {variantRequired && <Text style={styles.checkboxCheck}>✓</Text>}
+                        </View>
+                        <Text style={styles.checkboxLabel}>Required</Text>
+                      </TouchableOpacity>
+                      <View style={styles.modalActions}>
+                        <TouchableOpacity
+                          style={[styles.btn, styles.btnSecondary]}
+                          onPress={() => {
+                            setShowInlineVariantForm(false);
+                            setVariantName('');
+                            setVariantMinSelect('');
+                            setVariantMaxSelect('');
+                            setVariantRequired(false);
+                          }}
+                        >
+                          <Text style={styles.btnText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.btn, styles.btnPrimary]}
+                          onPress={async () => {
+                            await createVariant();
+                            setShowInlineVariantForm(false);
+                          }}
+                        >
+                          <Text style={styles.btnText}>Add Variant</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </>
               )}
                 </>
               )}
             </ScrollView>
+
+            {/* Fixed footer with Save/Cancel/Delete when in edit mode */}
+            {editingItemInlineId === selectedItem.id && (
+              <View style={styles.detailPanelFooter}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary, { flex: 1 }]}
+                  onPress={() => {
+                    setEditingItemInlineId(null);
+                  }}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary, { flex: 2 }]}
+                  onPress={async () => {
+                    try {
+                      await apiClient.patch(
+                        `/api/menu-items/${selectedItem.id}`,
+                        {
+                          name: inlineEditName,
+                          description: inlineEditDescription,
+                          price_cents: Math.round(parseFloat(inlineEditPrice) * 100),
+                          available: inlineEditAvailable,
+                          is_meal_combo: inlineEditIsMealCombo,
+                        }
+                      );
+                      setEditingItemInlineId(null);
+                      await loadMenuData();
+                      const updatedItems = items.filter(i => i.id === selectedItem.id);
+                      if (updatedItems.length > 0) {
+                        setSelectedItem(updatedItems[0]);
+                      }
+                    } catch (err: any) {
+                      Alert.alert('Error', err.response?.data?.error || 'Failed to update item');
+                    }
+                  }}
+                >
+                  <Text style={styles.btnText}>Save Changes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, { backgroundColor: '#fee' }]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Delete Item',
+                      `Are you sure you want to delete "${selectedItem.name}"?`,
+                      [
+                        { text: 'Cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              await deleteItem(selectedItem.id, selectedItem.name);
+                              setShowDetailPanel(false);
+                              setEditingItemInlineId(null);
+                            } catch (err: any) {
+                              Alert.alert('Error', 'Failed to delete item');
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={{ color: '#c33', fontWeight: '600', fontSize: 13 }}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
+
+        {/* Variant Preset Picker Modal */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showPresetPickerModal}
+          animationType="fade"
+          transparent
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxHeight: '80%', width: '85%' }]}>
+              <Text style={styles.modalTitle}>Variant Presets</Text>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+                Select a preset to view its variants and options. Tap "Apply" to add all variants to this item.
+              </Text>
+
+              <ScrollView style={{ maxHeight: 400 }}>
+                {inlineEditVariantPresets.map((preset) => {
+                  const details = presetPickerDetails[preset.id];
+                  const isSelected = inlineEditSelectedVariantPresetId === preset.id;
+                  return (
+                    <TouchableOpacity
+                      key={preset.id}
+                      style={[
+                        {
+                          backgroundColor: isSelected ? '#eff6ff' : '#f9fafb',
+                          borderWidth: 1,
+                          borderColor: isSelected ? '#3b82f6' : '#e5e7eb',
+                          borderRadius: 8,
+                          padding: 12,
+                          marginBottom: 10,
+                        },
+                      ]}
+                      onPress={() => setInlineEditSelectedVariantPresetId(isSelected ? null : preset.id)}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>{preset.name}</Text>
+                        {isSelected && <Text style={{ fontSize: 18, color: '#3b82f6' }}>✓</Text>}
+                      </View>
+
+                      {details && details.length > 0 ? (
+                        <View style={{ marginTop: 8 }}>
+                          {details.map((v: any, vi: number) => (
+                            <View key={vi} style={{ marginBottom: 6 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>
+                                {v.variant?.name || v.name}
+                                {v.variant?.required && <Text style={{ color: '#d32f2f' }}> *</Text>}
+                              </Text>
+                              {v.options && v.options.length > 0 && (
+                                <View style={{ marginLeft: 12, marginTop: 2 }}>
+                                  {v.options.map((opt: any, oi: number) => (
+                                    <Text key={oi} style={{ fontSize: 12, color: '#6b7280', lineHeight: 18 }}>
+                                      • {opt.name}{opt.price_cents ? ` (+$${(opt.price_cents / 100).toFixed(2)})` : ''}
+                                    </Text>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      ) : loadingPresetDetails === preset.id ? (
+                        <ActivityIndicator size="small" style={{ marginTop: 8 }} />
+                      ) : details && details.length === 0 ? (
+                        <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>No variants in this preset</Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={[styles.modalActions, { marginTop: 16 }]}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => {
+                    setShowPresetPickerModal(false);
+                    setInlineEditSelectedVariantPresetId(null);
+                  }}
+                >
+                  <Text style={styles.btnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary, !inlineEditSelectedVariantPresetId && { opacity: 0.5 }]}
+                  disabled={!inlineEditSelectedVariantPresetId}
+                  onPress={() => {
+                    const selectedPreset = inlineEditVariantPresets.find(
+                      (p) => p.id === inlineEditSelectedVariantPresetId
+                    );
+                    Alert.alert(
+                      'Apply Preset',
+                      `Apply "${selectedPreset?.name}" to this item? This will add all variants and options from the preset.`,
+                      [
+                        { text: 'Cancel' },
+                        {
+                          text: 'Apply',
+                          onPress: async () => {
+                            setShowPresetPickerModal(false);
+                            await applyVariantPresetToInlineItem();
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.btnText}>Apply Preset</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* ==================== MODALS ==================== */}
 
         {/* Category Modals */}
-        <Modal visible={showCategoryModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>New Category</Text>
@@ -1487,7 +1769,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
           </View>
         </Modal>
 
-        <Modal visible={showEditCategoryModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Category</Text>
@@ -1523,7 +1805,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         </Modal>
 
         {/* Item Modals */}
-        <Modal visible={showItemModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>New Food Item</Text>
@@ -1572,8 +1854,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 >
                   <Text style={styles.btnText}>
                     {uploadingImageItemId === 0 && uploadingImageContext === 'new'
-                      ? '⏳ Uploading...'
-                      : '📸 Upload Image'}
+                      ? 'Uploading...'
+                      : 'Upload Image'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1596,7 +1878,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
           </View>
         </Modal>
 
-        <Modal visible={showEditItemModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Item</Text>
@@ -1645,8 +1927,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
                 >
                   <Text style={styles.btnText}>
                     {uploadingImageItemId === editingItemId && uploadingImageContext === 'edit'
-                      ? '⏳ Uploading...'
-                      : '📸 Upload Image'}
+                      ? 'Uploading...'
+                      : 'Upload Image'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1739,7 +2021,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         </Modal>
 
         {/* Addon Selector Modal */}
-        <Modal visible={showAddonSelectorModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAddonSelectorModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>Add Addon Item</Text>
@@ -1834,7 +2116,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
             </ScrollView>
           </View>
         </Modal>
-        <Modal visible={showVariantModal} animationType="fade" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showVariantModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>New Variant</Text>
@@ -1901,7 +2183,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
           </View>
         </Modal>
 
-        <Modal visible={showEditVariantModal} animationType="slide" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditVariantModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Variant</Text>
@@ -1969,7 +2251,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
         </Modal>
 
         {/* Variant Option Modals */}
-        <Modal visible={showVariantOptionModal} animationType="slide" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>New Option</Text>
@@ -2013,7 +2295,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string }>(
           </View>
         </Modal>
 
-        <Modal visible={showEditVariantOptionModal} animationType="slide" transparent>
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditVariantOptionModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Option</Text>
@@ -2102,30 +2384,35 @@ const styles = StyleSheet.create({
   },
   categoryBtn: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: '#f9fafb',
-    marginHorizontal: 6,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    marginHorizontal: 4,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   categoryBtnActive: {
     backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
   categoryBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#64748b',
   },
   categoryBtnTextActive: {
     color: '#ffffff',
   },
   categoryBtnAdd: {
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#dbeafe',
+    borderColor: '#93c5fd',
+    borderStyle: 'dashed',
   },
   categoryBtnAddText: {
-    color: '#4b5563',
+    color: '#3b82f6',
   },
   categoryActionButtons: {
     position: 'absolute',
@@ -2164,34 +2451,32 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   gridRow: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 12,
+    gap: 10,
   },
   itemCardWrapper: {
-    flex: 1,
-    marginRight: 8,
+    width: '31%',
+    maxWidth: '31%',
     position: 'relative',
   },
   itemCard: {
-    flex: 1,
     borderRadius: 8,
     backgroundColor: '#fff',
     overflow: 'hidden',
-    minHeight: 220,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
   itemImage: {
     width: '100%',
-    height: 120,
+    aspectRatio: 2.2,
     backgroundColor: '#f0f0f0',
   },
   noImage: {
     width: '100%',
-    height: 120,
+    aspectRatio: 2.2,
     backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
+    resizeMode: 'cover',
   },
   noImageText: {
     fontSize: 32,
@@ -2255,9 +2540,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addItemText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#666',
+    color: '#3b82f6',
   },
 
   // Detail Panel
@@ -2266,7 +2551,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    width: '70%',
+    width: '42%',
     backgroundColor: '#fff',
     borderLeftWidth: 2,
     borderLeftColor: '#3b82f6',
@@ -2318,6 +2603,24 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 12,
     paddingVertical: 12,
+  },
+  detailPanelFooter: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  inlineVariantForm: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 12,
   },
   detailImage: {
     width: '100%',

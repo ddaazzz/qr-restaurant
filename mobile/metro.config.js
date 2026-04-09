@@ -1,4 +1,5 @@
 const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
@@ -22,5 +23,29 @@ config.server = {
 
 // Disable image optimization in dev to speed up bundler
 config.transformer.asyncIterator = true;
+
+// Fix engine.io-client: redirect Node.js-specific transport files to browser versions.
+// With unstable_enablePackageExports (Expo SDK 54 default), the browser field file
+// remapping in engine.io-client may be bypassed, causing Node.js-only modules (ws,
+// http, net, tls) to be loaded in React Native, which crashes at runtime.
+const originalResolveRequest = config.resolver?.resolveRequest;
+config.resolver = {
+  ...config.resolver,
+  resolveRequest: (context, moduleName, platform) => {
+    // Redirect engine.io-client .node.js files to their browser counterparts
+    if (moduleName.endsWith('.node.js') || moduleName.endsWith('.node')) {
+      const browserName = moduleName.replace(/\.node(\.js)?$/, '.js');
+      try {
+        return context.resolveRequest(context, browserName, platform);
+      } catch (e) {
+        // Fall through to default resolution
+      }
+    }
+    if (originalResolveRequest) {
+      return originalResolveRequest(context, moduleName, platform);
+    }
+    return context.resolveRequest(context, moduleName, platform);
+  },
+};
 
 module.exports = config;

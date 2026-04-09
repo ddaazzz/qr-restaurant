@@ -428,37 +428,53 @@
   }
 }
 
+/* .table-card-wrapper is the actual CSS Grid item.
+   height:0 + padding-bottom:100% gives in-flow height = column width,
+   which the grid correctly measures for row track sizing.
+   .table-card is absolutely positioned inside to fill the wrapper. */
+.table-card-wrapper {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%;
+}
+
 .table-card {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: white;
   border: 2px solid #e0e0e0;
   border-radius: 12px;
-  padding: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
   overflow: hidden;
-  flex-shrink: 0;
   touch-action: manipulation;
-  position: relative;
-  aspect-ratio: 1;
-  min-height: 160px;
-  max-width: 100%;
-  width: 100%;
-  gap: 0;
+  box-sizing: border-box;
+}
+
+body.edit-mode .table-card-wrapper {
+  height: auto;
+  padding-bottom: 0;
 }
 
 body.edit-mode .table-card {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px;
   border: 2px solid #4a90e2;
   background: #f0f7ff;
   box-shadow: 0 4px 12px rgba(74, 144, 226, 0.15);
-  min-height: auto;
-  aspect-ratio: auto;
-  overflow: visible;
-  justify-content: flex-start;
 }
 
 .table-card:hover {
@@ -579,6 +595,9 @@ body.edit-mode .table-card-sessions {
   text-shadow: none;
   z-index: 10;
   margin: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 body.edit-mode .table-card-seats {
@@ -587,33 +606,28 @@ body.edit-mode .table-card-seats {
 }
 
 .table-card-name {
-  font-size: 48px;
-  font-weight: 700;
-  color: #1a1a1a;
-  text-align: center;
-  position: relative;
-  top: auto;
-  left: auto;
-  transform: none;
-  z-index: 20;
-  line-height: 1.1;
-  margin: 0;
-  width: 90%;
-  flex: 0 0 auto;
-}
-
-body.edit-mode .table-card-name {
-  font-size: 28px;
-  margin: 4px 0 2px 0;
-}
-
-.table-card-name {
   font-size: 32px;
   font-weight: 900;
   color: var(--text-dark);
   text-align: center;
-  margin-bottom: 0;
- 
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  line-height: 1.1;
+  margin: 0;
+  width: 90%;
+  pointer-events: none;
+}
+
+body.edit-mode .table-card-name {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  font-size: 28px;
+  margin: 4px 0 2px 0;
 }
 
 .table-card-edit-controls button img {
@@ -627,16 +641,6 @@ body.edit-mode .table-card-name {
   outline: none;
 }
 
-/* TABLE CARD SEATS */
-.table-card-seats {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .table-card-seats img {
   width: 20px;
   height: 20px;
@@ -648,7 +652,6 @@ body.edit-mode .table-card-name {
 }
 
 .table-card.collapsed {
-  min-height: 240px;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -710,24 +713,17 @@ body.edit-mode .table-edit-controls {
 }
 
 .add-table-card {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%;
   background: rgba(var(--primary-color-rgb), 0.08);
   border: 2px dashed var(--primary-color);
   border-radius: 16px;
-  padding: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
   overflow: hidden;
-  position: relative;
-  aspect-ratio: 1;
-  min-height: 160px;
-  font-size: 56px;
-  color: var(--primary-color);
-  font-weight: bold;
-  line-height: 1;
+  box-sizing: border-box;
   user-select: none;
 }
 
@@ -736,6 +732,20 @@ body.edit-mode .table-edit-controls {
   transform: translateY(-3px);
   border-color: var(--primary-color);
   background: rgba(var(--primary-color-rgb), 0.12);
+}
+
+/* The "+" symbol centered over the card */
+.add-table-card::after {
+  content: '+';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 56px;
+  font-weight: bold;
+  color: var(--primary-color);
+  line-height: 1;
+  pointer-events: none;
 }
 
 .add-table-card:active {
@@ -782,10 +792,6 @@ body.edit-mode .table-edit-controls {
   color: var(--text-light);
   margin: 2px 0;
   line-height: 1.1;
-}
-
-.sessions {
-  margin-top: 12px;
 }
 
 .session-pill {
@@ -1363,7 +1369,6 @@ body.edit-mode .table-edit-controls {
     grid-template-columns: repeat(4, 1fr);
     gap: 16px;
   }
-
   .main-content {
     overflow-y: auto;
     height: 100%;
@@ -1375,7 +1380,6 @@ body.edit-mode .table-edit-controls {
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
   }
-
   .main-content {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -1384,136 +1388,28 @@ body.edit-mode .table-edit-controls {
 }
 
 @media (max-width: 479px) {
-  #tables-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
-  .table-card {
-    padding: 8px 6px;
-  }
-
-  body.edit-mode .table-card {
-    height: auto;
-    overflow: visible;
-    min-height: auto;
-  }
-
-  .table-name {
-    font-size: 14px;
-    margin-bottom: 2px;
-  }
-
-  .table-meta {
-    font-size: 11px;
-    margin: 1px 0;
-  }
-
   .main-content {
     padding: 12px;
   }
-
   .main-content h2 {
     font-size: 18px;
     margin-bottom: 8px;
   }
-
   .session-panel {
     padding: 8px;
   }
 }
 
 @media (min-width: 480px) and (max-width: 768px) {
-  #tables-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  .table-card {
-    padding: 9px 7px;
-  }
-
-  body.edit-mode .table-card {
-    height: auto;
-    overflow: visible;
-    min-height: auto;
-  }
-
-  .table-name {
-    font-size: 15px;
-    margin-bottom: 3px;
-  }
-  .table-meta {
-    font-size: 12px;
-    margin: 1px 0;
-  }
-
   .main-content {
     padding: 14px;
   }
-
   .main-content h2 {
     font-size: 22px;
     margin-bottom: 10px;
   }
-
   .session-panel {
     padding: 10px;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  #tables-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-  }
-
-  .table-card {
-    padding: 10px 8px;
-  }
-
-  .table-name {
-    font-size: 16px;
-    margin-bottom: 4px;
-  }
-
-  .table-meta {
-    font-size: 13px;
-    margin: 2px 0;
-  }
-}
-
-@media (min-width: 1025px) {
-  #tables-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-  }
-
-  .table-card {
-    padding: 10px 8px;
-  }
-
-  .table-name {
-    font-size: 18px;
-    margin-bottom: 5px;
-  }
-
-  .table-meta {
-    font-size: 14px;
-    margin: 2px 0;
-  }
-
-  .main-content {
-    padding: 18px;
-  }
-
-  .main-content h2 {
-    font-size: 24px;
-    margin-bottom: 14px;
-  }
-
-  .session-panel {
-    padding: 14px;
   }
 }
 

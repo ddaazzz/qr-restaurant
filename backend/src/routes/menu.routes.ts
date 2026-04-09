@@ -599,22 +599,11 @@ router.delete("/menu-items/:itemId", async (req, res) => {
       return res.status(404).json({ error: "Menu item not found or doesn't belong to this restaurant" });
     }
 
-    // Prevent delete if item exists in orders
-    const used = await pool.query(
-      `
-      SELECT 1
-      FROM order_items
-      WHERE menu_item_id = $1
-      LIMIT 1
-      `,
+    // Nullify references in order_items so order history is preserved
+    await pool.query(
+      `UPDATE order_items SET menu_item_id = NULL WHERE menu_item_id = $1`,
       [itemId]
     );
-
-    if ((used?.rowCount ?? 0) > 0) {
-      return res.status(400).json({
-        error: "Cannot delete item already ordered"
-      });
-    }
 
     const result = await pool.query(
       "DELETE FROM menu_items WHERE id = $1",

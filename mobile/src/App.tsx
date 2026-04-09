@@ -1,9 +1,9 @@
 import React from 'react';
 import { ActivityIndicator, View, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { TranslationProvider } from './contexts/TranslationContext';
+import { ToastProvider } from './components/ToastProvider';
 import { LoginScreen } from './screens/LoginScreen';
-import { StaffLoginScreen } from './screens/StaffLoginScreen';
-import { KitchenLoginScreen } from './screens/KitchenLoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
@@ -49,8 +49,12 @@ const RootNavigator = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <TranslationProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <RootNavigator />
+        </ToastProvider>
+      </AuthProvider>
+    </TranslationProvider>
   );
 }

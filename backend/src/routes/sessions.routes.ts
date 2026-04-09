@@ -117,6 +117,13 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       [tableId, freeUnit.id, pax, table.restaurant_id]
     );
 
+    // Auto-create a blank order for this session
+    const orderRes = await client.query(
+      `INSERT INTO orders (session_id, restaurant_id) VALUES ($1, $2) RETURNING id`,
+      [insertRes.rows[0].id, table.restaurant_id]
+    );
+    console.log(`[Sessions] ✨ Auto-created order ${orderRes.rows[0].id} for session ${insertRes.rows[0].id}`);
+
     await client.query("COMMIT");
 
     // If a booking_id was provided, link this session to the booking
@@ -127,7 +134,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       );
     }
 
-    res.status(201).json(insertRes.rows[0]);
+    res.status(201).json({ ...insertRes.rows[0], order_id: orderRes.rows[0].id });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);
@@ -196,6 +203,8 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
         ts.bill_closure_requested,
         ts.call_staff_requested,
 
+        o.id            AS order_id,
+
         b.guest_name    AS booking_guest_name
 
       FROM tables t
@@ -204,6 +213,9 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
       LEFT JOIN table_sessions ts
         ON ts.table_unit_id = tu.id
        AND ts.ended_at IS NULL
+      LEFT JOIN orders o
+        ON o.session_id = ts.id
+       AND o.status <> 'completed'
       LEFT JOIN bookings b
         ON b.session_id = ts.id
 

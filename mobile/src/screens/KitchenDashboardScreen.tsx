@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,6 +12,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../services/apiClient';
+import { useTranslation } from '../contexts/TranslationContext';
+import { useToast } from '../components/ToastProvider';
+import { io, Socket } from 'socket.io-client';
+import { API_URL } from '../services/apiClient';
 import { printerSettingsService, KitchenPrinter } from '../services/printerSettingsService';
 import { printerSessionService } from '../services/printerSessionService';
 import { printerAutoPrintService } from '../services/printerAutoPrintService';
@@ -50,8 +54,27 @@ interface KitchenItem {
  *   3. Backend sends ESC/POS to configured printer
  *   → Backup print if server didn't auto-print ✅
  */
+/**
+ * Get relative time-ago string from a date
+ */
+const getTimeAgo = (dateStr: string): string => {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  if (diffMs < 0) return 'just now';
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+};
+
 export const KitchenDashboardScreen = ({ navigation }: any) => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
+  const { t, lang, setLanguage } = useTranslation();
+  const { showToast } = useToast();
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,21 +86,101 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   const [printing, setPrinting] = useState(false);
   const [printerConnected, setPrinterConnected] = useState(false);
   const [printerStatus, setPrinterStatus] = useState('Initializing...');
+  const [wsConnected, setWsConnected] = useState(false);
+  const [clockLoading, setClockLoading] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const [, setTimeRefresh] = useState(0); // Force re-render for time-ago updates
 
   useEffect(() => {
     initializePrinters();
     subscribeToAutoPrint();
+    connectWebSocket();
     
+    // Polling as fallback (WebSocket is primary)
     const interval = setInterval(() => {
       loadKitchenItems();
-      loadKitchenPrinters(); // Refresh printer config periodically
-    }, 5000); // Refresh every 5 seconds
+      loadKitchenPrinters();
+    }, 5000);
+
+    // Time-ago refresh every 30s
+    const timeInterval = setInterval(() => {
+      setTimeRefresh(prev => prev + 1);
+    }, 30000);
 
     return () => {
       clearInterval(interval);
+      clearInterval(timeInterval);
       printerAutoPrintService.unsubscribeFromOrders();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, [user?.restaurantId]);
+
+  /**
+   * Connect to WebSocket for real-time kitchen order updates
+   */
+  const connectWebSocket = () => {
+    const restaurantId = user?.restaurantId;
+    if (!restaurantId) return;
+
+    try {
+      const wsUrl = API_URL.replace('/api', '');
+      const socket = io(wsUrl, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 2000,
+      });
+
+      socket.on('connect', () => {
+        console.log('[Kitchen WS] Connected');
+        setWsConnected(true);
+        socket.emit('subscribe-kitchen-orders', { restaurantId });
+      });
+
+      socket.on('disconnect', () => {
+        console.log('[Kitchen WS] Disconnected');
+        setWsConnected(false);
+      });
+
+      socket.on('new-order', (_data: any) => {
+        console.log('[Kitchen WS] New order received');
+        loadKitchenItems();
+      });
+
+      socket.on('order-status-changed', (_data: any) => {
+        console.log('[Kitchen WS] Order status changed');
+        loadKitchenItems();
+      });
+
+      socketRef.current = socket;
+    } catch (err) {
+      console.error('[Kitchen WS] Connection error:', err);
+    }
+  };
+
+  /**
+   * Clock In/Out handler
+   */
+  const handleClockToggle = async () => {
+    if (!user?.userId || !user?.restaurantId) return;
+    setClockLoading(true);
+    try {
+      const isClockedIn = user.currently_clocked_in;
+      const endpoint = isClockedIn
+        ? `/api/restaurants/${user.restaurantId}/staff/${user.userId}/clock-out`
+        : `/api/restaurants/${user.restaurantId}/staff/${user.userId}/clock-in`;
+      await apiClient.post(endpoint, { restaurantId: user.restaurantId });
+      updateUser({ currently_clocked_in: !isClockedIn });
+      showToast(t(isClockedIn ? 'common.clocked-out' : 'common.clocked-in'), 'success');
+    } catch (err: any) {
+      showToast(err.message || t('common.failed'), 'error');
+    } finally {
+      setClockLoading(false);
+    }
+  };
 
   /**
    * Initialize printer services on mount
@@ -126,14 +229,14 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
     const session = printerSessionService.getSession('kitchen');
     if (session && session.connected) {
       setPrinterConnected(true);
-      setPrinterStatus(`✅ Connected: ${session.deviceName}`);
+      setPrinterStatus(`Connected: ${session.deviceName}`);
     } else {
       setPrinterConnected(false);
       const pending = printerSessionService.getSessionAny('kitchen');
       if (pending) {
-        setPrinterStatus(`🔄 Reconnecting: ${pending.deviceName}...`);
+        setPrinterStatus(`Reconnecting: ${pending.deviceName}...`);
       } else {
-        setPrinterStatus('⚠️ Not connected');
+        setPrinterStatus('Not connected');
       }
     }
   };
@@ -217,7 +320,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
 
       if (printers.length === 0) {
         Alert.alert(
-          '⚠️ No Printer Configured',
+          'No Printer Configured',
           'No kitchen printer is configured for this order category.\n\nPlease configure printers in web admin.'
         );
         return;
@@ -330,14 +433,14 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
             printer.name
           );
         }
-        Alert.alert('✅ Print Sent', `Order sent to: ${printer.name}`);
+        Alert.alert('Print Sent', `Order sent to: ${printer.name}`);
       } else {
         throw new Error(`Failed to print to ${printer.name}`);
       }
     } catch (err) {
       console.error('[KitchenDashboard] ❌ Print error:', err);
       const message = err instanceof Error ? err.message : 'Failed to print order';
-      Alert.alert('❌ Print Failed', message);
+      Alert.alert('Print Failed', message);
     } finally {
       setPrinting(false);
     }
@@ -507,8 +610,16 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   }
 
   const statusColors: any = {
-    pending: '#FVC107',
-    confirmed: '#2196F3',
+    pending: '#FFC107',
+    confirmed: '#3b82f6',
+    preparing: '#FF9800',
+    ready: '#4CAF50',
+    served: '#9E9E9E',
+  };
+
+  const cardBorderColors: any = {
+    pending: '#FFC107',
+    confirmed: '#3b82f6',
     preparing: '#FF9800',
     ready: '#4CAF50',
     served: '#9E9E9E',
@@ -519,18 +630,40 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>🍳 Kitchen Queue</Text>
-          <Text style={[styles.printerStatus, { color: printerConnected ? '#4CAF50' : '#FF9800' }]}>
-            {printerStatus}
-          </Text>
+          <Text style={styles.title}>{t('kitchen.kitchen-queue') || 'Kitchen Queue'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <Text style={[styles.printerStatus, { color: printerConnected ? '#4CAF50' : '#FF9800' }]}>
+              {printerStatus}
+            </Text>
+            <Text style={{ fontSize: 12, color: wsConnected ? '#4CAF50' : '#FF9800' }}>
+              {wsConnected ? '● Live' : '○ Polling'}
+            </Text>
+          </View>
         </View>
+        {/* Clock In/Out button */}
+        <TouchableOpacity
+          onPress={handleClockToggle}
+          disabled={clockLoading}
+          style={[
+            styles.menuButton,
+            { backgroundColor: user?.currently_clocked_in ? 'rgba(231,76,60,0.3)' : 'rgba(39,174,96,0.3)', marginRight: 8 },
+          ]}
+        >
+          {clockLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.menuButtonText}>
+              {user?.currently_clocked_in ? t('admin.clock-out') : t('admin.clock-in')}
+            </Text>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.menuButton}>
-          <Text style={styles.menuButtonText}>Menu ▼</Text>
+          <Text style={styles.menuButtonText}>{t('common.menu') || 'Menu'}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Menu Dropdown */}
-      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
         <TouchableOpacity
           style={styles.menuBackdrop}
           activeOpacity={1}
@@ -540,11 +673,12 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
-                Alert.alert('Language', 'Language selection would go here');
+                setLanguage(lang === 'en' ? 'zh' : 'en');
+                showToast(lang === 'en' ? '已切換至中文' : 'Switched to English', 'info');
                 setShowMenu(false);
               }}
             >
-              <Text style={styles.menuItemText}>🌍 Language</Text>
+              <Text style={styles.menuItemText}>{lang === 'en' ? '中文' : 'English'}</Text>
             </TouchableOpacity>
             <View style={styles.menuDivider} />
             <TouchableOpacity
@@ -554,14 +688,14 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                 handleLogout();
               }}
             >
-              <Text style={styles.menuItemText}>🚪 Logout</Text>
+              <Text style={styles.menuItemText}>{t('common.logout') || 'Logout'}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
       {/* NEW: Printer Selection Modal */}
-      <Modal visible={showPrinterModal} transparent animationType="fade" onRequestClose={() => setShowPrinterModal(false)}>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showPrinterModal} transparent animationType="fade" onRequestClose={() => setShowPrinterModal(false)}>
         <TouchableOpacity
           style={styles.modalBackdrop}
           activeOpacity={1}
@@ -585,8 +719,8 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     <Text style={styles.printerName}>{printer.name}</Text>
                     <Text style={styles.printerType}>
                       {printer.type === 'network' 
-                        ? `📍 ${printer.host || 'Network Printer'}` 
-                        : `📱 ${printer.bluetoothDevice || 'Bluetooth'}`}
+                        ? `${printer.host || 'Network Printer'}` 
+                        : `${printer.bluetoothDevice || 'Bluetooth'}`}
                     </Text>
                     <Text style={styles.printerCategories}>
                       Categories: {printer.categories?.join(', ') || 'All'}
@@ -627,12 +761,15 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
           refreshing={loading}
           onRefresh={loadKitchenItems}
           renderItem={({ item }) => (
-            <View style={styles.orderCard}>
+            <View style={[
+              styles.orderCard,
+              { borderLeftColor: cardBorderColors[item.status] || '#FF9800' },
+            ]}>
               <View style={styles.orderHeader}>
                 <View>
                   <Text style={styles.orderNumber}>Order #{item.orderId}</Text>
                   <Text style={styles.tableNumber}>Table {item.tableNumber}</Text>
-                  <Text style={styles.timestamp}>{new Date(item.createdAt).toLocaleTimeString()}</Text>
+                  <Text style={styles.timestamp}>{getTimeAgo(item.createdAt)}</Text>
                 </View>
                 <View
                   style={[
@@ -680,25 +817,34 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                   disabled={printing}
                 >
                   <Text style={styles.actionButtonText}>
-                    {printing ? '⏳ Printing...' : '🖨️ Print'}
+                    {printing ? 'Printing...' : 'Print'}
                   </Text>
                 </TouchableOpacity>
 
-                {item.status !== 'ready' && (
+                {item.status === 'pending' && (
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.preparingButton]}
+                    onPress={() => handleUpdateStatus(item.id, 'preparing')}
+                  >
+                    <Text style={styles.actionButtonText}>{t('kitchen.start-preparing') || 'Start'}</Text>
+                  </TouchableOpacity>
+                )}
+
+                {(item.status === 'pending' || item.status === 'preparing') && (
                   <TouchableOpacity
                     style={[styles.actionButton, styles.readyButton]}
                     onPress={() => handleUpdateStatus(item.id, 'ready')}
                   >
-                    <Text style={styles.actionButtonText}>Ready</Text>
+                    <Text style={styles.actionButtonText}>{t('kitchen.ready') || 'Ready'}</Text>
                   </TouchableOpacity>
                 )}
 
-                {item.status !== 'served' && item.status === 'ready' && (
+                {item.status === 'ready' && (
                   <TouchableOpacity
                     style={[styles.actionButton, styles.servedButton]}
                     onPress={() => handleUpdateStatus(item.id, 'served')}
                   >
-                    <Text style={styles.actionButtonText}>Served</Text>
+                    <Text style={styles.actionButtonText}>{t('kitchen.served') || 'Served'}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -722,31 +868,34 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FF9800',
-    padding: 20,
-    paddingTop: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingTop: 50,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
   },
   printerStatus: {
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 2,
     fontWeight: '500',
   },
   menuButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 6,
+    flexShrink: 0,
   },
   menuButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   menuBackdrop: {
@@ -879,6 +1028,9 @@ const styles = StyleSheet.create({
   readyButton: {
     backgroundColor: '#4CAF50',
   },
+  preparingButton: {
+    backgroundColor: '#FF9800',
+  },
   servedButton: {
     backgroundColor: '#9E9E9E',
   },
@@ -919,7 +1071,7 @@ const styles = StyleSheet.create({
   },
   // NEW: Print button and modal styles
   printButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#3b82f6',
   },
   modalBackdrop: {
     flex: 1,
@@ -956,7 +1108,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#f5f5f5',
     borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
+    borderLeftColor: '#3b82f6',
   },
   printerOptionContent: {
     flex: 1,
@@ -978,7 +1130,7 @@ const styles = StyleSheet.create({
   },
   printerArrow: {
     fontSize: 16,
-    color: '#2196F3',
+    color: '#3b82f6',
     marginLeft: 8,
   },
   printerModalCancel: {

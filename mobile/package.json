@@ -19,11 +19,15 @@
     "@react-native-picker/picker": "2.11.1",
     "axios": "^1.7.0",
     "expo": "54.0.33",
+    "expo-auth-session": "~7.0.10",
     "expo-camera": "^55.0.9",
+    "expo-crypto": "~15.0.8",
     "expo-device": "8.0.10",
+    "expo-image-picker": "~17.0.10",
     "expo-permissions": "14.4.0",
     "expo-print": "^55.0.8",
     "expo-secure-store": "15.0.8",
+    "expo-web-browser": "~15.0.10",
     "qrcode": "1.5.4",
     "qrcode.react": "4.2.0",
     "react": "19.1.0",
@@ -33,6 +37,7 @@
     "react-native-modal": "13.0.1",
     "react-native-qrcode-svg": "^6.3.0",
     "react-native-svg": "^14.0.0",
+    "socket.io-client": "^4.8.3",
     "typescript": "5.9.2"
   },
   "devDependencies": {

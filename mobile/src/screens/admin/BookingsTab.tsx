@@ -10,9 +10,14 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Platform,
   Alert,
+  Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
+import { useTranslation } from '../../contexts/TranslationContext';
+import { useToast } from '../../components/ToastProvider';
 
 interface Booking {
   id: number;
@@ -27,6 +32,39 @@ interface Booking {
   email?: string;
   status: string;
   table_id?: number;
+  session_id?: number;
+  notes?: string;
+  restaurant_booking_number?: number;
+}
+
+interface BookingSessionOrder {
+  order_id: number;
+  restaurant_order_number?: number;
+  order_status: string;
+  order_payment_method?: string;
+  order_reference?: string;
+  total_cents: number;
+  items: Array<{
+    menu_item_name: string;
+    quantity: number;
+    item_total_cents: number;
+    variants?: string;
+    is_addon?: boolean;
+    addons?: Array<{
+      menu_item_name: string;
+      quantity: number;
+      item_total_cents: number;
+    }>;
+  }>;
+}
+
+interface BookingSession {
+  id: number;
+  restaurant_session_number?: number;
+  table_name?: string;
+  pax: number;
+  started_at: string;
+  ended_at?: string;
 }
 
 interface Table {
@@ -44,9 +82,11 @@ export interface BookingsTabRef {
   openNewBookingModal: () => void;
 }
 
-export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>((props, ref) => {
-  const { restaurantId } = props;
-  
+export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; searchQuery?: string }>((props, ref) => {
+  const { restaurantId, searchQuery } = props;
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+
   // Main state
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -65,6 +105,11 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
   const [showTableDropdown, setShowTableDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<Booking | null>(null);
+  const [sessionData, setSessionData] = useState<BookingSession | null>(null);
+  const [sessionOrders, setSessionOrders] = useState<BookingSessionOrder[]>([]);
+  const [loadingSession, setLoadingSession] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     guest_name: '',
@@ -75,6 +120,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
     date: '',
     time: '',
     status: 'confirmed',
+    notes: '',
   });
 
   // Expose openNewBookingModal via ref
@@ -194,7 +240,21 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
       const bookingDateField = b.date || (b as any).booking_date;
       if (!bookingDateField || b.status === 'cancelled') return false;
       const bookingDate = bookingDateField.split('T')[0]; // Handle ISO timestamp
-      return bookingDate === dateStr;
+      if (bookingDate !== dateStr) return false;
+      return true;
+    });
+  };
+
+  // Search across all dates when query is present
+  const getSearchResults = () => {
+    if (!searchQuery || !searchQuery.trim()) return null;
+    const q = searchQuery.trim().toLowerCase();
+    return bookings.filter((b) => {
+      const bookingDateField = b.date || (b as any).booking_date;
+      if (!bookingDateField || b.status === 'cancelled') return false;
+      return ((b as any).guest_name || (b as any).name || '').toLowerCase().includes(q)
+          || (b.phone || '').toLowerCase().includes(q)
+          || (b.email || '').toLowerCase().includes(q);
     });
   };
 
@@ -224,13 +284,21 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
             isToday && styles.calendarDayToday,
             isSelected && styles.calendarDaySelected,
           ]}
-          onPress={() => setSelectedDate(date)}
+          onPress={() => {
+            setSelectedDate(date);
+            setSelectedBookingDetail(null);
+          }}
         >
           <Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected]}>
             {day}
           </Text>
           {hasBookings && (
-            <Text style={styles.calendarDayBadge}>{bookingsForDay.length}</Text>
+            <>
+              <Text style={styles.calendarDayDot}>●</Text>
+              <Text style={[styles.calendarDayBookingsText, isSelected && { color: 'rgba(255,255,255,0.8)' }]}>
+                {bookingsForDay.length} booking{bookingsForDay.length > 1 ? 's' : ''}
+              </Text>
+            </>
           )}
         </TouchableOpacity>
       );
@@ -251,6 +319,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
       date: today,
       time: '19:00',
       status: 'confirmed',
+      notes: '',
     });
     setFormError(null);
     setShowBookingModal(true);
@@ -269,6 +338,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
       date: bookingDate,
       time: bookingTime,
       status: booking.status,
+      notes: (booking as any).notes || '',
     });
     setFormError(null);
     setShowBookingModal(true);
@@ -304,13 +374,14 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
         booking_date: formData.date,
         booking_time: formData.time,
         status: formData.status,
+        notes: formData.notes,
         restaurantId: parseInt(restaurantId),
       };
 
       if (editingBookingId) {
         // Update booking
         await apiClient.patch(`/api/bookings/${editingBookingId}`, payload);
-        Alert.alert(t('success.success'), t('success.booking-updated'));
+        showToast(t('common.booking-updated'), 'success');
       } else {
         // Create booking - adjust field names for backend API
         const createPayload = {
@@ -320,7 +391,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
           booking_time: payload.booking_time,
         };
         await apiClient.post(`/api/restaurants/${restaurantId}/bookings`, createPayload);
-        Alert.alert(t('success.success'), t('success.booking-created'));
+        showToast(t('common.booking-created'), 'success');
       }
 
       closeModal();
@@ -343,19 +414,19 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
   };
 
   const deleteBooking = (bookingId: number) => {
-    Alert.alert(t('bookings.delete-title'), t('bookings.delete-confirm'), [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('admin.delete-booking-title'), t('admin.delete-booking-confirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         onPress: async () => {
           try {
             await apiClient.delete(`/api/bookings/${bookingId}`, {
               data: { restaurantId: parseInt(restaurantId) }
             });
-            Alert.alert(t('success.success'), t('success.booking-deleted'));
+            showToast(t('common.booking-deleted'), 'success');
             await fetchBookings();
           } catch (err: any) {
-            Alert.alert(t('error.error'), err.message || t('error.failed'));
+            showToast(err.message || t('common.failed'), 'error');
           }
         },
         style: 'destructive',
@@ -366,21 +437,53 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
-        return '#10b981';
-      case 'pending':
-        return '#f59e0b';
-      case 'cancelled':
-        return '#ef4444';
+      case 'reserved':
+        return '#fbbf24';
+      case 'in-session':
+        return '#22c55e';
       case 'completed':
-        return '#6366f1';
+        return '#3b82f6';
+      case 'cancelled':
+        return '#f87171';
       case 'no-show':
-        return '#8b5cf6';
+        return '#9ca3af';
       default:
         return '#6b7280';
     }
   };
 
-  const selectedDateBookings = getBookingsForDate(selectedDate);
+  const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const loadBookingSessionDetails = async (sessionId: number) => {
+    setLoadingSession(true);
+    try {
+      const [sessionRes, ordersRes] = await Promise.all([
+        apiClient.get(`/api/sessions/${sessionId}`),
+        apiClient.get(`/api/sessions/${sessionId}/orders`),
+      ]);
+      setSessionData(sessionRes.data);
+      const orders = ordersRes.data?.items || ordersRes.data || [];
+      setSessionOrders(Array.isArray(orders) ? orders : []);
+    } catch (err) {
+      console.error('Error loading session details:', err);
+      setSessionData(null);
+      setSessionOrders([]);
+    } finally {
+      setLoadingSession(false);
+    }
+  };
+
+  const selectBookingDetail = (booking: Booking) => {
+    setSelectedBookingDetail(booking);
+    setSessionData(null);
+    setSessionOrders([]);
+    if (booking.session_id) {
+      loadBookingSessionDetails(booking.session_id);
+    }
+  };
+
+  const searchResults = getSearchResults();
+  const selectedDateBookings = searchResults !== null ? searchResults : getBookingsForDate(selectedDate);
   const monthYear = currentDate.toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
@@ -396,8 +499,8 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={styles.container}>
-        <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+      {/* Full-screen calendar */}
+      <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Calendar Navigation */}
         <View style={styles.calendarNav}>
           <TouchableOpacity onPress={previousMonth} style={styles.navBtn}>
@@ -422,52 +525,6 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
           {renderCalendarDays()}
         </View>
 
-        {/* Bookings for Selected Date */}
-        <View style={styles.bookingsSection}>
-          <Text style={styles.selectedDateTitle}>Bookings for {formatDateDisplay(selectedDate)}</Text>
-
-          {selectedDateBookings.length === 0 ? (
-            <Text style={styles.noBookings}>No bookings for this date</Text>
-          ) : (
-            <FlatList
-              scrollEnabled={false}
-              data={selectedDateBookings}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.bookingCard}>
-                  <View style={styles.bookingTop}>
-                    <View>
-                      <Text style={styles.bookingName}>{item.guest_name}</Text>
-                      <Text style={styles.bookingTime}>
-                        🕐 {item.time || (item as any).booking_time || 'N/A'} • 👥 {item.party_size} guests
-                      </Text>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                      <Text style={styles.statusText}>{item.status}</Text>
-                    </View>
-                  </View>
-                  {item.phone && <Text style={styles.bookingMeta}>📱 {item.phone}</Text>}
-                  {item.email && <Text style={styles.bookingMeta}>📧 {item.email}</Text>}
-                  <View style={styles.bookingActions}>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, styles.editBtn]}
-                      onPress={() => openEditBookingModal(item)}
-                    >
-                      <Text style={styles.actionBtnText}>✏️ Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, styles.deleteBtn]}
-                      onPress={() => deleteBooking(item.id)}
-                    >
-                      <Text style={styles.actionBtnText}>🗑️ Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            />
-          )}
-        </View>
-
         {error && (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
@@ -476,10 +533,272 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Inline bookings list below calendar */}
+        <View style={styles.inlineBookingsSection}>
+            <View style={styles.inlineBookingsHeader}>
+              <Text style={styles.inlineBookingsTitle}>
+                Bookings for {formatDateDisplay(selectedDate)}
+              </Text>
+            </View>
+
+            {selectedBookingDetail ? (
+              /* Inline detail view - matches webapp */
+              <View style={styles.inlineDetailCard}>
+                <TouchableOpacity onPress={() => setSelectedBookingDetail(null)} style={{ marginBottom: 8 }}>
+                  <Text style={styles.panelBackBtnText}>← Back to list</Text>
+                </TouchableOpacity>
+
+                {/* Header: Booking # + Status */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
+                    Booking #{(selectedBookingDetail as any).restaurant_booking_number || selectedBookingDetail.id} — {selectedBookingDetail.guest_name}
+                  </Text>
+                  <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedBookingDetail.status) }]}>
+                    <Text style={styles.detailStatusText}>{selectedBookingDetail.status}</Text>
+                  </View>
+                </View>
+
+                {/* Customer & Booking Details section */}
+                <View style={styles.detailSectionCard}>
+                  <Text style={styles.detailSectionTitle}>Customer & Booking Details</Text>
+                  <View style={styles.detailGrid}>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Name</Text>
+                      <Text style={styles.detailValue}>{selectedBookingDetail.guest_name}</Text>
+                    </View>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Phone</Text>
+                      <Text style={styles.detailValue}>{selectedBookingDetail.phone || '—'}</Text>
+                    </View>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Email</Text>
+                      <Text style={styles.detailValue}>{selectedBookingDetail.email || '—'}</Text>
+                    </View>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Pax</Text>
+                      <Text style={styles.detailValue}>{selectedBookingDetail.party_size}</Text>
+                    </View>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Table</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBookingDetail.table_id
+                          ? tables.find(t => t.id === selectedBookingDetail.table_id)?.name || `#${selectedBookingDetail.table_id}`
+                          : '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Date</Text>
+                      <Text style={styles.detailValue}>{(selectedBookingDetail.date || (selectedBookingDetail as any).booking_date || '—').split('T')[0]}</Text>
+                    </View>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Time</Text>
+                      <Text style={styles.detailValue}>{selectedBookingDetail.time || (selectedBookingDetail as any).booking_time || '—'}</Text>
+                    </View>
+                    {(selectedBookingDetail as any).notes ? (
+                      <View style={[styles.detailGridItem, { width: '100%' }]}>
+                        <Text style={styles.detailLabel}>Notes</Text>
+                        <Text style={styles.detailValue}>{(selectedBookingDetail as any).notes}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Session & Orders section */}
+                {selectedBookingDetail.session_id ? (
+                  <View style={styles.detailSectionCard}>
+                    <Text style={styles.detailSectionTitle}>Session & Orders</Text>
+                    {loadingSession ? (
+                      <ActivityIndicator size="small" color="#3b82f6" style={{ paddingVertical: 12 }} />
+                    ) : sessionData ? (
+                      <>
+                        {/* Session info grid */}
+                        <View style={[styles.detailGrid, { marginBottom: 12 }]}>
+                          <View style={styles.detailGridItem}>
+                            <Text style={styles.detailLabel}>Session #</Text>
+                            <Text style={styles.detailValue}>{(sessionData as any).restaurant_session_number || sessionData.id}</Text>
+                          </View>
+                          <View style={styles.detailGridItem}>
+                            <Text style={styles.detailLabel}>Table</Text>
+                            <Text style={styles.detailValue}>{sessionData.table_name || '—'}</Text>
+                          </View>
+                          <View style={styles.detailGridItem}>
+                            <Text style={styles.detailLabel}>Guests</Text>
+                            <Text style={styles.detailValue}>{sessionData.pax}</Text>
+                          </View>
+                          <View style={styles.detailGridItem}>
+                            <Text style={styles.detailLabel}>Started</Text>
+                            <Text style={styles.detailValue}>{new Date(sessionData.started_at).toLocaleString('en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                          </View>
+                          <View style={styles.detailGridItem}>
+                            <Text style={styles.detailLabel}>Ended</Text>
+                            <Text style={[styles.detailValue, !sessionData.ended_at && { color: '#22c55e' }]}>
+                              {sessionData.ended_at
+                                ? new Date(sessionData.ended_at).toLocaleString('en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                : 'Active'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Orders */}
+                        {sessionOrders.length === 0 ? (
+                          <Text style={{ color: '#9ca3af', fontSize: 13, paddingVertical: 8 }}>No orders in this session</Text>
+                        ) : (
+                          <>
+                            {sessionOrders.map((order, oi) => {
+                              const orderNum = order.restaurant_order_number || order.order_id;
+                              const isPaid = order.order_status === 'completed';
+                              const mainItems = (order.items || []).filter(i => !i.is_addon);
+                              return (
+                                <View key={oi} style={styles.orderBlock}>
+                                  <View style={styles.orderBlockHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                      <Text style={{ fontWeight: '700', color: '#1f2937', fontSize: 13 }}>Order #{orderNum}</Text>
+                                      <View style={[styles.detailStatusBadge, { backgroundColor: isPaid ? '#10b981' : '#d1d5db' }]}>
+                                        <Text style={[styles.detailStatusText, { fontSize: 10 }]}>{isPaid ? 'Paid' : order.order_status || 'Pending'}</Text>
+                                      </View>
+                                    </View>
+                                    {order.order_payment_method ? (
+                                      <Text style={{ fontSize: 11, color: '#6b7280' }}>
+                                        {order.order_payment_method.charAt(0).toUpperCase() + order.order_payment_method.slice(1)}
+                                        {order.order_reference ? ` · Ref: ${order.order_reference}` : ''}
+                                      </Text>
+                                    ) : null}
+                                  </View>
+                                  {mainItems.map((item, ii) => (
+                                    <View key={ii} style={styles.orderItemRow}>
+                                      <View style={{ flex: 1 }}>
+                                        <Text style={{ fontWeight: '600', color: '#333', fontSize: 13 }}>
+                                          {item.menu_item_name} ×{item.quantity}
+                                        </Text>
+                                        {item.variants ? (
+                                          <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{item.variants}</Text>
+                                        ) : null}
+                                        {item.addons && item.addons.length > 0 && item.addons.map((addon, ai) => (
+                                          <Text key={ai} style={{ fontSize: 11, color: '#6b7280', marginTop: 2, marginLeft: 8 }}>
+                                            + {addon.menu_item_name} ×{addon.quantity} — {formatMoney(addon.item_total_cents)}
+                                          </Text>
+                                        ))}
+                                      </View>
+                                      <Text style={{ fontWeight: '600', color: '#667eea', fontSize: 13 }}>
+                                        {formatMoney(item.item_total_cents)}
+                                      </Text>
+                                    </View>
+                                  ))}
+                                  <View style={styles.orderBlockTotal}>
+                                    <Text style={{ fontWeight: '600', color: '#1f2937', fontSize: 13 }}>
+                                      Order Total: {formatMoney(order.total_cents || 0)}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                            <View style={styles.grandTotalRow}>
+                              <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937' }}>
+                                Grand Total: {formatMoney(sessionOrders.reduce((sum, o) => sum + (o.total_cents || 0), 0))}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <Text style={{ color: '#ef4444', fontSize: 13 }}>Error loading session</Text>
+                    )}
+                  </View>
+                ) : null}
+
+                {/* Action buttons */}
+                <View style={styles.detailActions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.editBtn, { flex: 1 }]}
+                    onPress={() => { setSelectedBookingDetail(null); openEditBookingModal(selectedBookingDetail); }}
+                  >
+                    <Text style={styles.actionBtnText}>Edit Booking</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.deleteBtn, { flex: 1 }]}
+                    onPress={() => { setSelectedBookingDetail(null); deleteBooking(selectedBookingDetail.id); }}
+                  >
+                    <Text style={styles.actionBtnText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              /* Table-style booking rows */
+              <>
+                {/* Table header row */}
+                <View style={styles.bookingRowHeader}>
+                  <Text style={[styles.bookingRowCell, { flex: 1 }]}>Date</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 2 }]}>Guest</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 1.5 }]}>Phone</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>Pax</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>Time</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>Status</Text>
+                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>Actions</Text>
+                </View>
+
+                {selectedDateBookings.length === 0 ? (
+                  <Text style={styles.noBookings}>No bookings for this date</Text>
+                ) : (
+                  selectedDateBookings.map((item) => {
+                    const statusColor = getStatusColor(item.status);
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[styles.bookingRow, { borderLeftColor: statusColor }]}
+                        onPress={() => selectBookingDetail(item)}
+                      >
+                        <Text style={[styles.bookingRowCellText, { flex: 1, color: '#6b7280' }]} numberOfLines={1}>
+                          {(() => {
+                            const d = item.date || (item as any).booking_date || '';
+                            if (!d) return '—';
+                            const dt = new Date(d.includes('T') ? d : d + 'T00:00:00');
+                            return `${dt.getMonth() + 1}/${dt.getDate()}`;
+                          })()}
+                        </Text>
+                        <Text style={[styles.bookingRowCellText, { flex: 2, fontWeight: '600' }]} numberOfLines={1}>
+                          {item.guest_name}
+                        </Text>
+                        <Text style={[styles.bookingRowCellText, { flex: 1.5, color: '#6b7280' }]} numberOfLines={1}>
+                          {item.phone || '—'}
+                        </Text>
+                        <Text style={[styles.bookingRowCellText, { flex: 0.7, textAlign: 'center' }]}>
+                          👥 {item.party_size}
+                        </Text>
+                        <Text style={[styles.bookingRowCellText, { flex: 0.7, textAlign: 'center' }]}>
+                          {item.time || (item as any).booking_time || '—'}
+                        </Text>
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                            <Text style={styles.statusText}>{item.status}</Text>
+                          </View>
+                        </View>
+                        <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                          <TouchableOpacity
+                            style={styles.inlineEditBtn}
+                            onPress={() => openEditBookingModal(item)}
+                          >
+                            <Text style={{ color: '#3b82f6', fontSize: 12, fontWeight: '600' }}>Edit</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.inlineDeleteBtn}
+                            onPress={() => deleteBooking(item.id)}
+                          >
+                            <Text style={{ color: '#ef4444', fontSize: 14 }}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </>
+            )}
+          </View>
       </ScrollView>
 
+
       {/* Booking Modal */}
-      <Modal visible={showBookingModal} transparent animationType="fade">
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -494,117 +813,134 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
             {formError && <Text style={styles.formError}>{formError}</Text>}
 
             <ScrollView style={styles.formScroll}>
-              {/* Guest Name */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Guest Name *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Enter guest name"
-                  value={formData.guest_name}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, guest_name: text })
-                  }
-                />
+              {/* Row 1: Guest Name + Phone */}
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Guest Name *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="Guest name"
+                    value={formData.guest_name}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, guest_name: text })
+                    }
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Phone</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="Phone number"
+                    value={formData.phone}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, phone: text })
+                    }
+                  />
+                </View>
               </View>
 
-              {/* Phone */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Phone</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Enter phone number"
-                  value={formData.phone}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, phone: text })
-                  }
-                />
+              {/* Row 2: Email + Party Size */}
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Email</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="Email"
+                    value={formData.email}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, email: text })
+                    }
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Party Size *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="Guests"
+                    keyboardType="number-pad"
+                    value={formData.party_size}
+                    onChangeText={(text) =>
+                      setFormData({
+                        ...formData,
+                        party_size: text || '1',
+                      })
+                    }
+                  />
+                </View>
               </View>
 
-              {/* Email */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Email</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Enter email"
-                  value={formData.email}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, email: text })
-                  }
-                />
+              {/* Row 3: Table + Date */}
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Table</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownBtn}
+                    onPress={() => {
+                      console.log('[Debug] Table button pressed, current state:', showTableDropdown);
+                      setShowTableDropdown(true);
+                    }}
+                  >
+                    <Text style={styles.dropdownBtnText}>
+                      {formData.table_id
+                        ? tables.find(t => t.id.toString() === formData.table_id)?.name || 'Select table'
+                        : 'Select table'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Date *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="YYYY-MM-DD"
+                    value={formData.date}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, date: text })
+                    }
+                  />
+                </View>
               </View>
 
-              {/* Party Size */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Party Size *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Number of guests"
-                  keyboardType="number-pad"
-                  value={formData.party_size}
-                  onChangeText={(text) =>
-                    setFormData({
-                      ...formData,
-                      party_size: text || '1',
-                    })
-                  }
-                />
+              {/* Row 4: Time + Status */}
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Time *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="HH:MM"
+                    value={formData.time}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, time: text })
+                    }
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Status *</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownBtn}
+                    onPress={() => setShowStatusDropdown(!showStatusDropdown)}
+                  >
+                    <Text style={styles.dropdownBtnText}>
+                      {formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Table */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Table</Text>
-                <TouchableOpacity
-                  style={styles.dropdownBtn}
-                  onPress={() => {
-                    console.log('[Debug] Table button pressed, current state:', showTableDropdown);
-                    setShowTableDropdown(true);
-                  }}
-                >
-                  <Text style={styles.dropdownBtnText}>
-                    {formData.table_id
-                      ? tables.find(t => t.id.toString() === formData.table_id)?.name || 'Select table'
-                      : 'Select table'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Date */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Date *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="YYYY-MM-DD"
-                  value={formData.date}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, date: text })
-                  }
-                />
-              </View>
-
-              {/* Time */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Time *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="HH:MM"
-                  value={formData.time}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, time: text })
-                  }
-                />
-              </View>
-
-              {/* Status */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Status *</Text>
-                <TouchableOpacity
-                  style={styles.dropdownBtn}
-                  onPress={() => setShowStatusDropdown(!showStatusDropdown)}
-                >
-                  <Text style={styles.dropdownBtnText}>
-                    {formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
-                  </Text>
-                </TouchableOpacity>
+              {/* Row 5: Remarks/Notes */}
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Remarks / Notes</Text>
+                  <TextInput
+                    style={[styles.formInput, { minHeight: 60, textAlignVertical: 'top' }]}
+                    placeholder="Any special requests or notes"
+                    value={formData.notes}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, notes: text })
+                    }
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
               </View>
             </ScrollView>
 
@@ -621,7 +957,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
                 onPress={saveBooking}
               >
                 <Text style={[styles.formBtnText, styles.formBtnSaveText]}>
-                  💾 Save
+                  Save
                 </Text>
               </TouchableOpacity>
             </View>
@@ -663,7 +999,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
                       style={styles.dropdownItem}
                     >
                       <Text style={styles.dropdownItemText}>
-                        {item.id === -1 ? item.name : `📍 ${item.name} (${item.seat_count} seats)`}
+                        {item.id === -1 ? item.name : `${item.name} (${item.seat_count} seats)`}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -709,72 +1045,108 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string }>(
         )}
         </View>
       </Modal>
-      </View>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  // Inline bookings (iPad - webapp style)
+  inlineBookingsSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+    minHeight: 400,
+  },
+  inlineBookingsHeader: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  inlineBookingsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#1f2937',
   },
-  newBookingBtn: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
+  bookingRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  newBookingBtnText: {
-    color: '#fff',
+  bookingRowCell: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+  },
+  bookingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    borderLeftWidth: 3,
+  },
+  bookingRowCellText: {
     fontSize: 13,
+    color: '#1f2937',
+  },
+  inlineEditBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  inlineDeleteBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  inlineDetailCard: {
+    padding: 16,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: '#f9fafb',
   },
   calendarNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    marginBottom: 30,
+    backgroundColor: '#f9fafb',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     borderRadius: 8,
+    gap: 15,
   },
   navBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
   },
   navBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
   },
   todayBtn: {
     backgroundColor: '#3b82f6',
@@ -783,104 +1155,83 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   calendarMonth: {
-    fontSize: 14,
+    fontSize: 22,
     fontWeight: '600',
     color: '#1f2937',
+    flex: 1,
+    textAlign: 'center',
   },
   calendarGrid: {
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    marginBottom: 20,
+    padding: 20,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-around',
+    justifyContent: 'flex-start',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
   weekdayHeader: {
     width: '14.28%',
-    paddingVertical: 8,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   weekdayText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#6b7280',
+    textTransform: 'uppercase' as any,
   },
   calendarDay: {
     width: '14.28%',
-    aspectRatio: 1,
-    justifyContent: 'center',
+    height: 100,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    borderRadius: 6,
-    marginVertical: 4,
+    borderRadius: 8,
+    paddingTop: 10,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    position: 'relative' as any,
   },
   calendarDayToday: {
-    backgroundColor: '#fef3c7',
-    borderColor: '#fbbf24',
+    backgroundColor: '#dbeafe',
+    borderColor: '#4a90e2',
   },
   calendarDaySelected: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#4a90e2',
     borderColor: '#3b82f6',
   },
   calendarDayText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1f2937',
+    marginBottom: 2,
   },
   calendarDayTextSelected: {
     color: '#fff',
   },
-  calendarDayBadge: {
-    position: 'absolute',
-    bottom: 2,
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#ef4444',
-  },
-  bookingsSection: {
-    marginBottom: 20,
-  },
-  selectedDateTitle: {
+  calendarDayDot: {
+    position: 'absolute' as any,
+    top: 5,
+    right: 5,
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 12,
+    color: '#f59e0b',
+  },
+  calendarDayBookingsText: {
+    fontSize: 10,
+    color: '#f59e0b',
+    textAlign: 'center',
   },
   noBookings: {
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
     paddingVertical: 20,
-  },
-  bookingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  bookingTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  bookingName: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  bookingTime: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
   },
   statusBadge: {
     paddingVertical: 4,
@@ -891,16 +1242,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '600',
-  },
-  bookingMeta: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  bookingActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
   },
   actionBtn: {
     flex: 1,
@@ -951,7 +1292,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    minHeight: '80%',
+    minHeight: (Platform as any).isPad ? '60%' : '80%',
     paddingTop: 0,
     flexDirection: 'column',
     paddingBottom: 20,
@@ -990,8 +1331,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 10,
   },
+  formRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   formGroup: {
-    marginVertical: 10,
+    marginVertical: 6,
     minHeight: 50,
   },
   formLabel: {
@@ -1025,11 +1370,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1f2937',
   },
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'flex-end',
-  },
   backdropTouchable: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
@@ -1044,18 +1384,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     zIndex: 1000,
   },
-  dropdownMenuContainer: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
-    maxHeight: '60%',
-    overflow: 'hidden',
-  },
   absoluteDropdownMenuContainer: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
@@ -1068,18 +1396,6 @@ const styles = StyleSheet.create({
     elevation: 10,
     maxHeight: '60%',
     overflow: 'hidden',
-  },
-  dropdownMenu: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-    maxHeight: 300,
-    overflow: 'hidden',
-    width: 'auto',
   },
   dropdownItem: {
     paddingHorizontal: 16,
@@ -1113,7 +1429,7 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   formBtnSave: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#4a90e2',
   },
   formBtnText: {
     fontSize: 14,
@@ -1122,5 +1438,105 @@ const styles = StyleSheet.create({
   },
   formBtnSaveText: {
     color: '#fff',
+  },
+  panelBackBtnText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  detailStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  detailStatusText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 0,
+  },
+  detailGridItem: {
+    width: '50%',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '600',
+  },
+  detailActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  detailSectionCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  detailSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 10,
+  },
+  orderBlock: {
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  orderBlockHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: '#f3f4f6',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  orderItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f3f4f6',
+  },
+  orderBlockTotal: {
+    padding: 8,
+    alignItems: 'flex-end',
+    backgroundColor: '#f9fafb',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  grandTotalRow: {
+    alignItems: 'flex-end',
+    paddingTop: 10,
+    marginTop: 4,
+    borderTopWidth: 2,
+    borderTopColor: '#667eea',
   },
 });

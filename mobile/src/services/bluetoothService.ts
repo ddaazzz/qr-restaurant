@@ -4,13 +4,16 @@ import * as ExpoDevice from 'expo-device';
 import { BluetoothPrinter, PrinterConfig } from '../types';
 
 class BluetoothService {
-  private manager: BleManager;
+  private _manager: BleManager | null = null;
   private connectedDevices: Map<string, Device> = new Map();
   private scanSubscription: Subscription | null = null;
   private discoveredDevices: Map<string, Device> = new Map();
 
-  constructor() {
-    this.manager = new BleManager();
+  private get manager(): BleManager {
+    if (!this._manager) {
+      this._manager = new BleManager();
+    }
+    return this._manager;
   }
 
   async requestPermissions(): Promise<boolean> {

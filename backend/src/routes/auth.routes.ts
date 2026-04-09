@@ -729,4 +729,635 @@ router.get("/restaurants/:restaurantId/staff/:staffId/timekeeping", async (req, 
   }
 });
 
+// POST /api/auth/register - Public registration (Google sign-up flow)
+router.post("/auth/register", async (req, res) => {
+  const {
+    email,
+    google_id,
+    restaurant_name,
+    address,
+    phone,
+    service_charge_percent,
+    language_preference,
+    timezone,
+  } = req.body;
+
+  if (!email || !restaurant_name) {
+    return res.status(400).json({ error: "Email and restaurant name are required" });
+  }
+
+  try {
+    // Check if email or google_id already exists
+    const emailCheck = await pool.query(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: "Email already in use" });
+    }
+
+    if (google_id) {
+      const googleCheck = await pool.query(
+        "SELECT id FROM users WHERE google_id = $1",
+        [google_id]
+      );
+      if (googleCheck.rows.length > 0) {
+        return res.status(400).json({ error: "Google account already registered" });
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // Create restaurant
+      const restaurantResult = await client.query(
+        `INSERT INTO restaurants (name, address, phone, service_charge_percent, language_preference, timezone)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name`,
+        [
+          restaurant_name,
+          address || null,
+          phone || null,
+          service_charge_percent != null ? service_charge_percent : 0,
+          language_preference || "en",
+          timezone || "UTC",
+        ]
+      );
+
+      const restaurantId = restaurantResult.rows[0].id;
+      const restaurantName = restaurantResult.rows[0].name;
+
+      // Create admin user (no password since Google auth)
+      const userResult = await client.query(
+        `INSERT INTO users (email, password_hash, role, restaurant_id, google_id, name)
+         VALUES ($1, NULL, 'admin', $2, $3, $4) RETURNING id`,
+        [email, restaurantId, google_id || null, email.split("@")[0]]
+      );
+
+      const userId = userResult.rows[0].id;
+
+      // Log activity
+      await client.query(
+        "INSERT INTO staff_activity (restaurant_id, staff_id, action, metadata) VALUES ($1, $2, $3, $4)",
+        [restaurantId, userId, "RESTAURANT_CREATED", JSON.stringify({ method: "google_signup" })]
+      );
+
+      await client.query("COMMIT");
+      client.release();
+
+      // Generate JWT
+      const token = jwt.sign(
+        { id: userId, role: "admin" },
+        process.env.JWT_SECRET || "devsecret",
+        { expiresIn: "8h" }
+      );
+
+      res.status(201).json({
+        token,
+        role: "admin",
+        restaurantId,
+        restaurantName,
+        userId: String(userId),
+      });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      client.release();
+      throw err;
+    }
+  } catch (err: any) {
+    console.error("Register error:", err);
+    res.status(500).json({ error: err.message || "Registration failed" });
+  }
+});
+
+// POST /api/auth/google-login - Login with Google (returning users)
+router.post("/auth/google-login", async (req, res) => {
+  const { email, google_id } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
+  try {
+    // Find user by google_id or email
+    let result;
+    if (google_id) {
+      result = await pool.query(
+        "SELECT id, role, restaurant_id FROM users WHERE google_id = $1",
+        [google_id]
+      );
+    }
+    if (!result?.rows.length) {
+      result = await pool.query(
+        "SELECT id, role, restaurant_id FROM users WHERE email = $1",
+        [email]
+      );
+    }
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "No account found. Please create an account first." });
+    }
+
+    const user = result.rows[0];
+
+    // Update google_id if not set
+    if (google_id && !user.google_id) {
+      await pool.query("UPDATE users SET google_id = $1 WHERE id = $2", [google_id, user.id]);
+    }
+
+    // Get restaurant name
+    const restaurantResult = await pool.query(
+      "SELECT name FROM restaurants WHERE id = $1",
+      [user.restaurant_id]
+    );
+    const restaurantName = restaurantResult.rows[0]?.name || "";
+
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET || "devsecret",
+      { expiresIn: "8h" }
+    );
+
+    res.json({
+      token,
+      role: user.role,
+      restaurantId: user.restaurant_id,
+      restaurantName,
+      userId: String(user.id),
+    });
+  } catch (err: any) {
+    console.error("Google login error:", err);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// GET /api/restaurants/:restaurantId/info - Get restaurant name (public, for PIN login display)
+router.get("/restaurants/:restaurantId/info", async (req, res) => {
+  const { restaurantId } = req.params;
+  try {
+    const result = await pool.query(
+      "SELECT id, name FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch restaurant info" });
+  }
+});
+
+// ========== PROFILE (Self) ==========
+
+// GET /api/me - Get current user's own profile
+router.get("/me", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Not authenticated" });
+  try {
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+    const result = await pool.query(
+      "SELECT id, name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents FROM users WHERE id = $1",
+      [decoded.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "User not found" });
+    const user = result.rows[0];
+    user.access_rights = user.access_rights
+      ? typeof user.access_rights === "string" ? JSON.parse(user.access_rights) : user.access_rights
+      : [];
+    res.json(user);
+  } catch (err) {
+    console.error("Failed to fetch profile:", err);
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});
+
+// PATCH /api/me - Update current user's own profile
+router.patch("/me", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Not authenticated" });
+  try {
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+    const userCheck = await pool.query("SELECT id, role, restaurant_id FROM users WHERE id = $1", [decoded.id]);
+    if (!userCheck.rows.length) return res.status(404).json({ error: "User not found" });
+
+    const currentUser = userCheck.rows[0];
+    const { name, email, password, pin } = req.body;
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (name !== undefined) { updates.push(`name = $${paramIndex++}`); params.push(name); }
+    if (email !== undefined) {
+      if (email) {
+        const emailCheck = await pool.query("SELECT id FROM users WHERE email = $1 AND id != $2", [email, decoded.id]);
+        if (emailCheck.rows.length > 0) return res.status(400).json({ error: "Email already in use" });
+      }
+      updates.push(`email = $${paramIndex++}`); params.push(email || null);
+    }
+    if (password) {
+      const hash = await bcrypt.hash(password, 10);
+      updates.push(`password_hash = $${paramIndex++}`); params.push(hash);
+    }
+    if (pin !== undefined) {
+      if (pin && !/^\d{6}$/.test(pin)) return res.status(400).json({ error: "PIN must be 6 digits" });
+      if (pin) {
+        const pinCheck = await pool.query("SELECT id FROM users WHERE restaurant_id = $1 AND pin = $2 AND id != $3", [currentUser.restaurant_id, pin, decoded.id]);
+        if (pinCheck.rows.length > 0) return res.status(400).json({ error: "PIN already in use" });
+      }
+      updates.push(`pin = $${paramIndex++}`); params.push(pin || null);
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
+
+    params.push(decoded.id);
+    const query = `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIndex}
+      RETURNING id, name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents`;
+    const result = await pool.query(query, params);
+
+    res.json({ user: result.rows[0], success: true });
+  } catch (err: any) {
+    console.error("Failed to update profile:", err);
+    res.status(500).json({ error: "Failed to update profile", details: err.message });
+  }
+});
+
+// ========== USER MANAGEMENT (Admin/Superadmin) ==========
+
+// Helper: verify caller is admin/superadmin from token
+const verifyAdminRole = async (req: any): Promise<{ id: number; role: string; restaurant_id: number | null } | null> => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return null;
+  try {
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+    const result = await pool.query("SELECT id, role, restaurant_id FROM users WHERE id = $1", [decoded.id]);
+    if (!result.rows.length) return null;
+    const user = result.rows[0];
+    if (user.role !== "admin" && user.role !== "superadmin") return null;
+    return user;
+  } catch {
+    return null;
+  }
+};
+
+// GET /api/users - List all users (superadmin sees all, admin sees own restaurant)
+router.get("/users", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+  try {
+    let result;
+    if (caller.role === "superadmin") {
+      result = await pool.query(
+        `SELECT u.id, u.name, u.email, u.role, u.pin, u.restaurant_id, u.access_rights, u.hourly_rate_cents, u.google_id,
+                r.name as restaurant_name
+         FROM users u
+         LEFT JOIN restaurants r ON r.id = u.restaurant_id
+         ORDER BY u.id`
+      );
+    } else {
+      result = await pool.query(
+        `SELECT u.id, u.name, u.email, u.role, u.pin, u.restaurant_id, u.access_rights, u.hourly_rate_cents, u.google_id,
+                r.name as restaurant_name
+         FROM users u
+         LEFT JOIN restaurants r ON r.id = u.restaurant_id
+         WHERE u.restaurant_id = $1
+         ORDER BY u.id`,
+        [caller.restaurant_id]
+      );
+    }
+
+    const users = result.rows.map((u: any) => ({
+      ...u,
+      access_rights: u.access_rights
+        ? typeof u.access_rights === "string" ? JSON.parse(u.access_rights) : u.access_rights
+        : [],
+    }));
+
+    res.json(users);
+  } catch (err) {
+    console.error("Failed to fetch users:", err);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// POST /api/users - Create a user (admin can create staff/kitchen for their restaurant, superadmin can create any role for any restaurant)
+router.post("/users", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+  const { name, email, password, role, pin, restaurant_id, access_rights, hourly_rate_cents } = req.body;
+
+  if (!name) return res.status(400).json({ error: "Name is required" });
+  if (!role) return res.status(400).json({ error: "Role is required" });
+  if (!["superadmin", "admin", "staff", "kitchen"].includes(role)) {
+    return res.status(400).json({ error: "Invalid role" });
+  }
+
+  // Only superadmin can create admin/superadmin
+  if ((role === "admin" || role === "superadmin") && caller.role !== "superadmin") {
+    return res.status(403).json({ error: "Only superadmin can create admin/superadmin users" });
+  }
+
+  // Determine target restaurant
+  const targetRestaurantId = caller.role === "superadmin" ? (restaurant_id || caller.restaurant_id) : caller.restaurant_id;
+
+  // superadmin can exist without restaurant; others need one
+  if (role !== "superadmin" && !targetRestaurantId) {
+    return res.status(400).json({ error: "Restaurant ID is required for non-superadmin users" });
+  }
+
+  // Staff/kitchen need PIN
+  if ((role === "staff" || role === "kitchen") && !pin) {
+    return res.status(400).json({ error: "PIN is required for staff/kitchen users" });
+  }
+  if (pin && !/^\d{6}$/.test(pin)) {
+    return res.status(400).json({ error: "PIN must be 6 digits" });
+  }
+
+  // Admin/superadmin need email+password
+  if ((role === "admin" || role === "superadmin") && (!email || !password)) {
+    return res.status(400).json({ error: "Email and password required for admin/superadmin" });
+  }
+
+  try {
+    // Check email uniqueness if provided
+    if (email) {
+      const emailCheck = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
+      if (emailCheck.rows.length > 0) {
+        return res.status(400).json({ error: "Email already in use" });
+      }
+    }
+
+    // Check PIN uniqueness within restaurant if provided
+    if (pin && targetRestaurantId) {
+      const pinCheck = await pool.query(
+        "SELECT id FROM users WHERE restaurant_id = $1 AND pin = $2",
+        [targetRestaurantId, pin]
+      );
+      if (pinCheck.rows.length > 0) {
+        return res.status(400).json({ error: "PIN already in use at this restaurant" });
+      }
+    }
+
+    const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+
+    const result = await pool.query(
+      `INSERT INTO users (name, email, password_hash, role, pin, restaurant_id, access_rights, hourly_rate_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents`,
+      [
+        name,
+        email || null,
+        passwordHash,
+        role,
+        pin || null,
+        role === "superadmin" ? (targetRestaurantId || null) : targetRestaurantId,
+        JSON.stringify(access_rights || []),
+        hourly_rate_cents || null,
+      ]
+    );
+
+    res.status(201).json({ user: result.rows[0], success: true });
+  } catch (err: any) {
+    console.error("Failed to create user:", err);
+    res.status(500).json({ error: "Failed to create user", details: err.message });
+  }
+});
+
+// PATCH /api/users/:userId - Update a user
+router.patch("/users/:userId", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+  const { userId } = req.params;
+  const { name, email, password, role, pin, restaurant_id, access_rights, hourly_rate_cents } = req.body;
+
+  try {
+    // Get target user
+    const userCheck = await pool.query("SELECT id, role, restaurant_id FROM users WHERE id = $1", [userId]);
+    if (!userCheck.rows.length) return res.status(404).json({ error: "User not found" });
+
+    const targetUser = userCheck.rows[0];
+
+    // Admin can only edit users in their own restaurant (not other admins/superadmins)
+    if (caller.role !== "superadmin") {
+      if (targetUser.restaurant_id !== caller.restaurant_id) {
+        return res.status(403).json({ error: "Cannot edit users from another restaurant" });
+      }
+      if (targetUser.role === "superadmin" || targetUser.role === "admin") {
+        return res.status(403).json({ error: "Cannot edit admin/superadmin users" });
+      }
+    }
+
+    // Only superadmin can change role to admin/superadmin
+    if (role && (role === "admin" || role === "superadmin") && caller.role !== "superadmin") {
+      return res.status(403).json({ error: "Only superadmin can assign admin/superadmin roles" });
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (name !== undefined) { updates.push(`name = $${paramIndex++}`); params.push(name); }
+    if (email !== undefined) {
+      // Check email uniqueness
+      if (email) {
+        const emailCheck = await pool.query("SELECT id FROM users WHERE email = $1 AND id != $2", [email, userId]);
+        if (emailCheck.rows.length > 0) return res.status(400).json({ error: "Email already in use" });
+      }
+      updates.push(`email = $${paramIndex++}`); params.push(email || null);
+    }
+    if (password) {
+      const hash = await bcrypt.hash(password, 10);
+      updates.push(`password_hash = $${paramIndex++}`); params.push(hash);
+    }
+    if (role !== undefined) { updates.push(`role = $${paramIndex++}`); params.push(role); }
+    if (pin !== undefined) {
+      if (pin && !/^\d{6}$/.test(pin)) return res.status(400).json({ error: "PIN must be 6 digits" });
+      if (pin) {
+        const rid = restaurant_id || targetUser.restaurant_id;
+        const pinCheck = await pool.query("SELECT id FROM users WHERE restaurant_id = $1 AND pin = $2 AND id != $3", [rid, pin, userId]);
+        if (pinCheck.rows.length > 0) return res.status(400).json({ error: "PIN already in use" });
+      }
+      updates.push(`pin = $${paramIndex++}`); params.push(pin || null);
+    }
+    if (restaurant_id !== undefined && caller.role === "superadmin") {
+      updates.push(`restaurant_id = $${paramIndex++}`); params.push(restaurant_id);
+    }
+    if (access_rights !== undefined) { updates.push(`access_rights = $${paramIndex++}`); params.push(JSON.stringify(access_rights)); }
+    if (hourly_rate_cents !== undefined) { updates.push(`hourly_rate_cents = $${paramIndex++}`); params.push(hourly_rate_cents); }
+
+    if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
+
+    params.push(userId);
+    const query = `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIndex}
+      RETURNING id, name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents`;
+    const result = await pool.query(query, params);
+
+    res.json({ user: result.rows[0], success: true });
+  } catch (err: any) {
+    console.error("Failed to update user:", err);
+    res.status(500).json({ error: "Failed to update user", details: err.message });
+  }
+});
+
+// DELETE /api/users/:userId - Delete a user
+router.delete("/users/:userId", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+  const { userId } = req.params;
+
+  try {
+    const userCheck = await pool.query("SELECT id, role, restaurant_id FROM users WHERE id = $1", [userId]);
+    if (!userCheck.rows.length) return res.status(404).json({ error: "User not found" });
+
+    const targetUser = userCheck.rows[0];
+
+    // Cannot delete yourself
+    if (targetUser.id === caller.id) {
+      return res.status(400).json({ error: "Cannot delete yourself" });
+    }
+
+    // Admin can only delete staff/kitchen in own restaurant
+    if (caller.role !== "superadmin") {
+      if (targetUser.restaurant_id !== caller.restaurant_id) {
+        return res.status(403).json({ error: "Cannot delete users from another restaurant" });
+      }
+      if (targetUser.role === "superadmin" || targetUser.role === "admin") {
+        return res.status(403).json({ error: "Cannot delete admin/superadmin users" });
+      }
+    }
+
+    await pool.query("DELETE FROM users WHERE id = $1", [userId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to delete user:", err);
+    res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+// ========== RESTAURANT MANAGEMENT (Admin/Superadmin) ==========
+
+// GET /api/manage/restaurants - List all restaurants
+router.get("/manage/restaurants", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+  try {
+    let result;
+    if (caller.role === "superadmin") {
+      result = await pool.query(
+        `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+         FROM restaurants r ORDER BY r.id`
+      );
+    } else {
+      result = await pool.query(
+        `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+         FROM restaurants r WHERE r.id = $1`,
+        [caller.restaurant_id]
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Failed to fetch restaurants:", err);
+    res.status(500).json({ error: "Failed to fetch restaurants" });
+  }
+});
+
+// POST /api/manage/restaurants - Create a new restaurant (superadmin only)
+router.post("/manage/restaurants", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller || caller.role !== "superadmin") {
+    return res.status(403).json({ error: "Superadmin access required" });
+  }
+
+  const { name, address, phone, timezone, service_charge_percent, language_preference } = req.body;
+  if (!name) return res.status(400).json({ error: "Restaurant name is required" });
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO restaurants (name, address, phone, timezone, service_charge_percent, language_preference)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference`,
+      [name, address || null, phone || null, timezone || "UTC", service_charge_percent || 0, language_preference || "en"]
+    );
+    res.status(201).json({ restaurant: result.rows[0], success: true });
+  } catch (err: any) {
+    console.error("Failed to create restaurant:", err);
+    res.status(500).json({ error: "Failed to create restaurant", details: err.message });
+  }
+});
+
+// PATCH /api/manage/restaurants/:restaurantId - Update restaurant
+router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+  const { restaurantId } = req.params;
+
+  // Admin can only edit their own restaurant
+  if (caller.role !== "superadmin" && String(caller.restaurant_id) !== restaurantId) {
+    return res.status(403).json({ error: "Cannot edit another restaurant" });
+  }
+
+  const { name, address, phone, timezone, service_charge_percent, language_preference } = req.body;
+
+  try {
+    const updates: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+
+    if (name !== undefined) { updates.push(`name = $${i++}`); params.push(name); }
+    if (address !== undefined) { updates.push(`address = $${i++}`); params.push(address); }
+    if (phone !== undefined) { updates.push(`phone = $${i++}`); params.push(phone); }
+    if (timezone !== undefined) { updates.push(`timezone = $${i++}`); params.push(timezone); }
+    if (service_charge_percent !== undefined) { updates.push(`service_charge_percent = $${i++}`); params.push(service_charge_percent); }
+    if (language_preference !== undefined) { updates.push(`language_preference = $${i++}`); params.push(language_preference); }
+
+    if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
+
+    params.push(restaurantId);
+    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference`;
+    const result = await pool.query(query, params);
+
+    if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
+    res.json({ restaurant: result.rows[0], success: true });
+  } catch (err) {
+    console.error("Failed to update restaurant:", err);
+    res.status(500).json({ error: "Failed to update restaurant" });
+  }
+});
+
+// DELETE /api/manage/restaurants/:restaurantId - Delete restaurant (superadmin only)
+router.delete("/manage/restaurants/:restaurantId", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller || caller.role !== "superadmin") {
+    return res.status(403).json({ error: "Superadmin access required" });
+  }
+
+  const { restaurantId } = req.params;
+
+  try {
+    // Check restaurant exists and has no users (safety check)
+    const userCount = await pool.query("SELECT COUNT(*) FROM users WHERE restaurant_id = $1", [restaurantId]);
+    if (parseInt(userCount.rows[0].count) > 0) {
+      return res.status(400).json({ error: "Cannot delete restaurant with existing users. Remove all users first." });
+    }
+
+    const result = await pool.query("DELETE FROM restaurants WHERE id = $1 RETURNING id", [restaurantId]);
+    if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to delete restaurant:", err);
+    res.status(500).json({ error: "Failed to delete restaurant" });
+  }
+});
+
 export default router;

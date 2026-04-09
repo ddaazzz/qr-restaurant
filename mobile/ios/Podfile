@@ -61,9 +61,14 @@ target 'QRRestaurant' do
     )
     
     # Disable dSYM generation to fix "empty dSYM file detected" warnings
+    # Also fix MultiplatformBleAdapter (react-native-ble-plx) Swift 6 incompatibility
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf'
+        if target.name == 'MultiplatformBleAdapter'
+          config.build_settings['SWIFT_VERSION'] = '5.0'
+          config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+        end
       end
     end
   end

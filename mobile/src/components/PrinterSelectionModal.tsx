@@ -123,7 +123,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
       setPrinting(false);
       reset();
       onClose();
-      Alert.alert('✓ Printed', `${jobName} sent to printer successfully`);
+      Alert.alert('Printed', `${jobName} sent to printer successfully`);
     } catch (err: any) {
       setPrinting(false);
       Alert.alert('Error', 'Failed to print: ' + err.message);
@@ -143,12 +143,12 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent={true} animationType="slide">
+    <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={visible} transparent={true} animationType="slide">
       <View style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>🖨️ Print {jobName}</Text>
+            <Text style={styles.title}>Print {jobName}</Text>
             <TouchableOpacity onPress={handleClose}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
@@ -166,7 +166,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
                   setStep('list');
                 }}
               >
-                <Text style={styles.printerTypeButtonText}>🌐 Browser Print</Text>
+                <Text style={styles.printerTypeButtonText}>Browser Print</Text>
                 <Text style={styles.printerTypeButtonDesc}>Print using your device's browser</Text>
               </TouchableOpacity>
 
@@ -176,7 +176,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
                   await handleBluetoothScan();
                 }}
               >
-                <Text style={styles.printerTypeButtonText}>📱 Bluetooth Printer</Text>
+                <Text style={styles.printerTypeButtonText}>Bluetooth Printer</Text>
                 <Text style={styles.printerTypeButtonDesc}>Scan for nearby Bluetooth printers</Text>
               </TouchableOpacity>
 
@@ -187,7 +187,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
                   setStep('list');
                 }}
               >
-                <Text style={styles.printerTypeButtonText}>🔗 Network Printer</Text>
+                <Text style={styles.printerTypeButtonText}>Network Printer</Text>
                 <Text style={styles.printerTypeButtonDesc}>Connect to a network/thermal printer</Text>
               </TouchableOpacity>
             </View>
@@ -211,7 +211,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
                         style={styles.retryButton}
                         onPress={handleBluetoothScan}
                       >
-                        <Text style={styles.retryButtonText}>🔄 Scan Again</Text>
+                        <Text style={styles.retryButtonText}>Scan Again</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -248,7 +248,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
                         style={styles.retryButton}
                         onPress={handleBluetoothScan}
                       >
-                        <Text style={styles.retryButtonText}>🔄 Scan Again</Text>
+                        <Text style={styles.retryButtonText}>Scan Again</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -263,7 +263,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
               <Text style={styles.stepTitle}>Printer Selected</Text>
               <View style={styles.printerConfirm}>
                 <Text style={styles.printerConfirmText}>
-                  {selectedPrinter.type === 'browser' ? '🌐' : '🔗'} {selectedPrinter.name}
+                  {selectedPrinter.name}
                 </Text>
               </View>
               <Text style={styles.confirmDesc}>
@@ -293,7 +293,7 @@ export const PrinterSelectionModal: React.FC<PrinterSelectionModalProps> = ({
                 {printing ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.buttonText}>🖨️ Print Now</Text>
+                  <Text style={styles.buttonText}>Print Now</Text>
                 )}
               </TouchableOpacity>
             )}

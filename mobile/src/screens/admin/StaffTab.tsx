@@ -1,6 +1,7 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert } from 'react-native';
 import { apiClient } from '../../services/apiClient';
+import { useTranslation } from '../../contexts/TranslationContext';
 
 interface StaffMember {
   id: number;
@@ -32,7 +33,8 @@ export interface StaffTabRef {
   toggleEditMode: () => void;
 }
 
-export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ restaurantId }, ref) => {
+export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQuery?: string }>(({ restaurantId, searchQuery }, ref) => {
+  const { t } = useTranslation();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [menuCategories, setMenuCategories] = useState<MenuCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -261,7 +263,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#5a5a5a" />
+        <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );
   }
@@ -276,11 +278,15 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
     { id: 'bookings', label: 'Bookings' },
   ];
 
+  const filteredStaff = searchQuery && searchQuery.trim()
+    ? staff.filter(s => s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    : staff;
+
   return (
     <View style={styles.container}>
       {/* Staff Grid */}
       <FlatList
-        data={editMode ? [{ id: 'add' }, ...staff] : staff}
+        data={editMode ? [{ id: 'add' }, ...filteredStaff] : filteredStaff}
         keyExtractor={(item, idx) => (item.id ? item.id.toString() : `add-${idx}`)}
         numColumns={2}
         columnWrapperStyle={styles.gridRow}
@@ -292,8 +298,8 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                   style={[styles.staffCard, styles.addStaffCard]}
                   onPress={() => openForm()}
                 >
-                  <Text style={styles.addStaffIcon}>➕</Text>
-                  <Text style={styles.addStaffText}>Add Staff</Text>
+                  <Text style={styles.addStaffIcon}>+</Text>
+                  <Text style={styles.addStaffText}>{t('admin.add-staff')}</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -314,26 +320,32 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                 <Text style={styles.staffCardName}>{s.name}</Text>
                 <View style={[styles.staffCardRole, { backgroundColor: getRoleColor(s.role) + '30' }]}>
                   <Text style={[styles.staffCardRoleText, { color: getRoleColor(s.role) }]}>
-                    {s.role === 'kitchen' ? '🍳 Kitchen' : '👤 Staff'}
+                    {s.role === 'kitchen' ? 'Kitchen' : 'Staff'}
                   </Text>
                 </View>
                 {s.pin && (
                   <Text style={styles.staffCardPin}>PIN: {s.pin}</Text>
                 )}
                 <Text style={styles.staffCardAccess}>{accessDisplay}</Text>
+                <View style={styles.staffClockStatus}>
+                  <View style={[styles.staffClockDot, { backgroundColor: s.currently_clocked_in ? '#10b981' : '#9ca3af' }]} />
+                  <Text style={[styles.staffClockText, { color: s.currently_clocked_in ? '#10b981' : '#9ca3af' }]}>
+                    {s.currently_clocked_in ? 'Clocked In' : 'Clocked Out'}
+                  </Text>
+                </View>
                 {editMode && (
                   <View style={styles.staffCardActions}>
                     <TouchableOpacity
                       style={[styles.cardActionBtn, styles.editCardBtn]}
                       onPress={() => openForm(s)}
                     >
-                      <Text style={styles.cardActionBtnText}>✏️</Text>
+                      <Text style={styles.cardActionBtnText}>Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.cardActionBtn, styles.deleteCardBtn]}
                       onPress={() => handleDeleteStaff(s.id)}
                     >
-                      <Text style={styles.cardActionBtnText}>🗑️</Text>
+                      <Text style={styles.cardActionBtnText}>Del</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -344,7 +356,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
         contentContainerStyle={styles.gridContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No staff members</Text>
+            <Text style={styles.emptyText}>{t('admin.no-staff')}</Text>
           </View>
         }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -357,7 +369,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
       )}
 
       {/* Create/Edit Form Modal */}
-      <Modal visible={showForm} transparent animationType="fade" onRequestClose={closeForm}>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showForm} transparent animationType="fade" onRequestClose={closeForm}>
         <View style={styles.formOverlay}>
           <View style={styles.formContent}>
             <View style={styles.formHeader}>
@@ -371,72 +383,72 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             {formSuccess && <Text style={styles.formSuccess}>{formSuccess}</Text>}
 
             <ScrollView style={styles.formBody}>
-              {/* Name */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Staff Name</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g., John Smith"
-                  value={formData.name}
-                  onChangeText={(text) => setFormData({ ...formData, name: text })}
-                />
-              </View>
-
-              {/* PIN */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>PIN (6 digits)</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g., 123456"
-                  value={formData.pin}
-                  onChangeText={(text) => setFormData({ ...formData, pin: text.slice(0, 6) })}
-                  maxLength={6}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              {/* Role */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Role</Text>
-                <View style={styles.roleButtons}>
-                  {['staff', 'kitchen'].map((roleOption) => (
-                    <TouchableOpacity
-                      key={roleOption}
-                      style={[
-                        styles.roleBtn,
-                        formData.role === roleOption && styles.roleBtnActive,
-                      ]}
-                      onPress={() => setFormData({ ...formData, role: roleOption as 'staff' | 'kitchen', accessRights: [] })}
-                    >
-                      <Text
-                        style={[
-                          styles.roleBtnText,
-                          formData.role === roleOption && styles.roleBtnTextActive,
-                        ]}
-                      >
-                        {roleOption === 'kitchen' ? '🍳 Kitchen' : '👤 Staff'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+              {/* Name + PIN row */}
+              <View style={styles.formRow}>
+                <View style={styles.formGroupHalf}>
+                  <Text style={styles.formLabel}>Staff Name</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g., John Smith"
+                    value={formData.name}
+                    onChangeText={(text) => setFormData({ ...formData, name: text })}
+                  />
+                </View>
+                <View style={styles.formGroupHalf}>
+                  <Text style={styles.formLabel}>{t('admin.pin')}</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g., 123456"
+                    value={formData.pin}
+                    onChangeText={(text) => setFormData({ ...formData, pin: text.slice(0, 6) })}
+                    maxLength={6}
+                    keyboardType="numeric"
+                  />
                 </View>
               </View>
 
-              {/* Hourly Rate */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Hourly Rate ($/hr)</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g., 15.50"
-                  value={formData.hourlyRate}
-                  onChangeText={(text) => setFormData({ ...formData, hourlyRate: text })}
-                  keyboardType="decimal-pad"
-                />
+              {/* Role + Hourly Rate row */}
+              <View style={styles.formRow}>
+                <View style={styles.formGroupHalf}>
+                  <Text style={styles.formLabel}>{t('admin.role')}</Text>
+                  <View style={styles.roleButtons}>
+                    {['staff', 'kitchen'].map((roleOption) => (
+                      <TouchableOpacity
+                        key={roleOption}
+                        style={[
+                          styles.roleBtn,
+                          formData.role === roleOption && styles.roleBtnActive,
+                        ]}
+                        onPress={() => setFormData({ ...formData, role: roleOption as 'staff' | 'kitchen', accessRights: [] })}
+                      >
+                        <Text
+                          style={[
+                            styles.roleBtnText,
+                            formData.role === roleOption && styles.roleBtnTextActive,
+                          ]}
+                        >
+                          {roleOption === 'kitchen' ? `${t('admin.kitchen')}` : `${t('admin.staff')}`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.formGroupHalf}>
+                  <Text style={styles.formLabel}>{t('admin.hourly-rate')}</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g., 15.50"
+                    value={formData.hourlyRate}
+                    onChangeText={(text) => setFormData({ ...formData, hourlyRate: text })}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
               </View>
 
               {/* Access Rights */}
               {formData.role === 'staff' ? (
                 <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Tab Access Permissions</Text>
+                  <Text style={styles.formLabel}>{t('admin.tab-access')}</Text>
                   <View style={styles.accessGrid}>
                     {tabAccessOptions.map((option) => (
                       <TouchableOpacity
@@ -461,7 +473,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                 </View>
               ) : (
                 <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Food Categories Access</Text>
+                  <Text style={styles.formLabel}>{t('admin.food-categories')}</Text>
                   <View style={styles.accessGrid}>
                     {menuCategories.map((cat) => (
                       <TouchableOpacity
@@ -490,11 +502,11 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
             {/* Form Actions */}
             <View style={styles.formActions}>
               <TouchableOpacity style={[styles.formBtn, styles.formBtnCancel]} onPress={closeForm}>
-                <Text style={styles.formBtnText}>Cancel</Text>
+                <Text style={styles.formBtnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.formBtn, styles.formBtnSubmit]} onPress={handleSubmitStaff}>
                 <Text style={[styles.formBtnText, styles.formBtnSubmitText]}>
-                  {editingStaffId ? '💾 Update' : '➕ Add'}
+                  {editingStaffId ? `${t('common.update')}` : `${t('common.add')}`}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -503,7 +515,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
       </Modal>
 
       {/* Detail Modal */}
-      <Modal visible={showDetailModal} transparent animationType="fade" onRequestClose={() => setShowDetailModal(false)}>
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showDetailModal} transparent animationType="fade" onRequestClose={() => setShowDetailModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.detailModalContent}>
             <View style={styles.modalHeader}>
@@ -519,32 +531,34 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                 <>
                   {/* Staff Info */}
                   <View style={styles.infoSection}>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>Role</Text>
-                      <Text style={styles.infoValue}>
-                        {selectedStaff.role === 'kitchen' ? '🍳 Kitchen' : '👤 Staff'}
-                      </Text>
+                    <View style={styles.infoGrid}>
+                      <View style={styles.infoGridItem}>
+                        <Text style={styles.infoLabel}>{t('admin.role')}</Text>
+                        <Text style={styles.infoValue}>
+                          {selectedStaff.role === 'kitchen' ? `${t('admin.kitchen')}` : `${t('admin.staff')}`}
+                        </Text>
+                      </View>
+                      <View style={styles.infoGridItem}>
+                        <Text style={styles.infoLabel}>{t('admin.pin')}</Text>
+                        <Text style={[styles.infoValue, { fontFamily: 'monospace' }]}>{selectedStaff.pin || '-'}</Text>
+                      </View>
+                      <View style={styles.infoGridItem}>
+                        <Text style={styles.infoLabel}>{t('admin.hourly-rate')}</Text>
+                        <Text style={styles.infoValue}>
+                          {selectedStaff.hourly_rate_cents
+                            ? `$${(selectedStaff.hourly_rate_cents / 100).toFixed(2)}/hr`
+                            : 'Not set'}
+                        </Text>
+                      </View>
+                      <View style={styles.infoGridItem}>
+                        <Text style={styles.infoLabel}>{t('admin.status')}</Text>
+                        <Text style={[styles.infoValue, { color: selectedStaff.currently_clocked_in ? '#10b981' : '#999' }]}>
+                          {selectedStaff.currently_clocked_in ? `${t('admin.clocked-in')}` : `${t('admin.clocked-out')}`}
+                        </Text>
+                      </View>
                     </View>
                     <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>PIN</Text>
-                      <Text style={[styles.infoValue, { fontFamily: 'monospace' }]}>{selectedStaff.pin || '-'}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>Hourly Rate</Text>
-                      <Text style={styles.infoValue}>
-                        {selectedStaff.hourly_rate_cents
-                          ? `$${(selectedStaff.hourly_rate_cents / 100).toFixed(2)}/hr`
-                          : 'Not set'}
-                      </Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>Status</Text>
-                      <Text style={[styles.infoValue, { color: selectedStaff.currently_clocked_in ? '#10b981' : '#999' }]}>
-                        {selectedStaff.currently_clocked_in ? '🟢 Clocked In' : '⚪ Clocked Out'}
-                      </Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>Access</Text>
+                      <Text style={styles.infoLabel}>{t('admin.access')}</Text>
                       <Text style={styles.infoValue}>
                         {selectedStaff.access_rights && selectedStaff.access_rights.length > 0
                           ? selectedStaff.access_rights.map(r => getAccessLabel(r)).join(', ')
@@ -555,21 +569,21 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
 
                   {/* Clock In/Out */}
                   <View style={styles.clockSection}>
-                    <Text style={styles.sectionTitle}>Clock In/Out</Text>
+                    <Text style={styles.sectionTitle}>{t('admin.clock-in-out')}</Text>
                     <View style={styles.clockButtons}>
                       {!selectedStaff.currently_clocked_in ? (
                         <TouchableOpacity
                           style={[styles.clockBtn, styles.clockInBtn]}
                           onPress={() => handleClockInOut(selectedStaff.id, 'in')}
                         >
-                          <Text style={styles.clockBtnText}>▶ Clock In</Text>
+                          <Text style={styles.clockBtnText}>▶ {t('admin.clock-in')}</Text>
                         </TouchableOpacity>
                       ) : (
                         <TouchableOpacity
                           style={[styles.clockBtn, styles.clockOutBtn]}
                           onPress={() => handleClockInOut(selectedStaff.id, 'out')}
                         >
-                          <Text style={styles.clockBtnText}>⏹ Clock Out</Text>
+                          <Text style={styles.clockBtnText}>⏹ {t('admin.clock-out')}</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -578,14 +592,14 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                   {/* Work Hours Summary */}
                   {selectedStaff.stats && (
                     <View style={styles.statsSection}>
-                      <Text style={styles.sectionTitle}>Work Hours (Last 30 Days)</Text>
+                      <Text style={styles.sectionTitle}>{t('admin.work-hours')}</Text>
                       <View style={styles.statsRow}>
                         <View style={styles.statBox}>
-                          <Text style={styles.statLabel}>Days Worked</Text>
+                          <Text style={styles.statLabel}>{t('admin.days-worked')}</Text>
                           <Text style={styles.statValue}>{selectedStaff.stats.total_shifts}</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={styles.statLabel}>Total Hours</Text>
+                          <Text style={styles.statLabel}>{t('admin.total-hours')}</Text>
                           <Text style={styles.statValue}>{selectedStaff.stats.total_hours.toFixed(1)}h</Text>
                         </View>
                       </View>
@@ -595,7 +609,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                   {/* Timekeeping List */}
                   {selectedStaff.timekeeping && selectedStaff.timekeeping.length > 0 && (
                     <View style={styles.timekeepingSection}>
-                      <Text style={styles.sectionTitle}>Work Log (Last 30 Days)</Text>
+                      <Text style={styles.sectionTitle}>{t('admin.work-log')}</Text>
                       {selectedStaff.timekeeping.map((record, idx) => {
                         const clockIn = new Date(record.clock_in_at);
                         const clockOut = record.clock_out_at ? new Date(record.clock_out_at) : null;
@@ -631,7 +645,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                   if (selectedStaff) openForm(selectedStaff);
                 }}
               >
-                <Text style={styles.modalActionBtnText}>✏️ Edit</Text>
+                <Text style={styles.modalActionBtnText}>{t('common.edit')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalActionBtn, styles.deleteBtn]}
@@ -639,7 +653,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string }>(({ res
                   if (selectedStaff) handleDeleteStaff(selectedStaff.id);
                 }}
               >
-                <Text style={styles.modalActionBtnText}>🗑️ Delete</Text>
+                <Text style={styles.modalActionBtnText}>{t('common.delete')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -663,12 +677,13 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   gridRow: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 12,
     gap: 12,
   },
   staffCardContainer: {
-    flex: 1,
+    width: '48%',
+    maxWidth: '48%',
   },
   staffCard: {
     backgroundColor: '#fff',
@@ -731,9 +746,24 @@ const styles = StyleSheet.create({
   staffCardAccess: {
     fontSize: 10,
     color: '#999',
-    marginBottom: 8,
+    marginBottom: 6,
     maxHeight: 50,
     lineHeight: 14,
+  },
+  staffClockStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  staffClockDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  staffClockText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   staffCardActions: {
     flexDirection: 'row',
@@ -841,6 +871,15 @@ const styles = StyleSheet.create({
   formGroup: {
     marginBottom: 16,
   },
+  formRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  formGroupHalf: {
+    flex: 1,
+    maxWidth: 400,
+  },
   formLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -874,8 +913,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   roleBtnActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
   roleBtnText: {
     fontSize: 13,
@@ -903,8 +942,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   accessCheckboxActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
   accessCheckboxText: {
     fontSize: 12,
@@ -992,14 +1031,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 15,
   },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  infoGridItem: {
+    width: '50%',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+  },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
   },
   infoLabel: {
     fontSize: 13,

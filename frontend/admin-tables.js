@@ -478,7 +478,6 @@ function renderCategoryTablesGrid() {
   if (document.body.classList.contains("edit-mode")) {
     var addCard = document.createElement("div");
     addCard.className = "add-table-card";
-    addCard.textContent = "+";
     addCard.onclick = function() { addTableModal(SELECTED_TABLE_CATEGORY.id); };
     grid.appendChild(addCard);
   }
@@ -638,7 +637,10 @@ function renderCategoryTablesGrid() {
       };
     })(table);
 
-    grid.appendChild(card);
+    var wrapper = document.createElement("div");
+    wrapper.className = "table-card-wrapper";
+    wrapper.appendChild(card);
+    grid.appendChild(wrapper);
   }
 }
 

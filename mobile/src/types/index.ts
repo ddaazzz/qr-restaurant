@@ -9,6 +9,8 @@ export interface AuthResponse {
   role: 'admin' | 'staff' | 'kitchen' | 'superadmin';
   restaurantId: string;
   userId: string;
+  access_rights?: Record<string, any> | string[];
+  currently_clocked_in?: boolean;
 }
 
 export interface AuthToken {

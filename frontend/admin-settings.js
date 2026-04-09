@@ -218,6 +218,9 @@ async function showSettingsPage(pageName) {
       case 'variant-presets':
         await loadVariantPresets();
         break;
+      case 'users-management':
+        if (typeof loadUsersManagement === 'function') await loadUsersManagement();
+        break;
     }
   }
 }

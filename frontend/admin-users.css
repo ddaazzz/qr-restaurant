@@ -1,0 +1,249 @@
+/* ============== ADMIN USERS & RESTAURANTS CSS ============== */
+
+/* Tab bar */
+.users-tab-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0;
+}
+
+.users-tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-light);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s ease;
+}
+
+.users-tab-btn:hover {
+  color: var(--text-dark);
+}
+
+.users-tab-btn.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+/* Users list */
+.users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* User/Restaurant card row */
+.user-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: all 0.2s ease;
+  gap: 12px;
+}
+
+.user-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #c7d2fe;
+}
+
+.user-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.user-card-meta {
+  font-size: 12px;
+  color: var(--text-light);
+  line-height: 1.5;
+}
+
+.user-card-meta span {
+  margin-right: 12px;
+}
+
+.user-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.user-card-actions button {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.user-card-actions button:hover {
+  background: var(--bg-light);
+}
+
+.user-card-actions .btn-edit {
+  color: #3b82f6;
+  border-color: #bfdbfe;
+}
+
+.user-card-actions .btn-edit:hover {
+  background: #eff6ff;
+}
+
+.user-card-actions .btn-delete-user {
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+.user-card-actions .btn-delete-user:hover {
+  background: #fef2f2;
+}
+
+/* Role badge */
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.role-badge-superadmin {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #f59e0b;
+}
+
+.role-badge-admin {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #3b82f6;
+}
+
+.role-badge-staff {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #22c55e;
+}
+
+.role-badge-kitchen {
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #f97316;
+}
+
+/* Role picker chips */
+.users-role-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.role-chip {
+  padding: 8px 16px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  transition: all 0.2s ease;
+}
+
+.role-chip:hover {
+  border-color: #a5b4fc;
+  color: var(--text-dark);
+}
+
+.role-chip.active {
+  border-color: var(--primary-color);
+  background: #eef2ff;
+  color: var(--primary-color);
+}
+
+/* Restaurant meta chips */
+.restaurant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.meta-chip {
+  font-size: 11px;
+  color: #4b5563;
+  background: var(--bg-light);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* Modal backdrop for user/restaurant modals */
+#user-modal,
+#restaurant-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#user-modal .modal-content,
+#restaurant-modal .modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .user-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .user-card-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .users-tab-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
