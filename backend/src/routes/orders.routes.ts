@@ -634,10 +634,12 @@ router.get("/kitchen/items", async (req, res) => {
       result.rows.map(row => ({
         order_item_id: row.order_item_id,
         order_id: row.order_id,
+        restaurant_order_number: row.restaurant_order_number,
         session_id: row.session_id,
         table_name: row.table_name,
         order_type: row.order_type,
         menu_item_name: row.item_name,
+        category_id: row.category_id,
         quantity: row.quantity,
         status: row.status,
         variants: row.variants,

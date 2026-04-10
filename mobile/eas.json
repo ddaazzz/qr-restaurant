@@ -8,6 +8,10 @@
       "distribution": "internal",
       "ios": {
         "resourceClass": "large"
+      },
+      "android": {
+        "buildType": "apk",
+        "resourceClass": "large"
       }
     },
     "preview": {
@@ -15,6 +19,7 @@
         "resourceClass": "large"
       },
       "android": {
+        "buildType": "apk",
         "resourceClass": "large"
       },
       "env": {
@@ -22,6 +27,13 @@
       }
     },
     "production": {
+      "ios": {
+        "resourceClass": "large"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "resourceClass": "large"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://chuio.io"
       }
@@ -33,7 +45,22 @@
         "simulator": true
       },
       "environment": "development"
+    },
+    "development-device": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "environment": "development"
     }
   },
-  "submit": {}
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-services.json",
+        "track": "production"
+      }
+    }
+  }
 }

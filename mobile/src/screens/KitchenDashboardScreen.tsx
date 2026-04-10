@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,6 +9,8 @@ import {
   Alert,
   FlatList,
   Modal,
+  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../services/apiClient';
@@ -23,18 +25,40 @@ import { printQueueService } from '../services/printQueueService';
 import { bluetoothService } from '../services/bluetoothService';
 import { printerDeviceStorageService } from '../services/printerDeviceStorageService';
 
-interface KitchenItem {
-  id: string;
-  orderId: string;
-  tableNumber: number;
-  createdAt: string;
+/** Raw item from the API (one row per order_item) */
+interface RawKitchenItem {
+  order_item_id: number;
+  order_id: number;
+  restaurant_order_number?: number;
+  session_id: number;
+  table_name: string;
+  order_type: string;
+  menu_item_name: string;
+  category_id?: number;
+  quantity: number;
   status: string;
-  categoryId?: number;  // NEW: category for printer routing
+  variants: string;
+  notes: string;
+  created_at: string;
+  restaurant_id: number;
+}
+
+/** Grouped order card (matches web app structure) */
+interface KitchenOrder {
+  orderId: number;
+  restaurantOrderNumber?: number;
+  tableName: string;
+  orderType: string;
+  createdAt: string;
+  status: string; // worst status among items
   items: Array<{
-    quantity: number;
+    id: number;
     name: string;
-    selectedOptions?: Array<{ name: string }>;
+    quantity: number;
+    status: string;
+    variants?: string;
     notes?: string;
+    categoryId?: number;
   }>;
 }
 
@@ -75,13 +99,14 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   const { user, logout, updateUser } = useAuth();
   const { t, lang, setLanguage } = useTranslation();
   const { showToast } = useToast();
-  const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
+  const { width: screenWidth } = useWindowDimensions();
+  const [rawItems, setRawItems] = useState<RawKitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [kitchenPrinters, setKitchenPrinters] = useState<KitchenPrinter[]>([]);
   const [showPrinterModal, setShowPrinterModal] = useState(false);
-  const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<KitchenItem | null>(null);
+  const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<KitchenOrder | null>(null);
   const [matchingPrinters, setMatchingPrinters] = useState<KitchenPrinter[]>([]);
   const [printing, setPrinting] = useState(false);
   const [printerConnected, setPrinterConnected] = useState(false);
@@ -90,6 +115,52 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   const [clockLoading, setClockLoading] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const [, setTimeRefresh] = useState(0); // Force re-render for time-ago updates
+
+  // Group raw items into order cards (like web app does)
+  const kitchenOrders = useMemo((): KitchenOrder[] => {
+    const orderMap: Record<number, KitchenOrder> = {};
+    const statusPriority: Record<string, number> = { pending: 0, confirmed: 1, preparing: 2, ready: 3 };
+
+    for (const item of rawItems) {
+      const oid = item.order_id;
+      if (!orderMap[oid]) {
+        orderMap[oid] = {
+          orderId: oid,
+          restaurantOrderNumber: item.restaurant_order_number,
+          tableName: item.table_name,
+          orderType: item.order_type,
+          createdAt: item.created_at,
+          status: item.status,
+          items: [],
+        };
+      }
+      orderMap[oid].items.push({
+        id: item.order_item_id,
+        name: item.menu_item_name,
+        quantity: item.quantity,
+        status: item.status,
+        variants: item.variants,
+        notes: item.notes,
+        categoryId: item.category_id,
+      });
+      // Use worst (earliest) status for the card
+      if ((statusPriority[item.status] ?? 99) < (statusPriority[orderMap[oid].status] ?? 99)) {
+        orderMap[oid].status = item.status;
+      }
+    }
+
+    return Object.values(orderMap).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, [rawItems]);
+
+  // Calculate grid columns based on screen width
+  const numColumns = useMemo(() => {
+    if (screenWidth >= 1200) return 4;
+    if (screenWidth >= 900) return 3;
+    if (screenWidth >= 600) return 2;
+    return 1;
+  }, [screenWidth]);
 
   useEffect(() => {
     initializePrinters();
@@ -265,7 +336,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   const loadKitchenItems = async () => {
     try {
       const data = await apiClient.getKitchenItems();
-      setKitchenItems(data);
+      setRawItems(data);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load items');
@@ -286,9 +357,21 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
     ]);
   };
 
-  const handleUpdateStatus = async (itemId: string, newStatus: string) => {
+  const handleUpdateStatus = async (itemId: number, newStatus: string) => {
     try {
-      await apiClient.updateOrderStatus(itemId, newStatus);
+      await apiClient.updateOrderStatus(String(itemId), newStatus);
+      loadKitchenItems();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
+
+  /** Update all items in an order to the same status */
+  const handleUpdateAllItemsStatus = async (order: KitchenOrder, newStatus: string) => {
+    try {
+      await Promise.all(
+        order.items.map(item => apiClient.updateOrderStatus(String(item.id), newStatus))
+      );
       loadKitchenItems();
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update status');
@@ -299,19 +382,19 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
    * Handle print order button - routes to appropriate printer based on category
    * NEW: Supports multi-printer with category-based routing
    */
-  const handlePrintOrder = async (order: KitchenItem) => {
+  const handlePrintOrder = async (order: KitchenOrder) => {
     try {
       setSelectedOrderForPrint(order);
 
-      // Find printers that can handle this order's category
+      // Find printers that can handle this order's categories
       let printers: KitchenPrinter[] = [];
+      const orderCategoryIds = order.items.map(i => i.categoryId).filter(Boolean) as number[];
       
-      if (order.categoryId && kitchenPrinters.length > 0) {
-        // NEW: Match by category ID
+      if (orderCategoryIds.length > 0 && kitchenPrinters.length > 0) {
         printers = kitchenPrinters.filter(p => 
-          p.categories && p.categories.includes(order.categoryId!)
+          p.categories && orderCategoryIds.some(cid => p.categories!.includes(cid))
         );
-        console.log(`[KitchenDashboard] Found ${printers.length} printers for category ${order.categoryId}`);
+        console.log(`[KitchenDashboard] Found ${printers.length} printers for categories ${orderCategoryIds}`);
       } else if (kitchenPrinters.length > 0) {
         // Fallback: if no category or no match, show all printers
         printers = kitchenPrinters;
@@ -410,7 +493,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   /**
    * Execute print to selected printer with queue & auto-reconnect support
    */
-  const executePrint = async (order: KitchenItem, printer: KitchenPrinter) => {
+  const executePrint = async (order: KitchenOrder, printer: KitchenPrinter) => {
     try {
       setPrinting(true);
       setShowPrinterModal(false);
@@ -450,7 +533,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
    * Send print data to network printer via TCP/IP
    * Matches webapp's network printer approach
    */
-  const sendToNetworkPrinter = async (order: KitchenItem, printer: KitchenPrinter) => {
+  const sendToNetworkPrinter = async (order: KitchenOrder, printer: KitchenPrinter) => {
     try {
       if (!printer.host) {
         throw new Error('Printer host not configured');
@@ -458,25 +541,6 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
 
       console.log(`[KitchenDashboard] Connecting to network printer: ${printer.host}:9100`);
 
-      // Generate ESC/POS from order data
-      const { thermalPrinterService } = require('../services/thermalPrinterService');
-      const printerService = new thermalPrinterService();
-      
-      const receiptData = {
-        orderNumber: order.orderId,
-        tableNumber: order.tableNumber,
-        items: order.items?.map((item: any) => ({
-          name: item.name,
-          quantity: item.quantity
-        })),
-        timestamp: new Date().toLocaleString(),
-        restaurantName: ''
-      };
-
-      const escposArray = printerService.generateESCPOS(receiptData);
-      console.log(`[KitchenDashboard] Generated ${escposArray.length} bytes of ESC/POS`);
-
-      // Send to backend print endpoint (backup - usually server-side auto-print handles this)
       const response = await apiClient.post(
         `/restaurants/${user?.restaurantId}/print-order`,
         {
@@ -498,7 +562,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
    * Send print data to Bluetooth printer with queue & retry support
    */
   const sendToBluetoothPrinterWithQueue = async (
-    order: KitchenItem | any,
+    order: KitchenOrder | any,
     printer: KitchenPrinter
   ): Promise<boolean> => {
     try {
@@ -554,23 +618,6 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
       }
 
       // Send print request to backend
-      const { thermalPrinterService } = require('../services/thermalPrinterService');
-      const printerService = new thermalPrinterService();
-      
-      const receiptData = {
-        orderNumber: order.orderId,
-        tableNumber: order.tableNumber,
-        items: order.items?.map((item: any) => ({
-          name: item.name,
-          quantity: item.quantity
-        })),
-        timestamp: new Date().toLocaleString(),
-        restaurantName: ''
-      };
-
-      const escposArray = printerService.generateESCPOS(receiptData);
-      console.log(`[KitchenDashboard] Generated ${escposArray.length} bytes of ESC/POS`);
-
       const response = await apiClient.post(
         `/restaurants/${user?.restaurantId}/print-order`,
         {
@@ -597,7 +644,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
    * Send print data to Bluetooth printer
    * Matches webapp's Bluetooth approach - uses persistent session if available
    */
-  const sendToBluetoothPrinter = async (order: KitchenItem, printer: KitchenPrinter) => {
+  const sendToBluetoothPrinter = async (order: KitchenOrder, printer: KitchenPrinter) => {
     return await sendToBluetoothPrinterWithQueue(order, printer);
   };
 
@@ -749,107 +796,114 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      ) : kitchenItems.length === 0 ? (
+      ) : kitchenOrders.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No active orders</Text>
+          <Text style={styles.emptyText}>{t('kitchen.no-orders') || 'No active orders'}</Text>
         </View>
       ) : (
-        <FlatList
-          data={kitchenItems}
-          keyExtractor={(item) => item.id}
+        <FlatList<KitchenOrder>
+          // @ts-ignore - key needed to force remount when numColumns changes
+          key={`grid-${numColumns}`}
+          data={kitchenOrders}
+          numColumns={numColumns}
+          keyExtractor={(item) => String(item.orderId)}
           contentContainerStyle={styles.listContent}
+          columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
           refreshing={loading}
           onRefresh={loadKitchenItems}
-          renderItem={({ item }) => (
-            <View style={[
-              styles.orderCard,
-              { borderLeftColor: cardBorderColors[item.status] || '#FF9800' },
-            ]}>
-              <View style={styles.orderHeader}>
-                <View>
-                  <Text style={styles.orderNumber}>Order #{item.orderId}</Text>
-                  <Text style={styles.tableNumber}>Table {item.tableNumber}</Text>
-                  <Text style={styles.timestamp}>{getTimeAgo(item.createdAt)}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: statusColors[item.status] || '#999' },
-                  ]}
-                >
-                  <Text style={styles.statusText}>{item.status}</Text>
-                </View>
-              </View>
+          renderItem={({ item: order }) => {
+            const displayName = order.orderType === 'table'
+              ? order.tableName
+              : order.orderType === 'takeaway' ? (t('kitchen.takeaway') || 'Takeaway')
+              : order.orderType === 'counter' ? (t('kitchen.counter') || 'Counter')
+              : order.tableName || (t('kitchen.order') || 'Order');
 
-              {/* Items */}
-              <View style={styles.itemsList}>
-                {item.items && item.items.length > 0 ? (
-                  item.items.map((menuItem: any, id: number) => (
-                    <View key={id} style={styles.itemRow}>
-                      <Text style={styles.itemName}>
-                        {menuItem.quantity}x {menuItem.name}
-                      </Text>
-                      {menuItem.selectedOptions && menuItem.selectedOptions.length > 0 && (
-                        <View style={styles.optionsList}>
-                          {menuItem.selectedOptions.map((opt: any, optId: number) => (
-                            <Text key={optId} style={styles.optionText}>
-                              • {opt.name}
-                            </Text>
-                          ))}
-                        </View>
-                      )}
-                      {menuItem.notes && (
-                        <Text style={styles.notes}>Note: {menuItem.notes}</Text>
-                      )}
+            return (
+              <View style={[
+                styles.orderCard,
+                { borderLeftColor: cardBorderColors[order.status] || '#FF9800' },
+                numColumns > 1 && { flex: 1, maxWidth: `${100 / numColumns}%` as any },
+              ]}>
+                {/* Header */}
+                <View style={styles.orderHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.orderNumber}>
+                      {displayName} {order.restaurantOrderNumber ? `#${order.restaurantOrderNumber}` : `#${order.orderId}`}
+                    </Text>
+                    <Text style={styles.timestamp}>{getTimeAgo(order.createdAt)}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: statusColors[order.status] || '#999' },
+                    ]}
+                  >
+                    <Text style={styles.statusText}>{order.status?.toUpperCase()}</Text>
+                  </View>
+                </View>
+
+                {/* Items */}
+                <View style={styles.itemsList}>
+                  {order.items.map((menuItem) => (
+                    <View key={menuItem.id} style={styles.itemRow}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.itemName}>
+                          {menuItem.quantity}x {menuItem.name}
+                        </Text>
+                        <View style={[styles.itemStatusDot, { backgroundColor: statusColors[menuItem.status] || '#999' }]} />
+                      </View>
+                      {menuItem.variants ? (
+                        <Text style={styles.optionText}>{menuItem.variants}</Text>
+                      ) : null}
+                      {menuItem.notes ? (
+                        <Text style={styles.notes}>{menuItem.notes}</Text>
+                      ) : null}
                     </View>
-                  ))
-                ) : (
-                  <Text style={styles.noItems}>No items</Text>
-                )}
+                  ))}
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.printButton]}
+                    onPress={() => handlePrintOrder(order)}
+                    disabled={printing}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      {printing ? (t('kitchen.printing') || 'Printing...') : (t('kitchen.print') || 'Print')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {order.status === 'pending' && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.preparingButton]}
+                      onPress={() => handleUpdateAllItemsStatus(order, 'preparing')}
+                    >
+                      <Text style={styles.actionButtonText}>{t('kitchen.start-preparing') || 'Start Preparing'}</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {(order.status === 'pending' || order.status === 'preparing') && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.readyButton]}
+                      onPress={() => handleUpdateAllItemsStatus(order, 'ready')}
+                    >
+                      <Text style={styles.actionButtonText}>{t('kitchen.ready') || 'Ready'}</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {order.status === 'ready' && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.servedButton]}
+                      onPress={() => handleUpdateAllItemsStatus(order, 'served')}
+                    >
+                      <Text style={styles.actionButtonText}>{t('kitchen.served') || 'Served'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-
-              {/* Action Buttons */}
-              <View style={styles.actions}>
-                {/* NEW: Print Button */}
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.printButton]}
-                  onPress={() => handlePrintOrder(item)}
-                  disabled={printing}
-                >
-                  <Text style={styles.actionButtonText}>
-                    {printing ? 'Printing...' : 'Print'}
-                  </Text>
-                </TouchableOpacity>
-
-                {item.status === 'pending' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.preparingButton]}
-                    onPress={() => handleUpdateStatus(item.id, 'preparing')}
-                  >
-                    <Text style={styles.actionButtonText}>{t('kitchen.start-preparing') || 'Start'}</Text>
-                  </TouchableOpacity>
-                )}
-
-                {(item.status === 'pending' || item.status === 'preparing') && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.readyButton]}
-                    onPress={() => handleUpdateStatus(item.id, 'ready')}
-                  >
-                    <Text style={styles.actionButtonText}>{t('kitchen.ready') || 'Ready'}</Text>
-                  </TouchableOpacity>
-                )}
-
-                {item.status === 'ready' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.servedButton]}
-                    onPress={() => handleUpdateStatus(item.id, 'served')}
-                  >
-                    <Text style={styles.actionButtonText}>{t('kitchen.served') || 'Served'}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          )}
+            );
+          }}
         />
       )}
     </View>
@@ -936,14 +990,17 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   listContent: {
-    padding: 15,
+    padding: 10,
+  },
+  gridRow: {
+    gap: 10,
   },
   orderCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    borderLeftWidth: 4,
+    padding: 12,
+    marginBottom: 10,
+    borderLeftWidth: 5,
     borderLeftColor: '#FF9800',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -955,25 +1012,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 15,
-    paddingBottom: 15,
+    marginBottom: 10,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
   orderNumber: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-  },
-  tableNumber: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
   },
   timestamp: {
     fontSize: 12,
     color: '#999',
-    marginTop: 5,
+    marginTop: 3,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -993,27 +1045,28 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   itemName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#333',
+    flex: 1,
   },
-  optionsList: {
-    marginTop: 5,
-    marginLeft: 10,
+  itemStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: 6,
   },
   optionText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
+    marginTop: 2,
+    marginLeft: 4,
   },
   notes: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#FF9800',
     fontStyle: 'italic',
-    marginTop: 5,
-  },
-  noItems: {
-    fontSize: 14,
-    color: '#999',
+    marginTop: 2,
   },
   actions: {
     flexDirection: 'row',

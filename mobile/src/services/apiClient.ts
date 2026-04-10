@@ -237,7 +237,8 @@ class APIClient {
   async getKitchenItems() {
     try {
       const response = await this.client.get(
-        `/api/restaurants/${this.restaurantId}/kitchen/items`
+        `/api/kitchen/items`,
+        { params: { restaurantId: this.restaurantId } }
       );
       return response.data;
     } catch (error) {

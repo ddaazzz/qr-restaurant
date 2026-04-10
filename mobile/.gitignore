@@ -38,6 +38,11 @@ Thumbs.db
 
 # Build outputs
 build
+
+# Service account keys - NEVER commit
+google-services.json
+*.keystore
+!android/app/debug.keystore
 *.jsbundle
 
 # @generated expo-cli sync-8d4afeec25ea8a192358fae2f8e2fc766bdce4ec
