@@ -1752,6 +1752,7 @@
   "menu.variants": "Variants",
   "menu.cancel-add": "- Cancel",
   "menu.add": "+ Add",
+  "menu.add-category": "+ Add Category",
   "menu.item-name": "Item Name",
   "menu.item-name-placeholder": "Item name",
   "menu.item-description": "Description",

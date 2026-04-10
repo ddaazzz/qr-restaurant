@@ -1892,6 +1892,7 @@
   "menu.variants": "選項",
   "menu.cancel-add": "- 取消",
   "menu.add": "+ 添加",
+  "menu.add-category": "+ 添加分類",
   "menu.item-name": "商品名稱",
   "menu.item-name-placeholder": "商品名稱",
   "menu.item-description": "描述",

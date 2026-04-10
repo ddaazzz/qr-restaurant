@@ -648,7 +648,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           text: 'Delete',
           onPress: async () => {
             try {
-              await apiClient.delete(`/tables/${tableId}`, {
+              await apiClient.delete(`/api/tables/${tableId}`, {
                 data: { restaurantId: parseInt(restaurantId) },
               });
               await loadTableData();
@@ -3519,13 +3519,12 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   categoryActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center',
-    opacity: 0.8,
   },
   categoryActionBtnDelete: {
     backgroundColor: '#ef4444',
@@ -3675,10 +3674,12 @@ const styles = StyleSheet.create({
   },
   tableActionButtonsContainer: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    bottom: 6,
+    left: 6,
+    right: 6,
     flexDirection: 'row',
     gap: 4,
+    justifyContent: 'center',
   },
   tableEditIcon: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
@@ -3693,19 +3694,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   tableActionBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 6,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
+    backgroundColor: '#3b82f6',
   },
   tableActionBtnDelete: {
-    backgroundColor: 'rgba(255, 100, 100, 0.9)',
+    backgroundColor: '#ef4444',
   },
   tableDeleteIcon: {
     backgroundColor: 'rgba(255, 100, 100, 0.9)',
@@ -3714,10 +3710,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   tableActionBtnText: {
-    fontSize: 16,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
   categoryActionBtnText: {
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
   tableCardContent: {
     alignItems: 'center',

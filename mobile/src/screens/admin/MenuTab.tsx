@@ -777,13 +777,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 onPress={() => setShowCategoryModal(true)}
               >
                 <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
-                  {t('menu.add')}
+                  {t('menu.add-category') || '+ Add Category'}
                 </Text>
               </TouchableOpacity>
             )}
 
             {categories.map((cat) => (
-              <View key={cat.id} style={{ position: 'relative' }}>
+              <View key={cat.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <TouchableOpacity
                   style={[
                     styles.categoryBtn,
@@ -841,11 +841,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 return (
                   <View style={styles.itemCardWrapper}>
                     <TouchableOpacity
-                      style={[styles.itemCard, { backgroundColor: '#eff6ff', borderStyle: 'dashed' as any, borderColor: '#93c5fd' }]}
+                      style={[styles.itemCard, styles.addItemCard]}
                       onPress={() => setShowItemModal(true)}
                     >
-                      <View style={styles.addItemPlaceholder}>
-                        <Text style={styles.addItemText}>{t('menu.add-item-card')}</Text>
+                      <View style={styles.addItemImageArea}>
+                        <Text style={styles.addItemIcon}>+</Text>
+                      </View>
+                      <View style={styles.itemContent}>
+                        <Text style={styles.addItemLabel}>{t('menu.add-item-card')}</Text>
                       </View>
                     </TouchableOpacity>
                   </View>
@@ -2415,29 +2418,25 @@ const styles = StyleSheet.create({
     color: '#3b82f6',
   },
   categoryActionButtons: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingRight: 4,
+    gap: 6,
+    marginLeft: 8,
   },
   categoryActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center',
-    opacity: 0.8,
   },
   categoryActionBtnDelete: {
     backgroundColor: '#ef4444',
   },
   categoryActionBtnText: {
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
 
   // Items Grid - ISOLATED CONTEXT (fills remaining space)
@@ -2513,20 +2512,22 @@ const styles = StyleSheet.create({
   },
   itemActionButtons: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     flexDirection: 'row',
     gap: 4,
   },
   itemActionBtn: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    width: 32,
-    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   itemActionBtnDelete: {
     backgroundColor: 'rgba(255, 100, 100, 0.9)',
@@ -2534,15 +2535,28 @@ const styles = StyleSheet.create({
   itemActionBtnText: {
     fontSize: 16,
   },
-  addItemPlaceholder: {
-    flex: 1,
+  addItemCard: {
+    backgroundColor: '#f9f9f9',
+    borderStyle: 'dashed',
+    borderColor: '#d0d0d0',
+  },
+  addItemImageArea: {
+    width: '100%',
+    aspectRatio: 2.2,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f3f4f6',
   },
-  addItemText: {
-    fontSize: 15,
+  addItemIcon: {
+    fontSize: 32,
+    fontWeight: '300',
+    color: '#9ca3af',
+  },
+  addItemLabel: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#3b82f6',
+    color: '#1f2937',
+    textAlign: 'center',
   },
 
   // Detail Panel
