@@ -17,7 +17,34 @@ if (typeof window.currentEditingPrinterType === 'undefined') {
 async function initializePrinterSettings() {
   console.log('[admin-printer.js] Initializing printer settings module');
   await loadPrinterSettings();
+  await checkKPayPrinterVisibility();
   console.log('[admin-printer.js] Initialization complete, settings loaded');
+}
+
+/**
+ * Check if KPay printer card should be shown
+ * Only visible when an active KPay payment terminal is configured
+ */
+async function checkKPayPrinterVisibility() {
+  try {
+    const restaurantId = window.currentRestaurantId;
+    if (!restaurantId) return;
+    
+    const response = await fetch(`/api/restaurants/${restaurantId}/payment-terminals`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    if (response.ok) {
+      const terminals = await response.json();
+      const hasActiveKpay = Array.isArray(terminals) && terminals.some(t => t.vendor_name === 'kpay' && t.is_active);
+      const kpayCard = document.getElementById('kpay-printer-card');
+      if (kpayCard) {
+        kpayCard.style.display = hasActiveKpay ? '' : 'none';
+      }
+    }
+  } catch (err) {
+    console.log('[admin-printer.js] Could not check KPay terminal status:', err);
+  }
 }
 
 /**

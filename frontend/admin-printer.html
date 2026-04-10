@@ -15,29 +15,33 @@
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
       <!-- QR Code Printing -->
       <div class="printer-type-card" onclick="selectPrinterType('qr')">
-        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-qr-title">QR Code Printing</h3>
-        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-qr-desc">Configure QR code format and printer</p>
+        <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-qr-title">QR Code Printing</h3>
+        <p style="margin: 0; font-size: 11px; color: #9ca3af; font-style: italic;">Epson TM-T82</p>
+        <p style="margin: 8px 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-qr-desc">Configure QR code format and printer</p>
         <div id="qr-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
       </div>
 
       <!-- Bill Receipt Printing -->
       <div class="printer-type-card" onclick="selectPrinterType('bill')">
-        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-bill-title">Bill Receipt Printing</h3>
-        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-bill-desc">Configure bill format and printer</p>
+        <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-bill-title">Bill Receipt Printing</h3>
+        <p style="margin: 0; font-size: 11px; color: #9ca3af; font-style: italic;">Epson TM-T82</p>
+        <p style="margin: 8px 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-bill-desc">Configure bill format and printer</p>
         <div id="bill-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
       </div>
 
       <!-- Kitchen Order Printing -->
       <div class="printer-type-card" onclick="selectPrinterType('kitchen')">
-        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kitchen-title">Kitchen Order Printing</h3>
-        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-kitchen-desc">Configure kitchen printer</p>
+        <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kitchen-title">Kitchen Order Printing</h3>
+        <p style="margin: 0; font-size: 11px; color: #9ca3af; font-style: italic;">Epson TM-U220</p>
+        <p style="margin: 8px 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-kitchen-desc">Configure kitchen printer</p>
         <div id="kitchen-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
       </div>
 
-      <!-- KPay Receipt Printing -->
-      <div class="printer-type-card" onclick="selectPrinterType('kpay')">
-        <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kpay-title">KPay Receipt Printing</h3>
-        <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-kpay-desc">Auto-print receipt after KPay terminal payment</p>
+      <!-- KPay Receipt Printing (only shown when active KPay terminal exists) -->
+      <div id="kpay-printer-card" class="printer-type-card" onclick="selectPrinterType('kpay')" style="display: none;">
+        <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: var(--text-dark, #1f2937);" data-i18n="admin.printer-kpay-title">KPay Receipt Printing</h3>
+        <p style="margin: 0; font-size: 11px; color: #9ca3af; font-style: italic;">Epson TM-T82</p>
+        <p style="margin: 8px 0 16px 0; font-size: 14px; color: var(--text-light, #6b7280);" data-i18n="admin.printer-kpay-desc">Auto-print receipt after KPay terminal payment</p>
         <div id="kpay-status" style="padding: 10px; background: var(--bg-light, #f3f4f6); border-radius: 4px; font-size: 12px; color: var(--text-light, #666);" data-i18n="admin.printer-not-configured">Not configured</div>
       </div>
     </div>

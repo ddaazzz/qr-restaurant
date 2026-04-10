@@ -1739,12 +1739,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       } as PrinterSettings);
     };
 
-    const printerCards: { type: 'qr' | 'bill' | 'kitchen' | 'kpay'; label: string; bg: string; border: string }[] = [
-      { type: 'qr', label: t('settings.qr-printer'), bg: '#f0f9ff', border: '#93c5fd' },
-      { type: 'bill', label: t('settings.bill-printer'), bg: '#fef3c7', border: '#fcd34d' },
-      { type: 'kitchen', label: t('settings.kitchen-printer'), bg: '#fce7f3', border: '#fbcfe8' },
-      { type: 'kpay', label: t('settings.kpay-printer'), bg: '#ecfdf5', border: '#6ee7b7' },
+    const hasActiveKpayTerminal = paymentTerminals.some(t => t.vendor_name === 'kpay' && t.is_active);
+
+    const allPrinterCards: { type: 'qr' | 'bill' | 'kitchen' | 'kpay'; label: string; subtitle: string; bg: string; border: string }[] = [
+      { type: 'qr', label: t('settings.qr-printer'), subtitle: 'Epson TM-T82', bg: '#f0f9ff', border: '#93c5fd' },
+      { type: 'bill', label: t('settings.bill-printer'), subtitle: 'Epson TM-T82', bg: '#fef3c7', border: '#fcd34d' },
+      { type: 'kitchen', label: t('settings.kitchen-printer'), subtitle: 'Epson TM-U220', bg: '#fce7f3', border: '#fbcfe8' },
+      { type: 'kpay', label: t('settings.kpay-printer'), subtitle: 'Epson TM-T82', bg: '#ecfdf5', border: '#6ee7b7' },
     ];
+
+    // Only show KPay printer card when an active KPay terminal is configured
+    const printerCards = allPrinterCards.filter(c => c.type !== 'kpay' || hasActiveKpayTerminal);
 
     return (
       <View style={styles.container}>
@@ -1752,14 +1757,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>{t('settings.printer-config')}</Text>
-            {printerCards.map(({ type, label, bg, border }) => {
+            {printerCards.map(({ type, label, subtitle, bg, border }) => {
               const pType = printerSettings?.[`${type}_printer_type`];
               const pHost = printerSettings?.[`${type}_printer_host`];
               const pPort = printerSettings?.[`${type}_printer_port`];
               const btName = printerSettings?.[`${type}_bluetooth_device_name`];
               return (
                 <View key={type} style={{ backgroundColor: bg, borderWidth: 1, borderColor: border, borderRadius: 8, padding: 14, marginBottom: 12 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 6 }}>{label}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{label}</Text>
+                    <Text style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>{subtitle}</Text>
+                  </View>
                   {pType ? (
                     <>
                       <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>Type: {getPrinterTypeLabel(pType)}</Text>

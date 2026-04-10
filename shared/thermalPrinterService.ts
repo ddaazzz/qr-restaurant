@@ -5,6 +5,10 @@
  * 
  * This is the SINGLE SOURCE OF TRUTH for receipt formatting.
  * Both apps must import and use this service to ensure synchronization.
+ * 
+ * Supported Printers:
+ * - TM-T82 (Thermal): QR codes, Bill receipts, KPay receipts
+ * - TM-U220 (Impact/Dot-matrix): Kitchen orders only (no graphics/QR support)
  */
 
 export interface ReceiptData {
@@ -347,6 +351,113 @@ function appendText(commands: number[], text: string): void {
   }
 }
 
+export interface KitchenOrderData {
+  orderNumber: string;
+  tableNumber: string;
+  items: Array<{ name: string; quantity: number; variants?: string; notes?: string }>;
+  timestamp: string;
+  restaurantName?: string;
+}
+
+/**
+ * Generate ESC/POS commands for kitchen order tickets
+ * Optimized for TM-U220 Impact Printer (dot-matrix)
+ * - No QR codes or graphics (impact printers cannot print raster images)
+ * - Uses GS V for paper cut instead of ESC i (not supported on TM-U220)
+ * - Uses multiple LFs for paper feed instead of ESC d (limited support)
+ * - 33 columns at Font A on 76mm paper
+ */
+export function generateKitchenOrderESCPOS(data: KitchenOrderData): Uint8Array {
+  const commands: number[] = [];
+  const sep = '================================';
+  const lineWidth = 33; // TM-U220 columns at Font A
+
+  // === INITIALIZE ===
+  commands.push(27, 64); // ESC @ - Initialize printer
+
+  // === HEADER: KITCHEN ORDER - CENTERED BOLD ===
+  commands.push(27, 97, 1); // ESC a 1 - Center
+  commands.push(27, 33, 8); // ESC ! 8 - Bold on
+  appendText(commands, 'KITCHEN ORDER');
+  commands.push(27, 33, 0); // ESC ! 0 - Bold off
+  commands.push(10); // LF
+
+  // === SEPARATOR ===
+  appendText(commands, sep);
+  commands.push(10);
+
+  // === ORDER INFO - LEFT ALIGNED ===
+  commands.push(27, 97, 0); // ESC a 0 - Left align
+  commands.push(10); // LF
+
+  // Order number - bold
+  commands.push(27, 33, 8); // Bold
+  appendText(commands, `Order #${data.orderNumber}`);
+  commands.push(27, 33, 0); // Bold off
+  commands.push(10);
+
+  // Table
+  commands.push(27, 33, 8); // Bold
+  appendText(commands, `Table: ${data.tableNumber}`);
+  commands.push(27, 33, 0); // Bold off
+  commands.push(10);
+
+  // Time
+  appendText(commands, `Time:  ${data.timestamp}`);
+  commands.push(10, 10);
+
+  // === SEPARATOR ===
+  appendText(commands, sep);
+  commands.push(10);
+
+  // === ITEMS - LEFT ALIGNED, BOLD ITEM NAMES ===
+  for (const item of data.items) {
+    commands.push(10); // spacing between items
+
+    // Item line: "qty x ItemName" in bold
+    commands.push(27, 33, 8); // Bold
+    const itemLine = `${item.quantity}x ${item.name}`;
+    appendText(commands, itemLine.length > lineWidth ? itemLine.substring(0, lineWidth) : itemLine);
+    commands.push(27, 33, 0); // Bold off
+    commands.push(10);
+
+    // Variants (if any) - indented
+    if (item.variants) {
+      const variantLine = `   ${item.variants}`;
+      appendText(commands, variantLine.length > lineWidth ? variantLine.substring(0, lineWidth) : variantLine);
+      commands.push(10);
+    }
+
+    // Notes (if any) - indented with marker
+    if (item.notes) {
+      const noteLine = `   * ${item.notes}`;
+      appendText(commands, noteLine.length > lineWidth ? noteLine.substring(0, lineWidth) : noteLine);
+      commands.push(10);
+    }
+  }
+
+  commands.push(10); // LF
+
+  // === FOOTER SEPARATOR ===
+  appendText(commands, sep);
+  commands.push(10, 10);
+
+  // === RESTAURANT NAME (if provided) ===
+  if (data.restaurantName) {
+    commands.push(27, 97, 1); // Center
+    appendText(commands, data.restaurantName);
+    commands.push(10);
+  }
+
+  // === PAPER FEED (multiple LFs - ESC d not reliably supported on TM-U220) ===
+  commands.push(10, 10, 10, 10, 10); // 5 line feeds
+
+  // === PAPER CUT - GS V (supported by TM-U220, ESC i is NOT) ===
+  commands.push(29, 86, 1); // GS V 1 - Partial cut
+
+  return new Uint8Array(commands);
+}
+
 export interface KPayReceiptData {
   restaurantName: string;
   tableName?: string;
@@ -454,4 +565,4 @@ export function generateKPayReceiptESCPOS(data: KPayReceiptData): Uint8Array {
   return new Uint8Array(commands);
 }
 
-export default { generateESCPOS, generateKPayReceiptESCPOS };
+export default { generateESCPOS, generateKitchenOrderESCPOS, generateKPayReceiptESCPOS };

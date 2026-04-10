@@ -195,6 +195,69 @@ class BluetoothService {
     }
   }
 
+  /**
+   * Send raw ESC/POS data to a connected Bluetooth printer
+   * Used for pre-generated ESC/POS commands (e.g., TM-U220 kitchen orders from backend)
+   */
+  async sendRawData(deviceId: string, escposBase64: string): Promise<boolean> {
+    try {
+      const isConnected = await this.isPrinterConnected(deviceId);
+      if (!isConnected) {
+        throw new Error('Printer not connected');
+      }
+
+      const device = this.connectedDevices.get(deviceId);
+      if (!device) {
+        throw new Error('Device not found');
+      }
+
+      // Decode base64 to bytes
+      const binaryStr = atob(escposBase64);
+      const rawData = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        rawData[i] = binaryStr.charCodeAt(i);
+      }
+
+      console.log(`[Bluetooth] Sending ${rawData.length} bytes of raw ESC/POS data`);
+
+      // Find a writable characteristic
+      const services = await device.services();
+      for (const service of services) {
+        const characteristics = await service.characteristics();
+        for (const characteristic of characteristics) {
+          if (characteristic.isWritableWithoutResponse || characteristic.isWritable) {
+            const maxChunkSize = 20;
+            for (let i = 0; i < rawData.length; i += maxChunkSize) {
+              const chunk = rawData.slice(i, i + maxChunkSize);
+              if (characteristic.isWritableWithoutResponse) {
+                await device.writeCharacteristicWithoutResponseForService(
+                  service.uuid,
+                  characteristic.uuid,
+                  this.bytesToBase64(chunk)
+                );
+              } else {
+                await device.writeCharacteristicWithResponseForService(
+                  service.uuid,
+                  characteristic.uuid,
+                  this.bytesToBase64(chunk)
+                );
+              }
+              // Small delay between chunks
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            console.log('[Bluetooth] Raw ESC/POS data sent successfully');
+            return true;
+          }
+        }
+      }
+
+      throw new Error('Could not find writable printer characteristic');
+    } catch (error) {
+      console.error('[Bluetooth] Error sending raw data:', error);
+      throw error;
+    }
+  }
+
   private generateThermalReceipt(orderData: any, config?: PrinterConfig): Uint8Array {
     const commands: number[] = [];
 

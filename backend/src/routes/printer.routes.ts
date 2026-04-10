@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import pool from "../config/db";
 import { printOrder, testPrinterConnection, generateReceiptHTML } from "../services/printerService";
 import { PrinterQueueService } from "../services/printerQueue";
-import { generateESCPOS, generateKPayReceiptESCPOS, ReceiptData, KPayReceiptData } from "../services/thermalPrinterService";
+import { generateESCPOS, generateKitchenOrderESCPOS, generateKPayReceiptESCPOS, ReceiptData, KPayReceiptData, KitchenOrderData } from "../services/thermalPrinterService";
 
 const router = express.Router();
 
@@ -193,13 +193,10 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
   }
 
   try {
-    // Get restaurant printer config and order details
-    const [restaurantResult, orderResult] = await Promise.all([
+    // Get restaurant info and order details
+    const [restaurantResult, orderResult, kitchenPrinterResult] = await Promise.all([
       pool.query(
-        `SELECT printer_type, printer_host, printer_port,
-                printer_usb_vendor_id, printer_usb_product_id, 
-                bluetooth_device_id, bluetooth_device_name, name
-         FROM restaurants WHERE id = $1`,
+        `SELECT name FROM restaurants WHERE id = $1`,
         [restaurantId]
       ),
       pool.query(
@@ -212,6 +209,13 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
          ORDER BY oi.order_item_id`,
         [orderId, restaurantId]
       ),
+      // Get kitchen printer config from unified printers table
+      pool.query(
+        `SELECT printer_type, printer_host, printer_port,
+                bluetooth_device_id, bluetooth_device_name
+         FROM printers WHERE restaurant_id = $1 AND type = 'Kitchen'`,
+        [restaurantId]
+      ),
     ]);
 
     if (restaurantResult.rowCount === 0) {
@@ -222,9 +226,25 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
       return res.status(404).json({ error: "Order not found" });
     }
 
-    const printerConfig = restaurantResult.rows[0];
+    const restaurantName = restaurantResult.rows[0].name;
+    const printerConfig = (kitchenPrinterResult.rowCount ?? 0) > 0
+      ? kitchenPrinterResult.rows[0]
+      : { printer_type: 'none' };
     const items = orderResult.rows;
     const tableNumber = items[0].table_name || "To-Go";
+
+    // Build kitchen order data for TM-U220 ESC/POS generation
+    const kitchenOrderData: KitchenOrderData = {
+      orderNumber: String(orderId),
+      tableNumber,
+      items: items.map((i) => ({
+        name: i.item_name,
+        quantity: i.quantity,
+        variants: i.variants || undefined,
+      })),
+      timestamp: new Date(items[0].created_at).toLocaleTimeString(),
+      restaurantName,
+    };
 
     const payload = {
       orderNumber: String(orderId),
@@ -235,14 +255,12 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
         variants: i.variants,
       })),
       timestamp: new Date(items[0].created_at).toLocaleTimeString(),
-      restaurantName: printerConfig.name,
+      restaurantName,
       type: orderType as "kitchen" | "bill",
       printerConfig: {
         type: printerConfig.printer_type,
         host: printerConfig.printer_host,
         port: printerConfig.printer_port,
-        vendorId: printerConfig.printer_usb_vendor_id,
-        productId: printerConfig.printer_usb_product_id,
         bluetoothDeviceId: printerConfig.bluetooth_device_id,
         bluetoothDeviceName: printerConfig.bluetooth_device_name,
       },
@@ -257,54 +275,57 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
       });
     }
 
-    // For Bluetooth printing, return bluetoothPayload for client-side handling
+    // For Bluetooth printing, return ESC/POS data optimized for TM-U220 Impact Printer
     if (printerConfig.printer_type === "bluetooth") {
-      // Validate that device is configured
       if (!printerConfig.bluetooth_device_name) {
         return res.status(400).json({ error: "Bluetooth printer device not configured. Please configure the printer in Settings first." });
       }
       
-      const bluetoothPayload = {
-        printerConfig: {
-          bluetoothDeviceId: printerConfig.bluetooth_device_id,
-          bluetoothDeviceName: printerConfig.bluetooth_device_name,
-        },
-        data: {
-          type: 'order',
-          orderNumber: String(orderId),
-          tableNumber,
-          items: items.map((i) => ({
-            name: i.item_name,
-            quantity: i.quantity,
-            variants: i.variants,
-          })),
-          timestamp: new Date(items[0].created_at).toLocaleTimeString(),
-          restaurantName: printerConfig.name,
-          html: generateReceiptHTML(payload),
-        }
-      };
+      // Generate TM-U220 compatible ESC/POS (no graphics, GS V cut)
+      const escposArray = generateKitchenOrderESCPOS(kitchenOrderData);
       
       return res.json({
         success: true,
-        bluetoothPayload,
+        bluetoothPayload: {
+          printerConfig: {
+            bluetoothDeviceId: printerConfig.bluetooth_device_id,
+            bluetoothDeviceName: printerConfig.bluetooth_device_name,
+          },
+          escposBase64: Buffer.from(escposArray).toString('base64'),
+        },
         message: `Order ready for Bluetooth printing on ${printerConfig.bluetooth_device_name}`,
       });
     }
 
-    // Add to print queue
-    const queue = getPrinterQueueInstance();
-    const job = await queue.addJob(parseInt(restaurantId), payload, {
-      orderId: String(orderId),
-      priority,
-      printerZoneId,
-      maxRetries: 3,
-    });
+    // For network printing, send TM-U220 ESC/POS directly via TCP/IP
+    if (printerConfig.printer_type === "network") {
+      const escposArray = generateKitchenOrderESCPOS(kitchenOrderData);
+      const net = await import('net');
+      const host = printerConfig.printer_host;
+      const port = printerConfig.printer_port || 9100;
 
+      await new Promise<void>((resolve, reject) => {
+        const client = new net.Socket();
+        client.setTimeout(5000);
+        client.connect(port, host, () => {
+          client.write(Buffer.from(escposArray), () => {
+            client.end();
+            resolve();
+          });
+        });
+        client.on('error', reject);
+        client.on('timeout', () => { client.destroy(); reject(new Error('Kitchen printer connection timed out')); });
+      });
+
+      return res.json({ success: true, message: 'Kitchen order sent to network printer' });
+    }
+
+    // Fallback: return ESC/POS data for other printer types
+    const escposArray = generateKitchenOrderESCPOS(kitchenOrderData);
     res.json({
       success: true,
-      jobId: job.id,
-      status: job.status,
-      message: "Print job queued successfully",
+      escposBase64: Buffer.from(escposArray).toString('base64'),
+      message: "Kitchen order ESC/POS generated",
     });
   } catch (err: any) {
     if (err.message.includes("not initialized")) {

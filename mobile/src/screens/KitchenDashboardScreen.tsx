@@ -617,7 +617,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
         }
       }
 
-      // Send print request to backend
+      // Send print request to backend to get TM-U220 compatible ESC/POS data
       const response = await apiClient.post(
         `/restaurants/${user?.restaurantId}/print-order`,
         {
@@ -627,6 +627,14 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
           priority: 10
         }
       );
+
+      // Send ESC/POS data to Bluetooth printer (TM-U220 Impact Printer compatible)
+      if (response.data?.bluetoothPayload?.escposBase64) {
+        await bluetoothService.sendRawData(
+          printer.bluetoothDevice,
+          response.data.bluetoothPayload.escposBase64
+        );
+      }
 
       console.log('[KitchenDashboard] ✅ Print sent successfully');
       updatePrinterConnectionStatus();
