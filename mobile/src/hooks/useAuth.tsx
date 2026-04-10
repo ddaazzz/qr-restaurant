@@ -23,6 +23,7 @@ interface AuthContextType {
   googleLogin: (email: string, googleId?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<AuthResponse>) => void;
+  switchRestaurant: (restaurantId: string) => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
@@ -146,6 +147,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser((prev) => prev ? { ...prev, ...updates } : prev);
   };
 
+  const switchRestaurant = async (restaurantId: string) => {
+    await SecureStore.setItemAsync('restaurantId', restaurantId);
+    apiClient.setRestaurantId(restaurantId);
+    setUser((prev) => prev ? { ...prev, restaurantId } : prev);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -159,6 +166,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         googleLogin,
         logout,
         updateUser,
+        switchRestaurant,
       }}
     >
       {children}

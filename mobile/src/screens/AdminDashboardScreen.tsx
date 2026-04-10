@@ -52,7 +52,7 @@ const ACCESS_RIGHTS_STRING_MAP: Record<string, TabType> = {
 };
 
 export const AdminDashboardScreen = ({ navigation }: any) => {
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, switchRestaurant } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabType>('tables');
@@ -532,10 +532,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                         styles.dropdownItem,
                         parseInt(user.restaurantId) === restaurant.id && styles.dropdownItemActive,
                       ]}
-                      onPress={() => {
+                      onPress={async () => {
                         if (parseInt(user.restaurantId) !== restaurant.id) {
-                          // TODO: Implement restaurant switching
-                          Alert.alert('Restaurant Switch', `Switching to ${restaurant.name}`);
+                          await switchRestaurant(String(restaurant.id));
+                          showToast(`${t('admin.switched-to') || 'Switched to'} ${restaurant.name}`, 'success');
                         }
                         setShowAdminDropdown(false);
                       }}
