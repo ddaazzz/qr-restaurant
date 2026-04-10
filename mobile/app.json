@@ -2,7 +2,7 @@
   "expo": {
     "name": "QR Restaurant",
     "slug": "qr-restaurant-ai",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "sdkVersion": "54.0.0",
     "icon": "./assets/logo.png",
     "orientation": "portrait",
@@ -13,7 +13,7 @@
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.qrrestaurant.app",
-      "buildNumber": "7",
+      "buildNumber": "1",
       "icon": "./assets/logo.png",
       "minimumOSVersion": "16.0",
       "infoPlist": {
@@ -23,7 +23,7 @@
         "NSLocationWhenInUseUsageDescription": "Location is needed for Bluetooth scanning",
         "UIApplicationSupportsMultipleScenes": true
       },
-      "runtimeVersion": "1.0.0",
+      "runtimeVersion": "1.1.0",
       "splash": {
         "image": "./assets/logo.png",
         "resizeMode": "contain",
