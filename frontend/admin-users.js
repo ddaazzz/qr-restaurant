@@ -95,7 +95,7 @@ function renderRestaurantsList() {
   var html = '';
   for (var i = 0; i < restaurantsData.length; i++) {
     var r = restaurantsData[i];
-    html += '<div class="user-card">';
+    html += '<div class="user-card restaurant-card-clickable" onclick="openRestaurantDetail(' + r.id + ')" style="cursor: pointer;">';
     html += '  <div class="user-card-info">';
     html += '    <div class="user-card-name">' + escapeHtml(r.name) + '</div>';
     html += '    <div class="user-card-meta">';
@@ -109,10 +109,11 @@ function renderRestaurantsList() {
     html += '    </div>';
     html += '  </div>';
     html += '  <div class="user-card-actions">';
-    html += '    <button class="btn-edit" onclick="openRestaurantModal(' + r.id + ')">✏️ Edit</button>';
+    html += '    <button class="btn-edit" onclick="event.stopPropagation(); openRestaurantModal(' + r.id + ')">✏️ Edit</button>';
     if (IS_SUPERADMIN) {
-      html += '    <button class="btn-delete-user" onclick="deleteRestaurant(' + r.id + ', \'' + escapeHtml(r.name) + '\')">🗑️</button>';
+      html += '    <button class="btn-delete-user" onclick="event.stopPropagation(); deleteRestaurant(' + r.id + ', \'' + escapeHtml(r.name) + '\')">🗑️</button>';
     }
+    html += '    <span style="color: #9ca3af; font-size: 18px; margin-left: 4px;">›</span>';
     html += '  </div>';
     html += '</div>';
   }
@@ -445,6 +446,139 @@ function showRestaurantError(msg) {
   if (errorEl) {
     errorEl.textContent = msg;
     errorEl.style.display = 'block';
+  }
+}
+
+// ============= RESTAURANT DETAIL =============
+
+async function openRestaurantDetail(restId) {
+  var rest = restaurantsData.find(function(r) { return r.id === restId; });
+  if (!rest) return;
+
+  var modal = document.getElementById('restaurant-detail-modal');
+  if (!modal) {
+    // Create the modal dynamically if it doesn't exist
+    modal = document.createElement('div');
+    modal.id = 'restaurant-detail-modal';
+    modal.className = 'modal-overlay';
+    modal.style.display = 'none';
+    modal.innerHTML = '<div class="modal-content" style="max-width: 600px;"><div class="modal-header"><h3 id="restaurant-detail-title"></h3><button class="modal-close" onclick="closeRestaurantDetail()">✕</button></div><div class="modal-body" id="restaurant-detail-body"></div></div>';
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById('restaurant-detail-title').textContent = rest.name;
+
+  var bodyHtml = '';
+  bodyHtml += '<div style="background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 16px;">';
+  bodyHtml += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">Restaurant Information</h4>';
+  if (rest.address) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">📍 ' + escapeHtml(rest.address) + '</p>';
+  if (rest.phone) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">📞 ' + escapeHtml(rest.phone) + '</p>';
+  if (rest.timezone) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">🕐 ' + rest.timezone + '</p>';
+  if (rest.service_charge_percent != null) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">💰 ' + rest.service_charge_percent + '% service charge</p>';
+  bodyHtml += '<p style="margin: 0; font-size: 13px; color: #6b7280;">👥 ' + (rest.user_count || 0) + ' users</p>';
+  bodyHtml += '</div>';
+
+  bodyHtml += '<h4 style="margin: 0 0 10px 0; font-size: 14px; color: #1f2937;">Payment Terminal Applications</h4>';
+  bodyHtml += '<div id="restaurant-detail-applications"><p style="color: #9ca3af; text-align: center;">Loading...</p></div>';
+
+  document.getElementById('restaurant-detail-body').innerHTML = bodyHtml;
+  modal.style.display = 'flex';
+
+  // Fetch applications
+  try {
+    var res = await fetch(`${API}/restaurants/${restId}/payment-terminal-applications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      var apps = await res.json();
+      renderRestaurantApplications(apps);
+    } else {
+      document.getElementById('restaurant-detail-applications').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load applications</p>';
+    }
+  } catch (err) {
+    document.getElementById('restaurant-detail-applications').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load applications</p>';
+  }
+}
+
+function renderRestaurantApplications(apps) {
+  var container = document.getElementById('restaurant-detail-applications');
+  if (!container) return;
+
+  if (!apps.length) {
+    container.innerHTML = '<p style="color: #9ca3af; text-align: center; padding: 20px;">No applications submitted</p>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < apps.length; i++) {
+    var app = apps[i];
+    var statusColor = app.status === 'approved' ? '#059669' : app.status === 'rejected' ? '#dc2626' : '#d97706';
+    var statusBg = app.status === 'approved' ? '#dcfce7' : app.status === 'rejected' ? '#fef2f2' : '#fef3c7';
+
+    html += '<div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px;">';
+    html += '  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+    html += '    <strong style="font-size: 14px; color: #1f2937;">' + escapeHtml(app.company_name) + '</strong>';
+    html += '    <span style="background: ' + statusBg + '; color: ' + statusColor + '; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">' + app.status.toUpperCase() + '</span>';
+    html += '  </div>';
+    html += '  <p style="margin: 0 0 3px 0; font-size: 12px; color: #6b7280;">📞 ' + escapeHtml(app.contact_number) + '</p>';
+    html += '  <p style="margin: 0 0 3px 0; font-size: 12px; color: #6b7280;">📧 ' + escapeHtml(app.contact_email) + '</p>';
+    html += '  <p style="margin: 0 0 3px 0; font-size: 12px; color: #6b7280;">📋 BR No: ' + escapeHtml(app.br_license_no) + '</p>';
+    html += '  <p style="margin: 0 0 3px 0; font-size: 12px; color: #6b7280;">📅 Submitted: ' + new Date(app.submitted_at).toLocaleDateString() + '</p>';
+    if (app.br_certificate_url) {
+      html += '  <p style="margin: 0 0 3px 0; font-size: 12px;"><a href="' + escapeHtml(app.br_certificate_url) + '" target="_blank" style="color: #3b82f6;">📄 BR Certificate</a></p>';
+    }
+    if (app.restaurant_license_url) {
+      html += '  <p style="margin: 0 0 3px 0; font-size: 12px;"><a href="' + escapeHtml(app.restaurant_license_url) + '" target="_blank" style="color: #3b82f6;">📄 Restaurant License</a></p>';
+    }
+    if (app.admin_notes) {
+      html += '  <p style="margin: 3px 0 0 0; font-size: 12px; color: #6b7280;">📝 Notes: ' + escapeHtml(app.admin_notes) + '</p>';
+    }
+
+    if (IS_SUPERADMIN && app.status === 'pending') {
+      html += '  <div style="display: flex; gap: 8px; margin-top: 10px;">';
+      html += '    <button onclick="event.stopPropagation(); updateApplicationStatus(' + app.id + ', \'approved\', ' + app.restaurant_id + ')" style="flex: 1; background: #059669; color: #fff; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 600;">Approve</button>';
+      html += '    <button onclick="event.stopPropagation(); updateApplicationStatus(' + app.id + ', \'rejected\', ' + app.restaurant_id + ')" style="flex: 1; background: #dc2626; color: #fff; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 600;">Reject</button>';
+      html += '  </div>';
+    }
+
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function closeRestaurantDetail() {
+  var modal = document.getElementById('restaurant-detail-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function updateApplicationStatus(appId, status, restaurantId) {
+  try {
+    var res = await fetch(`${API}/manage/payment-terminal-applications/${appId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status: status }),
+    });
+
+    if (!res.ok) {
+      var data = await res.json();
+      alert(data.error || 'Failed to update application');
+      return;
+    }
+
+    // Refresh the applications list
+    var appsRes = await fetch(`${API}/restaurants/${restaurantId}/payment-terminal-applications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (appsRes.ok) {
+      var apps = await appsRes.json();
+      renderRestaurantApplications(apps);
+    }
+  } catch (err) {
+    alert('Failed to update application: ' + err.message);
   }
 }
 

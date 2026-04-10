@@ -506,6 +506,47 @@ class APIClient {
     }
   }
 
+  // Payment terminal applications
+  async submitTerminalApplication(restaurantId: number, formData: FormData): Promise<any> {
+    try {
+      const response = await this.client.post(
+        `/api/restaurants/${restaurantId}/payment-terminal-applications`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async getTerminalApplications(restaurantId: number): Promise<any[]> {
+    try {
+      const response = await this.client.get(`/api/restaurants/${restaurantId}/payment-terminal-applications`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async getAllTerminalApplications(): Promise<any[]> {
+    try {
+      const response = await this.client.get('/api/manage/payment-terminal-applications');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async updateTerminalApplication(id: number, data: { status?: string; admin_notes?: string }): Promise<any> {
+    try {
+      const response = await this.client.patch(`/api/manage/payment-terminal-applications/${id}`, data);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // Upload image (logo/background)
   async uploadImage(uri: string, type: 'logo' | 'background'): Promise<string> {
     try {

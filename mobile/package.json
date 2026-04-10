@@ -23,6 +23,7 @@
     "expo-camera": "^55.0.9",
     "expo-crypto": "~15.0.8",
     "expo-device": "8.0.10",
+    "expo-document-picker": "~14.0.8",
     "expo-image-picker": "~17.0.10",
     "expo-permissions": "14.4.0",
     "expo-print": "^55.0.8",

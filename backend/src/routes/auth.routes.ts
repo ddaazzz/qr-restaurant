@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import pool from "../config/db"; // adjust if you use your pool setup
 import { logStaffActivity } from "../services/logStaffActivity";
 import { STAFF_ACTIONS } from "../constants/staffActions";
+import { uploadDocuments } from "../config/upload";
 
 const router = Router();
 // POST /api/auth/login
@@ -1357,6 +1358,158 @@ router.delete("/manage/restaurants/:restaurantId", async (req, res) => {
   } catch (err) {
     console.error("Failed to delete restaurant:", err);
     res.status(500).json({ error: "Failed to delete restaurant" });
+  }
+});
+
+// ========== PAYMENT TERMINAL APPLICATIONS ==========
+
+// POST /api/restaurants/:restaurantId/payment-terminal-applications - Submit application
+router.post("/restaurants/:restaurantId/payment-terminal-applications",
+  uploadDocuments.fields([
+    { name: 'br_certificate', maxCount: 1 },
+    { name: 'restaurant_license', maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const caller = await verifyAdminRole(req);
+    if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+    const { restaurantId } = req.params;
+
+    // Admin can only submit for their own restaurant
+    if (caller.role !== "superadmin" && String(caller.restaurant_id) !== restaurantId) {
+      return res.status(403).json({ error: "Cannot submit application for another restaurant" });
+    }
+
+    const { company_name, contact_number, contact_email, br_license_no } = req.body;
+
+    if (!company_name || !contact_number || !contact_email || !br_license_no) {
+      return res.status(400).json({ error: "All fields are required: company_name, contact_number, contact_email, br_license_no" });
+    }
+
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const brCertUrl = files?.br_certificate?.[0]
+        ? `/${files.br_certificate[0].path.replace(/\\/g, '/')}`
+        : null;
+      const restaurantLicenseUrl = files?.restaurant_license?.[0]
+        ? `/${files.restaurant_license[0].path.replace(/\\/g, '/')}`
+        : null;
+
+      const result = await pool.query(
+        `INSERT INTO payment_terminal_applications
+          (restaurant_id, company_name, contact_number, contact_email, br_license_no, br_certificate_url, restaurant_license_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [restaurantId, company_name, contact_number, contact_email, br_license_no, brCertUrl, restaurantLicenseUrl]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error("Failed to submit payment terminal application:", err);
+      res.status(500).json({ error: "Failed to submit application" });
+    }
+  }
+);
+
+// GET /api/restaurants/:restaurantId/payment-terminal-applications - Get applications for a restaurant
+router.get("/restaurants/:restaurantId/payment-terminal-applications", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller) return res.status(403).json({ error: "Admin access required" });
+
+  const { restaurantId } = req.params;
+
+  // Admin can only see their own restaurant's applications
+  if (caller.role !== "superadmin" && String(caller.restaurant_id) !== restaurantId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT pta.*, u.name as reviewer_name
+       FROM payment_terminal_applications pta
+       LEFT JOIN users u ON u.id = pta.reviewed_by
+       WHERE pta.restaurant_id = $1
+       ORDER BY pta.submitted_at DESC`,
+      [restaurantId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Failed to fetch payment terminal applications:", err);
+    res.status(500).json({ error: "Failed to fetch applications" });
+  }
+});
+
+// GET /api/manage/payment-terminal-applications - List all applications (superadmin only)
+router.get("/manage/payment-terminal-applications", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller || caller.role !== "superadmin") {
+    return res.status(403).json({ error: "Superadmin access required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT pta.*, r.name as restaurant_name, u.name as reviewer_name
+       FROM payment_terminal_applications pta
+       JOIN restaurants r ON r.id = pta.restaurant_id
+       LEFT JOIN users u ON u.id = pta.reviewed_by
+       ORDER BY pta.submitted_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Failed to fetch all payment terminal applications:", err);
+    res.status(500).json({ error: "Failed to fetch applications" });
+  }
+});
+
+// PATCH /api/manage/payment-terminal-applications/:id - Update application status (superadmin only)
+router.patch("/manage/payment-terminal-applications/:id", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller || caller.role !== "superadmin") {
+    return res.status(403).json({ error: "Superadmin access required" });
+  }
+
+  const { id } = req.params;
+  const { status, admin_notes } = req.body;
+
+  if (status && !["pending", "approved", "rejected"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status. Must be: pending, approved, or rejected" });
+  }
+
+  try {
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (status) {
+      updates.push(`status = $${paramIndex++}`);
+      values.push(status);
+      updates.push(`reviewed_at = NOW()`);
+      updates.push(`reviewed_by = $${paramIndex++}`);
+      values.push(caller.id);
+    }
+    if (admin_notes !== undefined) {
+      updates.push(`admin_notes = $${paramIndex++}`);
+      values.push(admin_notes);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE payment_terminal_applications SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Failed to update payment terminal application:", err);
+    res.status(500).json({ error: "Failed to update application" });
   }
 });
 

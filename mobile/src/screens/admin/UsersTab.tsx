@@ -86,6 +86,11 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
     language_preference: 'en',
   });
 
+  // Restaurant detail view
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [restaurantApplications, setRestaurantApplications] = useState<any[]>([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+
   const fetchData = useCallback(async () => {
     setFetchError(null);
     try {
@@ -284,6 +289,33 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
     );
   };
 
+  const openRestaurantDetail = async (r: Restaurant) => {
+    setSelectedRestaurant(r);
+    setLoadingApplications(true);
+    try {
+      const apps = await apiClient.getTerminalApplications(r.id);
+      setRestaurantApplications(apps);
+    } catch (err: any) {
+      console.warn('Failed to load applications:', err.message);
+      setRestaurantApplications([]);
+    } finally {
+      setLoadingApplications(false);
+    }
+  };
+
+  const handleUpdateApplicationStatus = async (appId: number, status: string) => {
+    try {
+      await apiClient.updateTerminalApplication(appId, { status });
+      // Refresh applications
+      if (selectedRestaurant) {
+        const apps = await apiClient.getTerminalApplications(selectedRestaurant.id);
+        setRestaurantApplications(apps);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update application');
+    }
+  };
+
   // ---- Role badge ----
   const RoleBadge = ({ role }: { role: string }) => {
     const colors = ROLE_COLORS[role] || ROLE_COLORS.staff;
@@ -331,7 +363,7 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
 
   // ---- Render restaurant card ----
   const renderRestaurantCard = ({ item: r }: { item: Restaurant }) => (
-    <View style={s.card}>
+    <TouchableOpacity style={s.card} onPress={() => openRestaurantDetail(r)} activeOpacity={0.7}>
       <View style={s.cardHeader}>
         <View style={{ flex: 1 }}>
           <Text style={s.cardName}>{r.name}</Text>
@@ -346,17 +378,18 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
           </View>
         </View>
         <View style={s.cardActions}>
-          <TouchableOpacity style={s.iconBtn} onPress={() => openEditRestaurant(r)}>
+          <TouchableOpacity style={s.iconBtn} onPress={(e) => { e.stopPropagation(); openEditRestaurant(r); }}>
             <Ionicons name="pencil" size={18} color="#3b82f6" />
           </TouchableOpacity>
           {isSuperadmin && (
-            <TouchableOpacity style={s.iconBtn} onPress={() => handleDeleteRestaurant(r)}>
+            <TouchableOpacity style={s.iconBtn} onPress={(e) => { e.stopPropagation(); handleDeleteRestaurant(r); }}>
               <Ionicons name="trash" size={18} color="#ef4444" />
             </TouchableOpacity>
           )}
+          <Ionicons name="chevron-forward" size={18} color="#9ca3af" style={{ marginLeft: 4 }} />
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   // ---- Role needs PIN or email/password ----
@@ -721,6 +754,128 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========== Restaurant Detail Modal ========== */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={!!selectedRestaurant} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { maxWidth: 600 }]}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>{selectedRestaurant?.name || 'Restaurant Details'}</Text>
+              <TouchableOpacity onPress={() => { setSelectedRestaurant(null); setRestaurantApplications([]); }}>
+                <Text style={s.closeBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={s.modalBody}>
+              {/* Restaurant Info */}
+              <View style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Restaurant Information</Text>
+                {selectedRestaurant?.address && (
+                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Address:</Text>
+                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.address}</Text>
+                  </View>
+                )}
+                {selectedRestaurant?.phone && (
+                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Phone:</Text>
+                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.phone}</Text>
+                  </View>
+                )}
+                {selectedRestaurant?.timezone && (
+                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Timezone:</Text>
+                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.timezone}</Text>
+                  </View>
+                )}
+                {selectedRestaurant?.service_charge_percent != null && (
+                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Service:</Text>
+                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.service_charge_percent}%</Text>
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Users:</Text>
+                  <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant?.user_count || 0}</Text>
+                </View>
+              </View>
+
+              {/* Payment Terminal Applications */}
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 10 }}>Payment Terminal Applications</Text>
+              {loadingApplications ? (
+                <ActivityIndicator size="small" color="#4f46e5" style={{ paddingVertical: 20 }} />
+              ) : restaurantApplications.length === 0 ? (
+                <Text style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', paddingVertical: 20 }}>No applications submitted</Text>
+              ) : (
+                restaurantApplications.map((app: any) => (
+                  <View key={app.id} style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{app.company_name}</Text>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, backgroundColor: app.status === 'approved' ? '#dcfce7' : app.status === 'rejected' ? '#fef2f2' : '#fef3c7' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: app.status === 'approved' ? '#166534' : app.status === 'rejected' ? '#991b1b' : '#92400e' }}>
+                          {app.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', marginBottom: 3 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280', width: 100 }}>Contact:</Text>
+                      <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{app.contact_number}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', marginBottom: 3 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280', width: 100 }}>Email:</Text>
+                      <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{app.contact_email}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', marginBottom: 3 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280', width: 100 }}>BR No:</Text>
+                      <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{app.br_license_no}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', marginBottom: 3 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280', width: 100 }}>Submitted:</Text>
+                      <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{new Date(app.submitted_at).toLocaleDateString()}</Text>
+                    </View>
+                    {app.br_certificate_url && (
+                      <View style={{ flexDirection: 'row', marginBottom: 3 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280', width: 100 }}>BR Cert:</Text>
+                        <Text style={{ fontSize: 12, color: '#3b82f6', flex: 1 }}>Uploaded</Text>
+                      </View>
+                    )}
+                    {app.restaurant_license_url && (
+                      <View style={{ flexDirection: 'row', marginBottom: 3 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280', width: 100 }}>License:</Text>
+                        <Text style={{ fontSize: 12, color: '#3b82f6', flex: 1 }}>Uploaded</Text>
+                      </View>
+                    )}
+                    {app.admin_notes && (
+                      <View style={{ flexDirection: 'row', marginBottom: 3 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280', width: 100 }}>Notes:</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{app.admin_notes}</Text>
+                      </View>
+                    )}
+
+                    {/* Superadmin actions */}
+                    {isSuperadmin && app.status === 'pending' && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: '#059669', paddingVertical: 8, borderRadius: 6, alignItems: 'center' }}
+                          onPress={() => handleUpdateApplicationStatus(app.id, 'approved')}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Approve</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: '#dc2626', paddingVertical: 8, borderRadius: 6, alignItems: 'center' }}
+                          onPress={() => handleUpdateApplicationStatus(app.id, 'rejected')}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Reject</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>

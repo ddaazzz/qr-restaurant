@@ -26,6 +26,7 @@ import { useTranslation } from '../../contexts/TranslationContext';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { Ionicons } from '@expo/vector-icons';
 import { UsersTab } from './UsersTab';
+import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
 
 interface RestaurantSettings {
@@ -249,6 +250,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [testingTerminal, setTestingTerminal] = useState(false);
   const [terminalTestResult, setTerminalTestResult] = useState<any>(null);
 
+  // Payment terminal application form (for non-superadmin users)
+  const [applicationForm, setApplicationForm] = useState({
+    company_name: '',
+    contact_number: '',
+    contact_email: '',
+    br_license_no: '',
+  });
+  const [brCertificateUri, setBrCertificateUri] = useState<string | null>(null);
+  const [restaurantLicenseUri, setRestaurantLicenseUri] = useState<string | null>(null);
+  const [submittingApplication, setSubmittingApplication] = useState(false);
+  const [existingApplications, setExistingApplications] = useState<any[]>([]);
+
   const fetchSettings = async () => {
     try {
       setError(null);
@@ -353,6 +366,80 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const fetchTerminalApplications = async () => {
+    try {
+      const apps = await apiClient.getTerminalApplications(parseInt(String(restaurantId)));
+      setExistingApplications(apps);
+    } catch (err: any) {
+      console.warn('[Settings] Failed to fetch terminal applications:', err.message);
+      setExistingApplications([]);
+    }
+  };
+
+  const pickDocument = async (type: 'br_certificate' | 'restaurant_license') => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        if (type === 'br_certificate') {
+          setBrCertificateUri(asset.uri);
+        } else {
+          setRestaurantLicenseUri(asset.uri);
+        }
+      }
+    } catch (err) {
+      console.error('Document picker error:', err);
+    }
+  };
+
+  const handleSubmitApplication = async () => {
+    const { company_name, contact_number, contact_email, br_license_no } = applicationForm;
+    if (!company_name.trim() || !contact_number.trim() || !contact_email.trim() || !br_license_no.trim()) {
+      Alert.alert(t('common.error'), t('admin.terminal-app-fields-required'));
+      return;
+    }
+
+    setSubmittingApplication(true);
+    try {
+      const formData = new FormData();
+      formData.append('company_name', company_name.trim());
+      formData.append('contact_number', contact_number.trim());
+      formData.append('contact_email', contact_email.trim());
+      formData.append('br_license_no', br_license_no.trim());
+
+      if (brCertificateUri) {
+        const filename = brCertificateUri.split('/').pop() || 'br_certificate.pdf';
+        formData.append('br_certificate', {
+          uri: brCertificateUri,
+          name: filename,
+          type: 'application/pdf',
+        } as any);
+      }
+      if (restaurantLicenseUri) {
+        const filename = restaurantLicenseUri.split('/').pop() || 'restaurant_license.pdf';
+        formData.append('restaurant_license', {
+          uri: restaurantLicenseUri,
+          name: filename,
+          type: 'application/pdf',
+        } as any);
+      }
+
+      await apiClient.submitTerminalApplication(parseInt(String(restaurantId)), formData);
+      Alert.alert(t('common.success'), t('admin.terminal-app-submitted'));
+      setApplicationForm({ company_name: '', contact_number: '', contact_email: '', br_license_no: '' });
+      setBrCertificateUri(null);
+      setRestaurantLicenseUri(null);
+      await fetchTerminalApplications();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.message || t('admin.terminal-app-failed'));
+    } finally {
+      setSubmittingApplication(false);
+    }
+  };
+
   const fetchAddonPresets = async () => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/addon-presets`);
@@ -369,6 +456,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     fetchVariantPresets();
     fetchPaymentTerminals();
     fetchAddonPresets();
+    fetchTerminalApplications();
   }, [restaurantId]);
 
   const getPrinterTypeLabel = (type?: string): string => {
@@ -1701,56 +1789,188 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Payment terminals page
-  const renderPaymentTerminalsPage = () => (
-    <View style={styles.container}>
-      {renderSubPageHeader(t('admin.payment-terminal') || 'Payment Terminals')}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('admin.payment-terminal')}</Text>
-            <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => { resetTerminalForm(); setShowPaymentTerminalModal(true); }}>
-              <Text style={styles.btnSmallText}>{t('settings.add-terminal')}</Text>
-            </TouchableOpacity>
-          </View>
-          {paymentTerminals.length > 0 ? (
-            <FlatList
-              data={paymentTerminals}
-              renderItem={({ item: terminal }) => (
-                <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
-                  <View style={{ flex: 1 }}>
+  const renderPaymentTerminalsPage = () => {
+    // Non-superadmin: show paid feature notice + application form
+    if (!isSuperadmin) {
+      return (
+        <View style={styles.container}>
+          {renderSubPageHeader(t('admin.payment-terminal') || 'Payment Terminals')}
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            {/* Paid feature notice */}
+            <View style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="lock-closed" size={20} color="#d97706" />
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#92400e', marginLeft: 8 }}>{t('admin.terminal-paid-feature')}</Text>
+              </View>
+              <Text style={{ fontSize: 13, color: '#92400e', lineHeight: 20 }}>{t('admin.terminal-paid-desc')}</Text>
+            </View>
+
+            {/* Existing applications */}
+            {existingApplications.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t('admin.terminal-app-history')}</Text>
+                {existingApplications.map((app: any) => (
+                  <View key={app.id} style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
-                      {terminal.is_active && (
-                        <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
-                        </View>
-                      )}
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{app.company_name}</Text>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, backgroundColor: app.status === 'approved' ? '#dcfce7' : app.status === 'rejected' ? '#fef2f2' : '#fef3c7' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: app.status === 'approved' ? '#166534' : app.status === 'rejected' ? '#991b1b' : '#92400e' }}>
+                          {app.status.toUpperCase()}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
-                    {terminal.last_tested_at && (<Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>)}
-                    {terminal.last_error_message && (<Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>)}
+                    <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('admin.terminal-app-submitted-at')}: {new Date(app.submitted_at).toLocaleDateString()}</Text>
+                    {app.admin_notes && <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{t('admin.terminal-app-notes')}: {app.admin_notes}</Text>}
                   </View>
-                  <View style={{ marginLeft: 12, justifyContent: 'space-around' }}>
-                    <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => editPaymentTerminal(terminal)}>
-                      <Ionicons name="create-outline" size={14} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.btn, styles.btnSmall, { backgroundColor: '#ef4444', marginTop: 4 }]} onPress={() => deletePaymentTerminal(terminal.id)}>
-                      <Ionicons name="trash-outline" size={14} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-            />
-          ) : (
-            <Text style={styles.emptyText}>{t('settings.no-terminals')}</Text>
-          )}
+                ))}
+              </View>
+            )}
+
+            {/* Application form */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.terminal-app-title')}</Text>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>{t('admin.terminal-app-desc')}</Text>
+
+              <Text style={styles.label}>{t('admin.terminal-app-company')} *</Text>
+              <TextInput
+                style={styles.input}
+                value={applicationForm.company_name}
+                onChangeText={(v) => setApplicationForm({ ...applicationForm, company_name: v })}
+                placeholder={t('admin.terminal-app-company-placeholder')}
+                placeholderTextColor="#9ca3af"
+              />
+
+              <Text style={styles.label}>{t('admin.terminal-app-phone')} *</Text>
+              <TextInput
+                style={styles.input}
+                value={applicationForm.contact_number}
+                onChangeText={(v) => setApplicationForm({ ...applicationForm, contact_number: v })}
+                placeholder={t('admin.terminal-app-phone-placeholder')}
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.label}>{t('admin.terminal-app-email')} *</Text>
+              <TextInput
+                style={styles.input}
+                value={applicationForm.contact_email}
+                onChangeText={(v) => setApplicationForm({ ...applicationForm, contact_email: v })}
+                placeholder={t('admin.terminal-app-email-placeholder')}
+                placeholderTextColor="#9ca3af"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Text style={styles.label}>{t('admin.terminal-app-br-no')} *</Text>
+              <TextInput
+                style={styles.input}
+                value={applicationForm.br_license_no}
+                onChangeText={(v) => setApplicationForm({ ...applicationForm, br_license_no: v })}
+                placeholder={t('admin.terminal-app-br-no-placeholder')}
+                placeholderTextColor="#9ca3af"
+              />
+
+              <Text style={styles.label}>{t('admin.terminal-app-br-cert')}</Text>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, marginBottom: 12, borderStyle: 'dashed' }}
+                onPress={() => pickDocument('br_certificate')}
+              >
+                <Ionicons name="document-attach-outline" size={20} color="#6b7280" />
+                <Text style={{ marginLeft: 8, color: brCertificateUri ? '#1f2937' : '#9ca3af', fontSize: 13, flex: 1 }}>
+                  {brCertificateUri ? brCertificateUri.split('/').pop() : t('admin.terminal-app-upload-pdf')}
+                </Text>
+                {brCertificateUri && (
+                  <TouchableOpacity onPress={() => setBrCertificateUri(null)}>
+                    <Ionicons name="close-circle" size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.label}>{t('admin.terminal-app-rest-license')}</Text>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, marginBottom: 16, borderStyle: 'dashed' }}
+                onPress={() => pickDocument('restaurant_license')}
+              >
+                <Ionicons name="document-attach-outline" size={20} color="#6b7280" />
+                <Text style={{ marginLeft: 8, color: restaurantLicenseUri ? '#1f2937' : '#9ca3af', fontSize: 13, flex: 1 }}>
+                  {restaurantLicenseUri ? restaurantLicenseUri.split('/').pop() : t('admin.terminal-app-upload-pdf')}
+                </Text>
+                {restaurantLicenseUri && (
+                  <TouchableOpacity onPress={() => setRestaurantLicenseUri(null)}>
+                    <Ionicons name="close-circle" size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, { paddingVertical: 14, opacity: submittingApplication ? 0.6 : 1 }]}
+                onPress={handleSubmitApplication}
+                disabled={submittingApplication}
+              >
+                {submittingApplication ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={[styles.btnText, { fontWeight: '700' }]}>{t('admin.terminal-app-submit')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
-      </ScrollView>
-    </View>
-  );
+      );
+    }
+
+    // Superadmin: show terminal configuration
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader(t('admin.payment-terminal') || 'Payment Terminals')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('admin.payment-terminal')}</Text>
+              <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => { resetTerminalForm(); setShowPaymentTerminalModal(true); }}>
+                <Text style={styles.btnSmallText}>{t('settings.add-terminal')}</Text>
+              </TouchableOpacity>
+            </View>
+            {paymentTerminals.length > 0 ? (
+              <FlatList
+                data={paymentTerminals}
+                renderItem={({ item: terminal }) => (
+                  <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
+                        {terminal.is_active && (
+                          <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                      {terminal.last_tested_at && (<Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>)}
+                      {terminal.last_error_message && (<Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>)}
+                    </View>
+                    <View style={{ marginLeft: 12, justifyContent: 'space-around' }}>
+                      <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => editPaymentTerminal(terminal)}>
+                        <Ionicons name="create-outline" size={14} color="#fff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btn, styles.btnSmall, { backgroundColor: '#ef4444', marginTop: 4 }]} onPress={() => deletePaymentTerminal(terminal.id)}>
+                        <Ionicons name="trash-outline" size={14} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+                scrollEnabled={false}
+              />
+            ) : (
+              <Text style={styles.emptyText}>{t('settings.no-terminals')}</Text>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  };
 
   // QR Settings page
   const renderQRSettingsPage = () => (

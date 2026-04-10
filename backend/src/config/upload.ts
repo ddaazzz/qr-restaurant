@@ -24,6 +24,11 @@ const storage = multer.diskStorage({
       const match = req.originalUrl.match(/\/restaurants\/(\d+)\/menu\/menu-items/);
       restaurantId = match ? match[1] : null;
       folder = restaurantId ? `uploads/restaurants/${restaurantId}/menu` : "uploads/menu";
+    } else if (req.originalUrl.includes("/payment-terminal-applications")) {
+      // Pattern: /restaurants/:restaurantId/payment-terminal-applications
+      const match = req.originalUrl.match(/\/restaurants\/(\d+)\/payment-terminal-applications/);
+      restaurantId = match ? match[1] : null;
+      folder = restaurantId ? `uploads/restaurants/${restaurantId}/documents` : "uploads/documents";
     }
 
     // Ensure folder exists
@@ -45,6 +50,19 @@ export const upload = multer({
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith("image/")) {
       cb(new Error("Only images allowed"));
+    } else {
+      cb(null, true);
+    }
+  }
+});
+
+// Upload config for documents (PDFs + images) - used for payment terminal applications
+export const uploadDocuments = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB for documents
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith("image/") && file.mimetype !== "application/pdf") {
+      cb(new Error("Only images and PDF files are allowed"));
     } else {
       cb(null, true);
     }
