@@ -592,6 +592,8 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                     </View>
                     <View style={styles.detailGridItem}>
                       <Text style={styles.detailLabel}>{t('bookings.table')}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBookingDetail.table_id
                           ? tables.find(t => t.id === selectedBookingDetail.table_id)?.name || `#${selectedBookingDetail.table_id}`
                           : '—'}
                       </Text>
@@ -880,6 +882,9 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.table-label')}</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownBtn}
+                    onPress={() => {
                       console.log('[Debug] Table button pressed, current state:', showTableDropdown);
                       setShowTableDropdown(true);
                     }}

@@ -905,6 +905,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   {/* Order Info */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                     <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.type')}</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>
+                      {t(`orders.${selectedHistoryOrder.order_type || 'dine-in'}`)}
                       {selectedHistoryOrder.order_type === 'table' && selectedHistoryOrder.table_name ? ` — ${selectedHistoryOrder.table_name}` : ''}
                     </Text>
                   </View>
@@ -1082,11 +1084,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           <>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                               <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
+                              <Text style={{ fontSize: 12, color: '#1f2937' }}>
+                                {kpayTxDetails.payCurrency || 'HKD'} {((Number(kpayTxDetails.payAmount) || kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
                                 {kpayTxDetails.payAmount ? ` (${kpayTxDetails.payAmount})` : ''}
                               </Text>
                             </View>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                               <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{kpayTxDetails.status || '—'}</Text>
                             </View>
                             {kpayTxDetails.payResult !== undefined && (
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
