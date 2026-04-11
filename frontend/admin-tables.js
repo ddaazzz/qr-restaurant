@@ -2725,7 +2725,7 @@ async function deleteTable(tableId) {
   if (!confirm("Delete this table permanently?")) return;
 
   try {
-    const res = await fetch(`${API}/tables/${tableId}`, {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/tables/${tableId}`, {
       method: "DELETE"
     });
 

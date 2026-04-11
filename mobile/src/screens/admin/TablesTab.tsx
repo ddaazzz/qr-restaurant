@@ -648,9 +648,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           text: 'Delete',
           onPress: async () => {
             try {
-              await apiClient.delete(`/api/tables/${tableId}`, {
-                data: { restaurantId: parseInt(restaurantId) },
-              });
+              await apiClient.delete(`/api/restaurants/${restaurantId}/tables/${tableId}`);
               await loadTableData();
             } catch (err: any) {
               Alert.alert('Error', err.response?.data?.error || 'Failed to delete table');

@@ -518,16 +518,11 @@ router.patch("/tables/:tableId", async (req, res) => {
  * DELETE table - ✅ MULTI-RESTAURANT SUPPORT
  * (Admin only)
  */
-router.delete("/tables/:tableId", async (req, res) => {
+router.delete("/restaurants/:restaurantId/tables/:tableId", async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { tableId } = req.params;
-    const { restaurantId } = req.body;
-
-    if (!restaurantId) {
-      return res.status(400).json({ error: "Restaurant ID is required" });
-    }
+    const { tableId, restaurantId } = req.params;
 
     await client.query("BEGIN");
 
