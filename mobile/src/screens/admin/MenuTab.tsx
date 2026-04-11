@@ -188,28 +188,22 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       try {
         setError(null);
         
-        // Load items with variants and category info
-        // Response is an array of items with category_id and category_name
-        const itemsRes = await apiClient.get(
-          `/api/restaurants/${restaurantId}/menu/staff`
-        );
+        // Load items and categories in parallel
+        const [itemsRes, categoriesRes] = await Promise.all([
+          apiClient.get(`/api/restaurants/${restaurantId}/menu/staff`),
+          apiClient.get(`/api/restaurants/${restaurantId}/menu_categories`),
+        ]);
         
         const allItems = Array.isArray(itemsRes.data) ? itemsRes.data : [];
-        
-        // Extract unique categories from items
-        const categoryMap = new Map<number, MenuCategory>();
-        allItems.forEach((item: any) => {
-          if (item.category_id && item.category_name && !categoryMap.has(item.category_id)) {
-            categoryMap.set(item.category_id, { id: item.category_id, name: item.category_name });
-          }
-        });
-        const uniqueCategories = Array.from(categoryMap.values());
+        const allCategories: MenuCategory[] = Array.isArray(categoriesRes.data)
+          ? categoriesRes.data.map((c: any) => ({ id: c.id, name: c.name }))
+          : [];
         
         setItems(allItems);
-        setCategories(uniqueCategories);
+        setCategories(allCategories);
 
-        if (!selectedCategory && uniqueCategories.length > 0) {
-          setSelectedCategory(uniqueCategories[0].id);
+        if (!selectedCategory && allCategories.length > 0) {
+          setSelectedCategory(allCategories[0].id);
         }
       } catch (err: any) {
         console.error('Error fetching menu data:', err);
