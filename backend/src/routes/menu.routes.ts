@@ -977,7 +977,7 @@ router.post("/menu-items/:menuItemId/image",
 
       res.json(result.rows[0]);
     } catch (err) {
-      console.error(err);
+      console.error("Image upload error:", err);
       res.status(500).json({ error: "Failed to upload image" });
     }
   }

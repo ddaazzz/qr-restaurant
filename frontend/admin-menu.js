@@ -1271,7 +1271,9 @@ async function saveFoodItemEdit() {
       });
       
       if (!uploadRes.ok) {
-        console.warn('Failed to upload image, but item updated successfully');
+        const errData = await uploadRes.json().catch(() => ({}));
+        console.error('Failed to upload image:', uploadRes.status, errData);
+        showToast('Item saved but image upload failed: ' + (errData.error || uploadRes.status), 'error');
       }
     }
     
