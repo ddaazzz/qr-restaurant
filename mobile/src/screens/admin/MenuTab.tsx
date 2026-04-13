@@ -22,6 +22,7 @@ import {
   Image,
   Pressable,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -291,6 +292,15 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     // ==================== FOOD ITEM OPERATIONS ====================
 
+    const parsePriceCents = (price: string): number | null => {
+      const parsedPrice = Number.parseFloat(price);
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+        return null;
+      }
+
+      return Math.round(parsedPrice * 100);
+    };
+
     const createItem = async () => {
       if (!itemName.trim() || !itemPrice.trim()) {
         Alert.alert(t('common.error'), t('menu.item-name-price-required'));
@@ -302,18 +312,36 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         return;
       }
 
+      const priceCents = parsePriceCents(itemPrice);
+      if (priceCents === null) {
+        Alert.alert(t('common.error'), t('menu.invalid-price'));
+        return;
+      }
+
       try {
-        await apiClient.post(
+        const createResponse = await apiClient.post(
           `/api/restaurants/${restaurantId}/menu-items`,
           {
             name: itemName,
             description: itemDescription,
-            price_cents: Math.round(parseFloat(itemPrice) * 100),
+            price_cents: priceCents,
             category_id: selectedCategory,
-            image_url: itemImageUrl || null,
             available: true,
           }
         );
+
+        const createdItemId = createResponse.data?.id;
+        if (createdItemId && isLocalImageUri(itemImageUrl)) {
+          try {
+            await apiClient.uploadMenuItemImage(restaurantId, createdItemId, itemImageUrl);
+          } catch (uploadError: any) {
+            Alert.alert(
+              t('common.error'),
+              uploadError?.message || t('menu.failed-upload-image')
+            );
+          }
+        }
+
         setItemName('');
         setItemDescription('');
         setItemPrice('');
@@ -331,18 +359,28 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         return;
       }
 
+      const priceCents = parsePriceCents(editingItemPrice);
+      if (priceCents === null) {
+        Alert.alert(t('common.error'), t('menu.invalid-price'));
+        return;
+      }
+
       try {
         await apiClient.patch(
           `/api/menu-items/${itemId}`,
           {
             name: editingItemName,
             description: editingItemDescription,
-            price_cents: Math.round(parseFloat(editingItemPrice) * 100),
-            image_url: editingItemImageUrl || null,
+            price_cents: priceCents,
             is_meal_combo: editingItemIsMealCombo,
             restaurantId: restaurantId,
           }
         );
+
+        if (isLocalImageUri(editingItemImageUrl)) {
+          await apiClient.uploadMenuItemImage(restaurantId, itemId, editingItemImageUrl);
+        }
+
         setEditingItemId(null);
         setShowEditItemModal(false);
         await loadMenuData();
@@ -726,14 +764,69 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
+    const isLocalImageUri = (imageUrl?: string): imageUrl is string => {
+      if (!imageUrl) return false;
+      return /^(file|content|ph|assets-library):/i.test(imageUrl);
+    };
+
     const getFullImageUrl = (imageUrl?: string): string | null => {
       if (!imageUrl || !imageUrl.trim()) return null;
+      if (isLocalImageUri(imageUrl)) return imageUrl;
       if (imageUrl.startsWith('http')) return imageUrl;
       return `${API_URL}${imageUrl}`;
     };
 
     const uploadItemImage = async (itemId: number, context: 'inline' | 'new' | 'edit') => {
-      Alert.alert(t('common.error'), t('menu.image-not-available'));
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+
+        if (result.canceled || !result.assets[0]?.uri) {
+          return;
+        }
+
+        const localUri = result.assets[0].uri;
+
+        if (context === 'new') {
+          setItemImageUrl(localUri);
+          return;
+        }
+
+        if (!itemId) {
+          Alert.alert(t('common.error'), t('menu.failed-upload-image'));
+          return;
+        }
+
+        setUploadingImageItemId(itemId);
+        setUploadingImageContext(context);
+
+        const uploadedImageUrl = await apiClient.uploadMenuItemImage(restaurantId, itemId, localUri);
+
+        setItems(prevItems => prevItems.map(item => (
+          item.id === itemId ? { ...item, image_url: uploadedImageUrl } : item
+        )));
+
+        if (selectedItem?.id === itemId) {
+          setSelectedItem({ ...selectedItem, image_url: uploadedImageUrl });
+        }
+
+        if (context === 'inline') {
+          setInlineEditImageUrl(uploadedImageUrl);
+        }
+
+        if (context === 'edit') {
+          setEditingItemImageUrl(uploadedImageUrl);
+        }
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message || t('menu.failed-upload-image'));
+      } finally {
+        setUploadingImageItemId(null);
+        setUploadingImageContext(null);
+      }
     };
 
     const filteredItems = items.filter(i => {
@@ -1108,6 +1201,123 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         </View>
                       )}
                     </>
+                  )}
+
+                  {/* Existing Variants List - shown in edit mode when has variants */}
+                  {inlineEditHasVariants && selectedItem.variants && selectedItem.variants.length > 0 && (
+                    <View style={styles.variantsSection}>
+                      <Text style={[styles.detailLabel, { marginTop: 8, marginBottom: 4 }]}>{t('menu.variants')}</Text>
+                      {selectedItem.variants.map((variant) => {
+                        const isVariantInEditMode = editingVariantIds.has(variant.id);
+                        return (
+                          <View key={variant.id} style={styles.variantCard}>
+                            <View style={styles.variantHeader}>
+                              <Text style={styles.variantName}>{variant.name}</Text>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const newSet = new Set(editingVariantIds);
+                                  if (newSet.has(variant.id)) {
+                                    newSet.delete(variant.id);
+                                  } else {
+                                    newSet.add(variant.id);
+                                  }
+                                  setEditingVariantIds(newSet);
+                                }}
+                              >
+                                <Text style={styles.variantToggleBtn}>
+                                  {isVariantInEditMode ? t('menu.hide') : t('menu.show')}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            {(variant.required || variant.min_select != null || variant.max_select != null) && (
+                              <View style={{ marginBottom: 8, paddingLeft: 0 }}>
+                                {variant.required && (
+                                  <Text style={{ fontSize: 12, color: '#d32f2f', fontWeight: '600' }}>{t('menu.required-badge')}</Text>
+                                )}
+                                {(variant.min_select != null || variant.max_select != null) && (
+                                  <Text style={{ fontSize: 12, color: '#666' }}>
+                                    {variant.min_select != null && t('menu.min-select').replace('{0}', String(variant.min_select))}
+                                    {variant.min_select != null && variant.max_select != null && ', '}
+                                    {variant.max_select != null && t('menu.max-select').replace('{0}', String(variant.max_select))}
+                                  </Text>
+                                )}
+                              </View>
+                            )}
+
+                            {isVariantInEditMode && (
+                              <View style={styles.variantActions}>
+                                <TouchableOpacity
+                                  style={styles.variantActionBtn}
+                                  onPress={() => {
+                                    setEditingVariantId(variant.id);
+                                    setEditingVariantName(variant.name);
+                                    setEditingVariantMinSelect(variant.min_select ? String(variant.min_select) : '');
+                                    setEditingVariantMaxSelect(variant.max_select ? String(variant.max_select) : '');
+                                    setEditingVariantRequired(variant.required || false);
+                                    setShowEditVariantModal(true);
+                                  }}
+                                >
+                                  <Text style={styles.actionSmallBtn}>{t('menu.edit')}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.variantActionBtn, styles.variantActionBtnDelete]}
+                                  onPress={() => deleteVariant(variant.id, variant.name)}
+                                >
+                                  <Text style={styles.actionSmallBtnDelete}>{t('menu.delete')}</Text>
+                                </TouchableOpacity>
+                              </View>
+                            )}
+
+                            {variant.options && variant.options.length > 0 && (
+                              <View style={styles.optionsContainer}>
+                                {variant.options.map((option) => (
+                                  <View key={option.id} style={styles.optionItem}>
+                                    <View>
+                                      <Text style={styles.optionName}>{option.name}</Text>
+                                      <Text style={styles.optionPrice}>
+                                        +{formatPrice(option.price_cents)}
+                                      </Text>
+                                    </View>
+                                    {isVariantInEditMode && (
+                                      <View style={styles.optionActions}>
+                                        <TouchableOpacity
+                                          onPress={() => {
+                                            setEditingOptionId(option.id);
+                                            setEditingOptionName(option.name);
+                                            setEditingOptionPrice((option.price_cents / 100).toString());
+                                            setShowEditVariantOptionModal(true);
+                                          }}
+                                        >
+                                          <Text style={styles.actionSmallBtn}>{t('menu.edit')}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          onPress={() => deleteVariantOption(option.id, option.name)}
+                                        >
+                                          <Text style={styles.actionSmallBtnDelete}>{t('menu.del')}</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                    )}
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+
+                            {isVariantInEditMode && (
+                              <TouchableOpacity
+                                style={styles.addOptionBtn}
+                                onPress={() => {
+                                  setEditingVariantForOption(variant);
+                                  setShowVariantOptionModal(true);
+                                }}
+                              >
+                                <Text style={styles.addOptionBtnText}>{t('menu.add-option')}</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
                   )}
 
                   {/* Variant Preset Selection - shown only if has variants */}
@@ -1817,7 +2027,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 autoFocus
               />
 
-              <Text style={styles.label}>{t('menu.description')}</Text>
+              <Text style={styles.label}>{t('menu.description-optional')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 value={itemDescription}
@@ -1892,7 +2102,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 autoFocus
               />
 
-              <Text style={styles.label}>{t('menu.description')}</Text>
+              <Text style={styles.label}>{t('menu.description-optional')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
                 value={editingItemDescription}
