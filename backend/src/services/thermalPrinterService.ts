@@ -329,6 +329,90 @@ function appendText(commands: number[], text: string): void {
   }
 }
 
+export interface KitchenOrderData {
+  orderNumber: string;
+  tableNumber: string;
+  items: Array<{ name: string; quantity: number; variants?: string; notes?: string }>;
+  timestamp: string;
+  restaurantName?: string;
+}
+
+/**
+ * Generate ESC/POS commands for kitchen order tickets
+ * Optimized for TM-U220 Impact Printer (dot-matrix)
+ */
+export function generateKitchenOrderESCPOS(data: KitchenOrderData): Uint8Array {
+  const commands: number[] = [];
+  const sep = '================================';
+  const lineWidth = 33;
+
+  commands.push(27, 64); // ESC @ - Initialize
+
+  commands.push(27, 97, 1); // Center
+  commands.push(27, 33, 8); // Bold
+  appendText(commands, 'KITCHEN ORDER');
+  commands.push(27, 33, 0); // Bold off
+  commands.push(10);
+
+  appendText(commands, sep);
+  commands.push(10);
+
+  commands.push(27, 97, 0); // Left align
+  commands.push(10);
+
+  commands.push(27, 33, 8);
+  appendText(commands, `Order #${data.orderNumber}`);
+  commands.push(27, 33, 0);
+  commands.push(10);
+
+  commands.push(27, 33, 8);
+  appendText(commands, `Table: ${data.tableNumber}`);
+  commands.push(27, 33, 0);
+  commands.push(10);
+
+  appendText(commands, `Time:  ${data.timestamp}`);
+  commands.push(10, 10);
+
+  appendText(commands, sep);
+  commands.push(10);
+
+  for (const item of data.items) {
+    commands.push(10);
+    commands.push(27, 33, 8);
+    const itemLine = `${item.quantity}x ${item.name}`;
+    appendText(commands, itemLine.length > lineWidth ? itemLine.substring(0, lineWidth) : itemLine);
+    commands.push(27, 33, 0);
+    commands.push(10);
+
+    if (item.variants) {
+      const variantLine = `   ${item.variants}`;
+      appendText(commands, variantLine.length > lineWidth ? variantLine.substring(0, lineWidth) : variantLine);
+      commands.push(10);
+    }
+
+    if (item.notes) {
+      const noteLine = `   * ${item.notes}`;
+      appendText(commands, noteLine.length > lineWidth ? noteLine.substring(0, lineWidth) : noteLine);
+      commands.push(10);
+    }
+  }
+
+  commands.push(10);
+  appendText(commands, sep);
+  commands.push(10, 10);
+
+  if (data.restaurantName) {
+    commands.push(27, 97, 1);
+    appendText(commands, data.restaurantName);
+    commands.push(10);
+  }
+
+  commands.push(10, 10, 10, 10, 10); // 5 line feeds
+  commands.push(29, 86, 1); // GS V 1 - Partial cut
+
+  return new Uint8Array(commands);
+}
+
 export interface KPayReceiptData {
   restaurantName: string;
   tableName?: string;

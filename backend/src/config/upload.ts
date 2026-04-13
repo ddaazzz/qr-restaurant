@@ -2,8 +2,9 @@ import multer from "multer";
 import path from "path";
 import crypto from "crypto";
 import fs from "fs";
+import { Request } from "express";
 
-const getRestaurantIdForUpload = (req: Express.Request): string | null => {
+const getRestaurantIdForUpload = (req: Request): string | null => {
   const routeParamId = req.params?.restaurantId || req.params?.id;
   if (typeof routeParamId === "string" && routeParamId.trim()) {
     return routeParamId;
