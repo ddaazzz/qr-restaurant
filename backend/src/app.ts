@@ -107,6 +107,16 @@ app.get("/sitemap.xml", (_req, res) => {
 /* ======================
    STATIC UPLOADS
 ====================== */
+// Debug endpoint to check R2 configuration
+app.get("/api/debug/storage", (_req, res) => {
+  res.json({
+    r2Configured: isR2Configured(),
+    r2AccountId: process.env.R2_ACCOUNT_ID ? "set" : "missing",
+    r2AccessKey: process.env.R2_ACCESS_KEY_ID ? "set" : "missing",
+    r2SecretKey: process.env.R2_SECRET_ACCESS_KEY ? "set" : "missing",
+    r2Bucket: process.env.R2_BUCKET_NAME || "chuio-uploads (default)",
+  });
+});
 // Serve from local disk first, fall back to R2 if configured
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
