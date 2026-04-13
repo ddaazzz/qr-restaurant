@@ -1,5 +1,8 @@
-import app from "./app";
 import dotenv from "dotenv";
+dotenv.config(); // loads .env (gitignored, local overrides)
+dotenv.config({ path: ".env.r2" }); // loads .env.r2 (committed, R2 config)
+
+import app from "./app";
 import bcrypt from "bcrypt";
 import os from "os";
 import https from "https";
@@ -12,8 +15,6 @@ import { sessionNotifier } from "./services/sessionNotifier";
 import { orderNotifier } from "./services/orderNotifier";
 import { webSocketServer } from "./services/websocket";
 import { kitchenAutoPrintService } from "./services/kitchenAutoPrintService";
-
-dotenv.config();
 
 const PORT = Number(process.env.PORT) || 10000;
 
