@@ -425,16 +425,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const handleItemPress = async (item: MenuItem) => {
       try {
-        setSelectedItem(item);
-        setVariantSelections({});
-        
         // Fetch variants for this item
         const response = await apiClient.get(`/api/menu-items/${item.id}/variants`);
-        setItemVariants(response.data || []);
-        setShowVariantModal(true);
+        const variants = response.data || [];
+        
+        if (variants.length > 0) {
+          setSelectedItem(item);
+          setVariantSelections({});
+          setItemVariants(variants);
+          setShowVariantModal(true);
+        } else {
+          // No variants - add directly to cart
+          handleAddToCart(item, []);
+        }
       } catch (err) {
         console.error('Error loading variants:', err);
-        // If no variants, just add to cart
+        // If error fetching variants, just add to cart
         handleAddToCart(item, []);
       }
     };
