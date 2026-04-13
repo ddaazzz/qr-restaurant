@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../config/db";
 import {upload} from "../config/upload"
+import { isR2Configured, uploadToR2, getR2Folder } from "../config/storage";
 const router = Router();
 /**
  * GET active sessions + orders + items (staff view)
@@ -98,13 +99,18 @@ router.post("/:id/logo", upload.single("image"), async (req, res) => {
   console.log("REQ FILE:", req.file);
     console.log("REQ PARAM ID:", req.params.id);
 
-  const { id } = req.params;
+  const id = req.params.id as string;
 
   if (!req.file) {
     return res.status(400).json({ error: "Logo upload failed" });
   }
 
-  const logoPath = `/uploads/restaurants/${id}/${req.file.filename}`;
+  let logoPath: string;
+  if (isR2Configured() && req.file!.buffer) {
+    logoPath = await uploadToR2(req.file!.buffer, req.file!.originalname, getR2Folder("logo", id), req.file!.mimetype);
+  } else {
+    logoPath = `/uploads/restaurants/${id}/${req.file!.filename}`;
+  }
   console.log(logoPath);
   console.log("Updating logo_url for restaurant ID:", id, "with path:", logoPath);
 

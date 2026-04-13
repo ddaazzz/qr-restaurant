@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../config/db";
 import { upload } from "../config/upload";
+import { isR2Configured, uploadToR2, getR2Folder } from "../config/storage";
 
 const router = Router();
 
@@ -42,13 +43,18 @@ router.get("/:restaurantId", async (req, res) => {
 // POST upload restaurant background image
 router.post("/:restaurantId/background", upload.single("image"), async (req, res) => {
   try {
-    const { restaurantId } = req.params;
+    const restaurantId = req.params.restaurantId as string;
 
     if (!req.file) {
       return res.status(400).json({ error: "Image upload failed" });
     }
 
-    const backgroundPath = `/uploads/restaurants/${restaurantId}/${req.file.filename}`;
+    let backgroundPath: string;
+    if (isR2Configured() && req.file!.buffer) {
+      backgroundPath = await uploadToR2(req.file!.buffer, req.file!.originalname, getR2Folder("background", restaurantId), req.file!.mimetype);
+    } else {
+      backgroundPath = `/uploads/restaurants/${restaurantId}/${req.file!.filename}`;
+    }
 
     await pool.query(
       `UPDATE restaurants SET background_url = $1 WHERE id = $2`,

@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import fs from "fs";
 import { Request } from "express";
+import { isR2Configured } from "./storage";
 
 const getRestaurantIdForUpload = (req: Request): string | null => {
   const routeParamId = req.params?.restaurantId || req.params?.id;
@@ -58,7 +59,7 @@ const storage = multer.diskStorage({
 });
 
 export const upload = multer({
-  storage,
+  storage: isR2Configured() ? multer.memoryStorage() : storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith("image/")) {
@@ -71,7 +72,7 @@ export const upload = multer({
 
 // Upload config for documents (PDFs + images) - used for payment terminal applications
 export const uploadDocuments = multer({
-  storage,
+  storage: isR2Configured() ? multer.memoryStorage() : storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB for documents
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith("image/") && file.mimetype !== "application/pdf") {

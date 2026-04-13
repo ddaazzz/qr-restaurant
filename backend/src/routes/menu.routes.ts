@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../config/db";
 import { upload } from "../config/upload";
+import { isR2Configured, uploadToR2, getR2Folder } from "../config/storage";
 
 const router = Router();
 
@@ -953,7 +954,12 @@ router.post("/menu-items/:menuItemId/image",
         return res.status(400).json({ error: "restaurantId required" });
       }
 
-      const imageUrl = `/uploads/restaurants/${restaurantId}/menu/${req.file.filename}`;
+      let imageUrl: string;
+      if (isR2Configured() && req.file!.buffer) {
+        imageUrl = await uploadToR2(req.file!.buffer, req.file!.originalname, getR2Folder("menu", restaurantId), req.file!.mimetype);
+      } else {
+        imageUrl = `/uploads/restaurants/${restaurantId}/menu/${req.file!.filename}`;
+      }
 
       const result = await pool.query(
         `
@@ -981,7 +987,7 @@ router.post("/restaurants/:restaurantId/menu-items/:menuItemId/image",
   upload.single("image"),
   async (req, res) => {
     try {
-      const { restaurantId, menuItemId } = req.params;
+      const { restaurantId, menuItemId } = req.params as { restaurantId: string; menuItemId: string };
 
       if (!req.file) {
         return res.status(400).json({ error: "Image required" });
@@ -998,7 +1004,12 @@ router.post("/restaurants/:restaurantId/menu-items/:menuItemId/image",
         return res.status(404).json({ error: "Menu item not found or doesn't belong to this restaurant" });
       }
 
-      const imageUrl = `/uploads/restaurants/${restaurantId}/menu/${req.file.filename}`;
+      let imageUrl: string;
+      if (isR2Configured() && req.file!.buffer) {
+        imageUrl = await uploadToR2(req.file!.buffer, req.file!.originalname, getR2Folder("menu", restaurantId), req.file!.mimetype);
+      } else {
+        imageUrl = `/uploads/restaurants/${restaurantId}/menu/${req.file!.filename}`;
+      }
 
       const result = await pool.query(
         `

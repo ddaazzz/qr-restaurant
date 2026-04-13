@@ -21,6 +21,8 @@ import addonsRoutes from "./routes/addons.routes";
 import presetsRoutes from "./routes/presets.routes";
 import paymentTerminalsRoutes from "./routes/payment-terminals.routes";
 import paymentTransactionsRoutes from "./routes/payment-transactions.routes";
+import { isR2Configured, s3Client, R2_BUCKET_NAME } from "./config/storage";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 const app = express();
 
@@ -105,7 +107,31 @@ app.get("/sitemap.xml", (_req, res) => {
 /* ======================
    STATIC UPLOADS
 ====================== */
+// Serve from local disk first, fall back to R2 if configured
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+if (isR2Configured()) {
+  // R2 proxy fallback: if file not found locally, fetch from R2
+  app.use("/uploads", async (req, res, next) => {
+    try {
+      const key = req.path.startsWith("/") ? req.path.slice(1) : req.path;
+      const response = await s3Client.send(
+        new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key })
+      );
+      if (response.ContentType) {
+        res.setHeader("Content-Type", response.ContentType);
+      }
+      res.setHeader("Cache-Control", "public, max-age=31536000");
+      const stream = response.Body as NodeJS.ReadableStream;
+      stream.pipe(res);
+    } catch (err: any) {
+      if (err.name === "NoSuchKey") {
+        return res.status(404).json({ error: "File not found" });
+      }
+      next(err);
+    }
+  });
+}
 
 /* ======================
    PAYMENT GATEWAY STATIC FILES
