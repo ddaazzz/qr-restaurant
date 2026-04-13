@@ -298,6 +298,7 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       SELECT
       mi.id,
       mi.name,
+      mi.description,
       mi.price_cents,
       mi.available,
       mi.image_url,
@@ -942,7 +943,7 @@ router.post("/menu-items/:menuItemId/image",
   async (req, res) => {
     try {
       const { menuItemId } = req.params;
-      const restaurantId = req.body.restaurantId;
+      const restaurantId = req.body.restaurantId || req.headers["x-restaurant-id"];
 
       if (!req.file) {
         return res.status(400).json({ error: "Image required" });
@@ -967,6 +968,47 @@ router.post("/menu-items/:menuItemId/image",
       if (result.rowCount === 0) {
         return res.status(404).json({ error: "Menu item not found" });
       }
+
+      res.json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to upload image" });
+    }
+  }
+);
+
+router.post("/restaurants/:restaurantId/menu-items/:menuItemId/image",
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      const { restaurantId, menuItemId } = req.params;
+
+      if (!req.file) {
+        return res.status(400).json({ error: "Image required" });
+      }
+
+      const itemCheck = await pool.query(
+        `SELECT mi.id FROM menu_items mi
+         JOIN menu_categories mc ON mi.category_id = mc.id
+         WHERE mi.id = $1 AND mc.restaurant_id = $2`,
+        [menuItemId, restaurantId]
+      );
+
+      if (itemCheck.rowCount === 0) {
+        return res.status(404).json({ error: "Menu item not found or doesn't belong to this restaurant" });
+      }
+
+      const imageUrl = `/uploads/restaurants/${restaurantId}/menu/${req.file.filename}`;
+
+      const result = await pool.query(
+        `
+        UPDATE menu_items
+        SET image_url = $1
+        WHERE id = $2
+        RETURNING id, name, image_url
+        `,
+        [imageUrl, menuItemId]
+      );
 
       res.json(result.rows[0]);
     } catch (err) {
