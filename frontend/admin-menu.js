@@ -1212,6 +1212,8 @@ function cancelFoodItemEdit() {
   cancelBtn.style.display = 'none';
   
   if (changeImageBtn) changeImageBtn.style.display = 'none';
+    const hasVariantsCheckboxSection = document.getElementById('food-panel-has-variants-checkbox-section');
+    const isMealComboCheckboxSection = document.getElementById('food-panel-is-meal-combo-checkbox-section');
     if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
     if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
   
