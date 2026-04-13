@@ -74,8 +74,8 @@ function createMenuItemCardElement(item, isEditMode) {
     imgEl.src = item.image_url;
   } else {
     imgEl.src = '/uploads/website/placeholder.png';
-    imgEl.style.display = '';
   }
+  imgEl.alt = item.name || '';
   
   card.querySelector('.menu-item-name').textContent = item.name;
   card.querySelector('.menu-item-price').textContent = '$' + (item.price_cents / 100).toFixed(2);
