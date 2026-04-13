@@ -1804,7 +1804,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         {/* Item Modals */}
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
-            <ScrollView contentContainerStyle={styles.modalContent}>
+            <View style={styles.modalContent}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
               <Text style={styles.modalTitle}>{t('menu.new-food-item')}</Text>
 
               <Text style={styles.label}>{t('menu.item-name')}</Text>
@@ -1872,12 +1873,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 </TouchableOpacity>
               </View>
             </ScrollView>
+            </View>
           </View>
         </Modal>
 
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditItemModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
-            <ScrollView contentContainerStyle={styles.modalContent}>
+            <View style={styles.modalContent}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
               <Text style={styles.modalTitle}>{t('menu.edit-modal-title')}</Text>
 
               <Text style={styles.label}>{t('menu.item-name')}</Text>
@@ -2014,13 +2017,15 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 </TouchableOpacity>
               </View>
             </ScrollView>
+            </View>
           </View>
         </Modal>
 
         {/* Addon Selector Modal */}
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAddonSelectorModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
-            <ScrollView contentContainerStyle={styles.modalContent}>
+            <View style={styles.modalContent}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
               <Text style={styles.modalTitle}>{t('menu.add-addon-item')}</Text>
 
               <Text style={styles.label}>{t('menu.search-items')}</Text>
@@ -2111,6 +2116,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                 )}
               </View>
             </ScrollView>
+            </View>
           </View>
         </Modal>
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showVariantModal} animationType="fade" transparent>
@@ -2837,15 +2843,17 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
     maxHeight: Dimensions.get('window').height * 0.8,
+    width: '90%',
+    maxWidth: 600,
   },
   modalTitle: {
     fontSize: 18,

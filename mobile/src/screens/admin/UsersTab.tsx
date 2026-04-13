@@ -760,8 +760,8 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
 
       {/* ========== Restaurant Detail Modal ========== */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={!!selectedRestaurant} transparent animationType="fade">
-        <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { maxWidth: 600 }]}>
+        <View style={[s.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={[s.modalContent, { maxWidth: 600, width: '90%', maxHeight: '80%', borderRadius: 16 }]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{selectedRestaurant?.name || 'Restaurant Details'}</Text>
               <TouchableOpacity onPress={() => { setSelectedRestaurant(null); setRestaurantApplications([]); }}>
@@ -769,7 +769,7 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={s.modalBody}>
+            <ScrollView style={s.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
               {/* Restaurant Info */}
               <View style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 16 }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Restaurant Information</Text>

@@ -11,6 +11,7 @@ import {
   Dimensions,
   FlatList,
   TextInput,
+  ScrollView,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -431,7 +432,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             </View>
 
             {/* Tab buttons — fill remaining space */}
-            <View style={styles.sidebarTabsContainer}>
+            <ScrollView style={styles.sidebarTabsContainer} contentContainerStyle={isTabletDevice ? { flex: 1, justifyContent: 'space-evenly' } : { paddingVertical: 4 }} showsVerticalScrollIndicator={false}>
               {visibleTabs.map(
                 (tab) => {
                   const tabConfig: Record<TabType, { label: string; icon: string }> = {
@@ -444,26 +445,27 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                     'settings': { label: t('admin.more'), icon: 'cog' },
                   };
                   const config = tabConfig[tab];
+                  const iconSize = isTabletDevice ? 36 : 26;
                   return (
                     <TouchableOpacity
                       key={tab}
-                      style={[styles.sidebarTab, activeTab === tab && styles.sidebarTabActive]}
+                      style={[styles.sidebarTab, !isTabletDevice && styles.sidebarTabPhone, activeTab === tab && styles.sidebarTabActive]}
                       onPress={() => { setActiveTab(tab); setSearchQuery(''); }}
                     >
                       <Ionicons 
                         name={config.icon as any} 
-                        size={36} 
+                        size={iconSize} 
                         color={activeTab === tab ? '#fff' : 'rgba(255,255,255,0.55)'} 
-                        style={styles.sidebarIcon}
+                        style={isTabletDevice ? styles.sidebarIcon : styles.sidebarIconPhone}
                       />
-                      <Text style={[styles.sidebarTabText, activeTab === tab && styles.sidebarTabTextActive]}>
+                      <Text style={[styles.sidebarTabText, !isTabletDevice && styles.sidebarTabTextPhone, activeTab === tab && styles.sidebarTabTextActive]}>
                         {config.label}
                       </Text>
                     </TouchableOpacity>
                   );
                 }
               )}
-            </View>
+            </ScrollView>
           </SafeAreaView>
         </View>
       )}
@@ -809,7 +811,6 @@ const styles = StyleSheet.create({
   },
   sidebarTabsContainer: {
     flex: 1,
-    justifyContent: 'space-evenly',
   },
   sidebarTab: {
     paddingVertical: 14,
@@ -821,9 +822,18 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: 8,
   },
+  sidebarTabPhone: {
+    paddingVertical: 8,
+    marginVertical: 1,
+    gap: 2,
+  },
   sidebarIcon: {
     width: 36,
     height: 36,
+  },
+  sidebarIconPhone: {
+    width: 26,
+    height: 26,
   },
   sidebarTabActive: {
     backgroundColor: '#3b82f6',
@@ -834,6 +844,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     lineHeight: 14,
+  },
+  sidebarTabTextPhone: {
+    fontSize: 10,
+    lineHeight: 12,
   },
   sidebarTabTextActive: {
     color: '#fff',
