@@ -1556,36 +1556,47 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         >
           <View style={[styles.modalOverlay, menuIsTablet && { flexDirection: 'row', justifyContent: 'flex-end' }]}>
             <View style={[styles.variantModalContent, menuIsTablet && { maxHeight: '100%', width: 380, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }]}>
-              {/* Header with image, name, price in one compact row */}
-              <View style={styles.variantModalHeader}>
-                <TouchableOpacity onPress={() => setShowVariantModal(false)}>
-                  <Text style={styles.closeButton}>✕</Text>
-                </TouchableOpacity>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, marginLeft: 8 }}>
-                  {selectedItem?.image_url && selectedItem.image_url.trim() ? (
-                    <Image
-                      source={{ uri: getFullImageUrl(selectedItem.image_url)! }}
-                      style={{ width: 50, height: 50, borderRadius: 6, backgroundColor: '#f0f0f0' }}
-                    />
-                  ) : null}
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.variantModalTitle} numberOfLines={1}>{selectedItem?.name}</Text>
-                    {selectedItem?.description ? (
-                      <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{selectedItem.description}</Text>
-                    ) : null}
-                  </View>
-                  <Text style={styles.itemPrice}>{formatPrice(selectedItem?.price_cents || 0)}</Text>
-                </View>
-              </View>
+              {/* Close button */}
+              <TouchableOpacity style={styles.variantCloseBtn} onPress={() => setShowVariantModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
 
-              <ScrollView style={styles.variantContent}>
+              <ScrollView style={{ flex: 1 }}>
+                {/* Full-width image */}
+                {selectedItem?.image_url && selectedItem.image_url.trim() ? (
+                  <Image
+                    source={{ uri: getFullImageUrl(selectedItem.image_url)! }}
+                    style={styles.variantSlideImage}
+                  />
+                ) : null}
+
+                {/* Item info */}
+                <View style={styles.variantSlideHeader}>
+                  <Text style={styles.variantSlideTitle}>{selectedItem?.name}</Text>
+                  <View style={styles.variantSlidePrice}>
+                    <Text style={styles.variantSlidePriceLabel}>{t('orders.price-label') || 'Price:'}</Text>
+                    <Text style={styles.variantSlidePriceValue}>{formatPrice(selectedItem?.price_cents || 0)}</Text>
+                  </View>
+                  {selectedItem?.description ? (
+                    <Text style={styles.variantSlideDescription}>{selectedItem.description}</Text>
+                  ) : null}
+                </View>
+
+                {/* Divider */}
+                <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 16 }} />
+
+                {/* Options section */}
                 {itemVariants.length > 0 ? (
-                  itemVariants.map((variant) => (
-                    <View key={variant.id} style={styles.variantGroup}>
-                      <View style={styles.variantGroupHeader}>
-                        <Text style={styles.variantGroupName}>{variant.name}</Text>
-                        {variant.required && <Text style={styles.requiredBadge}>{t('orders.required')}</Text>}
-                      </View>
+                  <View style={styles.variantContent}>
+                    <Text style={styles.variantSectionTitle}>{t('orders.select-options') || 'SELECT OPTIONS'}</Text>
+                    {itemVariants.map((variant) => (
+                      <View key={variant.id} style={styles.variantGroup}>
+                        <View style={styles.variantGroupHeader}>
+                          <Text style={styles.variantGroupName}>
+                            {variant.name}
+                            {variant.required && <Text style={{ color: '#ef4444' }}> *</Text>}
+                          </Text>
+                        </View>
 
                       <View style={styles.variantOptionsGrid}>
                       {variant.min_select === 1 && variant.max_select === 1 ? (
@@ -1656,22 +1667,23 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       )}
                       </View>
                     </View>
-                  ))
+                  ))}
+                  </View>
                 ) : null}
               </ScrollView>
 
               <View style={styles.variantModalFooter}>
                 <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => setShowVariantModal(false)}
-                >
-                  <Text style={styles.cancelBtnText}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
                   style={styles.addBtn}
                   onPress={handleVariantSubmit}
                 >
                   <Text style={styles.addBtnText}>{t('orders.add-to-cart')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => setShowVariantModal(false)}
+                >
+                  <Text style={styles.cancelBtnText}>{t('orders.cancel')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2342,6 +2354,57 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: '95%',
     paddingTop: 0,
+  },
+  variantCloseBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    zIndex: 10,
+    padding: 4,
+  },
+  variantSlideImage: {
+    width: '100%',
+    height: 200,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  variantSlideHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  variantSlideTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  variantSlidePrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  variantSlidePriceLabel: {
+    fontSize: 15,
+    color: '#374151',
+  },
+  variantSlidePriceValue: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#10b981',
+  },
+  variantSlideDescription: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  variantSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   variantModalHeader: {
     flexDirection: 'row',
