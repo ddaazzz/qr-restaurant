@@ -627,7 +627,8 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
     };
 
     const createAddon = async () => {
-      if (!editingItemId || !selectedAddonItemId || !addonDiscountPrice.trim()) {
+      const targetItemId = editingItemId || selectedItem?.id;
+      if (!targetItemId || !selectedAddonItemId) {
         Alert.alert(t('common.error'), t('menu.select-item-price'));
         return;
       }
@@ -639,12 +640,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
           return;
         }
 
+        const priceCents = addonDiscountPrice.trim() ? Math.round(parseFloat(addonDiscountPrice) * 100) : 0;
+
         await addonService.createAddon(restaurantId, {
-          menu_item_id: editingItemId,
+          menu_item_id: targetItemId,
           addon_item_id: selectedAddonItemId,
           addon_name: addonItem.name,
           regular_price_cents: addonItem.price_cents,
-          addon_discount_price_cents: Math.round(parseFloat(addonDiscountPrice) * 100),
+          addon_discount_price_cents: priceCents,
         });
 
         setShowAddonSelectorModal(false);
@@ -653,7 +656,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         setAddonSearchQuery('');
         
         // Reload addons
-        await loadAddonsForItem(editingItemId);
+        await loadAddonsForItem(targetItemId);
       } catch (err: any) {
         Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-add-addon'));
       }
@@ -693,6 +696,51 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       } catch (err: any) {
         console.error('Error loading variant presets:', err);
         Alert.alert(t('common.error'), t('menu.failed-presets'));
+      }
+    };
+
+    const loadAddonPresetsForInlineEdit = async () => {
+      try {
+        const res = await apiClient.get(
+          `/api/restaurants/${restaurantId}/addon-presets`
+        );
+        const presets = Array.isArray(res.data) ? res.data : [];
+        setInlineEditAddonPresets(presets);
+      } catch (err: any) {
+        console.error('Error loading addon presets:', err);
+      }
+    };
+
+    const applyAddonPresetToInlineItem = async (presetId: number) => {
+      if (!selectedItem) return;
+      try {
+        const res = await apiClient.get(
+          `/api/restaurants/${restaurantId}/addon-presets/${presetId}/items`
+        );
+        const presetItems = Array.isArray(res.data) ? res.data : [];
+        if (presetItems.length === 0) {
+          Alert.alert(t('common.error'), t('menu.preset-no-items') || 'This preset has no items. Add items to the preset in Settings first.');
+          return;
+        }
+        for (const presetItem of presetItems) {
+          try {
+            await apiClient.post(`/api/restaurants/${restaurantId}/addons`, {
+              menu_item_id: selectedItem.id,
+              addon_item_id: presetItem.menu_item_id,
+              addon_name: presetItem.menu_item?.name || 'Unknown',
+              addon_preset_id: presetId,
+              regular_price_cents: presetItem.menu_item?.price_cents || 0,
+              addon_discount_price_cents: presetItem.addon_discount_price_cents,
+              is_available: presetItem.is_available,
+            });
+          } catch (err: any) {
+            console.warn('Failed to add addon from preset:', presetItem.menu_item_id);
+          }
+        }
+        await loadAddonsForItem(selectedItem.id);
+        Alert.alert(t('common.success'), t('menu.preset-addons-added') || 'Preset addons added');
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to apply addon preset');
       }
     };
 
@@ -1032,8 +1080,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       setInlineEditIsMealCombo(selectedItem.is_meal_combo || false);
                       setInlineEditHasVariants(selectedItem.variants && selectedItem.variants.length > 0);
                       setEditingItemInlineId(selectedItem.id);
+                      if (selectedItem.variants && selectedItem.variants.length > 0) {
+                        loadVariantPresetsForInlineEdit();
+                      }
                       if (selectedItem.is_meal_combo) {
                         loadAddonsForItem(selectedItem.id);
+                        loadAddonPresetsForInlineEdit();
                       }
                     }}
                     style={styles.categoryActionBtn}
@@ -1381,6 +1433,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                           if (newValue && selectedItem) {
                             // Load addons when combo/meal is enabled
                             await loadAddonsForItem(selectedItem.id);
+                            await loadAddonPresetsForInlineEdit();
                           }
                         }}
                       >
@@ -1443,6 +1496,24 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       >
                         <Text style={styles.btnText}>{t('menu.add-addon')}</Text>
                       </TouchableOpacity>
+
+                      {/* Addon Preset Selection */}
+                      {inlineEditAddonPresets.length > 0 && (
+                        <View style={{ marginTop: 16 }}>
+                          <Text style={styles.label}>{t('menu.addon-presets') || 'Addon Presets'}</Text>
+                          {inlineEditAddonPresets.map((preset) => (
+                            <TouchableOpacity
+                              key={preset.id}
+                              style={[styles.btn, styles.btnSecondary, { marginTop: 6 }]}
+                              onPress={() => applyAddonPresetToInlineItem(preset.id)}
+                            >
+                              <Text style={styles.btnText}>
+                                {preset.name} ({preset.items_count || 0} {t('menu.items') || 'items'})
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   )}
 

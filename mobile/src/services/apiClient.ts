@@ -574,6 +574,49 @@ class APIClient {
     }
   }
 
+  async uploadMenuItemImage(restaurantId: string | number, menuItemId: number, uri: string): Promise<string> {
+    try {
+      const filename = uri.split('/').pop() || 'menu-item.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const mimeType = match ? `image/${match[1]}` : 'image/jpeg';
+
+      const buildFormData = () => {
+        const formData = new FormData();
+        formData.append('restaurantId', String(restaurantId));
+        formData.append('image', {
+          uri,
+          name: filename,
+          type: mimeType,
+        } as any);
+        return formData;
+      };
+
+      let response;
+
+      try {
+        response = await this.client.post(
+          `/api/restaurants/${restaurantId}/menu-items/${menuItemId}/image`,
+          buildFormData(),
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+      } catch (error) {
+        if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+          throw error;
+        }
+
+        response = await this.client.post(
+          `/api/menu-items/${menuItemId}/image`,
+          buildFormData(),
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+      }
+
+      return response.data.image_url || '';
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   private handleError(error: any): Error {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;

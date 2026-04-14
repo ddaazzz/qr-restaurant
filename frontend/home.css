@@ -372,7 +372,7 @@ body {
 
 .who-inner {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.4fr;
   gap: 60px;
   align-items: stretch;
   margin-top: 40px;
@@ -721,6 +721,8 @@ body {
 
 .how-cta-text strong { color: var(--white); }
 
+.fee-table-section { margin-top: 16px; }
+
 .fee-table-heading {
   font-size: 20px;
   font-weight: 400;
@@ -730,77 +732,81 @@ body {
   letter-spacing: -0.3px;
 }
 
-/* ================================================================
-   PAYMENT RATES CARDS
-================================================================ */
-.rates-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+.fee-table-wrap {
+  overflow-x: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.rates-card {
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.20);
-  border-radius: 20px;
-  padding: 32px 24px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.fee-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: var(--white);
 }
 
-.rates-card-logos {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 96px;
+.fee-table thead tr {
+  background: rgba(255, 255, 255, 0.14);
 }
 
-.rates-card-logos img {
-  height: 36px;
-  width: auto;
-  max-width: 90px;
-  object-fit: contain;
-  background: white;
-  border-radius: 8px;
-  padding: 4px 8px;
-}
-
-.rates-logo-text {
-  background: white;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #1a1a1a;
+.fee-table th {
+  padding: 14px 20px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   white-space: nowrap;
 }
 
-.rates-card-label {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.75);
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  padding-top: 16px;
-  line-height: 1.5;
-  text-align: center;
+.fee-table td {
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.88);
 }
 
-.rates-card-fee {
-  font-size: 42px;
-  font-weight: 300;
+.fee-table td:nth-child(2),
+.fee-table td:nth-child(3) {
+  text-align: center;
+  font-weight: 600;
   color: #6ee7b7;
-  letter-spacing: -1.5px;
-  line-height: 1.0;
-  text-align: center;
 }
 
-.rates-card-note {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.50);
-  min-height: 16px;
+.fee-table tbody tr:last-child td { border-bottom: none; }
+
+.fee-table tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+
+.service-packs-heading {
+  margin-top: 34px;
+}
+
+.service-packs-table th,
+.service-packs-table td {
+  white-space: nowrap;
+}
+
+.service-packs-table td:first-child,
+.service-packs-table th:first-child {
+  min-width: 260px;
+}
+
+.service-packs-table td:not(:first-child),
+.service-packs-table th:not(:first-child) {
   text-align: center;
+  min-width: 120px;
+}
+
+.service-packs-table td:not(:first-child) {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 500;
+}
+
+.service-pack-divider-row td {
+  padding: 10px 0;
+  border-bottom: none;
+  background: transparent;
 }
 
 .fee-sme-note {
@@ -1010,45 +1016,23 @@ footer {
     left: 0;
     right: 0;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.96);
+    background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 0 0 16px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.50);
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: max-height 0.35s ease;
     z-index: 199;
     display: flex;
     gap: 0;
-    padding: 0;
-    /* Remove desktop pill styling on mobile */
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+    padding: 0 16px;
   }
 
-  .nav-links.active {
-    max-height: 320px;
-    overflow-y: auto;
-  }
-
-  .nav-links > li {
-    width: 100%;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.07) !important;
-    border-right: none !important;
-  }
-  .nav-links > li:last-child { border-bottom: none !important; }
-  .nav-links > li > a {
-    padding: 16px 24px;
-    font-size: 15px;
-    font-weight: 400;
-    width: 100%;
-    border-radius: 0;
-    color: #1a1a1a;
-  }
-  .nav-links > li > a:hover { background: rgba(0, 0, 0, 0.04); }
+  .nav-links.active { overflow-y: auto; }
+  .nav-links > li { width: 100%; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+  .nav-links > li:last-child { border-bottom: none; }
+  .nav-links > li > a { padding: 16px 8px; font-size: 16px; width: 100%; border-radius: 0; }
 
   .glass-panel { padding: 36px 24px; border-radius: 20px; }
   .who-panel, .provides-panel, .how-panel { padding: 40px 24px; }
@@ -1102,7 +1086,7 @@ footer {
   .carousel-stage { margin-top: 32px; margin-bottom: 0; }
   .carousel-label { padding: 0 16px; margin-top: 8px; }
   .bill-img { max-height: 360px; }
-  .rates-cards { grid-template-columns: 1fr; gap: 16px; }
+  .fee-table th, .fee-table td { padding: 10px 12px; font-size: 12px; }
 
   .waitlist-panel { padding: 40px 24px; }
   .waitlist-panel h2 { font-size: 28px; }
@@ -1116,5 +1100,5 @@ footer {
 @media (max-width: 480px) {
   .hero-word-chuio { font-size: 64px; letter-spacing: -2.5px; }
   .bills-comparison { gap: 24px; }
-  .rates-card-fee { font-size: 36px; }
+  .fee-table { font-size: 11px; }
 }

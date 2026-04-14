@@ -210,6 +210,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [showCouponDetailModal, setShowCouponDetailModal] = useState(false);
   const [showVariantPresetsModal, setShowVariantPresetsModal] = useState(false);
   const [selectedVariantPreset, setSelectedVariantPreset] = useState<VariantPreset | null>(null);
+  const [selectedAddonPreset, setSelectedAddonPreset] = useState<any>(null);
+  const [addonPresetItems, setAddonPresetItems] = useState<any[]>([]);
   const [showStaffLogin, setShowStaffLogin] = useState(false);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
@@ -448,6 +450,26 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     } catch (err: any) {
       console.warn('[Settings] Failed to fetch addon presets (non-critical):', err.message);
       setAddonPresets([]);
+    }
+  };
+
+  const loadAddonPresetItems = async (presetId: number) => {
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
+      setAddonPresetItems(Array.isArray(res.data) ? res.data : []);
+    } catch (err: any) {
+      console.warn('[Settings] Failed to fetch addon preset items:', err.message);
+      setAddonPresetItems([]);
+    }
+  };
+
+  const removeAddonPresetItem = async (presetId: number, itemId: number) => {
+    try {
+      await apiClient.delete(`/api/restaurants/${restaurantId}/addon-presets/${presetId}/items/${itemId}`);
+      await loadAddonPresetItems(presetId);
+      await fetchAddonPresets();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to remove item');
     }
   };
 
@@ -2104,7 +2126,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               onPress={() => {
                 Alert.prompt(t('settings.create-variant'), t('settings.variant-title-prompt'), [
                   { text: t('common.cancel'), style: 'cancel' },
-                  { text: t('settings.create'), onPress: (name: string | undefined) => { if (name) Alert.alert(t('common.success'), `${name}`); } },
+                  { text: t('settings.create'), onPress: async (name: string | undefined) => {
+                    if (!name) return;
+                    try {
+                      await apiClient.post(`/api/restaurants/${restaurantId}/variant-presets`, { name, description: '', is_active: true });
+                      await fetchVariantPresets();
+                      Alert.alert(t('common.success'), name);
+                    } catch (err: any) {
+                      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to create preset');
+                    }
+                  }},
                 ], 'plain-text');
               }}
             >
@@ -2174,7 +2205,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <FlatList
               data={addonPresets}
               renderItem={({ item: preset }) => (
-                <View style={styles.presetCard}>
+                <TouchableOpacity
+                  style={styles.presetCard}
+                  onPress={async () => {
+                    setSelectedAddonPreset(preset);
+                    await loadAddonPresetItems(preset.id);
+                  }}
+                >
                   <View style={styles.presetCardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.presetName}>{preset.name}</Text>
@@ -2204,7 +2241,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       <Ionicons name="trash-outline" size={16} color="#ef4444" />
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
               keyExtractor={(item) => item.id.toString()}
               scrollEnabled={false}
@@ -2214,6 +2251,70 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           )}
         </View>
       </ScrollView>
+
+      {/* Addon Preset Detail Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={!!selectedAddonPreset} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedAddonPreset?.name}</Text>
+              <TouchableOpacity onPress={() => setSelectedAddonPreset(null)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.presetDetailScroll}>
+              <View style={styles.modalBody}>
+                {selectedAddonPreset?.description && (
+                  <Text style={styles.presetDetailDesc}>{selectedAddonPreset.description}</Text>
+                )}
+
+                <Text style={styles.variantsLabel}>{t('settings.items-in-preset') || `Items in ${selectedAddonPreset?.name}`}</Text>
+                {addonPresetItems.length > 0 ? (
+                  addonPresetItems.map((item, idx) => (
+                    <View key={idx} style={styles.variantDetailItem}>
+                      <View style={styles.variantDetailContent}>
+                        <Text style={styles.variantDetailName}>{item.menu_item?.name || 'Unknown'}</Text>
+                        <Text style={styles.variantDetailMeta}>
+                          {t('settings.discount-price') || 'Discount'}: ${(item.addon_discount_price_cents / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.btn, styles.btnSmall, { backgroundColor: '#fee2e2', borderColor: '#fecaca' }]}
+                        onPress={() =>
+                          Alert.alert(
+                            t('common.delete'),
+                            `${item.menu_item?.name || 'Unknown'}?`,
+                            [
+                              { text: t('common.cancel'), style: 'cancel' },
+                              {
+                                text: t('common.delete'),
+                                style: 'destructive',
+                                onPress: () => removeAddonPresetItem(selectedAddonPreset!.id, item.id),
+                              },
+                            ]
+                          )
+                        }
+                      >
+                        <Text style={[styles.btnSmallText, { color: '#991b1b' }]}>{t('common.delete')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyText}>{t('settings.no-items-in-preset') || 'No items in this preset'}</Text>
+                )}
+              </View>
+            </ScrollView>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => setSelectedAddonPreset(null)}
+              >
+                <Text style={styles.btnText}>{t('settings.close') || 'Close'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 
@@ -3001,10 +3102,44 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                             },
                             {
                               text: t('common.add'),
-                              onPress: (name: string | undefined) => {
-                                if (name) {
-                                  Alert.alert(t('common.success'), `${name}`);
-                                }
+                              onPress: async (name: string | undefined) => {
+                                if (!name) return;
+                                // Prompt for price
+                                Alert.prompt(
+                                  t('settings.option-price-title') || 'Option Price',
+                                  t('settings.option-price-prompt') || 'Price in cents (0 for no extra charge)',
+                                  [
+                                    { text: t('common.cancel'), style: 'cancel' },
+                                    {
+                                      text: t('common.add'),
+                                      onPress: async (priceStr: string | undefined) => {
+                                        try {
+                                          const priceCents = parseInt(priceStr || '0') || 0;
+                                          await apiClient.post(
+                                            `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset.id}/options`,
+                                            { name, price_cents: priceCents }
+                                          );
+                                          // Reload the preset to show new option
+                                          const res = await apiClient.get(
+                                            `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset.id}`
+                                          );
+                                          const optionsRes = await apiClient.get(
+                                            `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset.id}/options`
+                                          );
+                                          setSelectedVariantPreset({
+                                            ...res.data,
+                                            variants: Array.isArray(optionsRes.data) ? optionsRes.data : [],
+                                          });
+                                          await fetchVariantPresets();
+                                        } catch (err: any) {
+                                          Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to add option');
+                                        }
+                                      },
+                                    },
+                                  ],
+                                  'plain-text',
+                                  '0'
+                                );
                               },
                             },
                           ],
@@ -3030,7 +3165,57 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                           <View style={{ flexDirection: 'row', gap: 6, marginLeft: 10 }}>
                             <TouchableOpacity
                               style={[styles.btn, styles.btnSmall, { backgroundColor: '#dbeafe', borderColor: '#93c5fd' }]}
-                              onPress={() => Alert.alert(t('common.edit'), option.name)}
+                              onPress={() => {
+                                Alert.prompt(
+                                  t('common.edit'),
+                                  t('settings.option-name'),
+                                  [
+                                    { text: t('common.cancel'), style: 'cancel' },
+                                    {
+                                      text: t('common.next'),
+                                      onPress: (newName) => {
+                                        if (!newName?.trim()) return;
+                                        Alert.prompt(
+                                          t('common.edit'),
+                                          t('settings.option-price'),
+                                          [
+                                            { text: t('common.cancel'), style: 'cancel' },
+                                            {
+                                              text: t('common.save'),
+                                              onPress: async (priceStr) => {
+                                                try {
+                                                  const priceCents = parseInt(priceStr || '0') || 0;
+                                                  await apiClient.patch(
+                                                    `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset!.id}/options/${option.id}`,
+                                                    { name: newName.trim(), price_cents: priceCents }
+                                                  );
+                                                  const res = await apiClient.get(
+                                                    `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset!.id}`
+                                                  );
+                                                  const optionsRes = await apiClient.get(
+                                                    `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset!.id}/options`
+                                                  );
+                                                  setSelectedVariantPreset({
+                                                    ...res.data,
+                                                    variants: Array.isArray(optionsRes.data) ? optionsRes.data : [],
+                                                  });
+                                                  await fetchVariantPresets();
+                                                } catch (err: any) {
+                                                  Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to update option');
+                                                }
+                                              },
+                                            },
+                                          ],
+                                          'plain-text',
+                                          String(option.price_cents || 0)
+                                        );
+                                      },
+                                    },
+                                  ],
+                                  'plain-text',
+                                  option.name
+                                );
+                              }}
                             >
                               <Text style={[styles.btnSmallText, { color: '#1e40af' }]}>{t('common.edit')}</Text>
                             </TouchableOpacity>
@@ -3042,7 +3227,30 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                                   `${option.name}?`,
                                   [
                                     { text: t('common.cancel'), style: 'cancel' },
-                                    { text: t('common.delete'), style: 'destructive', onPress: () => {} },
+                                    {
+                                      text: t('common.delete'),
+                                      style: 'destructive',
+                                      onPress: async () => {
+                                        try {
+                                          await apiClient.delete(
+                                            `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset!.id}/options/${option.id}`
+                                          );
+                                          const res = await apiClient.get(
+                                            `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset!.id}`
+                                          );
+                                          const optionsRes = await apiClient.get(
+                                            `/api/restaurants/${restaurantId}/variant-presets/${selectedVariantPreset!.id}/options`
+                                          );
+                                          setSelectedVariantPreset({
+                                            ...res.data,
+                                            variants: Array.isArray(optionsRes.data) ? optionsRes.data : [],
+                                          });
+                                          await fetchVariantPresets();
+                                        } catch (err: any) {
+                                          Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to delete option');
+                                        }
+                                      },
+                                    },
                                   ]
                                 )
                               }

@@ -100,4 +100,49 @@ try {
   console.log('[Patches] ℹ️  Could not patch engine.io-client:', err.message);
 }
 
+// Patch 4: react-native-svg - fix Apple header imports for filter enum headers
+const rnsvgHeaderFiles = [
+  path.join(__dirname, '../node_modules/react-native-svg/apple/Utils/RCTConvert+RNSVG.h'),
+  path.join(__dirname, '../node_modules/react-native-svg/apple/Utils/RNSVGConvert.h'),
+];
+
+try {
+  let patchedCount = 0;
+  const replacements = [
+    ['#import "RNSVGBlendMode.h"', '#import "../Filters/RNSVGBlendMode.h"'],
+    ['#import "RNSVGColorMatrixType.h"', '#import "../Filters/RNSVGColorMatrixType.h"'],
+    ['#import "RNSVGCompositeOperator.h"', '#import "../Filters/RNSVGCompositeOperator.h"'],
+    ['#import "RNSVGEdgeMode.h"', '#import "../Filters/RNSVGEdgeMode.h"'],
+  ];
+
+  for (const filePath of rnsvgHeaderFiles) {
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
+    let content = fs.readFileSync(filePath, 'utf8');
+    let filePatched = false;
+
+    for (const [from, to] of replacements) {
+      if (content.includes(from)) {
+        content = content.replace(from, to);
+        filePatched = true;
+      }
+    }
+
+    if (filePatched) {
+      fs.writeFileSync(filePath, content);
+      patchedCount++;
+    }
+  }
+
+  if (patchedCount > 0) {
+    console.log(`[Patches] ✅ react-native-svg patched (${patchedCount} files)`);
+  } else {
+    console.log('[Patches] ℹ️  react-native-svg already patched or not found');
+  }
+} catch (err) {
+  console.log('[Patches] ℹ️  Could not patch react-native-svg:', err.message);
+}
+
 console.log('[Patches] ✅ All patches applied successfully');
