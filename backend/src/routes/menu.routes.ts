@@ -645,7 +645,8 @@ router.get("/menu-items/:menuItemId/variants", async (req, res) => {
         v.max_select,
         o.id AS option_id,
         o.name AS option_name,
-        o.price_cents
+        o.price_cents,
+        o.is_available
       FROM menu_item_variants v
       LEFT JOIN menu_item_variant_options o
         ON o.variant_id = v.id
@@ -675,7 +676,8 @@ router.get("/menu-items/:menuItemId/variants", async (req, res) => {
         v.options.push({
           id: row.option_id,
           name: row.option_name,
-          price_cents: row.price_cents
+          price_cents: row.price_cents,
+          is_available: row.is_available
         });
       }
 

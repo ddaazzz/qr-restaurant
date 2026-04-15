@@ -696,7 +696,7 @@ function renderAddonVariantSections(addons, container) {
       vDiv.style.cssText = "margin-bottom: 6px;";
       vDiv.innerHTML = `<div style="font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 3px;">${v.name}${v.required ? '<span style="color:red;"> *</span>' : ''}</div>`;
 
-      (v.options || []).forEach(o => {
+      (v.options || []).filter(o => o.is_available !== false).forEach(o => {
         const selected = (addonVariantSelections[addon.id]?.[v.id] || []).includes(o.id);
         const label = document.createElement("label");
         label.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; margin-bottom: 2px; cursor: pointer;";
