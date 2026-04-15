@@ -310,20 +310,6 @@ export const LoginScreen = () => {
                   <Text style={styles.choiceButtonText}>Kitchen</Text>
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.choiceButton, styles.googleButton]}
-                onPress={handleGoogleSignIn}
-              >
-                <Ionicons name="logo-google" size={20} color="#4285F4" />
-                <Text style={[styles.choiceButtonText, { color: '#333' }]}>Continue with Google</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
