@@ -696,7 +696,7 @@ function renderAddonVariantSections(addons, container) {
       vDiv.style.cssText = "margin-bottom: 6px;";
       vDiv.innerHTML = `<div style="font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 3px;">${v.name}${v.required ? '<span style="color:red;"> *</span>' : ''}</div>`;
 
-      (v.options || []).filter(o => o.is_available).forEach(o => {
+      (v.options || []).forEach(o => {
         const selected = (addonVariantSelections[addon.id]?.[v.id] || []).includes(o.id);
         const label = document.createElement("label");
         label.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; margin-bottom: 2px; cursor: pointer;";
@@ -731,6 +731,14 @@ function onAddonVariantChange(addonId, variant, optionId, checked) {
     selected = selected.filter(id => id !== optionId);
   }
   addonVariantSelections[addonId][variant.id] = selected;
+
+  // Update Add to Cart button state
+  const btn = document.querySelector('.add-btn');
+  if (btn) {
+    const itemId = Number(btn.dataset.itemId);
+    const item = window.menu && window.menu.items ? window.menu.items.find(i => i.id === itemId) : null;
+    if (item) btn.disabled = !canAddToCart(item);
+  }
 }
 
 function setActiveCategory(categoryId) {
@@ -807,6 +815,20 @@ function addToCart(item) {
         extraPrice += option.price_cents || 0;
       });
     });
+  }
+
+  // Validate addon variant requirements
+  for (const addon of drawerAddons) {
+    if (!selectedDrawerAddons[addon.id]) continue;
+    const variants = addonVariantData[addon.addon_item_id] || [];
+    for (const v of variants) {
+      const selected = (addonVariantSelections[addon.id]?.[v.id] || []).length;
+      const min = v.min_select != null ? v.min_select : (v.required ? 1 : 0);
+      if (selected < min) {
+        alert(`Please select ${v.name} for ${addon.addon_item_name}`);
+        throw new Error("Missing required addon variant");
+      }
+    }
   }
 
   const existing = cart.items.find(
@@ -895,16 +917,29 @@ function loadCartFromStorage() {
 }
 
 function canAddToCart(item) {
-  if (!item.variants || item.variants.length === 0) return true;
+  if (!item.variants || item.variants.length === 0) {
+    // still check addon variants
+  } else {
+    for (const v of item.variants) {
+      const selected =
+        (variantSelections[item.id] && variantSelections[item.id][v.id]) ? variantSelections[item.id][v.id].length : 0;
 
-  for (const v of item.variants) {
-    const selected =
-      (variantSelections[item.id] && variantSelections[item.id][v.id]) ? variantSelections[item.id][v.id].length : 0;
+      const min = v.min_select != null ? v.min_select : (v.required ? 1 : 0);
 
-    const min = v.min_select != null ? v.min_select : (v.required ? 1 : 0);
+      if (selected < min) {
+        return false;
+      }
+    }
+  }
 
-    if (selected < min) {
-      return false;
+  // Check addon variant requirements
+  for (const addon of drawerAddons) {
+    if (!selectedDrawerAddons[addon.id]) continue;
+    const variants = addonVariantData[addon.addon_item_id] || [];
+    for (const v of variants) {
+      const selected = (addonVariantSelections[addon.id]?.[v.id] || []).length;
+      const min = v.min_select != null ? v.min_select : (v.required ? 1 : 0);
+      if (selected < min) return false;
     }
   }
 
