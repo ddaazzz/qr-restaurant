@@ -362,36 +362,16 @@ function renderKitchenOrders(orders) {
           <div class="card-actions">
             ${(() => {
               const allItemIds = order.items.flatMap(i => [i.order_item_id, ...(i._addons || []).map(a => a.order_item_id)]);
-              const pendingIds = order.items.flatMap(i => {
-                const ids = [];
-                if (i.status === 'pending') ids.push(i.order_item_id);
-                (i._addons || []).forEach(a => { if (a.status === 'pending') ids.push(a.order_item_id); });
-                return ids;
-              });
-              const preparingIds = order.items.flatMap(i => {
-                const ids = [];
-                if (i.status === 'preparing') ids.push(i.order_item_id);
-                (i._addons || []).forEach(a => { if (a.status === 'preparing') ids.push(a.order_item_id); });
-                return ids;
-              });
-              const readyIds = order.items.flatMap(i => {
-                const ids = [];
-                if (i.status === 'ready') ids.push(i.order_item_id);
-                (i._addons || []).forEach(a => { if (a.status === 'ready') ids.push(a.order_item_id); });
-                return ids;
-              });
               const printBtn = `<button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')">${typeof t === 'function' ? t('kitchen.print-order') : '🖨️ Print'}</button>`;
-              if (pendingIds.length > 0) {
+              if (statusClass === 'pending') {
                 return `${printBtn}
-                <button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(pendingIds)}, 'preparing')">${typeof t === 'function' ? t('kitchen.start-preparing') : 'Start Preparing'}</button>
+                <button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(allItemIds)}, 'preparing')">${typeof t === 'function' ? t('kitchen.start-preparing') : 'Start Preparing'}</button>`;
+              } else if (statusClass === 'preparing') {
+                return `${printBtn}
                 <button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(allItemIds)}, 'ready')">${typeof t === 'function' ? t('kitchen.ready') : 'Ready'}</button>`;
-              } else if (preparingIds.length > 0) {
+              } else if (statusClass === 'ready') {
                 return `${printBtn}
-                <button class="btn-action btn-start" disabled>${typeof t === 'function' ? t('kitchen.start-preparing') : 'Start Preparing'}</button>
-                <button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(preparingIds)}, 'ready')">${typeof t === 'function' ? t('kitchen.ready') : 'Ready'}</button>`;
-              } else if (readyIds.length > 0) {
-                return `${printBtn}
-                <button class="btn-action btn-served" onclick="updateAllItemStatus(${JSON.stringify(readyIds)}, 'served')">${typeof t === 'function' ? t('kitchen.served') : 'Served'}</button>`;
+                <button class="btn-action btn-served" onclick="updateAllItemStatus(${JSON.stringify(allItemIds)}, 'served')">${typeof t === 'function' ? t('kitchen.served') : 'Served'}</button>`;
               } else {
                 return `${printBtn}
                 <button class="btn-action btn-ready" disabled>${typeof t === 'function' ? t('kitchen.all-served') : 'All Served'}</button>`;

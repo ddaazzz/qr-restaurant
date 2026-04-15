@@ -678,7 +678,7 @@ router.patch("/order-items/:orderItemId/status", async (req, res) => {
   const { orderItemId } = req.params;
   const { status, restaurantId } = req.body;
 
-  if (!["pending", "preparing", "served"].includes(status)) {
+  if (!["pending", "preparing", "ready", "served"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
 

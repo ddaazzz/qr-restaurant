@@ -930,7 +930,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                   ))}
                 </View>
 
-                {/* Action Buttons */}
+                {/* Action Buttons: Print + one state-change button */}
                 <View style={styles.actions}>
                   <TouchableOpacity
                     style={[styles.actionButton, styles.printButton]}
@@ -951,7 +951,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                     </TouchableOpacity>
                   )}
 
-                  {(order.status === 'pending' || order.status === 'preparing') && (
+                  {order.status === 'preparing' && (
                     <TouchableOpacity
                       style={[styles.actionButton, styles.readyButton]}
                       onPress={() => handleUpdateAllItemsStatus(order, 'ready')}

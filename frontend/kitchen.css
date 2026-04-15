@@ -433,6 +433,16 @@ body {
   cursor: default;
 }
 
+.btn-served {
+  background: #9E9E9E;
+  color: var(--bg-white);
+}
+
+.btn-served:hover {
+  background: #757575;
+  transform: translateY(-2px);
+}
+
 .btn-print {
   background: #2563eb;
   color: var(--bg-white);

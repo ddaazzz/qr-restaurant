@@ -221,11 +221,11 @@ class APIClient {
     }
   }
 
-  async updateOrderStatus(orderId: string, status: string) {
+  async updateOrderStatus(orderItemId: string, status: string) {
     try {
       const response = await this.client.patch(
-        `/api/orders/${orderId}`,
-        { status }
+        `/api/order-items/${orderItemId}/status`,
+        { status, restaurantId: this.restaurantId }
       );
       return response.data;
     } catch (error) {
