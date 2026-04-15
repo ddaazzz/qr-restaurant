@@ -1450,12 +1450,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {item.addons && item.addons.length > 0 ? (
                       <View style={{ marginTop: 3 }}>
                         {item.addons.map((addon: any, ai: number) => (
-                          <Text key={ai} style={{ fontSize: 11, color: '#667eea', marginTop: 1 }}>
-                            + {addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
-                          </Text>
-                          {addon.variants ? (
-                            <Text style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }}>{addon.variants}</Text>
-                          ) : null}
+                          <React.Fragment key={ai}>
+                            <Text style={{ fontSize: 11, color: '#667eea', marginTop: 1 }}>
+                              + {addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
+                            </Text>
+                            {addon.variants ? (
+                              <Text style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }}>{addon.variants}</Text>
+                            ) : null}
+                          </React.Fragment>
                         ))}
                       </View>
                     ) : null}
