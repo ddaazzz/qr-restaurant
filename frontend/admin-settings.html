@@ -62,12 +62,6 @@
       <h3 data-i18n="admin.payment-terminals">Payment Terminals</h3>
       <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
     </div>
-
-    <!-- Users & Restaurants Card -->
-    <div class="settings-card" onclick="showSettingsPage('users-management')">
-      <h3>Users & Restaurants</h3>
-      <p>Manage users, roles & restaurants</p>
-    </div>
   </div>
 
   <!-- HIDDEN: Preferences Modal -->
@@ -254,9 +248,9 @@
               <option value="static_seat" data-i18n="admin.qr-static-seat-option">Static QR Code Per Seat</option>
             </select>
             <p style="font-size: 0.85em; color: #666; margin-top: 12px; line-height: 1.6;">
-              <strong data-i18n="admin.qr-regenerate-desc">Regenerate (Per Order):</strong> <span data-i18n="admin.qr-regenerate-desc-text">A new QR code is generated for each order. Old QR codes become invalid when the session ends. Best for restaurants that print QR codes on receipts or table tents.</span><br><br>
-              <strong data-i18n="admin.qr-static-table-desc">Static (Per Table):</strong> <span data-i18n="admin.qr-static-table-desc-text">Each table has a fixed QR code sticker. Only one active order is allowed per table at a time. When the order is closed, the same QR code can be reused for the next customer.</span><br><br>
-              <strong data-i18n="admin.qr-static-seat-desc">Static (Per Seat):</strong> <span data-i18n="admin.qr-static-seat-desc-text">Each seat has its own fixed QR code sticker (e.g. T01A, T01B). When starting a new order, you select which seats are occupied. Guests scanning different seat QR codes at the same table share the same order.</span>
+              <strong data-i18n="admin.qr-regenerate-desc">Regenerate QR Code Each Session:</strong> <span data-i18n="admin.qr-regenerate-desc-text">New QR code generated each time session starts</span><br><br>
+              <strong data-i18n="admin.qr-static-table-desc">Static QR Code Per Table:</strong> <span data-i18n="admin.qr-static-table-desc-text">One session per table, cannot start new session</span><br><br>
+              <strong data-i18n="admin.qr-static-seat-desc">Static QR Code Per Seat:</strong> <span data-i18n="admin.qr-static-seat-desc-text">Each seat has independent QR code and session</span>
             </p>
           </div>
         </div>
@@ -426,20 +420,10 @@
       <div class="settings-page-header">
     <button class="btn-back" onclick="hideSettingsPage('payment-terminals')">&#8592; Back</button>
     <h3 data-i18n="admin.payment-terminals">Payment Terminals</h3>
-    <button id="terminal-add-btn" class="btn-primary" onclick="openPaymentTerminalForm()" style="padding: 6px 12px; font-size: 13px; display: none;" data-i18n="admin.add-terminal">+ Add Terminal</button>
+    <button id="terminal-add-btn" class="btn-primary" onclick="openPaymentTerminalForm()" style="padding: 6px 12px; font-size: 13px;" data-i18n="admin.add-terminal">+ Add Terminal</button>
   </div>
       </div>
       <div class="settings-page-content">
-        <!-- Premium feature notice for non-superadmins (shown via JS) -->
-        <div id="terminal-superadmin-notice" style="display: none; background: #fefce8; border: 1px solid #fbbf24; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
-          <div style="display: flex; align-items: flex-start; gap: 12px;">
-            <span style="font-size: 16px; flex-shrink: 0; color: #d97706; font-weight: 700; margin-top: 1px;">&#9733;</span>
-            <div>
-              <p style="margin: 0 0 2px 0; font-weight: 600; font-size: 13px; color: #92400e;" data-i18n="admin.terminal-superadmin-only">Super Admin access required</p>
-              <p style="margin: 0; font-size: 12px; color: #78350f;" data-i18n="admin.terminal-superadmin-desc">Adding, enabling, and deleting payment terminals is a premium feature restricted to Super Admins. You can edit existing terminal configurations below.</p>
-            </div>
-          </div>
-        </div>
         <!-- Order & Pay Feature Toggle -->
         <div style="background: #f0f4f8; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -655,158 +639,3 @@
     }
   })();
 </script>
-
-<!-- ================= USERS & RESTAURANTS SUB-PAGE ================= -->
-<div id="page-users-management" class="settings-page hidden">
-  <div class="settings-page-inner">
-    <div class="settings-page-header">
-      <button class="btn-back" onclick="hideSettingsPage('users-management');">&#8592; Back</button>
-      <h3>Users & Restaurants</h3>
-    </div>
-    <div class="settings-page-content">
-      <!-- Tab bar -->
-      <div class="users-tab-bar">
-        <button class="users-tab-btn active" data-tab="users" onclick="switchUsersTab('users')">👤 Users</button>
-        <button class="users-tab-btn" data-tab="restaurants" onclick="switchUsersTab('restaurants')">🏪 Restaurants</button>
-      </div>
-
-      <!-- USERS TAB -->
-      <div id="users-tab-content" class="users-tab-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <h4 style="margin: 0;">All Users</h4>
-          <button class="btn-primary" onclick="openUserModal()">+ Create User</button>
-        </div>
-        <div id="users-list" class="users-list">
-          <p style="color: #999; text-align: center; padding: 20px;">Loading users...</p>
-        </div>
-      </div>
-
-      <!-- RESTAURANTS TAB -->
-      <div id="restaurants-tab-content" class="users-tab-content" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <h4 style="margin: 0;">All Restaurants</h4>
-          <button id="create-restaurant-btn" class="btn-primary" onclick="openRestaurantModal()" style="display: none;">+ Create Restaurant</button>
-        </div>
-        <div id="restaurants-list" class="users-list">
-          <p style="color: #999; text-align: center; padding: 20px;">Loading restaurants...</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- USER MODAL -->
-<div id="user-modal" class="modal" style="display: none;">
-  <div class="modal-content" style="max-width: 500px; max-height: 85vh; overflow-y: auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 id="user-modal-title" style="margin: 0;">Create User</h3>
-      <button onclick="closeUserModal()" style="font-size: 22px; background: none; border: none; cursor: pointer; color: #999;">✕</button>
-    </div>
-
-    <div id="user-modal-error" class="error-message" style="display: none;"></div>
-
-    <form onsubmit="event.preventDefault(); saveUser();">
-      <div class="form-group">
-        <label>Name *</label>
-        <input id="user-form-name" placeholder="Full name" required />
-      </div>
-
-      <div class="form-group">
-        <label>Role *</label>
-        <div class="users-role-picker">
-          <button type="button" class="role-chip active" data-role="staff" onclick="selectUserRole('staff')">Staff</button>
-          <button type="button" class="role-chip" data-role="kitchen" onclick="selectUserRole('kitchen')">Kitchen</button>
-          <button type="button" class="role-chip" data-role="admin" onclick="selectUserRole('admin')" style="display:none;" id="role-admin-chip">Admin</button>
-          <button type="button" class="role-chip" data-role="superadmin" onclick="selectUserRole('superadmin')" style="display:none;" id="role-superadmin-chip">Superadmin</button>
-        </div>
-      </div>
-
-      <div id="user-form-email-section" style="display: none;">
-        <div class="form-group">
-          <label id="user-form-email-label">Email *</label>
-          <input id="user-form-email" type="email" placeholder="user@example.com" />
-        </div>
-        <div class="form-group">
-          <label id="user-form-password-label">Password *</label>
-          <input id="user-form-password" type="password" placeholder="Min 8 characters" />
-        </div>
-      </div>
-
-      <div id="user-form-pin-section">
-        <div class="form-group">
-          <label>PIN (6 digits) *</label>
-          <input id="user-form-pin" type="text" placeholder="000000" maxlength="6" />
-        </div>
-      </div>
-
-      <div id="user-form-restaurant-section" style="display: none;">
-        <div class="form-group">
-          <label>Restaurant</label>
-          <select id="user-form-restaurant"></select>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>Hourly Rate ($/hr)</label>
-        <input id="user-form-hourly-rate" type="number" placeholder="e.g. 15.50" step="0.01" min="0" />
-      </div>
-
-      <div style="display: flex; gap: 8px; margin-top: 16px;">
-        <button type="submit" id="user-save-btn" class="btn-primary" style="flex: 2;">Create User</button>
-        <button type="button" class="btn-secondary" onclick="closeUserModal()" style="flex: 1;">Cancel</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- RESTAURANT MODAL -->
-<div id="restaurant-modal" class="modal" style="display: none;">
-  <div class="modal-content" style="max-width: 500px; max-height: 85vh; overflow-y: auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 id="restaurant-modal-title" style="margin: 0;">Create Restaurant</h3>
-      <button onclick="closeRestaurantModal()" style="font-size: 22px; background: none; border: none; cursor: pointer; color: #999;">✕</button>
-    </div>
-
-    <div id="restaurant-modal-error" class="error-message" style="display: none;"></div>
-
-    <form onsubmit="event.preventDefault(); saveRestaurant();">
-      <div class="form-group">
-        <label>Restaurant Name *</label>
-        <input id="restaurant-form-name" placeholder="Restaurant name" required />
-      </div>
-      <div class="form-group">
-        <label>Address</label>
-        <input id="restaurant-form-address" placeholder="123 Main St, City" />
-      </div>
-      <div class="form-group">
-        <label>Phone</label>
-        <input id="restaurant-form-phone" placeholder="+852 1234 5678" />
-      </div>
-      <div class="form-group">
-        <label>Service Charge (%)</label>
-        <input id="restaurant-form-sc" type="number" value="10" step="0.1" min="0" />
-      </div>
-      <div class="form-group">
-        <label>Timezone</label>
-        <select id="restaurant-form-timezone">
-          <option value="Asia/Hong_Kong">Asia/Hong Kong (HKT)</option>
-          <option value="America/New_York">America/New York (EST)</option>
-          <option value="Europe/London">Europe/London (GMT)</option>
-          <option value="UTC">UTC</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Language</label>
-        <select id="restaurant-form-language">
-          <option value="en">English</option>
-          <option value="zh">中文</option>
-        </select>
-      </div>
-
-      <div style="display: flex; gap: 8px; margin-top: 16px;">
-        <button type="submit" id="restaurant-save-btn" class="btn-primary" style="flex: 2;">Create Restaurant</button>
-        <button type="button" class="btn-secondary" onclick="closeRestaurantModal()" style="flex: 1;">Cancel</button>
-      </div>
-    </form>
-  </div>
-</div>

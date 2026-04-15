@@ -173,6 +173,7 @@ router.post("/restaurants/:restaurantId/addons", async (req, res) => {
         is_available
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      ON CONFLICT (restaurant_id, menu_item_id, addon_item_id) DO NOTHING
       RETURNING *
       `,
       [
@@ -186,15 +187,18 @@ router.post("/restaurants/:restaurantId/addons", async (req, res) => {
       ]
     );
 
+    if (result.rowCount === 0) {
+      // Addon already exists — return the existing one
+      const existing = await pool.query(
+        `SELECT * FROM addons WHERE restaurant_id = $1 AND menu_item_id = $2 AND addon_item_id = $3`,
+        [restaurantId, menu_item_id, addon_item_id]
+      );
+      return res.status(200).json(existing.rows[0]);
+    }
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("❌ Failed to create addon:", err);
-    
-    // Check for unique constraint violation
-    if (err instanceof Error && err.message.includes("duplicate key")) {
-      return res.status(400).json({ error: "This addon already exists for this menu item" });
-    }
-    
     res.status(500).json({ error: "Failed to create addon" });
   }
 });

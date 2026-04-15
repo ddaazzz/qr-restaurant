@@ -176,7 +176,7 @@ function renderTableCategoryTabs() {
       
       var deleteBtn = document.createElement("button");
       deleteBtn.className = "category-btn-delete";
-      deleteBtn.textContent = "🗑️";
+      deleteBtn.textContent = "✕";
       deleteBtn.style.marginTop = "4px";
       deleteBtn.style.padding = "4px 8px";
       deleteBtn.style.backgroundColor = "#ef4444";
@@ -1067,12 +1067,12 @@ async function renderSessionsList(table) {
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
             <strong>${t('admin.session-label').replace('{0}', session.id)}${session.booking_guest_name ? ` – ${session.booking_guest_name}` : ''}</strong>
-            <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">👥 ${session.pax} • ${t('admin.dining')} ${duration}</div>
+            <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">${session.pax} pax • ${t('admin.dining')} ${duration}</div>
           </div>
           <div style="text-align: right; font-size: 14px; font-weight: 600; color: ${sessionColor};">
             ${billTotal}
-            ${session.call_staff_requested ? `<div style="font-size:11px;background:#fef9c3;border:1px solid #fbbf24;border-radius:4px;padding:2px 6px;color:#92400e;font-weight:600;margin-top:4px;">🔔 Call Staff</div>` : ''}
-            ${session.bill_closure_requested && !session.call_staff_requested ? `<div style="font-size:11px;background:#fff7ed;border:1px solid #f97316;border-radius:4px;padding:2px 6px;color:#c2410c;font-weight:600;margin-top:4px;">📋 Close Bill</div>` : ''}
+            ${session.call_staff_requested ? `<div style="font-size:11px;background:#fef9c3;border:1px solid #fbbf24;border-radius:4px;padding:2px 6px;color:#92400e;font-weight:600;margin-top:4px;">Call Staff</div>` : ''}
+            ${session.bill_closure_requested && !session.call_staff_requested ? `<div style="font-size:11px;background:#fff7ed;border:1px solid #f97316;border-radius:4px;padding:2px 6px;color:#c2410c;font-weight:600;margin-top:4px;">Close Bill</div>` : ''}
           </div>
         </div>
       </div>
@@ -1181,7 +1181,7 @@ async function loadTableReservations(tableId) {
       const isActive = !!booking.session_id;
       const clickAttr = isActive ? '' : `onclick="showStartSessionFromBookingPrompt(${tableId}, ${booking.id}, ${booking.pax}, '${booking.guest_name.replace(/'/g, "\\'")}')"`;
       const badge = isActive
-        ? `<span style="font-size: 11px; padding: 3px 8px; background: #22c55e; color: white; border-radius: 4px; white-space: nowrap;">📋 Active</span>`
+        ? `<span style="font-size: 11px; padding: 3px 8px; background: #22c55e; color: white; border-radius: 4px; white-space: nowrap;">Active</span>`
         : `<span style="font-size: 11px; padding: 3px 8px; background: #dbeafe; color: #1d4ed8; border-radius: 4px; white-space: nowrap;">▶ Tap to start</span>`;
       return `
         <div ${clickAttr} style="padding: 10px; background: #f5f5f5; border-left: 3px solid #4a90e2; border-radius: 4px; margin-bottom: 8px;${isActive ? '' : ' cursor: pointer;'}">
@@ -1189,7 +1189,7 @@ async function loadTableReservations(tableId) {
             <div style="min-width: 0; flex: 1;">
               <strong style="display: block; margin-bottom: 2px;">#${booking.id} - ${booking.guest_name}</strong>
               <div style="font-size: 12px; color: var(--text-light);">
-                🕒 ${booking.booking_time} · 📞 ${booking.phone || 'N/A'} · 👥 ${booking.pax}
+                ${booking.booking_time} · ${booking.phone || 'N/A'} · ${booking.pax} pax
               </div>
             </div>
             <div style="flex-shrink: 0;">${badge}</div>
@@ -1394,7 +1394,7 @@ function showStartSessionFromBookingPrompt(tableId, bookingId, pax, guestName) {
     <div class="modal-content" style="width: 340px; padding: 28px; text-align: center;">
       <h3 style="margin: 0 0 8px 0; font-size: 18px;">Start Session Now?</h3>
       <p style="margin: 0 0 6px 0; color: var(--text-dark); font-size: 15px; font-weight: 600;">${guestName}</p>
-      <p style="margin: 0 0 24px 0; color: var(--text-light); font-size: 14px;">👥 ${pax} guests</p>
+      <p style="margin: 0 0 24px 0; color: var(--text-light); font-size: 14px;">${pax} guests</p>
       <div class="modal-button-group">
         <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">No</button>
         <button onclick="confirmStartSessionFromBooking(${tableId}, ${bookingId}, ${pax})" class="modal-btn-primary">Yes, Start</button>
@@ -1559,7 +1559,7 @@ async function renderSessionOrder(session) {
     const merchant = session.merchant_reference || '—';
     paymentStatusHtml = `
       <div style="background: #e8f5e9; border: 1px solid #4caf50; border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 12px;">
-        <div style="color: #2e7d32; font-weight: 600;">✅ Payment Received</div>
+        <div style="color: #2e7d32; font-weight: 600;">Payment Received</div>
         <div style="color: #555; margin-top: 2px; font-size: 11px;">Via: ${session.payment_method_online ? session.payment_method_online.toUpperCase() : 'N/A'}</div>
         <div style="color: #555; font-size: 11px;">Ref: ${merchant}</div>
       </div>
@@ -1567,7 +1567,7 @@ async function renderSessionOrder(session) {
   } else if (session.bill_closure_requested) {
     paymentStatusHtml = `
       <div style="background: #fff3e0; border: 1px solid #ff9800; border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 12px;">
-        <div style="color: #e65100; font-weight: 600;">⏳ Bill Closure Requested</div>
+        <div style="color: #e65100; font-weight: 600;">Bill Closure Requested</div>
         <div style="color: #555; margin-top: 2px; font-size: 11px;">Customer has requested payment</div>
       </div>
     `;
@@ -1576,7 +1576,7 @@ async function renderSessionOrder(session) {
   if (session.call_staff_requested) {
     paymentStatusHtml += `
       <div style="background: #fef9c3; border: 1px solid #fbbf24; border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 12px;">
-        <div style="color: #92400e; font-weight: 600;">🔔 Staff Called</div>
+        <div style="color: #92400e; font-weight: 600;">Staff Called</div>
         <div style="color: #555; margin-top: 2px; font-size: 11px;">Customer is requesting assistance
           <button onclick="clearCallStaff(${session.id})" style="margin-left: 8px; padding: 2px 8px; font-size: 11px; border: none; border-radius: 4px; background: #d97706; color: #fff; cursor: pointer; font-weight: 600;">Acknowledge</button>
         </div>
@@ -1593,13 +1593,13 @@ async function renderSessionOrder(session) {
       <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
       <div style="flex: 1;">
         <h3 style="margin: 0; font-size: 18px; text-align: center;">${sessionLabel}</h3>
-        ${session.booking_guest_name ? `<p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 600; color: var(--text-dark); text-align: center;">👤 ${session.booking_guest_name}</p>` : ''}
+        ${session.booking_guest_name ? `<p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 600; color: var(--text-dark); text-align: center;">${session.booking_guest_name}</p>` : ''}
         <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-light); text-align: center;">Table ${table.name} • ${t('admin.started')} ${new Date(session.started_at).toLocaleTimeString()}</p>
         <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-light); text-align: center;">${pax} ${t('admin.pax-label')} • ${t('admin.dining')} ${diningDuration}</p>
         ${paymentStatusHtml}
       </div>
       <div style="position: relative;">
-        <button class="gear-icon-btn" onclick="toggleSessionGearMenu(event)">⚙️</button>
+        <button class="gear-icon-btn" onclick="toggleSessionGearMenu(event)">⚙</button>
         <div id="session-gear-menu" class="session-gear-menu hidden">
           <button onclick="changeSessionPaxModal(${session.id}, ${pax})">${t('admin.change-pax')}</button>
           <button onclick="moveTableModal(${table.id})">${t('admin.move-table')}</button>
@@ -1794,7 +1794,7 @@ async function printBill(sessionId, autoPrint = false) {
   } catch (err) {
     console.error('[PrintBill] Error:', err);
     if (!autoPrint) {
-      alert('⚠️ Print error: ' + err.message);
+      alert('Print error: ' + err.message);
     }
   }
 }
@@ -1806,7 +1806,7 @@ async function splitBill(sessionId) {
     modal.className = 'modal-overlay';
     modal.innerHTML = `
       <div class="modal-content" style="width: 380px;">
-        <h3>💵 ${t('admin.split-bill')}</h3>
+        <h3>${t('admin.split-bill')}</h3>
         <p style="color: #e74c3c; margin: 12px 0;">Failed to load bill details.</p>
         <div class="modal-button-group">
           <button onclick="this.closest('.modal-overlay').remove()" class="modal-btn-primary">OK</button>
@@ -1827,7 +1827,7 @@ async function splitBill(sessionId) {
   modal.setAttribute('data-split-total', total);
   modal.innerHTML = `
     <div class="modal-content" style="width: 420px;">
-      <h3>💵 ${t('admin.split-bill')}</h3>
+      <h3>${t('admin.split-bill')}</h3>
       <div style="background: #f3f4f6; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; border-left: 4px solid var(--primary-color);">
         <p style="margin: 0; font-size: 15px; color: var(--text-dark);">Total: <strong>$${(total / 100).toFixed(2)}</strong></p>
       </div>
@@ -1964,7 +1964,7 @@ async function printQR(sessionId, autoPrint = false, sessionEventData = null) {
   } catch (err) {
     console.error('[PrintQR] Error:', err);
     if (!autoPrint) {
-      alert('⚠️ Print error: ' + err.message);
+      alert('Print error: ' + err.message);
     }
   }
 }
@@ -2119,7 +2119,7 @@ async function moveTableModal(tableId) {
         </select>
       </label>
       <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 13px; color: #92400e;">
-        ⚠️ Table transfer feature coming soon.
+        Table transfer feature coming soon.
       </div>
       <div class="modal-button-group">
         <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
@@ -2134,7 +2134,7 @@ async function changeSessionPaxModal(sessionId, currentPax) {
   modal.className = 'modal-overlay';
   modal.innerHTML = `
     <div class="modal-content" style="width: 380px;">
-      <h3>👥 ${t('admin.change-pax')}</h3>
+      <h3>${t('admin.change-pax')}</h3>
       <p style="color: var(--text-light); margin: 0 0 16px 0;">Current: <strong>${currentPax}</strong> guest(s)</p>
       <label style="display: block; margin-bottom: 16px;">
         <span class="modal-content-label">${t('admin.number-of-guests')}</span>
@@ -2281,13 +2281,13 @@ async function closeBillModal(sessionId) {
         <select id="payment-method" onchange="onPaymentMethodChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <option value="cash">${t('admin.payment-cash')}</option>
           <option value="card">${t('admin.payment-card')}</option>
-          ${window._kpayTerminal ? `<option value="kpay">💳 KPay Terminal</option>` : ''}
+          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
         </select>
       </label>
 
       <!-- KPay notice (shown when kpay selected) -->
       <div id="kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:15px; font-size:13px; color:#1d4ed8;">
-        💳 Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.<br>
+        Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.<br>
         Confirm to initiate — the terminal will prompt the customer.
       </div>
 
@@ -2380,7 +2380,7 @@ async function startKPayPayment({ sessionId, finalAmount, discountApplied, servi
   overlay.innerHTML = `
     <div class="modal-content" style="width:420px; max-width:95vw;">
       <h3 style="margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
-        💳 KPay Terminal Payment
+        KPay Terminal Payment
         <span id="kpay-status-badge" style="font-size:12px; padding:3px 10px; background:#fef3c7; color:#b45309; border-radius:12px; font-weight:600;">Initiating…</span>
       </h3>
 
@@ -2459,7 +2459,7 @@ async function startKPayPayment({ sessionId, finalAmount, discountApplied, servi
     if (!result.initiated) {
       setBadge('Failed', '#fee2e2', '#dc2626');
       const msg = document.getElementById('kpay-result-msg');
-      if (msg) { msg.style.display='block'; msg.style.background='#fee2e2'; msg.style.color='#dc2626'; msg.textContent = '❌ ' + (result.message || 'Failed to initiate payment'); }
+      if (msg) { msg.style.display='block'; msg.style.background='#fee2e2'; msg.style.color='#dc2626'; msg.textContent = (result.message || 'Failed to initiate payment'); }
       return;
     }
 

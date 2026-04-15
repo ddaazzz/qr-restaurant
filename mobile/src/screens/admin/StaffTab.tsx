@@ -1,5 +1,5 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert, Platform, Dimensions } from 'react-native';
 import { apiClient } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 
@@ -58,6 +58,24 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
   // Detail modal state
   const [selectedStaff, setSelectedStaff] = useState<(StaffMember & { timekeeping?: TimekeepingRecord[] }) | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Live clock tick for updating work hours while clocked in
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setClockTick(t => t + 1), 60000); // tick every minute
+    return () => clearInterval(timer);
+  }, []);
+
+  // Compute ongoing shift hours for a clocked-in staff member
+  const getOngoingShiftHours = (staff: StaffMember): number => {
+    if (!staff.currently_clocked_in || !staff.timekeeping || staff.timekeeping.length === 0) return 0;
+    // Find the latest record without a clock_out (open shift)
+    const openShift = staff.timekeeping.find(r => !r.clock_out_at);
+    if (!openShift) return 0;
+    const clockInTime = new Date(openShift.clock_in_at).getTime();
+    const now = Date.now();
+    return (now - clockInTime) / (1000 * 60 * 60); // hours
+  };
 
   const fetchStaff = async () => {
     try {
@@ -576,14 +594,14 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                           style={[styles.clockBtn, styles.clockInBtn]}
                           onPress={() => handleClockInOut(selectedStaff.id, 'in')}
                         >
-                          <Text style={styles.clockBtnText}>▶ {t('admin.clock-in')}</Text>
+                          <Text style={styles.clockBtnText}>{t('admin.clock-in')}</Text>
                         </TouchableOpacity>
                       ) : (
                         <TouchableOpacity
                           style={[styles.clockBtn, styles.clockOutBtn]}
                           onPress={() => handleClockInOut(selectedStaff.id, 'out')}
                         >
-                          <Text style={styles.clockBtnText}>⏹ {t('admin.clock-out')}</Text>
+                          <Text style={styles.clockBtnText}>{t('admin.clock-out')}</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -600,7 +618,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                         </View>
                         <View style={styles.statBox}>
                           <Text style={styles.statLabel}>{t('admin.total-hours')}</Text>
-                          <Text style={styles.statValue}>{selectedStaff.stats.total_hours.toFixed(1)}h</Text>
+                          <Text style={styles.statValue}>{(selectedStaff.stats.total_hours + getOngoingShiftHours(selectedStaff)).toFixed(1)}h</Text>
                         </View>
                       </View>
                     </View>
@@ -613,7 +631,11 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                       {selectedStaff.timekeeping.map((record, idx) => {
                         const clockIn = new Date(record.clock_in_at);
                         const clockOut = record.clock_out_at ? new Date(record.clock_out_at) : null;
-                        const hours = record.duration_minutes ? (record.duration_minutes / 60).toFixed(1) : '—';
+                        const hours = record.duration_minutes
+                          ? (record.duration_minutes / 60).toFixed(1)
+                          : !record.clock_out_at
+                            ? ((Date.now() - clockIn.getTime()) / (1000 * 60 * 60)).toFixed(1)
+                            : '—';
                         const dateStr = clockIn.toLocaleDateString();
                         const timeInStr = clockIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         const timeOutStr = clockOut
@@ -814,6 +836,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+    alignItems: (Platform as any).isPad ? 'center' : undefined,
   },
   formContent: {
     backgroundColor: '#fff',
@@ -823,6 +846,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     flexDirection: 'column',
     height: '100%',
+    maxWidth: (Platform as any).isPad ? 600 : undefined,
+    width: (Platform as any).isPad ? '90%' : '100%',
   },
   formHeader: {
     flexDirection: 'row',
@@ -990,6 +1015,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+    alignItems: (Platform as any).isPad ? 'center' : undefined,
   },
   detailModalContent: {
     backgroundColor: '#fff',
@@ -999,6 +1025,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     flexDirection: 'column',
     height: '100%',
+    maxWidth: (Platform as any).isPad ? 600 : undefined,
+    width: (Platform as any).isPad ? '90%' : '100%',
   },
   modalHeader: {
     flexDirection: 'row',

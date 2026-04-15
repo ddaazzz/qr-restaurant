@@ -203,7 +203,7 @@ async function editStaff(staffId, event) {
       document.getElementById("staff-hourly-rate").value = "";
     }
     
-    document.getElementById("staff-submit-btn").textContent = "💾 Update";
+    document.getElementById("staff-submit-btn").textContent = "Update";
     
     // Clear all checkboxes first
     document.querySelectorAll(".staff-access-checkbox, .kitchen-category-checkbox").forEach(cb => {
@@ -452,7 +452,7 @@ async function loadStaffDetailData() {
     const clockOutBtn = document.getElementById("staff-clock-out-btn");
     
     if (staff.currently_clocked_in) {
-      statusEl.textContent = '🟢 Clocked In';
+      statusEl.textContent = 'Clocked In';
       statusEl.style.color = '#10b981';
       clockInBtn.style.display = "none";
       clockOutBtn.style.display = "block";

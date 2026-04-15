@@ -442,6 +442,8 @@ async function switchSection(sectionId) {
   var sidebar = document.getElementById("sidebar");
   if (sidebar && window.innerWidth < 768) {
     sidebar.classList.add("collapsed");
+    var overlay = document.getElementById("sidebar-overlay");
+    if (overlay) overlay.classList.remove("active");
   }
 }
 
@@ -456,6 +458,11 @@ function toggleSidebar() {
   var sidebar = document.querySelector(".sidebar");
   if (sidebar) {
     sidebar.classList.toggle("collapsed");
+    // Toggle overlay backdrop on mobile
+    var overlay = document.getElementById("sidebar-overlay");
+    if (overlay) {
+      overlay.classList.toggle("active", !sidebar.classList.contains("collapsed"));
+    }
   }
 }
 
@@ -718,6 +725,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ========== STEP 2: NOW show app container after language is set ==========
   document.getElementById("app-container").style.display = "";
   
+  // On desktop, expand sidebar by default; on mobile, keep collapsed
+  var sidebar = document.getElementById("sidebar");
+  if (sidebar && window.innerWidth >= 768) {
+    sidebar.classList.remove("collapsed");
+  }
+
   // Hide loading splash screen
   const loadingSplash = document.getElementById("loading-splash");
   if (loadingSplash) {

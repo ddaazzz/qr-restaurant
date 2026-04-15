@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput, SafeAreaView } from 'react-native';
 import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
@@ -57,6 +57,8 @@ interface Order {
   items?: any[];
   table_id?: number;
   table_name?: string;
+  customer_name?: string;
+  customer_phone?: string;
   // Payment fields from backend
   payment_status?: string;
   payment_received?: boolean;
@@ -176,6 +178,7 @@ interface OrdersTabProps {
 const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<OrdersTabRef>) => {
   const { restaurantId, selectedTableOnInit } = props;
     const { t } = useTranslation();
+    const { showToast } = useToast();
     // Menu state
     const [categories, setCategories] = useState<Category[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -193,6 +196,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // Cart state
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartEditMode, setCartEditMode] = useState(false);
+    const [phoneView, setPhoneView] = useState<'menu' | 'variant' | 'cart'>('menu');
     const [orderType, setOrderType] = useState<'table' | 'pay-now' | 'to-go' | null>(null);
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [tables, setTables] = useState<any[]>([]);
@@ -213,6 +217,36 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<Order | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Payment modal state (for Order Now settle-on-submit)
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentModalSessionId, setPaymentModalSessionId] = useState<number | null>(null);
+    const [paymentModalOrderId, setPaymentModalOrderId] = useState<number | null>(null);
+    const [paymentModalTotal, setPaymentModalTotal] = useState(0);
+    const [paymentModalMethod, setPaymentModalMethod] = useState<'cash' | 'card' | 'kpay'>('cash');
+
+    // KPay terminal payment processing state
+    const [kpayProcessing, setKpayProcessing] = useState(false);
+    const [kpayStatusMsg, setKpayStatusMsg] = useState('');
+    const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
+    const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Customer name prompt for To-Go orders
+    const [showCustomerNameModal, setShowCustomerNameModal] = useState(false);
+    const [customerName, setCustomerName] = useState('');
+    const [customerPhone, setCustomerPhone] = useState('');
+
+    // Editable customer in order detail
+    const [editingCustomer, setEditingCustomer] = useState(false);
+    const [editCustomerName, setEditCustomerName] = useState('');
+    const [editCustomerPhone, setEditCustomerPhone] = useState('');
+    const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
+    const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+    const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // History filter tab state
+    const [historyFilter, setHistoryFilter] = useState<'all' | 'table' | 'pay-now' | 'to-go'>('all');
+    const [historyTableFilter, setHistoryTableFilter] = useState<string>('');
 
     // Payment terminal state for refund/void
     const [kpayTerminal, setKpayTerminal] = useState<any>(null);
@@ -322,6 +356,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     useEffect(() => {
       loadMenu();
       loadTables();
+      loadKpayTerminal();
     }, [restaurantId]);
 
     // Load history when showing history view
@@ -340,6 +375,55 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         }
       } catch (err) {
         // No KPay terminal configured — that's fine
+      }
+    };
+
+    // Search CRM customers by name or phone
+    const searchCustomers = async (query: string) => {
+      if (!query || query.length < 1) {
+        setCustomerSearchResults([]);
+        return;
+      }
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers?search=${encodeURIComponent(query)}`);
+        setCustomerSearchResults(res.data || []);
+      } catch (err) {
+        setCustomerSearchResults([]);
+      }
+    };
+
+    const handleCustomerSearchInput = (text: string) => {
+      setCustomerSearchQuery(text);
+      setEditCustomerName(text);
+      if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current);
+      customerSearchTimer.current = setTimeout(() => searchCustomers(text), 300);
+    };
+
+    const selectCrmCustomer = (customer: any) => {
+      setEditCustomerName(customer.name || '');
+      setEditCustomerPhone(customer.phone || '');
+      setCustomerSearchResults([]);
+      setCustomerSearchQuery('');
+    };
+
+    const saveCustomerEdit = async () => {
+      if (!selectedHistoryOrder?.session_id) return;
+      try {
+        await apiClient.patch(`/api/sessions/${selectedHistoryOrder.session_id}/customer`, {
+          customer_name: editCustomerName,
+          customer_phone: editCustomerPhone,
+        });
+        // Update local state
+        if (selectedHistoryOrder) {
+          const updated = { ...selectedHistoryOrder, customer_name: editCustomerName, customer_phone: editCustomerPhone };
+          setSelectedHistoryOrder(updated);
+          // Update in orders list too
+          setOrders((prev: Order[]) => prev.map((o: Order) => o.id === updated.id ? { ...o, customer_name: editCustomerName, customer_phone: editCustomerPhone } : o));
+        }
+        setEditingCustomer(false);
+        showToast(t('orders.customer-saved'), 'success');
+      } catch (err) {
+        showToast(t('orders.customer-save-failed'), 'error');
       }
     };
 
@@ -425,7 +509,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const handleItemPress = async (item: MenuItem) => {
       try {
-        // Fetch variants for this item
         const response = await apiClient.get(`/api/menu-items/${item.id}/variants`);
         const variants = response.data || [];
         
@@ -433,14 +516,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           setSelectedItem(item);
           setVariantSelections({});
           setItemVariants(variants);
-          setShowVariantModal(true);
+          const isPhone = !(Platform as any).isPad;
+          if (isPhone) {
+            setPhoneView('variant');
+          } else {
+            setShowVariantModal(true);
+          }
         } else {
-          // No variants - add directly to cart
           handleAddToCart(item, []);
         }
       } catch (err) {
         console.error('Error loading variants:', err);
-        // If error fetching variants, just add to cart
         handleAddToCart(item, []);
       }
     };
@@ -485,7 +571,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       });
 
       handleAddToCart(selectedItem, selectedVariantsList);
-      setShowVariantModal(false);
+      const isPhone = !(Platform as any).isPad;
+      if (isPhone) {
+        setPhoneView('menu');
+      } else {
+        setShowVariantModal(false);
+      }
     };
 
     const handleRemoveFromCart = (index: number) => {
@@ -522,6 +613,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         return;
       }
 
+      // To-Go orders: prompt for customer name first
+      if (orderType === 'to-go') {
+        setCustomerName('');
+        setCustomerPhone('');
+        setShowCustomerNameModal(true);
+        return;
+      }
+
+      await doSubmitOrder();
+    };
+
+    const doSubmitOrder = async (toGoCustomerName?: string) => {
       try {
         // Prepare items for API submission
         const items = cart.map(cartItem => ({
@@ -539,15 +642,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         });
 
         if (orderType === 'table') {
-          // For table orders, we need a session ID
-          // First, check if table has an active session
           if (!selectedTable) {
             throw new Error('Please select a table');
           }
-          
-          // The selectedTable is now a table ID (string)
-          // We need to look up if this table has an active session
-          // For now, treat selectedTable as a session ID (in case it's been pre-selected from active sessions)
           const sessionId = selectedTable;
           
           const res = await apiClient.post(
@@ -562,20 +659,36 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             { pax: 1, items }
           );
           console.log('[OrderSubmit] Counter order submitted:', res);
-          Alert.alert(t('orders.success'), t('orders.counter-order-success').replace('{0}', String(cart.length)));
+          
+          // Show payment modal right away for Order Now
+          const session = res.data?.session;
+          if (session) {
+            const sessionOrders = res.data?.orders || [];
+            let totalCents = 0;
+            sessionOrders.forEach((o: any) => (o.items || []).forEach((i: any) => { totalCents += (i.item_total_cents || i.unit_price_cents * i.quantity || 0); }));
+            if (totalCents === 0) totalCents = cartTotal;
+            setPaymentModalSessionId(session.id || session.session_id);
+            setPaymentModalOrderId(sessionOrders[0]?.id || null);
+            setPaymentModalTotal(totalCents);
+            setPaymentModalMethod('cash');
+            setShowPaymentModal(true);
+          }
         } else if (orderType === 'to-go') {
           const res = await apiClient.post(
             `/api/restaurants/${restaurantId}/to-go-order`,
-            { pax: 1, items }
+            { pax: 1, items, customer_name: toGoCustomerName || '', customer_phone: customerPhone || '' }
           );
           console.log('[OrderSubmit] To-go order submitted:', res);
-          Alert.alert(t('orders.success'), t('orders.togo-order-success').replace('{0}', String(cart.length)));
+          showToast(t('orders.togo-order-success').replace('{0}', String(cart.length)), 'success');
         }
 
         // Clear cart and reset
         setCart([]);
         setOrderType(null);
         setSelectedTable(null);
+        
+        // Refresh order list so new order appears
+        await loadOrdersAndSessions();
       } catch (err: any) {
         console.error('[OrderSubmit] Error:', err);
         Alert.alert(
@@ -583,6 +696,163 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           err.response?.data?.error || err.message || t('orders.submit-failed')
         );
       }
+    };
+
+    // Submit payment for Order Now (counter order)
+    const submitPaymentModal = async () => {
+      if (!paymentModalSessionId) return;
+
+      if (paymentModalMethod === 'kpay') {
+        // KPay terminal payment flow
+        if (!kpayTerminal) {
+          Alert.alert(t('orders.error'), t('orders.no-kpay-terminal'));
+          return;
+        }
+        await startKpayTerminalPayment();
+        return;
+      }
+
+      // Cash or Card (manual) — close bill immediately
+      try {
+        await apiClient.post(
+          `/api/sessions/${paymentModalSessionId}/close-bill`,
+          {
+            restaurantId: parseInt(restaurantId),
+            payment_method: paymentModalMethod,
+            amount_paid: paymentModalTotal,
+            discount_applied: 0,
+            service_charge: 0,
+            notes: '',
+          }
+        );
+        setShowPaymentModal(false);
+        showToast(t('orders.payment-confirmed'), 'success');
+        await loadOrdersAndSessions();
+      } catch (err: any) {
+        Alert.alert(t('orders.error'), err.response?.data?.error || t('orders.payment-failed'));
+      }
+    };
+
+    // KPay terminal payment: initiate sale + poll for result
+    const startKpayTerminalPayment = async () => {
+      if (!kpayTerminal || !paymentModalSessionId) return;
+
+      setKpayProcessing(true);
+      setKpayStatusMsg(t('orders.kpay-initiating'));
+      setKpayLogs([{ msg: `> ${t('orders.kpay-connecting')}`, color: '#ffd43b' }]);
+
+      const amountInCents = String(paymentModalTotal).padStart(12, '0');
+      const addLog = (msg: string, color: string = '#00ff00') => {
+        setKpayLogs(prev => [...prev, { msg, color }]);
+      };
+
+      try {
+        // Step 1: Initiate sale on terminal
+        addLog(`> POST /payment-terminals/${kpayTerminal.id}/test`);
+        addLog(`> Amount: ${formatPrice(paymentModalTotal)}`);
+
+        const resp = await apiClient.post(
+          `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test`,
+          { payAmount: amountInCents, tipsAmount: '000000000000', payCurrency: '344' }
+        );
+        const result = resp.data;
+
+        if (result.logs) result.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+
+        if (!result.initiated) {
+          setKpayStatusMsg(t('orders.kpay-failed'));
+          addLog(`> ❌ ${result.message || 'Failed to initiate'}`, '#ff6b6b');
+          return;
+        }
+
+        const outTradeNo = result.outTradeNo;
+        setKpayStatusMsg(t('orders.kpay-waiting'));
+        addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
+        addLog(`> ${t('orders.kpay-tap-scan')}`, '#ffd43b');
+
+        // Step 2: Poll for result
+        let attempts = 0;
+        const maxAttempts = 22;
+
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatusMsg(t('orders.kpay-timeout'));
+            addLog('> TIMEOUT', '#ffd43b');
+            setKpayProcessing(false);
+            return;
+          }
+          attempts++;
+          addLog(`> Polling… (${attempts}/${maxAttempts})`);
+
+          try {
+            const qResp = await apiClient.get(
+              `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test-status`,
+              { params: { outTradeNo } }
+            );
+            const qData = qResp.data;
+            if (qData.logs) qData.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+
+            if (qData.status === 'success') {
+              setKpayStatusMsg(t('orders.kpay-paid'));
+              addLog(`> ✅ ${t('orders.kpay-confirmed')}`, '#51cf66');
+
+              // Close the bill
+              await apiClient.post(
+                `/api/sessions/${paymentModalSessionId}/close-bill`,
+                {
+                  restaurantId: parseInt(restaurantId),
+                  payment_method: 'kpay',
+                  amount_paid: paymentModalTotal,
+                  discount_applied: 0,
+                  service_charge: 0,
+                  notes: '',
+                  kpay_reference_id: outTradeNo,
+                }
+              );
+              addLog(`> ✅ ${t('orders.bill-closed')}`, '#51cf66');
+              setKpayProcessing(false);
+              
+              // Auto-dismiss after 2 seconds
+              setTimeout(() => {
+                setShowPaymentModal(false);
+                setKpayLogs([]);
+                showToast(t('orders.payment-confirmed'), 'success');
+                loadOrdersAndSessions();
+              }, 2000);
+              return;
+            }
+
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatusMsg(qData.status === 'cancelled' ? t('orders.kpay-cancelled') : t('orders.kpay-failed'));
+              addLog(`> ${qData.status}`, '#ff6b6b');
+              setKpayProcessing(false);
+              return;
+            }
+
+            // Still pending — poll again
+            kpayPollRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            addLog(`> Poll error: ${e.message}`, '#ffd43b');
+            kpayPollRef.current = setTimeout(poll, 3000);
+          }
+        };
+
+        kpayPollRef.current = setTimeout(poll, 2000);
+      } catch (err: any) {
+        addLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+        setKpayStatusMsg(t('orders.kpay-failed'));
+        setKpayProcessing(false);
+      }
+    };
+
+    const abortKpayPayment = () => {
+      if (kpayPollRef.current) {
+        clearTimeout(kpayPollRef.current);
+        kpayPollRef.current = null;
+      }
+      setKpayProcessing(false);
+      setKpayStatusMsg('');
+      setKpayLogs([]);
     };
 
     // === Manual Void/Refund (non-vendor orders) ===
@@ -747,6 +1017,33 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const cartTotal = cart.reduce((sum, item) => sum + (item.price_cents * item.quantity), 0);
 
+    // Helper to determine if an order is unpaid
+    const isOrderUnpaid = (order: Order) => {
+      const effStatus = order.cp_status || order.payment_status;
+      const isPaid = order.payment_received || effStatus === 'completed' || effStatus === 'paid';
+      const isVoided = effStatus === 'voided' || effStatus === 'cancelled';
+      const isRefunded = effStatus === 'refunded';
+      return !isPaid && !isVoided && !isRefunded && order.total_cents > 0;
+    };
+
+    // Compute filtered orders for history and unpaid counts
+    const filteredHistoryOrders = orders.filter(order => {
+      if (historyFilter === 'table') {
+        if (order.order_type !== 'table') return false;
+        if (historyTableFilter && order.table_name && !order.table_name.toLowerCase().includes(historyTableFilter.toLowerCase())) return false;
+      }
+      if (historyFilter === 'pay-now') return order.order_type === 'counter' || order.order_type === 'pay-now';
+      if (historyFilter === 'to-go') return order.order_type === 'to-go';
+      return true;
+    });
+
+    const unpaidCounts = {
+      all: orders.filter(isOrderUnpaid).length,
+      table: orders.filter(o => o.order_type === 'table' && isOrderUnpaid(o)).length,
+      'pay-now': orders.filter(o => (o.order_type === 'counter' || o.order_type === 'pay-now') && isOrderUnpaid(o)).length,
+      'to-go': orders.filter(o => o.order_type === 'to-go' && isOrderUnpaid(o)).length,
+    };
+
     const filteredMenuItems = menuItems.filter(item => {
       if (selectedCategory && item.category_id !== selectedCategory) return false;
       if (props.searchQuery && props.searchQuery.trim()) {
@@ -771,6 +1068,131 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       });
     };
 
+    // ============= PAYMENT MODAL (shared between history and menu views) =============
+    const paymentModal = (
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showPaymentModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => {
+            if (!kpayProcessing) {
+              setShowPaymentModal(false);
+              setKpayLogs([]);
+            }
+          }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '85%', maxWidth: 440, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.collect-payment')}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+                {t('orders.order-now')} {paymentModalOrderId ? `#${paymentModalOrderId}` : ''}
+              </Text>
+
+              {/* Total */}
+              <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>{formatPrice(paymentModalTotal)}</Text>
+                </View>
+              </View>
+
+              {/* KPay Terminal Processing View */}
+              {kpayProcessing || kpayLogs.length > 0 ? (
+                <View style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>{t('orders.kpay-terminal')}</Text>
+                    {kpayStatusMsg ? (
+                      <View style={{ backgroundColor: kpayStatusMsg.includes('✅') || kpayStatusMsg === t('orders.kpay-paid') ? '#d1fae5' : '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: kpayStatusMsg.includes('✅') || kpayStatusMsg === t('orders.kpay-paid') ? '#065f46' : '#b45309' }}>{kpayStatusMsg}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <ScrollView style={{ backgroundColor: '#1a1a1a', borderRadius: 8, padding: 10, maxHeight: 160 }}>
+                    {kpayLogs.map((log, idx) => (
+                      <Text key={idx} style={{ color: log.color, fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 2 }}>{log.msg}</Text>
+                    ))}
+                    {kpayProcessing && <ActivityIndicator size="small" color="#00ff00" style={{ marginTop: 6, alignSelf: 'flex-start' }} />}
+                  </ScrollView>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                    {kpayProcessing ? (
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#fca5a5' }}
+                        onPress={abortKpayPayment}
+                      >
+                        <Text style={{ fontWeight: '600', color: '#dc2626' }}>{t('orders.abort')}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: '#d1fae5', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#6ee7b7' }}
+                        onPress={() => {
+                          setShowPaymentModal(false);
+                          setKpayLogs([]);
+                          setKpayStatusMsg('');
+                          loadOrdersAndSessions();
+                        }}
+                      >
+                        <Text style={{ fontWeight: '600', color: '#065f46' }}>{t('orders.done')}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>{t('orders.payment-method')}</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: kpayTerminal && paymentModalMethod === 'kpay' ? 8 : 20 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: paymentModalMethod === 'cash' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'cash' ? '#3b82f6' : '#d1d5db' }}
+                      onPress={() => setPaymentModalMethod('cash')}
+                    >
+                      <Text style={{ fontWeight: '600', color: paymentModalMethod === 'cash' ? '#fff' : '#374151' }}>{t('orders.cash')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: paymentModalMethod === 'card' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'card' ? '#3b82f6' : '#d1d5db' }}
+                      onPress={() => setPaymentModalMethod('card')}
+                    >
+                      <Text style={{ fontWeight: '600', color: paymentModalMethod === 'card' ? '#fff' : '#374151' }}>{t('orders.card')}</Text>
+                    </TouchableOpacity>
+                    {kpayTerminal && (
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#d1d5db' }}
+                        onPress={() => setPaymentModalMethod('kpay')}
+                      >
+                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'kpay' ? '#fff' : '#374151', fontSize: 12 }}>{t('orders.terminal')}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {paymentModalMethod === 'kpay' && kpayTerminal && (
+                    <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 12, color: '#1d4ed8' }}>
+                        {t('orders.kpay-terminal-msg').replace('{0}', kpayTerminal.terminal_ip || '')}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                      onPress={() => {
+                        setShowPaymentModal(false);
+                        showToast(t('orders.pay-later-msg'), 'info');
+                      }}
+                    >
+                      <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.pay-later')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#10b981', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                      onPress={submitPaymentModal}
+                    >
+                      <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.confirm-payment')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
+    );
+
     if (loading && !showHistory) {
       return (
         <View style={styles.centerContainer}>
@@ -779,9 +1201,555 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       );
     }
 
+    // ============= RENDER HISTORY ORDER DETAIL (shared by iPad panel + iPhone full-page) =============
+    const renderHistoryOrderDetail = () => {
+      if (!selectedHistoryOrder) return null;
+      return (
+        <>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
+              {t('orders.order-num').replace('{0}', String(selectedHistoryOrder.id))}
+            </Text>
+            <View style={{ backgroundColor: selectedHistoryOrder.status === 'completed' ? '#d1fae5' : selectedHistoryOrder.status === 'cancelled' ? '#fee2e2' : '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: selectedHistoryOrder.status === 'completed' ? '#065f46' : selectedHistoryOrder.status === 'cancelled' ? '#991b1b' : '#1e40af' }}>
+                {selectedHistoryOrder.status?.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          {/* Order Info */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.type')}</Text>
+            <Text style={{ fontSize: 13, color: '#1f2937' }}>
+              {t(`orders.${selectedHistoryOrder.order_type || 'dine-in'}`)}
+              {selectedHistoryOrder.order_type === 'table' && selectedHistoryOrder.table_name ? ` — ${selectedHistoryOrder.table_name}` : ''}
+            </Text>
+          </View>
+
+          {/* Editable Customer Info */}
+          {editingCustomer ? (
+            <View style={{ backgroundColor: '#f0f9ff', borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#bfdbfe' }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#1e40af', marginBottom: 6 }}>{t('orders.customer')}</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, padding: 8, fontSize: 13, marginBottom: 4, backgroundColor: '#fff' }}
+                value={editCustomerName}
+                onChangeText={handleCustomerSearchInput}
+                placeholder={t('orders.customer-name-placeholder')}
+                placeholderTextColor="#9ca3af"
+              />
+              {customerSearchResults.length > 0 && (
+                <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 6, maxHeight: 120, marginBottom: 4 }}>
+                  <ScrollView nestedScrollEnabled>
+                    {customerSearchResults.map((c: any) => (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                        onPress={() => selectCrmCustomer(c)}
+                      >
+                        <Text style={{ fontSize: 13, color: '#1f2937', fontWeight: '500' }}>{c.name}</Text>
+                        {c.phone ? <Text style={{ fontSize: 11, color: '#6b7280' }}>{c.phone}</Text> : null}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, padding: 8, fontSize: 13, marginBottom: 8, backgroundColor: '#fff' }}
+                value={editCustomerPhone}
+                onChangeText={setEditCustomerPhone}
+                placeholder={t('orders.customer-phone-placeholder')}
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+              />
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 6, padding: 8, alignItems: 'center' }}
+                  onPress={() => { setEditingCustomer(false); setCustomerSearchResults([]); }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 6, padding: 8, alignItems: 'center' }}
+                  onPress={saveCustomerEdit}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>{t('orders.save')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => {
+                setEditCustomerName(selectedHistoryOrder.customer_name || '');
+                setEditCustomerPhone(selectedHistoryOrder.customer_phone || '');
+                setEditingCustomer(true);
+                setCustomerSearchResults([]);
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.customer')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={{ fontSize: 13, color: '#1f2937' }}>
+                    {selectedHistoryOrder.customer_name || selectedHistoryOrder.customer_phone
+                      ? `${selectedHistoryOrder.customer_name || ''}${selectedHistoryOrder.customer_phone ? ` (${selectedHistoryOrder.customer_phone})` : ''}`
+                      : t('orders.add-customer')}
+                  </Text>
+                  <Ionicons name="pencil-outline" size={12} color="#9ca3af" />
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.date')}</Text>
+            <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.created_at)}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.items')}</Text>
+            <Text style={{ fontSize: 13, color: '#1f2937' }}>{t('orders.items-count').replace('{0}', String((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.quantity || 1), 0)))}</Text>
+          </View>
+
+          {/* Items Section */}
+          <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginVertical: 12, paddingTop: 12 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-items')}</Text>
+            {(selectedHistoryOrder.items || []).map((item: any, idx: number) => (
+              <View key={idx} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 13, color: '#1f2937' }}>{item.menu_item_name || item.name}</Text>
+                      {item.status && (() => {
+                        const statusMap: Record<string, { label: string; bg: string; fg: string }> = {
+                          pending: { label: t('orders.pending'), bg: '#fef3c7', fg: '#92400e' },
+                          preparing: { label: t('orders.preparing') || 'Preparing', bg: '#dbeafe', fg: '#1e40af' },
+                          ready: { label: t('orders.ready') || 'Ready', bg: '#d1fae5', fg: '#065f46' },
+                          served: { label: t('orders.served') || 'Served', bg: '#e5e7eb', fg: '#374151' },
+                          cancelled: { label: t('orders.cancelled') || 'Cancelled', bg: '#fee2e2', fg: '#991b1b' },
+                        };
+                        const s = statusMap[item.status];
+                        return s ? (
+                          <View style={{ backgroundColor: s.bg, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '600', color: s.fg }}>{s.label}</Text>
+                          </View>
+                        ) : null;
+                      })()}
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#9ca3af' }}>×{item.quantity}</Text>
+                    {item.variants ? (
+                      <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.variants}</Text>
+                    ) : null}
+                    {item.notes ? (
+                      <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>{t('orders.note-prefix')}{item.notes}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
+                    {formatPrice(item.item_total_cents || (item.price_cents || 0) * (item.quantity || 1))}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Order Summary */}
+          <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 12 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-summary')}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
+              <Text style={{ fontSize: 13, color: '#1f2937' }}>
+                {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0))}
+              </Text>
+            </View>
+            {(() => {
+              const subtotal = (selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0);
+              const serviceCharge = selectedHistoryOrder.total_cents - subtotal;
+              if (serviceCharge > 0) {
+                return (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.service-charge')}</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
+                  </View>
+                );
+              }
+              return null;
+            })()}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
+            </View>
+          </View>
+
+          {/* Payment Information */}
+          {(() => {
+            const vendor = resolveVendor(selectedHistoryOrder);
+            const effectiveStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status || (selectedHistoryOrder.payment_received ? 'completed' : selectedHistoryOrder.status || null);
+            const methodLabel = (() => { const raw = getPaymentMethodLabel(selectedHistoryOrder); const map: Record<string, string> = { 'Credit Card': t('orders.credit-card'), 'Cash': t('orders.cash'), 'Terminal': t('orders.terminal') }; return map[raw] || raw; })();
+            const vendorLabel = (() => { if (vendor) { const raw = getVendorLabel(vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; } return selectedHistoryOrder.payment_received ? t('orders.cash') : null; })();
+
+            const statusBadge = (status: string | null) => {
+              if (!status) return null;
+              const map: Record<string, { label: string; bg: string; fg: string }> = {
+                completed: { label: t('orders.paid'), bg: '#d1fae5', fg: '#065f46' },
+                paid: { label: t('orders.paid'), bg: '#d1fae5', fg: '#065f46' },
+                voided: { label: t('orders.voided'), bg: '#fef3c7', fg: '#92400e' },
+                cancelled: { label: t('orders.voided'), bg: '#fef3c7', fg: '#92400e' },
+                refunded: { label: t('orders.refunded'), bg: '#fee2e2', fg: '#991b1b' },
+                partial_refund: { label: t('orders.partial-refund'), bg: '#fef3c7', fg: '#92400e' },
+                pending: { label: t('orders.pending'), bg: '#dbeafe', fg: '#1e40af' },
+                failed: { label: t('orders.failed'), bg: '#fee2e2', fg: '#991b1b' },
+              };
+              return map[status] || { label: status, bg: '#f3f4f6', fg: '#374151' };
+            };
+            const badge = statusBadge(effectiveStatus);
+
+            return (
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.payment-info')}</Text>
+
+                {/* Payment Status */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-status')}</Text>
+                  {badge ? (
+                    <View style={{ backgroundColor: badge.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: badge.fg }}>{badge.label}</Text>
+                    </View>
+                  ) : (
+                    <View style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>{t('orders.unpaid')}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Payment Vendor */}
+                {vendorLabel && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-vendor')}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: vendor ? getVendorColor(vendor) : '#374151' }}>
+                      {vendorLabel}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Payment Method */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-method')}</Text>
+                  <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
+                </View>
+
+                {/* Vendor Reference */}
+                {selectedHistoryOrder.cp_vendor_ref && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.reference')}</Text>
+                    <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.cp_vendor_ref}</Text>
+                  </View>
+                )}
+
+                {/* Paid At */}
+                {selectedHistoryOrder.cp_completed_at && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.paid-at')}</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.cp_completed_at)}</Text>
+                  </View>
+                )}
+
+                {/* Refund info */}
+                {selectedHistoryOrder.cp_refund_amount_cents && selectedHistoryOrder.cp_refund_amount_cents > 0 && (
+                  <View style={{ backgroundColor: '#fef2f2', borderRadius: 8, padding: 8, marginTop: 4 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
+                    </View>
+                    {selectedHistoryOrder.cp_refunded_at && (
+                      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>at {formatDate(selectedHistoryOrder.cp_refunded_at)}</Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Sandbox badge */}
+                {selectedHistoryOrder.cp_env === 'sandbox' && (
+                  <View style={{ backgroundColor: '#fef3c7', borderRadius: 6, padding: 4, alignSelf: 'flex-start', marginTop: 6 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#92400e' }}>{t('orders.sandbox')}</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })()}
+
+          {/* KPay Transaction Details */}
+          {(() => {
+            const vendor = resolveVendor(selectedHistoryOrder);
+            if (vendor !== 'kpay' || !selectedHistoryOrder.kpay_reference_id) return null;
+
+            return (
+              <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 8 }}>{t('orders.kpay-details')}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.order-ref')}</Text>
+                  <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
+                </View>
+                {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
+                {kpayTxDetails && (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
+                      <Text style={{ fontSize: 12, color: '#1f2937' }}>
+                        {kpayTxDetails.payCurrency || 'HKD'} {((Number(kpayTxDetails.payAmount) || kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
+                        {kpayTxDetails.payAmount ? ` (${kpayTxDetails.payAmount})` : ''}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{kpayTxDetails.status || '—'}</Text>
+                    </View>
+                    {kpayTxDetails.payResult !== undefined && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>payResult</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{(KPAY_RESULT_MAP as any)[kpayTxDetails.payResult] || kpayTxDetails.payResult}</Text>
+                      </View>
+                    )}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>outTradeNo</Text>
+                      <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.outTradeNo || '—'}</Text>
+                    </View>
+                    {kpayTxDetails.transactionNo && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>transactionNo</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.transactionNo}</Text>
+                      </View>
+                    )}
+                    {kpayTxDetails.refNo && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>refNo</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refNo}</Text>
+                      </View>
+                    )}
+                    {kpayTxDetails.commitTime && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>commitTime</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{kpayTxDetails.commitTime}</Text>
+                      </View>
+                    )}
+                    {kpayTxDetails.payMethod !== undefined && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>payMethod</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{KPAY_METHOD_MAP[kpayTxDetails.payMethod] || kpayTxDetails.payMethod}</Text>
+                      </View>
+                    )}
+                    {kpayTxDetails.refund_amount_cents > 0 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+            );
+          })()}
+
+          {/* Payment Asia Transaction Details */}
+          {(() => {
+            const vendor = resolveVendor(selectedHistoryOrder);
+            if (vendor !== 'payment-asia') return null;
+            const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
+            if (!merchantRef) return null;
+
+            return (
+              <View style={{ backgroundColor: '#fefce8', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#fde68a' }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 8 }}>{t('orders.pa-details')}</Text>
+                {txLoading && <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 8 }} />}
+                {paTxDetails?.records?.map((rec: any, idx: number) => {
+                  const isSale = rec.type === '1' || rec.type === 'Sale';
+                  return (
+                    <View key={idx} style={{ marginBottom: idx < (paTxDetails.records.length - 1) ? 8 : 0 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>
+                        {isSale ? t('orders.sale') : t('orders.record-num').replace('{0}', String(idx + 1))}
+                      </Text>
+                      {selectedHistoryOrder.payment_network && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.method')}</Text>
+                        </View>
+                      )}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{rec.currency || 'HKD'} {rec.amount}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{PA_STATUS_MAP[rec.status] || rec.status}</Text>
+                      </View>
+                      {rec.request_reference && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.request-ref')}</Text>
+                          <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{rec.request_reference}</Text>
+                        </View>
+                      )}
+                      {rec.created_time && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.created')}</Text>
+                          <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.created_time) * 1000).toLocaleString()}</Text>
+                        </View>
+                      )}
+                      {rec.completed_time && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.completed')}</Text>
+                          <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.completed_time) * 1000).toLocaleString()}</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+                {paTxDetails && !paTxDetails.records?.length && (
+                  <Text style={{ fontSize: 12, color: '#9ca3af' }}>{t('orders.no-records')}</Text>
+                )}
+              </View>
+            );
+          })()}
+
+          {/* Payment Records Ledger */}
+          {selectedHistoryOrder.payment_records && selectedHistoryOrder.payment_records.length > 0 && (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.payment-ledger')}</Text>
+              {selectedHistoryOrder.payment_records.map((record: PaymentRecord, idx: number) => (
+                <View key={record.id || idx} style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: getVendorColor(record.payment_vendor) }}>
+                      {(() => { const raw = getVendorLabel(record.payment_vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; })()}
+                    </Text>
+                    <View style={{ backgroundColor: record.status === 'completed' ? '#d1fae5' : record.status === 'failed' ? '#fee2e2' : '#fef3c7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: record.status === 'completed' ? '#065f46' : record.status === 'failed' ? '#991b1b' : '#92400e' }}>
+                        {(() => { const map: Record<string, string> = { completed: t('orders.paid'), paid: t('orders.paid'), failed: t('orders.failed'), pending: t('orders.pending'), refunded: t('orders.refunded'), voided: t('orders.voided'), cancelled: t('orders.voided') }; return map[record.status || ''] || record.status?.toUpperCase(); })()}
+                      </Text>
+                    </View>
+                  </View>
+                  {record.payment_method && (
+                    <Text style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>{t('orders.method-prefix')}{record.payment_method}</Text>
+                  )}
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{formatPrice(record.amount_cents)} {record.currency_code || ''}</Text>
+                  {record.vendor_reference && (
+                    <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{t('orders.ref-prefix')}{record.vendor_reference}</Text>
+                  )}
+                  {record.completed_at && (
+                    <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{t('orders.completed-prefix')}{formatDate(record.completed_at)}</Text>
+                  )}
+                  {record.refund_amount_cents && record.refund_amount_cents > 0 && (
+                    <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>{t('orders.refunded-prefix')}{formatPrice(record.refund_amount_cents)}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Settle Bill for Unpaid Orders */}
+          {(() => {
+            if (!isOrderUnpaid(selectedHistoryOrder)) return null;
+            return (
+              <View style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 8, padding: 16, marginTop: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#92400e', marginBottom: 4 }}>{t('orders.payment-pending-title')}</Text>
+                <Text style={{ fontSize: 12, color: '#78350f', marginBottom: 12 }}>{t('orders.payment-pending-msg')}</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#667eea', borderRadius: 8, padding: 10, alignItems: 'center' }}
+                    onPress={() => {
+                      if (selectedHistoryOrder.session_id) {
+                        setPaymentModalSessionId(selectedHistoryOrder.session_id);
+                        setPaymentModalOrderId(selectedHistoryOrder.id);
+                        setPaymentModalTotal(selectedHistoryOrder.total_cents);
+                        setPaymentModalMethod('cash');
+                        setShowPaymentModal(true);
+                      }
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{t('admin.settle-bill')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+
+          {/* Void / Refund Actions */}
+          {(() => {
+            const vendor = resolveVendor(selectedHistoryOrder);
+            const pStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status;
+            const isVoided = pStatus === 'voided' || pStatus === 'cancelled';
+            const isRefunded = pStatus === 'refunded';
+            if (isVoided || isRefunded) return null;
+
+            if (vendor === 'kpay' && kpayTerminal) {
+              return (
+                <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
+                      onPress={() => handleKpayVoid(selectedHistoryOrder)}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>{t('orders.void-btn')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                      onPress={openKpayRefund}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
+
+            if (vendor === 'payment-asia') {
+              return (
+                <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                    onPress={openPaRefund}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-pa-btn')}</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
+            if (!vendor || vendor === 'cash' || vendor === 'card') {
+              const effStatus = pStatus || '';
+              if (effStatus === 'completed' || effStatus === 'paid' || !effStatus) {
+                return (
+                  <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                      onPress={() => handleRefundOrder(selectedHistoryOrder.id)}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+            }
+            return null;
+          })()}
+        </>
+      );
+    };
+
     // ============= HISTORY VIEW =============
     if (showHistory) {
       const historyIsTablet = (Platform as any).isPad;
+
+      // iPhone: full-page order detail when an order is selected
+      if (!historyIsTablet && selectedHistoryOrder) {
+        return (
+          <>
+            <View style={styles.container}>
+              <View style={styles.historyHeader}>
+                <TouchableOpacity onPress={() => setSelectedHistoryOrder(null)}>
+                  <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+                </TouchableOpacity>
+                <Text style={styles.historyTitle}>{t('orders.order-num').replace('{0}', String(selectedHistoryOrder.id))}</Text>
+              </View>
+              <ScrollView style={{ flex: 1, padding: 16 }}>
+                {renderHistoryOrderDetail()}
+              </ScrollView>
+            </View>
+            {paymentModal}
+          </>
+        );
+      }
+
       return (
         <>
           <View style={[styles.container, historyIsTablet && { flexDirection: 'row' }]}>
@@ -794,19 +1762,62 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <Text style={styles.historyTitle}>{t('admin.order-history')}</Text>
           </View>
 
-          {/* Orders List — all orders descending */}
+          {/* Filter Tabs */}
+          <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, gap: 6 }}>
+            {([
+              { key: 'all' as const, label: t('orders.all-orders') },
+              { key: 'table' as const, label: t('orders.table') },
+              { key: 'pay-now' as const, label: t('orders.order-now') },
+              { key: 'to-go' as const, label: t('orders.to-go') },
+            ]).map(tab => (
+              <TouchableOpacity
+                key={tab.key}
+                style={{
+                  paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+                  backgroundColor: historyFilter === tab.key ? '#3b82f6' : '#f3f4f6',
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                }}
+                onPress={() => { setHistoryFilter(tab.key); setHistoryTableFilter(''); }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: historyFilter === tab.key ? '#fff' : '#374151' }}>
+                  {tab.label}
+                </Text>
+                {unpaidCounts[tab.key] > 0 && (
+                  <View style={{ backgroundColor: '#ef4444', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
+                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{unpaidCounts[tab.key]}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Table number filter (when Table tab is active) */}
+          {historyFilter === 'table' && (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 8, fontSize: 13, backgroundColor: '#fff' }}
+                placeholder={t('orders.filter-table-placeholder')}
+                placeholderTextColor="#9ca3af"
+                value={historyTableFilter}
+                onChangeText={setHistoryTableFilter}
+              />
+            </View>
+          )}
+
+          {/* Orders List — filtered orders descending */}
           <FlatList
-            data={orders}
+            data={filteredHistoryOrders}
             keyExtractor={(item: any) => item.id.toString()}
             renderItem={({ item }) => {
               const order = item as Order;
               const paymentBadge = getPaymentBadge(order);
               const badgeLabelMap: Record<string, string> = {
-                '↩ Refunded': t('orders.refunded'),
-                '🚫 Voided': t('orders.voided'),
-                '↩ Partial': t('orders.partial-refund'),
-                '✓ Paid': t('orders.paid'),
+                'Refunded': t('orders.refunded'),
+                'Voided': t('orders.voided'),
+                'Partial': t('orders.partial-refund'),
+                'Paid': t('orders.paid'),
                 'Unpaid': t('orders.unpaid'),
+                'Pending': t('orders.pending'),
               };
               const translatedBadgeLabel = badgeLabelMap[paymentBadge.label] || paymentBadge.label;
               const orderTypeLabelMap: Record<string, string> = {
@@ -822,12 +1833,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               };
               const items = order.items || [];
               const isSelected = selectedHistoryOrder?.id === order.id;
+              const orderUnpaid = isOrderUnpaid(order);
               return (
                 <TouchableOpacity onPress={() => selectHistoryOrder(order)}>
-                <View style={[styles.orderCard, isSelected && { borderColor: '#3b82f6', borderWidth: 2 }]}>
+                <View style={[styles.orderCard, isSelected && { borderColor: '#3b82f6', borderWidth: 2 }, orderUnpaid && { borderLeftWidth: 3, borderLeftColor: '#ef4444' }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.orderId}>{t('orders.order-num').replace('{0}', String(order.id))}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {orderUnpaid && (
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
+                        )}
+                        <Text style={styles.orderId}>{t('orders.order-num').replace('{0}', String(order.id))}</Text>
+                      </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                         <Ionicons 
                           name={order.order_type === 'table' ? 'restaurant-outline' : order.order_type === 'to-go' ? 'bag-handle-outline' : 'cart-outline'} 
@@ -837,6 +1854,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         <Text style={styles.orderDetails}>
                           {orderTypeLabelMap[getOrderTypeLabel(order.order_type)] || getOrderTypeLabel(order.order_type)}
                           {order.order_type === 'table' && order.table_name ? ` ${order.table_name}` : ''}
+                          {order.order_type === 'to-go' && order.customer_name ? ` — ${order.customer_name}` : ''}
+                          {order.order_type === 'to-go' && order.customer_phone ? ` (${order.customer_phone})` : ''}
                         </Text>
                       </View>
                       <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>
@@ -896,414 +1915,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <View style={styles.historyDetailPanel}>
               {selectedHistoryOrder ? (
                 <ScrollView>
-                  {/* Header */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>
-                      {t('orders.order-num').replace('{0}', String(selectedHistoryOrder.id))}
-                    </Text>
-                    <View style={{ backgroundColor: selectedHistoryOrder.status === 'completed' ? '#d1fae5' : selectedHistoryOrder.status === 'cancelled' ? '#fee2e2' : '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: selectedHistoryOrder.status === 'completed' ? '#065f46' : selectedHistoryOrder.status === 'cancelled' ? '#991b1b' : '#1e40af' }}>
-                        {selectedHistoryOrder.status?.toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Order Info */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.type')}</Text>
-                    <Text style={{ fontSize: 13, color: '#1f2937' }}>
-                      {t(`orders.${selectedHistoryOrder.order_type || 'dine-in'}`)}
-                      {selectedHistoryOrder.order_type === 'table' && selectedHistoryOrder.table_name ? ` — ${selectedHistoryOrder.table_name}` : ''}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.date')}</Text>
-                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.created_at)}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.items')}</Text>
-                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{t('orders.items-count').replace('{0}', String((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.quantity || 1), 0)))}</Text>
-                  </View>
-
-                  {/* Items Section */}
-                  <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginVertical: 12, paddingTop: 12 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-items')}</Text>
-                    {(selectedHistoryOrder.items || []).map((item: any, idx: number) => (
-                      <View key={idx} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 13, color: '#1f2937' }}>{item.menu_item_name || item.name}</Text>
-                            <Text style={{ fontSize: 11, color: '#9ca3af' }}>×{item.quantity}</Text>
-                            {item.variants ? (
-                              <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.variants}</Text>
-                            ) : null}
-                            {item.notes ? (
-                              <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>{t('orders.note-prefix')}{item.notes}</Text>
-                            ) : null}
-                          </View>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
-                            {formatPrice(item.item_total_cents || (item.price_cents || 0) * (item.quantity || 1))}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Order Summary */}
-                  <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 12 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-summary')}</Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
-                      <Text style={{ fontSize: 13, color: '#1f2937' }}>
-                        {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0))}
-                      </Text>
-                    </View>
-                    {(() => {
-                      const subtotal = (selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0);
-                      const serviceCharge = selectedHistoryOrder.total_cents - subtotal;
-                      if (serviceCharge > 0) {
-                        return (
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.service-charge')}</Text>
-                            <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
-                          </View>
-                        );
-                      }
-                      return null;
-                    })()}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
-                    </View>
-                  </View>
-
-                  {/* Payment Information */}
-                  {(() => {
-                    const vendor = resolveVendor(selectedHistoryOrder);
-                    const effectiveStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status || (selectedHistoryOrder.payment_received ? 'completed' : null);
-                    const methodLabel = (() => { const raw = getPaymentMethodLabel(selectedHistoryOrder); const map: Record<string, string> = { 'Credit Card': t('orders.credit-card'), 'Cash': t('orders.cash'), 'Terminal': t('orders.terminal') }; return map[raw] || raw; })();
-                    const vendorLabel = (() => { if (vendor) { const raw = getVendorLabel(vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; } return selectedHistoryOrder.payment_received ? t('orders.cash') : null; })();
-
-                    // Status badge helper
-                    const statusBadge = (status: string | null) => {
-                      if (!status) return null;
-                      const map: Record<string, { label: string; bg: string; fg: string }> = {
-                        completed: { label: t('orders.paid'), bg: '#d1fae5', fg: '#065f46' },
-                        paid: { label: t('orders.paid'), bg: '#d1fae5', fg: '#065f46' },
-                        voided: { label: t('orders.voided'), bg: '#fef3c7', fg: '#92400e' },
-                        cancelled: { label: t('orders.voided'), bg: '#fef3c7', fg: '#92400e' },
-                        refunded: { label: t('orders.refunded'), bg: '#fee2e2', fg: '#991b1b' },
-                        partial_refund: { label: t('orders.partial-refund'), bg: '#fef3c7', fg: '#92400e' },
-                        pending: { label: t('orders.pending'), bg: '#dbeafe', fg: '#1e40af' },
-                        failed: { label: t('orders.failed'), bg: '#fee2e2', fg: '#991b1b' },
-                      };
-                      return map[status] || { label: status, bg: '#f3f4f6', fg: '#374151' };
-                    };
-                    const badge = statusBadge(effectiveStatus);
-
-                    return (
-                      <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.payment-info')}</Text>
-
-                        {/* Payment Status */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-status')}</Text>
-                          {badge ? (
-                            <View style={{ backgroundColor: badge.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 12, fontWeight: '600', color: badge.fg }}>{badge.label}</Text>
-                            </View>
-                          ) : (
-                            <View style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>{t('orders.unpaid')}</Text>
-                            </View>
-                          )}
-                        </View>
-
-                        {/* Payment Vendor */}
-                        {vendorLabel && (
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-vendor')}</Text>
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: vendor ? getVendorColor(vendor) : '#374151' }}>
-                              💳 {vendorLabel}
-                            </Text>
-                          </View>
-                        )}
-
-                        {/* Payment Method */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-method')}</Text>
-                          <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
-                        </View>
-
-                        {/* Vendor Reference */}
-                        {selectedHistoryOrder.cp_vendor_ref && (
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.reference')}</Text>
-                            <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.cp_vendor_ref}</Text>
-                          </View>
-                        )}
-
-                        {/* Paid At */}
-                        {selectedHistoryOrder.cp_completed_at && (
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.paid-at')}</Text>
-                            <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(selectedHistoryOrder.cp_completed_at)}</Text>
-                          </View>
-                        )}
-
-                        {/* Refund info */}
-                        {selectedHistoryOrder.cp_refund_amount_cents && selectedHistoryOrder.cp_refund_amount_cents > 0 && (
-                          <View style={{ backgroundColor: '#fef2f2', borderRadius: 8, padding: 8, marginTop: 4 }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                              <Text style={{ fontSize: 13, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
-                            </View>
-                            {selectedHistoryOrder.cp_refunded_at && (
-                              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>at {formatDate(selectedHistoryOrder.cp_refunded_at)}</Text>
-                            )}
-                          </View>
-                        )}
-
-                        {/* Sandbox badge */}
-                        {selectedHistoryOrder.cp_env === 'sandbox' && (
-                          <View style={{ backgroundColor: '#fef3c7', borderRadius: 6, padding: 4, alignSelf: 'flex-start', marginTop: 6 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#92400e' }}>{t('orders.sandbox')}</Text>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })()}
-
-                  {/* KPay Transaction Details */}
-                  {(() => {
-                    const vendor = resolveVendor(selectedHistoryOrder);
-                    if (vendor !== 'kpay' || !selectedHistoryOrder.kpay_reference_id) return null;
-
-                    return (
-                      <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 8 }}>{t('orders.kpay-details')}</Text>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.order-ref')}</Text>
-                          <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
-                        </View>
-                        {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
-                        {kpayTxDetails && (
-                          <>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
-                              <Text style={{ fontSize: 12, color: '#1f2937' }}>
-                                {kpayTxDetails.payCurrency || 'HKD'} {((Number(kpayTxDetails.payAmount) || kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
-                                {kpayTxDetails.payAmount ? ` (${kpayTxDetails.payAmount})` : ''}
-                              </Text>
-                            </View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
-                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{kpayTxDetails.status || '—'}</Text>
-                            </View>
-                            {kpayTxDetails.payResult !== undefined && (
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>payResult</Text>
-                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{(KPAY_RESULT_MAP as any)[kpayTxDetails.payResult] || kpayTxDetails.payResult}</Text>
-                              </View>
-                            )}
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <Text style={{ fontSize: 12, color: '#6b7280' }}>outTradeNo</Text>
-                              <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.outTradeNo || '—'}</Text>
-                            </View>
-                            {kpayTxDetails.transactionNo && (
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>transactionNo</Text>
-                                <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.transactionNo}</Text>
-                              </View>
-                            )}
-                            {kpayTxDetails.refNo && (
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>refNo</Text>
-                                <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refNo}</Text>
-                              </View>
-                            )}
-                            {kpayTxDetails.commitTime && (
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>commitTime</Text>
-                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{kpayTxDetails.commitTime}</Text>
-                              </View>
-                            )}
-                            {kpayTxDetails.payMethod !== undefined && (
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>payMethod</Text>
-                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{KPAY_METHOD_MAP[kpayTxDetails.payMethod] || kpayTxDetails.payMethod}</Text>
-                              </View>
-                            )}
-                            {kpayTxDetails.refund_amount_cents > 0 && (
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 12, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
-                              </View>
-                            )}
-                          </>
-                        )}
-                      </View>
-                    );
-                  })()}
-
-                  {/* Payment Asia Transaction Details */}
-                  {(() => {
-                    const vendor = resolveVendor(selectedHistoryOrder);
-                    if (vendor !== 'payment-asia') return null;
-                    const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
-                    if (!merchantRef) return null;
-
-                    return (
-                      <View style={{ backgroundColor: '#fefce8', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#fde68a' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 8 }}>{t('orders.pa-details')}</Text>
-                        {txLoading && <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 8 }} />}
-                        {paTxDetails?.records?.map((rec: any, idx: number) => {
-                          const isSale = rec.type === '1' || rec.type === 'Sale';
-                          return (
-                            <View key={idx} style={{ marginBottom: idx < (paTxDetails.records.length - 1) ? 8 : 0 }}>
-                              <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>
-                                {isSale ? t('orders.sale') : t('orders.record-num').replace('{0}', String(idx + 1))}
-                              </Text>
-                              {selectedHistoryOrder.payment_network && (
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.method')}</Text>
-                                </View>
-                              )}
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
-                                <Text style={{ fontSize: 12, color: '#1f2937' }}>{rec.currency || 'HKD'} {rec.amount}</Text>
-                              </View>
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{PA_STATUS_MAP[rec.status] || rec.status}</Text>
-                              </View>
-                              {rec.request_reference && (
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.request-ref')}</Text>
-                                  <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{rec.request_reference}</Text>
-                                </View>
-                              )}
-                              {rec.created_time && (
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.created')}</Text>
-                                  <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.created_time) * 1000).toLocaleString()}</Text>
-                                </View>
-                              )}
-                              {rec.completed_time && (
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.completed')}</Text>
-                                  <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.completed_time) * 1000).toLocaleString()}</Text>
-                                </View>
-                              )}
-                            </View>
-                          );
-                        })}
-                        {paTxDetails && !paTxDetails.records?.length && (
-                          <Text style={{ fontSize: 12, color: '#9ca3af' }}>{t('orders.no-records')}</Text>
-                        )}
-                      </View>
-                    );
-                  })()}
-
-                  {/* Payment Records Ledger */}
-                  {selectedHistoryOrder.payment_records && selectedHistoryOrder.payment_records.length > 0 && (
-                    <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.payment-ledger')}</Text>
-                      {selectedHistoryOrder.payment_records.map((record: PaymentRecord, idx: number) => (
-                        <View key={record.id || idx} style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: getVendorColor(record.payment_vendor) }}>
-                              {(() => { const raw = getVendorLabel(record.payment_vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; })()}
-                            </Text>
-                            <View style={{ backgroundColor: record.status === 'completed' ? '#d1fae5' : record.status === 'failed' ? '#fee2e2' : '#fef3c7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 10, fontWeight: '600', color: record.status === 'completed' ? '#065f46' : record.status === 'failed' ? '#991b1b' : '#92400e' }}>
-                                {(() => { const map: Record<string, string> = { completed: t('orders.paid'), paid: t('orders.paid'), failed: t('orders.failed'), pending: t('orders.pending'), refunded: t('orders.refunded'), voided: t('orders.voided'), cancelled: t('orders.voided') }; return map[record.status || ''] || record.status?.toUpperCase(); })()}
-                              </Text>
-                            </View>
-                          </View>
-                          {record.payment_method && (
-                            <Text style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>{t('orders.method-prefix')}{record.payment_method}</Text>
-                          )}
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{formatPrice(record.amount_cents)} {record.currency_code || ''}</Text>
-                          {record.vendor_reference && (
-                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{t('orders.ref-prefix')}{record.vendor_reference}</Text>
-                          )}
-                          {record.completed_at && (
-                            <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{t('orders.completed-prefix')}{formatDate(record.completed_at)}</Text>
-                          )}
-                          {record.refund_amount_cents && record.refund_amount_cents > 0 && (
-                            <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>{t('orders.refunded-prefix')}{formatPrice(record.refund_amount_cents)}</Text>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  )}
-
-                  {/* Void / Refund Actions */}
-                  {(() => {
-                    const vendor = resolveVendor(selectedHistoryOrder);
-                    const pStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status;
-                    const isVoided = pStatus === 'voided' || pStatus === 'cancelled';
-                    const isRefunded = pStatus === 'refunded';
-                    if (isVoided || isRefunded) return null;
-
-                    if (vendor === 'kpay' && kpayTerminal) {
-                      // KPay: Void + Refund (calls terminal)
-                      return (
-                        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                          <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity
-                              style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
-                              onPress={() => handleKpayVoid(selectedHistoryOrder)}
-                            >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>{t('orders.void-btn')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
-                              onPress={openKpayRefund}
-                            >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      );
-                    }
-
-                    if (vendor === 'payment-asia') {
-                      // Payment Asia: Refund only (calls PA API)
-                      return (
-                        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                          <TouchableOpacity
-                            style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
-                            onPress={openPaRefund}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-pa-btn')}</Text>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    }
-
-                    // Cash/Card (manual): Refund only
-                    if (!vendor || vendor === 'cash' || vendor === 'card') {
-                      const effStatus = pStatus || '';
-                      if (effStatus === 'completed' || effStatus === 'paid' || !effStatus) {
-                        return (
-                          <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                            <TouchableOpacity
-                              style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
-                              onPress={() => handleRefundOrder(selectedHistoryOrder.id)}
-                            >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
-                            </TouchableOpacity>
-                          </View>
-                        );
-                      }
-                    }
-                    return null;
-                  })()}
-                        );
-                      }
-                    }
-                    return null;
-                  })()}
+                  {renderHistoryOrderDetail()}
                 </ScrollView>
               ) : (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -1314,6 +1926,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           )}
         </View>
+        {paymentModal}
         </>
       );
     }
@@ -1322,381 +1935,210 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const menuScreenWidth = Dimensions.get('window').width;
     const menuIsTablet = (Platform as any).isPad;
     const menuNumColumns = menuIsTablet ? (menuScreenWidth > 1100 ? 4 : 3) : (menuScreenWidth > 500 ? 3 : 2);
+    const menuItemWidthPct = `${Math.floor(100 / menuNumColumns) - 2}%` as const;
 
-    const cartPanel = (
-      <View style={menuIsTablet ? styles.rightPanel : styles.bottomPanel}>
-      <ScrollView style={{ flex: 1 }}>
-        {/* Cart Header */}
-        <View style={styles.cartHeader}>
-          <Text style={styles.cartHeaderTitle}>{t('orders.cart')}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {cart.length > 0 && (
-              <TouchableOpacity onPress={() => setCartEditMode(!cartEditMode)} style={[styles.cartEditToggle, cartEditMode && { backgroundColor: '#667eea' }]}>
-                <Ionicons name="pencil" size={14} color={cartEditMode ? '#fff' : '#667eea'} />
-                <Text style={[styles.cartEditToggleText, cartEditMode && styles.cartEditToggleTextActive]}>
-                  {cartEditMode ? t('orders.done') : t('orders.edit')}
-                </Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={() => { setCart([]); setCartEditMode(false); }}>
-              <Text style={styles.cartClearBtn}>{t('orders.clear')}</Text>
-            </TouchableOpacity>
+    // Shared variant selection content (used by both phone full-page and iPad modal)
+    const variantContent = selectedItem ? (
+      <>
+        <ScrollView style={{ flex: 1 }}>
+          {selectedItem.image_url && selectedItem.image_url.trim() ? (
+            <Image source={{ uri: getFullImageUrl(selectedItem.image_url)! }} style={styles.variantSlideImage} />
+          ) : null}
+          <View style={styles.variantSlideHeader}>
+            <Text style={styles.variantSlideTitle}>{selectedItem.name}</Text>
+            <View style={styles.variantSlidePrice}>
+              <Text style={styles.variantSlidePriceLabel}>{t('orders.price-label') || 'Price:'}</Text>
+              <Text style={styles.variantSlidePriceValue}>{formatPrice(selectedItem.price_cents || 0)}</Text>
+            </View>
+            {selectedItem.description ? (
+              <Text style={styles.variantSlideDescription}>{selectedItem.description}</Text>
+            ) : null}
           </View>
-        </View>
-
-        {/* Cart items */}
-        {cart.length === 0 ? (
-          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-            <Ionicons name="cart-outline" size={36} color="#d1d5db" />
-            <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>{t('orders.no-items')}</Text>
-          </View>
-        ) : (
-        <View style={styles.cartItemsList}>
-          {cart.map((item, idx) => (
-            <View key={idx} style={styles.cartItemRow}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={styles.cartItemPreviewText} numberOfLines={1}>
-                    {item.name} x{item.quantity}
-                  </Text>
-                  <Text style={styles.cartItemPriceText}>
-                    {formatPrice(item.price_cents * item.quantity)}
-                  </Text>
+          <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 16 }} />
+          {itemVariants.length > 0 ? (
+            <View style={styles.variantContent}>
+              <Text style={styles.variantSectionTitle}>{t('orders.select-options') || 'SELECT OPTIONS'}</Text>
+              {itemVariants.map((variant) => (
+                <View key={variant.id} style={styles.variantGroup}>
+                  <View style={styles.variantGroupHeader}>
+                    <Text style={styles.variantGroupName}>
+                      {variant.name}
+                      {variant.required && <Text style={{ color: '#ef4444' }}> *</Text>}
+                    </Text>
+                  </View>
+                  <View style={styles.variantOptionsGrid}>
+                    {variant.min_select === 1 && variant.max_select === 1 ? (
+                      variant.options.map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={styles.variantOption}
+                          onPress={() => setVariantSelections(prev => ({ ...prev, [variant.id]: option.id }))}
+                        >
+                          <View style={[styles.radioButton, variantSelections[variant.id] === option.id && styles.radioButtonSelected]} />
+                          <View style={styles.variantOptionContent}>
+                            <Text style={styles.variantOptionName}>{option.name}</Text>
+                            {option.price_cents > 0 && <Text style={styles.variantOptionPrice}>+{formatPrice(option.price_cents)}</Text>}
+                          </View>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      variant.options.map((option) => {
+                        const selected = Array.isArray(variantSelections[variant.id])
+                          ? (variantSelections[variant.id] as number[]).includes(option.id) : false;
+                        return (
+                          <TouchableOpacity
+                            key={option.id}
+                            style={styles.variantOption}
+                            onPress={() => {
+                              setVariantSelections(prev => {
+                                const current = Array.isArray(prev[variant.id]) ? [...(prev[variant.id] as number[])] : [];
+                                if (current.includes(option.id)) current.splice(current.indexOf(option.id), 1);
+                                else current.push(option.id);
+                                return { ...prev, [variant.id]: current };
+                              });
+                            }}
+                          >
+                            <View style={[styles.checkbox, selected && styles.checkboxSelected]} />
+                            <View style={styles.variantOptionContent}>
+                              <Text style={styles.variantOptionName}>{option.name}</Text>
+                              {option.price_cents > 0 && <Text style={styles.variantOptionPrice}>+{formatPrice(option.price_cents)}</Text>}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </View>
                 </View>
-                {item.variants && item.variants.length > 0 && (
-                  <View style={{ marginTop: 2 }}>
-                    {item.variants.map((v, vi) => (
-                      <Text key={vi} style={styles.cartItemVariantText} numberOfLines={1}>
-                        {v.variantName}: {v.optionName}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-                {/* Edit mode controls */}
-                {cartEditMode && (
-                  <View style={styles.cartEditControls}>
-                    <View style={styles.cartQtyRow}>
-                      <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity - 1)}>
-                        <Text style={styles.cartQtyBtnText}>−</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.cartQtyValue}>{item.quantity}</Text>
-                      <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity + 1)}>
-                        <Text style={styles.cartQtyBtnText}>+</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.cartRemoveBtn} onPress={() => handleRemoveFromCart(idx)}>
-                        <Text style={{ fontSize: 16 }}>🗑</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <TextInput
-                      style={styles.cartRemarksInput}
-                      placeholder={t('orders.add-remarks')}
-                      placeholderTextColor="#9ca3af"
-                      value={item.notes || ''}
-                      onChangeText={(text) => handleUpdateNotes(idx, text)}
-                      multiline
-                    />
-                  </View>
-                )}
-              </View>
-              {!cartEditMode && (
-                <TouchableOpacity onPress={() => handleRemoveFromCart(idx)} style={{ paddingLeft: 6 }}>
-                  <Text style={styles.removeItemBtn}>✕</Text>
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
+        <View style={styles.variantModalFooter}>
+          <TouchableOpacity style={styles.addBtn} onPress={handleVariantSubmit}>
+            <Text style={styles.addBtnText}>{t('orders.add-to-cart')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => {
+            if (!menuIsTablet) { setPhoneView('menu'); } else { setShowVariantModal(false); }
+          }}>
+            <Text style={styles.cancelBtnText}>{t('orders.cancel')}</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    ) : null;
+
+    // Shared cart content (used by both phone full-page and iPad side panel)
+    const cartContent = (
+      <>
+        <ScrollView style={{ flex: 1 }}>
+          <View style={styles.cartHeader}>
+            <Text style={styles.cartHeaderTitle}>{t('orders.cart')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {cart.length > 0 && (
+                <TouchableOpacity onPress={() => setCartEditMode(!cartEditMode)} style={[styles.cartEditToggle, cartEditMode && { backgroundColor: '#667eea' }]}>
+                  <Ionicons name="pencil" size={14} color={cartEditMode ? '#fff' : '#667eea'} />
+                  <Text style={[styles.cartEditToggleText, cartEditMode && styles.cartEditToggleTextActive]}>
+                    {cartEditMode ? t('orders.done') : t('orders.edit')}
+                  </Text>
                 </TouchableOpacity>
               )}
+              <TouchableOpacity onPress={() => { setCart([]); setCartEditMode(false); }}>
+                <Text style={styles.cartClearBtn}>{t('orders.clear')}</Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-        )}
-
-        </ScrollView>
-        {/* Order type selection + total - sticky at bottom */}
-        <ScrollView style={{ flexShrink: 1, maxHeight: 200 }} bounces={false}>
-        <View style={styles.orderTypeSection}>
-          <Text style={styles.sectionLabel}>{t('orders.order-type')}</Text>
-          <View style={menuIsTablet ? styles.orderTypeButtonsVertical : styles.orderTypeButtons}>
-            <TouchableOpacity
-              style={[styles.orderTypeBtn, orderType === 'table' && styles.orderTypeBtnActive]}
-              onPress={() => {
-                openTablePicker();
-              }}
-            >
-              <Text style={[styles.orderTypeBtnText, orderType === 'table' && styles.orderTypeBtnTextActive]}>
-                {selectedTableName ? `${t('orders.table')} — ${selectedTableName}${selectedOrderId ? `, #${selectedOrderId}` : ''}` : (selectedTableOnInit ? `${t('orders.table')} — ${selectedTableOnInit.tableName || 'Selected'}` : t('orders.table'))}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.orderTypeBtn, orderType === 'pay-now' && styles.orderTypeBtnActive]}
-              onPress={() => setOrderType('pay-now')}
-            >
-              <Text style={[styles.orderTypeBtnText, orderType === 'pay-now' && styles.orderTypeBtnTextActive]}>
-                {t('orders.order-now')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.orderTypeBtn, orderType === 'to-go' && styles.orderTypeBtnActive]}
-              onPress={() => setOrderType('to-go')}
-            >
-              <Text style={[styles.orderTypeBtnText, orderType === 'to-go' && styles.orderTypeBtnTextActive]}>
-                {t('orders.to-go')}
-              </Text>
-            </TouchableOpacity>
           </View>
-        </View>
+          {cart.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <Ionicons name="cart-outline" size={36} color="#d1d5db" />
+              <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>{t('orders.no-items')}</Text>
+            </View>
+          ) : (
+            <View style={styles.cartItemsList}>
+              {cart.map((item, idx) => (
+                <View key={idx} style={styles.cartItemRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.cartItemPreviewText} numberOfLines={1}>{item.name} x{item.quantity}</Text>
+                      <Text style={styles.cartItemPriceText}>{formatPrice(item.price_cents * item.quantity)}</Text>
+                    </View>
+                    {item.variants && item.variants.length > 0 && (
+                      <View style={{ marginTop: 2 }}>
+                        {item.variants.map((v, vi) => (
+                          <Text key={vi} style={styles.cartItemVariantText} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
+                        ))}
+                      </View>
+                    )}
+                    {cartEditMode && (
+                      <View style={styles.cartEditControls}>
+                        <View style={styles.cartQtyRow}>
+                          <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity - 1)}>
+                            <Text style={styles.cartQtyBtnText}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.cartQtyValue}>{item.quantity}</Text>
+                          <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity + 1)}>
+                            <Text style={styles.cartQtyBtnText}>+</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.cartRemoveBtn} onPress={() => handleRemoveFromCart(idx)}>
+                            <Text style={{ fontSize: 16 }}>🗑</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <TextInput
+                          style={styles.cartRemarksInput}
+                          placeholder={t('orders.add-remarks')}
+                          placeholderTextColor="#9ca3af"
+                          value={item.notes || ''}
+                          onChangeText={(text) => handleUpdateNotes(idx, text)}
+                          multiline
+                        />
+                      </View>
+                    )}
+                  </View>
+                  {!cartEditMode && (
+                    <TouchableOpacity onPress={() => handleRemoveFromCart(idx)} style={{ paddingLeft: 6 }}>
+                      <Text style={styles.removeItemBtn}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
-
-        {/* Cart total and submit */}
+        <ScrollView style={{ flexShrink: 1, maxHeight: 200 }} bounces={false}>
+          <View style={styles.orderTypeSection}>
+            <Text style={styles.sectionLabel}>{t('orders.order-type')}</Text>
+            <View style={menuIsTablet ? styles.orderTypeButtonsVertical : styles.orderTypeButtons}>
+              <TouchableOpacity style={[styles.orderTypeBtn, orderType === 'table' && styles.orderTypeBtnActive]} onPress={() => openTablePicker()}>
+                <Text style={[styles.orderTypeBtnText, orderType === 'table' && styles.orderTypeBtnTextActive]}>
+                  {selectedTableName ? `${t('orders.table')} — ${selectedTableName}${selectedOrderId ? `, #${selectedOrderId}` : ''}` : (selectedTableOnInit ? `${t('orders.table')} — ${selectedTableOnInit.tableName || 'Selected'}` : t('orders.table'))}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.orderTypeBtn, orderType === 'pay-now' && styles.orderTypeBtnActive]} onPress={() => setOrderType('pay-now')}>
+                <Text style={[styles.orderTypeBtnText, orderType === 'pay-now' && styles.orderTypeBtnTextActive]}>{t('orders.order-now')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.orderTypeBtn, orderType === 'to-go' && styles.orderTypeBtnActive]} onPress={() => setOrderType('to-go')}>
+                <Text style={[styles.orderTypeBtnText, orderType === 'to-go' && styles.orderTypeBtnTextActive]}>{t('orders.to-go')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
         <View style={styles.cartFooterSection}>
           <View style={styles.cartTotalRow}>
             <Text style={styles.cartTotalLabel}>{t('orders.total-items').replace('{0}', String(cart.length))}</Text>
             <Text style={styles.cartTotalPrice}>{formatPrice(cartTotal)}</Text>
           </View>
-          <TouchableOpacity 
-            style={[
-              styles.submitBtn,
-              (!orderType || (orderType === 'table' && !selectedTable)) && styles.submitBtnDisabled
-            ]}
+          <TouchableOpacity
+            style={[styles.submitBtn, (!orderType || (orderType === 'table' && !selectedTable)) && styles.submitBtnDisabled]}
             disabled={!orderType || (orderType === 'table' && !selectedTable)}
             onPress={handleSubmitOrder}
           >
             <Text style={styles.submitBtnText}>{t('orders.submit-order')}</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </>
     );
 
-    return (
+    // Table Picker Modal (extracted so it's available in all return paths)
+    const tablePickerModal = (
       <>
-        <View style={[styles.container, menuIsTablet && styles.containerRow]}>
-          {/* Left: Menu area */}
-          <View style={menuIsTablet ? styles.menuAreaTablet : { flex: 1 }}>
-            {/* Food Items Grid Wrapper */}
-            <View style={styles.foodItemsGridWrapper}>
-              <FlatList
-                key={`menu-${selectedCategory}-${menuNumColumns}`}
-                data={(() => {
-                  const remainder = filteredMenuItems.length % menuNumColumns;
-                  if (remainder === 0) return filteredMenuItems;
-                  const spacers = Array.from({ length: menuNumColumns - remainder }, (_, i) => ({ id: `spacer-${i}`, isSpacer: true }));
-                  return [...filteredMenuItems, ...spacers];
-                })()}
-                keyExtractor={(item: any) => item.id.toString()}
-                numColumns={menuNumColumns}
-                columnWrapperStyle={styles.gridRow}
-                renderItem={({ item }: any) => {
-                if (item.isSpacer) {
-                  return <View style={styles.menuItemContainer} />;
-                }
-                return (
-                <View style={styles.menuItemContainer}>
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => handleItemPress(item)}
-                  >
-                    {item.image_url && item.image_url.trim() ? (
-                      <Image
-                        source={{ uri: getFullImageUrl(item.image_url)! }}
-                        style={styles.menuItemImage}
-                        onError={() => console.log('Image load error for:', item.name, 'URL:', getFullImageUrl(item.image_url))}
-                      />
-                    ) : (
-                      <Image
-                        source={{ uri: `${API_URL}/uploads/website/placeholder.png` }}
-                        style={styles.menuItemImage}
-                      />
-                    )}
-                    <View style={styles.menuItemInfo}>
-                      <Text style={styles.menuItemName} numberOfLines={2}>{item.name}</Text>
-                      <View style={styles.menuItemFooter}>
-                        <Text style={styles.menuItemPrice}>{formatPrice(item.price_cents)}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              );}}
-              contentContainerStyle={styles.menuGrid}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadMenu} />}
-            />
-            </View>
-
-            {/* Category Bar at bottom - matching webapp */}
-            <View style={styles.categoryBarWrapper}>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoriesContent}
-              >
-                {categories.map(cat => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[
-                      styles.categoryBtn,
-                      selectedCategory === cat.id && styles.categoryBtnActive
-                    ]}
-                    onPress={() => setSelectedCategory(cat.id)}
-                  >
-                    <Text style={[
-                      styles.categoryBtnText,
-                      selectedCategory === cat.id && styles.categoryBtnTextActive
-                    ]}>
-                      {cat.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* Bottom panel for phone only */}
-            {!menuIsTablet && cart.length > 0 && cartPanel}
-          </View>
-
-          {/* Right panel: Cart (iPad only - always visible) */}
-          {menuIsTablet && cartPanel}
-        </View>
-
-        {/* Variant Modal */}
-        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-          visible={showVariantModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowVariantModal(false)}
-        >
-          <View style={[styles.modalOverlay, menuIsTablet && { flexDirection: 'row', justifyContent: 'flex-end' }]}>
-            <View style={[styles.variantModalContent, menuIsTablet && { maxHeight: '100%', width: 380, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }]}>
-              {/* Close button */}
-              <TouchableOpacity style={styles.variantCloseBtn} onPress={() => setShowVariantModal(false)}>
-                <Text style={styles.closeButton}>✕</Text>
-              </TouchableOpacity>
-
-              <ScrollView style={{ flex: 1 }}>
-                {/* Full-width image */}
-                {selectedItem?.image_url && selectedItem.image_url.trim() ? (
-                  <Image
-                    source={{ uri: getFullImageUrl(selectedItem.image_url)! }}
-                    style={styles.variantSlideImage}
-                  />
-                ) : null}
-
-                {/* Item info */}
-                <View style={styles.variantSlideHeader}>
-                  <Text style={styles.variantSlideTitle}>{selectedItem?.name}</Text>
-                  <View style={styles.variantSlidePrice}>
-                    <Text style={styles.variantSlidePriceLabel}>{t('orders.price-label') || 'Price:'}</Text>
-                    <Text style={styles.variantSlidePriceValue}>{formatPrice(selectedItem?.price_cents || 0)}</Text>
-                  </View>
-                  {selectedItem?.description ? (
-                    <Text style={styles.variantSlideDescription}>{selectedItem.description}</Text>
-                  ) : null}
-                </View>
-
-                {/* Divider */}
-                <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 16 }} />
-
-                {/* Options section */}
-                {itemVariants.length > 0 ? (
-                  <View style={styles.variantContent}>
-                    <Text style={styles.variantSectionTitle}>{t('orders.select-options') || 'SELECT OPTIONS'}</Text>
-                    {itemVariants.map((variant) => (
-                      <View key={variant.id} style={styles.variantGroup}>
-                        <View style={styles.variantGroupHeader}>
-                          <Text style={styles.variantGroupName}>
-                            {variant.name}
-                            {variant.required && <Text style={{ color: '#ef4444' }}> *</Text>}
-                          </Text>
-                        </View>
-
-                      <View style={styles.variantOptionsGrid}>
-                      {variant.min_select === 1 && variant.max_select === 1 ? (
-                        variant.options.map((option) => (
-                          <TouchableOpacity
-                            key={option.id}
-                            style={styles.variantOption}
-                            onPress={() => {
-                              setVariantSelections(prev => ({
-                                ...prev,
-                                [variant.id]: option.id,
-                              }));
-                            }}
-                          >
-                            <View
-                              style={[
-                                styles.radioButton,
-                                variantSelections[variant.id] === option.id && styles.radioButtonSelected,
-                              ]}
-                            />
-                            <View style={styles.variantOptionContent}>
-                              <Text style={styles.variantOptionName}>{option.name}</Text>
-                              {option.price_cents > 0 && (
-                                <Text style={styles.variantOptionPrice}>+{formatPrice(option.price_cents)}</Text>
-                              )}
-                            </View>
-                          </TouchableOpacity>
-                        ))
-                      ) : (
-                        variant.options.map((option) => {
-                          const selected = Array.isArray(variantSelections[variant.id])
-                            ? (variantSelections[variant.id] as number[]).includes(option.id)
-                            : false;
-                          return (
-                            <TouchableOpacity
-                              key={option.id}
-                              style={styles.variantOption}
-                              onPress={() => {
-                                setVariantSelections(prev => {
-                                  const current = Array.isArray(prev[variant.id]) ? [...(prev[variant.id] as number[])] : [];
-                                  if (current.includes(option.id)) {
-                                    current.splice(current.indexOf(option.id), 1);
-                                  } else {
-                                    current.push(option.id);
-                                  }
-                                  return {
-                                    ...prev,
-                                    [variant.id]: current,
-                                  };
-                                });
-                              }}
-                            >
-                              <View
-                                style={[
-                                  styles.checkbox,
-                                  selected && styles.checkboxSelected,
-                                ]}
-                              />
-                              <View style={styles.variantOptionContent}>
-                                <Text style={styles.variantOptionName}>{option.name}</Text>
-                                {option.price_cents > 0 && (
-                                  <Text style={styles.variantOptionPrice}>+{formatPrice(option.price_cents)}</Text>
-                                )}
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })
-                      )}
-                      </View>
-                    </View>
-                  ))}
-                  </View>
-                ) : null}
-              </ScrollView>
-
-              <View style={styles.variantModalFooter}>
-                <TouchableOpacity
-                  style={styles.addBtn}
-                  onPress={handleVariantSubmit}
-                >
-                  <Text style={styles.addBtnText}>{t('orders.add-to-cart')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => setShowVariantModal(false)}
-                >
-                  <Text style={styles.cancelBtnText}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Table Picker Modal */}
         <Modal
           supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
           visible={showTablePicker}
@@ -1761,7 +2203,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           </View>
         </Modal>
 
-        {/* New Order Pax Modal */}
         <Modal
           supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
           visible={showNewOrderPaxModal}
@@ -1799,6 +2240,179 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </Modal>
+      </>
+    );
+
+    // ===== PHONE: Full-page variant selection =====
+    if (!menuIsTablet && phoneView === 'variant' && selectedItem) {
+      return (
+        <>
+          <View style={styles.container}>
+            <View style={styles.phoneSubpageHeader}>
+              <TouchableOpacity onPress={() => setPhoneView('menu')}>
+                <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+              </TouchableOpacity>
+              <Text style={styles.phoneSubpageTitle}>{selectedItem.name}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              {variantContent}
+            </View>
+          </View>
+          {paymentModal}
+          {tablePickerModal}
+        </>
+      );
+    }
+
+    // ===== PHONE: Full-page cart view =====
+    if (!menuIsTablet && phoneView === 'cart') {
+      return (
+        <>
+          <View style={styles.container}>
+            <View style={styles.phoneSubpageHeader}>
+              <TouchableOpacity onPress={() => setPhoneView('menu')}>
+                <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+              </TouchableOpacity>
+              <Text style={styles.phoneSubpageTitle}>{t('orders.cart')} ({cart.reduce((sum, i) => sum + i.quantity, 0)})</Text>
+            </View>
+            <View style={{ flex: 1, padding: 12 }}>
+              {cartContent}
+            </View>
+          </View>
+          {paymentModal}
+          {tablePickerModal}
+        </>
+      );
+    }
+
+    // ===== MENU GRID VIEW (default for both phone and iPad) =====
+    return (
+      <>
+        <View style={[styles.container, menuIsTablet && styles.containerRow]}>
+          {/* Left: Menu area */}
+          <View style={menuIsTablet ? styles.menuAreaTablet : { flex: 1 }}>
+            {/* Food Items Grid Wrapper */}
+            <View style={styles.foodItemsGridWrapper}>
+              <FlatList
+                key={`menu-${selectedCategory}-${menuNumColumns}`}
+                data={(() => {
+                  const remainder = filteredMenuItems.length % menuNumColumns;
+                  if (remainder === 0) return filteredMenuItems;
+                  const spacers = Array.from({ length: menuNumColumns - remainder }, (_, i) => ({ id: `spacer-${i}`, isSpacer: true }));
+                  return [...filteredMenuItems, ...spacers];
+                })()}
+                keyExtractor={(item: any) => item.id.toString()}
+                numColumns={menuNumColumns}
+                columnWrapperStyle={styles.gridRow}
+                renderItem={({ item }: any) => {
+                if (item.isSpacer) {
+                  return <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]} />;
+                }
+                return (
+                <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]}>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => handleItemPress(item)}
+                  >
+                    {item.image_url && item.image_url.trim() ? (
+                      <Image
+                        source={{ uri: getFullImageUrl(item.image_url)! }}
+                        style={styles.menuItemImage}
+                        onError={() => console.log('Image load error for:', item.name, 'URL:', getFullImageUrl(item.image_url))}
+                      />
+                    ) : (
+                      <Image
+                        source={{ uri: `${API_URL}/uploads/website/placeholder.png` }}
+                        style={styles.menuItemImage}
+                      />
+                    )}
+                    <View style={styles.menuItemInfo}>
+                      <Text style={styles.menuItemName} numberOfLines={2}>{item.name}</Text>
+                      <View style={styles.menuItemFooter}>
+                        <Text style={styles.menuItemPrice}>{formatPrice(item.price_cents)}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              );}}
+              contentContainerStyle={styles.menuGrid}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadMenu} />}
+            />
+            </View>
+
+            {/* Category Bar at bottom - matching webapp */}
+            <View style={styles.categoryBarWrapper}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoriesContent}
+              >
+                {categories.map(cat => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryBtn,
+                      selectedCategory === cat.id && styles.categoryBtnActive
+                    ]}
+                    onPress={() => setSelectedCategory(cat.id)}
+                  >
+                    <Text style={[
+                      styles.categoryBtnText,
+                      selectedCategory === cat.id && styles.categoryBtnTextActive
+                    ]}>
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Phone: floating cart button that navigates to full cart page */}
+            {!menuIsTablet && cart.length > 0 && (
+              <TouchableOpacity
+                style={styles.cartFloatingBtn}
+                onPress={() => setPhoneView('cart')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.cartFloatingBtnInner}>
+                  <View style={styles.cartFloatingBadge}>
+                    <Text style={styles.cartFloatingBadgeText}>{cart.reduce((sum, i) => sum + i.quantity, 0)}</Text>
+                  </View>
+                  <Text style={styles.cartFloatingBtnText}>{t('orders.cart')}</Text>
+                  <Text style={styles.cartFloatingBtnPrice}>{formatPrice(cartTotal)}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* iPad: Cart side panel (always visible) */}
+          {menuIsTablet && (
+            <View style={styles.rightPanel}>
+              {cartContent}
+            </View>
+          )}
+        </View>
+
+        {/* Variant Modal (iPad only — phone uses full-page view) */}
+        {menuIsTablet && (
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showVariantModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowVariantModal(false)}
+        >
+          <View style={[styles.modalOverlay, { flexDirection: 'row', justifyContent: 'flex-end' }]}>
+            <SafeAreaView style={[styles.variantModalContent, { maxHeight: '100%', width: 380, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }]}>
+              <TouchableOpacity style={styles.variantCloseBtn} onPress={() => setShowVariantModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+              {variantContent}
+            </SafeAreaView>
+          </View>
+        </Modal>
+        )}
+
+        {tablePickerModal}
 
         {/* KPay Refund Modal */}
         <Modal
@@ -1887,6 +2501,61 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </Modal>
+
+        {/* Order Now Payment Modal */}
+        {paymentModal}
+
+        {/* Customer Name Modal for To-Go orders */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showCustomerNameModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowCustomerNameModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.to-go')}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>{t('orders.enter-customer-name')}</Text>
+
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 12 }}
+                value={customerName}
+                onChangeText={setCustomerName}
+                placeholder={t('orders.customer-name-placeholder')}
+                placeholderTextColor="#9ca3af"
+                autoFocus
+              />
+
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 16 }}
+                value={customerPhone}
+                onChangeText={setCustomerPhone}
+                placeholder={t('orders.customer-phone-placeholder')}
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+              />
+
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => setShowCustomerNameModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => {
+                    setShowCustomerNameModal(false);
+                    doSubmitOrder(customerName);
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-order')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </>
     );
 };
@@ -1899,16 +2568,19 @@ export const OrdersTab = React.forwardRef(OrdersTabComponent) as React.ForwardRe
 const getPaymentBadge = (order: Order) => {
   const effStatus = order.cp_status || order.payment_status;
   if (effStatus === 'refunded' || order.cp_refunded_at) {
-    return { label: '↩ Refunded', color: '#ef4444' };
+    return { label: 'Refunded', color: '#ef4444' };
   }
   if (effStatus === 'voided' || effStatus === 'cancelled') {
-    return { label: '🚫 Voided', color: '#6b7280' };
+    return { label: 'Voided', color: '#6b7280' };
   }
   if (order.cp_refund_amount_cents && order.cp_refund_amount_cents > 0) {
-    return { label: '↩ Partial', color: '#f97316' };
+    return { label: 'Partial', color: '#f97316' };
   }
   if (order.payment_received || effStatus === 'completed' || effStatus === 'paid') {
-    return { label: '✓ Paid', color: '#10b981' };
+    return { label: 'Paid', color: '#10b981' };
+  }
+  if (order.status === 'pending') {
+    return { label: 'Pending', color: '#f59e0b' };
   }
   return { label: 'Unpaid', color: '#9ca3af' };
 };
@@ -2135,13 +2807,64 @@ const styles = StyleSheet.create({
     color: '#2C3E50',
   },
 
-  // Bottom panel
-  bottomPanel: {
+  // Floating cart button (phone)
+  cartFloatingBtn: {
+    backgroundColor: '#3b82f6',
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  cartFloatingBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  cartFloatingBadge: {
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    marginRight: 10,
+  },
+  cartFloatingBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#3b82f6',
+  },
+  cartFloatingBtnText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  cartFloatingBtnPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  // Phone subpage header (for variant/cart full-page views)
+  phoneSubpageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 12,
-    paddingBottom: 20,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  phoneSubpageTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1f2937',
   },
   // Right panel (iPad cart)
   rightPanel: {

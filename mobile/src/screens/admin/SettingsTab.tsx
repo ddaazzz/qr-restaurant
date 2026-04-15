@@ -544,6 +544,22 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       if (printerFormData.printer_paper_width) {
         settings.printer_paper_width = printerFormData.printer_paper_width;
       }
+
+      // Include format settings in the same save
+      if (editingPrinterType === 'qr') {
+        settings.code_size = qrCodeSize;
+        settings.text_above = qrTextAbove;
+        settings.text_below = qrTextBelow;
+      } else if (editingPrinterType === 'bill') {
+        settings.paper_width = billPaperWidth;
+        settings.show_phone = billShowPhone;
+        settings.show_address = billShowAddress;
+        settings.show_time = billShowTime;
+        settings.show_items = billShowItems;
+        settings.show_total = billShowTotal;
+        settings.footer_message = billFooterMsg;
+      }
+
       if (Object.keys(settings).length > 0) {
         payload.settings = settings;
       }
@@ -572,37 +588,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       
       setEditingPrinterType(null);
       setActiveModal(null);
-      setShowingPrinterSettingsPage(false);
       Alert.alert(t('common.success'), t('settings.printer-saved'));
     } catch (err: any) {
       console.error('[SettingsTab] Error saving printer settings:', err);
       Alert.alert(t('common.error'), err.response?.data?.error || t('settings.printer-failed'));
-    }
-  };
-
-  const saveQRFormatSettings = async () => {
-    try {
-      const payload = {
-        type: 'QR',
-        printer_type: printerSettings?.qr_printer_type || 'none',
-        settings: {
-          code_size: qrCodeSize,
-          text_above: qrTextAbove,
-          text_below: qrTextBelow,
-        },
-      };
-
-      console.log('[SettingsTab] Saving QR Code Format settings:', payload);
-
-      await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, payload);
-
-      // Invalidate cache so next fetch gets fresh data from backend
-      printerSettingsService.invalidateCache(restaurantId);
-      
-      Alert.alert(t('common.success'), t('settings.qr-format-saved'));
-    } catch (err: any) {
-      console.error('[SettingsTab] Error saving QR Code Format settings:', err);
-      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.qr-format-failed'));
     }
   };
 
@@ -1004,7 +993,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {editingPrinterType === 'kitchen' && t('settings.kitchen-printer')}
             {editingPrinterType === 'kpay' && t('settings.kpay-printer')}
           </Text>
-          <TouchableOpacity onPress={() => { setEditingPrinterType(null); setShowingPrinterSettingsPage(false); }}>
+          <TouchableOpacity onPress={() => setEditingPrinterType(null)}>
             <Text style={styles.backButton}>{t('settings.back-arrow')}</Text>
           </TouchableOpacity>
         </View>
@@ -1141,12 +1130,191 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </>
             )}
           </View>
+
+          {/* QR Code Format Settings (only for QR printer) */}
+          {editingPrinterType === 'qr' && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.qr-format') || 'QR Code Format'}</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.qr-size')}</Text>
+                <View style={styles.toggleGroup}>
+                  {['small', 'medium', 'large'].map((size) => (
+                    <TouchableOpacity
+                      key={size}
+                      style={[styles.typeBtn, qrCodeSize === size && styles.typeBtnActive]}
+                      onPress={() => setQrCodeSize(size)}
+                    >
+                      <Text style={[styles.typeBtnText, qrCodeSize === size && styles.typeBtnTextActive]}>
+                        {size.charAt(0).toUpperCase() + size.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.text-above')}</Text>
+                <TextInput style={styles.input} value={qrTextAbove} onChangeText={setQrTextAbove} placeholder={t('settings.text-above')} />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.text-below')}</Text>
+                <TextInput style={styles.input} value={qrTextBelow} onChangeText={setQrTextBelow} placeholder={t('settings.text-below')} />
+              </View>
+
+              <View style={[styles.formGroup, { marginBottom: 20 }]}>
+                <Text style={styles.label}>{t('settings.preview')}</Text>
+                <View style={{ borderColor: '#ddd', borderWidth: 2, borderRadius: 6, padding: 16, backgroundColor: '#f9fafb', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', marginBottom: 8 }}>{settings?.name || 'Restaurant'}</Text>
+                  <Text style={{ fontSize: 10, marginBottom: 2 }}>Table: T02</Text>
+                  <Text style={{ fontSize: 10, marginBottom: 8 }}>Time: 2026-03-13 18:24</Text>
+                  <Text style={{ fontSize: 10, marginBottom: 12 }}>{'='.repeat(40)}</Text>
+                  <View style={{
+                    width: qrCodeSize === 'small' ? 120 : qrCodeSize === 'medium' ? 150 : 180,
+                    height: qrCodeSize === 'small' ? 120 : qrCodeSize === 'medium' ? 150 : 180,
+                    backgroundColor: '#f0f0f0', borderWidth: 1, borderColor: '#ccc',
+                    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+                  }}>
+                    <Text style={{ fontSize: 11, color: '#999' }}>QR</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '600', marginBottom: 4 }}>{qrTextAbove}</Text>
+                  <Text style={{ fontSize: 10, marginBottom: 8, textAlign: 'center' }}>{qrTextBelow}</Text>
+                  <Text style={{ fontSize: 9, color: '#666' }}>Powered by Chuio</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Bill Receipt Format Settings (only for Bill printer) */}
+          {editingPrinterType === 'bill' && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.bill-format') || 'Bill Receipt Format'}</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.paper-width')}</Text>
+                <View style={styles.toggleGroup}>
+                  {['58', '80'].map((width) => (
+                    <TouchableOpacity
+                      key={width}
+                      style={[styles.typeBtn, billPaperWidth === width && styles.typeBtnActive]}
+                      onPress={() => setBillPaperWidth(width)}
+                    >
+                      <Text style={[styles.typeBtnText, billPaperWidth === width && styles.typeBtnTextActive]}>{width}mm</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.label}>{t('settings.show-phone')}</Text>
+                  <Switch value={billShowPhone} onValueChange={setBillShowPhone} />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.label}>{t('settings.show-address')}</Text>
+                  <Switch value={billShowAddress} onValueChange={setBillShowAddress} />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.label}>{t('settings.show-order-time')}</Text>
+                  <Switch value={billShowTime} onValueChange={setBillShowTime} />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.label}>{t('settings.show-items')}</Text>
+                  <Switch value={billShowItems} onValueChange={setBillShowItems} />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.label}>{t('settings.show-total')}</Text>
+                  <Switch value={billShowTotal} onValueChange={setBillShowTotal} />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.footer-message')}</Text>
+                <TextInput style={styles.input} value={billFooterMsg} onChangeText={setBillFooterMsg} placeholder={t('settings.footer-placeholder')} />
+              </View>
+
+              <View style={[styles.formGroup, { marginBottom: 20 }]}>
+                <Text style={styles.label}>{t('settings.preview')}</Text>
+                <View style={{ borderColor: '#ddd', borderWidth: 2, borderRadius: 6, padding: 12, backgroundColor: '#f9fafb' }}>
+                  <Text style={{ fontSize: billPaperWidth === '58' ? 11 : 13, fontWeight: '600', textAlign: 'center', marginBottom: 2, fontFamily: 'Courier New' }}>{settings?.name || 'Restaurant'}</Text>
+                  {billShowPhone && (
+                    <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, textAlign: 'center', marginBottom: 1, fontFamily: 'Courier New' }}>Phone: +852 1234 5678</Text>
+                  )}
+                  {billShowAddress && (
+                    <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, textAlign: 'center', marginBottom: 4, fontFamily: 'Courier New' }}>123 Main Street</Text>
+                  )}
+                  <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, textAlign: 'center', marginVertical: 4, letterSpacing: 1, fontFamily: 'Courier New' }}>{'='.repeat(billPaperWidth === '58' ? 40 : 50)}</Text>
+                  {billShowTime && (
+                    <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, textAlign: 'center', marginVertical: 2, fontFamily: 'Courier New' }}>Order Time: 2026-03-13 18:24</Text>
+                  )}
+                  <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, marginVertical: 2, fontFamily: 'Courier New' }}>Table: T02       Pax: 4</Text>
+                  {billShowItems && (
+                    <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, marginVertical: 4, fontFamily: 'Courier New' }}>Domaine Rolet          $450</Text>
+                  )}
+                  {billShowTotal && (
+                    <>
+                      <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, textAlign: 'right', marginVertical: 2, fontFamily: 'Courier New' }}>Subtotal: $450</Text>
+                      <Text style={{ fontSize: billPaperWidth === '58' ? 11 : 13, fontWeight: 'bold', textAlign: 'right', marginVertical: 2, fontFamily: 'Courier New' }}>Total: $450</Text>
+                    </>
+                  )}
+                  <Text style={{ fontSize: billPaperWidth === '58' ? 9 : 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(billPaperWidth === '58' ? 40 : 50)}</Text>
+                  <Text style={{ fontSize: billPaperWidth === '58' ? 10 : 12, fontWeight: '600', textAlign: 'center', marginVertical: 6, fontFamily: 'Courier New' }}>Thank You</Text>
+                  <Text style={{ fontSize: billPaperWidth === '58' ? 8 : 10, textAlign: 'center', marginBottom: 2, fontFamily: 'Courier New' }}>{billFooterMsg}</Text>
+                  <Text style={{ fontSize: billPaperWidth === '58' ? 8 : 10, textAlign: 'center', color: '#666', fontFamily: 'Courier New' }}>Powered by Chuio</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Kitchen Order Format Preview (only for Kitchen printer) */}
+          {editingPrinterType === 'kitchen' && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('admin.printer-kitchen-format') || 'Kitchen Order Format'}</Text>
+              </View>
+
+              <View style={[styles.formGroup, { marginBottom: 20 }]}>
+                <Text style={styles.label}>{t('settings.preview')}</Text>
+                <View style={{ borderColor: '#ddd', borderWidth: 2, borderRadius: 6, padding: 12, backgroundColor: '#f9fafb' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 4, fontFamily: 'Courier New' }}>KITCHEN ORDER</Text>
+                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
+                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>Order #42   Table: T02</Text>
+                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>Time: 2026-03-13 18:24</Text>
+                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
+                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>1x  Caesar Salad</Text>
+                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>2x  Margherita Pizza</Text>
+                  <Text style={{ fontSize: 10, marginLeft: 20, color: '#666', fontFamily: 'Courier New' }}>Size: Large</Text>
+                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 12 }}>
+                {t('settings.kitchen-format-note') || 'Kitchen order format uses a standard layout.'}
+              </Text>
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.formActions}>
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
-            onPress={() => { setEditingPrinterType(null); setShowingPrinterSettingsPage(false); }}
+            onPress={() => setEditingPrinterType(null)}
           >
             <Text style={styles.btnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
@@ -1163,7 +1331,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   );
   }
 
-  // Printer Settings Full Page View
+  // Printer Settings Main Page
   if (showingPrinterSettingsPage) {
     return (
       <>
@@ -1177,283 +1345,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
-          {/* QR Code Format Section */}
-          <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.qr-format')}</Text>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>{t('settings.qr-size')}</Text>
-              <View style={styles.toggleGroup}>
-                {['small', 'medium', 'large'].map((size) => (
-                  <TouchableOpacity
-                    key={size}
-                    style={[
-                      styles.typeBtn,
-                      qrCodeSize === size && styles.typeBtnActive,
-                    ]}
-                    onPress={() => setQrCodeSize(size)}
-                  >
-                    <Text
-                      style={[
-                        styles.typeBtnText,
-                        qrCodeSize === size && styles.typeBtnTextActive,
-                      ]}
-                    >
-                      {size.charAt(0).toUpperCase() + size.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>{t('settings.text-above')}</Text>
-              <TextInput
-                style={styles.input}
-                value={qrTextAbove}
-                onChangeText={setQrTextAbove}
-                placeholder={t('settings.text-above')}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>{t('settings.text-below')}</Text>
-              <TextInput
-                style={styles.input}
-                value={qrTextBelow}
-                onChangeText={setQrTextBelow}
-                placeholder={t('settings.text-below')}
-              />
-            </View>
-
-            <View style={[styles.formGroup, { marginBottom: 20 }]}>
-              <Text style={styles.label}>{t('settings.preview')}</Text>
-              <View style={{
-                borderColor: '#ddd',
-                borderWidth: 2,
-                borderRadius: 6,
-                padding: 16,
-                backgroundColor: '#f9fafb',
-                alignItems: 'center',
-              }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', marginBottom: 8 }}>La Cave (Sai Ying Pun)</Text>
-                <Text style={{ fontSize: 10, marginBottom: 2 }}>Table: T02</Text>
-                <Text style={{ fontSize: 10, marginBottom: 8 }}>Time: 2026-03-13 18:24</Text>
-                <Text style={{ fontSize: 10, marginBottom: 12 }}>{'='.repeat(40)}</Text>
-                <View style={{
-                  width: qrCodeSize === 'small' ? 120 : qrCodeSize === 'medium' ? 150 : 180,
-                  height: qrCodeSize === 'small' ? 120 : qrCodeSize === 'medium' ? 150 : 180,
-                  backgroundColor: '#f0f0f0',
-                  borderWidth: 1,
-                  borderColor: '#ccc',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginBottom: 12,
-                }}>
-                  <Text style={{ fontSize: 11, color: '#999' }}>QR</Text>
-                </View>
-                <Text style={{ fontSize: 11, fontWeight: '600', marginBottom: 4 }}>{qrTextAbove}</Text>
-                <Text style={{ fontSize: 10, marginBottom: 8, textAlign: 'center' }}>{qrTextBelow}</Text>
-                <Text style={{ fontSize: 9, color: '#666' }}>Powered by Chuio</Text>
-              </View>
-            </View>
-
-            <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 20, marginBottom: 20 }} />
-          </View>
-
-          {/* Bill Format Section */}
-          <View style={{ marginHorizontal: 16 }}>
-            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.bill-format')}</Text>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>{t('settings.paper-width')}</Text>
-              <View style={styles.toggleGroup}>
-                {['58', '80'].map((width) => (
-                  <TouchableOpacity
-                    key={width}
-                    style={[
-                      styles.typeBtn,
-                      billPaperWidth === width && styles.typeBtnActive,
-                    ]}
-                    onPress={() => setBillPaperWidth(width)}
-                  >
-                    <Text
-                      style={[
-                        styles.typeBtnText,
-                        billPaperWidth === width && styles.typeBtnTextActive,
-                      ]}
-                    >
-                      {width}mm
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>{t('settings.show-phone')}</Text>
-                <Switch value={billShowPhone} onValueChange={setBillShowPhone} />
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>{t('settings.show-address')}</Text>
-                <Switch value={billShowAddress} onValueChange={setBillShowAddress} />
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>{t('settings.show-order-time')}</Text>
-                <Switch value={billShowTime} onValueChange={setBillShowTime} />
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>{t('settings.show-items')}</Text>
-                <Switch value={billShowItems} onValueChange={setBillShowItems} />
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>{t('settings.show-total')}</Text>
-                <Switch value={billShowTotal} onValueChange={setBillShowTotal} />
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>{t('settings.footer-message')}</Text>
-              <TextInput
-                style={styles.input}
-                value={billFooterMsg}
-                onChangeText={setBillFooterMsg}
-                placeholder={t('settings.footer-placeholder')}
-              />
-            </View>
-
-            <View style={[styles.formGroup, { marginBottom: 20 }]}>
-              <Text style={styles.label}>{t('settings.preview')}</Text>
-              <View style={{
-                borderColor: '#ddd',
-                borderWidth: 2,
-                borderRadius: 6,
-                padding: 12,
-                backgroundColor: '#f9fafb',
-              }}>
-                <Text style={{
-                  fontSize: billPaperWidth === '58' ? 11 : 13,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                  marginBottom: 2,
-                  fontFamily: 'Courier New',
-                }}>La Cave (Sai Ying Pun)</Text>
-                {billShowPhone && (
-                  <Text style={{
-                    fontSize: billPaperWidth === '58' ? 9 : 11,
-                    textAlign: 'center',
-                    marginBottom: 1,
-                    fontFamily: 'Courier New',
-                  }}>Phone: +852 1234 5678</Text>
-                )}
-                {billShowAddress && (
-                  <Text style={{
-                    fontSize: billPaperWidth === '58' ? 9 : 11,
-                    textAlign: 'center',
-                    marginBottom: 4,
-                    fontFamily: 'Courier New',
-                  }}>123 Main Street</Text>
-                )}
-                <Text style={{
-                  fontSize: billPaperWidth === '58' ? 9 : 11,
-                  textAlign: 'center',
-                  marginVertical: 4,
-                  letterSpacing: 1,
-                  fontFamily: 'Courier New',
-                }}>{'='.repeat(billPaperWidth === '58' ? 40 : 50)}</Text>
-                {billShowTime && (
-                  <Text style={{
-                    fontSize: billPaperWidth === '58' ? 9 : 11,
-                    textAlign: 'center',
-                    marginVertical: 2,
-                    fontFamily: 'Courier New',
-                  }}>Order Time: 2026-03-13 18:24</Text>
-                )}
-                <Text style={{
-                  fontSize: billPaperWidth === '58' ? 9 : 11,
-                  marginVertical: 2,
-                  fontFamily: 'Courier New',
-                }}>Table: T02       Pax: 4</Text>
-                {billShowItems && (
-                  <>
-                    <Text style={{
-                      fontSize: billPaperWidth === '58' ? 9 : 11,
-                      marginVertical: 4,
-                      fontFamily: 'Courier New',
-                    }}>Domaine Rolet          $450</Text>
-                  </>
-                )}
-                {billShowTotal && (
-                  <>
-                    <Text style={{
-                      fontSize: billPaperWidth === '58' ? 9 : 11,
-                      textAlign: 'right',
-                      marginVertical: 2,
-                      fontFamily: 'Courier New',
-                    }}>Subtotal: $450</Text>
-                    <Text style={{
-                      fontSize: billPaperWidth === '58' ? 11 : 13,
-                      fontWeight: 'bold',
-                      textAlign: 'right',
-                      marginVertical: 2,
-                      fontFamily: 'Courier New',
-                    }}>Total: $450</Text>
-                  </>
-                )}
-                <Text style={{
-                  fontSize: billPaperWidth === '58' ? 9 : 11,
-                  textAlign: 'center',
-                  marginVertical: 4,
-                  fontFamily: 'Courier New',
-                }}>{'='.repeat(billPaperWidth === '58' ? 40 : 50)}</Text>
-                <Text style={{
-                  fontSize: billPaperWidth === '58' ? 10 : 12,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                  marginVertical: 6,
-                  fontFamily: 'Courier New',
-                }}>Thank You</Text>
-                <Text style={{
-                  fontSize: billPaperWidth === '58' ? 8 : 10,
-                  textAlign: 'center',
-                  marginBottom: 2,
-                  fontFamily: 'Courier New',
-                }}>{billFooterMsg}</Text>
-                <Text style={{
-                  fontSize: billPaperWidth === '58' ? 8 : 10,
-                  textAlign: 'center',
-                  color: '#666',
-                  fontFamily: 'Courier New',
-                }}>Powered by Chuio</Text>
-              </View>
-            </View>
-
-            <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 20, marginBottom: 20 }} />
-          </View>
-
           {/* Printer Configuration - Separate for each type */}
-          <View style={{ marginHorizontal: 16 }}>
-            <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('settings.printer-config')}</Text>
+          <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+            <Text style={[styles.label, { fontSize: 16, fontWeight: '700', marginBottom: 12 }]}>{t('settings.printer-config')}</Text>
             
             {/* QR Code Printer */}
             <View style={{ backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.qr-printer')}</Text>
               </View>
-              {printerSettings?.qr_printer_type && (
+              {printerSettings?.qr_printer_type && printerSettings.qr_printer_type !== 'none' && (
                 <>
                   <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
                     Type: {getPrinterTypeLabel(printerSettings.qr_printer_type)}
@@ -1474,7 +1375,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
                 onPress={() => {
                   setEditingPrinterType('qr');
-                  // Load current QR printer settings into form
                   const qrSettings: PrinterSettings = {
                     printer_type: printerSettings?.qr_printer_type || 'none',
                     printer_host: printerSettings?.qr_printer_host,
@@ -1495,7 +1395,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.bill-printer')}</Text>
               </View>
-              {printerSettings?.bill_printer_type && (
+              {printerSettings?.bill_printer_type && printerSettings.bill_printer_type !== 'none' && (
                 <>
                   <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
                     Type: {getPrinterTypeLabel(printerSettings.bill_printer_type)}
@@ -1516,7 +1416,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
                 onPress={() => {
                   setEditingPrinterType('bill');
-                  // Load current Bill printer settings into form
                   const billSettings: PrinterSettings = {
                     printer_type: printerSettings?.bill_printer_type || 'none',
                     printer_host: printerSettings?.bill_printer_host,
@@ -1533,11 +1432,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
 
             {/* Kitchen Printer */}
-            <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 20 }}>
+            <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kitchen-printer')}</Text>
               </View>
-              {printerSettings?.kitchen_printer_type && (
+              {printerSettings?.kitchen_printer_type && printerSettings.kitchen_printer_type !== 'none' && (
                 <>
                   <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
                     Type: {getPrinterTypeLabel(printerSettings.kitchen_printer_type)}
@@ -1558,7 +1457,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
                 onPress={() => {
                   setEditingPrinterType('kitchen');
-                  // Load current Kitchen printer settings into form
                   const kitchenSettings: PrinterSettings = {
                     printer_type: printerSettings?.kitchen_printer_type || 'none',
                     printer_host: printerSettings?.kitchen_printer_host,
@@ -1574,23 +1472,46 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            {/* Back Button */}
-            <TouchableOpacity
-              style={[styles.btn, styles.btnSecondary, { paddingVertical: 10 }]}
-              onPress={() => setShowingPrinterSettingsPage(false)}
-            >
-              <Text style={styles.btnText}>{t('settings.back-arrow')}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Save Button for QR Format Settings */}
-          <View style={{marginHorizontal: 16, marginBottom: 20}}>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary]}
-              onPress={saveQRFormatSettings}
-            >
-              <Text style={styles.btnText}>{t('settings.save-qr-format')}</Text>
-            </TouchableOpacity>
+            {/* KPay Receipt Printer */}
+            <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 8, padding: 14, marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kpay-printer')}</Text>
+              </View>
+              {printerSettings?.kpay_printer_type && printerSettings.kpay_printer_type !== 'none' && (
+                <>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
+                    Type: {getPrinterTypeLabel(printerSettings.kpay_printer_type)}
+                  </Text>
+                  {printerSettings.kpay_bluetooth_device_name && (
+                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>
+                      ✓ Device: {printerSettings.kpay_bluetooth_device_name}
+                    </Text>
+                  )}
+                  {printerSettings.kpay_printer_host && (
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                      Host: {printerSettings.kpay_printer_host}:{printerSettings.kpay_printer_port}
+                    </Text>
+                  )}
+                </>
+              )}
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
+                onPress={() => {
+                  setEditingPrinterType('kpay');
+                  const kpaySettings: PrinterSettings = {
+                    printer_type: printerSettings?.kpay_printer_type || 'none',
+                    printer_host: printerSettings?.kpay_printer_host,
+                    printer_port: printerSettings?.kpay_printer_port,
+                    bluetooth_device_id: printerSettings?.kpay_bluetooth_device_id,
+                    bluetooth_device_name: printerSettings?.kpay_bluetooth_device_name,
+                    kpay_auto_print: printerSettings?.kpay_auto_print,
+                  };
+                  setPrinterFormData(kpaySettings);
+                }}
+              >
+                <Text style={styles.btnText}>{t('settings.configure')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </View>

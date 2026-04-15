@@ -185,7 +185,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     // ==================== API CALLS ====================
 
-    const loadMenuData = useCallback(async () => {
+    const loadMenuData = useCallback(async (): Promise<any[]> => {
       try {
         setError(null);
         
@@ -206,9 +206,11 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         if (!selectedCategory && allCategories.length > 0) {
           setSelectedCategory(allCategories[0].id);
         }
+        return allItems;
       } catch (err: any) {
         console.error('Error fetching menu data:', err);
         setError(err.response?.data?.error || t('menu.failed-load'));
+        return [];
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -383,9 +385,9 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
         setEditingItemId(null);
         setShowEditItemModal(false);
-        await loadMenuData();
+        const freshItems = await loadMenuData();
         if (selectedItem?.id === itemId) {
-          const updated = items.find(i => i.id === itemId);
+          const updated = freshItems.find((i: any) => i.id === itemId);
           if (updated) setSelectedItem(updated);
         }
       } catch (err: any) {
@@ -675,6 +677,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
               try {
                 await addonService.deleteAddon(restaurantId, addonId);
                 setAddons(addons.filter(a => a.id !== addonId));
+                await loadMenuData();
               } catch (err: any) {
                 Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-delete-addon'));
               }
@@ -1064,7 +1067,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         {showDetailPanel && selectedItem && (
           <View style={styles.detailPanel}>
             <View style={styles.detailHeader}>
-              <TouchableOpacity onPress={() => { setEditingItemInlineId(null); setShowInlineVariantForm(false); setShowDetailPanel(false); }}>
+              <TouchableOpacity onPress={() => { setEditingItemInlineId(null); setShowInlineVariantForm(false); setShowDetailPanel(false); loadMenuData(); }}>
                 <Text style={styles.detailCloseBtn}>✕</Text>
               </TouchableOpacity>
               <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? t('menu.edit-item') : selectedItem.name}</Text>
@@ -1088,7 +1091,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         loadAddonPresetsForInlineEdit();
                       }
                     }}
-                    style={styles.categoryActionBtn}
+                    style={{ padding: 2 }}
                   >
                     <Text style={styles.detailHeaderActionBtn}>{t('menu.edit')}</Text>
                   </TouchableOpacity>
@@ -1469,6 +1472,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                     if (selectedItem) {
                                       await loadAddonsForItem(selectedItem.id);
                                     }
+                                    await loadMenuData();
                                   } catch (err: any) {
                                     Alert.alert(t('common.error'), t('menu.failed-remove-addon'));
                                   }
@@ -1857,13 +1861,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                           price_cents: Math.round(parseFloat(inlineEditPrice) * 100),
                           available: inlineEditAvailable,
                           is_meal_combo: inlineEditIsMealCombo,
+                          restaurantId: restaurantId,
                         }
                       );
                       setEditingItemInlineId(null);
-                      await loadMenuData();
-                      const updatedItems = items.filter(i => i.id === selectedItem.id);
-                      if (updatedItems.length > 0) {
-                        setSelectedItem(updatedItems[0]);
+                      const freshItems = await loadMenuData();
+                      const updatedItem = freshItems.find((i: any) => i.id === selectedItem.id);
+                      if (updatedItem) {
+                        setSelectedItem(updatedItem);
                       }
                     } catch (err: any) {
                       Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-update-item'));

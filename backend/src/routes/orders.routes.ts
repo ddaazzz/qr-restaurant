@@ -447,9 +447,9 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         ) AS variants
 
       FROM orders o
-      JOIN order_items oi ON oi.order_id = o.id
+      LEFT JOIN order_items oi ON oi.order_id = o.id
       JOIN table_sessions ts ON o.session_id = ts.id
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
       LEFT JOIN menu_categories mc ON mi.category_id = mc.id
 
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
@@ -729,11 +729,27 @@ router.patch("/order-items/:id", async (req, res) => {
       return res.status(403).json({ error: "Order item not found or doesn't belong to this restaurant" });
     }
 
+    // Get the order_id before potentially deleting the item
+    const orderIdRes = await pool.query(
+      `SELECT order_id FROM order_items WHERE id = $1`,
+      [id]
+    );
+    const orderId = orderIdRes.rows[0]?.order_id;
+
     if (quantity <= 0) {
       await pool.query(
         `DELETE FROM order_items WHERE id = $1`,
         [id]
       );
+
+      // cleanup only THIS order if it became empty
+      if (orderId) {
+        await pool.query(`
+          DELETE FROM orders
+          WHERE id = $1
+          AND NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = $1)
+        `, [orderId]);
+      }
     } else {
       await pool.query(
         `UPDATE order_items
@@ -742,14 +758,6 @@ router.patch("/order-items/:id", async (req, res) => {
         [quantity, id]
       );
     }
-
-    // cleanup empty orders
-    await pool.query(`
-      DELETE FROM orders
-      WHERE id NOT IN (
-        SELECT DISTINCT order_id FROM order_items
-      )
-    `);
 
     res.json({ success: true });
   } catch (err) {
@@ -782,18 +790,26 @@ router.delete("/order-items/:id", async (req, res) => {
       return res.status(403).json({ error: "Order item not found or doesn't belong to this restaurant" });
     }
 
+    // Get the order_id before deleting the item
+    const orderIdRes = await pool.query(
+      `SELECT order_id FROM order_items WHERE id = $1`,
+      [id]
+    );
+    const orderId = orderIdRes.rows[0]?.order_id;
+
     await pool.query(
       `DELETE FROM order_items WHERE id = $1`,
       [id]
     );
 
-    // cleanup empty orders
-    await pool.query(`
-      DELETE FROM orders
-      WHERE id NOT IN (
-        SELECT DISTINCT order_id FROM order_items
-      )
-    `);
+    // cleanup only THIS order if it became empty
+    if (orderId) {
+      await pool.query(`
+        DELETE FROM orders
+        WHERE id = $1
+        AND NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = $1)
+      `, [orderId]);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -899,7 +915,10 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         COALESCE(ts.order_type, 'counter') AS order_type,
         ts.table_id,
         COALESCE(t.name, '') as table_name,
+        COALESCE(ts.customer_name, '') as customer_name,
+        COALESCE(ts.customer_phone, '') as customer_phone,
         COALESCE(ts.pax, 0) as pax,
+        COALESCE(ts.discount_applied, 0) as discount_cents,
         COUNT(oi.id) as item_count,
         COALESCE(SUM(oi.price_cents * oi.quantity), 0) as subtotal_cents,
         ROUND(COALESCE(SUM(oi.price_cents * oi.quantity), 0) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0)) as total_cents,
@@ -938,7 +957,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         LIMIT 1
       ) cpay ON true
       WHERE o.restaurant_id = $1
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, ts.order_type, ts.table_id, t.name, ts.pax, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
       ORDER BY o.created_at DESC
       LIMIT $2`,
       [restaurantId, limitVal]
@@ -975,6 +994,11 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         o.payment_status,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
         SUM(oi.price_cents * oi.quantity) as total_cents,
+        COALESCE(ts.order_type, 'counter') AS order_type,
+        ts.table_id,
+        COALESCE(t.name, '') as table_name,
+        COALESCE(ts.customer_name, '') as customer_name,
+        COALESCE(ts.customer_phone, '') as customer_phone,
         COALESCE(
           (SELECT pat.network FROM payment_asia_transactions pat WHERE pat.merchant_reference = o.chuio_order_reference AND pat.transaction_type = 'payment' ORDER BY pat.created_at DESC LIMIT 1),
           (SELECT pcp.payment_method FROM chuio_payments pcp WHERE pcp.order_reference = o.chuio_order_reference AND pcp.payment_vendor = 'payment-asia' LIMIT 1)
@@ -990,6 +1014,8 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         to_char(cpay.refunded_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_refunded_at,
         cpay.refund_amount_cents AS cp_refund_amount_cents
       FROM orders o
+      LEFT JOIN table_sessions ts ON o.session_id = ts.id
+      LEFT JOIN tables t ON ts.table_id = t.id
       LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
       LEFT JOIN LATERAL (
         SELECT payment_vendor, payment_method, status, vendor_reference, total_cents, payment_gateway_env, completed_at, refunded_at, refund_amount_cents
@@ -999,7 +1025,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         LIMIT 1
       ) cpay ON true
       WHERE o.id = $1 AND o.restaurant_id = $2
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
       `,
       [orderId, restaurantId]
     );
@@ -1275,6 +1301,78 @@ router.get("/restaurants/:restaurantId/reports/top-tables", async (req, res) => 
   } catch (err) {
     console.error("[top-tables]", err);
     res.status(500).json({ error: "Failed to load top tables" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/sales-by-item
+ * Returns sales breakdown by menu item
+ */
+router.get("/restaurants/:restaurantId/reports/sales-by-item", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { days } = req.query;
+    const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    const result = await pool.query(
+      `SELECT
+        mi.name AS item_name,
+        mc.name AS category_name,
+        SUM(oi.quantity) AS total_qty,
+        SUM(oi.price_cents * oi.quantity) AS total_revenue_cents,
+        COUNT(DISTINCT o.id) AS order_count
+      FROM order_items oi
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.restaurant_id = $1
+        AND oi.removed = false
+        AND oi.is_addon = false
+        AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+      GROUP BY mi.name, mc.name
+      ORDER BY total_revenue_cents DESC`,
+      [restaurantId, daysBack]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[sales-by-item]", err);
+    res.status(500).json({ error: "Failed to load sales by item" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/sales-by-category
+ * Returns sales breakdown by menu category
+ */
+router.get("/restaurants/:restaurantId/reports/sales-by-category", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { days } = req.query;
+    const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    const result = await pool.query(
+      `SELECT
+        COALESCE(mc.name, 'Uncategorized') AS category_name,
+        SUM(oi.quantity) AS total_qty,
+        SUM(oi.price_cents * oi.quantity) AS total_revenue_cents,
+        COUNT(DISTINCT o.id) AS order_count,
+        COUNT(DISTINCT mi.id) AS unique_items
+      FROM order_items oi
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.restaurant_id = $1
+        AND oi.removed = false
+        AND oi.is_addon = false
+        AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+      GROUP BY COALESCE(mc.name, 'Uncategorized')
+      ORDER BY total_revenue_cents DESC`,
+      [restaurantId, daysBack]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[sales-by-category]", err);
+    res.status(500).json({ error: "Failed to load sales by category" });
   }
 });
 

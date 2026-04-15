@@ -86,6 +86,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
   const { restaurantId, searchQuery } = props;
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const isTabletDevice = (Platform as any).isPad;
 
   // Main state
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -265,7 +266,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
 
     // Empty cells for previous month
     for (let i = 0; i < firstDay; i++) {
-      days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
+      days.push(<View key={`empty-${i}`} style={[styles.calendarDay, !isTabletDevice && { height: 50 }]} />);
     }
 
     // Days of current month
@@ -281,6 +282,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
           key={`day-${day}`}
           style={[
             styles.calendarDay,
+            !isTabletDevice && { height: 50 },
             isToday && styles.calendarDayToday,
             isSelected && styles.calendarDaySelected,
           ]}
@@ -295,9 +297,11 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
           {hasBookings && (
             <>
               <Text style={styles.calendarDayDot}>●</Text>
-              <Text style={[styles.calendarDayBookingsText, isSelected && { color: 'rgba(255,255,255,0.8)' }]}>
-                {t('bookings.booking-count').replace('{0}', String(bookingsForDay.length))}
-              </Text>
+              {isTabletDevice && (
+                <Text style={[styles.calendarDayBookingsText, isSelected && { color: 'rgba(255,255,255,0.8)' }]}>
+                  {t('bookings.booking-count').replace('{0}', String(bookingsForDay.length))}
+                </Text>
+              )}
             </>
           )}
         </TouchableOpacity>
@@ -361,6 +365,10 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
     }
     if (!formData.date || !formData.time) {
       setFormError(t('bookings.date-time-required'));
+      return;
+    }
+    if (!formData.table_id) {
+      setFormError(t('bookings.table-required') || 'Please select a table');
       return;
     }
 
@@ -482,6 +490,20 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
     } finally {
       setLoadingSession(false);
     }
+  };
+
+  const getAvailableTablesForForm = () => {
+    const dateStr = formData.date?.split('T')[0];
+    if (!dateStr) return tables;
+    // Find tables that are NOT booked by another booking on this date (excluding current booking being edited)
+    const bookedTableIds = bookings
+      .filter(b => {
+        const bDate = (b.date || b.booking_date || '').split('T')[0];
+        return bDate === dateStr && b.status !== 'cancelled' && b.id !== editingBookingId;
+      })
+      .map(b => b.table_id)
+      .filter((id): id is number => id != null);
+    return tables.filter(t => !bookedTableIds.includes(t.id));
   };
 
   const selectBookingDetail = (booking: Booking) => {
@@ -735,23 +757,26 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
             ) : (
               /* Table-style booking rows */
               <>
-                {/* Table header row */}
-                <View style={styles.bookingRowHeader}>
-                  <Text style={[styles.bookingRowCell, { flex: 1 }]}>{t('bookings.date')}</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 2 }]}>{t('bookings.guest')}</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 1.5 }]}>{t('bookings.phone')}</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>{t('bookings.pax')}</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>{t('bookings.time')}</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>{t('bookings.status')}</Text>
-                  <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>{t('bookings.actions')}</Text>
-                </View>
+                {/* Table header row — iPad only */}
+                {isTabletDevice && (
+                  <View style={styles.bookingRowHeader}>
+                    <Text style={[styles.bookingRowCell, { flex: 1 }]}>{t('bookings.date')}</Text>
+                    <Text style={[styles.bookingRowCell, { flex: 2 }]}>{t('bookings.guest')}</Text>
+                    <Text style={[styles.bookingRowCell, { flex: 1.5 }]}>{t('bookings.phone')}</Text>
+                    <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>{t('bookings.pax')}</Text>
+                    <Text style={[styles.bookingRowCell, { flex: 0.7, textAlign: 'center' }]}>{t('bookings.time')}</Text>
+                    <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>{t('bookings.status')}</Text>
+                    <Text style={[styles.bookingRowCell, { flex: 1, textAlign: 'center' }]}>{t('bookings.actions')}</Text>
+                  </View>
+                )}
 
                 {selectedDateBookings.length === 0 ? (
                   <Text style={styles.noBookings}>{t('bookings.no-bookings')}</Text>
                 ) : (
                   selectedDateBookings.map((item) => {
                     const statusColor = getStatusColor(item.status);
-                    return (
+                    return isTabletDevice ? (
+                      /* iPad: table row layout (unchanged) */
                       <TouchableOpacity
                         key={item.id}
                         style={[styles.bookingRow, { borderLeftColor: statusColor }]}
@@ -772,7 +797,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                           {item.phone || '—'}
                         </Text>
                         <Text style={[styles.bookingRowCellText, { flex: 0.7, textAlign: 'center' }]}>
-                          👥 {item.party_size}
+                          {item.party_size}
                         </Text>
                         <Text style={[styles.bookingRowCellText, { flex: 0.7, textAlign: 'center' }]}>
                           {item.time || (item as any).booking_time || '—'}
@@ -795,6 +820,35 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                           >
                             <Text style={{ color: '#ef4444', fontSize: 14 }}>✕</Text>
                           </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    ) : (
+                      /* iPhone: card layout */
+                      <TouchableOpacity
+                        key={item.id}
+                        style={styles.bookingCard}
+                        onPress={() => selectBookingDetail(item)}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontWeight: '600', fontSize: 15, color: '#1f2937', flex: 1 }} numberOfLines={1}>
+                            {item.guest_name}
+                          </Text>
+                          <View style={[styles.statusBadge, { backgroundColor: statusColor, marginLeft: 8 }]}>
+                            <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
+                          </View>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 6, alignItems: 'center' }}>
+                          <Text style={{ color: '#6b7280', fontSize: 13 }}>
+                            <Ionicons name="time-outline" size={12} color="#9ca3af" /> {item.time || (item as any).booking_time || '—'}
+                          </Text>
+                          <Text style={{ color: '#6b7280', fontSize: 13 }}>
+                            <Ionicons name="people-outline" size={12} color="#9ca3af" /> {item.party_size}
+                          </Text>
+                          {item.phone ? (
+                            <Text style={{ color: '#6b7280', fontSize: 13 }} numberOfLines={1}>
+                              <Ionicons name="call-outline" size={12} color="#9ca3af" /> {item.phone}
+                            </Text>
+                          ) : null}
                         </View>
                       </TouchableOpacity>
                     );
@@ -878,24 +932,8 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                 </View>
               </View>
 
-              {/* Row 3: Table + Date */}
+              {/* Row 3: Date + Time */}
               <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.formLabel}>{t('bookings.table-label')}</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownBtn}
-                    onPress={() => {
-                      console.log('[Debug] Table button pressed, current state:', showTableDropdown);
-                      setShowTableDropdown(true);
-                    }}
-                  >
-                    <Text style={styles.dropdownBtnText}>
-                      {formData.table_id
-                        ? tables.find(t => t.id.toString() === formData.table_id)?.name || t('bookings.select-table')
-                        : t('bookings.select-table')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.date-label')}</Text>
                   <TextInput
@@ -907,10 +945,6 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                     }
                   />
                 </View>
-              </View>
-
-              {/* Row 4: Time + Status */}
-              <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.time-label')}</Text>
                   <TextInput
@@ -921,6 +955,25 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                       setFormData({ ...formData, time: text })
                     }
                   />
+                </View>
+              </View>
+
+              {/* Row 4: Table + Status */}
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>{t('bookings.table-label')} *</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownBtn}
+                    onPress={() => {
+                      setShowTableDropdown(true);
+                    }}
+                  >
+                    <Text style={styles.dropdownBtnText}>
+                      {formData.table_id
+                        ? tables.find(t => t.id.toString() === formData.table_id)?.name || t('bookings.select-table')
+                        : t('bookings.select-table')}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.status-label')}</Text>
@@ -973,31 +1026,31 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
           </View>
 
         {/* Table Dropdown Overlay - Inside Modal so it renders on top */}
-        {showTableDropdown && (
+        {showTableDropdown && (() => {
+          const availableTables = getAvailableTablesForForm();
+          return (
           <View style={styles.absoluteDropdownOverlay}>
             <TouchableOpacity 
               style={styles.backdropTouchable}
               activeOpacity={1}
               onPress={() => {
-                console.log('[Debug] Backdrop pressed, closing dropdown');
                 setShowTableDropdown(false);
               }}
             />
             <View style={styles.absoluteDropdownMenuContainer}>
-              {tables.length === 0 ? (
+              {availableTables.length === 0 ? (
                 <View style={styles.dropdownItem}>
-                  <Text style={styles.dropdownItemText}>{t('bookings.no-tables')}</Text>
+                  <Text style={styles.dropdownItemText}>{t('bookings.no-tables-available') || 'No tables available for this date'}</Text>
                 </View>
               ) : (
                 <FlatList
-                  data={[{ id: -1, name: t('bookings.select-table-option'), seat_count: 0 }, ...tables]}
+                  data={[{ id: -1, name: t('bookings.select-table-option'), seat_count: 0 }, ...availableTables]}
                   keyExtractor={(item) => item.id.toString()}
                   scrollEnabled={tables.length > 10}
                   nestedScrollEnabled={true}
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       onPress={() => {
-                        console.log('[Debug] Table selected:', item.id);
                         if (item.id === -1) {
                           setFormData({ ...formData, table_id: '' });
                         } else {
@@ -1016,7 +1069,8 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               )}
             </View>
           </View>
-        )}
+          );
+        })()}
 
         {/* Status Dropdown Overlay - Inside Modal so it renders on top */}
         {showStatusDropdown && (
@@ -1025,7 +1079,6 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               style={styles.backdropTouchable}
               activeOpacity={1}
               onPress={() => {
-                console.log('[Debug] Status backdrop pressed, closing dropdown');
                 setShowStatusDropdown(false);
               }}
             />
@@ -1037,7 +1090,6 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                 renderItem={({ item: status }) => (
                   <TouchableOpacity
                     onPress={() => {
-                      console.log('[Debug] Status selected:', status);
                       setFormData({ ...formData, status });
                       setShowStatusDropdown(false);
                     }}
@@ -1547,5 +1599,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderTopWidth: 2,
     borderTopColor: '#667eea',
+  },
+  bookingCard: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    borderLeftWidth: 3,
+    borderLeftColor: '#d1d5db',
   },
 });

@@ -74,10 +74,13 @@ async function initializeAnalyticsDashboard() {
         total_revenue: 0,
         average_bill: 0,
         active_sessions: 0,
+        total_discount: 0,
         order_count_by_status: {},
         revenue_by_day: {},
         revenue_by_hour: {},
         daily_order_counts: {},
+        daily_customers: {},
+        daily_discount: {},
         table_orders: {},
         item_sales: {},
         topItems: [],
@@ -125,10 +128,13 @@ function calculateAnalyticsStats(orders) {
     total_revenue: 0,
     average_bill: 0,
     active_sessions: orders.length,
+    total_discount: 0,
     order_count_by_status: {},
     revenue_by_day: {},
     revenue_by_hour: {},
     daily_order_counts: {},
+    daily_customers: {},
+    daily_discount: {},
     table_orders: {},
     item_sales: {},
     orders_by_hour: {},
@@ -143,7 +149,9 @@ function calculateAnalyticsStats(orders) {
   for (var oi = 0; oi < orders.length; oi++) {
     var order = orders[oi];
     var orderAmount = parseInt(order.total_cents, 10) || 0;
+    var discountAmount = parseInt(order.discount_cents, 10) || 0;
     stats.total_revenue += orderAmount;
+    stats.total_discount += discountAmount;
 
     // Count by status
     var orderStatus = order.status || "unknown";
@@ -168,9 +176,13 @@ function calculateAnalyticsStats(orders) {
     if (!stats.revenue_by_day[date]) {
       stats.revenue_by_day[date] = 0;
       stats.daily_order_counts[date] = 0;
+      stats.daily_customers[date] = 0;
+      stats.daily_discount[date] = 0;
     }
     stats.revenue_by_day[date] += orderAmount;
     stats.daily_order_counts[date]++;
+    stats.daily_customers[date]++;
+    stats.daily_discount[date] += discountAmount;
 
     // Revenue by hour (in restaurant timezone)
     var hourFormatter = new Intl.DateTimeFormat('en-US', {
@@ -202,6 +214,11 @@ function renderAnalyticsDashboard(stats) {
   var metricTotalRevenue = document.getElementById("metric-total-revenue");
   var metricAvgBill = document.getElementById("metric-avg-bill");
   var metricActiveSessions = document.getElementById("metric-active-sessions");
+  var metricCustomersPerDay = document.getElementById("metric-customers-per-day");
+  var metricAvgSpendCustomer = document.getElementById("metric-avg-spend-customer");
+  var metricTotalDiscounts = document.getElementById("metric-total-discounts");
+  var metricAvgDailyNet = document.getElementById("metric-avg-daily-net");
+  var metricAvgDailyCustomers = document.getElementById("metric-avg-daily-customers");
   
   if (metricTotalOrders) {
     metricTotalOrders.textContent = stats.total_orders;
@@ -216,6 +233,30 @@ function renderAnalyticsDashboard(stats) {
     metricActiveSessions.textContent = stats.active_sessions;
   }
 
+  // Calculate new metrics
+  var dayKeys = Object.keys(stats.revenue_by_day || {});
+  var numDays = dayKeys.length || 1;
+  var totalCustomers = stats.total_orders; // 1 order = 1 customer session
+  var totalDiscount = stats.total_discount || 0;
+  var netSales = stats.total_revenue - totalDiscount;
+
+  if (metricCustomersPerDay) {
+    metricCustomersPerDay.textContent = (totalCustomers / numDays).toFixed(1);
+  }
+  if (metricAvgSpendCustomer) {
+    var avgSpend = totalCustomers > 0 ? stats.total_revenue / totalCustomers : 0;
+    metricAvgSpendCustomer.textContent = "$" + (avgSpend / 100).toFixed(2);
+  }
+  if (metricTotalDiscounts) {
+    metricTotalDiscounts.textContent = "$" + (totalDiscount / 100).toFixed(2);
+  }
+  if (metricAvgDailyNet) {
+    metricAvgDailyNet.textContent = "$" + (netSales / numDays / 100).toFixed(2);
+  }
+  if (metricAvgDailyCustomers) {
+    metricAvgDailyCustomers.textContent = (totalCustomers / numDays).toFixed(1);
+  }
+
   renderRevenueReport(stats);
 
   renderBusiestTables(stats);
@@ -225,6 +266,9 @@ function renderAnalyticsDashboard(stats) {
   renderTopItems(stats);
 
   renderDailyTrends(stats, 'daily');
+
+  loadSalesByCategory();
+  loadSalesByItem();
 
   renderBookingsAnalytics(stats);
 }
@@ -589,7 +633,9 @@ function renderDailyTrends(stats, mode) {
           period: date,
           label: formatTimeWithTimezone(date, restaurantTimezone, 'date'),
           revenue: stats.revenue_by_day[date],
-          count: stats.daily_order_counts[date] || 0
+          count: stats.daily_order_counts[date] || 0,
+          customers: stats.daily_customers[date] || 0,
+          discount: stats.daily_discount[date] || 0
         });
       }
     }
@@ -612,11 +658,15 @@ function renderDailyTrends(stats, mode) {
           weekMap[weekKey] = {
             period: weekKey,
             revenue: 0,
-            count: 0
+            count: 0,
+            customers: 0,
+            discount: 0
           };
         }
         weekMap[weekKey].revenue += stats.revenue_by_day[date2];
         weekMap[weekKey].count += stats.daily_order_counts[date2] || 0;
+        weekMap[weekKey].customers += stats.daily_customers[date2] || 0;
+        weekMap[weekKey].discount += stats.daily_discount[date2] || 0;
       }
     }
     for (var week in weekMap) {
@@ -630,7 +680,9 @@ function renderDailyTrends(stats, mode) {
           period: week,
           label: weekStart2Str + ' - ' + weekEndStr,
           revenue: weekMap[week].revenue,
-          count: weekMap[week].count
+          count: weekMap[week].count,
+          customers: weekMap[week].customers,
+          discount: weekMap[week].discount
         });
       }
     }
@@ -647,11 +699,15 @@ function renderDailyTrends(stats, mode) {
           monthMap[monthKey] = {
             period: monthKey,
             revenue: 0,
-            count: 0
+            count: 0,
+            customers: 0,
+            discount: 0
           };
         }
         monthMap[monthKey].revenue += stats.revenue_by_day[date3];
         monthMap[monthKey].count += stats.daily_order_counts[date3] || 0;
+        monthMap[monthKey].customers += stats.daily_customers[date3] || 0;
+        monthMap[monthKey].discount += stats.daily_discount[date3] || 0;
       }
     }
     for (var month in monthMap) {
@@ -660,7 +716,9 @@ function renderDailyTrends(stats, mode) {
           period: month,
           label: formatTimeWithTimezone(month + '-01', restaurantTimezone, 'month'),
           revenue: monthMap[month].revenue,
-          count: monthMap[month].count
+          count: monthMap[month].count,
+          customers: monthMap[month].customers,
+          discount: monthMap[month].discount
         });
       }
     }
@@ -682,13 +740,17 @@ function renderDailyTrends(stats, mode) {
 
   for (var ei = 0; ei < entries.length; ei++) {
     var item = entries[ei];
-    var avg = item.count > 0 ? item.revenue / item.count : 0;
+    var avg = item.customers > 0 ? item.revenue / item.customers : 0;
+    var netSales = item.revenue - item.discount;
     
     var row = rowTemplate.content.cloneNode(true);
     row.querySelector('[data-field="label"]').textContent = item.label;
     row.querySelector('[data-field="orders"]').textContent = item.count;
+    row.querySelector('[data-field="customers"]').textContent = item.customers;
     row.querySelector('[data-field="revenue"]').textContent = '$' + (item.revenue / 100).toFixed(2);
-    row.querySelector('[data-field="avg-bill"]').textContent = '$' + (avg / 100).toFixed(2);
+    row.querySelector('[data-field="discount"]').textContent = item.discount > 0 ? '-$' + (item.discount / 100).toFixed(2) : '$0.00';
+    row.querySelector('[data-field="net-sales"]').textContent = '$' + (netSales / 100).toFixed(2);
+    row.querySelector('[data-field="avg-spend"]').textContent = '$' + (avg / 100).toFixed(2);
     
     tbody.appendChild(row);
   }
@@ -696,6 +758,140 @@ function renderDailyTrends(stats, mode) {
   container.innerHTML = '';
   container.appendChild(fragment);
   reTranslateContent();
+}
+
+// ========== SALES BY CATEGORY ==========
+
+async function loadSalesByCategory() {
+  var container = document.getElementById('sales-by-category-content');
+  if (!container) return;
+
+  var daysEl = document.getElementById('sales-category-days');
+  var days = daysEl ? parseInt(daysEl.value, 10) : 30;
+
+  container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">Loading...</p>';
+
+  try {
+    var url = API + '/restaurants/' + restaurantId + '/reports/sales-by-category?days=' + days;
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">No data available.</p>';
+      return;
+    }
+
+    var totalRev = 0;
+    for (var i = 0; i < data.length; i++) {
+      totalRev += parseInt(data[i].total_revenue_cents, 10) || 0;
+    }
+
+    var html = '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">' +
+      '<thead><tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">' +
+      '<th style="padding: 10px 12px; text-align: left; font-weight: 600; color: #6b7280;" data-i18n="admin.col-category">Category</th>' +
+      '<th style="padding: 10px 12px; text-align: right; font-weight: 600; color: #6b7280;" data-i18n="admin.col-items-sold">Items Sold</th>' +
+      '<th style="padding: 10px 12px; text-align: right; font-weight: 600; color: #6b7280;" data-i18n="admin.col-orders">Orders</th>' +
+      '<th style="padding: 10px 12px; text-align: right; font-weight: 600; color: #6b7280;" data-i18n="admin.col-revenue">Revenue</th>' +
+      '<th style="padding: 10px 12px; text-align: right; font-weight: 600; color: #6b7280;">%</th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var rev = parseInt(row.total_revenue_cents, 10) || 0;
+      var pct = totalRev > 0 ? ((rev / totalRev) * 100).toFixed(1) : '0.0';
+      html += '<tr style="border-bottom: 1px solid #f0f0f0;">' +
+        '<td style="padding: 10px 12px; font-weight: 500; color: #1f2937;">' + (row.category_name || 'Uncategorized') + '</td>' +
+        '<td style="padding: 10px 12px; text-align: right; color: #667eea; font-weight: 600;">' + (parseInt(row.total_qty, 10) || 0) + '</td>' +
+        '<td style="padding: 10px 12px; text-align: right; color: #6b7280;">' + (parseInt(row.order_count, 10) || 0) + '</td>' +
+        '<td style="padding: 10px 12px; text-align: right; color: #059669; font-weight: 600;">$' + (rev / 100).toFixed(2) + '</td>' +
+        '<td style="padding: 10px 12px; text-align: right; color: #6b7280;">' + pct + '%</td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table>';
+
+    // Add visual bar breakdown
+    if (data.length > 0) {
+      var colors = ['#667eea', '#e67e22', '#059669', '#dc2626', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'];
+      html += '<div style="display: flex; height: 24px; border-radius: 6px; overflow: hidden; margin-top: 16px;">';
+      for (var i = 0; i < data.length; i++) {
+        var rev = parseInt(data[i].total_revenue_cents, 10) || 0;
+        var pct = totalRev > 0 ? (rev / totalRev) * 100 : 0;
+        if (pct < 0.5) continue;
+        var color = colors[i % colors.length];
+        html += '<div title="' + data[i].category_name + ': $' + (rev / 100).toFixed(2) + ' (' + pct.toFixed(1) + '%)" style="width: ' + pct + '%; background: ' + color + '; cursor: pointer;" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'1\'"></div>';
+      }
+      html += '</div>';
+      html += '<div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 11px;">';
+      for (var i = 0; i < data.length; i++) {
+        var rev = parseInt(data[i].total_revenue_cents, 10) || 0;
+        var pct = totalRev > 0 ? (rev / totalRev) * 100 : 0;
+        if (pct < 0.5) continue;
+        var color = colors[i % colors.length];
+        html += '<span><span style="display: inline-block; width: 10px; height: 10px; background: ' + color + '; border-radius: 2px; margin-right: 4px;"></span>' + data[i].category_name + '</span>';
+      }
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+    reTranslateContent();
+  } catch (err) {
+    console.error('[sales-by-category]', err);
+    container.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 16px;">Failed to load data.</p>';
+  }
+}
+
+// ========== SALES BY ITEM ==========
+
+async function loadSalesByItem() {
+  var container = document.getElementById('sales-by-item-content');
+  if (!container) return;
+
+  var daysEl = document.getElementById('sales-item-days');
+  var days = daysEl ? parseInt(daysEl.value, 10) : 30;
+
+  container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">Loading...</p>';
+
+  try {
+    var url = API + '/restaurants/' + restaurantId + '/reports/sales-by-item?days=' + days;
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">No data available.</p>';
+      return;
+    }
+
+    var html = '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">' +
+      '<thead><tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">' +
+      '<th style="padding: 10px 12px; text-align: left; font-weight: 600; color: #6b7280;" data-i18n="admin.col-item">Item</th>' +
+      '<th style="padding: 10px 12px; text-align: left; font-weight: 600; color: #6b7280;" data-i18n="admin.col-category">Category</th>' +
+      '<th style="padding: 10px 12px; text-align: right; font-weight: 600; color: #6b7280;" data-i18n="admin.col-qty-sold">Qty Sold</th>' +
+      '<th style="padding: 10px 12px; text-align: right; font-weight: 600; color: #6b7280;" data-i18n="admin.col-orders">Orders</th>' +
+      '<th style="padding: 10px 12px; text-align: right; font-weight: 600; color: #6b7280;" data-i18n="admin.col-revenue">Revenue</th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var rev = parseInt(row.total_revenue_cents, 10) || 0;
+      html += '<tr style="border-bottom: 1px solid #f0f0f0;">' +
+        '<td style="padding: 10px 12px; font-weight: 500; color: #1f2937;">' + (row.item_name || 'Unknown') + '</td>' +
+        '<td style="padding: 10px 12px; color: #6b7280; font-size: 12px;">' + (row.category_name || '-') + '</td>' +
+        '<td style="padding: 10px 12px; text-align: right; color: #667eea; font-weight: 600;">' + (parseInt(row.total_qty, 10) || 0) + '</td>' +
+        '<td style="padding: 10px 12px; text-align: right; color: #6b7280;">' + (parseInt(row.order_count, 10) || 0) + '</td>' +
+        '<td style="padding: 10px 12px; text-align: right; color: #059669; font-weight: 600;">$' + (rev / 100).toFixed(2) + '</td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    reTranslateContent();
+  } catch (err) {
+    console.error('[sales-by-item]', err);
+    container.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 16px;">Failed to load data.</p>';
+  }
 }
 
 // ========== BOOKINGS ANALYTICS ==========

@@ -2,22 +2,22 @@ import pool from '../config/db';
 import fs from 'fs';
 import path from 'path';
 
-// Parse SQL statements respecting dollar-quoted strings and comments
+// Parse SQL statements respecting quoted strings, dollar-quoted strings, and comments
 function parseSQLStatements(sql: string): string[] {
   const statements: string[] = [];
   let current = '';
   let inDollarQuote = false;
   let dollarQuoteTag = '';
+  let inSingleQuote = false;
   let inLineComment = false;
   let inBlockComment = false;
   
   for (let i = 0; i < sql.length; i++) {
     const char = sql[i];
     const nextChar = sql[i + 1];
-    const prevChar = sql[i - 1];
     
     // Handle line comments
-    if (!inDollarQuote && !inBlockComment && char === '-' && nextChar === '-') {
+    if (!inDollarQuote && !inSingleQuote && !inBlockComment && char === '-' && nextChar === '-') {
       inLineComment = true;
       current += char;
       continue;
@@ -35,7 +35,7 @@ function parseSQLStatements(sql: string): string[] {
     }
     
     // Handle block comments
-    if (!inDollarQuote && !inLineComment && char === '/' && nextChar === '*') {
+    if (!inDollarQuote && !inSingleQuote && !inLineComment && char === '/' && nextChar === '*') {
       inBlockComment = true;
       current += char;
       continue;
@@ -49,6 +49,28 @@ function parseSQLStatements(sql: string): string[] {
     }
     
     if (inBlockComment) {
+      current += char;
+      continue;
+    }
+    
+    // Handle single-quoted strings ('' is an escaped quote inside)
+    if (!inDollarQuote && !inLineComment && !inBlockComment && char === "'") {
+      if (inSingleQuote) {
+        if (nextChar === "'") {
+          // Escaped single quote ('')
+          current += char + nextChar;
+          i++;
+          continue;
+        }
+        inSingleQuote = false;
+      } else {
+        inSingleQuote = true;
+      }
+      current += char;
+      continue;
+    }
+    
+    if (inSingleQuote) {
       current += char;
       continue;
     }
@@ -88,7 +110,7 @@ function parseSQLStatements(sql: string): string[] {
     }
     
     // Handle statement terminators
-    if (!inDollarQuote && !inLineComment && !inBlockComment && char === ';') {
+    if (!inDollarQuote && !inSingleQuote && !inLineComment && !inBlockComment && char === ';') {
       current += char;
       if (current.trim()) {
         statements.push(current.trim());

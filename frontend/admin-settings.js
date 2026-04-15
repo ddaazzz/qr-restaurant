@@ -218,9 +218,6 @@ async function showSettingsPage(pageName) {
       case 'variant-presets':
         await loadVariantPresets();
         break;
-      case 'users-management':
-        if (typeof loadUsersManagement === 'function') await loadUsersManagement();
-        break;
     }
   }
 }
@@ -1613,12 +1610,6 @@ async function loadPaymentTerminals() {
     showError('terminal-error', 'Failed to load terminals');
   }
 
-  // Show/hide Add Terminal button and superadmin notice based on role
-  const addBtn = document.getElementById('terminal-add-btn');
-  if (addBtn) addBtn.style.display = IS_SUPERADMIN ? '' : 'none';
-  const notice = document.getElementById('terminal-superadmin-notice');
-  if (notice) notice.style.display = IS_SUPERADMIN ? 'none' : 'block';
-
   // Also load Order & Pay status
   await loadOrderPayStatus();
 }
@@ -1672,15 +1663,13 @@ function renderPaymentTerminalsList() {
     html += '</div>';
     html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px;">';
     
-    // Activate button - only show to superadmin if not already active
-    if (!terminal.is_active && IS_SUPERADMIN) {
-      html += '<button onclick="activatePaymentTerminal(' + terminal.id + ')" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">Activate</button>';
+    // Activate button - only show if not already active
+    if (!terminal.is_active) {
+      html += '<button onclick="activatePaymentTerminal(' + terminal.id + ')" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">✓ Activate</button>';
     }
     
-    html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</button>';
-    if (IS_SUPERADMIN) {
-      html += '<button onclick="deletePaymentTerminal(' + terminal.id + ')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>';
-    }
+    html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">✎ Edit</button>';
+    html += '<button onclick="deletePaymentTerminal(' + terminal.id + ')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">🗑️ Delete</button>';
     html += '</div>';
     
     card.innerHTML = html;
@@ -1689,10 +1678,6 @@ function renderPaymentTerminalsList() {
 }
 
 function openPaymentTerminalForm() {
-  if (!IS_SUPERADMIN) {
-    alert('Adding payment terminals requires Super Admin access.');
-    return;
-  }
   EDITING_TERMINAL_ID = null;
   document.getElementById('payment-terminal-form-view').style.display = 'block';
   document.getElementById('payment-terminal-list-view').style.display = 'none';
@@ -1781,11 +1766,6 @@ async function editPaymentTerminal(terminalId) {
 }
 
 async function savePaymentTerminal() {
-  // New terminals can only be created by superadmin; editing existing is allowed for both roles
-  if (!EDITING_TERMINAL_ID && !IS_SUPERADMIN) {
-    alert('Adding payment terminals requires Super Admin access.');
-    return;
-  }
   const vendor = document.getElementById('new-terminal-vendor').value;
   
   let payload;
@@ -2035,10 +2015,6 @@ async function testPaymentAsia() {
 }
 
 async function activatePaymentTerminal(terminalId) {
-  if (!IS_SUPERADMIN) {
-    alert('Activating payment terminals requires Super Admin access.');
-    return;
-  }
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
       method: 'POST',
@@ -2060,10 +2036,6 @@ async function activatePaymentTerminal(terminalId) {
 }
 
 async function deletePaymentTerminal(terminalId) {
-  if (!IS_SUPERADMIN) {
-    alert('Deleting payment terminals requires Super Admin access.');
-    return;
-  }
   if (!confirm('Delete this payment terminal?')) return;
   
   try {
@@ -2128,17 +2100,9 @@ async function loadOrderPayStatus() {
     const statusDiv = document.getElementById('order-pay-status');
 
     if (toggleBtn) {
-      if (!IS_SUPERADMIN) {
-        toggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
-        toggleBtn.className = isEnabled ? 'btn-success' : 'btn-secondary';
-        toggleBtn.disabled = true;
-        toggleBtn.title = 'Super Admin access required to change this setting';
-      } else {
-        toggleBtn.textContent = isEnabled ? 'Enabled' : 'Enable';
-        toggleBtn.className = isEnabled ? 'btn-success' : 'btn-secondary';
-        toggleBtn.disabled = false;
-        toggleBtn.title = '';
-      }
+      toggleBtn.textContent = isEnabled ? '✓ Enabled' : 'Enable';
+      toggleBtn.className = isEnabled ? 'btn-success' : 'btn-secondary';
+      toggleBtn.disabled = false;
     }
 
     if (statusDiv) {
@@ -2169,10 +2133,6 @@ async function loadOrderPayStatus() {
  * Toggle Order & Pay feature on/off
  */
 async function toggleOrderPayFeature() {
-  if (!IS_SUPERADMIN) {
-    alert('Enabling or disabling Order & Pay requires Super Admin access.');
-    return;
-  }
   try {
     const toggleBtn = document.getElementById('order-pay-toggle-btn');
     const statusDiv = document.getElementById('order-pay-status');

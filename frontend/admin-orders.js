@@ -500,7 +500,7 @@ function updateOrdersCartDisplay() {
             <button class="cart-qty-btn" onclick="cartItemChangeQty('${item.cartItemId}', -1)">−</button>
             <span class="cart-qty-value">${item.quantity}</span>
             <button class="cart-qty-btn" onclick="cartItemChangeQty('${item.cartItemId}', 1)">+</button>
-            <button class="cart-remove-btn" onclick="removeCartItem('${item.cartItemId}')">🗑</button>
+            <button class="cart-remove-btn" onclick="removeCartItem('${item.cartItemId}')">✕</button>
           </div>
           <div class="cart-item-remarks-row">
             <button class="cart-remarks-btn" onclick="toggleCartItemRemarks('${item.cartItemId}')">${t('admin.remarks-button') || 'Remarks'}</button>
@@ -782,7 +782,7 @@ async function openCounterOrderPaymentModal(sessionId) {
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal-content" style="width:400px;">
-      <h3 style="margin:0 0 16px 0;">💰 Order Now — Collect Payment</h3>
+      <h3 style="margin:0 0 16px 0;">Order Now — Collect Payment</h3>
 
       <div style="background:#f5f5f5; border-radius:8px; padding:14px; margin-bottom:16px;">
         <p style="margin:0 0 5px 0; font-size:14px;">Subtotal: $${(subtotalCents / 100).toFixed(2)}</p>
@@ -795,12 +795,12 @@ async function openCounterOrderPaymentModal(sessionId) {
         <select id="counter-payment-method" onchange="document.getElementById('counter-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
           <option value="cash">Cash</option>
           <option value="card">Card</option>
-          ${window._kpayTerminal ? `<option value="kpay">💳 KPay Terminal</option>` : ''}
+          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
         </select>
       </label>
 
       <div id="counter-kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:14px; font-size:13px; color:#1d4ed8;">
-        💳 Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
+        Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
       </div>
 
       <label style="display:block; margin-bottom:14px;">
@@ -859,7 +859,7 @@ async function submitCounterOrderPayment(sessionId, grandTotal, serviceChargeCen
   document.querySelector('.modal-overlay')?.remove();
 
   if (paymentMethod === 'kpay') {
-    if (!window._kpayTerminal) return alert('❌ No active KPay terminal configured.');
+    if (!window._kpayTerminal) return alert('No active KPay terminal configured.');
     await startKPayPayment({
       sessionId,
       finalAmount,
@@ -898,6 +898,7 @@ async function submitToGoOrder() {
     // Get customer contact info
     const customerName = prompt('Customer name:', '');
     if (!customerName) throw new Error('Customer name required for to-go order');
+    const customerPhone = prompt('Customer phone (optional):', '');
     
     // Use to-go-order endpoint
     const orderRes = await fetch(`${API}/restaurants/${restaurantId}/to-go-order`, {
@@ -906,7 +907,8 @@ async function submitToGoOrder() {
       body: JSON.stringify({
         pax: 1,
         items: items,
-        customer_name: customerName
+        customer_name: customerName,
+        customer_phone: customerPhone || null
       })
     });
     
@@ -1208,7 +1210,7 @@ async function loadOrdersHistoryLeftPanel() {
       if (isPaidOrCp || (isKpay && effectiveStatus)) {
         if (effectiveStatus === 'refunded')       paymentBadge = `<span style="padding:2px 8px; background:#fee2e2; color:#dc2626; border-radius:3px; font-size:10px; font-weight:600;">↩ Refunded</span>`;
         else if (effectiveStatus === 'partial_refund') paymentBadge = `<span style="padding:2px 8px; background:#fef3c7; color:#f59e0b; border-radius:3px; font-size:10px; font-weight:600;">↩ Partial</span>`;
-        else if (effectiveStatus === 'voided')    paymentBadge = `<span style="padding:2px 8px; background:#fef3c7; color:#b45309; border-radius:3px; font-size:10px; font-weight:600;">🚫 Voided</span>`;
+        else if (effectiveStatus === 'voided')    paymentBadge = `<span style="padding:2px 8px; background:#fef3c7; color:#b45309; border-radius:3px; font-size:10px; font-weight:600;">Voided</span>`;
         else paymentBadge = `<span style="padding:2px 8px; background:#10b981; color:white; border-radius:3px; font-size:10px; font-weight:600;">✓ Paid</span>`;
       } else {
         paymentBadge = `<span style="padding:2px 8px; background:#d1d5db; color:#666; border-radius:3px; font-size:10px; font-weight:600;">Unpaid</span>`;
@@ -1218,16 +1220,16 @@ async function loadOrdersHistoryLeftPanel() {
       const orderDateStr = formatTimeWithTimezone(order.created_at, restaurantTimezone, 'date');
       
       let typeLabel = 'Order';
-      let typeIcon = '📋';
+      let typeIcon = '';
       if (order.order_type === 'counter') {
         typeLabel = 'Order Now';
-        typeIcon = '🛒';
+        typeIcon = '';
       } else if (order.order_type === 'to-go') {
         typeLabel = 'To Go';
-        typeIcon = '🎁';
+        typeIcon = '';
       } else if (order.order_type === 'table') {
         typeLabel = order.table_name ? `Table ${order.table_name}` : 'Table Order';
-        typeIcon = '🪑';
+        typeIcon = '';
       }
       
       html += `
@@ -1244,7 +1246,7 @@ async function loadOrdersHistoryLeftPanel() {
         " onmouseover="if(!this.classList.contains('selected-order-row')) this.style.backgroundColor='#f9fafb'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';" onmouseout="if(!this.classList.contains('selected-order-row')) this.style.backgroundColor='white'; this.style.boxShadow='none';">
           <div style="flex: 1; min-width: 0;">
             <div style="font-weight: 600; font-size: 13px; color: #1f2937;">Order #${order.id}</div>
-            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${typeIcon} ${typeLabel}</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${typeLabel}</div>
             <div style="font-size: 10px; color: #9ca3af; margin-top: 2px;">${orderDateStr} at ${orderTimeStr}</div>
           </div>
           <div style="text-align: right; margin-left: 12px; flex-shrink: 0;">
@@ -1383,6 +1385,22 @@ function displayOrderDetails(order) {
           <div style="font-size: 13px; color: #333; margin-top: 4px;">${order.items ? order.items.length : 0} items</div>
         </div>
       </div>
+      ${(order.customer_name || order.customer_phone) ? `
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0;">
+        <div>
+          <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;">Customer</div>
+          <div id="order-customer-name-display" style="font-size: 13px; color: #333; margin-top: 4px;">${order.customer_name || '—'}</div>
+        </div>
+        <div>
+          <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;">Phone</div>
+          <div id="order-customer-phone-display" style="font-size: 13px; color: #333; margin-top: 4px;">${order.customer_phone || '—'}</div>
+        </div>
+      </div>
+      ` : `
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0;">
+        <button onclick="editOrderCustomerInfo(${order.session_id})" style="padding: 6px 14px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 5px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 500;">+ Add Customer Info</button>
+      </div>
+      `}
     </div>
   `;
   
@@ -1448,9 +1466,9 @@ function displayOrderDetails(order) {
   const paymentStatusConfig = {
     completed:      { label: '✓ Paid',            color: '#10b981' },
     paid:           { label: '✓ Paid',            color: '#10b981' },
-    voided:         { label: '🚫 Voided',          color: '#b45309' },
-    refunded:       { label: '💸 Refunded',         color: '#dc2626' },
-    partial_refund: { label: '💸 Partial Refund',   color: '#f59e0b' },
+    voided:         { label: 'Voided',          color: '#b45309' },
+    refunded:       { label: 'Refunded',         color: '#dc2626' },
+    partial_refund: { label: 'Partial Refund',   color: '#f59e0b' },
   };
   const psDisplay = paymentStatusConfig[effectivePaymentStatus] || { label: effectivePaymentStatus || 'Unpaid', color: '#6b7280' };
 
@@ -1483,7 +1501,7 @@ function displayOrderDetails(order) {
         ${payVendorLabel ? `
         <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px;">
           <div style="color:#666;">Payment Vendor</div>
-          <div style="font-weight:600; color:${payVendorColor};">💳 ${payVendorLabel}</div>
+          <div style="font-weight:600; color:${payVendorColor};">${payVendorLabel}</div>
         </div>` : ''}
 
         <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px;">
@@ -1511,8 +1529,8 @@ function displayOrderDetails(order) {
 
         ${paymentMethod !== 'kpay' && paymentMethod !== 'payment-asia' && (!effectivePaymentStatus || effectivePaymentStatus === 'completed' || effectivePaymentStatus === 'paid') ? `
         <div style="display:flex; gap:8px; margin-top:8px;" id="non-kpay-actions-${order.id}">
-          <button onclick="orderVoid(${order.id})" style="padding:5px 12px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">🚫 Void</button>
-          <button onclick="orderRefund(${order.id})" style="padding:5px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">💸 Refund</button>
+          <button onclick="orderVoid(${order.id})" style="padding:5px 12px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Void</button>
+          <button onclick="orderRefund(${order.id})" style="padding:5px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Refund</button>
         </div>` : ''}
 
         ${paymentMethod === 'kpay' && order.kpay_reference_id ? `
@@ -1525,7 +1543,7 @@ function displayOrderDetails(order) {
 
         ${paymentMethod === 'payment-asia' && order.kpay_reference_id ? `
         <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:10px; font-size:12px; color:#92400e; margin-top:8px;">
-          <div style="font-weight:600; margin-bottom:6px;">💳 Payment Asia Transaction Details</div>
+          <div style="font-weight:600; margin-bottom:6px;">Payment Asia Transaction Details</div>
           <div style="margin-bottom:4px; font-size:11px; color:#78350f;">Merchant Ref: <code style="font-family:monospace;font-size:11px;">${order.kpay_reference_id}</code></div>
           <div id="pa-txn-detail-${order.id}" style="margin-top:6px; color:#78350f;">Loading transaction details…</div>
           <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;" id="pa-txn-actions-${order.id}"></div>
@@ -1537,21 +1555,21 @@ function displayOrderDetails(order) {
     if (order.payment_records && order.payment_records.length > 0) {
       const _cpStatusBadge = {
         completed:      '<span style="background:#d1fae5;color:#065f46;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">✓ Completed</span>',
-        pending:        '<span style="background:#fef9c3;color:#713f12;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">⏳ Pending</span>',
+        pending:        '<span style="background:#fef9c3;color:#713f12;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">Pending</span>',
         failed:         '<span style="background:#fee2e2;color:#991b1b;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">✗ Failed</span>',
-        voided:         '<span style="background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">🚫 Voided</span>',
+        voided:         '<span style="background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">Voided</span>',
         refunded:       '<span style="background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">↩ Refunded</span>',
         partial_refund: '<span style="background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">↩ Partial</span>',
       };
-      const _cpRecIcons = { 'kpay':'💳', 'payment-asia':'🌐', 'cash':'💵', 'card':'🃏' };
+      const _cpRecIcons = { 'kpay':'', 'payment-asia':'', 'cash':'', 'card':'' };
       html += `
         <div style="background:white; border:1px solid #e0e0e0; border-radius:8px; padding:16px;">
-          <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600; color:#333;">📒 Payment Ledger</h4>
+          <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600; color:#333;">Payment Ledger</h4>
           <div style="display:flex; flex-direction:column; gap:10px;">
       `;
       order.payment_records.forEach(rec => {
         const recVendor  = _cpVendorLabels[rec.payment_vendor] || rec.payment_vendor || '';
-        const recIcon    = _cpRecIcons[rec.payment_vendor] || '💳';
+        const recIcon    = _cpRecIcons[rec.payment_vendor] || '';
         const recStatus  = _cpStatusBadge[rec.status] || `<span style="background:#f3f4f6;color:#374151;padding:1px 7px;border-radius:3px;font-size:11px;">${rec.status || '—'}</span>`;
         const recEnv     = rec.payment_gateway_env === 'sandbox' ? ' <span style="font-size:9px;background:#e0e7ff;color:#3730a3;border-radius:2px;padding:0 4px;">sandbox</span>' : '';
         const recTotal   = rec.total_cents   ? `$${(rec.total_cents/100).toFixed(2)}`   : rec.amount_cents ? `$${(rec.amount_cents/100).toFixed(2)}` : '—';
@@ -1561,7 +1579,7 @@ function displayOrderDetails(order) {
         html += `
           <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; padding:12px; font-size:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <div style="font-weight:700; color:#1f2937; font-size:13px;">${recIcon} ${recVendor}${rec.payment_method ? ' · ' + rec.payment_method : ''}${recEnv}</div>
+              <div style="font-weight:700; color:#1f2937; font-size:13px;">${recVendor}${rec.payment_method ? ' · ' + rec.payment_method : ''}${recEnv}</div>
               <div>${recStatus}</div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px 16px; color:#555; line-height:1.6;">
@@ -1583,11 +1601,11 @@ function displayOrderDetails(order) {
     // Unpaid order — show Settle Bill + Edit Order options
     html += `
       <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 16px;">
-        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #92400e;">⚠️ Payment Pending</h4>
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #92400e;">Payment Pending</h4>
         <p style="margin: 0 0 12px 0; font-size: 13px; color: #78350f;">This order has not been settled yet.</p>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button onclick="openSettleBillModal(${order.id}, ${order.session_id})" style="padding:8px 18px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">💰 Settle Bill</button>
-          <button onclick="loadExistingOrderForEdit(${order.id})" style="padding:8px 18px; background:#f59e0b; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">✏️ Edit Order</button>
+          <button onclick="openSettleBillModal(${order.id}, ${order.session_id})" style="padding:8px 18px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Settle Bill</button>
+          <button onclick="loadExistingOrderForEdit(${order.id})" style="padding:8px 18px; background:#f59e0b; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Edit Order</button>
         </div>
       </div>
     `;
@@ -1605,6 +1623,28 @@ function displayOrderDetails(order) {
 async function restoreOrderToCart(orderId) {
   // Alias to selectOrderFromHistory for backward compatibility
   return selectOrderFromHistory(orderId);
+}
+
+async function editOrderCustomerInfo(sessionId) {
+  const name = prompt('Customer name:', '');
+  if (name === null) return;
+  const phone = prompt('Customer phone:', '');
+  if (phone === null) return;
+
+  try {
+    const res = await fetch(`${API}/sessions/${sessionId}/customer`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_name: name || null, customer_phone: phone || null })
+    });
+    if (!res.ok) throw new Error('Failed to update customer info');
+    // Refresh the order detail
+    if (VIEWING_HISTORICAL_ORDER) {
+      await selectOrderFromHistory(VIEWING_HISTORICAL_ORDER);
+    }
+  } catch (err) {
+    alert('Error updating customer: ' + err.message);
+  }
 }
 
 async function openSettleBillModal(orderId, sessionId) {
@@ -1629,7 +1669,7 @@ async function openSettleBillModal(orderId, sessionId) {
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal-content" style="width:400px;">
-      <h3 style="margin:0 0 16px 0;">💰 Settle Bill — Order #${orderId}</h3>
+      <h3 style="margin:0 0 16px 0;">Settle Bill — Order #${orderId}</h3>
 
       <div style="background:#f5f5f5; border-radius:8px; padding:14px; margin-bottom:16px;">
         <p style="margin:0 0 5px 0; font-size:14px;">Subtotal: $${(subtotalCents / 100).toFixed(2)}</p>
@@ -1642,12 +1682,12 @@ async function openSettleBillModal(orderId, sessionId) {
         <select id="settle-payment-method" onchange="document.getElementById('settle-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
           <option value="cash">Cash</option>
           <option value="card">Card</option>
-          ${window._kpayTerminal ? `<option value="kpay">💳 KPay Terminal</option>` : ''}
+          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
         </select>
       </label>
 
       <div id="settle-kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:14px; font-size:13px; color:#1d4ed8;">
-        💳 Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
+        Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
       </div>
 
       <label style="display:block; margin-bottom:14px;">
@@ -1706,7 +1746,7 @@ async function submitSettleBill(sessionId, grandTotal, serviceChargeCents, order
   document.querySelector('.modal-overlay')?.remove();
 
   if (paymentMethod === 'kpay') {
-    if (!window._kpayTerminal) return alert('❌ No active KPay terminal configured.');
+    if (!window._kpayTerminal) return alert('No active KPay terminal configured.');
     await startKPayPayment({
       sessionId,
       finalAmount,
@@ -1758,9 +1798,9 @@ async function loadKPayOrderDetails(orderId, outTradeNo) {
 
     let statusExtra = '';
     if (txn.status === 'voided' && completedAtStr) {
-      statusExtra = `<div style="margin-top:4px; color:#b45309;">🚫 Voided on ${completedAtStr}</div>`;
+      statusExtra = `<div style="margin-top:4px; color:#b45309;">Voided on ${completedAtStr}</div>`;
     } else if (txn.status === 'refunded') {
-      statusExtra = `<div style="margin-top:4px; color:#dc2626;">💸 Refunded${refundAmountHKD ? ` HKD ${refundAmountHKD}` : ''}${completedAtStr ? ` on ${completedAtStr}` : ''}</div>`;
+      statusExtra = `<div style="margin-top:4px; color:#dc2626;">Refunded${refundAmountHKD ? ` HKD ${refundAmountHKD}` : ''}${completedAtStr ? ` on ${completedAtStr}` : ''}</div>`;
     }
 
     const payMethodLabels = {
@@ -1794,7 +1834,7 @@ async function loadKPayOrderDetails(orderId, outTradeNo) {
     if (txn.status === 'completed' && window._kpayTerminal) {
       // Refund (only when settled)
       const refundBtn = document.createElement('button');
-      refundBtn.textContent = '💸 Refund';
+      refundBtn.textContent = 'Refund';
       refundBtn.style.cssText = 'padding:6px 14px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;';
       refundBtn.onclick = () => openHistoryKPayRefund(outTradeNo, txn);
       actionsDiv.appendChild(refundBtn);
@@ -1803,7 +1843,7 @@ async function loadKPayOrderDetails(orderId, outTradeNo) {
     if ((txn.status === 'completed' || txn.status === 'pending') && window._kpayTerminal) {
       // Void (completed-but-unsettled same-day only — terminal will reject if inappropriate)
       const voidBtn = document.createElement('button');
-      voidBtn.textContent = '🚫 Void';
+      voidBtn.textContent = 'Void';
       voidBtn.title = 'Only works for same-day, unsettled transactions';
       voidBtn.style.cssText = 'padding:6px 14px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;';
       voidBtn.onclick = () => historyKPayVoid(outTradeNo);
@@ -1942,7 +1982,7 @@ async function submitPaymentAsiaRefund(merchantReference, orderId) {
     document.getElementById('pa-refund-overlay')?.remove();
 
     if (!data.success) {
-      alert(`❌ Refund failed: ${data.error}`);
+      alert(` Refund failed: ${data.error}`);
       return;
     }
 
@@ -1952,7 +1992,7 @@ async function submitPaymentAsiaRefund(merchantReference, orderId) {
     selectOrderFromHistory(orderId);
   } catch (e) {
     document.getElementById('pa-refund-overlay')?.remove();
-    alert(`❌ Refund request failed: ${e.message}`);
+    alert(` Refund request failed: ${e.message}`);
   }
 }
 
@@ -1966,10 +2006,10 @@ async function orderVoid(orderId) {
     if (data.success) {
       selectOrderFromHistory(orderId);
     } else {
-      alert(`❌ Void failed: ${data.error}`);
+      alert(` Void failed: ${data.error}`);
     }
   } catch (e) {
-    alert(`❌ ${e.message}`);
+    alert(` ${e.message}`);
   }
 }
 
@@ -1981,10 +2021,10 @@ async function orderRefund(orderId) {
     if (data.success) {
       selectOrderFromHistory(orderId);
     } else {
-      alert(`❌ Refund failed: ${data.error}`);
+      alert(` Refund failed: ${data.error}`);
     }
   } catch (e) {
-    alert(`❌ ${e.message}`);
+    alert(` ${e.message}`);
   }
 }
 
@@ -2007,7 +2047,7 @@ async function historyKPayVoid(outTradeNo) {
       : `❌ Void failed: ${data.message || data.error}`);
     if (data.success) selectOrderFromHistory(VIEWING_HISTORICAL_ORDER);
   } catch (e) {
-    alert(`❌ Void request failed: ${e.message}`);
+    alert(` Void request failed: ${e.message}`);
   }
 }
 
@@ -2030,7 +2070,7 @@ function openHistoryKPayRefund(outTradeNo, txn) {
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal-content" style="width:400px; max-width:95vw;">
-      <h3 style="margin:0 0 14px 0;">💸 Refund KPay Transaction</h3>
+      <h3 style="margin:0 0 14px 0;">Refund KPay Transaction</h3>
       <div style="background:#f9fafb; border-radius:6px; padding:10px; font-size:12px; font-family:monospace; color:#333; margin-bottom:14px; line-height:1.8;">
         <b>outTradeNo:</b> ${outTradeNo}<br>
         <b>Type:</b> ${typeLabel}<br>
@@ -2090,7 +2130,7 @@ async function submitHistoryKPayRefund(outTradeNo, refundType) {
       : `❌ Refund failed: ${data.message || data.error}`);
     if (data.success) selectOrderFromHistory(VIEWING_HISTORICAL_ORDER);
   } catch (e) {
-    alert(`❌ Refund request failed: ${e.message}`);
+    alert(` Refund request failed: ${e.message}`);
   }
 }
 

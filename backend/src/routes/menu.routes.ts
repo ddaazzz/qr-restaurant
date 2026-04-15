@@ -303,7 +303,8 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       mi.price_cents,
       mi.available,
       mi.image_url,
-      mi.category_id,              -- ✅ ADD THIS
+      mi.category_id,
+      mi.is_meal_combo,
       mc.name AS category_name
       FROM menu_items mi
       JOIN menu_categories mc ON mc.id = mi.category_id
@@ -458,7 +459,8 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
       category_id,
       name,
       price_cents,
-      description
+      description,
+      is_meal_combo
     } = req.body;
 
     if (!category_id || !name || price_cents == null) {
@@ -478,15 +480,16 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO menu_items
-        (category_id, name, price_cents, description, available)
-      VALUES ($1, $2, $3, $4, true)
+        (category_id, name, price_cents, description, available, is_meal_combo)
+      VALUES ($1, $2, $3, $4, true, $5)
       RETURNING *
       `,
       [
         category_id,
         name.trim(),
         price_cents,
-        description || null
+        description || null,
+        is_meal_combo || false
       ]
     );
 
@@ -512,6 +515,7 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       description,
       category_id,
       is_meal_combo,
+      available,
       restaurantId
     } = req.body;
 
@@ -551,8 +555,9 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         price_cents = COALESCE($2, price_cents),
         description = COALESCE($3, description),
         category_id = COALESCE($4, category_id),
-        is_meal_combo = COALESCE($5, is_meal_combo)
-      WHERE id = $6
+        is_meal_combo = COALESCE($5, is_meal_combo),
+        available = COALESCE($6, available)
+      WHERE id = $7
       RETURNING *
       `,
       [
@@ -561,6 +566,7 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         description ?? null,
         category_id ?? null,
         is_meal_combo ?? null,
+        available ?? null,
         itemId
       ]
     );

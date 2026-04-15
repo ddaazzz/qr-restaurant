@@ -14,7 +14,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
     await client.query("BEGIN");
 
     const { tableId } = req.params;
-    const { pax, booking_id, unit_ids } = req.body;
+    const { pax, booking_id, unit_ids, customer_name, customer_phone } = req.body;
 
     if (!pax || pax <= 0) {
       return res.status(400).json({ error: "Invalid pax" });
@@ -143,14 +143,28 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
     }
     // Static mode: QR token was already generated at table creation, just use it
 
+    // Resolve customer info: explicit params > booking data > null
+    let finalCustomerName = customer_name || null;
+    let finalCustomerPhone = customer_phone || null;
+    if (booking_id && (!finalCustomerName || !finalCustomerPhone)) {
+      const bookingRes = await client.query(
+        `SELECT guest_name, phone FROM bookings WHERE id = $1`,
+        [booking_id]
+      );
+      if (bookingRes.rows.length > 0) {
+        if (!finalCustomerName) finalCustomerName = bookingRes.rows[0].guest_name || null;
+        if (!finalCustomerPhone) finalCustomerPhone = bookingRes.rows[0].phone || null;
+      }
+    }
+
     // 7️⃣ Create session WITH unit
     const insertRes = await client.query(
       `
-      INSERT INTO table_sessions (table_id, table_unit_id, pax, started_at, restaurant_id, order_type)
-      VALUES ($1, $2, $3, NOW() AT TIME ZONE 'UTC', $4, 'table')
+      INSERT INTO table_sessions (table_id, table_unit_id, pax, started_at, restaurant_id, order_type, customer_name, customer_phone)
+      VALUES ($1, $2, $3, NOW() AT TIME ZONE 'UTC', $4, 'table', $5, $6)
       RETURNING *
       `,
-      [tableId, assignedUnit.id, pax, table.restaurant_id]
+      [tableId, assignedUnit.id, pax, table.restaurant_id, finalCustomerName, finalCustomerPhone]
     );
 
     // Auto-create a blank order for this session
@@ -752,7 +766,8 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     await client.query(
       `UPDATE orders 
        SET payment_method = $1,
-           status = 'completed'
+           status = 'completed',
+           payment_status = 'paid'
        WHERE session_id = $2`,
       [payment_method, sessionId]
     );
@@ -905,7 +920,7 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
           [payment_method || 'cash', total, session.id]
         );
         await client.query(
-          `UPDATE orders SET status = 'completed', payment_method = $1 WHERE id = $2`,
+          `UPDATE orders SET status = 'completed', payment_method = $1, payment_status = 'paid' WHERE id = $2`,
           [payment_method || 'cash', order.id]
         );
       }
@@ -926,7 +941,7 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
 // Creates a "to-go" order (takeout, no table)
 router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
   const { restaurantId } = req.params;
-  const { pax, items } = req.body;
+  const { pax, items, customer_name, customer_phone } = req.body;
 
   const client = await pool.connect();
   try {
@@ -935,11 +950,11 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
     // Create to-go order session (no table_id or table_unit_id)
     const sessionRes = await client.query(
       `
-      INSERT INTO table_sessions (pax, started_at, restaurant_id, order_type)
-      VALUES ($1, NOW() AT TIME ZONE 'UTC', $2, 'to-go')
+      INSERT INTO table_sessions (pax, started_at, restaurant_id, order_type, customer_name, customer_phone)
+      VALUES ($1, NOW() AT TIME ZONE 'UTC', $2, 'to-go', $3, $4)
       RETURNING *
       `,
-      [pax || 1, restaurantId]
+      [pax || 1, restaurantId, customer_name || null, customer_phone || null]
     );
 
     const session = sessionRes.rows[0];

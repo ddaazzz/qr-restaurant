@@ -381,72 +381,77 @@
 /* Mobile responsive styles for bookings */
 @media (max-width: 768px) {
   .bookings-container {
-    padding: 12px;
+    padding: 10px;
     overflow-x: hidden;
   }
   
   .bookings-header {
     flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
   }
   
   .bookings-header h1 {
-    font-size: 20px;
+    font-size: 18px;
     width: 100%;
   }
 
   .btn-new-booking {
     text-align: center;
+    width: 100%;
+    font-size: 12px;
+    padding: 8px 12px;
   }
   
   .calendar-nav {
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 12px;
-    margin-bottom: 15px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 12px;
   }
   
   .calendar-nav h2 {
-    font-size: 18px;
+    font-size: 16px;
     min-width: 100%;
+    text-align: center;
   }
   
   .btn-month-nav {
     font-size: 12px;
     padding: 8px 12px;
     flex: 1;
-    min-width: 70px;
+    min-width: 60px;
   }
   
   .calendar-view {
-    padding: 12px;
-    margin-bottom: 12px;
+    padding: 8px;
+    margin-bottom: 10px;
   }
   
   .weekdays {
-    gap: 4px;
-    margin-bottom: 6px;
+    gap: 2px;
+    margin-bottom: 4px;
   }
   
   .weekday {
-    padding: 6px 2px;
-    font-size: 10px;
+    padding: 4px 2px;
+    font-size: 9px;
   }
   
   .calendar-days {
-    gap: 4px;
-    grid-auto-rows: 70px;
+    gap: 3px;
+    grid-auto-rows: 50px;
   }
   
   .calendar-day {
-    padding: 4px 2px;
-    font-size: 12px;
+    padding: 3px 2px;
+    font-size: 11px;
+    min-height: 40px;
   }
   
   .calendar-day-number {
-    font-size: 11px;
+    font-size: 10px;
   }
   
   .calendar-day-bookings {
@@ -454,17 +459,23 @@
   }
   
   .bookings-list-section {
-    padding: 12px;
-    min-height: 300px;
+    padding: 10px;
+    min-height: 250px;
     border-radius: 8px;
   }
   
+  .bookings-list-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  
   .bookings-list-header h3 {
-    font-size: 16px;
+    font-size: 15px;
   }
   
   .booking-search-input {
-    width: 160px;
+    width: 100%;
   }
   
   .bookings-list {
@@ -474,42 +485,44 @@
   .booking-row-phone {
     display: none;
   }
-}
 
-@media (max-width: 480px) {
-  .bookings-container {
-    padding: 8px;
+  /* Fix booking rows overlapping on mobile */
+  .booking-row {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 8px 10px;
   }
-  
-  .bookings-header h1 {
-    font-size: 18px;
+
+  .booking-row-name {
+    flex: 1 1 60%;
+    min-width: 0;
   }
-  
-  .btn-new-booking {
-    width: 100%;
+
+  .booking-row-name strong {
+    font-size: 13px;
+  }
+
+  .booking-row-pax {
+    flex: 0 0 auto;
     font-size: 12px;
-    padding: 8px 12px;
+    min-width: auto;
   }
-  
-  .calendar-nav {
-    flex-direction: column;
+
+  .booking-row-time {
+    flex: 0 0 auto;
+    font-size: 12px;
+    min-width: auto;
   }
-  
-  .btn-month-nav {
-    flex: 1 1 auto;
-  }
-  
-  .weekday {
+
+  .booking-row .booking-status-badge {
     font-size: 9px;
+    padding: 2px 6px;
   }
-  
-  .calendar-day {
-    min-height: 50px;
-    font-size: 11px;
-  }
-  
-  .calendar-day-number {
-    font-size: 10px;
+
+  .booking-row .booking-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    gap: 4px;
   }
   
   .booking-guest {
@@ -518,6 +531,35 @@
   
   .booking-card {
     min-height: auto;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  #booking-form {
+    padding: 16px;
+  }
+
+  .modal-content {
+    max-height: 85vh;
+    max-width: 90%;
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-footer {
+    padding: 16px;
+    gap: 8px;
+  }
+
+  .modal-footer button {
+    padding: 10px 16px;
+    font-size: 14px;
   }
 }
 
@@ -807,59 +849,6 @@
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .bookings-container {
-    padding: 15px;
-  }
-
-  .bookings-header {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .calendar-nav {
-    flex-wrap: wrap;
-  }
-
-  .calendar-nav h2 {
-    width: 100%;
-  }
-
-  .bookings-list {
-    gap: 0;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  #booking-form {
-    padding: 16px;
-  }
-
-  .modal-content {
-    max-height: 85vh;
-    max-width: 90%;
-    overflow-y: auto;
-  }
-
-  .modal-header {
-    padding: 16px;
-  }
-
-  .modal-footer {
-    padding: 16px;
-    gap: 8px;
-  }
-
-  .modal-footer button {
-    padding: 10px 16px;
-    font-size: 14px;
-  }
-}
-
 /* ============================================================
    BOOKING DETAIL MODAL
    ============================================================ */

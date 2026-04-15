@@ -74,8 +74,8 @@ function createMenuItemCardElement(item, isEditMode) {
     imgEl.src = item.image_url;
   } else {
     imgEl.src = '/uploads/website/placeholder.png';
+    imgEl.style.display = '';
   }
-  imgEl.alt = item.name || '';
   
   card.querySelector('.menu-item-name').textContent = item.name;
   card.querySelector('.menu-item-price').textContent = '$' + (item.price_cents / 100).toFixed(2);
@@ -1212,8 +1212,6 @@ function cancelFoodItemEdit() {
   cancelBtn.style.display = 'none';
   
   if (changeImageBtn) changeImageBtn.style.display = 'none';
-    const hasVariantsCheckboxSection = document.getElementById('food-panel-has-variants-checkbox-section');
-    const isMealComboCheckboxSection = document.getElementById('food-panel-is-meal-combo-checkbox-section');
     if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
     if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
   
@@ -1271,9 +1269,7 @@ async function saveFoodItemEdit() {
       });
       
       if (!uploadRes.ok) {
-        const errData = await uploadRes.json().catch(() => ({}));
-        console.error('Failed to upload image:', uploadRes.status, errData);
-        showToast('Item saved but image upload failed: ' + (errData.error || uploadRes.status), 'error');
+        console.warn('Failed to upload image, but item updated successfully');
       }
     }
     
@@ -1360,7 +1356,7 @@ async function deleteVariantFromPanel(variantId) {
   if (!confirm('Delete this variant?')) return;
   
   try {
-    const res = await fetch(`${API}/variants/${variantId}`, {
+    const res = await fetch(`${API}/menu-items/${currentEditingItemId}/variants/${variantId}`, {
       method: 'DELETE'
     });
     
@@ -2133,7 +2129,7 @@ async function updateVariant(itemId, groupId, changes) {
 async function deleteVariant(itemId, groupId) {
   if (!confirm("Delete this variant group?")) return;
 
-  const res = await fetch(`${API}/variants/${groupId}`, {
+  const res = await fetch(`${API}/menu-items/${itemId}/variants/${groupId}`, {
     method: "DELETE"
   });
 

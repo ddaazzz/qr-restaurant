@@ -42,6 +42,19 @@ interface Session {
   order_id?: number;
 }
 
+interface Booking {
+  id: number;
+  table_id: number;
+  guest_name: string;
+  phone?: string;
+  pax: number;
+  booking_time: string;
+  booking_date: string;
+  status: string;
+  session_id?: number;
+  notes?: string;
+}
+
 interface Table {
   id: number;
   name: string;
@@ -50,6 +63,7 @@ interface Table {
   sessions: Session[];
   reserved?: boolean;
   booking_time?: string;
+  bookings?: Booking[];
   units: Array<{ id: number; qr_token: string; display_name?: string }>;
 }
 
@@ -157,6 +171,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [showSessionGearMenu, setShowSessionGearMenu] = useState(false);
   const [showChangePaxModal, setShowChangePaxModal] = useState(false);
   const [showMoveTableModal, setShowMoveTableModal] = useState(false);
+  const [showBookingStartModal, setShowBookingStartModal] = useState(false);
+  const [bookingToStart, setBookingToStart] = useState<{ tableId: number; booking: Booking } | null>(null);
   const [newPaxValue, setNewPaxValue] = useState('');
   const [selectedMoveTable, setSelectedMoveTable] = useState<number | null>(null);
 
@@ -300,6 +316,45 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       });
 
       const tableArray = Object.values(tableMap);
+
+      // Load today's bookings to mark reserved tables
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const bookingsRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/bookings?date=${todayStr}`
+        );
+        if (bookingsRes.data && Array.isArray(bookingsRes.data)) {
+          bookingsRes.data.forEach((b: any) => {
+            if (b.table_id && b.status !== 'cancelled' && b.status !== 'completed') {
+              const table = tableArray.find(t => t.id === b.table_id);
+              if (table) {
+                if (!b.session_id) {
+                  table.reserved = true;
+                  if (!table.booking_time || b.booking_time < table.booking_time) {
+                    table.booking_time = b.booking_time;
+                  }
+                }
+                if (!table.bookings) table.bookings = [];
+                table.bookings.push({
+                  id: b.id,
+                  table_id: b.table_id,
+                  guest_name: b.guest_name,
+                  phone: b.phone,
+                  pax: b.pax,
+                  booking_time: b.booking_time,
+                  booking_date: b.booking_date,
+                  status: b.status,
+                  session_id: b.session_id,
+                  notes: b.notes,
+                });
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Could not load bookings for reservation status');
+      }
+
       setTables(tableArray);
 
       if (!selectedCategory && categoriesRes.data.length > 0) {
@@ -465,6 +520,22 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     }
   };
 
+  const getReservationTimeInfo = (table: Table) => {
+    if (!table.reserved || !table.booking_time) return null;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const bookingTime = new Date(`${todayStr}T${table.booking_time}`);
+    const timeRemaining = bookingTime.getTime() - now.getTime();
+    if (timeRemaining <= 0) return { text: 'Now', isNow: true };
+    const minutesRemaining = Math.floor(timeRemaining / 60000);
+    if (minutesRemaining < 60) {
+      return { text: `In ${minutesRemaining}m`, isNow: false };
+    }
+    const hours = Math.floor(minutesRemaining / 60);
+    const mins = minutesRemaining % 60;
+    return { text: mins > 0 ? `In ${hours}h ${mins}m` : `In ${hours}h`, isNow: false };
+  };
+
   const getTableCardColor = (table: Table) => {
     if (table.sessions.length === 0 && !table.reserved) return '#dddddd';
     if (table.sessions.length > 1) return '#2C3E50';
@@ -486,7 +557,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         return '#2C3E50';
       }
     }
-    if (table.reserved) return '#e0e7ff';
+    if (table.reserved) return '#dddddd';
     return '#dddddd';
   };
 
@@ -768,6 +839,31 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       }
     } catch (err: any) {
       console.error('[AutoPrintQR] Error:', err);
+    }
+  };
+
+  const startSessionFromBooking = async (tableId: number, booking: Booking) => {
+    setBookingToStart({ tableId, booking });
+    setShowBookingStartModal(true);
+  };
+
+  const confirmStartSessionFromBooking = async () => {
+    if (!bookingToStart) return;
+    const { tableId, booking } = bookingToStart;
+    try {
+      await apiClient.post(`/api/tables/${tableId}/sessions`, {
+        pax: booking.pax,
+        booking_id: booking.id,
+        customer_name: booking.guest_name,
+        customer_phone: booking.phone || '',
+      });
+      setShowBookingStartModal(false);
+      setBookingToStart(null);
+      await loadTableData();
+      setSelectedTable(null);
+      setCurrentView('grid');
+    } catch (err: any) {
+      Alert.alert(t('common.error') || 'Error', err.response?.data?.error || 'Failed to start session');
     }
   };
 
@@ -1744,7 +1840,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const totals = calculateTotal();
   const screenWidth = Dimensions.get('window').width;
   const sidebarWidth = 130;
-  const contentWidth = screenWidth - sidebarWidth - 24; // 24 for padding
+  const contentWidth = isTablet ? screenWidth - sidebarWidth - 24 : screenWidth - 24; // iPhone sidebar is overlay
   const tableNumColumns = isTablet ? (screenWidth > 1100 ? 5 : 4) : (screenWidth > 500 ? 3 : 2);
   const tableCardMaxWidth = Math.floor(contentWidth / tableNumColumns) - 12; // 12 for gap
 
@@ -2056,6 +2152,30 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           </View>
         </Modal>
 
+        {/* Booking Start Modal */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingStartModal} animationType="fade" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{t('admin.start-session') || 'Start Session'}</Text>
+              {bookingToStart && (
+                <>
+                  <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 4 }}>{bookingToStart.booking.guest_name}</Text>
+                  <Text style={{ fontSize: 14, color: '#666', marginBottom: 4 }}>{bookingToStart.booking.pax} {t('admin.guests') || 'guests'}</Text>
+                  {bookingToStart.booking.phone ? <Text style={{ fontSize: 14, color: '#666' }}>{bookingToStart.booking.phone}</Text> : null}
+                </>
+              )}
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { setShowBookingStartModal(false); setBookingToStart(null); }}>
+                  <Text style={styles.btnText}>{t('common.cancel') || 'Cancel'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={confirmStartSessionFromBooking}>
+                  <Text style={styles.btnText}>{t('admin.start-session') || 'Start'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Change Pax Modal */}
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showChangePaxModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
@@ -2269,6 +2389,31 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           >
             <Text style={styles.btnText}>{t('admin.book-table')}</Text>
           </TouchableOpacity>
+          {/* Upcoming Reservations */}
+          {selectedTable.bookings && selectedTable.bookings.filter(b => !b.session_id).length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{t('admin.upcoming-reservations') || 'Upcoming Reservations'}</Text>
+              {selectedTable.bookings.filter(b => !b.session_id).map((booking) => (
+                <TouchableOpacity
+                  key={booking.id}
+                  style={{ padding: 10, backgroundColor: '#f5f5f5', borderLeftWidth: 3, borderLeftColor: '#4a90e2', borderRadius: 4, marginBottom: 8 }}
+                  onPress={() => startSessionFromBooking(selectedTable.id, booking)}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '700', fontSize: 14 }}>#{booking.id} - {booking.guest_name}</Text>
+                      <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                        {booking.booking_time} · {booking.phone || 'N/A'} · {booking.pax} {t('admin.guests') || 'guests'}
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>{t('admin.tap-to-start') || 'Tap to start'}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
         </ScrollView>
 
         {/* Session Modal */}
@@ -2549,7 +2694,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                             ))}
                           </View>
                         ) : table.reserved ? (
-                          <Text style={[styles.tableCardAvailableText, { color: '#ffc107' }]}>Reserved</Text>
+                          <View style={{ backgroundColor: '#ffc107', borderRadius: 6, paddingVertical: 3, paddingHorizontal: 10, alignSelf: 'center' }}>
+                            <Text style={{ color: '#000', fontWeight: '700', fontSize: 11 }}>
+                              {getReservationTimeInfo(table)?.text || 'Reserved'}
+                            </Text>
+                          </View>
                         ) : (
                           <Text style={[styles.tableCardAvailableText, textColor]}>Available</Text>
                         )}
@@ -2642,6 +2791,31 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowBookingModal(true)}>
               <Text style={styles.btnText}>{t('admin.book-table')}</Text>
             </TouchableOpacity>
+            {/* Upcoming Reservations */}
+            {selectedTable.bookings && selectedTable.bookings.filter(b => !b.session_id).length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{t('admin.upcoming-reservations') || 'Upcoming Reservations'}</Text>
+                {selectedTable.bookings.filter(b => !b.session_id).map((booking) => (
+                  <TouchableOpacity
+                    key={booking.id}
+                    style={{ padding: 10, backgroundColor: '#f5f5f5', borderLeftWidth: 3, borderLeftColor: '#4a90e2', borderRadius: 4, marginBottom: 8 }}
+                    onPress={() => startSessionFromBooking(selectedTable.id, booking)}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: '700', fontSize: 14 }}>#{booking.id} - {booking.guest_name}</Text>
+                        <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                          {booking.booking_time} · {booking.phone || 'N/A'} · {booking.pax} {t('admin.guests') || 'guests'}
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>{t('admin.tap-to-start') || 'Tap to start'}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
           </ScrollView>
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSessionModal} animationType="fade" transparent onDismiss={() => Keyboard.dismiss()}>
             <Pressable style={styles.modalOverlay} onPress={() => { Keyboard.dismiss(); setShowSessionModal(false); }}>
@@ -2904,6 +3078,28 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={closeBill}>
                     <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingStartModal} animationType="fade" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>{t('admin.start-session') || 'Start Session'}</Text>
+                {bookingToStart && (
+                  <>
+                    <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 4 }}>{bookingToStart.booking.guest_name}</Text>
+                    <Text style={{ fontSize: 14, color: '#666', marginBottom: 4 }}>{bookingToStart.booking.pax} {t('admin.guests') || 'guests'}</Text>
+                    {bookingToStart.booking.phone ? <Text style={{ fontSize: 14, color: '#666' }}>{bookingToStart.booking.phone}</Text> : null}
+                  </>
+                )}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { setShowBookingStartModal(false); setBookingToStart(null); }}>
+                    <Text style={styles.btnText}>{t('common.cancel') || 'Cancel'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={confirmStartSessionFromBooking}>
+                    <Text style={styles.btnText}>{t('admin.start-session') || 'Start'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>

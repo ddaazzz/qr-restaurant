@@ -58,7 +58,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabType>('tables');
   const isTabletDevice = (Platform as any).isPad;
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(isTabletDevice);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const [restaurants, setRestaurants] = useState<Array<{ id: number; name: string }>>([]);
@@ -68,11 +68,37 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [tableCategories, setTableCategories] = useState<Array<{ id: number; name?: string; key?: string }>>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
-  const [showRoomDropdown, setShowRoomDropdown] = useState(false);  const tablesTabRef = useRef<TablesTabRef>(null);
+  const [showRoomDropdown, setShowRoomDropdown] = useState(false);
+  const [unpaidOrderCount, setUnpaidOrderCount] = useState(0);
+  const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
   const staffTabRef = useRef<StaffTabRef>(null);
   const ordersTabRef = useRef<any>(null);
   const bookingsTabRef = useRef<BookingsTabRef>(null);
+
+  // Load unpaid order count for sidebar badge
+  const loadUnpaidCount = useCallback(async () => {
+    try {
+      const response = await apiClient.get(`/api/restaurants/${user.restaurantId}/orders?limit=500`);
+      const allOrders = Array.isArray(response.data) ? response.data : [];
+      const count = allOrders.filter((o: any) => {
+        const effStatus = o.cp_status || o.payment_status;
+        const isPaid = o.payment_received || effStatus === 'completed' || effStatus === 'paid';
+        const isVoided = effStatus === 'voided' || effStatus === 'cancelled';
+        const isRefunded = effStatus === 'refunded';
+        return !isPaid && !isVoided && !isRefunded && o.total_cents > 0;
+      }).length;
+      setUnpaidOrderCount(count);
+    } catch (err) {
+      // Ignore errors
+    }
+  }, [user?.restaurantId]);
+
+  useEffect(() => {
+    loadUnpaidCount();
+    const interval = setInterval(loadUnpaidCount, 30000);
+    return () => clearInterval(interval);
+  }, [loadUnpaidCount]);
 
   // Show clock-in prompt for staff who haven't clocked in
   useEffect(() => {
@@ -281,7 +307,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     <View style={styles.rootContainer}>
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
-        <View style={[styles.header, (isTabletDevice || sidebarOpen) && { marginLeft: 138 }]}>
+        <View style={[styles.header, isTabletDevice && { marginLeft: 138 }]}>
         {!isTabletDevice && (
         <TouchableOpacity 
           onPress={() => setSidebarOpen(!sidebarOpen)}
@@ -290,10 +316,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           <Ionicons name={sidebarOpen ? 'chevron-back' : 'menu'} size={20} color="#374151" />
         </TouchableOpacity>
         )}
-        <Text style={styles.title}>{getTabDisplayName()}</Text>
+        <Text style={[styles.title, !isTabletDevice && { fontSize: 16 }]}>{getTabDisplayName()}</Text>
         <View style={styles.headerRightSection}>
           {showSearchBar && (
-            <View style={styles.searchBarContainer}>
+            <View style={[styles.searchBarContainer, !isTabletDevice && { maxWidth: 140 }]}>
               <Ionicons name="search" size={16} color="#9ca3af" style={{ marginLeft: 8 }} />
               <TextInput
                 style={styles.searchInput}
@@ -344,54 +370,79 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         <View style={styles.headerCenterActions}>
           {activeTab === 'tables' && (
             <TouchableOpacity 
-              style={styles.headerActionBtn}
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
               onPress={handleEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>{t('common.edit')}</Text>
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>{t('common.edit')}</Text>
+              ) : (
+                <Ionicons name="pencil" size={16} color="#fff" />
+              )}
             </TouchableOpacity>
           )}
           {activeTab === 'staff' && (
             <TouchableOpacity 
-              style={styles.headerActionBtn}
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
               onPress={handleStaffEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>{t('common.edit')}</Text>
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>{t('common.edit')}</Text>
+              ) : (
+                <Ionicons name="pencil" size={16} color="#fff" />
+              )}
             </TouchableOpacity>
           )}
           {activeTab === 'menu' && (
             <TouchableOpacity 
-              style={styles.headerActionBtn}
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
               onPress={handleMenuEditToggle}
             >
-              <Text style={styles.headerActionBtnText}>{t('common.edit')}</Text>
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>{t('common.edit')}</Text>
+              ) : (
+                <Ionicons name="pencil" size={16} color="#fff" />
+              )}
             </TouchableOpacity>
           )}
           {activeTab === 'orders' && (
             <TouchableOpacity 
-              style={styles.headerActionBtn}
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
               onPress={handleHistoryToggle}
             >
-              <Text style={styles.headerActionBtnText}>{t('admin.order-history')}</Text>
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>{t('admin.order-history')}</Text>
+              ) : (
+                <Ionicons name="time" size={16} color="#fff" />
+              )}
             </TouchableOpacity>
           )}
           {activeTab === 'bookings' && (
             <TouchableOpacity 
-              style={styles.headerActionBtn}
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
               onPress={() => bookingsTabRef.current?.openNewBookingModal()}
             >
-              <Text style={styles.headerActionBtnText}>+ {t('common.new')}</Text>
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>+ {t('common.new')}</Text>
+              ) : (
+                <Ionicons name="add" size={18} color="#fff" />
+              )}
             </TouchableOpacity>
           )}
           <TouchableOpacity 
-            style={styles.headerActionBtn}
+            style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
             onPress={handleScanQR}
           >
-            <Text style={styles.headerActionBtnText}>{t('admin.scan-qr')}</Text>
+            {isTabletDevice ? (
+              <Text style={styles.headerActionBtnText}>{t('admin.scan-qr')}</Text>
+            ) : (
+              <Ionicons name="qr-code" size={16} color="#fff" />
+            )}
           </TouchableOpacity>
           {user?.role === 'staff' && (
             <TouchableOpacity 
               style={[
                 styles.headerActionBtn,
+                !isTabletDevice && styles.headerActionBtnPhone,
                 { backgroundColor: user?.currently_clocked_in ? '#e74c3c' : '#27ae60' },
               ]}
               onPress={handleClockToggle}
@@ -399,40 +450,55 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             >
               {clockLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
-              ) : (
+              ) : isTabletDevice ? (
                 <Text style={styles.headerActionBtnText}>
                   {user?.currently_clocked_in ? t('admin.clock-out') : t('admin.clock-in')}
                 </Text>
+              ) : (
+                <Ionicons name={user?.currently_clocked_in ? 'log-out' : 'log-in'} size={16} color="#fff" />
               )}
             </TouchableOpacity>
           )}
         </View>
         <TouchableOpacity 
-          style={styles.adminBtn}
+          style={[styles.adminBtn, !isTabletDevice && styles.headerActionBtnPhone]}
           onPress={openAdminDropdown}
         >
-          <Text style={styles.adminBtnText}>Admin <Ionicons name="chevron-down" size={12} color="#374151" /></Text>
+          {isTabletDevice ? (
+            <Text style={styles.adminBtnText}>Admin <Ionicons name="chevron-down" size={12} color="#374151" /></Text>
+          ) : (
+            <Ionicons name="person-circle" size={18} color="#fff" />
+          )}
         </TouchableOpacity>
         </View>{/* end headerRightSection */}
       </View>
 
       {/* Main Layout — content area with left margin for sidebar */}
-      <View style={[styles.mainLayout, (isTabletDevice || sidebarOpen) && { marginLeft: 138 }]}>
+      <View style={[styles.mainLayout, isTabletDevice && { marginLeft: 138 }]}>
         <View style={styles.content} key={`tab-${activeTab}`}>{renderTabContent()}</View>
       </View>
       </SafeAreaView>
 
+      {/* Sidebar backdrop for iPhone overlay */}
+      {!isTabletDevice && sidebarOpen && (
+        <TouchableOpacity
+          style={styles.sidebarBackdrop}
+          activeOpacity={1}
+          onPress={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar — rendered OUTSIDE SafeAreaView, positioned absolutely to fill full screen height */}
       {(isTabletDevice || sidebarOpen) && (
-        <View style={styles.sidebarAbsolute}>
-          <SafeAreaView style={styles.sidebarSafeArea}>
+        <View style={[styles.sidebarAbsolute, !isTabletDevice && styles.sidebarAbsolutePhone, !isTabletDevice && { zIndex: 11 }]}>
+          <SafeAreaView style={[styles.sidebarSafeArea, !isTabletDevice && styles.sidebarSafeAreaPhone]}>
             {/* Brand at top */}
             <View style={styles.sidebarBrandContainer}>
               <Text style={styles.sidebarBrand}>chuio.io</Text>
             </View>
 
             {/* Tab buttons — fill remaining space */}
-            <ScrollView style={styles.sidebarTabsContainer} contentContainerStyle={isTabletDevice ? { flex: 1, justifyContent: 'space-evenly' } : { paddingVertical: 4 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.sidebarTabsContainer} contentContainerStyle={{ flex: 1, justifyContent: 'space-evenly' }} showsVerticalScrollIndicator={false}>
               {visibleTabs.map(
                 (tab) => {
                   const tabConfig: Record<TabType, { label: string; icon: string }> = {
@@ -450,14 +516,21 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                     <TouchableOpacity
                       key={tab}
                       style={[styles.sidebarTab, !isTabletDevice && styles.sidebarTabPhone, activeTab === tab && styles.sidebarTabActive]}
-                      onPress={() => { setActiveTab(tab); setSearchQuery(''); }}
+                      onPress={() => { setActiveTab(tab); setSearchQuery(''); if (!isTabletDevice) setSidebarOpen(false); }}
                     >
-                      <Ionicons 
-                        name={config.icon as any} 
-                        size={iconSize} 
-                        color={activeTab === tab ? '#fff' : 'rgba(255,255,255,0.55)'} 
-                        style={isTabletDevice ? styles.sidebarIcon : styles.sidebarIconPhone}
-                      />
+                      <View style={{ position: 'relative' }}>
+                        <Ionicons 
+                          name={config.icon as any} 
+                          size={iconSize} 
+                          color={activeTab === tab ? '#fff' : 'rgba(255,255,255,0.55)'} 
+                          style={isTabletDevice ? styles.sidebarIcon : styles.sidebarIconPhone}
+                        />
+                        {tab === 'orders' && unpaidOrderCount > 0 && (
+                          <View style={{ position: 'absolute', top: -4, right: -8, backgroundColor: '#ef4444', borderRadius: 9, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{unpaidOrderCount > 99 ? '99+' : unpaidOrderCount}</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={[styles.sidebarTabText, !isTabletDevice && styles.sidebarTabTextPhone, activeTab === tab && styles.sidebarTabTextActive]}>
                         {config.label}
                       </Text>
@@ -914,5 +987,33 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 16,
     fontWeight: '500',
+  },
+  sidebarBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    zIndex: 9,
+  },
+  headerActionBtnPhone: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minWidth: 36,
+    alignItems: 'center' as any,
+    justifyContent: 'center' as any,
+  },
+  sidebarAbsolutePhone: {
+    paddingTop: 0,
+    paddingLeft: 0,
+    paddingBottom: 0,
+    width: 80,
+    backgroundColor: '#1e293b',
+  },
+  sidebarSafeAreaPhone: {
+    borderRadius: 0,
+    paddingHorizontal: 4,
+    paddingVertical: 0,
   },
 });

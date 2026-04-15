@@ -181,19 +181,19 @@
     flex-direction: column;
     gap: 0;
     padding: 0;
-    height: calc(100vh - 140px);
-    margin-left: 100px;
+    height: calc(100vh - 100px);
+    margin-left: 80px;
     position: relative;
   }
   
   .table-tabs-bottom {
     display: flex;
-    width: 100px;
-    height: calc(100vh - 70px);
+    width: 80px;
+    height: calc(100vh - 50px);
     flex-direction: column;
     position: fixed;
     left: 0;
-    top: 70px;
+    top: 50px;
     background: var(--bg-white);
     border-right: 2px solid var(--border-color);
     overflow-y: auto;
@@ -204,7 +204,7 @@
   }
   
   .table-tabs-bottom button {
-    padding: 12px 8px;
+    padding: 10px 6px;
     border-radius: 0;
     border: none;
     border-bottom: 1px solid var(--border-color);
@@ -214,10 +214,10 @@
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     cursor: pointer;
     transition: all 0.2s ease;
-    font-size: 11px;
+    font-size: 10px;
     flex: 0 0 auto;
     text-align: center;
-    min-height: 48px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -239,54 +239,7 @@
     background: #5a5a5a;
     color: var(--bg-white);
   }
-}
 
-@media (max-width: 480px) {
-  .tables-container {
-    margin-left: 80px;
-    padding: 0;
-    height: calc(100vh - 140px);
-  }
-  
-  .table-tabs-bottom {
-    width: 80px;
-    top: 60px;
-    height: calc(100vh - 60px);
-    padding: 0;
-    gap: 0;
-    flex-direction: column;
-    border-right: 2px solid var(--border-color);
-    border-top: none;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-  
-  .table-tabs-bottom button {
-    font-size: 10px;
-    padding: 10px 6px;
-    border: none;
-    border-bottom: 1px solid var(--border-color);
-    width: 100%;
-    height: auto;
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    white-space: normal;
-    word-break: break-word;
-    flex: 0 0 auto;
-  }
-  
-  .table-tabs-bottom button:last-child {
-    border-bottom: none;
-  }
-  
-  .table-tabs-bottom button.active {
-    background: #5a5a5a;
-    color: white;
-  }
-  
   .table-tabs-bottom button.add-category-btn {
     background: #5a5a5a;
     color: white;
@@ -327,14 +280,6 @@
 }
 
 @media (max-width: 768px) {
-  .tables-top-bar {
-    margin-left: 0;
-    width: 100%;
-    padding-left: 0;
-  }
-}
-
-@media (max-width: 480px) {
   .tables-top-bar {
     margin-left: 0;
     width: 100%;
@@ -409,16 +354,6 @@
 
 /* Ensure table cards display in responsive grid on all screen sizes */
 @media (max-width: 768px) {
-  #tables-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    padding: 12px 12px 12px 100px;
-    margin-left: 0;
-    width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
   #tables-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
@@ -529,11 +464,15 @@ body.edit-mode .table-card {
 }
 
 .table-card-reservation-time.reservation-upcoming {
-  color: #ffc107;
+  color: #333;
+  background: #ffc107;
+  border-radius: 6px;
 }
 
 .table-card-reservation-time.reservation-now {
-  color: #d32f2f;
+  color: #fff;
+  background: #d32f2f;
+  border-radius: 6px;
 }
 
 .table-card-sessions-list {
@@ -851,37 +790,16 @@ body.edit-mode .table-edit-controls {
     min-width: 100%;
     max-width: 100%;
     width: 100%;
-    height: calc(100vh - 70px);
+    height: calc(100vh - 50px);
     right: 0;
-    top: 70px;
-    left: auto;
-    transform: translateX(100%);
-    border-left: none;
-    border-right: 2px solid var(--border-color);
-    z-index: 100;
-    border-radius: 0;
-  }
-
-  .session-panel.active {
-    transform: translateX(0);
-  }
-}
-
-@media (max-width: 480px) {
-  .session-panel {
-    position: fixed;
-    flex: 0 0 100%;
-    min-width: 100%;
-    max-width: 100%;
-    width: 100%;
-    height: calc(100vh - 60px);
-    right: 0;
-    top: 60px;
+    top: 50px;
     left: auto;
     transform: translateX(100%);
     padding: 12px;
     border-left: none;
     border-right: none;
+    z-index: 100;
+    border-radius: 0;
   }
 
   .session-panel.active {
