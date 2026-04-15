@@ -1053,8 +1053,13 @@ function renderOrdersDrawer(orders, tableName) {
         const thumbHtml = thumbUrl
           ? `<img class="order-item-thumb" src="${thumbUrl}" alt="${itemName}" loading="lazy">`
           : `<div class="order-item-thumb order-item-thumb-placeholder"></div>`;
+        const addonTotal = (item.addons || []).reduce((sum, a) => sum + (Number(a.item_total_cents) || Number(a.unit_price_cents) * Number(a.quantity) || 0), 0);
+        subtotal += addonTotal;
         const addonsHtml = item.addons && item.addons.length > 0 
-          ? item.addons.map(addon => `<div style="font-size: 11px; color: #666; margin-left: 12px; margin-top: 2px;">+ ${(addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity}</div>`).join('')
+          ? item.addons.map(addon => {
+            const addonPrice = Number(addon.item_total_cents) || Number(addon.unit_price_cents) * Number(addon.quantity) || 0;
+            return `<div style="font-size: 11px; color: #667eea; margin-left: 12px; margin-top: 2px;">+ ${(addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity} <span style="color:#888;">$${(addonPrice / 100).toFixed(2)}</span></div>`;
+          }).join('')
           : '';
 
         html += `
@@ -1163,8 +1168,13 @@ function renderCartDrawer() {
 
   let html = '<div class="cart-items">';
   html += cart.items.map((item, idx) => {
-    const line = item.totalPriceCents * item.quantity;
+    const addonTotal = (item.addons || []).reduce((s, a) => s + (a.priceCents || 0) * (a.quantity || 1), 0);
+    const line = (item.totalPriceCents + addonTotal) * item.quantity;
     subtotal += line;
+
+    const addonsHtml = (item.addons || []).map(a => 
+      `<div style="font-size: 11px; color: #667eea; margin-top: 2px; padding-left: 4px;">+ ${a.name} <span style="color:#888;">$${(a.priceCents / 100).toFixed(2)}</span></div>`
+    ).join('');
 
     return `
       <div class="cart-item">
@@ -1176,6 +1186,7 @@ function renderCartDrawer() {
               <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
             </div>
             ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}
+            ${addonsHtml}
             <div class="qty-controls">
               <button class="qty-btn" onclick="updateCartQty(${idx}, -1)">−</button>
               <span class="qty-display">${item.quantity}</span>
@@ -1260,7 +1271,10 @@ function updateCartBar() {
 
   const count = cart.items.reduce((s, i) => s + i.quantity, 0);
   const subtotalCents = cart.items.reduce(
-    (sum, i) => sum + i.totalPriceCents * i.quantity,
+    (sum, i) => {
+      const addonTotal = (i.addons || []).reduce((s, a) => s + (a.priceCents || 0) * (a.quantity || 1), 0);
+      return sum + (i.totalPriceCents + addonTotal) * i.quantity;
+    },
     0
   );
   const serviceCharge = Math.round(subtotalCents * serviceChargePct / 100);
