@@ -2308,10 +2308,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {item.addons && item.addons.length > 0 && (
                       <View style={{ marginTop: 2 }}>
                         {item.addons.map((a, ai) => (
-                          <Text key={ai} style={{ fontSize: 11, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
-                          {a.variants && a.variants.length > 0 && a.variants.map((v, vi) => (
-                            <Text key={`av${vi}`} style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
-                          ))}
+                          <React.Fragment key={ai}>
+                            <Text style={{ fontSize: 11, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
+                            {a.variants && a.variants.length > 0 && a.variants.map((v, vi) => (
+                              <Text key={`av${vi}`} style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
+                            ))}
+                          </React.Fragment>
                         ))}
                       </View>
                     )}
