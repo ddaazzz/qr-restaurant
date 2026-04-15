@@ -1,9 +1,3 @@
-//Swipe
-  let touchStartY = 0;
-  let touchCurrentY = 0;
-  let mouseStartY = 0;
-  let mouseCurrentY = 0;
-  let dragging = false;
   let activeDrawer = null;
 
   const API_BASE = (() => {
@@ -157,7 +151,6 @@ async function initLanding() {
   
   // Apply restaurant language preference if available
   if (session.language_preference) {
-    console.log('[Menu] Applying restaurant language preference:', session.language_preference);
     localStorage.setItem('restaurantLanguage', session.language_preference);
     if (typeof setLanguage === 'function') {
       setLanguage(session.language_preference);
@@ -170,7 +163,6 @@ async function initLanding() {
     }
   }
   
-console.log("Session data:", session, "Pax value:", session.pax);
   // 🔥 Populate landing page
   const logoEl = document.getElementById("logo")
   if (logoEl){
@@ -182,7 +174,6 @@ console.log("Session data:", session, "Pax value:", session.pax);
     } else {
       logoEl.style.display = 'none';
     }
-    console.log("Logo URL set to:", logoUrl);
   }
 
   // 🔥 Apply background image with dark overlay (LANDING PAGE ONLY)
@@ -194,11 +185,9 @@ console.log("Session data:", session, "Pax value:", session.pax);
     landingPage.style.backgroundAttachment = "fixed";
     landingPage.style.backgroundRepeat = "no-repeat";
     landingPage.classList.remove("no-background");
-    console.log("Background image set with 60% dark overlay and phone sizing:", session.background_url);
   } else {
     // No background: apply black text class for visibility
     landingPage.classList.add("no-background");
-    console.log("No background image, applied black text styling");
   }
 
   // Store cleanup function to reset background when leaving menu
@@ -218,7 +207,6 @@ console.log("Session data:", session, "Pax value:", session.pax);
   const tableNameEl = document.getElementById("tableInfo")
   if (tableNameEl){
     tableNameEl.textContent = `${session.table_name} • ${t('menu.pax-label')} ${session.pax != null ? session.pax : "-"}`;
-    console.log("Table info set to:", tableNameEl.textContent, "with pax:", session.pax);
   }
   const addressEl = document.getElementById("address")
   if (addressEl){
@@ -371,7 +359,6 @@ function renderMenu(menu) {
     const categoryItems = items.filter(
       item => item.category_id === category.id && (item.available !== false)
     );  
-    console.log(menu);
 
     categoryItems.forEach(item => {
       const itemEl = renderMenuItem(item);
@@ -386,11 +373,6 @@ function renderMenu(menu) {
 function renderMenuItem(item) {
   const card = document.createElement("div");
   card.className = "menu-item";
-
-  // Log items without images for debugging
-  if (!item.image_url) {
-    console.warn(`[Menu] Item "${item.name}" (ID: ${item.id}) has no image_url`);
-  }
 
  card.innerHTML = `
   <span class="cart-badge" id="cart-badge-${item.id}"></span>
@@ -426,11 +408,6 @@ function renderMenuItem(item) {
 function renderMenuItemWithVariants(item, addons){
     const card = document.createElement("div");
     card.className = "drawer-item";
-
-    // Log items without images for debugging
-    if (!item.image_url) {
-      console.warn(`[Menu Drawer] Item "${item.name}" (ID: ${item.id}) has no image_url`);
-    }
 
     card.innerHTML = `
     <img 
@@ -922,7 +899,6 @@ function loadCartFromStorage() {
     const stored = localStorage.getItem(`cart_${sessionId}`);
     if (stored) {
       cart = JSON.parse(stored);
-      console.log("Loaded cart from storage:", cart);
     }
   } catch (e) {
     console.error("Failed to load cart:", e);
@@ -1116,22 +1092,7 @@ function onVariantChange(itemId, variantId, optionId, checked) {
   variantSelections[itemId][variantId] = selected;
 
   // ------------------------------
-  // Disable unchecked when max reached
-  // ------------------------------
-if (variant.max_select) {
-  document
-    .querySelectorAll(
-      `input[data-item-id="${itemId}"][data-variant-id="${variantId}"]`
-    )
-    .forEach(input => {
-      const id = Number(input.value);
-
-    });
-}
-
-
-  updateVariantCounter(itemId, variant);
-  updateAddToCartButton(item);
+  updateVariantCounter(itemId, variant);\n  updateAddToCartButton(item);
 }
 
 async function loadOrderStatus() {
@@ -1143,10 +1104,8 @@ async function loadOrderStatus() {
 
   try {
     const url = `${API_BASE}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`;
-    console.log("📡 Fetching orders from:", url);
     
     const res = await fetch(url);
-    console.log("📥 Response status:", res.status);
 
     if (!res.ok) {
       console.warn("❌ API returned:", res.status, res.statusText);
@@ -1154,7 +1113,6 @@ async function loadOrderStatus() {
     }
 
     const data = await res.json();
-    console.log("✅ Orders loaded:", data);
     renderOrdersDrawer(data.items || [], tableName);
   } catch (error) {
     console.error("❌ Error loading orders:", error);
@@ -1181,7 +1139,6 @@ function renderOrdersDrawer(orders, tableName) {
     html += `<p class="no-orders">📋 No orders yet</p>`;
   } else {
     orders.forEach((order, oIdx) => {
-      console.log(`📦 Order ${oIdx}:`, order);
       const isCompleted = order.order_status === 'completed';
       const isPAPayment = order.order_payment_method === 'payment-asia';
       const isPAInProgress = isPAPayment && !isCompleted; // PA initiated, webhook not yet confirmed
@@ -1562,127 +1519,6 @@ function openOrdersDrawer() {
 }
 
 
-function initOrdersDrawerSwipe_disabled() {
-  const drawer = document.getElementById("orders-drawer");
-  if (!drawer || drawer.dataset.swipeInit) return;
-  drawer.dataset.swipeInit = "true";
-
-  // Orders drawer slides in from the RIGHT (translateX), not bottom.
-  // Swipe right-to-close only — do NOT reuse initTouchSwipe (which applies
-  // translateX(-50%) translateY(delta) and breaks the layout).
-  let startX = 0;
-  drawer.addEventListener("touchstart", e => {
-    if (drawer !== activeDrawer) return;
-    if (isInteractiveElement(e.target)) return;
-    startX = e.touches[0].clientX;
-    drawer.style.transition = "none";
-  }, { passive: true });
-
-  drawer.addEventListener("touchmove", e => {
-    if (drawer !== activeDrawer) return;
-    const delta = e.touches[0].clientX - startX;
-    if (delta <= 0) return; // only allow rightward drag
-    drawer.style.transform = `translateX(${delta}px)`;
-  }, { passive: true });
-
-  drawer.addEventListener("touchend", e => {
-    if (drawer !== activeDrawer) return;
-    const delta = e.changedTouches[0].clientX - startX;
-    drawer.style.transition = "transform 0.3s ease";
-    if (delta > 100) {
-      closeActiveDrawer();
-    } else {
-      drawer.style.transform = "";
-    }
-  });
-}
-
-function isInteractiveElement(el) {
-  return (
-    el.tagName === "INPUT" ||
-    el.tagName === "LABEL" ||
-    el.tagName === "BUTTON" ||
-    el.closest(".variant-group")
-  );
-}
-
-function isTouchDevice() {
-  return (
-    "ontouchstart" in window ||
-    navigator.maxTouchPoints > 0
-  );
-}
-
-function initTouchSwipe_disabled(drawer) {
-  drawer.addEventListener("touchstart", e => {
-    if (drawer !== activeDrawer) return;
-    if (isInteractiveElement(e.target)) return;
-
-    touchStartY = e.touches[0].clientY;
-    drawer.style.transition = "none";
-  }, { passive: true });
-
-  drawer.addEventListener("touchmove", e => {
-    if (drawer !== activeDrawer) return;
-    if (isInteractiveElement(e.target)) return;
-
-    touchCurrentY = e.touches[0].clientY;
-    const delta = touchCurrentY - touchStartY;
-    if (delta < 0) return;
-
-    drawer.style.transform = `translateX(-50%) translateY(${delta}px)`;
-    e.preventDefault();
-  }, { passive: false });
-
-  drawer.addEventListener("touchend", () => {
-    if (drawer !== activeDrawer) return;
-
-    const delta = touchCurrentY - touchStartY;
-    drawer.style.transition = "transform 0.25s ease";
-
-    if (delta > 120) {
-      closeActiveDrawer();
-    } else {
-      drawer.style.transform = "";
-    }
-  });
-}
-
-function initMouseSwipe_disabled(drawer) {
-  drawer.addEventListener("mousedown", e => {
-    if (drawer !== activeDrawer) return;
-
-    dragging = true;
-    mouseStartY = e.clientY;
-    drawer.style.transition = "none";
-  });
-
-  window.addEventListener("mousemove", e => {
-    if (!dragging || drawer !== activeDrawer) return;
-
-    mouseCurrentY = e.clientY;
-    const delta = mouseCurrentY - mouseStartY;
-    if (delta < 0) return;
-
-    drawer.style.transform = `translateX(-50%) translateY(${delta}px)`;
-  });
-
-  window.addEventListener("mouseup", () => {
-    if (!dragging || drawer !== activeDrawer) return;
-
-    dragging = false;
-    const delta = mouseCurrentY - mouseStartY;
-
-    drawer.style.transition = "transform 0.25s ease";
-
-    if (delta > 120) {
-      closeActiveDrawer();
-    } else {
-      drawer.style.transform = "";
-    }
-  });
-}
-
 function closeAllDrawers() {
   ["item-drawer", "orders-drawer", "cart-drawer"].forEach(id => {
     const d = document.getElementById(id);
@@ -1730,23 +1566,7 @@ function startOrderPolling() {
   setInterval(loadOrderStatus, 5000);
 }
 
-// ============= COUPON FUNCTIONS =============
-function applyCouponToCart() {
-  const couponCode = document.getElementById("cart-coupon-input").value.trim().toUpperCase();
-  if (!couponCode) {
-    alert(t('menu.enter-coupon'));
-    return;
-  }
-  
-  // Store coupon in session storage for use during order submission
-  sessionStorage.setItem("pendingCouponCode", couponCode);
-  
-  // Display applied coupon
-  const displayEl = document.getElementById("cart-coupon-display");
-  displayEl.innerHTML = `<div class="coupon-applied">${t('menu.coupon-will-apply').replace('{0}', couponCode)}</div>`;
-}
-
-function applyCouponToOrders() {
+// ============= COUPON FUNCTIONS =============\nfunction applyCouponToOrders() {
   const couponCode = document.getElementById("orders-coupon-input").value.trim().toUpperCase();
   if (!couponCode) {
     alert(t('menu.enter-coupon'));
@@ -1862,8 +1682,6 @@ async function closeBill() {
       return;
     }
 
-    console.log("✅ Bill closure requested - admin will see orange table card");
-    
     // Change button to show request sent
     const btn = document.getElementById("close-bill-btn");
     if (btn) {

@@ -20,7 +20,6 @@ import {
   Alert,
   Dimensions,
   Image,
-  Pressable,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
@@ -1025,10 +1024,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       <Image 
                         source={{ uri: getFullImageUrl(item.image_url)! }} 
                         style={styles.itemImage}
-                        onError={(error) => {
-                          console.log(`Image loading error for ${item.name}:`, error.error);
-                          console.log(`Image URL attempted: ${getFullImageUrl(item.image_url)}`);
-                        }}
+                        onError={() => {}}
                       />
                     ) : (
                       <Image
@@ -1557,7 +1553,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     <Image 
                       source={{ uri: getFullImageUrl(selectedItem.image_url)! }} 
                       style={styles.detailImage}
-                      onError={(e) => console.log('Image failed to load:', e)}
+                      onError={() => {}}
                     />
                   )}
 

@@ -748,13 +748,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity, selected_option_ids: (a.variants || []).map(v => v.optionId) })),
         }));
 
-        console.log('[OrderSubmit] Submitting order:', {
-          orderType,
-          selectedTable,
-          items,
-          restaurantId,
-        });
-
         if (orderType === 'table') {
           if (!selectedTable) {
             throw new Error('Please select a table');
@@ -765,14 +758,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             `/api/sessions/${sessionId}/orders`,
             { items }
           );
-          console.log('[OrderSubmit] Table order submitted:', res);
           Alert.alert(t('orders.success'), t('orders.table-order-success').replace('{0}', String(cart.length)));
         } else if (orderType === 'pay-now') {
           const res = await apiClient.post(
             `/api/restaurants/${restaurantId}/counter-order`,
             { pax: 1, items }
           );
-          console.log('[OrderSubmit] Counter order submitted:', res);
           
           // Show payment modal right away for Order Now
           const session = res.data?.session;
@@ -792,7 +783,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             `/api/restaurants/${restaurantId}/to-go-order`,
             { pax: 1, items, customer_name: toGoCustomerName || '', customer_phone: customerPhone || '' }
           );
-          console.log('[OrderSubmit] To-go order submitted:', res);
           showToast(t('orders.togo-order-success').replace('{0}', String(cart.length)), 'success');
         }
 
@@ -2574,7 +2564,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <Image
                         source={{ uri: getFullImageUrl(item.image_url)! }}
                         style={styles.menuItemImage}
-                        onError={() => console.log('Image load error for:', item.name, 'URL:', getFullImageUrl(item.image_url))}
+                        onError={() => {}}
                       />
                     ) : (
                       <Image

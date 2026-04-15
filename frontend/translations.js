@@ -837,9 +837,12 @@ const translations = {
 
     // Kitchen Dashboard
     'kitchen.title': '🍳 Kitchen Dashboard',
+    'kitchen.kitchen-queue': 'Kitchen Queue',
     'kitchen.enter-pin': 'Enter PIN to continue',
     'kitchen.logout': 'Logout',
     'kitchen.print-order': '🖨️ Print',
+    'kitchen.print': 'Print',
+    'kitchen.printing': 'Printing...',
 
     // Staff Portal
     'staff.title': '👨‍💼 Staff Dashboard',
@@ -847,9 +850,14 @@ const translations = {
     'kitchen.loading': 'Loading orders...',
     'kitchen.no-orders': 'No orders',
     'kitchen.new-order': 'New Order',
+    'kitchen.pending': 'PENDING',
     'kitchen.preparing': 'Preparing',
     'kitchen.ready': 'Ready',
+    'kitchen.served': 'Served',
     'kitchen.order-status': 'Order Status',
+    'kitchen.takeaway': 'Takeaway',
+    'kitchen.counter': 'Counter',
+    'kitchen.order': 'Order',
 
     // Order Panel
     'admin.no-orders': 'No orders yet',
@@ -2462,9 +2470,12 @@ const translations = {
 
     // Kitchen Dashboard
     'kitchen.title': '🍳 廚房儀表板',
+    'kitchen.kitchen-queue': '廚房訂單',
     'kitchen.enter-pin': '輸入 PIN 繼續',
     'kitchen.logout': '登出',
     'kitchen.print-order': '🖨️ 打印',
+    'kitchen.print': '打印',
+    'kitchen.printing': '打印中...',
 
     // Staff Portal
     'staff.title': '👨‍💼 員工儀表板',
@@ -2472,9 +2483,14 @@ const translations = {
     'kitchen.loading': '正在加載訂單...',
     'kitchen.no-orders': '沒有訂單',
     'kitchen.new-order': '新訂單',
+    'kitchen.pending': '待處理',
     'kitchen.preparing': '正在準備',
     'kitchen.ready': '準備好',
+    'kitchen.served': '已提供',
     'kitchen.order-status': '訂單狀態',
+    'kitchen.takeaway': '外帶',
+    'kitchen.counter': '櫃檯',
+    'kitchen.order': '訂單',
 
     // Order Panel
     'admin.no-orders': '還沒有訂單',

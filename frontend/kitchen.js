@@ -255,6 +255,7 @@ async function loadKitchenOrders() {
       if (!orderMap[orderId]) {
         orderMap[orderId] = {
           orderId,
+          restaurantOrderNumber: item.restaurant_order_number,
           table: item.table_name,
           orderType: item.order_type,
           items: [],
@@ -284,7 +285,7 @@ async function loadKitchenOrders() {
       order.items = mainItems;
     }
 
-    renderKitchenOrders(Object.values(orderMap).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    renderKitchenOrders(Object.values(orderMap).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)));
   } catch (err) {
     console.error("❌ Failed to load kitchen items:", err);
   }
@@ -300,7 +301,9 @@ function renderKitchenOrders(orders) {
 
   container.innerHTML = orders.map(order => {
     const hasAllServed = order.items.every(item => item.status === "served");
-    const statusClass = hasAllServed ? "ready" : (order.items.some(item => item.status === "preparing") ? "preparing" : "pending");
+    const hasReady = order.items.some(item => item.status === "ready");
+    const hasPreparing = order.items.some(item => item.status === "preparing");
+    const statusClass = hasAllServed ? "served" : hasReady ? "ready" : hasPreparing ? "preparing" : "pending";
     
     // Determine display label: use table name if available and order type is 'table', otherwise use order type
     let displayLabel = order.table;
@@ -316,15 +319,24 @@ function renderKitchenOrders(orders) {
       }
     }
 
+    const orderNumber = order.restaurantOrderNumber || order.orderId;
+
     return `
       <div class="order-card ${statusClass}">
         <div class="card-header">
           <div>
-            <div class="card-title">${displayLabel}</div>
-            <div class="card-time">#${order.orderId}</div>
+            <div class="card-title">${displayLabel} #${orderNumber}</div>
           </div>
-          <div class="card-time">${getTimeAgo(order.createdAt)}</div>
+          <div>
+            <span class="card-status-badge ${statusClass}">${
+              statusClass === 'pending' ? (typeof t === 'function' ? t('kitchen.pending') : 'PENDING') :
+              statusClass === 'preparing' ? (typeof t === 'function' ? t('kitchen.preparing') : 'PREPARING') :
+              statusClass === 'ready' ? (typeof t === 'function' ? t('kitchen.ready') : 'READY') :
+              (typeof t === 'function' ? t('kitchen.served') : 'SERVED')
+            }</span>
+          </div>
         </div>
+        <div class="card-time-row">${getTimeAgo(order.createdAt)}</div>
         <div class="card-body">
           ${order.items.map(item => `
             <div class="order-item">
@@ -334,15 +346,14 @@ function renderKitchenOrders(orders) {
               </div>
               ${item.variants ? `<div class="item-variants">${item.variants}</div>` : ""}
               ${item.notes ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${item.notes}</div>` : ""}
-              <span class="item-status ${item.status}">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[item.status] || item.status.charAt(0).toUpperCase() + item.status.slice(1)}</span>
               ${(item._addons || []).map(addon => `
-                <div class="order-item" style="margin-left:16px;padding:4px 0;border-top:none;font-size:12px;color:#667eea;">
+                <div class="addon-item">
                   <div class="item-header">
                     <span class="item-name">+ ${addon.menu_item_name}</span>
                     <span class="item-qty">×${addon.quantity}</span>
                   </div>
                   ${addon.variants ? `<div class="item-variants">${addon.variants}</div>` : ""}
-                  <span class="item-status ${addon.status}">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[addon.status] || addon.status.charAt(0).toUpperCase() + addon.status.slice(1)}</span>
+                  ${addon.notes ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${addon.notes}</div>` : ""}
                 </div>
               `).join("")}
             </div>
@@ -363,13 +374,27 @@ function renderKitchenOrders(orders) {
                 (i._addons || []).forEach(a => { if (a.status === 'preparing') ids.push(a.order_item_id); });
                 return ids;
               });
+              const readyIds = order.items.flatMap(i => {
+                const ids = [];
+                if (i.status === 'ready') ids.push(i.order_item_id);
+                (i._addons || []).forEach(a => { if (a.status === 'ready') ids.push(a.order_item_id); });
+                return ids;
+              });
+              const printBtn = `<button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')">${typeof t === 'function' ? t('kitchen.print-order') : '🖨️ Print'}</button>`;
               if (pendingIds.length > 0) {
-                return `<button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(pendingIds)}, 'preparing')">Start Preparing</button>
-                <button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')" data-i18n="kitchen.print-order">🖨️ Print</button>`;
+                return `${printBtn}
+                <button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(pendingIds)}, 'preparing')">${typeof t === 'function' ? t('kitchen.start-preparing') : 'Start Preparing'}</button>
+                <button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(allItemIds)}, 'ready')">${typeof t === 'function' ? t('kitchen.ready') : 'Ready'}</button>`;
               } else if (preparingIds.length > 0) {
-                return `<button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(preparingIds)}, 'served')">Serve</button>`;
+                return `${printBtn}
+                <button class="btn-action btn-start" disabled>${typeof t === 'function' ? t('kitchen.start-preparing') : 'Start Preparing'}</button>
+                <button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(preparingIds)}, 'ready')">${typeof t === 'function' ? t('kitchen.ready') : 'Ready'}</button>`;
+              } else if (readyIds.length > 0) {
+                return `${printBtn}
+                <button class="btn-action btn-served" onclick="updateAllItemStatus(${JSON.stringify(readyIds)}, 'served')">${typeof t === 'function' ? t('kitchen.served') : 'Served'}</button>`;
               } else {
-                return `<button class="btn-action btn-ready" disabled>All Served</button>`;
+                return `${printBtn}
+                <button class="btn-action btn-ready" disabled>${typeof t === 'function' ? t('kitchen.all-served') : 'All Served'}</button>`;
               }
             })()}
           </div>

@@ -62,12 +62,14 @@
   <!-- ================= KITCHEN APP ================= -->
   <div id="kitchen-app" class="kitchen-app">
     <div class="kitchen-header">
-      <h1 data-i18n="kitchen.title">🍳 Kitchen Dashboard</h1>
+      <div class="kitchen-header-left">
+        <h1 data-i18n="kitchen.title">Kitchen Queue</h1>
+        <span class="live-indicator">● Live</span>
+      </div>
       <div class="kitchen-header-right">
         <button id="clock-btn" class="btn-secondary" onclick="toggleKitchenClockInOut()" style="display: none; margin-right: 8px;">⏱ Clock In</button>
-        <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()" style="margin-right: 10px;">
-          <img src="/uploads/website/user.png" alt="menu" class="btn-icon"> Menu
-          <span class="dropdown-arrow">▼</span>
+        <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
+          common.menu
         </button>
         <div id="admin-dropdown" class="admin-dropdown hidden">
           <div class="dropdown-item lang-selector-dropdown">

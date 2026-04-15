@@ -31,6 +31,16 @@ function generateKitchenOrderHTML(order, restaurantName = "Restaurant") {
         ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${item.notes}</div>`
         : ""
     }
+    ${
+      (item._addons || []).map(addon => `
+        <div class="item addon-print-item">
+          <div class="item-name" style="font-size:13px;padding-left:4mm;">+ ${addon.menu_item_name || "Addon"}</div>
+          <div class="item-qty" style="font-size:13px;">×${addon.quantity || 1}</div>
+        </div>
+        ${addon.variants ? `<div class="item-variants" style="margin-left:4mm;">${addon.variants}</div>` : ""}
+        ${addon.notes ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:11px;margin-top:2px;margin-left:4mm;">📝 ${addon.notes}</div>` : ""}
+      `).join("")
+    }
   `
     )
     .join("");
@@ -42,7 +52,7 @@ function generateKitchenOrderHTML(order, restaurantName = "Restaurant") {
     <html>
       <head>
         <meta charset="UTF-8">
-        <title>Kitchen Order #${order.orderId}</title>
+        <title>Kitchen Order #${order.restaurantOrderNumber || order.orderId}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
@@ -151,7 +161,7 @@ function generateKitchenOrderHTML(order, restaurantName = "Restaurant") {
             ${itemsHTML}
           </div>
 
-          <div class="order-number">#${order.orderId} • ${new Date(order.createdAt).toLocaleTimeString()}</div>
+          <div class="order-number">#${order.restaurantOrderNumber || order.orderId} • ${new Date(order.createdAt).toLocaleTimeString()}</div>
         </div>
       </body>
     </html>

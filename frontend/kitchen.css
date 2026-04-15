@@ -5,8 +5,8 @@
 }
 
 :root {
-  --primary-color: #2c3e50;
-  --secondary-color: #1a252f;
+  --primary-color: #f5a623;
+  --secondary-color: #e8951a;
   --text-dark: #1f2937;
   --text-light: #6b7280;
   --bg-dark: #f9fafb;
@@ -62,7 +62,7 @@ body {
 
 .login-header h1 {
   font-size: 24px;
-  color: var(--primary-color);
+  color: var(--text-dark);
   margin-bottom: 8px;
 }
 
@@ -145,17 +145,31 @@ body {
 }
 
 .kitchen-header {
-  background: var(--bg-white);
-  padding: 20px;
-  border-bottom: 2px solid var(--border-color);
+  background: var(--primary-color);
+  padding: 16px 20px;
+  border-bottom: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .kitchen-header h1 {
-  font-size: 28px;
-  color: var(--primary-color);
+  font-size: 24px;
+  color: #fff;
+  margin: 0;
+}
+
+.kitchen-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.live-indicator {
+  font-size: 12px;
+  color: #c6ffc6;
+  font-weight: 500;
 }
 
 .kitchen-header-right {
@@ -163,33 +177,6 @@ body {
   align-items: center;
   gap: 10px;
   position: relative;
-}
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.kitchen-header h1 {
-  font-size: 28px;
-  color: var(--primary-color);
-  margin: 0;
-}
-
-.logout-btn {
-  padding: 10px 20px;
-  background: var(--error-color);
-  color: var(--bg-white);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.logout-btn:hover {
-  background: #b91c1c;
-  transform: translateY(-2px);
 }
 
 .kitchen-content {
@@ -242,18 +229,80 @@ body {
   border-left: 6px solid var(--success-color);
 }
 
+.order-card.served {
+  border-left: 6px solid #9E9E9E;
+}
+
+/* Addon items nested under parent */
+.addon-item {
+  margin-left: 16px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #667eea;
+  border-left: 2px solid #667eea;
+  padding-left: 8px;
+  margin-top: 4px;
+}
+
+.addon-item .item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #667eea;
+}
+
+.addon-item .item-qty {
+  font-size: 13px;
+  color: #667eea;
+}
+
 .card-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+  background: var(--primary-color);
   color: var(--bg-white);
-  padding: 16px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .card-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
+}
+
+.card-status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-status-badge.pending {
+  background: var(--pending-color);
+  color: #fff;
+}
+
+.card-status-badge.preparing {
+  background: var(--warning-color);
+  color: #fff;
+}
+
+.card-status-badge.ready {
+  background: var(--success-color);
+  color: #fff;
+}
+
+.card-status-badge.served {
+  background: #9E9E9E;
+  color: #fff;
+}
+
+.card-time-row {
+  padding: 4px 16px 8px;
+  font-size: 12px;
+  color: var(--text-light);
 }
 
 .card-time {
@@ -262,11 +311,11 @@ body {
 }
 
 .card-body {
-  padding: 20px;
+  padding: 16px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .order-item {
@@ -295,7 +344,7 @@ body {
 .item-qty {
   font-size: 18px;
   font-weight: 700;
-  color: var(--primary-color);
+  color: var(--text-dark);
   min-width: 30px;
   text-align: right;
 }
@@ -352,13 +401,20 @@ body {
 }
 
 .btn-start {
-  background: var(--warning-color);
+  background: #f5a623;
   color: var(--bg-white);
 }
 
 .btn-start:hover {
-  background: #b45309;
+  background: #e8951a;
   transform: translateY(-2px);
+}
+
+.btn-start:disabled {
+  background: #e5e7eb;
+  color: #9ca3af;
+  cursor: default;
+  transform: none;
 }
 
 .btn-serve {
@@ -420,9 +476,9 @@ body {
 
 /* ============== ADMIN MENU BUTTON ============== */
 .btn-secondary {
-  background: #5a5a5a;
+  background: rgba(255, 255, 255, 0.25);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.4);
   padding: 8px 12px;
   border-radius: 6px;
   font-weight: 600;
@@ -435,7 +491,7 @@ body {
 }
 
 .btn-secondary:hover {
-  background: #4a4a4a;
+  background: rgba(255, 255, 255, 0.35);
   transform: translateY(-1px);
 }
 
@@ -464,9 +520,9 @@ body {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--primary-color);
-  color: var(--bg-white);
-  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -475,7 +531,7 @@ body {
 }
 
 .admin-menu-btn:hover {
-  background: var(--secondary-color);
+  background: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
 }
 

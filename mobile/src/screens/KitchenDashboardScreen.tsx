@@ -41,6 +41,8 @@ interface RawKitchenItem {
   notes: string;
   created_at: string;
   restaurant_id: number;
+  is_addon?: boolean;
+  parent_order_item_id?: number | null;
 }
 
 /** Grouped order card (matches web app structure) */
@@ -59,6 +61,16 @@ interface KitchenOrder {
     variants?: string;
     notes?: string;
     categoryId?: number;
+    isAddon?: boolean;
+    parentOrderItemId?: number | null;
+    addons?: Array<{
+      id: number;
+      name: string;
+      quantity: number;
+      status: string;
+      variants?: string;
+      notes?: string;
+    }>;
   }>;
 }
 
@@ -121,31 +133,63 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
     const orderMap: Record<number, KitchenOrder> = {};
     const statusPriority: Record<string, number> = { pending: 0, confirmed: 1, preparing: 2, ready: 3 };
 
+    // First pass: collect all items per order
+    const allItemsByOrder: Record<number, RawKitchenItem[]> = {};
     for (const item of rawItems) {
       const oid = item.order_id;
-      if (!orderMap[oid]) {
-        orderMap[oid] = {
-          orderId: oid,
-          restaurantOrderNumber: item.restaurant_order_number,
-          tableName: item.table_name,
-          orderType: item.order_type,
-          createdAt: item.created_at,
-          status: item.status,
-          items: [],
-        };
+      if (!allItemsByOrder[oid]) allItemsByOrder[oid] = [];
+      allItemsByOrder[oid].push(item);
+    }
+
+    // Second pass: group addons under parent items
+    for (const [oidStr, items] of Object.entries(allItemsByOrder)) {
+      const oid = Number(oidStr);
+      const mainItems: RawKitchenItem[] = [];
+      const addonsByParent: Record<number, RawKitchenItem[]> = {};
+
+      for (const item of items) {
+        if (item.is_addon && item.parent_order_item_id) {
+          if (!addonsByParent[item.parent_order_item_id]) addonsByParent[item.parent_order_item_id] = [];
+          addonsByParent[item.parent_order_item_id].push(item);
+        } else {
+          mainItems.push(item);
+        }
       }
-      orderMap[oid].items.push({
-        id: item.order_item_id,
-        name: item.menu_item_name,
-        quantity: item.quantity,
-        status: item.status,
-        variants: item.variants,
-        notes: item.notes,
-        categoryId: item.category_id,
-      });
+
+      const firstItem = items[0];
+      orderMap[oid] = {
+        orderId: oid,
+        restaurantOrderNumber: firstItem.restaurant_order_number,
+        tableName: firstItem.table_name,
+        orderType: firstItem.order_type,
+        createdAt: firstItem.created_at,
+        status: firstItem.status,
+        items: mainItems.map(item => ({
+          id: item.order_item_id,
+          name: item.menu_item_name,
+          quantity: item.quantity,
+          status: item.status,
+          variants: item.variants,
+          notes: item.notes,
+          categoryId: item.category_id,
+          isAddon: false,
+          parentOrderItemId: null,
+          addons: (addonsByParent[item.order_item_id] || []).map(addon => ({
+            id: addon.order_item_id,
+            name: addon.menu_item_name,
+            quantity: addon.quantity,
+            status: addon.status,
+            variants: addon.variants,
+            notes: addon.notes,
+          })),
+        })),
+      };
+
       // Use worst (earliest) status for the card
-      if ((statusPriority[item.status] ?? 99) < (statusPriority[orderMap[oid].status] ?? 99)) {
-        orderMap[oid].status = item.status;
+      for (const item of items) {
+        if ((statusPriority[item.status] ?? 99) < (statusPriority[orderMap[oid].status] ?? 99)) {
+          orderMap[oid].status = item.status;
+        }
       }
     }
 
@@ -369,8 +413,12 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
   /** Update all items in an order to the same status */
   const handleUpdateAllItemsStatus = async (order: KitchenOrder, newStatus: string) => {
     try {
+      const allIds = order.items.flatMap(item => [
+        item.id,
+        ...(item.addons || []).map(a => a.id),
+      ]);
       await Promise.all(
-        order.items.map(item => apiClient.updateOrderStatus(String(item.id), newStatus))
+        allIds.map(id => apiClient.updateOrderStatus(String(id), newStatus))
       );
       loadKitchenItems();
     } catch (err) {
@@ -866,6 +914,18 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
                       {menuItem.notes ? (
                         <Text style={styles.notes}>{menuItem.notes}</Text>
                       ) : null}
+                      {/* Addon items nested under parent */}
+                      {(menuItem.addons || []).map((addon) => (
+                        <View key={addon.id} style={styles.addonRow}>
+                          <Text style={styles.addonName}>+ {addon.name}</Text>
+                          {addon.variants ? (
+                            <Text style={styles.addonVariants}>{addon.variants}</Text>
+                          ) : null}
+                          {addon.notes ? (
+                            <Text style={styles.addonNotes}>{addon.notes}</Text>
+                          ) : null}
+                        </View>
+                      ))}
                     </View>
                   ))}
                 </View>
@@ -1075,6 +1135,30 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     fontStyle: 'italic',
     marginTop: 2,
+  },
+  addonRow: {
+    marginLeft: 16,
+    marginTop: 4,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: '#667eea',
+  },
+  addonName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#667eea',
+  },
+  addonVariants: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 1,
+    marginLeft: 4,
+  },
+  addonNotes: {
+    fontSize: 11,
+    color: '#FF9800',
+    fontStyle: 'italic',
+    marginTop: 1,
   },
   actions: {
     flexDirection: 'row',
