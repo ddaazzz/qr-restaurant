@@ -481,9 +481,13 @@ function renderMenuItemWithVariants(item, addons){
 
 
         (v.options || [])
-        .filter(o => o.is_available)
         .forEach(o => {
         const opt = document.createElement("label");
+        const isUnavail = o.is_available === false;
+
+        if (isUnavail) {
+          opt.style.cssText = 'opacity: 0.4; pointer-events: none;';
+        }
 
         opt.innerHTML = `
           <input
@@ -491,14 +495,16 @@ function renderMenuItemWithVariants(item, addons){
             value="${o.id}"
             data-item-id="${item.id}"
             data-variant-id="${v.id}"
+            data-unavailable="${isUnavail}"
              ${
     (variantSelections[item.id] && variantSelections[item.id][v.id] && variantSelections[item.id][v.id].includes(o.id))
       ? "checked"
       : ""}
+            ${isUnavail ? 'disabled' : ''}
             onchange="onVariantChange(${item.id}, ${v.id}, ${o.id}, this.checked)"
           />
           <span>
-          ${o.name}
+          ${o.name}${isUnavail ? ' (Sold Out)' : ''}
           ${o.price_cents > 0 ? `(+$${(o.price_cents / 100).toFixed(2)})` : ""}
           </span>
         `;
@@ -696,17 +702,20 @@ function renderAddonVariantSections(addons, container) {
       vDiv.style.cssText = "margin-bottom: 6px;";
       vDiv.innerHTML = `<div style="font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 3px;">${v.name}${v.required ? '<span style="color:red;"> *</span>' : ''}</div>`;
 
-      (v.options || []).filter(o => o.is_available !== false).forEach(o => {
-        const selected = (addonVariantSelections[addon.id]?.[v.id] || []).includes(o.id);
+      (v.options || []).forEach(o => {
+        const isUnavail = o.is_available === false;
+        const selected = !isUnavail && (addonVariantSelections[addon.id]?.[v.id] || []).includes(o.id);
         const label = document.createElement("label");
-        label.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; margin-bottom: 2px; cursor: pointer;";
+        label.style.cssText = `display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; margin-bottom: 2px; cursor: pointer;${isUnavail ? ' opacity: 0.4; pointer-events: none;' : ''}`;
         label.innerHTML = `
-          <input type="checkbox" ${selected ? 'checked' : ''} style="accent-color: #667eea;" />
-          <span>${o.name}${o.price_cents > 0 ? ` (+$${(o.price_cents / 100).toFixed(2)})` : ''}</span>
+          <input type="checkbox" ${selected ? 'checked' : ''} ${isUnavail ? 'disabled' : ''} style="accent-color: #667eea;" />
+          <span>${o.name}${isUnavail ? ' (Sold Out)' : ''}${o.price_cents > 0 ? ` (+$${(o.price_cents / 100).toFixed(2)})` : ''}</span>
         `;
-        label.querySelector('input').onchange = function() {
-          onAddonVariantChange(addon.id, v, o.id, this.checked);
-        };
+        if (!isUnavail) {
+          label.querySelector('input').onchange = function() {
+            onAddonVariantChange(addon.id, v, o.id, this.checked);
+          };
+        }
         vDiv.appendChild(label);
       });
 
@@ -805,6 +814,10 @@ function addToCart(item) {
 
       selectedIds.forEach(optionId => {
         const option = v.options.find(o => o.id === optionId);
+        if (option && option.is_available === false) {
+          alert(`${option.name} is no longer available`);
+          throw new Error("Unavailable option selected");
+        }
 
         selectedOptions.push(optionId);
         variantDetails.push({
@@ -979,8 +992,9 @@ function updateVariantCounter(itemId, variant) {
     `input[data-item-id="${itemId}"][data-variant-id="${variant.id}"]`
   );
 
-  // 1️⃣ ALWAYS reset disabled state first
+  // 1️⃣ ALWAYS reset disabled state first (except unavailable options)
   inputs.forEach(input => {
+    if (input.dataset.unavailable === 'true') return;
     input.removeAttribute("disabled");
     input.disabled = false;
   });
