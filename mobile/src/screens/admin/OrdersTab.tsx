@@ -12,6 +12,28 @@ interface MenuItem {
   price_cents: number;
   category_id: number;
   image_url?: string;
+  is_meal_combo?: boolean;
+}
+
+interface Addon {
+  id: number;
+  addon_item_id: number;
+  addon_name: string;
+  addon_description?: string;
+  regular_price_cents: number;
+  addon_discount_price_cents: number;
+  is_available: boolean;
+  addon_item_name: string;
+  addon_item_image?: string;
+}
+
+interface SelectedAddon {
+  addon_id: number;
+  addon_item_id: number;
+  addon_item_name: string;
+  addon_discount_price_cents: number;
+  quantity: number;
+  variants?: SelectedVariant[];
 }
 
 interface Variant {
@@ -38,6 +60,7 @@ interface CartItem extends MenuItem {
   quantity: number;
   variants?: SelectedVariant[];
   notes?: string;
+  addons?: SelectedAddon[];
 }
 
 interface SelectedVariant {
@@ -192,6 +215,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       [variantId: number]: number | number[];
     }>({});
     const [showVariantModal, setShowVariantModal] = useState(false);
+    
+    // Addon state
+    const [itemAddons, setItemAddons] = useState<Addon[]>([]);
+    const [selectedAddons, setSelectedAddons] = useState<SelectedAddon[]>([]);
+    const [addonVariantModal, setAddonVariantModal] = useState<{ addon: Addon; variants: Variant[] } | null>(null);
+    const [addonVariantSelections, setAddonVariantSelections] = useState<{ [variantId: number]: number | number[] }>({});
     
     // Cart state
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -509,13 +538,23 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const handleItemPress = async (item: MenuItem) => {
       try {
-        const response = await apiClient.get(`/api/menu-items/${item.id}/variants`);
-        const variants = response.data || [];
+        // Load variants and addons in parallel
+        const [variantRes, addonRes] = await Promise.all([
+          apiClient.get(`/api/menu-items/${item.id}/variants`),
+          item.is_meal_combo
+            ? apiClient.get(`/api/restaurants/${restaurantId}/menu-items/${item.id}/addons`)
+            : Promise.resolve({ data: [] }),
+        ]);
+        const variants = variantRes.data || [];
+        const addons = addonRes.data || [];
         
-        if (variants.length > 0) {
+        if (variants.length > 0 || addons.length > 0) {
           setSelectedItem(item);
           setVariantSelections({});
           setItemVariants(variants);
+          setItemAddons(addons);
+          setSelectedAddons([]);
+          setAddonVariantModal(null);
           const isPhone = !(Platform as any).isPad;
           if (isPhone) {
             setPhoneView('variant');
@@ -531,11 +570,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    const handleAddToCart = (item: MenuItem, selectedVariantsList: SelectedVariant[] = []) => {
+    const handleAddToCart = (item: MenuItem, selectedVariantsList: SelectedVariant[] = [], addonsList: SelectedAddon[] = []) => {
       setCart(prevCart => [...prevCart, {
         ...item,
         quantity: 1,
         variants: selectedVariantsList,
+        addons: addonsList,
       }]);
     };
 
@@ -570,13 +610,86 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         }
       });
 
-      handleAddToCart(selectedItem, selectedVariantsList);
+      handleAddToCart(selectedItem, selectedVariantsList, selectedAddons);
       const isPhone = !(Platform as any).isPad;
       if (isPhone) {
         setPhoneView('menu');
       } else {
         setShowVariantModal(false);
       }
+    };
+
+    // Toggle addon selection (simple on/off)
+    const toggleAddon = async (addon: Addon) => {
+      const existing = selectedAddons.find(a => a.addon_id === addon.id);
+      if (existing) {
+        // Deselect
+        setSelectedAddons(prev => prev.filter(a => a.addon_id !== addon.id));
+        return;
+      }
+      // Check if addon item has variants
+      try {
+        const res = await apiClient.get(`/api/menu-items/${addon.addon_item_id}/variants`);
+        const variants = res.data || [];
+        if (variants.length > 0) {
+          // Show addon variant sub-modal
+          setAddonVariantModal({ addon, variants });
+          setAddonVariantSelections({});
+        } else {
+          // No variants — add directly
+          setSelectedAddons(prev => [...prev, {
+            addon_id: addon.id,
+            addon_item_id: addon.addon_item_id,
+            addon_item_name: addon.addon_item_name,
+            addon_discount_price_cents: addon.addon_discount_price_cents,
+            quantity: 1,
+          }]);
+        }
+      } catch {
+        // Fallback: add without variants
+        setSelectedAddons(prev => [...prev, {
+          addon_id: addon.id,
+          addon_item_id: addon.addon_item_id,
+          addon_item_name: addon.addon_item_name,
+          addon_discount_price_cents: addon.addon_discount_price_cents,
+          quantity: 1,
+        }]);
+      }
+    };
+
+    // Confirm addon variant selection
+    const confirmAddonVariant = () => {
+      if (!addonVariantModal) return;
+      const { addon, variants } = addonVariantModal;
+      // Validate required
+      for (const v of variants) {
+        if (v.required && !addonVariantSelections[v.id]) {
+          Alert.alert('Missing Selection', `Please select ${v.name}`);
+          return;
+        }
+      }
+      const variantsList: SelectedVariant[] = [];
+      Object.entries(addonVariantSelections).forEach(([variantId, optionIds]) => {
+        const variant = variants.find(v => v.id === parseInt(variantId));
+        if (variant) {
+          const arr = Array.isArray(optionIds) ? optionIds : [optionIds];
+          arr.forEach(optionId => {
+            const option = variant.options.find(o => o.id === optionId);
+            if (option) {
+              variantsList.push({ variantId: variant.id, variantName: variant.name, optionId: option.id, optionName: option.name });
+            }
+          });
+        }
+      });
+      setSelectedAddons(prev => [...prev, {
+        addon_id: addon.id,
+        addon_item_id: addon.addon_item_id,
+        addon_item_name: addon.addon_item_name,
+        addon_discount_price_cents: addon.addon_discount_price_cents,
+        quantity: 1,
+        variants: variantsList,
+      }]);
+      setAddonVariantModal(null);
     };
 
     const handleRemoveFromCart = (index: number) => {
@@ -632,6 +745,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           quantity: cartItem.quantity,
           notes: cartItem.notes || null,
           selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
+          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
         }));
 
         console.log('[OrderSubmit] Submitting order:', {
@@ -1015,7 +1129,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.price_cents * item.quantity), 0);
+    const cartTotal = cart.reduce((sum, item) => {
+      const addonTotal = (item.addons || []).reduce((s, a) => s + a.addon_discount_price_cents * a.quantity, 0);
+      return sum + (item.price_cents * item.quantity) + (addonTotal * item.quantity);
+    }, 0);
 
     // Helper to determine if an order is unpaid
     const isOrderUnpaid = (order: Order) => {
@@ -1340,6 +1457,15 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {item.notes ? (
                       <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 2 }}>{t('orders.note-prefix')}{item.notes}</Text>
                     ) : null}
+                    {item.addons && item.addons.length > 0 ? (
+                      <View style={{ marginTop: 3 }}>
+                        {item.addons.map((addon: any, ai: number) => (
+                          <Text key={ai} style={{ fontSize: 11, color: '#667eea', marginTop: 1 }}>
+                            + {addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
                     {formatPrice(item.item_total_cents || (item.price_cents || 0) * (item.quantity || 1))}
@@ -1355,11 +1481,19 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
               <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
               <Text style={{ fontSize: 13, color: '#1f2937' }}>
-                {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0))}
+                {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => {
+                  const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
+                  const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || a.unit_price_cents * a.quantity), 0);
+                  return sum + itemTotal + addonsTotal;
+                }, 0))}
               </Text>
             </View>
             {(() => {
-              const subtotal = (selectedHistoryOrder.items || []).reduce((sum: number, i: any) => sum + (i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1)), 0);
+              const subtotal = (selectedHistoryOrder.items || []).reduce((sum: number, i: any) => {
+                const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
+                const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || a.unit_price_cents * a.quantity), 0);
+                return sum + itemTotal + addonsTotal;
+              }, 0);
               const serviceCharge = selectedHistoryOrder.total_cents - subtotal;
               if (serviceCharge > 0) {
                 return (
@@ -2012,6 +2146,115 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               ))}
             </View>
           ) : null}
+          {/* Addon items section */}
+          {itemAddons.length > 0 ? (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+              <View style={{ height: 1, backgroundColor: '#e5e7eb', marginBottom: 12 }} />
+              <Text style={styles.variantSectionTitle}>{t('orders.add-ons') || 'ADD-ONS'}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+                {itemAddons.map((addon) => {
+                  const isSelected = selectedAddons.some(a => a.addon_id === addon.id);
+                  const discountPct = addon.regular_price_cents > 0
+                    ? Math.round(((addon.regular_price_cents - addon.addon_discount_price_cents) / addon.regular_price_cents) * 100)
+                    : 0;
+                  return (
+                    <TouchableOpacity
+                      key={addon.id}
+                      onPress={() => toggleAddon(addon)}
+                      style={{
+                        width: 110,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: isSelected ? '#667eea' : '#e5e7eb',
+                        backgroundColor: isSelected ? '#f0f0ff' : '#fff',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {addon.addon_item_image ? (
+                        <Image
+                          source={{ uri: getFullImageUrl(addon.addon_item_image)! }}
+                          style={{ width: '100%', height: 70, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
+                        />
+                      ) : (
+                        <View style={{ width: '100%', height: 70, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', borderTopLeftRadius: 8, borderTopRightRadius: 8 }}>
+                          <Ionicons name="fast-food-outline" size={28} color="#d1d5db" />
+                        </View>
+                      )}
+                      {isSelected && (
+                        <View style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>1</Text>
+                        </View>
+                      )}
+                      <View style={{ padding: 6 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#1f2937' }} numberOfLines={2}>{addon.addon_item_name}</Text>
+                        <Text style={{ fontSize: 11, color: '#667eea', fontWeight: '600', marginTop: 2 }}>
+                          {formatPrice(addon.addon_discount_price_cents)}
+                        </Text>
+                        {discountPct > 0 && (
+                          <Text style={{ fontSize: 9, color: '#ef4444', marginTop: 1 }}>-{discountPct}% off</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+          {/* Addon variant sub-modal */}
+          {addonVariantModal && (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#f9fafb', borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 8 }}>
+                {addonVariantModal.addon.addon_item_name} — {t('orders.select-options') || 'Select Options'}
+              </Text>
+              {addonVariantModal.variants.map((variant) => (
+                <View key={variant.id} style={{ marginBottom: 8 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                    {variant.name}{variant.required && <Text style={{ color: '#ef4444' }}> *</Text>}
+                  </Text>
+                  {variant.min_select === 1 && variant.max_select === 1 ? (
+                    variant.options.map((option) => (
+                      <TouchableOpacity key={option.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
+                        onPress={() => setAddonVariantSelections(prev => ({ ...prev, [variant.id]: option.id }))}>
+                        <View style={[styles.radioButton, addonVariantSelections[variant.id] === option.id && styles.radioButtonSelected]} />
+                        <Text style={{ fontSize: 12, marginLeft: 8 }}>{option.name}</Text>
+                        {option.price_cents > 0 && <Text style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>+{formatPrice(option.price_cents)}</Text>}
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    variant.options.map((option) => {
+                      const sel = Array.isArray(addonVariantSelections[variant.id])
+                        ? (addonVariantSelections[variant.id] as number[]).includes(option.id) : false;
+                      return (
+                        <TouchableOpacity key={option.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
+                          onPress={() => {
+                            setAddonVariantSelections(prev => {
+                              const cur = Array.isArray(prev[variant.id]) ? [...(prev[variant.id] as number[])] : [];
+                              if (cur.includes(option.id)) cur.splice(cur.indexOf(option.id), 1);
+                              else cur.push(option.id);
+                              return { ...prev, [variant.id]: cur };
+                            });
+                          }}>
+                          <View style={[styles.checkbox, sel && styles.checkboxSelected]} />
+                          <Text style={{ fontSize: 12, marginLeft: 8 }}>{option.name}</Text>
+                          {option.price_cents > 0 && <Text style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>+{formatPrice(option.price_cents)}</Text>}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              ))}
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                <TouchableOpacity style={{ flex: 1, backgroundColor: '#667eea', paddingVertical: 8, borderRadius: 6, alignItems: 'center' }}
+                  onPress={confirmAddonVariant}>
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{t('orders.confirm') || 'Confirm'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ flex: 1, borderWidth: 1, borderColor: '#d1d5db', paddingVertical: 8, borderRadius: 6, alignItems: 'center' }}
+                  onPress={() => setAddonVariantModal(null)}>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.cancel')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </ScrollView>
         <View style={styles.variantModalFooter}>
           <TouchableOpacity style={styles.addBtn} onPress={handleVariantSubmit}>
@@ -2064,6 +2307,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <View style={{ marginTop: 2 }}>
                         {item.variants.map((v, vi) => (
                           <Text key={vi} style={styles.cartItemVariantText} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
+                        ))}
+                      </View>
+                    )}
+                    {item.addons && item.addons.length > 0 && (
+                      <View style={{ marginTop: 2 }}>
+                        {item.addons.map((a, ai) => (
+                          <Text key={ai} style={{ fontSize: 11, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
                         ))}
                       </View>
                     )}

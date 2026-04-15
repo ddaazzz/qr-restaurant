@@ -1424,6 +1424,7 @@ function displayOrderDetails(order) {
             <div style="font-weight: 600; color: #667eea; font-size: 13px; margin-left: 8px;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
           </div>
           ${item.variants ? `<div style="font-size: 11px; color: #999;">${item.variants}</div>` : ''}
+          ${item.addons && item.addons.length > 0 ? item.addons.map(a => `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">+ ${a.menu_item_name} ×${a.quantity} ($${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)})</div>`).join('') : ''}
         </div>
       `;
     });
@@ -2226,6 +2227,11 @@ async function emailReceipt(orderId) {
     order.items.forEach(item => {
       const itemTotal = (item.item_total_cents / 100).toFixed(2);
       emailContent += `- ${item.menu_item_name} x${item.quantity}: $${itemTotal}\n`;
+      if (item.addons && item.addons.length > 0) {
+        item.addons.forEach(a => {
+          emailContent += `  + ${a.menu_item_name} x${a.quantity}: $${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)}\n`;
+        });
+      }
     });
 
     const totalAmount = (order.total_cents / 100).toFixed(2);

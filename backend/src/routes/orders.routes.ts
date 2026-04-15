@@ -1047,6 +1047,8 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         oi.price_cents,
         (oi.price_cents * oi.quantity) as item_total_cents,
         oi.status,
+        oi.is_addon,
+        oi.parent_order_item_id,
         mi.name as menu_item_name,
         mi.image_url,
         STRING_AGG(
@@ -1063,12 +1065,35 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
       LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
       LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
       WHERE oi.order_id = $1 AND oi.removed = false
-      GROUP BY oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price_cents, oi.status, mi.name, mi.image_url
+      GROUP BY oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price_cents, oi.status, oi.is_addon, oi.parent_order_item_id, mi.name, mi.image_url
+      ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
       `,
       [orderId]
     );
 
-    order.items = itemsRes.rows;
+    // Group addon items under their parent items
+    const mainItems: any[] = [];
+    const itemsById: Record<number, any> = {};
+    for (const row of itemsRes.rows) {
+      row.addons = [];
+      itemsById[row.id] = row;
+      if (!row.is_addon) {
+        mainItems.push(row);
+      }
+    }
+    for (const row of itemsRes.rows) {
+      if (row.is_addon && row.parent_order_item_id && itemsById[row.parent_order_item_id]) {
+        itemsById[row.parent_order_item_id].addons.push({
+          order_item_id: row.id,
+          menu_item_name: row.menu_item_name,
+          quantity: row.quantity,
+          unit_price_cents: row.price_cents,
+          item_total_cents: row.item_total_cents,
+          status: row.status,
+        });
+      }
+    }
+    order.items = mainItems;
 
     // Get all chuio_payments records for this order (full ledger)
     const paymentsLedgerRes = await pool.query(
