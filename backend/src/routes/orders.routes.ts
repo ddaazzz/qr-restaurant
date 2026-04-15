@@ -273,6 +273,16 @@ for (const v of variants) {
             addonData.category_id
           ]
         );
+
+        // Insert addon variant selections if provided
+        const addonOrderItemId = addonItemRes.rows[0].id;
+        const addonOptionIds = addon.selected_option_ids || [];
+        for (const optionId of addonOptionIds) {
+          await pool.query(
+            `INSERT INTO order_item_variants (order_item_id, variant_option_id) VALUES ($1, $2)`,
+            [addonOrderItemId, optionId]
+          );
+        }
       }
     }
 
@@ -532,7 +542,8 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
             quantity: row.quantity,
             unit_price_cents: row.unit_price_cents,
             item_total_cents: addonTotal,
-            status: row.item_status
+            status: row.item_status,
+            variants: row.variants || ''
           });
           // Add addon price to total for parent order
           const parentOrder = ordersMap[result.rows.find(r => r.order_item_id === row.parent_order_item_id)?.order_id];
@@ -1096,6 +1107,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
           unit_price_cents: row.price_cents,
           item_total_cents: row.item_total_cents,
           status: row.status,
+          variants: row.variants || '',
         });
       }
     }

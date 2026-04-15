@@ -71,6 +71,8 @@ const variantSelections = {};
 // Addon state for drawer
 let drawerAddons = []; // addons loaded for current item
 let selectedDrawerAddons = {}; // { addonId: true/false }
+let addonVariantData = {}; // { addonItemId: [variants] } - cached
+let addonVariantSelections = {}; // { addonId: { variantId: [optionIds] } }
 
 // Search filter
 function filterMenu(query) {
@@ -547,16 +549,35 @@ content.appendChild(vContainer);
         </div>
       `;
 
-      addonCard.onclick = () => {
-        selectedDrawerAddons[addon.id] = !selectedDrawerAddons[addon.id];
-        // Re-render the addon section
-        refreshAddonCards(item, addons, content);
+      addonCard.onclick = async () => {
+        if (selectedDrawerAddons[addon.id]) {
+          // Deselect
+          selectedDrawerAddons[addon.id] = false;
+          delete addonVariantSelections[addon.id];
+          refreshAddonCards(item, addons, content);
+        } else {
+          // Select — fetch variants if needed
+          selectedDrawerAddons[addon.id] = true;
+          addonVariantSelections[addon.id] = {};
+          if (!addonVariantData[addon.addon_item_id]) {
+            try {
+              const vRes = await fetch(`${API_BASE}/menu-items/${addon.addon_item_id}/variants`);
+              if (vRes.ok) { addonVariantData[addon.addon_item_id] = await vRes.json(); }
+              else { addonVariantData[addon.addon_item_id] = []; }
+            } catch(e) { addonVariantData[addon.addon_item_id] = []; }
+          }
+          refreshAddonCards(item, addons, content);
+        }
       };
 
       addonGrid.appendChild(addonCard);
     });
 
     addonSection.appendChild(addonGrid);
+
+    // Render variant selections for selected addons
+    renderAddonVariantSections(addons, addonSection);
+
     content.appendChild(addonSection);
   }
 
@@ -619,15 +640,33 @@ function refreshAddonCards(item, addons, content) {
         </div>
       `;
 
-      addonCard.onclick = () => {
-        selectedDrawerAddons[addon.id] = !selectedDrawerAddons[addon.id];
-        refreshAddonCards(item, addons, content);
+      addonCard.onclick = async () => {
+        if (selectedDrawerAddons[addon.id]) {
+          selectedDrawerAddons[addon.id] = false;
+          delete addonVariantSelections[addon.id];
+          refreshAddonCards(item, addons, content);
+        } else {
+          selectedDrawerAddons[addon.id] = true;
+          addonVariantSelections[addon.id] = {};
+          if (!addonVariantData[addon.addon_item_id]) {
+            try {
+              const vRes = await fetch(`${API_BASE}/menu-items/${addon.addon_item_id}/variants`);
+              if (vRes.ok) { addonVariantData[addon.addon_item_id] = await vRes.json(); }
+              else { addonVariantData[addon.addon_item_id] = []; }
+            } catch(e) { addonVariantData[addon.addon_item_id] = []; }
+          }
+          refreshAddonCards(item, addons, content);
+        }
       };
 
       addonGrid.appendChild(addonCard);
     });
 
     addonSection.appendChild(addonGrid);
+
+    // Render variant selections for selected addons
+    renderAddonVariantSections(addons, addonSection);
+
     content.appendChild(addonSection);
   }
 
@@ -639,6 +678,59 @@ function refreshAddonCards(item, addons, content) {
   addBtn.disabled = !canAddToCart(item);
   addBtn.onclick = () => addToCart(item);
   content.appendChild(addBtn);
+}
+
+// Render variant selection checkboxes for each selected addon
+function renderAddonVariantSections(addons, container) {
+  addons.forEach(addon => {
+    if (!selectedDrawerAddons[addon.id]) return;
+    const variants = addonVariantData[addon.addon_item_id] || [];
+    if (variants.length === 0) return;
+
+    const section = document.createElement("div");
+    section.style.cssText = "margin-top: 10px; padding: 8px 10px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;";
+    section.innerHTML = `<div style="font-size: 12px; font-weight: 700; color: #667eea; margin-bottom: 6px;">${addon.addon_item_name}</div>`;
+
+    variants.forEach(v => {
+      const vDiv = document.createElement("div");
+      vDiv.style.cssText = "margin-bottom: 6px;";
+      vDiv.innerHTML = `<div style="font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 3px;">${v.name}${v.required ? '<span style="color:red;"> *</span>' : ''}</div>`;
+
+      (v.options || []).filter(o => o.is_available).forEach(o => {
+        const selected = (addonVariantSelections[addon.id]?.[v.id] || []).includes(o.id);
+        const label = document.createElement("label");
+        label.style.cssText = "display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; margin-bottom: 2px; cursor: pointer;";
+        label.innerHTML = `
+          <input type="checkbox" ${selected ? 'checked' : ''} style="accent-color: #667eea;" />
+          <span>${o.name}${o.price_cents > 0 ? ` (+$${(o.price_cents / 100).toFixed(2)})` : ''}</span>
+        `;
+        label.querySelector('input').onchange = function() {
+          onAddonVariantChange(addon.id, v, o.id, this.checked);
+        };
+        vDiv.appendChild(label);
+      });
+
+      section.appendChild(vDiv);
+    });
+
+    container.appendChild(section);
+  });
+}
+
+// Handle addon variant checkbox change
+function onAddonVariantChange(addonId, variant, optionId, checked) {
+  if (!addonVariantSelections[addonId]) addonVariantSelections[addonId] = {};
+  let selected = addonVariantSelections[addonId][variant.id] || [];
+
+  if (checked) {
+    if (variant.max_select && selected.length >= variant.max_select) {
+      selected = selected.slice(1); // drop oldest
+    }
+    selected.push(optionId);
+  } else {
+    selected = selected.filter(id => id !== optionId);
+  }
+  addonVariantSelections[addonId][variant.id] = selected;
 }
 
 function setActiveCategory(categoryId) {
@@ -748,12 +840,28 @@ function addToCart(item) {
     if (drawerAddons.length > 0) {
       const selectedAddonItems = drawerAddons.filter(a => selectedDrawerAddons[a.id]);
       selectedAddonItems.forEach(addon => {
+        const addonSelectedOpts = [];
+        const addonVarDetails = [];
+        const variants = addonVariantData[addon.addon_item_id] || [];
+        const selections = addonVariantSelections[addon.id] || {};
+        variants.forEach(v => {
+          const optIds = selections[v.id] || [];
+          optIds.forEach(optId => {
+            const opt = (v.options || []).find(o => o.id === optId);
+            if (opt) {
+              addonSelectedOpts.push(optId);
+              addonVarDetails.push({ variant: v.name, option: opt.name });
+            }
+          });
+        });
         cartItem.addons.push({
           addonId: addon.id,
           addonItemId: addon.addon_item_id,
           name: addon.addon_item_name,
           priceCents: addon.addon_discount_price_cents,
-          quantity: 1
+          quantity: 1,
+          selected_option_ids: addonSelectedOpts,
+          variantDetails: addonVarDetails
         });
       });
     }
@@ -861,7 +969,11 @@ async function submitOrder() {
       menu_item_id: i.menuItemId,
       quantity: i.quantity,
       selected_option_ids: i.variantOptionIds || [],
-      addons: i.addons || []
+      addons: (i.addons || []).map(a => ({
+        addon_id: a.addonId,
+        quantity: a.quantity || 1,
+        selected_option_ids: a.selected_option_ids || []
+      }))
     }))
   };
 
@@ -1058,7 +1170,8 @@ function renderOrdersDrawer(orders, tableName) {
         const addonsHtml = item.addons && item.addons.length > 0 
           ? item.addons.map(addon => {
             const addonPrice = Number(addon.item_total_cents) || Number(addon.unit_price_cents) * Number(addon.quantity) || 0;
-            return `<div style="font-size: 11px; color: #667eea; margin-left: 12px; margin-top: 2px;">+ ${(addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity} <span style="color:#888;">$${(addonPrice / 100).toFixed(2)}</span></div>`;
+            const addonVarHtml = addon.variants ? `<div style="font-size: 10px; color: #9ca3af; margin-left: 20px;">${addon.variants}</div>` : '';
+            return `<div style="font-size: 11px; color: #667eea; margin-left: 12px; margin-top: 2px;">+ ${(addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity} <span style="color:#888;">$${(addonPrice / 100).toFixed(2)}</span></div>${addonVarHtml}`;
           }).join('')
           : '';
 
@@ -1172,9 +1285,12 @@ function renderCartDrawer() {
     const line = (item.totalPriceCents + addonTotal) * item.quantity;
     subtotal += line;
 
-    const addonsHtml = (item.addons || []).map(a => 
-      `<div style="font-size: 11px; color: #667eea; margin-top: 2px; padding-left: 4px;">+ ${a.name} <span style="color:#888;">$${(a.priceCents / 100).toFixed(2)}</span></div>`
-    ).join('');
+    const addonsHtml = (item.addons || []).map(a => {
+      const varHtml = (a.variantDetails || []).map(v => 
+        `<div style="font-size: 10px; color: #9ca3af; padding-left: 12px;">${v.variant}: ${v.option}</div>`
+      ).join('');
+      return `<div style="font-size: 11px; color: #667eea; margin-top: 2px; padding-left: 4px;">+ ${a.name} <span style="color:#888;">$${(a.priceCents / 100).toFixed(2)}</span></div>${varHtml}`;
+    }).join('');
 
     return `
       <div class="cart-item">
@@ -1296,6 +1412,8 @@ async function openDrawer(itemId) {
   // Reset addon state
   drawerAddons = [];
   selectedDrawerAddons = {};
+  addonVariantData = {};
+  addonVariantSelections = {};
 
   // Fetch addons for combo items
   if (item.is_meal_combo) {

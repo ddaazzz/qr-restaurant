@@ -745,7 +745,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           quantity: cartItem.quantity,
           notes: cartItem.notes || null,
           selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
-          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
+          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity, selected_option_ids: (a.variants || []).map(v => v.optionId) })),
         }));
 
         console.log('[OrderSubmit] Submitting order:', {
@@ -1463,6 +1463,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           <Text key={ai} style={{ fontSize: 11, color: '#667eea', marginTop: 1 }}>
                             + {addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
                           </Text>
+                          {addon.variants ? (
+                            <Text style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }}>{addon.variants}</Text>
+                          ) : null}
                         ))}
                       </View>
                     ) : null}
@@ -2314,6 +2317,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <View style={{ marginTop: 2 }}>
                         {item.addons.map((a, ai) => (
                           <Text key={ai} style={{ fontSize: 11, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
+                          {a.variants && a.variants.length > 0 && a.variants.map((v, vi) => (
+                            <Text key={`av${vi}`} style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
+                          ))}
                         ))}
                       </View>
                     )}
