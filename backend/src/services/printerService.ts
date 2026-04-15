@@ -38,7 +38,7 @@ export interface PrinterConfig {
 export interface PrintJobPayload {
   orderNumber: string;
   tableNumber: string;
-  items: { name: string; quantity: number; variants?: string }[];
+  items: { name: string; quantity: number; variants?: string; isAddon?: boolean }[];
   timestamp: string;
   restaurantName: string;
   type: "kitchen" | "bill";
@@ -135,8 +135,8 @@ export const generateReceiptHTML = (payload: PrintJobPayload): string => {
             ${payload.items
               .map(
                 (item) => `
-              <div class="item">
-                <div class="item-name">${item.name.substring(0, 40)}</div>
+              <div class="item" ${item.isAddon ? 'style="padding-left: 5mm; font-size: 9px; color: #555;"' : ''}>
+                <div class="item-name">${item.isAddon ? '+ ' : ''}${item.name.substring(0, 40)}</div>
                 <div class="item-qty">x${item.quantity}</div>
               </div>
               ${

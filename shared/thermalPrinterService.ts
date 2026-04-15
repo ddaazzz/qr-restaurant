@@ -18,7 +18,7 @@ export interface ReceiptData {
   pax?: number;
   startTime?: string;
   startedTime?: string;
-  items?: Array<{ name: string; quantity: number; price?: number }>;
+  items?: Array<{ name: string; quantity: number; price?: number; isAddon?: boolean }>;
   subtotal?: number;
   serviceCharge?: number;
   tax?: number;
@@ -179,19 +179,20 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
 
       // Format: "Item Name x#     Price" (right-aligned price)
       // Calculate spacing: max 32 chars per line
-      const maxItemNameLen = 24;
+      const maxItemNameLen = item.isAddon ? 20 : 24;
+      const prefix = item.isAddon ? '  + ' : '';
       const displayName = item.name.length > maxItemNameLen 
         ? item.name.substring(0, maxItemNameLen - 1) 
         : item.name;
       
       if (priceStr) {
         // Create justified line: name and qty on left, price on right
-        const qtyDisplay = `${displayName} ${qtyStr}`;
+        const qtyDisplay = `${prefix}${displayName} ${qtyStr}`;
         const padding = Math.max(0, 32 - qtyDisplay.length - priceStr.length);
         const line = qtyDisplay + ' '.repeat(Math.max(1, padding)) + priceStr;
         appendText(commands, line);
       } else {
-        appendText(commands, `${displayName} ${qtyStr}`);
+        appendText(commands, `${prefix}${displayName} ${qtyStr}`);
       }
       commands.push(10);
     }
@@ -354,7 +355,7 @@ function appendText(commands: number[], text: string): void {
 export interface KitchenOrderData {
   orderNumber: string;
   tableNumber: string;
-  items: Array<{ name: string; quantity: number; variants?: string; notes?: string }>;
+  items: Array<{ name: string; quantity: number; variants?: string; notes?: string; isAddon?: boolean }>;
   timestamp: string;
   restaurantName?: string;
 }
@@ -414,12 +415,18 @@ export function generateKitchenOrderESCPOS(data: KitchenOrderData): Uint8Array {
   for (const item of data.items) {
     commands.push(10); // spacing between items
 
-    // Item line: "qty x ItemName" in bold
-    commands.push(27, 33, 8); // Bold
-    const itemLine = `${item.quantity}x ${item.name}`;
-    appendText(commands, itemLine.length > lineWidth ? itemLine.substring(0, lineWidth) : itemLine);
-    commands.push(27, 33, 0); // Bold off
-    commands.push(10);
+    // Item line: "qty x ItemName" in bold (addons indented with + prefix)
+    if (item.isAddon) {
+      const addonLine = `  + ${item.quantity}x ${item.name}`;
+      appendText(commands, addonLine.length > lineWidth ? addonLine.substring(0, lineWidth) : addonLine);
+      commands.push(10);
+    } else {
+      commands.push(27, 33, 8); // Bold
+      const itemLine = `${item.quantity}x ${item.name}`;
+      appendText(commands, itemLine.length > lineWidth ? itemLine.substring(0, lineWidth) : itemLine);
+      commands.push(27, 33, 0); // Bold off
+      commands.push(10);
+    }
 
     // Variants (if any) - indented
     if (item.variants) {

@@ -264,6 +264,26 @@ async function loadKitchenOrders() {
       orderMap[orderId].items.push(item);
     });
 
+    // Group addon items under their parent items for display
+    for (const orderId in orderMap) {
+      const order = orderMap[orderId];
+      const mainItems = [];
+      const addonsByParent = {};
+      for (const item of order.items) {
+        if (item.is_addon && item.parent_order_item_id) {
+          if (!addonsByParent[item.parent_order_item_id]) addonsByParent[item.parent_order_item_id] = [];
+          addonsByParent[item.parent_order_item_id].push(item);
+        } else {
+          mainItems.push(item);
+        }
+      }
+      // Attach addons to main items
+      for (const item of mainItems) {
+        item._addons = addonsByParent[item.order_item_id] || [];
+      }
+      order.items = mainItems;
+    }
+
     renderKitchenOrders(Object.values(orderMap).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
   } catch (err) {
     console.error("❌ Failed to load kitchen items:", err);
@@ -315,16 +335,43 @@ function renderKitchenOrders(orders) {
               ${item.variants ? `<div class="item-variants">${item.variants}</div>` : ""}
               ${item.notes ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${item.notes}</div>` : ""}
               <span class="item-status ${item.status}">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[item.status] || item.status.charAt(0).toUpperCase() + item.status.slice(1)}</span>
+              ${(item._addons || []).map(addon => `
+                <div class="order-item" style="margin-left:16px;padding:4px 0;border-top:none;font-size:12px;color:#667eea;">
+                  <div class="item-header">
+                    <span class="item-name">+ ${addon.menu_item_name}</span>
+                    <span class="item-qty">×${addon.quantity}</span>
+                  </div>
+                  ${addon.variants ? `<div class="item-variants">${addon.variants}</div>` : ""}
+                  <span class="item-status ${addon.status}">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[addon.status] || addon.status.charAt(0).toUpperCase() + addon.status.slice(1)}</span>
+                </div>
+              `).join("")}
             </div>
           `).join("")}
           
           <div class="card-actions">
-            ${order.items.some(item => item.status === "pending") ? 
-              `<button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'pending').map(i => i.order_item_id))}, 'preparing')">Start Preparing</button>
-              <button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')" data-i18n="kitchen.print-order">🖨️ Print</button>` 
-              : (order.items.some(item => item.status === "preparing") ? 
-              `<button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'preparing').map(i => i.order_item_id))}, 'served')">Serve</button>` 
-              : `<button class="btn-action btn-ready" disabled>All Served</button>`)}
+            ${(() => {
+              const allItemIds = order.items.flatMap(i => [i.order_item_id, ...(i._addons || []).map(a => a.order_item_id)]);
+              const pendingIds = order.items.flatMap(i => {
+                const ids = [];
+                if (i.status === 'pending') ids.push(i.order_item_id);
+                (i._addons || []).forEach(a => { if (a.status === 'pending') ids.push(a.order_item_id); });
+                return ids;
+              });
+              const preparingIds = order.items.flatMap(i => {
+                const ids = [];
+                if (i.status === 'preparing') ids.push(i.order_item_id);
+                (i._addons || []).forEach(a => { if (a.status === 'preparing') ids.push(a.order_item_id); });
+                return ids;
+              });
+              if (pendingIds.length > 0) {
+                return `<button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(pendingIds)}, 'preparing')">Start Preparing</button>
+                <button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')" data-i18n="kitchen.print-order">🖨️ Print</button>`;
+              } else if (preparingIds.length > 0) {
+                return `<button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(preparingIds)}, 'served')">Serve</button>`;
+              } else {
+                return `<button class="btn-action btn-ready" disabled>All Served</button>`;
+              }
+            })()}
           </div>
         </div>
       </div>

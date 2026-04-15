@@ -1748,8 +1748,14 @@ async function printMenuBill() {
     
     let itemsHTML = '';
     bill.items.forEach(i => {
-      const lineTotal = (i.unit_price_cents * i.quantity / 100).toFixed(2);
-      itemsHTML += `<div class="item-row"><div class="item-name">${i.item_name}</div><div class="item-qty">x${i.quantity}</div><div class="item-price">$${lineTotal}</div></div>`;
+      const lineTotal = ((i.price_cents || i.unit_price_cents || 0) * i.quantity / 100).toFixed(2);
+      itemsHTML += `<div class="item-row"><div class="item-name">${i.name || i.item_name}</div><div class="item-qty">x${i.quantity}</div><div class="item-price">$${lineTotal}</div></div>`;
+      if (i.addons && i.addons.length > 0) {
+        i.addons.forEach(a => {
+          const addonTotal = (a.price_cents * a.quantity / 100).toFixed(2);
+          itemsHTML += `<div class="item-row" style="padding-left:12px;font-size:11px;color:#667eea;"><div class="item-name">+ ${a.name}</div><div class="item-qty">x${a.quantity}</div><div class="item-price">$${addonTotal}</div></div>`;
+        });
+      }
     });
     
     const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>Service Charge:</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';

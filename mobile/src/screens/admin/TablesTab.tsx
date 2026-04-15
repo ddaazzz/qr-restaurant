@@ -1507,7 +1507,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   // Helper function to generate bill HTML
   const generateBillHTML = (tableName: string, bill: any) => {
     const itemsHTML = bill.items
-      .map((item: any) => `<tr><td>${item.name}</td><td>${item.quantity}</td><td>${(item.price_cents / 100).toFixed(2)}</td></tr>`)
+      .map((item: any) => {
+        let html = `<tr><td>${item.name}</td><td>${item.quantity}</td><td>${(item.price_cents / 100).toFixed(2)}</td></tr>`;
+        if (item.addons && item.addons.length > 0) {
+          for (const addon of item.addons) {
+            html += `<tr style="color:#667eea;font-size:0.9em;"><td style="padding-left:16px;">+ ${addon.name}</td><td>${addon.quantity}</td><td>${(addon.price_cents / 100).toFixed(2)}</td></tr>`;
+          }
+        }
+        return html;
+      })
       .join('');
     
     return `
@@ -1570,16 +1578,30 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       }
 
       // Prepare bill data in format expected by backend
+      const printItems: any[] = [];
+      sessionBill.items.forEach((item: any) => {
+        printItems.push({
+          name: item.name,
+          quantity: item.quantity,
+          price_cents: item.price_cents,
+          status: item.status,
+        });
+        if (item.addons && item.addons.length > 0) {
+          item.addons.forEach((addon: any) => {
+            printItems.push({
+              name: addon.name,
+              quantity: addon.quantity,
+              price_cents: addon.price_cents,
+              isAddon: true,
+            });
+          });
+        }
+      });
       const billPayload = {
         sessionId: selectedSession.id,
         billData: {
           table: selectedTable?.name || 'Receipt',
-          items: sessionBill.items.map(item => ({
-            name: item.name,
-            quantity: item.quantity,
-            price_cents: item.price_cents,
-            status: item.status,
-          })),
+          items: printItems,
           subtotal: sessionBill.subtotal_cents,
           serviceCharge: sessionBill.service_charge_cents || 0,
           total: sessionBill.total_cents,

@@ -569,6 +569,8 @@ router.get("/kitchen/items", async (req, res) => {
         oi.id AS order_item_id,
         oi.status,
         oi.quantity,
+        oi.is_addon,
+        oi.parent_order_item_id,
 
         mi.name AS item_name,
         mi.category_id,
@@ -609,6 +611,8 @@ router.get("/kitchen/items", async (req, res) => {
         oi.id,
         oi.status,
         oi.quantity,
+        oi.is_addon,
+        oi.parent_order_item_id,
         mi.name,
         mi.category_id,
         tu.display_name,
@@ -620,7 +624,7 @@ router.get("/kitchen/items", async (req, res) => {
         o.created_at,
         oi.notes
 
-      ORDER BY o.created_at ASC
+      ORDER BY o.created_at ASC, oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
       `,
       [restaurantId]
     );
@@ -645,7 +649,9 @@ router.get("/kitchen/items", async (req, res) => {
         variants: row.variants,
         notes: row.notes,
         created_at: row.created_at,
-        restaurant_id: row.restaurant_id
+        restaurant_id: row.restaurant_id,
+        is_addon: row.is_addon || false,
+        parent_order_item_id: row.parent_order_item_id || null
       }))
     );
   } catch (err: any) {

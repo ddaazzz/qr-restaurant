@@ -425,17 +425,42 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
     const { rows } = await pool.query(
       `
       SELECT
+        oi.id,
         mi.name,
         oi.quantity,
-        oi.price_cents
+        oi.price_cents,
+        oi.is_addon,
+        oi.parent_order_item_id
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE o.session_id = $1
         AND o.status <> 'cancelled'
+      ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
       `,
       [sessionId]
     );
+
+    // Group addon items under their parent items
+    const mainItems: any[] = [];
+    const itemsById: Record<number, any> = {};
+    for (const row of rows) {
+      const itemObj = { ...row, addons: [] as any[] };
+      itemsById[row.id] = itemObj;
+      if (!row.is_addon) {
+        mainItems.push(itemObj);
+      }
+    }
+    for (const row of rows) {
+      if (row.is_addon && row.parent_order_item_id && itemsById[row.parent_order_item_id]) {
+        itemsById[row.parent_order_item_id].addons.push({
+          name: row.name,
+          quantity: row.quantity,
+          price_cents: row.price_cents,
+          is_addon: true,
+        });
+      }
+    }
 
     const subtotal_cents = rows.reduce(
       (sum, r) => sum + r.quantity * r.price_cents,
@@ -449,7 +474,7 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
     res.json({
       restaurant,
       session,
-      items: rows,
+      items: mainItems,
       subtotal_cents,
       service_charge_cents,
       total_cents

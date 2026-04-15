@@ -309,12 +309,23 @@ export class CustomerReceiptService {
 
     const itemsHTML = receiptData.items
       .map(
-        (item: any) =>
-          `<tr>
+        (item: any) => {
+          let html = `<tr>
             <td>${item.name}</td>
             <td style="text-align: center;">${item.quantity}</td>
             <td style="text-align: right;">$${(item.price / 100).toFixed(2)}</td>
-          </tr>`
+          </tr>`;
+          if (item.addons && item.addons.length > 0) {
+            for (const addon of item.addons) {
+              html += `<tr style="color: #666; font-size: 0.9em;">
+                <td style="padding-left: 16px;">+ ${addon.name}</td>
+                <td style="text-align: center;">${addon.quantity}</td>
+                <td style="text-align: right;">$${(addon.price_cents / 100).toFixed(2)}</td>
+              </tr>`;
+            }
+          }
+          return html;
+        }
       )
       .join('');
 
