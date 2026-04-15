@@ -35,6 +35,7 @@ interface VariantOption {
   variant_id: number;
   name: string;
   price_cents: number;
+  is_available?: boolean;
 }
 
 interface Variant {
@@ -575,6 +576,17 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         await loadMenuData();
       } catch (err: any) {
         Alert.alert(t('common.error'), err.response?.data?.error || t('menu.failed-update-option'));
+      }
+    };
+
+    const toggleVariantOptionAvailability = async (optionId: number, currentAvail: boolean) => {
+      try {
+        await apiClient.patch(`/api/menu-item-variant-options/${optionId}/availability`, {
+          is_available: !currentAvail,
+        });
+        await loadMenuData();
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to toggle availability');
       }
     };
 
@@ -1333,12 +1345,22 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                             {variant.options && variant.options.length > 0 && (
                               <View style={styles.optionsContainer}>
                                 {variant.options.map((option) => (
-                                  <View key={option.id} style={styles.optionItem}>
-                                    <View>
-                                      <Text style={styles.optionName}>{option.name}</Text>
-                                      <Text style={styles.optionPrice}>
-                                        +{formatPrice(option.price_cents)}
-                                      </Text>
+                                  <View key={option.id} style={[styles.optionItem, option.is_available === false && { opacity: 0.5 }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                      {isVariantInEditMode && (
+                                        <TouchableOpacity
+                                          onPress={() => toggleVariantOptionAvailability(option.id, option.is_available !== false)}
+                                          style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, borderColor: option.is_available !== false ? '#10b981' : '#ef4444', backgroundColor: option.is_available !== false ? '#d1fae5' : '#fee2e2', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                          <Text style={{ fontSize: 10, fontWeight: '700', color: option.is_available !== false ? '#065f46' : '#991b1b' }}>{option.is_available !== false ? '\u2713' : '\u2715'}</Text>
+                                        </TouchableOpacity>
+                                      )}
+                                      <View>
+                                        <Text style={[styles.optionName, option.is_available === false && { textDecorationLine: 'line-through' }]}>{option.name}</Text>
+                                        <Text style={styles.optionPrice}>
+                                          +{formatPrice(option.price_cents)}
+                                        </Text>
+                                      </View>
                                     </View>
                                     {isVariantInEditMode && (
                                       <View style={styles.optionActions}>
@@ -1713,12 +1735,22 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                         {variant.options && variant.options.length > 0 && (
                           <View style={styles.optionsContainer}>
                             {variant.options.map((option) => (
-                              <View key={option.id} style={styles.optionItem}>
-                                <View>
-                                  <Text style={styles.optionName}>{option.name}</Text>
-                                  <Text style={styles.optionPrice}>
-                                    +{formatPrice(option.price_cents)}
-                                  </Text>
+                              <View key={option.id} style={[styles.optionItem, option.is_available === false && { opacity: 0.5 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  {isVariantInEditMode && (
+                                    <TouchableOpacity
+                                      onPress={() => toggleVariantOptionAvailability(option.id, option.is_available !== false)}
+                                      style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, borderColor: option.is_available !== false ? '#10b981' : '#ef4444', backgroundColor: option.is_available !== false ? '#d1fae5' : '#fee2e2', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                      <Text style={{ fontSize: 10, fontWeight: '700', color: option.is_available !== false ? '#065f46' : '#991b1b' }}>{option.is_available !== false ? '\u2713' : '\u2715'}</Text>
+                                    </TouchableOpacity>
+                                  )}
+                                  <View>
+                                    <Text style={[styles.optionName, option.is_available === false && { textDecorationLine: 'line-through' }]}>{option.name}</Text>
+                                    <Text style={styles.optionPrice}>
+                                      +{formatPrice(option.price_cents)}
+                                    </Text>
+                                  </View>
                                 </View>
                                 {/* Show option edit/delete only when variant is in edit mode */}
                                 {isVariantInEditMode && (

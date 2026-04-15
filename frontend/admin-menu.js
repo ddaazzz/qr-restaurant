@@ -372,10 +372,15 @@ function createVariantOptionsEditorElement(variant) {
     if (variant.options && variant.options.length > 0) {
       optionsList.innerHTML = variant.options.map(function(option) {
         const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+        const isAvail = option.is_available !== false;
+        const availStyle = isAvail ? 'background:#d1fae5;color:#065f46;' : 'background:#fee2e2;color:#991b1b;';
+        const availLabel = isAvail ? '✓' : '✕';
+        const nameStyle = isAvail ? '' : 'text-decoration: line-through; opacity: 0.5;';
         return `
           <div id="option-row-${option.id}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: white; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 4px;">
-            <span style="font-size: 12px;">${option.name}${priceLabel}</span>
-            <div style="display: flex; gap: 4px;">
+            <span style="font-size: 12px; ${nameStyle}">${option.name}${priceLabel}</span>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <button onclick="toggleVariantOptionAvailability(${option.id}, ${isAvail})" style="padding: 2px 6px; ${availStyle} border: none; border-radius: 2px; cursor: pointer; font-size: 10px; font-weight: 600;">${availLabel}</button>
               <button onclick="editVariantOption(${option.id})" style="padding: 2px 6px; background: #2C3E50; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Edit</button>
               <button onclick="deleteVariantOption(${option.id})" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Delete</button>
             </div>
@@ -1889,6 +1894,24 @@ function cancelOptionEdit(optionId) {
     openVariantOptionsEditor(currentEditingVariantId);
   }
   currentEditingOptionId = null;
+}
+
+async function toggleVariantOptionAvailability(optionId, currentAvail) {
+  try {
+    const res = await fetch(`${API}/menu-item-variant-options/${optionId}/availability`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_available: !currentAvail })
+    });
+    if (!res.ok) throw new Error('Failed to toggle availability');
+
+    // Update local data and re-render
+    const varRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`);
+    CURRENT_VARIANTS = varRes.ok ? await varRes.json() : [];
+    openVariantOptionsEditor(currentEditingVariantId);
+  } catch (err) {
+    alert('Error toggling availability: ' + err.message);
+  }
 }
 
 async function deleteVariantOption(optionId) {
