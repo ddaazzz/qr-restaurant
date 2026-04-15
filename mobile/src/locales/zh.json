@@ -1799,6 +1799,8 @@
   "orders.submit-order": "提交訂單",
   "orders.cancel": "取消",
   "orders.add-to-cart": "加入購物車",
+  "orders.add-ons": "加購項目",
+  "orders.confirm": "確認",
   "orders.required": "必選",
   "orders.select-options": "選擇選項",
   "orders.price-label": "價格：",

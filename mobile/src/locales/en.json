@@ -1659,6 +1659,8 @@
   "orders.submit-order": "SUBMIT ORDER",
   "orders.cancel": "Cancel",
   "orders.add-to-cart": "Add to Cart",
+  "orders.add-ons": "ADD-ONS",
+  "orders.confirm": "Confirm",
   "orders.required": "Required",
   "orders.select-options": "SELECT OPTIONS",
   "orders.price-label": "Price:",

@@ -1001,6 +1001,12 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     onPress={() => {
                       setSelectedItem(item);
                       setShowDetailPanel(true);
+                      // Load addons for combo items in read-only view
+                      if (item.is_meal_combo) {
+                        loadAddonsForItem(item.id);
+                      } else {
+                        setAddons([]);
+                      }
                     }}
                   >
                     {getFullImageUrl(item.image_url) ? (
@@ -1834,6 +1840,55 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   )}
                 </>
               )}
+
+              {/* Addons Section (read-only) */}
+              {selectedItem.is_meal_combo && addons.length > 0 && (
+                <View style={{ marginTop: 16 }}>
+                  <View style={{ height: 1, backgroundColor: '#e5e7eb', marginBottom: 12 }} />
+                  <Text style={styles.detailLabel}>{t('menu.addons')}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+                    {addons.map((addon) => {
+                      const discountPct = addon.regular_price_cents > 0
+                        ? Math.round(((addon.regular_price_cents - addon.addon_discount_price_cents) / addon.regular_price_cents) * 100)
+                        : 0;
+                      return (
+                        <View
+                          key={addon.id}
+                          style={{
+                            width: 110,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: '#e5e7eb',
+                            backgroundColor: '#fff',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {addon.addon_item_image ? (
+                            <Image
+                              source={{ uri: getFullImageUrl(addon.addon_item_image)! }}
+                              style={{ width: '100%', height: 70, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
+                            />
+                          ) : (
+                            <View style={{ width: '100%', height: 70, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', borderTopLeftRadius: 8, borderTopRightRadius: 8 }}>
+                              <Ionicons name="fast-food-outline" size={28} color="#d1d5db" />
+                            </View>
+                          )}
+                          <View style={{ padding: 6 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#1f2937' }} numberOfLines={2}>{addon.addon_item_name}</Text>
+                            <Text style={{ fontSize: 11, color: '#667eea', fontWeight: '600', marginTop: 2 }}>
+                              {formatPrice(addon.addon_discount_price_cents)}
+                            </Text>
+                            {discountPct > 0 && (
+                              <Text style={{ fontSize: 9, color: '#ef4444', marginTop: 1 }}>-{discountPct}% off</Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
                 </>
               )}
             </ScrollView>

@@ -68,6 +68,10 @@ function applyThemeColor(hex) {
 let cart = { items: [], total: 0 };
 const variantSelections = {};
 
+// Addon state for drawer
+let drawerAddons = []; // addons loaded for current item
+let selectedDrawerAddons = {}; // { addonId: true/false }
+
 // Search filter
 function filterMenu(query) {
   const q = (query || '').trim().toLowerCase();
@@ -417,7 +421,7 @@ function renderMenuItem(item) {
 
 }//Render
 
-function renderMenuItemWithVariants(item){
+function renderMenuItemWithVariants(item, addons){
     const card = document.createElement("div");
     card.className = "drawer-item";
 
@@ -506,6 +510,56 @@ content.appendChild(vContainer);
     });
   }
 
+  // ---------- ADDON ITEMS SECTION ----------
+  if (addons && addons.length > 0) {
+    const addonSection = document.createElement("div");
+    addonSection.className = "addon-section";
+    addonSection.innerHTML = `
+      <div style="border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 12px;">
+        <div style="font-weight: 700; font-size: 14px; color: #1f2937; margin-bottom: 8px; text-transform: uppercase;">${t('menu.addons') || 'Add-ons'}</div>
+      </div>
+    `;
+
+    const addonGrid = document.createElement("div");
+    addonGrid.style.cssText = "display: flex; flex-wrap: wrap; gap: 10px;";
+
+    addons.forEach(addon => {
+      const discountPct = addon.regular_price_cents > 0
+        ? Math.round(((addon.regular_price_cents - addon.addon_discount_price_cents) / addon.regular_price_cents) * 100)
+        : 0;
+      const isSelected = !!selectedDrawerAddons[addon.id];
+
+      const addonCard = document.createElement("div");
+      addonCard.className = "addon-card";
+      addonCard.dataset.addonId = addon.id;
+      addonCard.style.cssText = `width: 100px; border-radius: 10px; border: 2px solid ${isSelected ? '#667eea' : '#e5e7eb'}; background: ${isSelected ? '#f0f0ff' : '#fff'}; overflow: hidden; cursor: pointer; position: relative;`;
+
+      addonCard.innerHTML = `
+        ${addon.addon_item_image
+          ? `<img src="${addon.addon_item_image}" style="width: 100%; height: 65px; object-fit: cover; border-top-left-radius: 8px; border-top-right-radius: 8px;" onerror="this.style.display='none'" />`
+          : `<div style="width: 100%; height: 65px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; border-top-left-radius: 8px; border-top-right-radius: 8px; color: #d1d5db; font-size: 24px;">🍽</div>`
+        }
+        ${isSelected ? `<div style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</div>` : ''}
+        <div style="padding: 5px;">
+          <div style="font-size: 11px; font-weight: 600; color: #1f2937; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${addon.addon_item_name}</div>
+          <div style="font-size: 11px; color: #667eea; font-weight: 600; margin-top: 2px;">$${(addon.addon_discount_price_cents / 100).toFixed(2)}</div>
+          ${discountPct > 0 ? `<div style="font-size: 9px; color: #ef4444; margin-top: 1px;">-${discountPct}% off</div>` : ''}
+        </div>
+      `;
+
+      addonCard.onclick = () => {
+        selectedDrawerAddons[addon.id] = !selectedDrawerAddons[addon.id];
+        // Re-render the addon section
+        refreshAddonCards(item, addons, content);
+      };
+
+      addonGrid.appendChild(addonCard);
+    });
+
+    addonSection.appendChild(addonGrid);
+    content.appendChild(addonSection);
+  }
+
  // ---------- ADD TO CART BUTTON ----------
   const addBtn = document.createElement("button");
   addBtn.className = "add-btn";
@@ -519,6 +573,72 @@ content.appendChild(vContainer);
   return card;
 
 
+}
+
+function refreshAddonCards(item, addons, content) {
+  // Remove old addon section and add button
+  const oldSection = content.querySelector('.addon-section');
+  const oldBtn = content.querySelector('.add-btn');
+  if (oldSection) oldSection.remove();
+  if (oldBtn) oldBtn.remove();
+
+  // Re-render addon section
+  if (addons && addons.length > 0) {
+    const addonSection = document.createElement("div");
+    addonSection.className = "addon-section";
+    addonSection.innerHTML = `
+      <div style="border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 12px;">
+        <div style="font-weight: 700; font-size: 14px; color: #1f2937; margin-bottom: 8px; text-transform: uppercase;">${t('menu.addons') || 'Add-ons'}</div>
+      </div>
+    `;
+
+    const addonGrid = document.createElement("div");
+    addonGrid.style.cssText = "display: flex; flex-wrap: wrap; gap: 10px;";
+
+    addons.forEach(addon => {
+      const discountPct = addon.regular_price_cents > 0
+        ? Math.round(((addon.regular_price_cents - addon.addon_discount_price_cents) / addon.regular_price_cents) * 100)
+        : 0;
+      const isSelected = !!selectedDrawerAddons[addon.id];
+
+      const addonCard = document.createElement("div");
+      addonCard.className = "addon-card";
+      addonCard.dataset.addonId = addon.id;
+      addonCard.style.cssText = `width: 100px; border-radius: 10px; border: 2px solid ${isSelected ? '#667eea' : '#e5e7eb'}; background: ${isSelected ? '#f0f0ff' : '#fff'}; overflow: hidden; cursor: pointer; position: relative;`;
+
+      addonCard.innerHTML = `
+        ${addon.addon_item_image
+          ? `<img src="${addon.addon_item_image}" style="width: 100%; height: 65px; object-fit: cover; border-top-left-radius: 8px; border-top-right-radius: 8px;" onerror="this.style.display='none'" />`
+          : `<div style="width: 100%; height: 65px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; border-top-left-radius: 8px; border-top-right-radius: 8px; color: #d1d5db; font-size: 24px;">🍽</div>`
+        }
+        ${isSelected ? `<div style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</div>` : ''}
+        <div style="padding: 5px;">
+          <div style="font-size: 11px; font-weight: 600; color: #1f2937; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${addon.addon_item_name}</div>
+          <div style="font-size: 11px; color: #667eea; font-weight: 600; margin-top: 2px;">$${(addon.addon_discount_price_cents / 100).toFixed(2)}</div>
+          ${discountPct > 0 ? `<div style="font-size: 9px; color: #ef4444; margin-top: 1px;">-${discountPct}% off</div>` : ''}
+        </div>
+      `;
+
+      addonCard.onclick = () => {
+        selectedDrawerAddons[addon.id] = !selectedDrawerAddons[addon.id];
+        refreshAddonCards(item, addons, content);
+      };
+
+      addonGrid.appendChild(addonCard);
+    });
+
+    addonSection.appendChild(addonGrid);
+    content.appendChild(addonSection);
+  }
+
+  // Re-add the button
+  const addBtn = document.createElement("button");
+  addBtn.className = "add-btn";
+  addBtn.textContent = t('menu.add-to-cart');
+  addBtn.dataset.itemId = item.id;
+  addBtn.disabled = !canAddToCart(item);
+  addBtn.onclick = () => addToCart(item);
+  content.appendChild(addBtn);
 }
 
 function setActiveCategory(categoryId) {
@@ -624,12 +744,24 @@ function addToCart(item) {
     
     cart.items.push(cartItem);
 
-    // Show addon selection modal after adding the item
+    // Add selected addons from inline drawer selection
+    if (drawerAddons.length > 0) {
+      const selectedAddonItems = drawerAddons.filter(a => selectedDrawerAddons[a.id]);
+      selectedAddonItems.forEach(addon => {
+        cartItem.addons.push({
+          addonId: addon.id,
+          addonItemId: addon.addon_item_id,
+          name: addon.addon_item_name,
+          priceCents: addon.addon_discount_price_cents,
+          quantity: 1
+        });
+      });
+    }
+
     closeAllDrawers();
     saveCartToStorage();
     updateCartBar();
     updateCartBadges();
-    showAddonModal(item, cartItem);
   }
 }
 
@@ -1301,18 +1433,36 @@ function updateCartBar() {
   updateCartBadges();
 }
 
-function openDrawer(itemId) {
+async function openDrawer(itemId) {
   closeAllDrawers();
 
   const item = window.menu.items.find(i => i.id === itemId);
   if (!item) return;
+
+  // Reset addon state
+  drawerAddons = [];
+  selectedDrawerAddons = {};
+
+  // Fetch addons for combo items
+  if (item.is_meal_combo) {
+    try {
+      const res = await fetch(
+        `${API_BASE}/restaurants/${restaurantId}/menu-items/${item.id}/addons`
+      );
+      if (res.ok) {
+        drawerAddons = await res.json();
+      }
+    } catch (e) {
+      console.error('Failed to load addons:', e);
+    }
+  }
 
   activeDrawer = document.getElementById("item-drawer");
   const content = activeDrawer.querySelector(".drawer-content");
 
   content.innerHTML = ""; // FULL RESET
 
-  const itemUI = renderMenuItemWithVariants(item);
+  const itemUI = renderMenuItemWithVariants(item, drawerAddons);
   itemUI.classList.add("drawer-item"); // important
   content.appendChild(itemUI);
 

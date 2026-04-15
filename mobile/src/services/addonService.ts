@@ -11,6 +11,7 @@ export interface Addon {
   is_available: boolean;
   menu_item_name?: string;
   addon_item_name?: string;
+  addon_item_image?: string;
   addon_category_name?: string;
   created_at?: string;
 }
