@@ -185,7 +185,13 @@ app.use("/api", crmRoutes);
 ====================== */
 const FRONTEND_PATH = path.join(__dirname, "../../frontend");
 app.use(express.static(FRONTEND_PATH, {    
-  index: false, // 🔥 THIS IS THE FIX
+  index: false,
+  setHeaders: (res, filePath) => {
+    // Prevent browser caching of JS/CSS so deploys take effect immediately
+    if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
 })
 );
 
