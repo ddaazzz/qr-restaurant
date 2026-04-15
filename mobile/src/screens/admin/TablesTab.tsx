@@ -2915,10 +2915,30 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               </ScrollView>
             </View>
           </Modal>
+          <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingStartModal} animationType="fade" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>{t('admin.start-session') || 'Start Session'}</Text>
+                {bookingToStart && (
+                  <>
+                    <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 4 }}>{bookingToStart.booking.guest_name}</Text>
+                    <Text style={{ fontSize: 14, color: '#666', marginBottom: 4 }}>{bookingToStart.booking.pax} {t('admin.guests') || 'guests'}</Text>
+                    {bookingToStart.booking.phone ? <Text style={{ fontSize: 14, color: '#666' }}>{bookingToStart.booking.phone}</Text> : null}
+                  </>
+                )}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { setShowBookingStartModal(false); setBookingToStart(null); }}>
+                    <Text style={styles.btnText}>{t('common.cancel') || 'Cancel'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={confirmStartSessionFromBooking}>
+                    <Text style={styles.btnText}>{t('admin.start-session') || 'Start'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
       )}
-
-      {/* iPad: Session Detail Side Panel */}
       {isTablet && currentView === 'sessionDetail' && selectedSession && selectedTable && (
         <View style={styles.sessionSidePanel}>
           <View style={styles.sessionSidePanelHeader}>
