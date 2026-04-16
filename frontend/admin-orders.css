@@ -1053,6 +1053,18 @@
 
 /* ============== RESPONSIVE DESIGN ============== */
 
+/* ============== WIDE VIEWPORT - PERSISTENT CART ============== */
+@media (min-width: 900px) {
+  .orders-container .orders-right-panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .orders-cart-bar {
+    display: none;
+  }
+}
+
 /* ============== MOBILE MEDIA QUERY (≤768px) ============== */
 @media (max-width: 768px) {
   .orders-container {

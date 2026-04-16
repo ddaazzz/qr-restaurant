@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../hooks/useAuth';
+import { TIMEZONE_OPTIONS } from '../../constants/timezones';
 
 interface User {
   id: number;
@@ -77,6 +78,8 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
   // Restaurant modal
   const [showRestaurantModal, setShowRestaurantModal] = useState(false);
   const [editingRestaurant, setEditingRestaurant] = useState<Restaurant | null>(null);
+  const [showTzPicker, setShowTzPicker] = useState(false);
+  const [tzSearch, setTzSearch] = useState('');
   const [restaurantForm, setRestaurantForm] = useState({
     name: '',
     address: '',
@@ -709,29 +712,48 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
               </View>
 
               <Text style={s.label}>Timezone</Text>
-              <View style={s.roleRow}>
-                {[
-                  { value: 'Asia/Hong_Kong', label: 'HKT' },
-                  { value: 'America/New_York', label: 'EST' },
-                  { value: 'Europe/London', label: 'GMT' },
-                  { value: 'UTC', label: 'UTC' },
-                ].map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[s.roleChip, restaurantForm.timezone === opt.value && s.roleChipActive]}
-                    onPress={() => setRestaurantForm({ ...restaurantForm, timezone: opt.value })}
-                  >
-                    <Text
-                      style={[
-                        s.roleChipText,
-                        restaurantForm.timezone === opt.value && s.roleChipTextActive,
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity
+                style={[s.roleChip, s.roleChipActive, { alignSelf: 'flex-start', paddingHorizontal: 16 }]}
+                onPress={() => { setTzSearch(''); setShowTzPicker(true); }}
+              >
+                <Text style={[s.roleChipText, s.roleChipTextActive]}>
+                  {TIMEZONE_OPTIONS.find(o => o.value === restaurantForm.timezone)?.label || restaurantForm.timezone}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Timezone Picker Modal */}
+              <Modal visible={showTzPicker} transparent animationType="slide">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                  <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70%' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Select Timezone</Text>
+                      <TouchableOpacity onPress={() => setShowTzPicker(false)}>
+                        <Text style={{ fontSize: 16, color: '#6b7280' }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={{ margin: 12, padding: 10, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, fontSize: 14 }}
+                      placeholder="Search timezones..."
+                      value={tzSearch}
+                      onChangeText={setTzSearch}
+                      autoFocus
+                    />
+                    <FlatList
+                      data={TIMEZONE_OPTIONS.filter(o => o.label.toLowerCase().includes(tzSearch.toLowerCase()) || o.value.toLowerCase().includes(tzSearch.toLowerCase()))}
+                      keyExtractor={item => item.value}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={{ padding: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: item.value === restaurantForm.timezone ? '#eff6ff' : '#fff' }}
+                          onPress={() => { setRestaurantForm({ ...restaurantForm, timezone: item.value }); setShowTzPicker(false); }}
+                        >
+                          <Text style={{ fontSize: 14, color: item.value === restaurantForm.timezone ? '#2563eb' : '#1f2937', fontWeight: item.value === restaurantForm.timezone ? '600' : '400' }}>{item.label}</Text>
+                        </TouchableOpacity>
+                      )}
+                      keyboardShouldPersistTaps="handled"
+                    />
+                  </View>
+                </View>
+              </Modal>
             </ScrollView>
 
             <View style={s.modalFooter}>

@@ -12,6 +12,8 @@ import {
   ScrollView,
   Image,
   ImageBackground,
+  Modal,
+  FlatList,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from '../contexts/TranslationContext';
 import { apiClient } from '../services/apiClient';
+import { TIMEZONE_OPTIONS } from '../constants/timezones';
 
 const backgroundImage = require('../../assets/background.png');
 const logoImage = require('../../assets/logo.png');
@@ -61,6 +64,8 @@ export const LoginScreen = () => {
   const [regServiceCharge, setRegServiceCharge] = useState('10');
   const [regLanguage, setRegLanguage] = useState('en');
   const [regTimezone, setRegTimezone] = useState('Asia/Hong_Kong');
+  const [showTimezonePicker, setShowTimezonePicker] = useState(false);
+  const [timezoneSearch, setTimezoneSearch] = useState('');
   const [regLogoUri, setRegLogoUri] = useState<string | null>(null);
   const [regBgUri, setRegBgUri] = useState<string | null>(null);
 
@@ -634,24 +639,14 @@ export const LoginScreen = () => {
               </View>
 
               <Text style={styles.fieldLabel}>Timezone</Text>
-              <View style={styles.optionRow}>
-                {[
-                  { value: 'Asia/Hong_Kong', label: 'HKT' },
-                  { value: 'America/New_York', label: 'EST' },
-                  { value: 'Europe/London', label: 'GMT' },
-                  { value: 'UTC', label: 'UTC' },
-                ].map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.optionButton, regTimezone === opt.value && styles.optionButtonActive]}
-                    onPress={() => setRegTimezone(opt.value)}
-                  >
-                    <Text style={[styles.optionButtonText, regTimezone === opt.value && styles.optionButtonTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity
+                style={[styles.optionButton, styles.optionButtonActive, { flex: undefined, paddingHorizontal: 16 }]}
+                onPress={() => { setTimezoneSearch(''); setShowTimezonePicker(true); }}
+              >
+                <Text style={[styles.optionButtonText, styles.optionButtonTextActive]}>
+                  {TIMEZONE_OPTIONS.find(o => o.value === regTimezone)?.label || regTimezone}
+                </Text>
+              </TouchableOpacity>
 
               <View style={styles.stepNavRow}>
                 <TouchableOpacity style={styles.stepBackBtn} onPress={() => setOnboardingStep(0)}>
@@ -706,6 +701,40 @@ export const LoginScreen = () => {
             </View>
           )}
         </ScrollView>
+
+        {/* Timezone Picker Modal */}
+        <Modal visible={showTimezonePicker} transparent animationType="slide">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70%' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Select Timezone</Text>
+                <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
+                  <Text style={{ fontSize: 16, color: '#6b7280' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={{ margin: 12, padding: 10, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, fontSize: 14 }}
+                placeholder="Search timezones..."
+                value={timezoneSearch}
+                onChangeText={setTimezoneSearch}
+                autoFocus
+              />
+              <FlatList
+                data={TIMEZONE_OPTIONS.filter(o => o.label.toLowerCase().includes(timezoneSearch.toLowerCase()) || o.value.toLowerCase().includes(timezoneSearch.toLowerCase()))}
+                keyExtractor={item => item.value}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={{ padding: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: item.value === regTimezone ? '#eff6ff' : '#fff' }}
+                    onPress={() => { setRegTimezone(item.value); setShowTimezonePicker(false); }}
+                  >
+                    <Text style={{ fontSize: 14, color: item.value === regTimezone ? '#2563eb' : '#1f2937', fontWeight: item.value === regTimezone ? '600' : '400' }}>{item.label}</Text>
+                  </TouchableOpacity>
+                )}
+                keyboardShouldPersistTaps="handled"
+              />
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     );
   }

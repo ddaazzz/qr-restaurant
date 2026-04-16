@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
+import { TIMEZONE_OPTIONS } from '../../constants/timezones';
 
 interface RestaurantSettings {
   id: number;
@@ -230,6 +231,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Form states
   const [formData, setFormData] = useState<RestaurantSettings | null>(null);
+  const [showSettingsTzPicker, setShowSettingsTzPicker] = useState(false);
+  const [settingsTzSearch, setSettingsTzSearch] = useState('');
   const [printerFormData, setPrinterFormData] = useState<PrinterSettings | null>(null);
   const [couponForm, setCouponForm] = useState({
     code: '',
@@ -1616,7 +1619,46 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.timezone')}</Text>
-            <TextInput style={styles.input} value={formData.timezone} onChangeText={(text) => setFormData({ ...formData, timezone: text })} placeholder="e.g., UTC, EST, PST" />
+            <TouchableOpacity
+              style={[styles.input, { justifyContent: 'center' }]}
+              onPress={() => { setSettingsTzSearch(''); setShowSettingsTzPicker(true); }}
+            >
+              <Text style={{ fontSize: 14, color: '#1f2937' }}>
+                {TIMEZONE_OPTIONS.find(o => o.value === formData.timezone)?.label || formData.timezone || 'Select timezone'}
+              </Text>
+            </TouchableOpacity>
+            <Modal visible={showSettingsTzPicker} transparent animationType="slide">
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70%' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Select Timezone</Text>
+                    <TouchableOpacity onPress={() => setShowSettingsTzPicker(false)}>
+                      <Text style={{ fontSize: 16, color: '#6b7280' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={{ margin: 12, padding: 10, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, fontSize: 14 }}
+                    placeholder="Search timezones..."
+                    value={settingsTzSearch}
+                    onChangeText={setSettingsTzSearch}
+                    autoFocus
+                  />
+                  <FlatList
+                    data={TIMEZONE_OPTIONS.filter(o => o.label.toLowerCase().includes(settingsTzSearch.toLowerCase()) || o.value.toLowerCase().includes(settingsTzSearch.toLowerCase()))}
+                    keyExtractor={item => item.value}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={{ padding: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: item.value === formData.timezone ? '#eff6ff' : '#fff' }}
+                        onPress={() => { setFormData({ ...formData, timezone: item.value }); setShowSettingsTzPicker(false); }}
+                      >
+                        <Text style={{ fontSize: 14, color: item.value === formData.timezone ? '#2563eb' : '#1f2937', fontWeight: item.value === formData.timezone ? '600' : '400' }}>{item.label}</Text>
+                      </TouchableOpacity>
+                    )}
+                    keyboardShouldPersistTaps="handled"
+                  />
+                </View>
+              </View>
+            </Modal>
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.preferred-language')}</Text>
