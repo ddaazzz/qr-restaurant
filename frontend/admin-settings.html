@@ -62,6 +62,12 @@
       <h3 data-i18n="admin.payment-terminals">Payment Terminals</h3>
       <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
     </div>
+
+    <!-- Users & Restaurants Card -->
+    <div class="settings-card admin-only" onclick="showSettingsPage('users-restaurants'); loadUsersManagement();">
+      <h3 data-i18n="admin.users-restaurants">Users & Restaurants</h3>
+      <p data-i18n="admin.manage-users-restaurants">Manage users and restaurants</p>
+    </div>
   </div>
 
   <!-- HIDDEN: Preferences Modal -->
@@ -639,3 +645,148 @@
     }
   })();
 </script>
+
+<!-- ===== USERS & RESTAURANTS PAGE ===== -->
+<div id="page-users-restaurants" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('users-restaurants')">&#8592; Back</button>
+      <h3 data-i18n="admin.users-restaurants">Users & Restaurants</h3>
+    </div>
+    <div class="settings-page-content">
+      <!-- Tab buttons -->
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <button class="users-tab-btn active" data-tab="users" onclick="switchUsersTab('users')" style="flex: 1; padding: 10px; border: 2px solid #4a90e2; background: #4a90e2; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;" data-i18n="admin.users">Users</button>
+        <button class="users-tab-btn" data-tab="restaurants" onclick="switchUsersTab('restaurants')" style="flex: 1; padding: 10px; border: 2px solid #4a90e2; background: white; color: #4a90e2; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;" data-i18n="admin.restaurants">Restaurants</button>
+      </div>
+
+      <!-- Users tab -->
+      <div id="users-tab-content">
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+          <button class="btn-primary" onclick="openUserModal()" style="font-size: 13px;">+ Create User</button>
+        </div>
+        <div id="users-list"></div>
+      </div>
+
+      <!-- Restaurants tab -->
+      <div id="restaurants-tab-content" style="display: none;">
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+          <button id="create-restaurant-btn" class="btn-primary" onclick="openRestaurantModal()" style="font-size: 13px; display: none;">+ Create Restaurant</button>
+        </div>
+        <div id="restaurants-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User Modal -->
+<div id="user-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-header">
+      <h3 id="user-modal-title">Create User</h3>
+      <button class="modal-close" onclick="closeUserModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="user-modal-error" style="display: none; background: #fef2f2; color: #dc2626; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;"></div>
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Name *</label>
+        <input type="text" id="user-form-name" placeholder="User name" />
+      </div>
+
+      <!-- Role picker -->
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Role</label>
+        <div class="users-role-picker" style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button type="button" class="role-chip active" data-role="staff" onclick="selectUserRole('staff')" style="padding: 6px 14px; border: 2px solid #4a90e2; border-radius: 20px; background: #4a90e2; color: white; cursor: pointer; font-size: 12px; font-weight: 600;">Staff</button>
+          <button type="button" class="role-chip" data-role="kitchen" onclick="selectUserRole('kitchen')" style="padding: 6px 14px; border: 2px solid #e67e22; border-radius: 20px; background: transparent; color: #e67e22; cursor: pointer; font-size: 12px; font-weight: 600;">Kitchen</button>
+          <button type="button" id="role-admin-chip" class="role-chip" data-role="admin" onclick="selectUserRole('admin')" style="padding: 6px 14px; border: 2px solid #059669; border-radius: 20px; background: transparent; color: #059669; cursor: pointer; font-size: 12px; font-weight: 600; display: none;">Admin</button>
+          <button type="button" id="role-superadmin-chip" class="role-chip" data-role="superadmin" onclick="selectUserRole('superadmin')" style="padding: 6px 14px; border: 2px solid #dc2626; border-radius: 20px; background: transparent; color: #dc2626; cursor: pointer; font-size: 12px; font-weight: 600; display: none;">Superadmin</button>
+        </div>
+      </div>
+
+      <div id="user-form-email-section" class="form-group" style="margin-bottom: 12px; display: none;">
+        <label>Email</label>
+        <input type="email" id="user-form-email" placeholder="Email address" />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label id="user-form-password-label">Password *</label>
+        <input type="password" id="user-form-password" placeholder="Password" />
+      </div>
+
+      <div id="user-form-pin-section" class="form-group" style="margin-bottom: 12px;">
+        <label>PIN</label>
+        <input type="text" id="user-form-pin" placeholder="4-digit PIN" maxlength="4" inputmode="numeric" />
+      </div>
+
+      <div id="user-form-restaurant-section" class="form-group" style="margin-bottom: 12px; display: none;">
+        <label>Restaurant</label>
+        <select id="user-form-restaurant"></select>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label>Hourly Rate ($)</label>
+        <input type="number" id="user-form-hourly-rate" placeholder="0.00" step="0.01" min="0" />
+      </div>
+
+      <button id="user-save-btn" class="btn-primary" onclick="saveUser()" style="width: 100%;">Create User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Restaurant Modal -->
+<div id="restaurant-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-header">
+      <h3 id="restaurant-modal-title">Create Restaurant</h3>
+      <button class="modal-close" onclick="closeRestaurantModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="restaurant-modal-error" style="display: none; background: #fef2f2; color: #dc2626; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;"></div>
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Restaurant Name *</label>
+        <input type="text" id="restaurant-form-name" placeholder="Restaurant name" />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Address</label>
+        <input type="text" id="restaurant-form-address" placeholder="Address" />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Phone</label>
+        <input type="text" id="restaurant-form-phone" placeholder="Phone number" />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Service Charge %</label>
+        <input type="number" id="restaurant-form-sc" value="10" min="0" max="100" step="0.5" />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Timezone</label>
+        <select id="restaurant-form-timezone">
+          <option value="Asia/Hong_Kong">Asia/Hong Kong</option>
+          <option value="Asia/Singapore">Asia/Singapore</option>
+          <option value="Asia/Tokyo">Asia/Tokyo</option>
+          <option value="Asia/Shanghai">Asia/Shanghai</option>
+          <option value="America/New_York">America/New York</option>
+          <option value="America/Los_Angeles">America/Los Angeles</option>
+          <option value="Europe/London">Europe/London</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label>Language</label>
+        <select id="restaurant-form-language">
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
+
+      <button id="restaurant-save-btn" class="btn-primary" onclick="saveRestaurant()" style="width: 100%;">Create Restaurant</button>
+    </div>
+  </div>
+</div>
