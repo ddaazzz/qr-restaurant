@@ -745,8 +745,15 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           quantity: cartItem.quantity,
           notes: cartItem.notes || null,
           selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
-          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity, selected_option_ids: (a.variants || []).map(v => v.optionId) })),
+          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
         }));
+
+        console.log('[OrderSubmit] Submitting order:', {
+          orderType,
+          selectedTable,
+          items,
+          restaurantId,
+        });
 
         if (orderType === 'table') {
           if (!selectedTable) {
@@ -758,12 +765,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             `/api/sessions/${sessionId}/orders`,
             { items }
           );
+          console.log('[OrderSubmit] Table order submitted:', res);
           Alert.alert(t('orders.success'), t('orders.table-order-success').replace('{0}', String(cart.length)));
         } else if (orderType === 'pay-now') {
           const res = await apiClient.post(
             `/api/restaurants/${restaurantId}/counter-order`,
             { pax: 1, items }
           );
+          console.log('[OrderSubmit] Counter order submitted:', res);
           
           // Show payment modal right away for Order Now
           const session = res.data?.session;
@@ -783,6 +792,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             `/api/restaurants/${restaurantId}/to-go-order`,
             { pax: 1, items, customer_name: toGoCustomerName || '', customer_phone: customerPhone || '' }
           );
+          console.log('[OrderSubmit] To-go order submitted:', res);
           showToast(t('orders.togo-order-success').replace('{0}', String(cart.length)), 'success');
         }
 
@@ -1450,14 +1460,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {item.addons && item.addons.length > 0 ? (
                       <View style={{ marginTop: 3 }}>
                         {item.addons.map((addon: any, ai: number) => (
-                          <React.Fragment key={ai}>
-                            <Text style={{ fontSize: 11, color: '#667eea', marginTop: 1 }}>
-                              + {addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
-                            </Text>
-                            {addon.variants ? (
-                              <Text style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }}>{addon.variants}</Text>
-                            ) : null}
-                          </React.Fragment>
+                          <Text key={ai} style={{ fontSize: 11, color: '#667eea', marginTop: 1 }}>
+                            + {addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
+                          </Text>
                         ))}
                       </View>
                     ) : null}
@@ -2308,12 +2313,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {item.addons && item.addons.length > 0 && (
                       <View style={{ marginTop: 2 }}>
                         {item.addons.map((a, ai) => (
-                          <React.Fragment key={ai}>
-                            <Text style={{ fontSize: 11, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
-                            {a.variants && a.variants.length > 0 && a.variants.map((v, vi) => (
-                              <Text key={`av${vi}`} style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
-                            ))}
-                          </React.Fragment>
+                          <Text key={ai} style={{ fontSize: 11, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
                         ))}
                       </View>
                     )}
@@ -2568,7 +2568,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <Image
                         source={{ uri: getFullImageUrl(item.image_url)! }}
                         style={styles.menuItemImage}
-                        onError={() => {}}
+                        onError={() => console.log('Image load error for:', item.name, 'URL:', getFullImageUrl(item.image_url))}
                       />
                     ) : (
                       <Image

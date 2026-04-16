@@ -1,5 +1,9 @@
   let activeDrawer = null;
 
+  function isWideViewport() {
+    return window.innerWidth >= 900;
+  }
+
   const API_BASE = (() => {
     const hostname = window.location.hostname;
     const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
@@ -304,6 +308,12 @@ async function startOrdering() {
   initCategoryObserver(window.menu.categories);
   startOrderPolling();
   updateCartBar();
+
+  // On wide viewport, render cart drawer immediately (it's always visible)
+  if (isWideViewport()) {
+    renderCartDrawer();
+  }
+
   await fetchAndApplyPaymentSettings();
 }
 
@@ -1373,6 +1383,11 @@ function removeCartItem(index) {
 }
 
 function openCartDrawer() {
+    if (isWideViewport()) {
+      // On wide viewport, cart is always visible — just render it
+      renderCartDrawer();
+      return;
+    }
     closeAllDrawers();
 
   activeDrawer = document.getElementById("cart-drawer");
@@ -1520,7 +1535,9 @@ function openOrdersDrawer() {
 
 
 function closeAllDrawers() {
+  const wide = isWideViewport();
   ["item-drawer", "orders-drawer", "cart-drawer"].forEach(id => {
+    if (wide && id === "cart-drawer") return; // keep cart visible on wide
     const d = document.getElementById(id);
     if (!d) return;
     d.classList.remove("open");
@@ -1544,6 +1561,12 @@ function closeAllDrawers() {
 
 function closeActiveDrawer() {
   if (!activeDrawer) return;
+
+  // Don't close cart drawer on wide viewport
+  if (isWideViewport() && activeDrawer.id === "cart-drawer") {
+    activeDrawer = null;
+    return;
+  }
 
   activeDrawer.classList.remove("open");
 

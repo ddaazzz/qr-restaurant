@@ -1965,3 +1965,87 @@ body {
 .pay-badge-octopus {
   background: #ee7c0e;
 }
+
+/* =========================================================
+   WIDE VIEWPORT — PERSISTENT CART SIDEBAR (≥900px)
+========================================================= */
+@media (min-width: 900px) {
+  html {
+    background: #f0f1f3;
+  }
+
+  body {
+    max-width: 1100px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Make app a horizontal flex so cart sits beside layout */
+  #app {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  /* Header spans full width */
+  .app-header {
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  /* Cart bar spans full width below */
+  #cart-bar {
+    width: 100%;
+    order: 3;
+  }
+
+  /* Menu layout takes remaining space on left */
+  .layout {
+    flex: 1;
+    min-width: 0;
+    order: 1;
+  }
+
+  /* Cart drawer: always visible as right panel */
+  #cart-drawer {
+    position: relative !important;
+    display: flex !important;
+    width: 340px;
+    flex-shrink: 0;
+    order: 2;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: 1;
+    border-left: 1px solid var(--border-color);
+    background: var(--bg-white);
+  }
+
+  /* Hide the back button and spacer in cart header on wide */
+  #cart-drawer .drawer-back-btn {
+    display: none;
+  }
+  #cart-drawer .drawer-panel-spacer {
+    display: none;
+  }
+
+  /* Overlay should not appear for cart on wide */
+  #drawer-overlay.cart-overlay {
+    display: none !important;
+  }
+
+  /* Orders drawer and item drawer still overlay */
+  #orders-drawer,
+  #item-drawer {
+    width: 100%;
+  }
+}
+
+@media (min-width: 1200px) {
+  body {
+    max-width: 1300px;
+  }
+
+  #cart-drawer {
+    width: 380px;
+  }
+}

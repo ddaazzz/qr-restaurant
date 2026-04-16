@@ -305,3 +305,28 @@
   padding: 20px 0;
   text-align: center;
 }
+
+/* ============== TWO-COLUMN LAYOUT ============== */
+.printer-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* ============== RESPONSIVE ============== */
+@media (max-width: 900px) {
+  .printer-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .kitchen-categories-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #qr-format-section,
+  #bill-format-section,
+  #kitchen-format-section,
+  #kpay-format-section {
+    padding: 16px;
+  }
+}
