@@ -344,7 +344,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = QRRestaurant/QRRestaurant.entitlements;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5V7D5PUU8D;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -359,8 +359,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
-				"MARKETING_VERSION[sdk=iphoneos*]" = 1.1;
+				MARKETING_VERSION = 1.1.1;
+				"MARKETING_VERSION[sdk=iphoneos*]" = 1.1.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -384,7 +384,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = QRRestaurant/QRRestaurant.entitlements;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5V7D5PUU8D;
 				INFOPLIST_FILE = QRRestaurant/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = " Chuio - Restaurant Management";
@@ -394,8 +394,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
-				"MARKETING_VERSION[sdk=iphoneos*]" = 1.1;
+				MARKETING_VERSION = 1.1.1;
+				"MARKETING_VERSION[sdk=iphoneos*]" = 1.1.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
