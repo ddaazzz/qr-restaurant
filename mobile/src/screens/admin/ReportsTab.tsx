@@ -44,6 +44,21 @@ interface TopTable {
   total_revenue_cents: number;
 }
 
+interface SalesByCategory {
+  category_name: string;
+  total_qty: number;
+  order_count: number;
+  total_revenue_cents: number;
+}
+
+interface SalesByItem {
+  item_name: string;
+  category_name: string;
+  total_qty: number;
+  order_count: number;
+  total_revenue_cents: number;
+}
+
 interface AnalyticsStats {
   total_orders: number;
   total_revenue: number;
@@ -71,6 +86,8 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [topItems, setTopItems] = useState<TopItem[]>([]);
   const [topTables, setTopTables] = useState<TopTable[]>([]);
+  const [salesByCategory, setSalesByCategory] = useState<SalesByCategory[]>([]);
+  const [salesByItem, setSalesByItem] = useState<SalesByItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -99,11 +116,13 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       setError(null);
       const days = dateRangeDays[dateRange];
       
-      // Fetch orders + top items + top tables in parallel
-      const [ordersRes, topItemsRes, topTablesRes] = await Promise.all([
+      // Fetch orders + top items + top tables + sales breakdowns in parallel
+      const [ordersRes, topItemsRes, topTablesRes, salesByCategoryRes, salesByItemRes] = await Promise.all([
         apiClient.get(`/api/restaurants/${restaurantId}/orders?limit=1000`),
         apiClient.get(`/api/restaurants/${restaurantId}/reports/top-items?days=${days}`).catch(() => ({ data: [] })),
         apiClient.get(`/api/restaurants/${restaurantId}/reports/top-tables?days=${days}`).catch(() => ({ data: [] })),
+        apiClient.get(`/api/restaurants/${restaurantId}/reports/sales-by-category?days=${days}`).catch(() => ({ data: [] })),
+        apiClient.get(`/api/restaurants/${restaurantId}/reports/sales-by-item?days=${days}`).catch(() => ({ data: [] })),
       ]);
 
       const allOrders: Order[] = ordersRes.data || [];
@@ -120,6 +139,8 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       setOrders(filteredOrders);
       setTopItems(topItemsRes.data || []);
       setTopTables(topTablesRes.data || []);
+      setSalesByCategory(salesByCategoryRes.data || []);
+      setSalesByItem(salesByItemRes.data || []);
 
       if (filteredOrders.length > 0) {
         const calculatedStats = calculateAnalyticsStats(filteredOrders);
@@ -448,6 +469,50 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               </View>
             ))}
           </View>
+
+          {/* Sales by Category */}
+          {salesByCategory.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.report-sales-by-category') || 'Sales by Category'}</Text>
+              {(() => {
+                const totalRev = salesByCategory.reduce((sum, c) => sum + (parseInt(c.total_revenue_cents?.toString() || '0', 10) || 0), 0);
+                return salesByCategory.map((cat, idx) => {
+                  const rev = parseInt(cat.total_revenue_cents?.toString() || '0', 10) || 0;
+                  const pct = totalRev > 0 ? ((rev / totalRev) * 100).toFixed(1) : '0.0';
+                  const colors = ['#667eea', '#e67e22', '#059669', '#dc2626', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'];
+                  const color = colors[idx % colors.length];
+                  return (
+                    <View key={cat.category_name || idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: color, marginRight: 8 }} />
+                      <Text style={{ flex: 1, fontSize: 13, fontWeight: '500', color: '#1f2937' }}>{cat.category_name || 'Uncategorized'}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669', marginRight: 8 }}>${(rev / 100).toFixed(2)}</Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280', width: 45, textAlign: 'right' }}>{pct}%</Text>
+                    </View>
+                  );
+                });
+              })()}
+            </View>
+          )}
+
+          {/* Sales by Item */}
+          {salesByItem.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.report-sales-by-item') || 'Sales by Item'}</Text>
+              {salesByItem.slice(0, 20).map((item, idx) => {
+                const rev = parseInt(item.total_revenue_cents?.toString() || '0', 10) || 0;
+                return (
+                  <View key={item.item_name || idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937' }}>{item.item_name || 'Unknown'}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{item.category_name || ''}</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#667eea', fontWeight: '600', marginRight: 12 }}>{item.total_qty} sold</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669' }}>${(rev / 100).toFixed(2)}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
       )}
 

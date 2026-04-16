@@ -2,6 +2,17 @@
 
 <!-- Analytics Content -->
 <div id="reports-dashboard" style="display: none;">
+  <!-- Global Date Range Filter -->
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
+    <label style="font-weight: 600; color: #374151; font-size: 14px;" data-i18n="admin.filter-date">Date Range</label>
+    <div style="display: flex; gap: 6px;" id="global-date-range-buttons">
+      <button class="global-date-btn" data-range="today" style="padding: 6px 14px; border: 2px solid #4a90e2; border-radius: 6px; background: transparent; color: #4a90e2; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('today')" data-i18n="admin.today">Today</button>
+      <button class="global-date-btn" data-range="week" style="padding: 6px 14px; border: 2px solid #4a90e2; border-radius: 6px; background: transparent; color: #4a90e2; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('week')" data-i18n="admin.weekly-sales">7 Days</button>
+      <button class="global-date-btn active" data-range="month" style="padding: 6px 14px; border: none; border-radius: 6px; background: #4a90e2; color: white; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('month')" data-i18n="admin.monthly-sales">30 Days</button>
+      <button class="global-date-btn" data-range="all" style="padding: 6px 14px; border: 2px solid #4a90e2; border-radius: 6px; background: transparent; color: #4a90e2; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('all')" data-i18n="admin.all-orders">All Time</button>
+    </div>
+  </div>
+
   <!-- Metrics Row -->
   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
     <div class="metric-card">
@@ -59,15 +70,6 @@
     <h3 style="margin-bottom: 16px;" data-i18n="admin.orders-bills">Revenue Report</h3>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
       <div class="form-group">
-        <label data-i18n="admin.filter-date">Date Range</label>
-        <select id="revenue-filter-daterange" onchange="filterRevenueReport()">
-          <option value="today" data-i18n="admin.today">Today</option>
-          <option value="week" data-i18n="admin.weekly-sales">Last 7 Days</option>
-          <option value="month" selected data-i18n="admin.monthly-sales">Last 30 Days</option>
-          <option value="all" data-i18n="admin.all-orders">All Time</option>
-        </select>
-      </div>
-      <div class="form-group">
         <label data-i18n="admin.filter-by-category">Filter by Category</label>
         <select id="revenue-filter-category" onchange="filterRevenueReport()">
           <option value="" data-i18n="admin.all-categories">All Categories</option>
@@ -97,32 +99,39 @@
 
   <!-- Busiest Tables -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-tables">Busiest Tables <span style="font-size: 12px; color: #9ca3af; font-weight: 400;">(last 30 days)</span></h3>
+    <h3 data-i18n="admin.report-tables">Busiest Tables</h3>
     <div id="chart-busiest-tables" style="height: 250px; overflow-x: auto;"></div>
   </div>
 
   <!-- Hourly Revenue -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-hourly">Hourly Revenue <span style="font-size: 12px; color: #9ca3af; font-weight: 400;">(all time)</span></h3>
+    <h3 data-i18n="admin.report-hourly">Hourly Revenue</h3>
     <div id="chart-hourly-revenue" style="height: 270px; overflow-x: auto;"></div>
   </div>
 
   <!-- Top Items -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-items">Top Selling Items <span style="font-size: 12px; color: #9ca3af; font-weight: 400;">(last 30 days)</span></h3>
+    <h3 data-i18n="admin.report-items">Top Selling Items</h3>
     <div id="chart-top-items" style="min-height: 100px;"></div>
+  </div>
+
+  <!-- Top Revenue Days -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3 data-i18n="admin.report-top-revenue-days">Top Revenue Days</h3>
+    <div id="top-revenue-days" style="min-height: 60px;"></div>
+  </div>
+
+  <!-- Order Status Breakdown -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3 data-i18n="admin.report-order-status">Order Status Breakdown</h3>
+    <div id="order-status-breakdown" style="min-height: 60px;"></div>
   </div>
 
   <!-- Sales by Category -->
   <div class="section-card" style="margin-bottom: 24px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
       <h3 style="margin: 0;" data-i18n="admin.report-sales-by-category">Sales by Category</h3>
-      <select id="sales-category-days" onchange="loadSalesByCategory()" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
-        <option value="7">Last 7 Days</option>
-        <option value="30" selected>Last 30 Days</option>
-        <option value="90">Last 90 Days</option>
-        <option value="365">Last Year</option>
-      </select>
+
     </div>
     <div id="sales-by-category-content" style="overflow-x: auto; min-height: 60px;"></div>
   </div>
@@ -131,12 +140,7 @@
   <div class="section-card" style="margin-bottom: 24px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
       <h3 style="margin: 0;" data-i18n="admin.report-sales-by-item">Sales by Item</h3>
-      <select id="sales-item-days" onchange="loadSalesByItem()" style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
-        <option value="7">Last 7 Days</option>
-        <option value="30" selected>Last 30 Days</option>
-        <option value="90">Last 90 Days</option>
-        <option value="365">Last Year</option>
-      </select>
+
     </div>
     <div id="sales-by-item-content" style="overflow-x: auto; min-height: 60px;"></div>
   </div>

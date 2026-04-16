@@ -3,6 +3,34 @@
 
 // Initialization gate
 let reportsInitialized = false;
+let globalDateRange = 'month'; // today, week, month, all
+
+function getGlobalDays() {
+  if (globalDateRange === 'today') return 1;
+  if (globalDateRange === 'week') return 7;
+  if (globalDateRange === 'month') return 30;
+  return 9999;
+}
+
+function setGlobalDateRange(range) {
+  globalDateRange = range;
+  // Update button styles
+  var buttons = document.querySelectorAll('.global-date-btn');
+  for (var i = 0; i < buttons.length; i++) {
+    var btn = buttons[i];
+    if (btn.dataset.range === range) {
+      btn.style.background = '#4a90e2';
+      btn.style.color = 'white';
+      btn.style.border = 'none';
+    } else {
+      btn.style.background = 'transparent';
+      btn.style.color = '#4a90e2';
+      btn.style.border = '2px solid #4a90e2';
+    }
+  }
+  // Re-render everything with new date range
+  initializeAnalyticsDashboard();
+}
 
 // ========== INITIALIZE REPORTS ==========
 async function initializeReports() {
@@ -37,8 +65,8 @@ async function initializeAnalyticsDashboard() {
 
     // Fetch orders, top-items, top-tables, all tables, menu, and staff in parallel
     var ordersUrl = API + "/restaurants/" + restaurantId + "/orders?limit=1000";
-    var topItemsUrl = API + "/restaurants/" + restaurantId + "/reports/top-items?days=30";
-    var topTablesUrl = API + "/restaurants/" + restaurantId + "/reports/top-tables?days=30";
+    var topItemsUrl = API + "/restaurants/" + restaurantId + "/reports/top-items?days=" + getGlobalDays();
+    var topTablesUrl = API + "/restaurants/" + restaurantId + "/reports/top-tables?days=" + getGlobalDays();
     var tablesUrl = API + "/restaurants/" + restaurantId + "/tables";
     var menuUrl = API + "/restaurants/" + restaurantId + "/menu";
     var staffUrl = API + "/restaurants/" + restaurantId + "/staff";
@@ -96,8 +124,18 @@ async function initializeAnalyticsDashboard() {
       return;
     }
 
+    // Filter orders by global date range
+    var days = getGlobalDays();
+    var now = Date.now();
+    var filteredOrders = allOrders;
+    if (days < 9999) {
+      filteredOrders = allOrders.filter(function(order) {
+        return (now - new Date(order.created_at).getTime()) / (1000 * 60 * 60 * 24) <= days;
+      });
+    }
+
     // Calculate stats from orders
-    var stats = calculateAnalyticsStats(allOrders);
+    var stats = calculateAnalyticsStats(filteredOrders);
     stats.topItems = topItems || [];
     stats.topTables = topTables || [];
     stats.allTables = allTables || [];
@@ -265,6 +303,10 @@ function renderAnalyticsDashboard(stats) {
 
   renderTopItems(stats);
 
+  renderTopRevenueDays(stats);
+
+  renderOrderStatusBreakdown(stats);
+
   renderDailyTrends(stats, 'daily');
 
   loadSalesByCategory();
@@ -376,7 +418,7 @@ function filterRevenueReport() {
   var tableFilterEl = document.getElementById("revenue-filter-table");
   var productFilterEl = document.getElementById("revenue-filter-product");
 
-  var dateRange = (dateRangeEl && dateRangeEl.value) ? dateRangeEl.value : "month";
+  var dateRange = globalDateRange;
   var categoryFilter = (categoryFilterEl && categoryFilterEl.value) ? categoryFilterEl.value : "";
   var staffFilter = (staffFilterEl && staffFilterEl.value) ? staffFilterEl.value : "";
   var tableFilter = (tableFilterEl && tableFilterEl.value) ? tableFilterEl.value : "";
@@ -603,6 +645,73 @@ function renderTopItems(stats) {
   reTranslateContent();
 }
 
+function renderTopRevenueDays(stats) {
+  var container = document.getElementById('top-revenue-days');
+  if (!container) return;
+
+  var revenueByDay = stats.revenue_by_day || {};
+  var entries = [];
+  for (var date in revenueByDay) {
+    if (revenueByDay.hasOwnProperty(date)) {
+      entries.push({ date: date, revenue: revenueByDay[date], orders: stats.daily_order_counts[date] || 0 });
+    }
+  }
+  entries.sort(function(a, b) { return b.revenue - a.revenue; });
+  entries = entries.slice(0, 5);
+
+  if (entries.length === 0) {
+    container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">No data available.</p>';
+    return;
+  }
+
+  var html = '<div style="display: flex; flex-wrap: wrap; gap: 12px;">';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var colors = ['#667eea', '#e67e22', '#059669', '#8b5cf6', '#06b6d4'];
+    html += '<div style="flex: 1; min-width: 150px; background: linear-gradient(135deg, ' + colors[i % colors.length] + '22, ' + colors[i % colors.length] + '11); border: 1px solid ' + colors[i % colors.length] + '33; border-radius: 10px; padding: 14px; text-align: center;">' +
+      '<div style="font-size: 20px; font-weight: 700; color: ' + colors[i % colors.length] + ';">#' + (i + 1) + '</div>' +
+      '<div style="font-size: 13px; font-weight: 600; color: #374151; margin: 4px 0;">' + formatTimeWithTimezone(e.date, restaurantTimezone, 'date') + '</div>' +
+      '<div style="font-size: 18px; font-weight: 700; color: #059669;">$' + (e.revenue / 100).toFixed(2) + '</div>' +
+      '<div style="font-size: 11px; color: #6b7280;">' + e.orders + ' orders</div>' +
+      '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderOrderStatusBreakdown(stats) {
+  var container = document.getElementById('order-status-breakdown');
+  if (!container) return;
+
+  var statusCounts = stats.order_count_by_status || {};
+  var entries = [];
+  for (var status in statusCounts) {
+    if (statusCounts.hasOwnProperty(status)) {
+      entries.push({ status: status, count: statusCounts[status] });
+    }
+  }
+  entries.sort(function(a, b) { return b.count - a.count; });
+
+  if (entries.length === 0) {
+    container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">No data available.</p>';
+    return;
+  }
+
+  var statusColors = { paid: '#059669', completed: '#059669', pending: '#f59e0b', preparing: '#4a90e2', ready: '#8b5cf6', cancelled: '#dc2626', refunded: '#dc2626' };
+  var html = '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var color = statusColors[e.status] || '#6b7280';
+    html += '<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: ' + color + '11; border: 1px solid ' + color + '33; border-radius: 8px;">' +
+      '<span style="display: inline-block; width: 10px; height: 10px; background: ' + color + '; border-radius: 50%;"></span>' +
+      '<span style="font-size: 13px; font-weight: 500; color: #374151; text-transform: capitalize;">' + e.status + '</span>' +
+      '<span style="font-size: 14px; font-weight: 700; color: ' + color + ';">' + e.count + '</span>' +
+      '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
 function renderDailyTrends(stats, mode) {
   var container = document.getElementById("table-daily-trends");
   if (!container) return;
@@ -766,8 +875,7 @@ async function loadSalesByCategory() {
   var container = document.getElementById('sales-by-category-content');
   if (!container) return;
 
-  var daysEl = document.getElementById('sales-category-days');
-  var days = daysEl ? parseInt(daysEl.value, 10) : 30;
+  var days = getGlobalDays();
 
   container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">Loading...</p>';
 
@@ -848,8 +956,7 @@ async function loadSalesByItem() {
   var container = document.getElementById('sales-by-item-content');
   if (!container) return;
 
-  var daysEl = document.getElementById('sales-item-days');
-  var days = daysEl ? parseInt(daysEl.value, 10) : 30;
+  var days = getGlobalDays();
 
   container.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">Loading...</p>';
 
@@ -897,7 +1004,18 @@ async function loadSalesByItem() {
 // ========== BOOKINGS ANALYTICS ==========
 
 function renderBookingsAnalytics(stats) {
-  var bookings = stats.allBookings || [];
+  var allBookings = stats.allBookings || [];
+  // Filter bookings by global date range
+  var days = getGlobalDays();
+  var now = Date.now();
+  var bookings = allBookings;
+  if (days < 9999) {
+    bookings = allBookings.filter(function(b) {
+      var dateStr = b.booking_date_str || b.booking_date;
+      if (!dateStr) return false;
+      return (now - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24) <= days;
+    });
+  }
   window.allBookings = bookings;
 
   // Update top-level metric cards
