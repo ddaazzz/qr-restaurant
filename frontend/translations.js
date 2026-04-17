@@ -1487,6 +1487,10 @@ const translations = {
     'admin.addon-presets': 'Addon Presets',
     'admin.variant-presets': 'Variant Presets',
     'admin.manage-presets': 'Manage preset addon and variant lists',
+    'admin.users-restaurants': 'Users & Restaurants',
+    'admin.manage-users-restaurants': 'Manage users and restaurants',
+    'admin.users': 'Users',
+    'admin.restaurants': 'Restaurants',
 
     // Order Management (2 keys)
     'admin.cart-is-empty': 'Cart is empty',
@@ -3756,6 +3760,10 @@ const translations = {
     'admin.addon-presets': '附加項預設',
     'admin.variant-presets': '變體預設',
     'admin.manage-presets': '管理預設附加項和變體列表',
+    'admin.users-restaurants': '用戶與餐廳',
+    'admin.manage-users-restaurants': '管理用戶和餐廳',
+    'admin.users': '用戶',
+    'admin.restaurants': '餐廳',
 
     // Order Management (Chinese)
     'admin.cart-is-empty': '購物車為空',
