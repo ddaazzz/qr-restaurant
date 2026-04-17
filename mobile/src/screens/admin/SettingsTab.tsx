@@ -739,6 +739,25 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // Payment Terminal Functions
   const savePaymentTerminal = async () => {
     try {
+      // Non-superadmin can only update connection details on existing terminals
+      if (!isSuperadmin) {
+        if (!editingTerminalId) {
+          Alert.alert(t('common.error'), 'Only superadmins can create new terminals');
+          return;
+        }
+        const payload: any = {
+          terminal_ip: terminalForm.terminal_ip,
+          terminal_port: parseInt(terminalForm.terminal_port),
+          endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
+        };
+        await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
+        Alert.alert(t('common.success'), t('settings.terminal-updated'));
+        await fetchPaymentTerminals();
+        resetTerminalForm();
+        setShowPaymentTerminalModal(false);
+        return;
+      }
+
       // Validation differs by vendor
       if (terminalForm.vendor_name === 'payment-asia') {
         if (!terminalForm.merchant_token || !terminalForm.secret_code) {
@@ -1783,8 +1802,51 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Payment terminals page
   const renderPaymentTerminalsPage = () => {
-    // Non-superadmin: show paid feature notice + application form
+    // Non-superadmin: show paid feature notice if no terminals, or limited edit if terminals exist
     if (!isSuperadmin) {
+      // If terminals exist, show them with limited editing (connection details only)
+      if (paymentTerminals.length > 0) {
+        return (
+          <View style={styles.container}>
+            {renderSubPageHeader(t('admin.payment-terminal') || 'Payment Terminals')}
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t('admin.payment-terminal')}</Text>
+                <FlatList
+                  data={paymentTerminals}
+                  renderItem={({ item: terminal }) => (
+                    <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
+                          {terminal.is_active && (
+                            <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                        {terminal.last_tested_at && (<Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>)}
+                        {terminal.last_error_message && (<Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>)}
+                      </View>
+                      <View style={{ marginLeft: 12, justifyContent: 'space-around' }}>
+                        <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => editPaymentTerminal(terminal)}>
+                          <Ionicons name="create-outline" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                  keyExtractor={(item) => item.id.toString()}
+                  scrollEnabled={false}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        );
+      }
+
+      // No terminals: show paid feature notice + application form
       return (
         <View style={styles.container}>
           {renderSubPageHeader(t('admin.payment-terminal') || 'Payment Terminals')}
@@ -2706,6 +2768,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </Text>
 
             <ScrollView style={{ maxHeight: 440 }} keyboardShouldPersistTaps="handled">
+            {/* Vendor selector - superadmin only */}
+            {isSuperadmin && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
               <View>
@@ -2739,8 +2803,20 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 ))}
               </View>
             </View>
+            )}
 
-            {/* App ID */}
+            {/* Non-superadmin: show vendor as read-only label */}
+            {!isSuperadmin && (
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
+                <Text style={{ fontSize: 14, color: '#6b7280', paddingVertical: 8 }}>
+                  {terminalForm.vendor_name === 'kpay' ? 'KPay' : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia' : 'Other'}
+                </Text>
+              </View>
+            )}
+
+            {/* App ID - superadmin only */}
+            {isSuperadmin && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-id')}</Text>
               <TextInput
@@ -2750,8 +2826,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 placeholder={t('settings.enter-app-id')}
               />
             </View>
+            )}
 
-            {/* App Secret */}
+            {/* App Secret - superadmin only */}
+            {isSuperadmin && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-secret')}</Text>
               <TextInput
@@ -2762,6 +2840,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 secureTextEntry
               />
             </View>
+            )}
 
             {/* Terminal IP - KPay only */}
             {terminalForm.vendor_name === 'kpay' && (
@@ -2800,8 +2879,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </>
             )}
 
-            {/* Payment Asia fields */}
-            {terminalForm.vendor_name === 'payment-asia' && (
+            {/* Payment Asia fields - superadmin only */}
+            {terminalForm.vendor_name === 'payment-asia' && isSuperadmin && (
               <>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>{t('settings.merchant-token')}</Text>

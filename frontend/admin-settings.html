@@ -479,7 +479,18 @@
     <button id="terminal-add-btn" class="btn-primary" onclick="openPaymentTerminalForm()" style="padding: 6px 12px; font-size: 13px;" data-i18n="admin.add-terminal">+ Add Terminal</button>
   </div>
       </div>
-      <div class="settings-page-content">
+
+      <!-- Paid Service Notice (shown for non-superadmins when no terminals exist) -->
+      <div id="terminal-paid-notice" style="display: none; padding: 32px 24px; text-align: center;">
+        <div style="font-size: 48px; margin-bottom: 16px;">🔒</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #1e293b;">Paid Service</h3>
+        <p style="margin: 0 0 16px 0; font-size: 14px; color: #475569; max-width: 400px; margin-left: auto; margin-right: auto;">
+          Payment terminal integration is a paid service. To enable payment terminals for your restaurant, please contact us.
+        </p>
+        <a href="mailto:support@chuio.io" style="display: inline-block; background: #2563eb; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">Contact Chuio</a>
+      </div>
+
+      <div id="terminal-main-content" class="settings-page-content">
         <!-- Order & Pay Feature Toggle -->
         <div style="background: #f0f4f8; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">

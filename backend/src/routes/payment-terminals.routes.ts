@@ -4,18 +4,37 @@
  * Supports KPay and other payment vendors
  */
 
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import pool from '../config/db';
 import { kpayTerminalService } from '../services/kpayTerminalService';
 import { paymentAsiaService } from '../services/paymentAsiaService';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
+
+// Auth helper: verifies JWT and returns user info
+const verifyUser = async (req: Request): Promise<{ id: number; role: string; restaurant_id: number | null } | null> => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return null;
+  try {
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+    const result = await pool.query("SELECT id, role, restaurant_id FROM users WHERE id = $1", [decoded.id]);
+    if (!result.rows.length) return null;
+    const user = result.rows[0];
+    if (user.role !== "admin" && user.role !== "superadmin") return null;
+    return user;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * GET /api/restaurants/:restaurantId/payment-terminals
  * Fetch all payment terminals for a restaurant
  */
 router.get('/restaurants/:restaurantId/payment-terminals', async (req, res) => {
+  const user = await verifyUser(req);
+  if (!user) return res.status(403).json({ error: 'Admin access required' });
   try {
     const { restaurantId } = req.params;
     
@@ -41,6 +60,8 @@ router.get('/restaurants/:restaurantId/payment-terminals', async (req, res) => {
  * Fetch a specific payment terminal
  */
 router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (req, res) => {
+  const user = await verifyUser(req);
+  if (!user) return res.status(403).json({ error: 'Admin access required' });
   try {
     const { restaurantId, terminalId } = req.params;
     
@@ -57,7 +78,13 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
       return res.status(404).json({ error: 'Payment terminal not found' });
     }
 
-    res.json(result.rows[0]);
+    const terminal = result.rows[0];
+    // Non-superadmins should not see secrets
+    if (user.role !== 'superadmin') {
+      terminal.app_secret = terminal.app_secret ? '••••••••' : '';
+    }
+
+    res.json(terminal);
   } catch (err: any) {
     console.error('[PaymentTerminal] Error fetching terminal:', err);
     res.status(500).json({ error: err.message });
@@ -70,6 +97,8 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
  * Body: { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path?, metadata? }
  */
 router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => {
+  const user = await verifyUser(req);
+  if (!user || user.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required' });
   try {
     const { restaurantId } = req.params;
     const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata } = req.body;
@@ -122,6 +151,18 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
  * Update a payment terminal configuration
  */
 router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (req, res) => {
+  const user = await verifyUser(req);
+  if (!user) return res.status(403).json({ error: 'Admin access required' });
+
+  // Non-superadmins can only update connection details
+  const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path'];
+  if (user.role !== 'superadmin') {
+    const requestedFields = Object.keys(req.body);
+    const disallowed = requestedFields.filter(f => !adminAllowedFields.includes(f));
+    if (disallowed.length > 0) {
+      return res.status(403).json({ error: `Only superadmin can modify: ${disallowed.join(', ')}` });
+    }
+  }
   try {
     const { restaurantId, terminalId } = req.params;
     const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active } = req.body;
@@ -193,6 +234,8 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
  * Delete a payment terminal configuration
  */
 router.delete('/restaurants/:restaurantId/payment-terminals/:terminalId', async (req, res) => {
+  const user = await verifyUser(req);
+  if (!user || user.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required' });
   try {
     const { restaurantId, terminalId } = req.params;
 
@@ -505,6 +548,8 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/test-status
  * Activate a payment terminal as the primary payment method
  */
 router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/activate', async (req, res) => {
+  const user = await verifyUser(req);
+  if (!user || user.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required' });
   try {
     const { restaurantId, terminalId } = req.params;
 

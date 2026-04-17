@@ -1600,17 +1600,38 @@ let EDITING_TERMINAL_ID = null;
 
 async function loadPaymentTerminals() {
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     if (res.ok) {
       PAYMENT_TERMINALS_CACHE = await res.json();
-      renderPaymentTerminalsList();
+    } else {
+      PAYMENT_TERMINALS_CACHE = [];
     }
   } catch (err) {
     console.error('Failed to load payment terminals:', err);
-    showError('terminal-error', 'Failed to load terminals');
+    PAYMENT_TERMINALS_CACHE = [];
   }
 
-  // Also load Order & Pay status
+  // Gate: non-superadmins without terminals see paid service notice
+  const paidNotice = document.getElementById('terminal-paid-notice');
+  const mainContent = document.getElementById('terminal-main-content');
+  const addBtn = document.getElementById('terminal-add-btn');
+
+  if (!IS_SUPERADMIN && (!PAYMENT_TERMINALS_CACHE || PAYMENT_TERMINALS_CACHE.length === 0)) {
+    // No terminals and not superadmin: show paid service notice
+    if (paidNotice) paidNotice.style.display = 'block';
+    if (mainContent) mainContent.style.display = 'none';
+    if (addBtn) addBtn.style.display = 'none';
+    return;
+  }
+
+  // Has terminals or is superadmin: show main content
+  if (paidNotice) paidNotice.style.display = 'none';
+  if (mainContent) mainContent.style.display = '';
+  if (addBtn) addBtn.style.display = IS_SUPERADMIN ? '' : 'none';
+
+  renderPaymentTerminalsList();
   await loadOrderPayStatus();
 }
 
@@ -1663,13 +1684,17 @@ function renderPaymentTerminalsList() {
     html += '</div>';
     html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px;">';
     
-    // Activate button - only show if not already active
-    if (!terminal.is_active) {
+    // Activate button - only show for superadmin if not already active
+    if (!terminal.is_active && IS_SUPERADMIN) {
       html += '<button onclick="activatePaymentTerminal(' + terminal.id + ')" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">✓ Activate</button>';
     }
     
     html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">✎ Edit</button>';
-    html += '<button onclick="deletePaymentTerminal(' + terminal.id + ')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">🗑️ Delete</button>';
+    
+    // Delete button - only for superadmin
+    if (IS_SUPERADMIN) {
+      html += '<button onclick="deletePaymentTerminal(' + terminal.id + ')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">🗑️ Delete</button>';
+    }
     html += '</div>';
     
     card.innerHTML = html;
@@ -1730,7 +1755,9 @@ function updatePaymentTerminalFields() {
 async function editPaymentTerminal(terminalId) {
   try {
     // Fetch full terminal details including app_secret
-    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     if (!res.ok) {
       showError('terminal-error', 'Failed to load terminal details');
       return;
@@ -1754,6 +1781,23 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-endpoint').value = terminal.endpoint_path || '/v2/pos/sign';
     }
     
+    // Non-superadmins can only edit connection details (IP, port, endpoint path)
+    if (!IS_SUPERADMIN) {
+      document.getElementById('new-terminal-vendor').disabled = true;
+      document.getElementById('new-terminal-app-id').disabled = true;
+      document.getElementById('new-terminal-app-secret').disabled = true;
+      document.getElementById('new-terminal-merchant-token').disabled = true;
+      document.getElementById('new-terminal-secret-code').disabled = true;
+      document.getElementById('new-terminal-gateway-env').disabled = true;
+    } else {
+      document.getElementById('new-terminal-vendor').disabled = false;
+      document.getElementById('new-terminal-app-id').disabled = false;
+      document.getElementById('new-terminal-app-secret').disabled = false;
+      document.getElementById('new-terminal-merchant-token').disabled = false;
+      document.getElementById('new-terminal-secret-code').disabled = false;
+      document.getElementById('new-terminal-gateway-env').disabled = false;
+    }
+
     document.getElementById('payment-terminal-form-view').style.display = 'block';
     document.getElementById('payment-terminal-list-view').style.display = 'none';
     document.getElementById('terminal-error').style.display = 'none';
@@ -1768,8 +1812,24 @@ async function editPaymentTerminal(terminalId) {
 async function savePaymentTerminal() {
   const vendor = document.getElementById('new-terminal-vendor').value;
   
+  // Non-superadmins can only update connection details on existing terminals
+  if (!IS_SUPERADMIN && !EDITING_TERMINAL_ID) {
+    showError('terminal-error', 'Only superadmins can create new terminals');
+    return;
+  }
+
   let payload;
-  if (vendor === 'payment-asia') {
+  
+  if (!IS_SUPERADMIN) {
+    // Non-superadmin: only send connection detail fields
+    const terminalIp = document.getElementById('new-terminal-ip').value.trim();
+    const terminalPort = document.getElementById('new-terminal-port').value.trim();
+    const endpointPath = document.getElementById('new-terminal-endpoint').value.trim();
+    payload = {};
+    if (terminalIp) payload.terminal_ip = terminalIp;
+    if (terminalPort) payload.terminal_port = parseInt(terminalPort);
+    if (endpointPath) payload.endpoint_path = endpointPath;
+  } else if (vendor === 'payment-asia') {
     // Payment Asia validation
     const merchantToken = document.getElementById('new-terminal-merchant-token').value.trim();
     const secretCode = document.getElementById('new-terminal-secret-code').value.trim();
@@ -1817,7 +1877,7 @@ async function savePaymentTerminal() {
     
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify(payload)
     });
     
@@ -2018,7 +2078,7 @@ async function activatePaymentTerminal(terminalId) {
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({})
     });
 
@@ -2040,7 +2100,8 @@ async function deletePaymentTerminal(terminalId) {
   
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
     });
     
     if (res.ok) {
@@ -2159,7 +2220,7 @@ async function toggleOrderPayFeature() {
       if (paTerminal) {
         const activateRes = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/activate`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({})
         });
         if (!activateRes.ok) {
