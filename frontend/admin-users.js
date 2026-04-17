@@ -591,11 +591,18 @@ async function toggleCustomization(restId, enable) {
   var restName = rest ? rest.name : '#' + restId;
 
   if (!confirm('Are you sure you want to ' + actionText + ' "' + restName + '"?\n\n' +
-    (enable ? 'This will create a dedicated git branch and optionally a Render service.' : 'The restaurant will revert to the shared platform.'))) {
-    // Revert checkbox
+    (enable ? 'This will automatically:\n• Create a git branch\n• Create a Render web service\n• Copy production env vars\n• Set up custom domain & DNS\n• Auto-fill all deployment details' : 'The restaurant will revert to the shared platform.'))) {
     var cb = document.getElementById('customization-toggle-' + restId);
     if (cb) cb.checked = !enable;
     return;
+  }
+
+  // Show deploying state
+  var toggleRow = document.getElementById('customization-toggle-' + restId);
+  if (toggleRow) toggleRow.disabled = true;
+  var deployDetails = document.getElementById('deploy-details-' + restId);
+  if (deployDetails && enable) {
+    deployDetails.innerHTML = '<div style="text-align: center; padding: 20px; color: #6366f1;"><div style="font-size: 24px; margin-bottom: 8px;">⏳</div><div style="font-weight: 600;">Deploying...</div><div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">Creating service, configuring DNS, copying env vars...</div></div>';
   }
 
   try {
@@ -612,15 +619,15 @@ async function toggleCustomization(restId, enable) {
     if (!res.ok) {
       alert(data.error || 'Failed to toggle customization');
       var cb = document.getElementById('customization-toggle-' + restId);
-      if (cb) cb.checked = !enable;
+      if (cb) { cb.checked = !enable; cb.disabled = false; }
       return;
     }
 
-    // Show result
-    var msg = 'Customization ' + (enable ? 'enabled' : 'disabled') + ' for "' + restName + '"';
+    // Build result message
+    var msg = '✅ Customization ' + (enable ? 'enabled' : 'disabled') + ' for "' + restName + '"';
     if (data.steps && data.steps.length) msg += '\n\nSteps completed:\n• ' + data.steps.join('\n• ');
     if (data.errors && data.errors.length) msg += '\n\n⚠️ Warnings:\n• ' + data.errors.join('\n• ');
-    if (data.manual_steps && data.manual_steps.length) msg += '\n\nManual steps needed:\n• ' + data.manual_steps.join('\n• ');
+    if (data.note) msg += '\n\nℹ️ ' + data.note;
     alert(msg);
 
     // Refresh data and re-open detail
@@ -629,7 +636,7 @@ async function toggleCustomization(restId, enable) {
   } catch (err) {
     alert('Failed to toggle customization: ' + err.message);
     var cb = document.getElementById('customization-toggle-' + restId);
-    if (cb) cb.checked = !enable;
+    if (cb) { cb.checked = !enable; cb.disabled = false; }
   }
 }
 
