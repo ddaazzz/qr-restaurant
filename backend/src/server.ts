@@ -1,6 +1,5 @@
 import dotenv from "dotenv";
-dotenv.config(); // loads .env (gitignored, local overrides)
-dotenv.config({ path: ".env.r2" }); // loads .env.r2 (committed, R2 config)
+dotenv.config();
 
 import app from "./app";
 import bcrypt from "bcrypt";

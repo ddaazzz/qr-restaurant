@@ -23,12 +23,12 @@ export class CustomerReceiptService {
     
     // Initialize email if configured
     const emailConfig = {
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
+      host: process.env.EMAIL_SMTP_HOST,
+      port: parseInt(process.env.EMAIL_SMTP_PORT || '587'),
+      secure: process.env.EMAIL_SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
+        user: process.env.EMAIL_SMTP_USER,
+        pass: process.env.EMAIL_SMTP_PASSWORD,
       },
     };
 
@@ -129,7 +129,7 @@ export class CustomerReceiptService {
       const html = this.generateReceiptHTML(receiptData, restaurantConfig.language);
 
       await this.emailTransporter.sendMail({
-        from: restaurantConfig.customer_email_from || process.env.SMTP_USER,
+        from: restaurantConfig.customer_email_from || process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_SMTP_USER,
         to: receiptData.customerEmail,
         subject: `Receipt from ${restaurantConfig.name}`,
         html,
