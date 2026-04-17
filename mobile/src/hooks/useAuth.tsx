@@ -46,9 +46,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const clockedInStr = await SecureStore.getItemAsync('clockedIn');
 
       if (token && restaurantId && role) {
-        // Set token and restaurantId on API client
+        // Validate token with server before restoring session
         apiClient.setToken(token);
         apiClient.setRestaurantId(restaurantId);
+
+        try {
+          await apiClient.getProfile();
+        } catch {
+          // Token is invalid/expired — clear stored credentials
+          await apiClient.logout();
+          setIsLoading(false);
+          return;
+        }
 
         let access_rights: Record<string, any> | string[] | undefined;
         if (accessRightsStr) {

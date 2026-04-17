@@ -68,6 +68,7 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     role: 'staff' as string,
     pin: '',
     restaurant_id: '' as string,
@@ -169,7 +170,19 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
       };
 
       if (userForm.email) payload.email = userForm.email.trim();
-      if (userForm.password) payload.password = userForm.password;
+      if (userForm.password) {
+        if (userForm.password !== userForm.confirmPassword) {
+          Alert.alert('Error', 'Passwords do not match');
+          setSaving(false);
+          return;
+        }
+        if (userForm.password.length < 8) {
+          Alert.alert('Error', 'Password must be at least 8 characters');
+          setSaving(false);
+          return;
+        }
+        payload.password = userForm.password;
+      }
       if (userForm.pin) payload.pin = userForm.pin;
       if (userForm.restaurant_id) payload.restaurant_id = parseInt(userForm.restaurant_id);
       if (userForm.hourly_rate_cents) payload.hourly_rate_cents = parseInt(userForm.hourly_rate_cents);
@@ -552,6 +565,19 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                     placeholderTextColor="#9ca3af"
                     secureTextEntry
                   />
+                  {userForm.password.length > 0 && (
+                    <>
+                      <Text style={s.label}>Confirm Password *</Text>
+                      <TextInput
+                        style={s.input}
+                        value={userForm.confirmPassword}
+                        onChangeText={(t) => setUserForm({ ...userForm, confirmPassword: t })}
+                        placeholder="Re-enter password"
+                        placeholderTextColor="#9ca3af"
+                        secureTextEntry
+                      />
+                    </>
+                  )}
                 </>
               )}
 

@@ -193,7 +193,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Profile state
   const [profileData, setProfileData] = useState<{ name: string; email: string; pin: string; role: string } | null>(null);
-  const [profileForm, setProfileForm] = useState({ name: '', email: '', password: '', pin: '' });
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', password: '', confirmPassword: '', pin: '' });
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -2308,7 +2308,19 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const payload: any = {};
       if (profileForm.name && profileForm.name !== profileData?.name) payload.name = profileForm.name;
       if (profileForm.email !== (profileData?.email || '')) payload.email = profileForm.email;
-      if (profileForm.password) payload.password = profileForm.password;
+      if (profileForm.password) {
+        if (profileForm.password !== profileForm.confirmPassword) {
+          Alert.alert(t('common.error'), t('settings.passwords-mismatch'));
+          setProfileSaving(false);
+          return;
+        }
+        if (profileForm.password.length < 8) {
+          Alert.alert(t('common.error'), t('settings.password-too-short'));
+          setProfileSaving(false);
+          return;
+        }
+        payload.password = profileForm.password;
+      }
       if (profileData?.role === 'staff' || profileData?.role === 'kitchen') {
         if (profileForm.pin !== (profileData?.pin || '')) payload.pin = profileForm.pin;
       }
@@ -2394,6 +2406,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 placeholder={t('settings.password-placeholder')}
                 secureTextEntry
               />
+              {profileForm.password.length > 0 && (
+                <>
+                  <Text style={[styles.label, { marginTop: 12 }]}>{t('settings.confirm-password')}</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={profileForm.confirmPassword}
+                    onChangeText={(text) => setProfileForm({ ...profileForm, confirmPassword: text })}
+                    placeholder={t('settings.confirm-password-placeholder')}
+                    secureTextEntry
+                  />
+                </>
+              )}
             </View>
           )}
 

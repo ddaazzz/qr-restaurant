@@ -169,6 +169,7 @@ function openUserModal(userId) {
       document.getElementById('user-form-name').value = user.name || '';
       document.getElementById('user-form-email').value = user.email || '';
       document.getElementById('user-form-password').value = '';
+      document.getElementById('user-form-confirm-password').value = '';
       document.getElementById('user-form-pin').value = user.pin || '';
       document.getElementById('user-form-hourly-rate').value = user.hourly_rate_cents ? (user.hourly_rate_cents / 100).toFixed(2) : '';
       selectUserRole(user.role);
@@ -188,6 +189,7 @@ function openUserModal(userId) {
     document.getElementById('user-form-name').value = '';
     document.getElementById('user-form-email').value = '';
     document.getElementById('user-form-password').value = '';
+    document.getElementById('user-form-confirm-password').value = '';
     document.getElementById('user-form-pin').value = '';
     document.getElementById('user-form-hourly-rate').value = '';
     selectUserRole('staff');
@@ -257,7 +259,13 @@ async function saveUser() {
     var password = document.getElementById('user-form-password').value;
 
     if (email) payload.email = email;
-    if (password) payload.password = password;
+
+    if (password) {
+      var confirmPassword = document.getElementById('user-form-confirm-password').value;
+      if (password !== confirmPassword) { showUserError('Passwords do not match'); return; }
+      if (password.length < 8) { showUserError('Password must be at least 8 characters'); return; }
+      payload.password = password;
+    }
 
     if (!editingUserId) {
       if (!email) { showUserError('Email is required'); return; }

@@ -38,8 +38,10 @@ class APIClient {
     try {
       const token = await SecureStore.getItemAsync('authToken');
       const restaurantId = await SecureStore.getItemAsync('restaurantId');
+      const apiBaseUrl = await SecureStore.getItemAsync('apiBaseUrl');
       if (token) this.token = token;
       if (restaurantId) this.restaurantId = restaurantId;
+      if (apiBaseUrl) this.client.defaults.baseURL = apiBaseUrl;
     } catch (error) {
       console.error('Failed to load auth token:', error);
     }
@@ -49,7 +51,7 @@ class APIClient {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
       const response = await this.client.post<AuthResponse>('/api/auth/login', credentials);
-      const { token, restaurantId } = response.data;
+      const { token, restaurantId, apiBaseUrl } = response.data;
       
       // Ensure token is a string
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
@@ -61,6 +63,15 @@ class APIClient {
         this.restaurantId = restaurantIdString;
       }
       this.token = tokenString;
+
+      // Switch to custom deployment URL if restaurant has one
+      if (apiBaseUrl) {
+        this.client.defaults.baseURL = apiBaseUrl;
+        await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
+      } else {
+        await SecureStore.deleteItemAsync('apiBaseUrl');
+        this.client.defaults.baseURL = API_URL;
+      }
       
       return response.data;
     } catch (error) {
@@ -76,7 +87,7 @@ class APIClient {
         payload.restaurantId = restaurantId;
       }
       const response = await this.client.post<AuthResponse>('/api/auth/kitchen-login', payload);
-      const { token, restaurantId: responseRestaurantId } = response.data;
+      const { token, restaurantId: responseRestaurantId, apiBaseUrl } = response.data;
       
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       const restaurantIdString = responseRestaurantId ? (typeof responseRestaurantId === 'string' ? responseRestaurantId : String(responseRestaurantId)) : null;
@@ -87,6 +98,15 @@ class APIClient {
         this.restaurantId = restaurantIdString;
       }
       this.token = tokenString;
+
+      // Switch to custom deployment URL if restaurant has one
+      if (apiBaseUrl) {
+        this.client.defaults.baseURL = apiBaseUrl;
+        await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
+      } else {
+        await SecureStore.deleteItemAsync('apiBaseUrl');
+        this.client.defaults.baseURL = API_URL;
+      }
       
       return response.data;
     } catch (error) {
@@ -102,7 +122,7 @@ class APIClient {
       }
       const response = await this.client.post<any>('/api/auth/staff-login', payload);
       const data = response.data;
-      const { token, restaurantId: responseRestaurantId } = data;
+      const { token, restaurantId: responseRestaurantId, apiBaseUrl } = data;
       
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       const restaurantIdString = responseRestaurantId ? (typeof responseRestaurantId === 'string' ? responseRestaurantId : String(responseRestaurantId)) : null;
@@ -113,6 +133,15 @@ class APIClient {
         this.restaurantId = restaurantIdString;
       }
       this.token = tokenString;
+
+      // Switch to custom deployment URL if restaurant has one
+      if (apiBaseUrl) {
+        this.client.defaults.baseURL = apiBaseUrl;
+        await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
+      } else {
+        await SecureStore.deleteItemAsync('apiBaseUrl');
+        this.client.defaults.baseURL = API_URL;
+      }
 
       // Normalize field names and persist extra staff data
       const userId = String(data.user_id || data.userId || '');
@@ -141,8 +170,14 @@ class APIClient {
   async logout(): Promise<void> {
     await SecureStore.deleteItemAsync('authToken');
     await SecureStore.deleteItemAsync('restaurantId');
+    await SecureStore.deleteItemAsync('apiBaseUrl');
+    await SecureStore.deleteItemAsync('userId');
+    await SecureStore.deleteItemAsync('role');
+    await SecureStore.deleteItemAsync('accessRights');
+    await SecureStore.deleteItemAsync('clockedIn');
     this.token = null;
     this.restaurantId = null;
+    this.client.defaults.baseURL = API_URL;
   }
 
   // Menu endpoints

@@ -96,6 +96,10 @@
             <img src="/uploads/website/settings.png" alt="settings" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.settings">More</span>
           </button>
+          <button class="menu-btn superadmin-only" data-section="users" onclick="switchSection('users')" id="users-nav-btn" style="display: none;">
+            <span class="icon" style="font-size: 18px;">👥</span>
+            <span class="menu-text">Users</span>
+          </button>
         </div>
         
         <div class="sidebar-footer">
@@ -187,7 +191,7 @@
   <script src="/admin-settings-presets.js"></script>
   <script src="/admin-printer.js"></script>
   <script src="/admin-bookings.js"></script>
-  <script src="/admin-users.js"></script>
+  <script src="/admin-users.js?v=20260417a"></script>
   <!-- QR scanning functionality -->
   <script src="/qr-scanner.js"></script>
 </body>
