@@ -466,8 +466,10 @@ class APIClient {
   async registerEmail(data: {
     email: string;
     password: string;
+    name?: string;
     restaurant_name: string;
     address?: string;
+    country?: string;
     phone?: string;
     service_charge_percent?: number;
     language_preference?: string;

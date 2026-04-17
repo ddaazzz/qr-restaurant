@@ -58,9 +58,11 @@ export class CustomerReceiptService {
     try {
       // Get restaurant config
       const restaurantRes = await this.pool.query(
-        `SELECT customer_receipt_enabled, customer_receipt_type, customer_email_from,
-                name, language
-         FROM restaurants WHERE id = $1`,
+        `SELECT rps.customer_receipt_enabled, rps.customer_receipt_type, rps.customer_email_from,
+                r.name, r.language_preference as language
+         FROM restaurants r
+         LEFT JOIN restaurant_printer_settings rps ON rps.restaurant_id = r.id
+         WHERE r.id = $1`,
         [restaurantId]
       );
 

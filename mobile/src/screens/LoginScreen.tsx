@@ -63,7 +63,9 @@ export const LoginScreen = () => {
   const [googleEmail, setGoogleEmail] = useState('');
   const [googleId, setGoogleId] = useState<string | undefined>();
   const [regRestaurantName, setRegRestaurantName] = useState('');
+  const [regFullName, setRegFullName] = useState('');
   const [regAddress, setRegAddress] = useState('');
+  const [regCountry, setRegCountry] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regServiceCharge, setRegServiceCharge] = useState('10');
   const [regLanguage, setRegLanguage] = useState('en');
@@ -329,6 +331,10 @@ export const LoginScreen = () => {
 
   // ---- Email registration: complete restaurant creation ----
   const handleEmailRegisterSubmit = async () => {
+    if (!regFullName.trim()) {
+      Alert.alert('Error', 'Full name is required');
+      return;
+    }
     if (!regRestaurantName.trim()) {
       Alert.alert('Error', 'Restaurant name is required');
       return;
@@ -339,8 +345,10 @@ export const LoginScreen = () => {
       await registerEmail({
         email: regEmail.trim(),
         password: regPassword,
+        name: regFullName.trim(),
         restaurant_name: regRestaurantName.trim(),
         address: regAddress.trim() || undefined,
+        country: regCountry.trim() || undefined,
         phone: regPhone.trim() || undefined,
         service_charge_percent: parseFloat(regServiceCharge) || 0,
         language_preference: regLanguage,
@@ -682,6 +690,8 @@ export const LoginScreen = () => {
               autoCapitalize="none"
               placeholderTextColor="#999"
               editable={!loading}
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Text style={styles.fieldLabel}>Password *</Text>
@@ -693,6 +703,8 @@ export const LoginScreen = () => {
               secureTextEntry
               placeholderTextColor="#999"
               editable={!loading}
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Text style={styles.fieldLabel}>Confirm Password *</Text>
@@ -704,6 +716,8 @@ export const LoginScreen = () => {
               secureTextEntry
               placeholderTextColor="#999"
               editable={!loading}
+              autoComplete="off"
+              textContentType="none"
             />
 
             <TouchableOpacity
@@ -797,6 +811,18 @@ export const LoginScreen = () => {
           </View>
 
           <View style={styles.stepContent}>
+            <Text style={styles.fieldLabel}>Full Name *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="John Doe"
+              value={regFullName}
+              onChangeText={setRegFullName}
+              placeholderTextColor="#999"
+              editable={!loading}
+              autoComplete="off"
+              textContentType="none"
+            />
+
             <Text style={styles.fieldLabel}>Restaurant Name *</Text>
             <TextInput
               style={styles.input}
@@ -805,6 +831,8 @@ export const LoginScreen = () => {
               onChangeText={setRegRestaurantName}
               placeholderTextColor="#999"
               editable={!loading}
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Text style={styles.fieldLabel}>Address</Text>
@@ -815,6 +843,20 @@ export const LoginScreen = () => {
               onChangeText={setRegAddress}
               placeholderTextColor="#999"
               editable={!loading}
+              autoComplete="off"
+              textContentType="none"
+            />
+
+            <Text style={styles.fieldLabel}>Country</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Hong Kong"
+              value={regCountry}
+              onChangeText={setRegCountry}
+              placeholderTextColor="#999"
+              editable={!loading}
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Text style={styles.fieldLabel}>Contact Number</Text>
@@ -826,6 +868,8 @@ export const LoginScreen = () => {
               keyboardType="phone-pad"
               placeholderTextColor="#999"
               editable={!loading}
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Text style={styles.fieldLabel}>Timezone</Text>
@@ -839,9 +883,9 @@ export const LoginScreen = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: '#059669' }, (loading || !regRestaurantName.trim()) && styles.buttonDisabled]}
+              style={[styles.submitButton, { backgroundColor: '#059669' }, (loading || !regFullName.trim() || !regRestaurantName.trim()) && styles.buttonDisabled]}
               onPress={handleEmailRegisterSubmit}
-              disabled={loading || !regRestaurantName.trim()}
+              disabled={loading || !regFullName.trim() || !regRestaurantName.trim()}
             >
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Create Restaurant</Text>}
             </TouchableOpacity>

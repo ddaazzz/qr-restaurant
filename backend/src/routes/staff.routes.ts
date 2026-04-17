@@ -13,7 +13,28 @@ router.get("/:id/settings", async (req, res) => {
   try {
     console.log("Fetching settings for restaurant:", id);
     const { rows } = await pool.query(
-      `SELECT * FROM restaurants WHERE id = $1`,
+      `SELECT r.*, rps.printer_type, rps.printer_host, rps.printer_port,
+              rps.printer_usb_vendor_id, rps.printer_usb_product_id,
+              rps.bluetooth_device_id, rps.bluetooth_device_name,
+              rps.kitchen_auto_print, rps.bill_auto_print, rps.print_logo,
+              rps.enable_zone_printing,
+              rps.print_queue_enabled, rps.print_queue_timeout_seconds, rps.print_queue_max_concurrent,
+              rps.receipt_show_qr, rps.receipt_show_barcode, rps.receipt_barcode_type,
+              rps.receipt_include_order_qr, rps.receipt_include_payment_link,
+              rps.receipt_include_loyalty_qr, rps.receipt_loyalty_program_url,
+              rps.customer_receipt_enabled, rps.customer_receipt_type,
+              rps.customer_receipt_printer_id, rps.customer_sms_api_key, rps.customer_email_from,
+              rps.qr_printer_type, rps.qr_printer_host, rps.qr_printer_port,
+              rps.qr_bluetooth_device_id, rps.qr_bluetooth_device_name, rps.qr_auto_print,
+              rps.bill_printer_type, rps.bill_printer_host, rps.bill_printer_port,
+              rps.bill_bluetooth_device_id, rps.bill_bluetooth_device_name,
+              rps.kitchen_printer_type, rps.kitchen_printer_host, rps.kitchen_printer_port,
+              rps.kitchen_bluetooth_device_id, rps.kitchen_bluetooth_device_name,
+              rps.qr_restaurant_name_format, rps.qr_show_time, rps.qr_table_layout,
+              rps.qr_size, rps.qr_footer_text
+       FROM restaurants r
+       LEFT JOIN restaurant_printer_settings rps ON rps.restaurant_id = r.id
+       WHERE r.id = $1`,
       [id]
     );
 

@@ -190,7 +190,12 @@ document.getElementById('btn-resend').addEventListener('click', async function()
 
 // ---- Step 2: Create restaurant ----
 document.getElementById('btn-create-restaurant').addEventListener('click', async function() {
+  var fullName = document.getElementById('reg-full-name').value.trim();
   var name = document.getElementById('reg-restaurant-name').value.trim();
+  if (!fullName) {
+    showError('Full name is required');
+    return;
+  }
   if (!name) {
     showError('Restaurant name is required');
     return;
@@ -205,8 +210,10 @@ document.getElementById('btn-create-restaurant').addEventListener('click', async
       body: JSON.stringify({
         email: registeredEmail,
         password: registeredPassword,
+        name: fullName,
         restaurant_name: name,
         address: document.getElementById('reg-address').value.trim() || undefined,
+        country: document.getElementById('reg-country').value.trim() || undefined,
         phone: document.getElementById('reg-phone').value.trim() || undefined,
         timezone: document.getElementById('reg-timezone').value,
       })

@@ -136,7 +136,7 @@ router.post("/restaurants/:restaurantId/printer-test", async (req: Request, res:
         printer_usb_product_id,
         bluetooth_device_id,
         bluetooth_device_name
-       FROM restaurants WHERE id = $1`,
+       FROM restaurant_printer_settings WHERE restaurant_id = $1`,
       [restaurantId]
     );
 
@@ -682,15 +682,17 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
 
     // If not found in printers table, try old schema on restaurants table (fallback)
     if (!printerConfig) {
-      console.log('[PrintQR] QR printer not found in printers table, checking restaurants table');
+      console.log('[PrintQR] QR printer not found in printers table, checking restaurant_printer_settings');
       const oldSchemaResult = await pool.query(
-        `SELECT qr_printer_type as printer_type, 
-                qr_printer_host as printer_host, 
-                qr_printer_port as printer_port,
-                qr_bluetooth_device_id as bluetooth_device_id, 
-                qr_bluetooth_device_name as bluetooth_device_name,
-                name
-         FROM restaurants WHERE id = $1`,
+        `SELECT rps.qr_printer_type as printer_type, 
+                rps.qr_printer_host as printer_host, 
+                rps.qr_printer_port as printer_port,
+                rps.qr_bluetooth_device_id as bluetooth_device_id, 
+                rps.qr_bluetooth_device_name as bluetooth_device_name,
+                r.name
+         FROM restaurant_printer_settings rps
+         JOIN restaurants r ON r.id = rps.restaurant_id
+         WHERE rps.restaurant_id = $1`,
         [restaurantId]
       );
       
@@ -925,11 +927,13 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
 
     // If not found in printers table, try old schema on restaurants table (fallback)
     if (!printerConfig) {
-      console.log('[PrintBill] Bill printer not found in printers table, checking restaurants table');
+      console.log('[PrintBill] Bill printer not found in printers table, checking restaurant_printer_settings');
       const oldSchemaResult = await pool.query(
-        `SELECT printer_type, printer_host, printer_port,
-                bluetooth_device_id, bluetooth_device_name, name
-         FROM restaurants WHERE id = $1`,
+        `SELECT rps.printer_type, rps.printer_host, rps.printer_port,
+                rps.bluetooth_device_id, rps.bluetooth_device_name, r.name
+         FROM restaurant_printer_settings rps
+         JOIN restaurants r ON r.id = rps.restaurant_id
+         WHERE rps.restaurant_id = $1`,
         [restaurantId]
       );
       

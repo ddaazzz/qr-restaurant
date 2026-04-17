@@ -289,7 +289,7 @@ for (const v of variants) {
     // ✅ AUTO-PRINT: Check if kitchen auto-print is enabled
     try {
       const restaurantConfigRes = await pool.query(
-        `SELECT kitchen_auto_print, printer_type FROM restaurants WHERE id = $1`,
+        `SELECT kitchen_auto_print, printer_type FROM restaurant_printer_settings WHERE restaurant_id = $1`,
         [restaurantId]
       );
 

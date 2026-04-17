@@ -929,7 +929,7 @@ router.post("/auth/verify-code", async (req, res) => {
 
 // POST /api/auth/register-email - Register with verified email + password + restaurant info
 router.post("/auth/register-email", async (req, res) => {
-  const { email, password, restaurant_name, address, phone, service_charge_percent, language_preference, timezone } = req.body;
+  const { email, password, name, restaurant_name, address, phone, country, service_charge_percent, language_preference, timezone } = req.body;
 
   if (!email || !password || !restaurant_name) {
     return res.status(400).json({ error: "Email, password, and restaurant name are required" });
@@ -963,9 +963,9 @@ router.post("/auth/register-email", async (req, res) => {
 
       // Create restaurant
       const restaurantResult = await client.query(
-        `INSERT INTO restaurants (name, address, phone, service_charge_percent, language_preference, timezone)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name`,
-        [restaurant_name, address || null, phone || null, service_charge_percent != null ? service_charge_percent : 0, language_preference || "en", timezone || "UTC"]
+        `INSERT INTO restaurants (name, address, phone, country, service_charge_percent, language_preference, timezone)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name`,
+        [restaurant_name, address || null, phone || null, country || null, service_charge_percent != null ? service_charge_percent : 0, language_preference || "en", timezone || "UTC"]
       );
 
       const restaurantId = restaurantResult.rows[0].id;
@@ -975,7 +975,7 @@ router.post("/auth/register-email", async (req, res) => {
       const userResult = await client.query(
         `INSERT INTO users (email, password_hash, role, restaurant_id, name)
          VALUES ($1, $2, 'admin', $3, $4) RETURNING id`,
-        [email, passwordHash, restaurantId, email.split("@")[0]]
+        [email, passwordHash, restaurantId, name || email.split("@")[0]]
       );
 
       const userId = userResult.rows[0].id;
