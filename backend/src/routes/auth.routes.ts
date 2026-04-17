@@ -980,12 +980,6 @@ router.post("/auth/register-email", async (req, res) => {
 
       const userId = userResult.rows[0].id;
 
-      // Log activity
-      await client.query(
-        "INSERT INTO staff_activity (restaurant_id, staff_id, action, metadata) VALUES ($1, $2, $3, $4)",
-        [restaurantId, userId, "RESTAURANT_CREATED", JSON.stringify({ method: "email_signup" })]
-      );
-
       // Clean up verification records
       await client.query("DELETE FROM email_verifications WHERE email = $1", [email]);
 

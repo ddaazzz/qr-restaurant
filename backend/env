@@ -1,0 +1,30 @@
+# Database Configuration
+# Production DB (DO NOT USE for development):
+# DATABASE_URL=postgresql://chuio_demo_user:lA7yJYtXe8gUFPg5j60Sc77nx9XeXnjP@dpg-d5neo34mrvns73fmt0sg-a.singapore-postgres.render.com/chuio_demo
+
+# Development DB:
+DATABASE_URL=postgresql://chuio_dev_db_user:lWTUcKLtvMHSyCs47FC9ckXK9o92Pyt0@dpg-d7gq5j4p3tds73a44eo0-a.singapore-postgres.render.com/chuio_dev_db
+
+# Server Configuration
+PORT=10000
+NODE_ENV=development
+
+# JWT Configuration (optional, if using token authentication)
+JWT_SECRET=your_secret_key_here_change_in_production
+
+# Email Configuration (Zoho SMTP)
+EMAIL_SMTP_HOST=smtp.zoho.eu
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=support@chuio.io
+EMAIL_SMTP_PASSWORD=Chuio.5316
+EMAIL_FROM_ADDRESS=support@chuio.io
+
+# POS Integration (optional)
+POS_API_KEY=your_pos_api_key
+POS_WEBHOOK_URL=your_webhook_url
+
+# Cloudflare R2 Storage
+R2_ACCOUNT_ID=49f8af5b11822d65e24c84292670d8d3
+R2_ACCESS_KEY_ID=a45698f5b25fcf2fae23cca898b03397
+R2_SECRET_ACCESS_KEY=d162a98c8e8d884bde23a76840ec0545d533f7cb5456482c7a73f6ac598b26be
+R2_BUCKET_NAME=chuio-uploads
