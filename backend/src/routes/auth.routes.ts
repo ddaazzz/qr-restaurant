@@ -51,6 +51,13 @@ router.post("/auth/login", async (req, res) => {
       defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
     }
 
+    // Fetch custom deployment URL if restaurant has one
+    const apiBaseUrlResult = await pool.query(
+      "SELECT api_base_url FROM restaurants WHERE id = $1",
+      [defaultRestaurantId]
+    );
+    const apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+
     // Log the login activity with timestamp
     await logStaffActivity({
       restaurantId: defaultRestaurantId,
@@ -71,6 +78,7 @@ router.post("/auth/login", async (req, res) => {
       role: user.role,
       restaurantId: defaultRestaurantId,
       restaurants: user.role === "superadmin" ? restaurants : [],
+      apiBaseUrl,
     });
   } catch (err) {
     console.error(err);
@@ -433,7 +441,14 @@ router.post("/auth/staff-login", async (req, res) => {
       accessRights = typeof user.access_rights === 'string' ? JSON.parse(user.access_rights) : user.access_rights;
     }
 
-    res.json({ token, role: user.role, restaurantId, access_rights: accessRights, user_id: user.id, currently_clocked_in: user.currently_clocked_in });
+    // Fetch custom deployment URL if restaurant has one
+    const apiBaseUrlResult = await pool.query(
+      "SELECT api_base_url FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    const apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+
+    res.json({ token, role: user.role, restaurantId, access_rights: accessRights, user_id: user.id, currently_clocked_in: user.currently_clocked_in, apiBaseUrl });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -477,7 +492,14 @@ router.post("/auth/kitchen-login", async (req, res) => {
       accessRights = typeof user.access_rights === 'string' ? JSON.parse(user.access_rights) : user.access_rights;
     }
 
-    res.json({ token, role: user.role, restaurantId, access_rights: accessRights, user_id: user.id, currently_clocked_in: user.currently_clocked_in });
+    // Fetch custom deployment URL if restaurant has one
+    const apiBaseUrlResult = await pool.query(
+      "SELECT api_base_url FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    const apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+
+    res.json({ token, role: user.role, restaurantId, access_rights: accessRights, user_id: user.id, currently_clocked_in: user.currently_clocked_in, apiBaseUrl });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -866,12 +888,13 @@ router.post("/auth/google-login", async (req, res) => {
       await pool.query("UPDATE users SET google_id = $1 WHERE id = $2", [google_id, user.id]);
     }
 
-    // Get restaurant name
+    // Get restaurant name and custom deployment URL
     const restaurantResult = await pool.query(
-      "SELECT name FROM restaurants WHERE id = $1",
+      "SELECT name, api_base_url FROM restaurants WHERE id = $1",
       [user.restaurant_id]
     );
     const restaurantName = restaurantResult.rows[0]?.name || "";
+    const apiBaseUrl = restaurantResult.rows[0]?.api_base_url || null;
 
     const token = jwt.sign(
       { id: user.id, role: user.role },
@@ -885,6 +908,7 @@ router.post("/auth/google-login", async (req, res) => {
       restaurantId: user.restaurant_id,
       restaurantName,
       userId: String(user.id),
+      apiBaseUrl,
     });
   } catch (err: any) {
     console.error("Google login error:", err);
@@ -1253,12 +1277,14 @@ router.get("/manage/restaurants", async (req, res) => {
     if (caller.role === "superadmin") {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r ORDER BY r.id`
       );
     } else {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r WHERE r.id = $1`,
         [caller.restaurant_id]
@@ -1307,7 +1333,12 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     return res.status(403).json({ error: "Cannot edit another restaurant" });
   }
 
-  const { name, address, phone, timezone, service_charge_percent, language_preference } = req.body;
+  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url } = req.body;
+
+  // Only superadmin can change customization fields
+  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || render_service_id !== undefined || api_base_url !== undefined)) {
+    return res.status(403).json({ error: "Only superadmin can change customization settings" });
+  }
 
   try {
     const updates: string[] = [];
@@ -1320,11 +1351,16 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (timezone !== undefined) { updates.push(`timezone = $${i++}`); params.push(timezone); }
     if (service_charge_percent !== undefined) { updates.push(`service_charge_percent = $${i++}`); params.push(service_charge_percent); }
     if (language_preference !== undefined) { updates.push(`language_preference = $${i++}`); params.push(language_preference); }
+    if (is_customized !== undefined) { updates.push(`is_customized = $${i++}`); params.push(is_customized); }
+    if (app_version !== undefined) { updates.push(`app_version = $${i++}`); params.push(app_version); }
+    if (custom_branch !== undefined) { updates.push(`custom_branch = $${i++}`); params.push(custom_branch); }
+    if (render_service_id !== undefined) { updates.push(`render_service_id = $${i++}`); params.push(render_service_id); }
+    if (api_base_url !== undefined) { updates.push(`api_base_url = $${i++}`); params.push(api_base_url); }
 
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
     params.push(restaurantId);
-    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference`;
+    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
     const result = await pool.query(query, params);
 
     if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
@@ -1358,6 +1394,148 @@ router.delete("/manage/restaurants/:restaurantId", async (req, res) => {
   } catch (err) {
     console.error("Failed to delete restaurant:", err);
     res.status(500).json({ error: "Failed to delete restaurant" });
+  }
+});
+
+// POST /api/manage/restaurants/:restaurantId/toggle-customization - Enable/disable restaurant customization
+router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req, res) => {
+  const caller = await verifyAdminRole(req);
+  if (!caller || caller.role !== "superadmin") {
+    return res.status(403).json({ error: "Superadmin access required" });
+  }
+
+  const { restaurantId } = req.params;
+  const { enable } = req.body;
+
+  try {
+    // Get current restaurant info
+    const restResult = await pool.query("SELECT id, name, is_customized, custom_branch, render_service_id FROM restaurants WHERE id = $1", [restaurantId]);
+    if (!restResult.rows.length) return res.status(404).json({ error: "Restaurant not found" });
+
+    const restaurant = restResult.rows[0];
+    const branchName = "restaurant/" + restaurant.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+    if (enable && !restaurant.is_customized) {
+      // Enable customization: create git branch + Render service
+      const steps: string[] = [];
+      const errors: string[] = [];
+
+      // Step 1: Create git branch
+      try {
+        const { execSync } = require("child_process");
+        execSync(`git fetch origin main && git branch ${branchName} origin/main && git push origin ${branchName}`, {
+          cwd: process.cwd(),
+          timeout: 30000,
+        });
+        steps.push("Git branch created: " + branchName);
+      } catch (gitErr: any) {
+        // Branch might already exist
+        if (gitErr.message && gitErr.message.includes("already exists")) {
+          steps.push("Git branch already exists: " + branchName);
+        } else {
+          errors.push("Git branch creation failed: " + (gitErr.message || "Unknown error"));
+        }
+      }
+
+      // Step 2: Create Render service (if RENDER_API_KEY is set)
+      let renderServiceId = restaurant.render_service_id;
+      let apiBaseUrl = null;
+      const renderApiKey = process.env.RENDER_API_KEY;
+      const renderOwnerId = process.env.RENDER_OWNER_ID;
+
+      if (renderApiKey && renderOwnerId && !renderServiceId) {
+        try {
+          const serviceName = "chuio-" + restaurant.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+          const renderResponse = await fetch("https://api.render.com/v1/services", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${renderApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              type: "web_service",
+              name: serviceName,
+              ownerId: renderOwnerId,
+              repo: process.env.RENDER_REPO_URL || "https://github.com/chuio/qr-restaurant-ai",
+              branch: branchName,
+              rootDir: "backend",
+              runtime: "node",
+              buildCommand: "npm install && npm run build",
+              startCommand: "npm start",
+              plan: "starter",
+              envVars: [
+                { key: "NODE_ENV", value: "production" },
+                { key: "DATABASE_URL", value: process.env.DATABASE_URL || "" },
+              ],
+            }),
+          });
+
+          if (renderResponse.ok) {
+            const renderData = await renderResponse.json() as any;
+            renderServiceId = renderData.service?.id || renderData.id;
+            // Construct the URL from the service
+            const serviceSlug = renderData.service?.slug || serviceName;
+            apiBaseUrl = `https://${serviceSlug}.onrender.com`;
+            steps.push("Render service created: " + serviceName);
+          } else {
+            const errBody = await renderResponse.text();
+            errors.push("Render service creation failed: " + errBody);
+          }
+        } catch (renderErr: any) {
+          errors.push("Render API error: " + (renderErr.message || "Unknown error"));
+        }
+      } else if (!renderApiKey) {
+        steps.push("Skipped Render deployment (RENDER_API_KEY not set - configure manually)");
+      }
+
+      // Step 3: Update restaurant record
+      await pool.query(
+        `UPDATE restaurants SET is_customized = TRUE, custom_branch = $1, render_service_id = $2, api_base_url = $3 WHERE id = $4`,
+        [branchName, renderServiceId || null, apiBaseUrl || null, restaurantId]
+      );
+      steps.push("Restaurant marked as customized");
+
+      const updatedResult = await pool.query(
+        `SELECT id, name, is_customized, app_version, custom_branch, render_service_id, api_base_url FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+
+      res.json({
+        success: true,
+        restaurant: updatedResult.rows[0],
+        steps,
+        errors: errors.length > 0 ? errors : undefined,
+        manual_steps: !renderApiKey ? [
+          "1. Deploy branch '" + branchName + "' to your hosting provider",
+          "2. Set up a PostgreSQL database for this restaurant",
+          "3. Run all migrations on the new database",
+          "4. Update api_base_url: UPDATE restaurants SET api_base_url = 'https://YOUR_URL' WHERE id = " + restaurantId,
+        ] : undefined,
+      });
+    } else if (!enable && restaurant.is_customized) {
+      // Disable customization: reset to default (keep branch for safety, don't delete Render service)
+      await pool.query(
+        `UPDATE restaurants SET is_customized = FALSE, api_base_url = NULL WHERE id = $1`,
+        [restaurantId]
+      );
+
+      const updatedResult = await pool.query(
+        `SELECT id, name, is_customized, app_version, custom_branch, render_service_id, api_base_url FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+
+      res.json({
+        success: true,
+        restaurant: updatedResult.rows[0],
+        steps: ["Customization disabled. Restaurant will use main platform."],
+        note: "Git branch and Render service preserved for safety. Delete manually if needed.",
+      });
+    } else {
+      res.json({ success: true, message: "No change needed" });
+    }
+  } catch (err) {
+    console.error("Failed to toggle customization:", err);
+    res.status(500).json({ error: "Failed to toggle customization" });
   }
 });
 

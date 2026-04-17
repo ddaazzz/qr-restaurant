@@ -97,7 +97,14 @@ function renderRestaurantsList() {
     var r = restaurantsData[i];
     html += '<div class="user-card restaurant-card-clickable" onclick="openRestaurantDetail(' + r.id + ')" style="cursor: pointer;">';
     html += '  <div class="user-card-info">';
-    html += '    <div class="user-card-name">' + escapeHtml(r.name) + '</div>';
+    html += '    <div class="user-card-name">';
+    html += '      <span>' + escapeHtml(r.name) + '</span>';
+    if (r.is_customized) {
+      html += '      <span class="deploy-badge deploy-badge-custom">CUSTOM</span>';
+    } else {
+      html += '      <span class="deploy-badge deploy-badge-standard">STANDARD</span>';
+    }
+    html += '    </div>';
     html += '    <div class="user-card-meta">';
     if (r.address) html += '<span>📍 ' + escapeHtml(r.address) + '</span>';
     if (r.phone) html += '<span>📞 ' + escapeHtml(r.phone) + '</span>';
@@ -106,7 +113,12 @@ function renderRestaurantsList() {
     html += '      <span class="meta-chip">👥 ' + (r.user_count || 0) + ' users</span>';
     if (r.timezone) html += '<span class="meta-chip">🕐 ' + r.timezone + '</span>';
     if (r.service_charge_percent != null) html += '<span class="meta-chip">' + r.service_charge_percent + '% SC</span>';
+    if (r.is_customized && r.app_version) html += '<span class="meta-chip meta-chip-version">v' + escapeHtml(r.app_version) + '</span>';
+    if (r.is_customized && r.custom_branch) html += '<span class="meta-chip meta-chip-branch">🌿 ' + escapeHtml(r.custom_branch) + '</span>';
     html += '    </div>';
+    if (r.is_customized && r.api_base_url) {
+      html += '    <div class="user-card-meta" style="margin-top: 2px;"><span>🔗 ' + escapeHtml(r.api_base_url) + '</span></div>';
+    }
     html += '  </div>';
     html += '  <div class="user-card-actions">';
     html += '    <button class="btn-edit" onclick="event.stopPropagation(); openRestaurantModal(' + r.id + ')">✏️ Edit</button>';
@@ -457,29 +469,92 @@ async function openRestaurantDetail(restId) {
 
   var modal = document.getElementById('restaurant-detail-modal');
   if (!modal) {
-    // Create the modal dynamically if it doesn't exist
     modal = document.createElement('div');
     modal.id = 'restaurant-detail-modal';
     modal.className = 'modal-overlay';
     modal.style.display = 'none';
-    modal.innerHTML = '<div class="modal-content" style="max-width: 600px;"><div class="modal-header"><h3 id="restaurant-detail-title"></h3><button class="modal-close" onclick="closeRestaurantDetail()">✕</button></div><div class="modal-body" id="restaurant-detail-body"></div></div>';
+    modal.innerHTML = '<div class="modal-content restaurant-detail-content"><div class="modal-header"><h3 id="restaurant-detail-title"></h3><button class="modal-close" onclick="closeRestaurantDetail()">✕</button></div><div class="modal-body" id="restaurant-detail-body"></div></div>';
     document.body.appendChild(modal);
   }
 
   document.getElementById('restaurant-detail-title').textContent = rest.name;
 
   var bodyHtml = '';
-  bodyHtml += '<div style="background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 16px;">';
-  bodyHtml += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">Restaurant Information</h4>';
-  if (rest.address) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">📍 ' + escapeHtml(rest.address) + '</p>';
-  if (rest.phone) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">📞 ' + escapeHtml(rest.phone) + '</p>';
-  if (rest.timezone) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">🕐 ' + rest.timezone + '</p>';
-  if (rest.service_charge_percent != null) bodyHtml += '<p style="margin: 0 0 4px 0; font-size: 13px; color: #6b7280;">💰 ' + rest.service_charge_percent + '% service charge</p>';
-  bodyHtml += '<p style="margin: 0; font-size: 13px; color: #6b7280;">👥 ' + (rest.user_count || 0) + ' users</p>';
-  bodyHtml += '</div>';
 
-  bodyHtml += '<h4 style="margin: 0 0 10px 0; font-size: 14px; color: #1f2937;">Payment Terminal Applications</h4>';
+  // --- Restaurant Info Section ---
+  bodyHtml += '<div class="detail-section">';
+  bodyHtml += '<h4 class="detail-section-title">Restaurant Information</h4>';
+  bodyHtml += '<div class="detail-grid">';
+  bodyHtml += '<div class="detail-row"><span class="detail-label">ID</span><span class="detail-value">#' + rest.id + '</span></div>';
+  if (rest.address) bodyHtml += '<div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">' + escapeHtml(rest.address) + '</span></div>';
+  if (rest.phone) bodyHtml += '<div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">' + escapeHtml(rest.phone) + '</span></div>';
+  if (rest.timezone) bodyHtml += '<div class="detail-row"><span class="detail-label">Timezone</span><span class="detail-value">' + rest.timezone + '</span></div>';
+  if (rest.service_charge_percent != null) bodyHtml += '<div class="detail-row"><span class="detail-label">Service Charge</span><span class="detail-value">' + rest.service_charge_percent + '%</span></div>';
+  if (rest.language_preference) bodyHtml += '<div class="detail-row"><span class="detail-label">Language</span><span class="detail-value">' + (rest.language_preference === 'zh' ? '中文' : 'English') + '</span></div>';
+  bodyHtml += '<div class="detail-row"><span class="detail-label">Users</span><span class="detail-value">' + (rest.user_count || 0) + '</span></div>';
+  bodyHtml += '</div></div>';
+
+  // --- Deployment & Customization Section (Superadmin only) ---
+  if (IS_SUPERADMIN) {
+    bodyHtml += '<div class="detail-section">';
+    bodyHtml += '<h4 class="detail-section-title">Deployment & Customization</h4>';
+
+    // Customization toggle
+    var isCustom = rest.is_customized;
+    bodyHtml += '<div class="deploy-toggle-row">';
+    bodyHtml += '  <div>';
+    bodyHtml += '    <div class="deploy-toggle-label">Custom Deployment</div>';
+    bodyHtml += '    <div class="deploy-toggle-desc">' + (isCustom ? 'This restaurant has its own forked codebase and deployment.' : 'Uses the shared platform (main branch). Toggle to create a custom fork.') + '</div>';
+    bodyHtml += '  </div>';
+    bodyHtml += '  <label class="toggle-switch">';
+    bodyHtml += '    <input type="checkbox" id="customization-toggle-' + rest.id + '" ' + (isCustom ? 'checked' : '') + ' onchange="toggleCustomization(' + rest.id + ', this.checked)">';
+    bodyHtml += '    <span class="toggle-slider"></span>';
+    bodyHtml += '  </label>';
+    bodyHtml += '</div>';
+
+    // Deployment details (always shown, editable)
+    bodyHtml += '<div id="deploy-details-' + rest.id + '" class="deploy-details">';
+
+    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
+    bodyHtml += '  <label class="detail-label">App Version (pinned)</label>';
+    bodyHtml += '  <input type="text" id="deploy-version-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.app_version || '') + '" placeholder="e.g. 1.1.1">';
+    bodyHtml += '</div>';
+
+    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
+    bodyHtml += '  <label class="detail-label">Git Branch</label>';
+    bodyHtml += '  <input type="text" id="deploy-branch-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.custom_branch || '') + '" placeholder="e.g. restaurant/sushi-palace">';
+    bodyHtml += '</div>';
+
+    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
+    bodyHtml += '  <label class="detail-label">Render Service ID</label>';
+    bodyHtml += '  <input type="text" id="deploy-render-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.render_service_id || '') + '" placeholder="e.g. srv-xxxxxxxxxx">';
+    bodyHtml += '</div>';
+
+    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
+    bodyHtml += '  <label class="detail-label">API Base URL</label>';
+    bodyHtml += '  <input type="text" id="deploy-url-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.api_base_url || '') + '" placeholder="e.g. https://sushi-palace.chuio.io">';
+    bodyHtml += '</div>';
+
+    bodyHtml += '<button class="btn-primary" onclick="saveDeploymentSettings(' + rest.id + ')" style="width: 100%; margin-top: 6px;">💾 Save Deployment Settings</button>';
+    bodyHtml += '</div>';
+    bodyHtml += '</div>';
+
+    // --- Database Info Section ---
+    bodyHtml += '<div class="detail-section">';
+    bodyHtml += '<h4 class="detail-section-title">Database (Render)</h4>';
+    bodyHtml += '<div class="detail-grid">';
+    bodyHtml += '<div class="detail-row"><span class="detail-label">DB Host</span><span class="detail-value" style="font-size: 11px; word-break: break-all;">dpg-d5neo34mrvns73fmt0sg-a.singapore-postgres.render.com</span></div>';
+    bodyHtml += '<div class="detail-row"><span class="detail-label">Region</span><span class="detail-value">Singapore</span></div>';
+    bodyHtml += '<div class="detail-row"><span class="detail-label">Engine</span><span class="detail-value">PostgreSQL</span></div>';
+    bodyHtml += '<div class="detail-row"><span class="detail-label">Note</span><span class="detail-value" style="font-size: 11px;">All restaurants share the same database. Data is isolated by restaurant_id.</span></div>';
+    bodyHtml += '</div></div>';
+  }
+
+  // --- Payment Terminal Applications ---
+  bodyHtml += '<div class="detail-section">';
+  bodyHtml += '<h4 class="detail-section-title">Payment Terminal Applications</h4>';
   bodyHtml += '<div id="restaurant-detail-applications"><p style="color: #9ca3af; text-align: center;">Loading...</p></div>';
+  bodyHtml += '</div>';
 
   document.getElementById('restaurant-detail-body').innerHTML = bodyHtml;
   modal.style.display = 'flex';
@@ -497,6 +572,94 @@ async function openRestaurantDetail(restId) {
     }
   } catch (err) {
     document.getElementById('restaurant-detail-applications').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load applications</p>';
+  }
+}
+
+// ============= CUSTOMIZATION TOGGLE =============
+
+async function toggleCustomization(restId, enable) {
+  var actionText = enable ? 'enable custom deployment for' : 'disable custom deployment for';
+  var rest = restaurantsData.find(function(r) { return r.id === restId; });
+  var restName = rest ? rest.name : '#' + restId;
+
+  if (!confirm('Are you sure you want to ' + actionText + ' "' + restName + '"?\n\n' +
+    (enable ? 'This will create a dedicated git branch and optionally a Render service.' : 'The restaurant will revert to the shared platform.'))) {
+    // Revert checkbox
+    var cb = document.getElementById('customization-toggle-' + restId);
+    if (cb) cb.checked = !enable;
+    return;
+  }
+
+  try {
+    var res = await fetch(`${API}/manage/restaurants/${restId}/toggle-customization`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ enable: enable }),
+    });
+
+    var data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Failed to toggle customization');
+      var cb = document.getElementById('customization-toggle-' + restId);
+      if (cb) cb.checked = !enable;
+      return;
+    }
+
+    // Show result
+    var msg = 'Customization ' + (enable ? 'enabled' : 'disabled') + ' for "' + restName + '"';
+    if (data.steps && data.steps.length) msg += '\n\nSteps completed:\n• ' + data.steps.join('\n• ');
+    if (data.errors && data.errors.length) msg += '\n\n⚠️ Warnings:\n• ' + data.errors.join('\n• ');
+    if (data.manual_steps && data.manual_steps.length) msg += '\n\nManual steps needed:\n• ' + data.manual_steps.join('\n• ');
+    alert(msg);
+
+    // Refresh data and re-open detail
+    await loadUsersManagement();
+    openRestaurantDetail(restId);
+  } catch (err) {
+    alert('Failed to toggle customization: ' + err.message);
+    var cb = document.getElementById('customization-toggle-' + restId);
+    if (cb) cb.checked = !enable;
+  }
+}
+
+// ============= SAVE DEPLOYMENT SETTINGS =============
+
+async function saveDeploymentSettings(restId) {
+  var version = document.getElementById('deploy-version-' + restId).value.trim();
+  var branch = document.getElementById('deploy-branch-' + restId).value.trim();
+  var renderServiceId = document.getElementById('deploy-render-' + restId).value.trim();
+  var apiBaseUrl = document.getElementById('deploy-url-' + restId).value.trim();
+
+  var payload = {};
+  payload.app_version = version || null;
+  payload.custom_branch = branch || null;
+  payload.render_service_id = renderServiceId || null;
+  payload.api_base_url = apiBaseUrl || null;
+
+  try {
+    var res = await fetch(`${API}/manage/restaurants/${restId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    var data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Failed to save deployment settings');
+      return;
+    }
+
+    alert('Deployment settings saved successfully.');
+    await loadUsersManagement();
+    openRestaurantDetail(restId);
+  } catch (err) {
+    alert('Failed to save: ' + err.message);
   }
 }
 

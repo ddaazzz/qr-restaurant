@@ -246,4 +246,189 @@
     padding: 8px 14px;
     font-size: 13px;
   }
+
+  .restaurant-detail-content {
+    max-width: 95% !important;
+    max-height: 95vh;
+  }
+}
+
+/* ============== DEPLOYMENT & CUSTOMIZATION ============== */
+
+/* Restaurant detail modal */
+.restaurant-detail-content {
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.detail-section {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.detail-section-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 100px;
+}
+
+.detail-value {
+  font-size: 13px;
+  color: #374151;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* Deploy badge (STANDARD / CUSTOM) */
+.deploy-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.deploy-badge-standard {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+}
+
+.deploy-badge-custom {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fbbf24;
+}
+
+/* Meta chips for version and branch */
+.meta-chip-version {
+  background: #ede9fe;
+  color: #6d28d9;
+  font-weight: 600;
+}
+
+.meta-chip-branch {
+  background: #dcfce7;
+  color: #166534;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+/* Toggle switch */
+.deploy-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+}
+
+.deploy-toggle-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 2px;
+}
+
+.deploy-toggle-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #d1d5db;
+  transition: 0.3s;
+  border-radius: 26px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #f59e0b;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(22px);
+}
+
+/* Deployment details form */
+.deploy-details {
+  padding-top: 4px;
+}
+
+.deploy-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: monospace;
+  background: white;
+  box-sizing: border-box;
+}
+
+.deploy-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
