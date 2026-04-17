@@ -444,6 +444,78 @@ class APIClient {
     }
   }
 
+  // Send email verification code
+  async sendVerificationCode(email: string): Promise<void> {
+    try {
+      await this.client.post('/api/auth/send-verification', { email });
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Verify email code
+  async verifyCode(email: string, code: string): Promise<void> {
+    try {
+      await this.client.post('/api/auth/verify-code', { email, code });
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Register with verified email + password
+  async registerEmail(data: {
+    email: string;
+    password: string;
+    restaurant_name: string;
+    address?: string;
+    phone?: string;
+    service_charge_percent?: number;
+    language_preference?: string;
+    timezone?: string;
+  }): Promise<AuthResponse> {
+    try {
+      const response = await this.client.post('/api/auth/register-email', data);
+      const { token, restaurantId, role, userId } = response.data;
+
+      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+      const restaurantIdString = restaurantId ? String(restaurantId) : '';
+
+      await SecureStore.setItemAsync('authToken', tokenString);
+      await SecureStore.setItemAsync('restaurantId', restaurantIdString);
+      await SecureStore.setItemAsync('role', role || 'admin');
+      await SecureStore.setItemAsync('userId', String(userId || ''));
+      this.token = tokenString;
+      this.restaurantId = restaurantIdString;
+
+      return {
+        token: tokenString,
+        role,
+        restaurantId: restaurantIdString,
+        userId: String(userId || ''),
+      };
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Forgot password
+  async forgotPassword(email: string): Promise<void> {
+    try {
+      await this.client.post('/api/auth/forgot-password', { email });
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Reset password with token
+  async resetPassword(token: string, password: string): Promise<void> {
+    try {
+      await this.client.post('/api/auth/reset-password', { token, password });
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // ========== Profile ==========
   async getProfile(): Promise<any> {
     try {

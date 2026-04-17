@@ -1,10 +1,12 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import pool from "../config/db"; // adjust if you use your pool setup
 import { logStaffActivity } from "../services/logStaffActivity";
 import { STAFF_ACTIONS } from "../constants/staffActions";
 import { uploadDocuments } from "../config/upload";
+import { sendVerificationCode, sendPasswordResetEmail } from "../services/emailService";
 
 const router = Router();
 // POST /api/auth/login
@@ -850,6 +852,267 @@ router.post("/auth/register", async (req, res) => {
   } catch (err: any) {
     console.error("Register error:", err);
     res.status(500).json({ error: err.message || "Registration failed" });
+  }
+});
+
+// POST /api/auth/send-verification - Send 6-digit verification code to email
+router.post("/auth/send-verification", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ error: "Valid email is required" });
+  }
+
+  try {
+    // Check if email already has an account
+    const existing = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: "Email already in use" });
+    }
+
+    // Generate 6-digit code
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Invalidate any previous codes for this email
+    await pool.query("DELETE FROM email_verifications WHERE email = $1", [email]);
+
+    // Store the code
+    await pool.query(
+      "INSERT INTO email_verifications (email, code, expires_at) VALUES ($1, $2, $3)",
+      [email, code, expiresAt]
+    );
+
+    // Send email
+    const sent = await sendVerificationCode(email, code);
+    if (!sent) {
+      return res.status(500).json({ error: "Failed to send verification email. Please try again." });
+    }
+
+    res.json({ message: "Verification code sent" });
+  } catch (err: any) {
+    console.error("Send verification error:", err);
+    res.status(500).json({ error: "Failed to send verification code" });
+  }
+});
+
+// POST /api/auth/verify-code - Verify the 6-digit code
+router.post("/auth/verify-code", async (req, res) => {
+  const { email, code } = req.body;
+
+  if (!email || !code) {
+    return res.status(400).json({ error: "Email and code are required" });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT id FROM email_verifications WHERE email = $1 AND code = $2 AND expires_at > NOW() AND verified = FALSE",
+      [email, code]
+    );
+
+    if (!result.rows.length) {
+      return res.status(400).json({ error: "Invalid or expired verification code" });
+    }
+
+    // Mark as verified
+    await pool.query(
+      "UPDATE email_verifications SET verified = TRUE WHERE email = $1 AND code = $2",
+      [email, code]
+    );
+
+    res.json({ message: "Email verified", verified: true });
+  } catch (err: any) {
+    console.error("Verify code error:", err);
+    res.status(500).json({ error: "Verification failed" });
+  }
+});
+
+// POST /api/auth/register-email - Register with verified email + password + restaurant info
+router.post("/auth/register-email", async (req, res) => {
+  const { email, password, restaurant_name, address, phone, service_charge_percent, language_preference, timezone } = req.body;
+
+  if (!email || !password || !restaurant_name) {
+    return res.status(400).json({ error: "Email, password, and restaurant name are required" });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
+
+  try {
+    // Verify that the email was verified
+    const verResult = await pool.query(
+      "SELECT id FROM email_verifications WHERE email = $1 AND verified = TRUE",
+      [email]
+    );
+    if (!verResult.rows.length) {
+      return res.status(400).json({ error: "Email has not been verified" });
+    }
+
+    // Check email not already taken
+    const emailCheck = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: "Email already in use" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // Create restaurant
+      const restaurantResult = await client.query(
+        `INSERT INTO restaurants (name, address, phone, service_charge_percent, language_preference, timezone)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name`,
+        [restaurant_name, address || null, phone || null, service_charge_percent != null ? service_charge_percent : 0, language_preference || "en", timezone || "UTC"]
+      );
+
+      const restaurantId = restaurantResult.rows[0].id;
+      const restaurantName = restaurantResult.rows[0].name;
+
+      // Create admin user with password
+      const userResult = await client.query(
+        `INSERT INTO users (email, password_hash, role, restaurant_id, name)
+         VALUES ($1, $2, 'admin', $3, $4) RETURNING id`,
+        [email, passwordHash, restaurantId, email.split("@")[0]]
+      );
+
+      const userId = userResult.rows[0].id;
+
+      // Log activity
+      await client.query(
+        "INSERT INTO staff_activity (restaurant_id, staff_id, action, metadata) VALUES ($1, $2, $3, $4)",
+        [restaurantId, userId, "RESTAURANT_CREATED", JSON.stringify({ method: "email_signup" })]
+      );
+
+      // Clean up verification records
+      await client.query("DELETE FROM email_verifications WHERE email = $1", [email]);
+
+      await client.query("COMMIT");
+      client.release();
+
+      // Generate JWT
+      const token = jwt.sign(
+        { id: userId, role: "admin" },
+        process.env.JWT_SECRET || "devsecret",
+        { expiresIn: "8h" }
+      );
+
+      res.status(201).json({
+        token,
+        role: "admin",
+        restaurantId,
+        restaurantName,
+        userId: String(userId),
+      });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      client.release();
+      throw err;
+    }
+  } catch (err: any) {
+    console.error("Register email error:", err);
+    res.status(500).json({ error: err.message || "Registration failed" });
+  }
+});
+
+// POST /api/auth/forgot-password - Send password reset email
+router.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
+  try {
+    // Find user — always return success to prevent email enumeration
+    const result = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
+    if (!result.rows.length) {
+      return res.json({ message: "If an account exists with that email, a reset link has been sent" });
+    }
+
+    const userId = result.rows[0].id;
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Invalidate previous tokens
+    await pool.query("UPDATE password_reset_tokens SET used = TRUE WHERE user_id = $1 AND used = FALSE", [userId]);
+
+    // Store token
+    await pool.query(
+      "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)",
+      [userId, token, expiresAt]
+    );
+
+    // Build reset URL
+    const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+    await sendPasswordResetEmail(email, resetUrl);
+
+    res.json({ message: "If an account exists with that email, a reset link has been sent" });
+  } catch (err: any) {
+    console.error("Forgot password error:", err);
+    res.status(500).json({ error: "Failed to process request" });
+  }
+});
+
+// POST /api/auth/reset-password - Reset password with token
+router.post("/auth/reset-password", async (req, res) => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    return res.status(400).json({ error: "Token and password are required" });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT id, user_id FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW() AND used = FALSE",
+      [token]
+    );
+
+    if (!result.rows.length) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+
+    const { user_id } = result.rows[0];
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Update password
+    await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [passwordHash, user_id]);
+
+    // Mark token as used
+    await pool.query("UPDATE password_reset_tokens SET used = TRUE WHERE token = $1", [token]);
+
+    res.json({ message: "Password has been reset successfully" });
+  } catch (err: any) {
+    console.error("Reset password error:", err);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+});
+
+// GET /api/auth/validate-reset-token - Check if a reset token is still valid
+router.get("/auth/validate-reset-token", async (req, res) => {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ error: "Token is required", valid: false });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT id FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW() AND used = FALSE",
+      [token]
+    );
+
+    res.json({ valid: result.rows.length > 0 });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to validate token", valid: false });
   }
 });
 

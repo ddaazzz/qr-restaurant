@@ -214,6 +214,18 @@ app.get("/login", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "login.html"));
 });
 
+app.get("/register", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "register.html"));
+});
+
+app.get("/forgot-password", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "forgot-password.html"));
+});
+
+app.get("/reset-password", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "reset-password.html"));
+});
+
 /* ======================
    QR TOKEN ROUTE (LAST)
 ====================== */

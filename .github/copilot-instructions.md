@@ -95,3 +95,20 @@
 4. **Frontend hot-reload** - Works for `.js` files; restart backend if `app.ts` routes change
 5. **SSL/POS webhooks** - Render deployment uses `ssl: { rejectUnauthorized: false }` in DB config
 6. **Order status transitions** - Order marked "paid" only via successful webhook, never just from frontend state
+
+## Per-Restaurant Customization (Branch Model)
+
+**How it works:**
+- `main` branch = shared platform for all default restaurants (deployed at chuio.io)
+- `restaurant/<name>` branches = forked copies with their own deployment + database
+- Customized restaurants are version-pinned — they don't auto-receive `main` updates
+- The mobile app is a single binary; it connects to whichever `apiBaseUrl` the login response returns
+
+**Key rule:** If you're on `main`, never make restaurant-specific changes. Use a `restaurant/` branch instead.
+
+**Database column:** `restaurants.api_base_url` — NULL means use main platform, a URL means redirect mobile + API calls there.
+
+**Copilot files:**
+- Agent: `.github/agents/restaurant-customizer.agent.md` — use `@restaurant-customizer` for customization work
+- Instructions: `.github/instructions/restaurant-customization.instructions.md`
+- Prompt: `.github/prompts/customize-restaurant.prompt.md` — use `/customize-restaurant <name>`

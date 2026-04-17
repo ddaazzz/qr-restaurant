@@ -20,6 +20,16 @@ interface AuthContextType {
     language_preference?: string;
     timezone?: string;
   }) => Promise<void>;
+  registerEmail: (data: {
+    email: string;
+    password: string;
+    restaurant_name: string;
+    address?: string;
+    phone?: string;
+    service_charge_percent?: number;
+    language_preference?: string;
+    timezone?: string;
+  }) => Promise<void>;
   googleLogin: (email: string, googleId?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<AuthResponse>) => void;
@@ -152,6 +162,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const registerEmail = async (data: {
+    email: string;
+    password: string;
+    restaurant_name: string;
+    address?: string;
+    phone?: string;
+    service_charge_percent?: number;
+    language_preference?: string;
+    timezone?: string;
+  }) => {
+    setIsLoading(true);
+    try {
+      const response = await apiClient.registerEmail(data);
+      setUser(response);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const updateUser = (updates: Partial<AuthResponse>) => {
     setUser((prev) => prev ? { ...prev, ...updates } : prev);
   };
@@ -172,6 +201,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         kitchenLogin,
         staffLogin,
         register,
+        registerEmail,
         googleLogin,
         logout,
         updateUser,

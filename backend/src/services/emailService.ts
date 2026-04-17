@@ -199,6 +199,79 @@ Thank you for your order!
 };
 
 /**
+ * Send email verification code for registration
+ */
+export const sendVerificationCode = async (email: string, code: string): Promise<boolean> => {
+  try {
+    const transporter = getEmailTransporter();
+    const fromAddress = getEmailFromAddress();
+
+    await transporter.sendMail({
+      from: `"Chuio" <${fromAddress}>`,
+      to: email,
+      subject: "Your Chuio Verification Code",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 24px; color: #1f2937; margin: 0 0 8px;">Verify Your Email</h1>
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">Enter this code to complete your registration</p>
+          </div>
+          <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #f97316;">${code}</span>
+          </div>
+          <p style="color: #9ca3af; font-size: 12px; text-align: center;">This code expires in 10 minutes. If you didn't request this, please ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #9ca3af; font-size: 11px; text-align: center;">&copy; 2026 Chuio. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    console.log(`[Email] Verification code sent to ${email}`);
+    return true;
+  } catch (error: any) {
+    console.error("[Email] Failed to send verification code:", error.message);
+    return false;
+  }
+};
+
+/**
+ * Send password reset email with link
+ */
+export const sendPasswordResetEmail = async (email: string, resetUrl: string): Promise<boolean> => {
+  try {
+    const transporter = getEmailTransporter();
+    const fromAddress = getEmailFromAddress();
+
+    await transporter.sendMail({
+      from: `"Chuio" <${fromAddress}>`,
+      to: email,
+      subject: "Reset Your Chuio Password",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 24px; color: #1f2937; margin: 0 0 8px;">Reset Your Password</h1>
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">Click the button below to set a new password</p>
+          </div>
+          <div style="text-align: center; margin-bottom: 24px;">
+            <a href="${resetUrl}" style="display: inline-block; background: #f97316; color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600;">Reset Password</a>
+          </div>
+          <p style="color: #6b7280; font-size: 13px; text-align: center;">Or copy this link:<br/><a href="${resetUrl}" style="color: #f97316; word-break: break-all;">${resetUrl}</a></p>
+          <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px;">This link expires in 1 hour. If you didn't request this, please ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #9ca3af; font-size: 11px; text-align: center;">&copy; 2026 Chuio. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    console.log(`[Email] Password reset email sent to ${email}`);
+    return true;
+  } catch (error: any) {
+    console.error("[Email] Failed to send password reset email:", error.message);
+    return false;
+  }
+};
+
+/**
  * Verify SMTP connection (for testing)
  */
 export const verifyEmailConnection = async (): Promise<boolean> => {
@@ -216,5 +289,7 @@ export const verifyEmailConnection = async (): Promise<boolean> => {
 export default {
   sendReceipt,
   sendOrderConfirmation,
+  sendVerificationCode,
+  sendPasswordResetEmail,
   verifyEmailConnection,
 };

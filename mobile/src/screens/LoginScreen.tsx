@@ -32,6 +32,10 @@ type LoginMode =
   | 'admin'
   | 'scan-qr'
   | 'pin-entry'
+  | 'email-register'
+  | 'verify-code'
+  | 'restaurant-info'
+  | 'forgot-password'
   | 'google-signup';
 
 export const LoginScreen = () => {
@@ -69,9 +73,18 @@ export const LoginScreen = () => {
   const [regLogoUri, setRegLogoUri] = useState<string | null>(null);
   const [regBgUri, setRegBgUri] = useState<string | null>(null);
 
+  // Email registration
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
+
   const pinInputRef = useRef<TextInput>(null);
 
-  const { login, kitchenLogin, staffLogin, register, googleLogin } = useAuth();
+  const { login, kitchenLogin, staffLogin, register, registerEmail, googleLogin } = useAuth();
 
   useEffect(() => {
     loadRestaurantId();
@@ -262,6 +275,103 @@ export const LoginScreen = () => {
     }
   };
 
+  // ---- Resend countdown timer ----
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
+
+  // ---- Email registration: send verification code ----
+  const handleSendVerification = async () => {
+    if (!regEmail.trim() || !regEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+    if (regPassword.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters');
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiClient.sendVerificationCode(regEmail.trim());
+      setMode('verify-code');
+      setResendCountdown(60);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to send code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---- Email registration: verify code ----
+  const handleVerifyCode = async () => {
+    if (verificationCode.length !== 6) {
+      Alert.alert('Error', 'Please enter the full 6-digit code');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiClient.verifyCode(regEmail.trim(), verificationCode);
+      setMode('restaurant-info');
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Invalid code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---- Email registration: complete restaurant creation ----
+  const handleEmailRegisterSubmit = async () => {
+    if (!regRestaurantName.trim()) {
+      Alert.alert('Error', 'Restaurant name is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await registerEmail({
+        email: regEmail.trim(),
+        password: regPassword,
+        restaurant_name: regRestaurantName.trim(),
+        address: regAddress.trim() || undefined,
+        phone: regPhone.trim() || undefined,
+        service_charge_percent: parseFloat(regServiceCharge) || 0,
+        language_preference: regLanguage,
+        timezone: regTimezone,
+      });
+    } catch (error) {
+      Alert.alert('Registration Failed', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---- Forgot password ----
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim() || !forgotEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiClient.forgotPassword(forgotEmail.trim());
+      setForgotSent(true);
+    } catch (error) {
+      // Always show success to prevent email enumeration
+      setForgotSent(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ===================== CHOICE SCREEN =====================
   if (mode === 'choice') {
     return (
@@ -364,6 +474,15 @@ export const LoginScreen = () => {
           >
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Login</Text>}
           </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+            <TouchableOpacity onPress={() => { setForgotEmail(''); setForgotSent(false); setMode('forgot-password'); }}>
+              <Text style={{ color: '#6b7280', fontSize: 13, fontWeight: '500' }}>Forgot Password?</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setRegEmail(''); setRegPassword(''); setRegConfirmPassword(''); setVerificationCode(''); setMode('email-register'); }}>
+              <Text style={{ color: '#f97316', fontSize: 13, fontWeight: '600' }}>Create Account →</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     );
@@ -532,6 +651,290 @@ export const LoginScreen = () => {
           >
             <Text style={styles.submitButtonText}>Login</Text>
           </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ===================== EMAIL REGISTER (Step 1: Email + Password) =====================
+  if (mode === 'email-register') {
+    return (
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+        <ScrollView contentContainerStyle={styles.onboardingScroll} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity style={styles.backButton} onPress={() => setMode('admin')} disabled={loading}>
+            <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+
+          <View style={{ marginTop: 60 }}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Step 1 of 3 — Your credentials</Text>
+          </View>
+
+          <View style={styles.stepContent}>
+            <Text style={styles.fieldLabel}>Email Address *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="your@email.com"
+              value={regEmail}
+              onChangeText={setRegEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholderTextColor="#999"
+              editable={!loading}
+            />
+
+            <Text style={styles.fieldLabel}>Password *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Min 8 characters"
+              value={regPassword}
+              onChangeText={setRegPassword}
+              secureTextEntry
+              placeholderTextColor="#999"
+              editable={!loading}
+            />
+
+            <Text style={styles.fieldLabel}>Confirm Password *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Re-enter password"
+              value={regConfirmPassword}
+              onChangeText={setRegConfirmPassword}
+              secureTextEntry
+              placeholderTextColor="#999"
+              editable={!loading}
+            />
+
+            <TouchableOpacity
+              style={[styles.submitButton, loading && styles.buttonDisabled]}
+              onPress={handleSendVerification}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Send Verification Code</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setMode('admin')} style={{ marginTop: 16, alignItems: 'center' }}>
+              <Text style={{ color: '#6b7280', fontSize: 13 }}>Already have an account? <Text style={{ color: '#f97316', fontWeight: '600' }}>Sign In</Text></Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ===================== VERIFY CODE (Step 2) =====================
+  if (mode === 'verify-code') {
+    return (
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+        <ScrollView contentContainerStyle={styles.onboardingScroll} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity style={styles.backButton} onPress={() => setMode('email-register')} disabled={loading}>
+            <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+
+          <View style={{ marginTop: 60 }}>
+            <Text style={styles.title}>Verify Email</Text>
+            <Text style={styles.subtitle}>Step 2 of 3 — Enter the 6-digit code sent to{'\n'}{regEmail}</Text>
+          </View>
+
+          <View style={styles.stepContent}>
+            <TextInput
+              style={[styles.input, { textAlign: 'center', fontSize: 24, fontWeight: '700', letterSpacing: 8, paddingVertical: 16 }]}
+              placeholder="000000"
+              value={verificationCode}
+              onChangeText={(t) => setVerificationCode(t.replace(/\D/g, '').slice(0, 6))}
+              keyboardType="number-pad"
+              maxLength={6}
+              placeholderTextColor="#ccc"
+              editable={!loading}
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[styles.submitButton, (loading || verificationCode.length !== 6) && styles.buttonDisabled]}
+              onPress={handleVerifyCode}
+              disabled={loading || verificationCode.length !== 6}
+            >
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Verify Code</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={async () => {
+                if (resendCountdown > 0) return;
+                try {
+                  await apiClient.sendVerificationCode(regEmail.trim());
+                  setResendCountdown(60);
+                  Alert.alert('Sent', 'Verification code resent');
+                } catch {}
+              }}
+              disabled={resendCountdown > 0}
+              style={{ marginTop: 16, alignItems: 'center' }}
+            >
+              <Text style={{ color: resendCountdown > 0 ? '#9ca3af' : '#f97316', fontSize: 13, fontWeight: '500' }}>
+                {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ===================== RESTAURANT INFO (Step 3) =====================
+  if (mode === 'restaurant-info') {
+    return (
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+        <ScrollView contentContainerStyle={styles.onboardingScroll} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity style={styles.backButton} onPress={() => setMode('verify-code')} disabled={loading}>
+            <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+
+          <View style={{ marginTop: 60 }}>
+            <Text style={styles.title}>Restaurant Details</Text>
+            <Text style={styles.subtitle}>Step 3 of 3 — Tell us about your restaurant</Text>
+          </View>
+
+          <View style={styles.stepContent}>
+            <Text style={styles.fieldLabel}>Restaurant Name *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="My Restaurant"
+              value={regRestaurantName}
+              onChangeText={setRegRestaurantName}
+              placeholderTextColor="#999"
+              editable={!loading}
+            />
+
+            <Text style={styles.fieldLabel}>Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="123 Main St, City"
+              value={regAddress}
+              onChangeText={setRegAddress}
+              placeholderTextColor="#999"
+              editable={!loading}
+            />
+
+            <Text style={styles.fieldLabel}>Contact Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="+852 1234 5678"
+              value={regPhone}
+              onChangeText={setRegPhone}
+              keyboardType="phone-pad"
+              placeholderTextColor="#999"
+              editable={!loading}
+            />
+
+            <Text style={styles.fieldLabel}>Timezone</Text>
+            <TouchableOpacity
+              style={[styles.optionButton, styles.optionButtonActive, { flex: undefined, paddingHorizontal: 16 }]}
+              onPress={() => { setTimezoneSearch(''); setShowTimezonePicker(true); }}
+            >
+              <Text style={[styles.optionButtonText, styles.optionButtonTextActive]}>
+                {TIMEZONE_OPTIONS.find(o => o.value === regTimezone)?.label || regTimezone}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: '#059669' }, (loading || !regRestaurantName.trim()) && styles.buttonDisabled]}
+              onPress={handleEmailRegisterSubmit}
+              disabled={loading || !regRestaurantName.trim()}
+            >
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Create Restaurant</Text>}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Timezone Picker Modal */}
+        <Modal visible={showTimezonePicker} transparent animationType="slide">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70%' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Select Timezone</Text>
+                <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
+                  <Text style={{ fontSize: 16, color: '#6b7280' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={{ margin: 12, padding: 10, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, fontSize: 14 }}
+                placeholder="Search timezones..."
+                value={timezoneSearch}
+                onChangeText={setTimezoneSearch}
+                autoFocus
+              />
+              <FlatList
+                data={TIMEZONE_OPTIONS.filter(o => o.label.toLowerCase().includes(timezoneSearch.toLowerCase()) || o.value.toLowerCase().includes(timezoneSearch.toLowerCase()))}
+                keyExtractor={item => item.value}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={{ padding: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: item.value === regTimezone ? '#eff6ff' : '#fff' }}
+                    onPress={() => { setRegTimezone(item.value); setShowTimezonePicker(false); }}
+                  >
+                    <Text style={{ fontSize: 14, color: item.value === regTimezone ? '#2563eb' : '#1f2937', fontWeight: item.value === regTimezone ? '600' : '400' }}>{item.label}</Text>
+                  </TouchableOpacity>
+                )}
+                keyboardShouldPersistTaps="handled"
+              />
+            </View>
+          </View>
+        </Modal>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ===================== FORGOT PASSWORD =====================
+  if (mode === 'forgot-password') {
+    return (
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+        <View style={styles.content}>
+          <TouchableOpacity style={styles.backButton} onPress={() => { setMode('admin'); setForgotSent(false); }} disabled={loading}>
+            <Ionicons name="arrow-back" size={22} color="#2C3E50" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.title}>Forgot Password</Text>
+          <Text style={styles.subtitle}>Enter your email and we'll send you a reset link</Text>
+
+          {!forgotSent ? (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="your@email.com"
+                value={forgotEmail}
+                onChangeText={setForgotEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholderTextColor="#999"
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={[styles.submitButton, loading && styles.buttonDisabled]}
+                onPress={handleForgotPassword}
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Send Reset Link</Text>}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 12, padding: 20, alignItems: 'center' }}>
+              <Ionicons name="checkmark-circle" size={48} color="#059669" />
+              <Text style={{ fontSize: 15, color: '#1f2937', fontWeight: '600', marginTop: 12, textAlign: 'center' }}>
+                Check your email
+              </Text>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 8, textAlign: 'center' }}>
+                If an account exists with that email, a password reset link has been sent to your inbox.
+              </Text>
+              <TouchableOpacity
+                style={[styles.submitButton, { marginTop: 20, width: '100%' }]}
+                onPress={() => { setMode('admin'); setForgotSent(false); }}
+              >
+                <Text style={styles.submitButtonText}>Back to Login</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     );

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+  <title>Create Account - Chuio Restaurant Management System</title>
+  <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
+  <link rel="apple-touch-icon" href="/uploads/chuio/V2/App%20Icon%20B%26W.png" />
+  <meta name="description" content="Create your Chuio restaurant management account. Set up your restaurant in minutes.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#4a90e2">
+  <link rel="canonical" href="https://chuio.io/register">
+  <link rel="stylesheet" href="language-switcher.css" />
+  <link rel="stylesheet" href="login.css" />
+  <style>
+    .register-container {
+      max-width: 480px;
+    }
+    .steps-indicator {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .step-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--border-color);
+      transition: all 0.3s ease;
+    }
+    .step-dot.active {
+      background: var(--primary-color);
+      transform: scale(1.2);
+    }
+    .step-dot.done {
+      background: var(--success-color);
+    }
+    .step-section {
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .step-section.active {
+      display: flex;
+    }
+    .code-inputs {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .code-inputs input {
+      width: 48px;
+      height: 56px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      border: 2px solid var(--border-color);
+      border-radius: 10px;
+      transition: border-color 0.3s;
+      font-family: inherit;
+    }
+    .code-inputs input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+    }
+    .resend-link {
+      text-align: center;
+      margin-top: 8px;
+    }
+    .resend-link button {
+      background: none;
+      border: none;
+      color: var(--primary-color);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: underline;
+    }
+    .resend-link button:disabled {
+      color: var(--text-light);
+      cursor: not-allowed;
+      text-decoration: none;
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-secondary {
+      padding: 12px 16px;
+      background: #fff;
+      color: var(--text-dark);
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1;
+    }
+    .btn-secondary:hover {
+      border-color: var(--text-light);
+      background: var(--bg-light);
+    }
+    .login-link {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 14px;
+      color: var(--text-light);
+    }
+    .login-link a {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .login-link a:hover {
+      text-decoration: underline;
+    }
+    .success-icon {
+      text-align: center;
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    #success-section {
+      text-align: center;
+    }
+    #success-section p {
+      color: var(--text-light);
+      margin-bottom: 12px;
+    }
+    .tz-select {
+      padding: 12px 14px;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fff;
+      transition: border-color 0.3s ease;
+      width: 100%;
+    }
+    .tz-select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <!-- NAVIGATION HEADER -->
+  <nav class="glass-nav">
+    <div class="nav-container">
+      <a href="home.html" class="logo">
+        <img src="/uploads/chuio/V2/App%20Icon%20B%26W.png" alt="Chuio Logo" />
+        <div class="logo-text">
+          <span class="logo-name">Chuio</span>
+          <span class="logo-sub">All-in-One Restaurant Manager</span>
+        </div>
+      </a>
+      <div></div>
+      <div class="nav-actions">
+        <a href="login.html" class="nav-login-btn">← Login</a>
+        <div data-language-picker></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN REGISTER FORM -->
+  <main>
+    <div class="login-container register-container">
+      <div class="login-header">
+        <h1 id="page-title">Create Your Account</h1>
+        <p id="page-subtitle">Get started in just a few steps</p>
+      </div>
+
+      <!-- Step indicators -->
+      <div class="steps-indicator">
+        <div class="step-dot active" id="dot-0"></div>
+        <div class="step-dot" id="dot-1"></div>
+        <div class="step-dot" id="dot-2"></div>
+      </div>
+
+      <div id="error"></div>
+
+      <!-- STEP 0: Email & Password -->
+      <div class="step-section active" id="step-0">
+        <div class="form-group">
+          <label for="reg-email">Email Address</label>
+          <input type="email" id="reg-email" placeholder="your@email.com" required autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Password</label>
+          <input type="password" id="reg-password" placeholder="Min 8 characters" required autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+          <label for="reg-confirm-password">Confirm Password</label>
+          <input type="password" id="reg-confirm-password" placeholder="Re-enter password" required autocomplete="new-password" />
+        </div>
+        <button class="login-btn" id="btn-send-code">Send Verification Code</button>
+      </div>
+
+      <!-- STEP 1: Verification Code -->
+      <div class="step-section" id="step-1">
+        <p style="text-align: center; color: var(--text-light); font-size: 14px;">
+          Enter the 6-digit code sent to<br/><strong id="verify-email-display"></strong>
+        </p>
+        <div class="code-inputs">
+          <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="0" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="1" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="2" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="3" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="4" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="5" />
+        </div>
+        <button class="login-btn" id="btn-verify-code">Verify Code</button>
+        <div class="resend-link">
+          <button id="btn-resend" disabled>Resend code in <span id="resend-timer">60</span>s</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" id="btn-back-to-email">← Back</button>
+        </div>
+      </div>
+
+      <!-- STEP 2: Restaurant Info -->
+      <div class="step-section" id="step-2">
+        <div class="form-group">
+          <label for="reg-restaurant-name">Restaurant Name *</label>
+          <input type="text" id="reg-restaurant-name" placeholder="My Restaurant" required />
+        </div>
+        <div class="form-group">
+          <label for="reg-address">Address</label>
+          <input type="text" id="reg-address" placeholder="123 Main St, City" />
+        </div>
+        <div class="form-group">
+          <label for="reg-phone">Contact Number</label>
+          <input type="tel" id="reg-phone" placeholder="+852 1234 5678" />
+        </div>
+        <div class="form-group">
+          <label for="reg-timezone">Timezone</label>
+          <select id="reg-timezone" class="tz-select">
+            <option value="Pacific/Midway">UTC-11 — Midway Island</option>
+            <option value="Pacific/Honolulu">UTC-10 — Hawaii</option>
+            <option value="America/Anchorage">UTC-9 — Alaska</option>
+            <option value="America/Los_Angeles">UTC-8 — Pacific Time (US)</option>
+            <option value="America/Denver">UTC-7 — Mountain Time (US)</option>
+            <option value="America/Chicago">UTC-6 — Central Time (US)</option>
+            <option value="America/New_York">UTC-5 — Eastern Time (US)</option>
+            <option value="America/Caracas">UTC-4 — Venezuela</option>
+            <option value="America/Sao_Paulo">UTC-3 — Brazil</option>
+            <option value="Atlantic/South_Georgia">UTC-2 — Mid-Atlantic</option>
+            <option value="Atlantic/Azores">UTC-1 — Azores</option>
+            <option value="Europe/London">UTC+0 — London, Dublin</option>
+            <option value="Europe/Paris">UTC+1 — Paris, Berlin, Rome</option>
+            <option value="Europe/Helsinki">UTC+2 — Helsinki, Cairo</option>
+            <option value="Europe/Moscow">UTC+3 — Moscow, Istanbul</option>
+            <option value="Asia/Dubai">UTC+4 — Dubai, Abu Dhabi</option>
+            <option value="Asia/Karachi">UTC+5 — Karachi, Islamabad</option>
+            <option value="Asia/Kolkata">UTC+5:30 — Mumbai, New Delhi</option>
+            <option value="Asia/Dhaka">UTC+6 — Dhaka, Bangladesh</option>
+            <option value="Asia/Bangkok">UTC+7 — Bangkok, Jakarta</option>
+            <option value="Asia/Hong_Kong" selected>UTC+8 — Hong Kong, Singapore</option>
+            <option value="Asia/Shanghai">UTC+8 — Beijing, Shanghai</option>
+            <option value="Asia/Taipei">UTC+8 — Taipei</option>
+            <option value="Asia/Tokyo">UTC+9 — Tokyo, Seoul</option>
+            <option value="Australia/Sydney">UTC+10 — Sydney, Melbourne</option>
+            <option value="Pacific/Auckland">UTC+12 — Auckland, NZ</option>
+          </select>
+        </div>
+        <button class="login-btn" id="btn-create-restaurant" style="background: #059669;">Create Restaurant</button>
+      </div>
+
+      <!-- SUCCESS -->
+      <div class="step-section" id="success-section">
+        <div class="success-icon">🎉</div>
+        <h2 style="text-align: center; margin-bottom: 8px;">Welcome to Chuio!</h2>
+        <p>Your restaurant has been created successfully.</p>
+        <button class="login-btn" id="btn-go-dashboard">Go to Dashboard →</button>
+      </div>
+
+      <div class="login-link" id="login-link-row">
+        Already have an account? <a href="login.html">Sign In</a>
+      </div>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <p style="margin: 0; font-size: 14px;">&copy; 2026 Chuio. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="translations.js"></script>
+  <script src="language-switcher.js"></script>
+  <script src="register.js" defer></script>
+</body>
+</html>
