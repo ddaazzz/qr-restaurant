@@ -504,6 +504,13 @@ router.post("/table-sessions/:sessionId/end", async (req, res) => {
     [sessionId]
   );
 
+  // Close any pending orders and mark as unpaid (no payment was made)
+  await pool.query(
+    `UPDATE orders SET status = 'closed', payment_status = 'unpaid', payment_method = NULL
+     WHERE session_id = $1 AND status IN ('pending', 'confirmed')`,
+    [sessionId]
+  );
+
   res.json({ success: true });
 });
 

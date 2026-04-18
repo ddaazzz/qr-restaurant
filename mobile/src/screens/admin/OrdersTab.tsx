@@ -1849,7 +1849,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
             if (!vendor || vendor === 'cash' || vendor === 'card') {
               const effStatus = pStatus || '';
-              if (effStatus === 'completed' || effStatus === 'paid' || !effStatus) {
+              if (effStatus === 'completed' || effStatus === 'paid') {
                 return (
                   <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
                     <TouchableOpacity

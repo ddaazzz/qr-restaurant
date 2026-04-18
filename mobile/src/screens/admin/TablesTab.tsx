@@ -45,6 +45,7 @@ interface Session {
 
 interface Booking {
   id: number;
+  restaurant_booking_number?: number;
   table_id: number;
   guest_name: string;
   phone?: string;
@@ -341,6 +342,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 if (!table.bookings) table.bookings = [];
                 table.bookings.push({
                   id: b.id,
+                  restaurant_booking_number: b.restaurant_booking_number,
                   table_id: b.table_id,
                   guest_name: b.guest_name,
                   phone: b.phone,
@@ -2427,7 +2429,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: '700', fontSize: 14 }}>#{booking.id} - {booking.guest_name}</Text>
+                      <Text style={{ fontWeight: '700', fontSize: 14 }}>#{booking.restaurant_booking_number || booking.id} - {booking.guest_name}</Text>
                       <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
                         {booking.booking_time} · {booking.phone || 'N/A'} · {booking.pax} {t('admin.guests') || 'guests'}
                       </Text>
@@ -2829,7 +2831,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   >
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: '700', fontSize: 14 }}>#{booking.id} - {booking.guest_name}</Text>
+                        <Text style={{ fontWeight: '700', fontSize: 14 }}>#{booking.restaurant_booking_number || booking.id} - {booking.guest_name}</Text>
                         <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
                           {booking.booking_time} · {booking.phone || 'N/A'} · {booking.pax} {t('admin.guests') || 'guests'}
                         </Text>
