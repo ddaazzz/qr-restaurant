@@ -23,7 +23,7 @@
         "resourceClass": "large"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com"
+        "EXPO_PUBLIC_API_URL": "https://dev.chuio.io"
       }
     },
     "production": {

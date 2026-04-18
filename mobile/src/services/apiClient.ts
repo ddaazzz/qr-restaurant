@@ -6,6 +6,11 @@ import { AuthResponse, LoginCredentials } from '../types';
 const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
 export const API_URL = defaultUrl;
 
+export const ENVIRONMENTS: Record<string, string> = {
+  'Production': 'https://chuio.io',
+  'Development': 'https://dev.chuio.io',
+};
+
 class APIClient {
   private client: AxiosInstance;
   private restaurantId: string | null = null;
@@ -38,10 +43,13 @@ class APIClient {
     try {
       const token = await SecureStore.getItemAsync('authToken');
       const restaurantId = await SecureStore.getItemAsync('restaurantId');
+      const devEnvUrl = await SecureStore.getItemAsync('devEnvironmentUrl');
       const apiBaseUrl = await SecureStore.getItemAsync('apiBaseUrl');
       if (token) this.token = token;
       if (restaurantId) this.restaurantId = restaurantId;
-      if (apiBaseUrl) this.client.defaults.baseURL = apiBaseUrl;
+      // Dev environment override takes priority, then per-restaurant override
+      if (devEnvUrl) this.client.defaults.baseURL = devEnvUrl;
+      else if (apiBaseUrl) this.client.defaults.baseURL = apiBaseUrl;
     } catch (error) {
       console.error('Failed to load auth token:', error);
     }
@@ -168,6 +176,7 @@ class APIClient {
   }
 
   async logout(): Promise<void> {
+    const devEnvUrl = await SecureStore.getItemAsync('devEnvironmentUrl');
     await SecureStore.deleteItemAsync('authToken');
     await SecureStore.deleteItemAsync('restaurantId');
     await SecureStore.deleteItemAsync('apiBaseUrl');
@@ -177,7 +186,17 @@ class APIClient {
     await SecureStore.deleteItemAsync('clockedIn');
     this.token = null;
     this.restaurantId = null;
-    this.client.defaults.baseURL = API_URL;
+    // Preserve dev environment override across logout
+    this.client.defaults.baseURL = devEnvUrl || API_URL;
+  }
+
+  getCurrentBaseUrl(): string {
+    return (this.client.defaults.baseURL as string) || API_URL;
+  }
+
+  async switchEnvironment(url: string): Promise<void> {
+    await SecureStore.setItemAsync('devEnvironmentUrl', url);
+    this.client.defaults.baseURL = url;
   }
 
   // Menu endpoints

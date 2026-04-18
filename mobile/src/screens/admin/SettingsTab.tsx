@@ -21,7 +21,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
-import { apiClient } from '../../services/apiClient';
+import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { Ionicons } from '@expo/vector-icons';
@@ -160,6 +160,43 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
+
+  // Dev environment switcher (hidden by default)
+  const [devTapCount, setDevTapCount] = useState(0);
+  const [showDevMenu, setShowDevMenu] = useState(false);
+  const [currentEnv, setCurrentEnv] = useState(apiClient.getCurrentBaseUrl());
+  const devTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDevTap = () => {
+    const newCount = devTapCount + 1;
+    setDevTapCount(newCount);
+    if (devTapTimer.current) clearTimeout(devTapTimer.current);
+    devTapTimer.current = setTimeout(() => setDevTapCount(0), 2000);
+    if (newCount >= 7) {
+      setShowDevMenu(!showDevMenu);
+      setDevTapCount(0);
+    }
+  };
+
+  const switchEnv = async (name: string, url: string) => {
+    Alert.alert(
+      'Switch Environment',
+      `Switch to ${name} (${url})?\n\nYou will be logged out.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch',
+          style: 'destructive',
+          onPress: async () => {
+            await apiClient.switchEnvironment(url);
+            setCurrentEnv(url);
+            await apiClient.logout();
+            navigation.navigate('Login');
+          },
+        },
+      ]
+    );
+  };
 
   // Settings page navigation
   type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile';
@@ -2542,6 +2579,40 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       >
         <Text style={styles.btnText}>{t('settings.logout')}</Text>
       </TouchableOpacity>
+
+      {/* Version label — tap 7 times to reveal dev menu */}
+      <TouchableOpacity onPress={handleDevTap} activeOpacity={1}>
+        <Text style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
+          v1.0.0{showDevMenu ? ` • ${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'}` : ''}
+        </Text>
+      </TouchableOpacity>
+
+      {showDevMenu && (
+        <View style={{ backgroundColor: '#1e1b4b', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <Text style={{ color: '#c7d2fe', fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Developer Mode</Text>
+          <Text style={{ color: '#818cf8', fontSize: 11, marginBottom: 12 }}>API: {currentEnv}</Text>
+          {Object.entries(ENVIRONMENTS).map(([name, url]) => (
+            <TouchableOpacity
+              key={name}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                padding: 12, borderRadius: 8, marginBottom: 6,
+                backgroundColor: currentEnv === url ? '#312e81' : '#1e1b4b',
+                borderWidth: 1, borderColor: currentEnv === url ? '#6366f1' : '#374151',
+              }}
+              onPress={() => currentEnv !== url && switchEnv(name, url)}
+            >
+              <View>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{name}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11 }}>{url}</Text>
+              </View>
+              {currentEnv === url && (
+                <View style={{ backgroundColor: '#22c55e', width: 8, height: 8, borderRadius: 4 }} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 
