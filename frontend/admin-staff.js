@@ -147,6 +147,10 @@ function resetStaffForm() {
   document.getElementById("staff-pin").value = "";
   document.getElementById("staff-role").value = "";
   document.getElementById("staff-hourly-rate").value = "";
+  const emailInput = document.getElementById("staff-email");
+  if (emailInput) emailInput.value = "";
+  const passwordInput = document.getElementById("staff-password");
+  if (passwordInput) passwordInput.value = "";
   document.getElementById("staff-error").style.display = "none";
   document.getElementById("staff-success").style.display = "none";
   document.getElementById("staff-submit-btn").textContent = "➕ Add Staff";
@@ -202,6 +206,12 @@ async function editStaff(staffId, event) {
     } else {
       document.getElementById("staff-hourly-rate").value = "";
     }
+
+    // Populate email field
+    const emailInput = document.getElementById("staff-email");
+    if (emailInput) emailInput.value = staff.email || "";
+    const passwordInput = document.getElementById("staff-password");
+    if (passwordInput) passwordInput.value = "";
     
     document.getElementById("staff-submit-btn").textContent = "Update";
     
@@ -292,6 +302,19 @@ async function createOrUpdateStaff() {
 
   try {
     const payload = { name, pin, role, access_rights, hourly_rate_cents };
+
+    // Add email and password if provided
+    const emailInput = document.getElementById("staff-email");
+    const passwordInput = document.getElementById("staff-password");
+    if (emailInput) {
+      const email = emailInput.value.trim();
+      if (email) payload.email = email;
+      else if (STAFF_EDIT_ID) payload.email = null; // Allow clearing email on edit
+    }
+    if (passwordInput) {
+      const password = passwordInput.value;
+      if (password) payload.password = password;
+    }
     
     const url = STAFF_EDIT_ID 
       ? `${API}/restaurants/${restaurantId}/staff/${STAFF_EDIT_ID}`

@@ -29,21 +29,26 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     localStorage.setItem("token", data.token);
     localStorage.setItem("role", data.role);
     localStorage.setItem("restaurantId", data.restaurantId);
-    localStorage.setItem("userId", data.userId || "");
+    localStorage.setItem("userId", data.userId || data.user_id || "");
     sessionStorage.setItem("restaurantId", data.restaurantId);
     
     // Store restaurants list for superadmin
     if (data.restaurants && data.restaurants.length > 0) {
       localStorage.setItem("superadminRestaurants", JSON.stringify(data.restaurants));
     }
+
+    // Store access_rights for staff/kitchen
+    if (data.access_rights) {
+      localStorage.setItem("accessRights", JSON.stringify(data.access_rights));
+    }
     
     if (data.role === "admin" || data.role === "superadmin") {
       window.location.href = "/admin.html";
     } else if (data.role === "staff") {
-      window.location.href = "/admin.html";
+      window.location.href = `/staff.html?rid=${data.restaurantId}`;
     } else if (data.role === "kitchen") {
       sessionStorage.setItem("kitchenStaffLogged", "true");
-      window.location.href = "/kitchen.html";
+      window.location.href = `/kitchen.html?rid=${data.restaurantId}`;
     }
   } catch (err) {
     console.error(err);

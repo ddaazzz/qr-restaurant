@@ -19,7 +19,7 @@ router.post("/auth/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, password_hash, role, restaurant_id FROM users WHERE email = $1",
+      "SELECT id, password_hash, role, restaurant_id, access_rights, (SELECT COUNT(*) FROM staff_timekeeping WHERE user_id = users.id AND restaurant_id = users.restaurant_id AND clock_out_at IS NULL) > 0 AS currently_clocked_in FROM users WHERE email = $1",
       [email]
     );
 
@@ -74,12 +74,21 @@ router.post("/auth/login", async (req, res) => {
       }
     });
 
+    // Parse access_rights for staff/kitchen
+    let accessRights = user.access_rights;
+    if (accessRights && typeof accessRights === 'string') {
+      try { accessRights = JSON.parse(accessRights); } catch {}
+    }
+
     res.json({
       token,
       userId: user.id,
+      user_id: user.id,
       role: user.role,
       restaurantId: defaultRestaurantId,
       restaurants: user.role === "superadmin" ? restaurants : [],
+      access_rights: accessRights || [],
+      currently_clocked_in: user.currently_clocked_in || false,
       apiBaseUrl,
     });
   } catch (err) {
@@ -136,7 +145,7 @@ router.get("/auth/admin-restaurants", async (req, res) => {
 });
 
 router.post("/restaurants/:restaurantId/staff", async (req, res) => {
-  const { name, pin, role = "staff", access_rights = [], hourly_rate_cents } = req.body;
+  const { name, pin, role = "staff", access_rights = [], hourly_rate_cents, email, password } = req.body;
   const { restaurantId } = req.params;
 
   // Validate all required fields
@@ -178,10 +187,27 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
       return res.status(400).json({ error: "PIN already exists for another staff member in this restaurant" });
     }
 
+    // If email provided, check uniqueness and hash password
+    let emailValue = null;
+    let passwordHash = null;
+    if (email) {
+      const emailCheck = await pool.query(
+        `SELECT id FROM users WHERE email = $1`,
+        [email.toLowerCase().trim()]
+      );
+      if (emailCheck.rowCount && emailCheck.rowCount > 0) {
+        return res.status(400).json({ error: "Email already in use" });
+      }
+      emailValue = email.toLowerCase().trim();
+      if (password) {
+        passwordHash = await bcrypt.hash(password, 10);
+      }
+    }
+
     const result = await pool.query(
-      `INSERT INTO users (name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, role, pin, access_rights, hourly_rate_cents`,
-      [name, null, staffRole, pin, restaurantId, JSON.stringify(access_rights), hourly_rate_cents || null]
+      `INSERT INTO users (name, email, password_hash, role, pin, restaurant_id, access_rights, hourly_rate_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, email, role, pin, access_rights, hourly_rate_cents`,
+      [name, emailValue, passwordHash, staffRole, pin, restaurantId, JSON.stringify(access_rights), hourly_rate_cents || null]
     );
 
     console.log(`✅ Staff created for restaurant ${restaurantId}: ${name}`);
@@ -279,7 +305,7 @@ router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
 // ✅ PATCH staff member (update)
 router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
   const { restaurantId, staffId } = req.params;
-  const { name, pin, role, access_rights, hourly_rate_cents } = req.body;
+  const { name, pin, role, access_rights, hourly_rate_cents, email, password } = req.body;
 
   try {
     // Verify staff belongs to restaurant
@@ -356,6 +382,33 @@ router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
       paramIndex++;
     }
 
+    if (email !== undefined) {
+      if (email) {
+        const emailLower = email.toLowerCase().trim();
+        const emailCheck = await pool.query(
+          `SELECT id FROM users WHERE email = $1 AND id != $2`,
+          [emailLower, staffId]
+        );
+        if (emailCheck.rowCount && emailCheck.rowCount > 0) {
+          return res.status(400).json({ error: "Email already in use" });
+        }
+        updates.push(`email = $${paramIndex}`);
+        params.push(emailLower);
+        paramIndex++;
+      } else {
+        updates.push(`email = $${paramIndex}`);
+        params.push(null);
+        paramIndex++;
+      }
+    }
+
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      updates.push(`password_hash = $${paramIndex}`);
+      params.push(passwordHash);
+      paramIndex++;
+    }
+
     if (updates.length === 0) {
       return res.status(400).json({ error: "No fields to update" });
     }
@@ -363,7 +416,7 @@ router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
     // Add WHERE clause parameters (separate from SET updates)
     params.push(staffId);
 
-    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, name, role, pin, access_rights`;
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, name, email, role, pin, access_rights`;
     const result = await pool.query(query, params);
 
     console.log(`✅ Staff updated: ${staffId} in restaurant ${restaurantId}`);

@@ -27,6 +27,33 @@ let orderMap = {}; // Maps orderId to order details
     console.warn("⚠️ No restaurantId found in URL params or storage");
     // Don't redirect yet - they might be coming from login.html
   }
+
+  // Check if already authenticated via email login
+  const existingToken = localStorage.getItem("token");
+  const existingRole = localStorage.getItem("role");
+  if (existingToken && existingRole === "kitchen" && restaurantId) {
+    console.log("🔑 Kitchen already authenticated via email login, skipping PIN");
+    token = existingToken;
+    
+    // Restore allowed categories from localStorage
+    const storedRights = localStorage.getItem("accessRights");
+    if (storedRights) {
+      try {
+        const rawRights = JSON.parse(storedRights);
+        if (rawRights && rawRights.allowed_categories) {
+          allowedCategoryIds = rawRights.allowed_categories.map(id => parseInt(id, 10));
+        }
+      } catch {}
+    }
+
+    // Auto-initialize kitchen app after DOM ready
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("kitchen-app").classList.add("active");
+      loadKitchenOrders();
+      setInterval(loadKitchenOrders, 5000);
+    });
+  }
 })();
 
 // ============== PIN LOGIN ============== 

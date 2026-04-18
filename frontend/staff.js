@@ -74,6 +74,36 @@ function getAccessibleFeatures() {
   
   // Store in sessionStorage so it persists after login
   sessionStorage.setItem("restaurantId", window.restaurantId);
+
+  // Check if already authenticated via email login
+  const existingToken = localStorage.getItem("token");
+  const existingRole = localStorage.getItem("role");
+  if (existingToken && existingRole === "staff") {
+    console.log("🔑 Staff already authenticated via email login, skipping PIN");
+    window.token = existingToken;
+    
+    // Restore access_rights from localStorage
+    const storedRights = localStorage.getItem("accessRights");
+    if (storedRights) {
+      try {
+        const rawRights = JSON.parse(storedRights);
+        if (Array.isArray(rawRights)) {
+          staffAccessRights = rawRights.map(right => {
+            if (typeof right === 'string') {
+              for (const [id, config] of Object.entries(ACCESS_RIGHTS_MAP)) {
+                if (config.name === right) return parseInt(id, 10);
+              }
+              return NaN;
+            }
+            return parseInt(right, 10);
+          }).filter(id => !isNaN(id));
+        }
+      } catch {}
+    }
+    
+    // Auto-initialize the staff app
+    document.addEventListener("DOMContentLoaded", () => initializeStaffApp());
+  }
 })();
  
 function pressKey(num) {

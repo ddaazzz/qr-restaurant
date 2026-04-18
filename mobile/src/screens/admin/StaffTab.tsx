@@ -6,6 +6,7 @@ import { useTranslation } from '../../contexts/TranslationContext';
 interface StaffMember {
   id: number;
   name: string;
+  email?: string;
   role: string;
   pin?: string;
   access_rights?: string[] | number[];
@@ -51,6 +52,8 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
     role: 'staff' as 'staff' | 'kitchen',
     hourlyRate: '',
     accessRights: [] as (string | number)[],
+    email: '',
+    password: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -123,6 +126,8 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
       role: 'staff',
       hourlyRate: '',
       accessRights: [],
+      email: '',
+      password: '',
     });
     setFormError(null);
     setFormSuccess(null);
@@ -138,6 +143,8 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
         role: (staffMember.role as 'staff' | 'kitchen') || 'staff',
         hourlyRate: staffMember.hourly_rate_cents ? (staffMember.hourly_rate_cents / 100).toFixed(2) : '',
         accessRights: staffMember.access_rights || [],
+        email: staffMember.email || '',
+        password: '',
       });
     } else {
       resetForm();
@@ -188,13 +195,23 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
 
     try {
       const hourly_rate_cents = hourlyRate ? Math.round(Number(hourlyRate) * 100) : null;
-      const payload = {
+      const payload: any = {
         name,
         pin,
         role,
         access_rights: accessRights,
         hourly_rate_cents,
       };
+
+      // Add email and password if provided
+      if (formData.email.trim()) {
+        payload.email = formData.email.trim();
+      } else if (editingStaffId) {
+        payload.email = null;
+      }
+      if (formData.password) {
+        payload.password = formData.password;
+      }
 
       if (editingStaffId) {
         await apiClient.patch(`/api/restaurants/${restaurantId}/staff/${editingStaffId}`, payload);
@@ -459,6 +476,31 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                     value={formData.hourlyRate}
                     onChangeText={(text) => setFormData({ ...formData, hourlyRate: text })}
                     keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Email & Password (optional - for web login) */}
+              <View style={styles.formRow}>
+                <View style={styles.formGroupHalf}>
+                  <Text style={styles.formLabel}>Email (optional)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="For web login"
+                    value={formData.email}
+                    onChangeText={(text) => setFormData({ ...formData, email: text })}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={styles.formGroupHalf}>
+                  <Text style={styles.formLabel}>Password (optional)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder={editingStaffId ? "Leave blank to keep" : "For web login"}
+                    value={formData.password}
+                    onChangeText={(text) => setFormData({ ...formData, password: text })}
+                    secureTextEntry
                   />
                 </View>
               </View>

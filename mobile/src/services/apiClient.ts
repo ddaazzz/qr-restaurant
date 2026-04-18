@@ -78,10 +78,32 @@ class APIClient {
         await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
       } else {
         await SecureStore.deleteItemAsync('apiBaseUrl');
-        this.client.defaults.baseURL = API_URL;
+        // Preserve dev environment override if set, otherwise use build default
+        const devEnvUrl = await SecureStore.getItemAsync('devEnvironmentUrl');
+        if (!devEnvUrl) this.client.defaults.baseURL = API_URL;
       }
-      
-      return response.data;
+
+      // Persist role and staff/kitchen-specific data
+      const data = response.data as any;
+      const role = data.role || 'admin';
+      const userId = String(data.user_id || data.userId || '');
+      await SecureStore.setItemAsync('role', role);
+      await SecureStore.setItemAsync('userId', userId);
+      if (data.access_rights) {
+        await SecureStore.setItemAsync('accessRights', JSON.stringify(data.access_rights));
+      }
+      if (data.currently_clocked_in !== undefined) {
+        await SecureStore.setItemAsync('clockedIn', data.currently_clocked_in ? 'true' : 'false');
+      }
+
+      return {
+        token: tokenString,
+        role,
+        restaurantId: restaurantIdString || '',
+        userId,
+        access_rights: data.access_rights,
+        currently_clocked_in: data.currently_clocked_in,
+      };
     } catch (error) {
       console.error('[API] Login failed:', error);
       throw this.handleError(error);
@@ -113,7 +135,9 @@ class APIClient {
         await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
       } else {
         await SecureStore.deleteItemAsync('apiBaseUrl');
-        this.client.defaults.baseURL = API_URL;
+        // Preserve dev environment override if set, otherwise use build default
+        const devEnvUrl = await SecureStore.getItemAsync('devEnvironmentUrl');
+        if (!devEnvUrl) this.client.defaults.baseURL = API_URL;
       }
       
       return response.data;
@@ -148,7 +172,9 @@ class APIClient {
         await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
       } else {
         await SecureStore.deleteItemAsync('apiBaseUrl');
-        this.client.defaults.baseURL = API_URL;
+        // Preserve dev environment override if set, otherwise use build default
+        const devEnvUrl = await SecureStore.getItemAsync('devEnvironmentUrl');
+        if (!devEnvUrl) this.client.defaults.baseURL = API_URL;
       }
 
       // Normalize field names and persist extra staff data

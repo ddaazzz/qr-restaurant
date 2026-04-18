@@ -21,6 +21,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
+import * as SecureStore from 'expo-secure-store';
 import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { printerSettingsService } from '../../services/printerSettingsService';
@@ -150,7 +151,7 @@ interface PaymentTerminal {
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const { t, lang, setLanguage } = useTranslation();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout: authLogout } = useAuth();
   const isSuperadmin = currentUser?.role === 'superadmin';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +167,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [showDevMenu, setShowDevMenu] = useState(false);
   const [currentEnv, setCurrentEnv] = useState(apiClient.getCurrentBaseUrl());
   const devTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Read persisted env URL on mount (setupAuthToken is async, so sync read may be stale)
+  useEffect(() => {
+    SecureStore.getItemAsync('devEnvironmentUrl').then((url) => {
+      if (url) setCurrentEnv(url);
+    });
+  }, []);
 
   const handleDevTap = () => {
     const newCount = devTapCount + 1;
@@ -188,10 +196,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           text: 'Switch',
           style: 'destructive',
           onPress: async () => {
-            await apiClient.switchEnvironment(url);
-            setCurrentEnv(url);
-            await apiClient.logout();
-            navigation.navigate('Login');
+            try {
+              await apiClient.switchEnvironment(url);
+              setCurrentEnv(url);
+              await authLogout();
+            } catch (e) {
+              console.error('Env switch error:', e);
+            }
           },
         },
       ]
