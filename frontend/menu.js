@@ -1151,13 +1151,13 @@ function renderOrdersDrawer(orders, tableName) {
         const bg = isCompleted ? '#d1fae5' : '#fef3c7';
         const border = isCompleted ? '#10b981' : '#f59e0b';
         const color = isCompleted ? '#065f46' : '#92400e';
-        html += `<div style="margin:12px 0 0;padding:6px 10px;background:${bg};border-left:3px solid ${border};border-radius:0 4px 4px 0;font-size:12px;color:${color};font-weight:600;">📦 Order #${order.order_id} — ${payLabel}</div>`;
+        html += `<div style="margin:12px 0 0;padding:6px 10px;background:${bg};border-left:3px solid ${border};border-radius:0 4px 4px 0;font-size:12px;color:${color};font-weight:600;">📦 Order #${order.restaurant_order_number || order.order_id} — ${payLabel}</div>`;
         html += `<div style="opacity:0.65;">`;
       } else if (isPaid) {
-        html += `<div style="margin:12px 0 0;padding:6px 10px;background:#d1fae5;border-left:3px solid #10b981;border-radius:0 4px 4px 0;font-size:12px;color:#065f46;font-weight:600;">📦 Order #${order.order_id} — ✅ Paid</div>`;
+        html += `<div style="margin:12px 0 0;padding:6px 10px;background:#d1fae5;border-left:3px solid #10b981;border-radius:0 4px 4px 0;font-size:12px;color:#065f46;font-weight:600;">📦 Order #${order.restaurant_order_number || order.order_id} — ✅ Paid</div>`;
         html += `<div style="opacity:0.65;">`;
       } else if (oIdx > 0) {
-        html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">Order #${order.order_id} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">Unpaid</span></div>`;
+        html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">Order #${order.restaurant_order_number || order.order_id} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">Unpaid</span></div>`;
       }
 
       order.items.forEach(item => {
@@ -1873,7 +1873,7 @@ async function showPaymentPage(orderId) {
       <div class="pay-screen-wrapper">
         <div class="pay-screen-restaurant">
           <div class="pay-screen-restaurant-name">${restaurantName}</div>
-          <div class="pay-screen-meta">Order #${orderId} · ${orderTime} · Table ${tableName}</div>
+          <div class="pay-screen-meta">Order #${order?.restaurant_order_number || orderId} · ${orderTime} · Table ${tableName}</div>
         </div>
 
         <div class="pay-screen-items-card">

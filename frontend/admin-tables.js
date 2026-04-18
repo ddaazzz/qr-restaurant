@@ -1696,7 +1696,7 @@ async function loadAndRenderOrders(sessionId) {
       return `
       <div class="order-card" style="${isCompleted ? 'opacity:0.7;' : ''}">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div><strong>${t('admin.order-label')} #${order.order_id}</strong>${payBadge}</div>
+          <div><strong>${t('admin.order-label')} #${order.restaurant_order_number || order.order_id}</strong>${payBadge}</div>
           <button onclick="viewOrderInOrders(${order.order_id})" style="font-size:11px;padding:3px 8px;border:1px solid #d1d5db;border-radius:4px;background:white;color:#374151;cursor:pointer;white-space:nowrap;">View</button>
         </div>
         ${itemsHtml}

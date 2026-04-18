@@ -72,6 +72,7 @@ interface SelectedVariant {
 
 interface Order {
   id: number;
+  restaurant_order_number?: number;
   session_id?: number;
   order_type: string;
   status: string;
@@ -236,6 +237,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [tablePickerLoading, setTablePickerLoading] = useState(false);
     const [selectedTableName, setSelectedTableName] = useState<string | null>(null);
     const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+    const [selectedOrderNumber, setSelectedOrderNumber] = useState<number | null>(null);
     const [newOrderPax, setNewOrderPax] = useState('1');
     const [showNewOrderPaxModal, setShowNewOrderPaxModal] = useState(false);
     const [pendingTableForNewOrder, setPendingTableForNewOrder] = useState<any>(null);
@@ -251,6 +253,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentModalSessionId, setPaymentModalSessionId] = useState<number | null>(null);
     const [paymentModalOrderId, setPaymentModalOrderId] = useState<number | null>(null);
+    const [paymentModalOrderNumber, setPaymentModalOrderNumber] = useState<number | null>(null);
     const [paymentModalTotal, setPaymentModalTotal] = useState(0);
     const [paymentModalMethod, setPaymentModalMethod] = useState<'cash' | 'card' | 'kpay'>('cash');
 
@@ -331,6 +334,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               pax: row.pax,
               started_at: row.started_at,
               order_id: row.order_id,
+              restaurant_order_number: row.restaurant_order_number,
             });
           }
         });
@@ -351,6 +355,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setSelectedTable(session.id.toString());
       setSelectedTableName(table.name);
       setSelectedOrderId(session.order_id || null);
+      setSelectedOrderNumber(session.restaurant_order_number || session.order_id || null);
       setOrderType('table');
       setShowTablePicker(false);
     };
@@ -372,6 +377,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         setSelectedTable(newSession.id.toString());
         setSelectedTableName(pendingTableForNewOrder.name);
         setSelectedOrderId(newSession.order_id || null);
+        setSelectedOrderNumber(newSession.restaurant_order_number || newSession.order_id || null);
         setOrderType('table');
         setShowNewOrderPaxModal(false);
         setShowTablePicker(false);
@@ -783,6 +789,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             if (totalCents === 0) totalCents = cartTotal;
             setPaymentModalSessionId(session.id || session.session_id);
             setPaymentModalOrderId(sessionOrders[0]?.id || null);
+            setPaymentModalOrderNumber(sessionOrders[0]?.restaurant_order_number || sessionOrders[0]?.id || null);
             setPaymentModalTotal(totalCents);
             setPaymentModalMethod('cash');
             setShowPaymentModal(true);
@@ -1203,7 +1210,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '85%', maxWidth: 440, padding: 20 }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.collect-payment')}</Text>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                {t('orders.order-now')} {paymentModalOrderId ? `#${paymentModalOrderId}` : ''}
+                {t('orders.order-now')} {paymentModalOrderNumber ? `#${paymentModalOrderNumber}` : ''}
               </Text>
 
               {/* Total */}
@@ -1326,7 +1333,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {/* Header */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
-              {t('orders.order-num').replace('{0}', String(selectedHistoryOrder.id))}
+              {t('orders.order-num').replace('{0}', String(selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id))}
             </Text>
             <View style={{ backgroundColor: selectedHistoryOrder.status === 'completed' ? '#d1fae5' : selectedHistoryOrder.status === 'cancelled' ? '#fee2e2' : '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: selectedHistoryOrder.status === 'completed' ? '#065f46' : selectedHistoryOrder.status === 'cancelled' ? '#991b1b' : '#1e40af' }}>
@@ -1784,6 +1791,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       if (selectedHistoryOrder.session_id) {
                         setPaymentModalSessionId(selectedHistoryOrder.session_id);
                         setPaymentModalOrderId(selectedHistoryOrder.id);
+                        setPaymentModalOrderNumber(selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id);
                         setPaymentModalTotal(selectedHistoryOrder.total_cents);
                         setPaymentModalMethod('cash');
                         setShowPaymentModal(true);
@@ -1873,7 +1881,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 <TouchableOpacity onPress={() => setSelectedHistoryOrder(null)}>
                   <Ionicons name="arrow-back" size={22} color="#2C3E50" />
                 </TouchableOpacity>
-                <Text style={styles.historyTitle}>{t('orders.order-num').replace('{0}', String(selectedHistoryOrder.id))}</Text>
+                <Text style={styles.historyTitle}>{t('orders.order-num').replace('{0}', String(selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id))}</Text>
               </View>
               <ScrollView style={{ flex: 1, padding: 16 }}>
                 {renderHistoryOrderDetail()}
@@ -1977,7 +1985,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         {orderUnpaid && (
                           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
                         )}
-                        <Text style={styles.orderId}>{t('orders.order-num').replace('{0}', String(order.id))}</Text>
+                        <Text style={styles.orderId}>{t('orders.order-num').replace('{0}', String(order.restaurant_order_number || order.id))}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                         <Ionicons 
@@ -2358,7 +2366,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <View style={menuIsTablet ? styles.orderTypeButtonsVertical : styles.orderTypeButtons}>
               <TouchableOpacity style={[styles.orderTypeBtn, orderType === 'table' && styles.orderTypeBtnActive]} onPress={() => openTablePicker()}>
                 <Text style={[styles.orderTypeBtnText, orderType === 'table' && styles.orderTypeBtnTextActive]}>
-                  {selectedTableName ? `${t('orders.table')} — ${selectedTableName}${selectedOrderId ? `, #${selectedOrderId}` : ''}` : (selectedTableOnInit ? `${t('orders.table')} — ${selectedTableOnInit.tableName || 'Selected'}` : t('orders.table'))}
+                  {selectedTableName ? `${t('orders.table')} — ${selectedTableName}${selectedOrderNumber ? `, #${selectedOrderNumber}` : ''}` : (selectedTableOnInit ? `${t('orders.table')} — ${selectedTableOnInit.tableName || 'Selected'}` : t('orders.table'))}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.orderTypeBtn, orderType === 'pay-now' && styles.orderTypeBtnActive]} onPress={() => setOrderType('pay-now')}>
@@ -2434,7 +2442,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           >
                             <View>
                               <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151' }}>
-                                {session.order_id ? t('orders.order-num').replace('{0}', String(session.order_id)) : t('orders.order')} • {session.pax} pax
+                                {session.order_id ? t('orders.order-num').replace('{0}', String(session.restaurant_order_number || session.order_id)) : t('orders.order')} • {session.pax} pax
                               </Text>
                               <Text style={{ fontSize: 12, color: '#9ca3af' }}>⏱ {elapsed}m</Text>
                             </View>
@@ -2652,7 +2660,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           onRequestClose={() => setShowVariantModal(false)}
         >
           <View style={[styles.modalOverlay, { flexDirection: 'row', justifyContent: 'flex-end' }]}>
-            <SafeAreaView style={[styles.variantModalContent, { maxHeight: '100%', width: 380, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }]}>
+            <SafeAreaView style={[styles.variantModalContent, { maxHeight: '100%', width: 380, borderTopRightRadius: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }]}>
               <TouchableOpacity style={styles.variantCloseBtn} onPress={() => setShowVariantModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>

@@ -169,10 +169,10 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
 
     // Auto-create a blank order for this session
     const orderRes = await client.query(
-      `INSERT INTO orders (session_id, restaurant_id) VALUES ($1, $2) RETURNING id`,
+      `INSERT INTO orders (session_id, restaurant_id) VALUES ($1, $2) RETURNING id, restaurant_order_number`,
       [insertRes.rows[0].id, table.restaurant_id]
     );
-    console.log(`[Sessions] ✨ Auto-created order ${orderRes.rows[0].id} for session ${insertRes.rows[0].id}`);
+    console.log(`[Sessions] ✨ Auto-created order ${orderRes.rows[0].id} (restaurant #${orderRes.rows[0].restaurant_order_number}) for session ${insertRes.rows[0].id}`);
 
     await client.query("COMMIT");
 
@@ -184,7 +184,7 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       );
     }
 
-    res.status(201).json({ ...insertRes.rows[0], order_id: orderRes.rows[0].id });
+    res.status(201).json({ ...insertRes.rows[0], order_id: orderRes.rows[0].id, restaurant_order_number: orderRes.rows[0].restaurant_order_number });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);
@@ -254,6 +254,7 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
         ts.call_staff_requested,
 
         o.id            AS order_id,
+        o.restaurant_order_number,
 
         b.guest_name    AS booking_guest_name
 
@@ -991,12 +992,12 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
         `
         INSERT INTO orders (session_id, restaurant_id, status, created_at)
         VALUES ($1, $2, 'pending', NOW() AT TIME ZONE 'UTC')
-        RETURNING id
+        RETURNING id, restaurant_order_number
         `,
         [session.id, restaurantId]
       );
 
-      order = { id: orderRes.rows[0].id };
+      order = { id: orderRes.rows[0].id, restaurant_order_number: orderRes.rows[0].restaurant_order_number };
 
       // Insert order items
       for (const item of items) {

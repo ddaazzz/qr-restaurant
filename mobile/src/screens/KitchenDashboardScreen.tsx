@@ -807,7 +807,7 @@ export const KitchenDashboardScreen = ({ navigation }: any) => {
           <View style={styles.printerModalContent}>
             <Text style={styles.printerModalTitle}>Select Printer</Text>
             <Text style={styles.printerModalSubtitle}>
-              {selectedOrderForPrint ? `Order #${selectedOrderForPrint.orderId}` : ''}
+              {selectedOrderForPrint ? `Order #${selectedOrderForPrint.restaurantOrderNumber || selectedOrderForPrint.orderId}` : ''}
             </Text>
 
             <View style={styles.printerList}>

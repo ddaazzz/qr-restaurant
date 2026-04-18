@@ -16,6 +16,7 @@ let ORDERS_HISTORY_MODE = false;
 let VIEWING_HISTORICAL_ORDER = null;
 let _historyRefreshInterval = null;
 let EDITING_EXISTING_ORDER_ID = null;
+let EDITING_EXISTING_ORDER_NUMBER = null;
 let EDITING_EXISTING_SESSION_ID = null;
 
 // Initialization gate
@@ -1040,6 +1041,7 @@ async function loadExistingOrderForEdit(orderId) {
     }));
 
     EDITING_EXISTING_ORDER_ID = orderId;
+    EDITING_EXISTING_ORDER_NUMBER = order.restaurant_order_number || orderId;
     EDITING_EXISTING_SESSION_ID = order.session_id || null;
 
     // Exit history mode
@@ -1072,7 +1074,7 @@ function updateCartOrderHeader() {
   const cartHeader = document.querySelector('#orders-cart-view .cart-header h3');
   if (!cartHeader) return;
   if (EDITING_EXISTING_ORDER_ID) {
-    cartHeader.textContent = `Order #${EDITING_EXISTING_ORDER_ID}`;
+    cartHeader.textContent = `Order #${EDITING_EXISTING_ORDER_NUMBER || EDITING_EXISTING_ORDER_ID}`;
   } else {
     cartHeader.setAttribute('data-i18n', 'admin.cart');
     cartHeader.textContent = t('admin.cart') || 'Cart';
@@ -1245,7 +1247,7 @@ async function loadOrdersHistoryLeftPanel() {
           align-items: flex-start;
         " onmouseover="if(!this.classList.contains('selected-order-row')) this.style.backgroundColor='#f9fafb'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';" onmouseout="if(!this.classList.contains('selected-order-row')) this.style.backgroundColor='white'; this.style.boxShadow='none';">
           <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 600; font-size: 13px; color: #1f2937;">Order #${order.id}</div>
+            <div style="font-weight: 600; font-size: 13px; color: #1f2937;">Order #${order.restaurant_order_number || order.id}</div>
             <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${typeLabel}</div>
             <div style="font-size: 10px; color: #9ca3af; margin-top: 2px;">${orderDateStr} at ${orderTimeStr}</div>
           </div>
@@ -1366,7 +1368,7 @@ function displayOrderDetails(order) {
       <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
         <div>
           <div style="font-size: 12px; color: #666; font-weight: 600; text-transform: uppercase;">Order Number</div>
-          <div style="font-size: 20px; font-weight: 700; color: #2c3e50; margin-top: 4px;">#${order.id}</div>
+          <div style="font-size: 20px; font-weight: 700; color: #2c3e50; margin-top: 4px;">#${order.restaurant_order_number || order.id}</div>
         </div>
         <div style="text-align: right;">
           <div style="padding: 6px 12px; background: ${order.status === 'pending' ? '#e0e7ff' : '#d1fae5'}; color: ${order.status === 'pending' ? '#3730a3' : '#065f46'}; border-radius: 4px; font-weight: 600; font-size: 12px;">
@@ -1617,7 +1619,7 @@ function displayOrderDetails(order) {
   detailsContent.innerHTML = html;
   
   if (detailsTitle) {
-    detailsTitle.textContent = `Order #${order.id}`;
+    detailsTitle.textContent = `Order #${order.restaurant_order_number || order.id}`;
   }
 }
 
@@ -1670,7 +1672,7 @@ async function openSettleBillModal(orderId, sessionId) {
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal-content" style="width:400px;">
-      <h3 style="margin:0 0 16px 0;">Settle Bill — Order #${orderId}</h3>
+      <h3 style="margin:0 0 16px 0;">Settle Bill — Order #${order.restaurant_order_number || orderId}</h3>
 
       <div style="background:#f5f5f5; border-radius:8px; padding:14px; margin-bottom:16px;">
         <p style="margin:0 0 5px 0; font-size:14px;">Subtotal: $${(subtotalCents / 100).toFixed(2)}</p>
@@ -2220,7 +2222,7 @@ async function emailReceipt(orderId) {
 
     // Build email content
     let emailContent = `Order Receipt\n\n`;
-    emailContent += `Order #${order.id}\n`;
+    emailContent += `Order #${order.restaurant_order_number || order.id}\n`;
     emailContent += `Date: ${new Date(order.created_at).toLocaleString()}\n\n`;
     emailContent += `Items:\n`;
 

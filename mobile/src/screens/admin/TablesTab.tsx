@@ -40,6 +40,7 @@ interface Session {
   started_at: string;
   bill_closure_requested?: boolean;
   order_id?: number;
+  restaurant_order_number?: number;
 }
 
 interface Booking {
@@ -82,6 +83,7 @@ interface TableState {
   started_at?: string;
   bill_closure_requested?: boolean;
   order_id?: number;
+  restaurant_order_number?: number;
   booking_time?: string;
 }
 
@@ -105,6 +107,7 @@ interface Coupon {
 interface Order {
   order_id?: number;
   id?: number;
+  restaurant_order_number?: number;
   items: Array<{
     name?: string;
     item_name?: string;
@@ -311,6 +314,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             started_at: row.started_at || '',
             bill_closure_requested: row.bill_closure_requested,
             order_id: row.order_id,
+            restaurant_order_number: row.restaurant_order_number,
           });
         }
       });
@@ -1689,7 +1693,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             
             // Prepare receipt data for thermal printer
             const receiptData = {
-              orderNumber: String(selectedSession?.id),
+              orderNumber: String(selectedSession?.restaurant_order_number || selectedSession?.id),
               tableNumber: selectedTable?.name || 'Receipt',
               items: sessionBill.items.map(item => ({
                 name: item.name,
@@ -1883,7 +1887,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {selectedTable.name} • {selectedSession.pax} pax{selectedSession.order_id ? ` • Order #${selectedSession.order_id}` : ''}
+            {selectedTable.name} • {selectedSession.pax} pax{selectedSession.order_id ? ` • Order #${selectedSession.restaurant_order_number || selectedSession.order_id}` : ''}
           </Text>
           <View style={{ position: 'relative' }}>
             <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
@@ -1965,7 +1969,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               console.log(`[OrderRender] Order ${idx}:`, order);
               return (
                 <View key={idx} style={styles.orderCard}>
-                  <Text style={styles.orderTitle}>Order #{order.order_id || order.id}</Text>
+                  <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
@@ -2046,7 +2050,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           </TouchableOpacity>
         </View>
 
-        {/* Close Bill Modal */}}
+        {/* Close Bill Modal */}
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -2380,7 +2384,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               >
                 <View>
                   <Text style={styles.sessionTitle}>
-                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.order_id ? `, Order #${session.order_id}` : ''}
+                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.order_id ? `, Order #${session.restaurant_order_number || session.order_id}` : ''}
                   </Text>
                   <Text style={styles.sessionInfo}>
                     {session.pax} pax • Dining {formatDuration(session.started_at)}
@@ -2700,7 +2704,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                               <View key={session.id} style={styles.sessionTimeItem}>
                                 <Ionicons name="timer-outline" size={13} color={(textColor as any)?.color || '#fff'} />
                                 <Text style={[styles.sessionTimeText, textColor]}>
-                                  {session.order_id ? `#${session.order_id}` : ''} {formatDuration(session.started_at)}
+                                  {session.order_id ? `#${session.restaurant_order_number || session.order_id}` : ''} {formatDuration(session.started_at)}
                                 </Text>
                                 {session.staff_called && (
                                   <View style={styles.sessionBadgeStaff}>
@@ -2795,7 +2799,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               selectedTable.sessions.map((session, idx) => (
                 <TouchableOpacity key={session.id} style={styles.sessionCard} onPress={() => handleSessionClick(session)}>
                   <View>
-                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.order_id ? `, Order #${session.order_id}` : ''}</Text>
+                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.order_id ? `, Order #${session.restaurant_order_number || session.order_id}` : ''}</Text>
                     <Text style={styles.sessionInfo}>{session.pax} pax • Dining {formatDuration(session.started_at)}</Text>
                   </View>
                   <Text style={styles.chevron}>›</Text>
@@ -2922,7 +2926,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       {isTablet && currentView === 'sessionDetail' && selectedSession && selectedTable && (
         <View style={styles.sessionSidePanel}>
           <View style={styles.sessionSidePanelHeader}>
-            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{selectedSession.order_id ? ` • Order #${selectedSession.order_id}` : ''}</Text>
+            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{selectedSession.order_id ? ` • Order #${selectedSession.restaurant_order_number || selectedSession.order_id}` : ''}</Text>
             <TouchableOpacity onPress={() => { setCurrentView('grid'); setSelectedSession(null); }}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
@@ -2968,7 +2972,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             ) : (
               sessionOrders.map((order, idx) => (
                 <View key={idx} style={styles.orderCard}>
-                  <Text style={styles.orderTitle}>Order #{order.order_id || order.id}</Text>
+                  <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
