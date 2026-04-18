@@ -10,7 +10,8 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
       `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
               language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
-              show_item_status_to_diners
+              show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
+              custom_domain, is_customized
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     );

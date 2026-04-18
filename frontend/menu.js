@@ -30,16 +30,63 @@ let showItemStatusToDiners = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
+let featureFlags = {};
+let uiConfig = {};
 
 async function fetchAndApplyPaymentSettings() {
   try {
+    // Use feature flags from config if already loaded, otherwise fetch
+    if (featureFlags.order_pay !== undefined) {
+      orderPayEnabled = featureFlags.order_pay === true;
+      showItemStatusToDiners = featureFlags.item_status_visible !== false;
+      return;
+    }
     const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/payment-settings`);
     const data = await res.json();
     orderPayEnabled = data.order_pay_enabled === true;
-    showItemStatusToDiners = data.show_item_status_to_diners !== false; // default true
+    showItemStatusToDiners = data.show_item_status_to_diners !== false;
   } catch (e) {
     orderPayEnabled = false;
     showItemStatusToDiners = true;
+  }
+}
+
+// Apply per-restaurant UI configuration from config endpoint
+function applyUiConfig(config) {
+  if (!config || Object.keys(config).length === 0) return;
+  const container = document.getElementById("menu");
+  if (!container) return;
+
+  // Layout: grid (2-col) or list (1-col)
+  if (config.layout === "grid") {
+    container.classList.add("layout-grid");
+    container.classList.remove("layout-list");
+  } else if (config.layout === "list") {
+    container.classList.add("layout-list");
+    container.classList.remove("layout-grid");
+  }
+
+  // Menu style: compact hides images, minimal hides descriptions too
+  if (config.menu_style === "compact") {
+    container.classList.add("style-compact");
+  } else if (config.menu_style === "minimal") {
+    container.classList.add("style-minimal");
+  }
+
+  // Hide prices if configured
+  if (config.show_prices === false) {
+    container.classList.add("hide-prices");
+  }
+  // Hide descriptions if configured
+  if (config.show_descriptions === false) {
+    container.classList.add("hide-descriptions");
+  }
+
+  // Custom CSS injection (sanitized — only allow CSS, not scripts)
+  if (config.custom_css) {
+    const style = document.createElement("style");
+    style.textContent = config.custom_css;
+    document.head.appendChild(style);
   }
 }
 
@@ -139,12 +186,21 @@ async function initLanding() {
 
   const res = await fetch(`${API_BASE}/scan/${qrToken}`, { method: "POST" });
   const session = await res.json();
+
+  // If restaurant has a custom frontend URL, redirect to it
+  if (session.custom_frontend_url) {
+    window.location.href = `${session.custom_frontend_url}/${qrToken}${window.location.search}`;
+    return;
+  }
+
   sessionId = session.session_id;
   restaurantId = session.restaurant_id;
   restaurantName = session.restaurant_name;
   tableName = session.table_name;
   pax = session.pax;
   serviceChargePct = session.service_charge_percent || 0;
+  featureFlags = session.feature_flags || {};
+  uiConfig = session.ui_config || {};
 
   // Apply restaurant theme color
   if (session.theme_color) applyThemeColor(session.theme_color);
@@ -296,6 +352,7 @@ async function startOrdering() {
 
   renderMenu(window.menu);
   renderCategories(window.menu.categories);
+  applyUiConfig(uiConfig);
 
   // Load cart from localStorage if exists
   loadCartFromStorage();

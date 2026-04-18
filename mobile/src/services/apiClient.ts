@@ -573,6 +573,16 @@ class APIClient {
     }
   }
 
+  // ========== Restaurant Config ==========
+  async getRestaurantConfig(restaurantId: string): Promise<any> {
+    try {
+      const response = await this.client.get(`/api/restaurants/${restaurantId}/config`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   async updateProfile(data: { name?: string; email?: string; password?: string; pin?: string }): Promise<any> {
     try {
       const response = await this.client.patch('/api/me', data);

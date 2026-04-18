@@ -1965,3 +1965,73 @@ body {
 .pay-badge-octopus {
   background: #ee7c0e;
 }
+
+/* ===== CONFIG-DRIVEN LAYOUT CLASSES ===== */
+
+/* Grid layout (2-col, default) */
+.layout-grid .menu-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* List layout (1-col, full width cards) */
+.layout-list .menu-grid {
+  grid-template-columns: 1fr;
+}
+.layout-list .menu-item {
+  display: flex;
+  flex-direction: row;
+  padding-bottom: 0;
+}
+.layout-list .menu-item img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 12px 0 0 12px;
+}
+.layout-list .menu-item-name {
+  padding: 8px 12px 0;
+}
+.layout-list .menu-item-footer {
+  position: static;
+  padding: 4px 12px 8px;
+}
+
+/* Compact style — hide images */
+.style-compact .menu-item img {
+  display: none;
+}
+.style-compact .menu-item {
+  padding-bottom: 0;
+}
+.style-compact .menu-item-name {
+  padding: 10px 12px 0;
+}
+.style-compact .menu-item-footer {
+  position: static;
+  padding: 6px 12px 10px;
+}
+
+/* Minimal style — hide images and descriptions */
+.style-minimal .menu-item img {
+  display: none;
+}
+.style-minimal .menu-item {
+  padding-bottom: 0;
+}
+.style-minimal .menu-item-name {
+  padding: 8px 12px;
+}
+.style-minimal .menu-item-footer {
+  position: static;
+  padding: 0 12px 8px;
+}
+
+/* Hide prices */
+.hide-prices .menu-item-price {
+  display: none;
+}
+
+/* Hide descriptions */
+.hide-descriptions .menu-item-desc {
+  display: none;
+}

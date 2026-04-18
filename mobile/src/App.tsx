@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, Text, LogBox } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TranslationProvider } from './contexts/TranslationContext';
 import { ToastProvider } from './components/ToastProvider';
 import { LoginScreen } from './screens/LoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
+import { CustomWebViewScreen } from './screens/CustomWebViewScreen';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
-import { ENVIRONMENTS } from './services/apiClient';
+import { apiClient } from './services/apiClient';
 
 // Fix animation batching issues at startup
 patchAnimationErrors();
@@ -23,28 +23,10 @@ LogBox.ignoreLogs([
   'nw_connection'
 ]);
 
-const PROD_URL = ENVIRONMENTS['Production'];
+const IS_DEV = process.env.EXPO_PUBLIC_APP_ENV === 'dev';
 
 const DevBanner = () => {
-  const [isDev, setIsDev] = useState(false);
-
-  useEffect(() => {
-    SecureStore.getItemAsync('devEnvironmentUrl').then((url) => {
-      setIsDev(!!url && url !== PROD_URL);
-    });
-  }, []);
-
-  // Re-check whenever the component re-renders (e.g. after login)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      SecureStore.getItemAsync('devEnvironmentUrl').then((url) => {
-        setIsDev(!!url && url !== PROD_URL);
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  if (!isDev) return null;
+  if (!IS_DEV) return null;
 
   return (
     <View style={{ backgroundColor: '#dc2626', paddingVertical: 2, alignItems: 'center' }}>
@@ -55,8 +37,26 @@ const DevBanner = () => {
 
 const RootNavigator = () => {
   const { user, isLoading, isSignedIn } = useAuth();
+  const [restaurantConfig, setRestaurantConfig] = useState<any>(null);
+  const [configLoading, setConfigLoading] = useState(false);
 
-  if (isLoading) {
+  // Fetch restaurant config after login to determine rendering mode
+  useEffect(() => {
+    if (isSignedIn && user?.restaurantId) {
+      setConfigLoading(true);
+      apiClient.getRestaurantConfig(user.restaurantId)
+        .then(config => setRestaurantConfig(config))
+        .catch(err => {
+          console.error('[Config] Failed to fetch restaurant config:', err);
+          setRestaurantConfig(null);
+        })
+        .finally(() => setConfigLoading(false));
+    } else {
+      setRestaurantConfig(null);
+    }
+  }, [isSignedIn, user?.restaurantId]);
+
+  if (isLoading || configLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#2C3E50" />
@@ -64,8 +64,20 @@ const RootNavigator = () => {
     );
   }
 
-  // Determine which screen to show based on user role
+  // Determine which screen to show based on user role and restaurant config
   if (isSignedIn && user) {
+    // Custom restaurant with WebView UI
+    if (restaurantConfig?.ui_mode === 'webview' && restaurantConfig?.custom_frontend_url) {
+      return (
+        <CustomWebViewScreen
+          url={restaurantConfig.custom_frontend_url}
+          restaurantId={user.restaurantId}
+          token={user.token}
+        />
+      );
+    }
+
+    // Standard native rendering
     if (user.role === 'kitchen') {
       return <KitchenDashboardScreen />;
     } else if (user.role === 'staff') {

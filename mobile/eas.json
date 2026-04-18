@@ -16,14 +16,17 @@
     },
     "preview": {
       "ios": {
-        "resourceClass": "large"
+        "resourceClass": "large",
+        "bundleIdentifier": "com.qrrestaurant.app.dev"
       },
       "android": {
         "buildType": "apk",
-        "resourceClass": "large"
+        "resourceClass": "large",
+        "applicationId": "com.qrrestaurant.app.dev"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://dev.chuio.io"
+        "EXPO_PUBLIC_API_URL": "https://dev.chuio.io",
+        "EXPO_PUBLIC_APP_ENV": "dev"
       }
     },
     "production": {
@@ -35,7 +38,8 @@
         "resourceClass": "large"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://chuio.io"
+        "EXPO_PUBLIC_API_URL": "https://chuio.io",
+        "EXPO_PUBLIC_APP_ENV": "production"
       }
     },
     "development-simulator": {
