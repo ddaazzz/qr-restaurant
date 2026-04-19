@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pool from "../config/db";
+import { requireFeature } from "../middleware/featureFlags";
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const router = Router();
  * GET all addons for a restaurant
  * GET /api/restaurants/:restaurantId/addons
  */
-router.get("/restaurants/:restaurantId/addons", async (req, res) => {
+router.get("/restaurants/:restaurantId/addons", requireFeature("addons"), async (req, res) => {
   const { restaurantId } = req.params;
 
   try {
@@ -106,7 +107,7 @@ router.get(
  *   addon_discount_price_cents: number
  * }
  */
-router.post("/restaurants/:restaurantId/addons", async (req, res) => {
+router.post("/restaurants/:restaurantId/addons", requireFeature("addons"), async (req, res) => {
   const { restaurantId } = req.params;
   const {
     menu_item_id,
@@ -207,7 +208,7 @@ router.post("/restaurants/:restaurantId/addons", async (req, res) => {
  * UPDATE an addon
  * PATCH /api/restaurants/:restaurantId/addons/:addonId
  */
-router.patch("/restaurants/:restaurantId/addons/:addonId", async (req, res) => {
+router.patch("/restaurants/:restaurantId/addons/:addonId", requireFeature("addons"), async (req, res) => {
   const { restaurantId, addonId } = req.params;
   const {
     addon_name,
@@ -285,7 +286,7 @@ router.patch("/restaurants/:restaurantId/addons/:addonId", async (req, res) => {
  * DELETE an addon
  * DELETE /api/restaurants/:restaurantId/addons/:addonId
  */
-router.delete("/restaurants/:restaurantId/addons/:addonId", async (req, res) => {
+router.delete("/restaurants/:restaurantId/addons/:addonId", requireFeature("addons"), async (req, res) => {
   const { restaurantId, addonId } = req.params;
 
   try {

@@ -82,10 +82,18 @@ function applyUiConfig(config) {
     container.classList.add("hide-descriptions");
   }
 
-  // Custom CSS injection (sanitized — only allow CSS, not scripts)
+  // Custom CSS injection — strip dangerous patterns
   if (config.custom_css) {
+    let css = config.custom_css;
+    // Remove @import, url(), expression(), javascript:, behavior, -moz-binding
+    css = css.replace(/@import\b[^;]*/gi, '/* blocked @import */');
+    css = css.replace(/url\s*\([^)]*\)/gi, '/* blocked url() */');
+    css = css.replace(/expression\s*\([^)]*\)/gi, '/* blocked expression() */');
+    css = css.replace(/javascript\s*:/gi, '/* blocked */');
+    css = css.replace(/behavior\s*:/gi, '/* blocked */');
+    css = css.replace(/-moz-binding\s*:/gi, '/* blocked */');
     const style = document.createElement("style");
-    style.textContent = config.custom_css;
+    style.textContent = css;
     document.head.appendChild(style);
   }
 }

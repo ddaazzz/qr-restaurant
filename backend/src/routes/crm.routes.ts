@@ -1,11 +1,12 @@
 import { Router } from "express";
 import pool from "../config/db";
+import { requireFeature } from "../middleware/featureFlags";
 
 const router = Router();
 
 // GET /restaurants/:restaurantId/crm/customers?search=...
 // Search CRM customers by name or phone
-router.get("/restaurants/:restaurantId/crm/customers", async (req, res) => {
+router.get("/restaurants/:restaurantId/crm/customers", requireFeature("crm"), async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const { search } = req.query;
@@ -32,7 +33,7 @@ router.get("/restaurants/:restaurantId/crm/customers", async (req, res) => {
 
 // POST /restaurants/:restaurantId/crm/customers
 // Create a new CRM customer
-router.post("/restaurants/:restaurantId/crm/customers", async (req, res) => {
+router.post("/restaurants/:restaurantId/crm/customers", requireFeature("crm"), async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const { name, phone, email, notes } = req.body;

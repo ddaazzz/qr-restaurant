@@ -1,10 +1,11 @@
 import express from "express";
 import db from "../config/db";
+import { requireFeature } from "../middleware/featureFlags";
 
 const router = express.Router();
 
 // Get all coupons for a restaurant (Admin only)
-router.get("/restaurants/:restaurantId/coupons", async (req, res) => {
+router.get("/restaurants/:restaurantId/coupons", requireFeature("coupons"), async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const result = await db.query(
@@ -19,7 +20,7 @@ router.get("/restaurants/:restaurantId/coupons", async (req, res) => {
 });
 
 // Create a new coupon (Admin only)
-router.post("/restaurants/:restaurantId/coupons", async (req, res) => {
+router.post("/restaurants/:restaurantId/coupons", requireFeature("coupons"), async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const { code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value } = req.body;

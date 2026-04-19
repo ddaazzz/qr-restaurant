@@ -502,49 +502,56 @@ async function openRestaurantDetail(restId) {
   bodyHtml += '<div class="detail-row"><span class="detail-label">Users</span><span class="detail-value">' + (rest.user_count || 0) + '</span></div>';
   bodyHtml += '</div></div>';
 
-  // --- Deployment & Customization Section (Superadmin only) ---
+  // --- Feature Flags & UI Config Section (Superadmin only) ---
   if (IS_SUPERADMIN) {
     bodyHtml += '<div class="detail-section">';
-    bodyHtml += '<h4 class="detail-section-title">Deployment & Customization</h4>';
+    bodyHtml += '<h4 class="detail-section-title">Feature Flags</h4>';
+    bodyHtml += '<div id="feature-flags-' + rest.id + '" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">';
 
-    // Customization toggle
-    var isCustom = rest.is_customized;
-    bodyHtml += '<div class="deploy-toggle-row">';
-    bodyHtml += '  <div>';
-    bodyHtml += '    <div class="deploy-toggle-label">Custom Deployment</div>';
-    bodyHtml += '    <div class="deploy-toggle-desc">' + (isCustom ? 'This restaurant has its own forked codebase and deployment.' : 'Uses the shared platform (main branch). Toggle to create a custom fork.') + '</div>';
-    bodyHtml += '  </div>';
-    bodyHtml += '  <label class="toggle-switch">';
-    bodyHtml += '    <input type="checkbox" id="customization-toggle-' + rest.id + '" ' + (isCustom ? 'checked' : '') + ' onchange="toggleCustomization(' + rest.id + ', this.checked)">';
-    bodyHtml += '    <span class="toggle-slider"></span>';
-    bodyHtml += '  </label>';
+    var defaultFlags = {
+      bookings: true, waitlist: true, order_pay: false, coupons: true,
+      addons: true, variants: true, item_status_visible: false,
+      staff_timekeeping: true, kitchen_display: true, printer_support: true,
+      crm: true, multi_language: true
+    };
+    var flags = Object.assign({}, defaultFlags, rest.feature_flags || {});
+    var flagLabels = {
+      bookings: 'Bookings', waitlist: 'Waitlist', order_pay: 'Order & Pay',
+      coupons: 'Coupons', addons: 'Add-ons', variants: 'Variants',
+      item_status_visible: 'Item Status Visible', staff_timekeeping: 'Staff Timekeeping',
+      kitchen_display: 'Kitchen Display', printer_support: 'Printer Support',
+      crm: 'CRM', multi_language: 'Multi-Language'
+    };
+
+    Object.keys(defaultFlags).forEach(function(key) {
+      bodyHtml += '<label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151; cursor: pointer;">';
+      bodyHtml += '<input type="checkbox" data-flag="' + key + '" ' + (flags[key] ? 'checked' : '') + ' style="accent-color: #6366f1;">';
+      bodyHtml += (flagLabels[key] || key);
+      bodyHtml += '</label>';
+    });
     bodyHtml += '</div>';
 
-    // Deployment details (always shown, editable)
-    bodyHtml += '<div id="deploy-details-' + rest.id + '" class="deploy-details">';
+    bodyHtml += '<h4 class="detail-section-title" style="margin-top: 16px;">UI Config</h4>';
+
+    var defaultUi = { layout: 'list', menu_style: 'photo_cards', show_prices: true, show_descriptions: true, show_category_images: false, header_style: 'banner', cart_style: 'bottom_sheet', custom_css: null };
+    var uiCfg = Object.assign({}, defaultUi, rest.ui_config || {});
 
     bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">App Version (pinned)</label>';
-    bodyHtml += '  <input type="text" id="deploy-version-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.app_version || '') + '" placeholder="e.g. 1.1.1">';
+    bodyHtml += '  <label class="detail-label">Layout</label>';
+    bodyHtml += '  <select id="ui-layout-' + rest.id + '" class="deploy-input"><option value="list"' + (uiCfg.layout === 'list' ? ' selected' : '') + '>List</option><option value="grid"' + (uiCfg.layout === 'grid' ? ' selected' : '') + '>Grid</option></select>';
     bodyHtml += '</div>';
 
     bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">Git Branch</label>';
-    bodyHtml += '  <input type="text" id="deploy-branch-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.custom_branch || '') + '" placeholder="e.g. restaurant/sushi-palace">';
+    bodyHtml += '  <label class="detail-label">Menu Style</label>';
+    bodyHtml += '  <select id="ui-menustyle-' + rest.id + '" class="deploy-input"><option value="photo_cards"' + (uiCfg.menu_style === 'photo_cards' ? ' selected' : '') + '>Photo Cards</option><option value="compact"' + (uiCfg.menu_style === 'compact' ? ' selected' : '') + '>Compact</option><option value="minimal"' + (uiCfg.menu_style === 'minimal' ? ' selected' : '') + '>Minimal</option></select>';
     bodyHtml += '</div>';
 
     bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">Render Service ID</label>';
-    bodyHtml += '  <input type="text" id="deploy-render-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.render_service_id || '') + '" placeholder="e.g. srv-xxxxxxxxxx">';
+    bodyHtml += '  <label class="detail-label">Custom CSS</label>';
+    bodyHtml += '  <textarea id="ui-css-' + rest.id + '" class="deploy-input" rows="3" placeholder="Optional custom CSS...">' + escapeHtml(uiCfg.custom_css || '') + '</textarea>';
     bodyHtml += '</div>';
 
-    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">API Base URL</label>';
-    bodyHtml += '  <input type="text" id="deploy-url-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.api_base_url || '') + '" placeholder="e.g. https://sushi-palace.chuio.io">';
-    bodyHtml += '</div>';
-
-    bodyHtml += '<button class="btn-primary" onclick="saveDeploymentSettings(' + rest.id + ')" style="width: 100%; margin-top: 6px;">💾 Save Deployment Settings</button>';
-    bodyHtml += '</div>';
+    bodyHtml += '<button class="btn-primary" onclick="saveRestaurantConfig(' + rest.id + ')" style="width: 100%; margin-top: 6px;">Save Config</button>';
     bodyHtml += '</div>';
 
     // --- Database Info Section ---
@@ -583,98 +590,42 @@ async function openRestaurantDetail(restId) {
   }
 }
 
-// ============= CUSTOMIZATION TOGGLE =============
+// ============= SAVE RESTAURANT CONFIG =============
 
-async function toggleCustomization(restId, enable) {
-  var actionText = enable ? 'enable custom deployment for' : 'disable custom deployment for';
-  var rest = restaurantsData.find(function(r) { return r.id === restId; });
-  var restName = rest ? rest.name : '#' + restId;
+async function saveRestaurantConfig(restId) {
+  var flagCheckboxes = document.querySelectorAll('#feature-flags-' + restId + ' input[data-flag]');
+  var feature_flags = {};
+  flagCheckboxes.forEach(function(cb) {
+    feature_flags[cb.getAttribute('data-flag')] = cb.checked;
+  });
 
-  if (!confirm('Are you sure you want to ' + actionText + ' "' + restName + '"?\n\n' +
-    (enable ? 'This will automatically:\n• Create a git branch\n• Create a Render web service\n• Copy production env vars\n• Set up custom domain & DNS\n• Auto-fill all deployment details' : 'The restaurant will revert to the shared platform.'))) {
-    var cb = document.getElementById('customization-toggle-' + restId);
-    if (cb) cb.checked = !enable;
-    return;
-  }
-
-  // Show deploying state
-  var toggleRow = document.getElementById('customization-toggle-' + restId);
-  if (toggleRow) toggleRow.disabled = true;
-  var deployDetails = document.getElementById('deploy-details-' + restId);
-  if (deployDetails && enable) {
-    deployDetails.innerHTML = '<div style="text-align: center; padding: 20px; color: #6366f1;"><div style="font-size: 24px; margin-bottom: 8px;">⏳</div><div style="font-weight: 600;">Deploying...</div><div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">Creating service, configuring DNS, copying env vars...</div></div>';
-  }
+  var ui_config = {
+    layout: document.getElementById('ui-layout-' + restId).value,
+    menu_style: document.getElementById('ui-menustyle-' + restId).value,
+    custom_css: document.getElementById('ui-css-' + restId).value.trim() || null,
+  };
 
   try {
-    var res = await fetch(`${API}/manage/restaurants/${restId}/toggle-customization`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ enable: enable }),
-    });
-
-    var data = await res.json();
-    if (!res.ok) {
-      alert(data.error || 'Failed to toggle customization');
-      var cb = document.getElementById('customization-toggle-' + restId);
-      if (cb) { cb.checked = !enable; cb.disabled = false; }
-      return;
-    }
-
-    // Build result message
-    var msg = '✅ Customization ' + (enable ? 'enabled' : 'disabled') + ' for "' + restName + '"';
-    if (data.steps && data.steps.length) msg += '\n\nSteps completed:\n• ' + data.steps.join('\n• ');
-    if (data.errors && data.errors.length) msg += '\n\n⚠️ Warnings:\n• ' + data.errors.join('\n• ');
-    if (data.note) msg += '\n\nℹ️ ' + data.note;
-    alert(msg);
-
-    // Refresh data and re-open detail
-    await loadUsersManagement();
-    openRestaurantDetail(restId);
-  } catch (err) {
-    alert('Failed to toggle customization: ' + err.message);
-    var cb = document.getElementById('customization-toggle-' + restId);
-    if (cb) { cb.checked = !enable; cb.disabled = false; }
-  }
-}
-
-// ============= SAVE DEPLOYMENT SETTINGS =============
-
-async function saveDeploymentSettings(restId) {
-  var version = document.getElementById('deploy-version-' + restId).value.trim();
-  var branch = document.getElementById('deploy-branch-' + restId).value.trim();
-  var renderServiceId = document.getElementById('deploy-render-' + restId).value.trim();
-  var apiBaseUrl = document.getElementById('deploy-url-' + restId).value.trim();
-
-  var payload = {};
-  payload.app_version = version || null;
-  payload.custom_branch = branch || null;
-  payload.render_service_id = renderServiceId || null;
-  payload.api_base_url = apiBaseUrl || null;
-
-  try {
-    var res = await fetch(`${API}/manage/restaurants/${restId}`, {
+    var res = await fetch(`${API}/restaurants/${restId}/config`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ feature_flags: feature_flags, ui_config: ui_config }),
     });
 
     var data = await res.json();
     if (!res.ok) {
-      alert(data.error || 'Failed to save deployment settings');
+      alert(data.error || 'Failed to save config');
       return;
     }
 
-    alert('Deployment settings saved successfully.');
+    alert('Config saved successfully.');
     await loadUsersManagement();
     openRestaurantDetail(restId);
   } catch (err) {
-    alert('Failed to save: ' + err.message);
+    alert('Failed to save config: ' + err.message);
   }
 }
 

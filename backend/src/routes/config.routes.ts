@@ -51,7 +51,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
         id, name, logo_url, background_url, theme_color,
         address, phone, timezone, language_preference,
         service_charge_percent, qr_mode,
-        is_customized, app_version, custom_branch,
+        is_customized, app_version,
         custom_domain, ui_mode, custom_frontend_url,
         feature_flags, ui_config,
         active_payment_vendor, active_payment_terminal_id,

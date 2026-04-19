@@ -1,10 +1,11 @@
 import { Router } from "express";
 import pool from "../config/db";
+import { requireFeature } from "../middleware/featureFlags";
 
 const router = Router();
 
 // GET bookings for a restaurant (optionally filtered by date or table)
-router.get("/restaurants/:restaurantId/bookings", async (req, res) => {
+router.get("/restaurants/:restaurantId/bookings", requireFeature("bookings"), async (req, res) => {
   const restaurantId = parseInt(req.params.restaurantId, 10);
   const { date, table_id } = req.query;
 
@@ -76,7 +77,7 @@ router.get("/bookings/:bookingId", async (req, res) => {
 });
 
 // POST create booking
-router.post("/restaurants/:restaurantId/bookings", async (req, res) => {
+router.post("/restaurants/:restaurantId/bookings", requireFeature("bookings"), async (req, res) => {
   const { restaurantId } = req.params;
   const { table_id, guest_name, pax, booking_date, booking_time, status = "confirmed", notes = "" } = req.body;
 

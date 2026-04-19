@@ -549,6 +549,19 @@ async function loadApp() {
       restaurantTimezone = settings.timezone || 'UTC';
       localStorage.setItem('restaurantTimezone', restaurantTimezone);
       console.log('✅ Restaurant timezone loaded:', restaurantTimezone);
+
+      // Hide sidebar tabs based on feature flags
+      var ff = settings.feature_flags || {};
+      var tabFlagMap = {
+        bookings: 'bookings-nav-btn',
+        staff_timekeeping: 'staff-nav-btn',
+      };
+      Object.keys(tabFlagMap).forEach(function(flag) {
+        if (ff[flag] === false) {
+          var btn = document.getElementById(tabFlagMap[flag]);
+          if (btn) btn.style.display = 'none';
+        }
+      });
     }
     
     // Load only tables on page load

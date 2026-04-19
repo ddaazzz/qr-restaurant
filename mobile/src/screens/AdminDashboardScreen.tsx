@@ -70,6 +70,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [showRoomDropdown, setShowRoomDropdown] = useState(false);
   const [unpaidOrderCount, setUnpaidOrderCount] = useState(0);
+  const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
   const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
   const staffTabRef = useRef<StaffTabRef>(null);
@@ -99,6 +100,16 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     const interval = setInterval(loadUnpaidCount, 30000);
     return () => clearInterval(interval);
   }, [loadUnpaidCount]);
+
+  // Fetch restaurant feature flags
+  useEffect(() => {
+    if (!user?.restaurantId) return;
+    apiClient.get(`/api/restaurants/${user.restaurantId}/config`)
+      .then((res: any) => {
+        if (res.data?.feature_flags) setFeatureFlags(res.data.feature_flags);
+      })
+      .catch(() => {});
+  }, [user?.restaurantId]);
 
   // Show clock-in prompt for staff who haven't clocked in
   useEffect(() => {
@@ -136,6 +147,15 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
     return allTabs;
   }, [user]);
+
+  // Filter tabs by feature flags (opt-out: hidden only if explicitly false)
+  const TAB_FLAG_MAP: Record<string, string> = { bookings: 'bookings', staff: 'staff_timekeeping' };
+  const filteredTabs = useMemo(() => {
+    return visibleTabs.filter(tab => {
+      const flag = TAB_FLAG_MAP[tab];
+      return !flag || featureFlags[flag] !== false;
+    });
+  }, [visibleTabs, featureFlags]);
 
   // Clock In/Out handler
   const handleClockToggle = async () => {
@@ -499,7 +519,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
             {/* Tab buttons — fill remaining space */}
             <ScrollView style={styles.sidebarTabsContainer} contentContainerStyle={{ flex: 1, justifyContent: 'space-evenly' }} showsVerticalScrollIndicator={false}>
-              {visibleTabs.map(
+              {filteredTabs.map(
                 (tab) => {
                   const tabConfig: Record<TabType, { label: string; icon: string }> = {
                     'tables': { label: t('admin.tables'), icon: 'grid' },

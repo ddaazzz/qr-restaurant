@@ -1587,14 +1587,14 @@ router.get("/manage/restaurants", async (req, res) => {
     if (caller.role === "superadmin") {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                r.is_customized, r.app_version, r.feature_flags, r.ui_config,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r ORDER BY r.id`
       );
     } else {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                r.is_customized, r.app_version, r.feature_flags, r.ui_config,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r WHERE r.id = $1`,
         [caller.restaurant_id]
@@ -1643,12 +1643,7 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     return res.status(403).json({ error: "Cannot edit another restaurant" });
   }
 
-  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url } = req.body;
-
-  // Only superadmin can change customization fields
-  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || render_service_id !== undefined || api_base_url !== undefined)) {
-    return res.status(403).json({ error: "Only superadmin can change customization settings" });
-  }
+  const { name, address, phone, timezone, service_charge_percent, language_preference } = req.body;
 
   try {
     const updates: string[] = [];
@@ -1661,16 +1656,11 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (timezone !== undefined) { updates.push(`timezone = $${i++}`); params.push(timezone); }
     if (service_charge_percent !== undefined) { updates.push(`service_charge_percent = $${i++}`); params.push(service_charge_percent); }
     if (language_preference !== undefined) { updates.push(`language_preference = $${i++}`); params.push(language_preference); }
-    if (is_customized !== undefined) { updates.push(`is_customized = $${i++}`); params.push(is_customized); }
-    if (app_version !== undefined) { updates.push(`app_version = $${i++}`); params.push(app_version); }
-    if (custom_branch !== undefined) { updates.push(`custom_branch = $${i++}`); params.push(custom_branch); }
-    if (render_service_id !== undefined) { updates.push(`render_service_id = $${i++}`); params.push(render_service_id); }
-    if (api_base_url !== undefined) { updates.push(`api_base_url = $${i++}`); params.push(api_base_url); }
 
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
     params.push(restaurantId);
-    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
+    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference`;
     const result = await pool.query(query, params);
 
     if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
@@ -1704,300 +1694,6 @@ router.delete("/manage/restaurants/:restaurantId", async (req, res) => {
   } catch (err) {
     console.error("Failed to delete restaurant:", err);
     res.status(500).json({ error: "Failed to delete restaurant" });
-  }
-});
-
-// POST /api/manage/restaurants/:restaurantId/toggle-customization - Enable/disable restaurant customization
-router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req, res) => {
-  const caller = await verifyAdminRole(req);
-  if (!caller || caller.role !== "superadmin") {
-    return res.status(403).json({ error: "Superadmin access required" });
-  }
-
-  const { restaurantId } = req.params;
-  const { enable } = req.body;
-
-  try {
-    const restResult = await pool.query("SELECT id, name, is_customized, custom_branch, render_service_id FROM restaurants WHERE id = $1", [restaurantId]);
-    if (!restResult.rows.length) return res.status(404).json({ error: "Restaurant not found" });
-
-    const restaurant = restResult.rows[0];
-    const slug = restaurant.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    const branchName = "restaurant/" + slug;
-
-    if (enable && !restaurant.is_customized) {
-      const steps: string[] = [];
-      const errors: string[] = [];
-
-      // ===== Step 1: Create git branch =====
-      try {
-        const { execSync } = require("child_process");
-        execSync(`git fetch origin main && git branch ${branchName} origin/main && git push origin ${branchName}`, {
-          cwd: process.cwd(),
-          timeout: 30000,
-        });
-        steps.push("Git branch created: " + branchName);
-      } catch (gitErr: any) {
-        if (gitErr.message?.includes("already exists")) {
-          steps.push("Git branch already exists: " + branchName);
-        } else {
-          errors.push("Git branch creation failed: " + (gitErr.message || "Unknown error"));
-        }
-      }
-
-      let renderServiceId = restaurant.render_service_id;
-      let apiBaseUrl: string | null = null;
-      let renderSlug: string | null = null;
-
-      const renderApiKey = process.env.RENDER_API_KEY;
-      const renderOwnerId = process.env.RENDER_OWNER_ID;
-      const renderSourceServiceId = process.env.RENDER_SOURCE_SERVICE_ID;
-      const renderRepoUrl = process.env.RENDER_REPO_URL || "https://github.com/ddaazzz/qr-restaurant";
-      const chuioDomain = process.env.CHUIO_DOMAIN || "chuio.io";
-
-      if (renderApiKey && renderOwnerId && !renderServiceId) {
-        // ===== Step 2a: Copy env vars from production Render service =====
-        let envVars: { key: string; value: string }[] = [];
-        if (renderSourceServiceId) {
-          try {
-            const envResponse = await fetch(`https://api.render.com/v1/services/${renderSourceServiceId}/env-vars`, {
-              headers: { Authorization: `Bearer ${renderApiKey}`, Accept: "application/json" },
-            });
-            if (envResponse.ok) {
-              const envData = await envResponse.json() as any[];
-              envVars = envData.map((item: any) => ({ key: item.envVar.key, value: item.envVar.value }));
-              steps.push(`Copied ${envVars.length} env vars from production service`);
-            } else {
-              errors.push("Failed to fetch env vars from source: " + await envResponse.text());
-              envVars = [
-                { key: "NODE_ENV", value: "production" },
-                { key: "DATABASE_URL", value: process.env.DATABASE_URL || "" },
-              ];
-            }
-          } catch (envErr: any) {
-            errors.push("Error fetching env vars: " + (envErr.message || "Unknown"));
-            envVars = [
-              { key: "NODE_ENV", value: "production" },
-              { key: "DATABASE_URL", value: process.env.DATABASE_URL || "" },
-            ];
-          }
-        } else {
-          envVars = [
-            { key: "NODE_ENV", value: "production" },
-            { key: "DATABASE_URL", value: process.env.DATABASE_URL || "" },
-          ];
-          steps.push("Using default env vars (RENDER_SOURCE_SERVICE_ID not set)");
-        }
-
-        // ===== Step 2b: Create Render web service =====
-        const serviceName = "chuio-" + slug;
-        try {
-          const createResponse = await fetch("https://api.render.com/v1/services", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${renderApiKey}`,
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-            body: JSON.stringify({
-              type: "web_service",
-              name: serviceName,
-              ownerId: renderOwnerId,
-              repo: renderRepoUrl,
-              branch: branchName,
-              autoDeploy: "yes",
-              envVars,
-              serviceDetails: {
-                env: "node",
-                plan: "starter",
-                region: "singapore",
-                buildCommand: "cd backend && npm install && tsc",
-                startCommand: "node backend/dist/server.js",
-                numInstances: 1,
-              },
-            }),
-          });
-
-          if (createResponse.ok) {
-            const createData = await createResponse.json() as any;
-            renderServiceId = createData.service?.id;
-            renderSlug = createData.service?.slug || serviceName;
-            apiBaseUrl = `https://${slug}.${chuioDomain}`;
-            steps.push(`Render service created: ${serviceName} (${renderServiceId})`);
-          } else {
-            const errBody = await createResponse.text();
-            errors.push("Render service creation failed: " + errBody);
-          }
-        } catch (renderErr: any) {
-          errors.push("Render API error: " + (renderErr.message || "Unknown"));
-        }
-
-        // ===== Step 3: Add custom domain on Render =====
-        if (renderServiceId && renderSlug) {
-          const customDomain = `${slug}.${chuioDomain}`;
-          try {
-            const domainResponse = await fetch(`https://api.render.com/v1/services/${renderServiceId}/custom-domains`, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${renderApiKey}`,
-                "Content-Type": "application/json",
-                Accept: "application/json",
-              },
-              body: JSON.stringify({ name: customDomain }),
-            });
-            if (domainResponse.ok) {
-              steps.push(`Custom domain added on Render: ${customDomain}`);
-            } else {
-              const errBody = await domainResponse.text();
-              errors.push("Render custom domain failed: " + errBody);
-            }
-          } catch (domErr: any) {
-            errors.push("Render custom domain error: " + (domErr.message || "Unknown"));
-          }
-
-          // ===== Step 4: Create CNAME on Namecheap DNS =====
-          const ncApiUser = process.env.NAMECHEAP_API_USER;
-          const ncApiKey = process.env.NAMECHEAP_API_KEY;
-          const ncUserName = process.env.NAMECHEAP_USERNAME;
-          const ncClientIp = process.env.NAMECHEAP_CLIENT_IP;
-          const domainParts = chuioDomain.split(".");
-          const sld = domainParts[0];
-          const tld = domainParts.slice(1).join(".");
-
-          if (ncApiUser && ncApiKey && ncUserName && ncClientIp) {
-            try {
-              // Step 4a: Get existing DNS records from Namecheap
-              const getHostsUrl = `https://api.namecheap.com/xml.response?ApiUser=${encodeURIComponent(ncApiUser)}&ApiKey=${encodeURIComponent(ncApiKey)}&UserName=${encodeURIComponent(ncUserName)}&Command=namecheap.domains.dns.getHosts&ClientIp=${encodeURIComponent(ncClientIp)}&SLD=${encodeURIComponent(sld || "")}&TLD=${encodeURIComponent(tld)}`;
-              const getHostsRes = await fetch(getHostsUrl);
-              const getHostsXml = await getHostsRes.text();
-
-              // Parse Host elements from XML (attribute order may vary)
-              const hostTagRegex = /<Host\s+([^>]*?)\/>/g;
-              const existingHosts: { Name: string; Type: string; Address: string; MXPref: string; TTL: string }[] = [];
-              let hostMatch;
-              while ((hostMatch = hostTagRegex.exec(getHostsXml)) !== null) {
-                const attrs = hostMatch[1] || "";
-                const nameMatch = attrs.match(/Name="([^"]*)"/);  
-                const typeMatch = attrs.match(/Type="([^"]*)"/);
-                const addrMatch = attrs.match(/Address="([^"]*)"/);
-                const mxMatch = attrs.match(/MXPref="([^"]*)"/);
-                const ttlMatch = attrs.match(/TTL="([^"]*)"/);
-                if (nameMatch && typeMatch && addrMatch) {
-                  existingHosts.push({
-                    Name: nameMatch[1] || "",
-                    Type: typeMatch[1] || "",
-                    Address: addrMatch[1] || "",
-                    MXPref: mxMatch ? (mxMatch[1] || "10") : "10",
-                    TTL: ttlMatch ? (ttlMatch[1] || "1800") : "1800",
-                  });
-                }
-              }
-              steps.push(`Found ${existingHosts.length} existing DNS records`);
-
-              // Step 4b: Build setHosts with existing records + new CNAME
-              // Remove any existing record for this subdomain (handles retries)
-              const filteredHosts = existingHosts.filter(h => !(h.Name === slug && h.Type === "CNAME"));
-
-              const renderTarget = `${renderSlug}.onrender.com`;
-              filteredHosts.push({
-                Name: slug,
-                Type: "CNAME",
-                Address: renderTarget,
-                MXPref: "10",
-                TTL: "60",
-              });
-
-              // Build POST body for setHosts (Namecheap recommends POST for >10 records)
-              const setParams = new URLSearchParams();
-              setParams.set("ApiUser", ncApiUser!);
-              setParams.set("ApiKey", ncApiKey!);
-              setParams.set("UserName", ncUserName!);
-              setParams.set("Command", "namecheap.domains.dns.setHosts");
-              setParams.set("ClientIp", ncClientIp!);
-              setParams.set("SLD", sld || "");
-              setParams.set("TLD", tld);
-
-              for (let i = 0; i < filteredHosts.length; i++) {
-                const h = filteredHosts[i]!;
-                const n = i + 1;
-                setParams.set(`HostName${n}`, h.Name);
-                setParams.set(`RecordType${n}`, h.Type);
-                setParams.set(`Address${n}`, h.Address);
-                setParams.set(`TTL${n}`, h.TTL);
-                if (h.Type === "MX" || h.Type === "MXE") {
-                  setParams.set(`MXPref${n}`, h.MXPref);
-                }
-              }
-
-              const setHostsRes = await fetch("https://api.namecheap.com/xml.response", {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: setParams.toString(),
-              });
-              const setHostsXml = await setHostsRes.text();
-
-              if (setHostsXml.includes('IsSuccess="true"')) {
-                steps.push(`DNS CNAME added: ${slug}.${chuioDomain} → ${renderTarget}`);
-              } else {
-                const errorMatch = setHostsXml.match(/<Error[^>]*>(.*?)<\/Error>/);
-                errors.push("Namecheap DNS update failed: " + (errorMatch ? errorMatch[1] : "Unknown error"));
-              }
-            } catch (ncErr: any) {
-              errors.push("Namecheap API error: " + (ncErr.message || "Unknown"));
-            }
-          } else {
-            steps.push("Skipped DNS setup (NAMECHEAP_API_* env vars not configured)");
-          }
-        }
-      } else if (renderServiceId) {
-        steps.push("Render service already exists: " + renderServiceId);
-        apiBaseUrl = `https://${slug}.${chuioDomain}`;
-      } else if (!renderApiKey) {
-        steps.push("Skipped Render/DNS automation (RENDER_API_KEY not set)");
-      }
-
-      // ===== Step 5: Update restaurant record =====
-      await pool.query(
-        `UPDATE restaurants SET is_customized = TRUE, custom_branch = $1, render_service_id = $2, api_base_url = $3 WHERE id = $4`,
-        [branchName, renderServiceId || null, apiBaseUrl || null, restaurantId]
-      );
-      steps.push("Restaurant marked as customized");
-
-      const updatedResult = await pool.query(
-        `SELECT id, name, is_customized, app_version, custom_branch, render_service_id, api_base_url FROM restaurants WHERE id = $1`,
-        [restaurantId]
-      );
-
-      res.json({
-        success: true,
-        restaurant: updatedResult.rows[0],
-        steps,
-        errors: errors.length > 0 ? errors : undefined,
-      });
-    } else if (!enable && restaurant.is_customized) {
-      // Disable customization: reset to default (preserve branch/service for safety)
-      await pool.query(
-        `UPDATE restaurants SET is_customized = FALSE, api_base_url = NULL WHERE id = $1`,
-        [restaurantId]
-      );
-
-      const updatedResult = await pool.query(
-        `SELECT id, name, is_customized, app_version, custom_branch, render_service_id, api_base_url FROM restaurants WHERE id = $1`,
-        [restaurantId]
-      );
-
-      res.json({
-        success: true,
-        restaurant: updatedResult.rows[0],
-        steps: ["Customization disabled. Restaurant will use main platform."],
-        note: "Git branch, Render service, and DNS record preserved for safety. Delete manually if needed.",
-      });
-    } else {
-      res.json({ success: true, message: "No change needed" });
-    }
-  } catch (err) {
-    console.error("Failed to toggle customization:", err);
-    res.status(500).json({ error: "Failed to toggle customization" });
   }
 });
 
