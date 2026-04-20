@@ -39,6 +39,7 @@ interface Session {
   pax: number;
   started_at: string;
   bill_closure_requested?: boolean;
+  call_staff_requested?: boolean;
   order_id?: number;
   restaurant_order_number?: number;
   restaurant_session_number?: number;
@@ -85,6 +86,7 @@ interface TableState {
   pax?: number;
   started_at?: string;
   bill_closure_requested?: boolean;
+  call_staff_requested?: boolean;
   order_id?: number;
   restaurant_order_number?: number;
   booking_time?: string;
@@ -316,6 +318,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             pax: row.pax || 0,
             started_at: row.started_at || '',
             bill_closure_requested: row.bill_closure_requested,
+            call_staff_requested: row.call_staff_requested,
             restaurant_session_number: row.restaurant_session_number,
           });
         }
@@ -549,6 +552,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     if (table.sessions.length === 1) {
       const session = table.sessions[0];
       if ((session as any).payment_received === true) return '#4caf50';
+      if (session.call_staff_requested) return '#ef4444';
       if (session.bill_closure_requested) return '#ffeb3b';
 
       try {
@@ -598,6 +602,21 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     setSelectedSession(session);
     setCurrentView('sessionDetail');
     await loadSessionOrders(session.id);
+  };
+
+  const clearCallStaff = async (sessionId: number) => {
+    try {
+      await apiClient.patch(`/api/sessions/${sessionId}/call-staff`, {
+        restaurantId,
+        call_staff_requested: false,
+      });
+      await loadTables();
+      if (selectedSession?.id === sessionId) {
+        setSelectedSession(prev => prev ? { ...prev, call_staff_requested: false } : prev);
+      }
+    } catch (err) {
+      console.error('Error clearing call staff:', err);
+    }
   };
 
   const createCategory = async () => {
@@ -1890,7 +1909,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • #${selectedSession.restaurant_session_number}` : ''}
+            {selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • Order #${selectedSession.restaurant_session_number}` : ''}
           </Text>
           <View style={{ position: 'relative' }}>
             <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
@@ -1964,6 +1983,20 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         )}
 
         <ScrollView style={styles.content}>
+          {selectedSession.call_staff_requested && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#ef4444', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              onPress={() => clearCallStaff(selectedSession.id)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 Staff Called</Text>
+              <Text style={{ color: '#fff', fontSize: 12 }}>Tap to acknowledge</Text>
+            </TouchableOpacity>
+          )}
+          {selectedSession.bill_closure_requested && (
+            <View style={{ backgroundColor: '#f59e0b', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
+            </View>
+          )}
           <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
           {sessionOrders.length === 0 ? (
             <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
@@ -2387,7 +2420,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               >
                 <View>
                   <Text style={styles.sessionTitle}>
-                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, #${session.restaurant_session_number}` : ''}
+                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, Order #${session.restaurant_session_number}` : ''}
                   </Text>
                   <Text style={styles.sessionInfo}>
                     {session.pax} pax • Dining {formatDuration(session.started_at)}
@@ -2709,7 +2742,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                                 <Text style={[styles.sessionTimeText, textColor]}>
                                   {session.restaurant_session_number ? `#${session.restaurant_session_number}` : ''} {formatDuration(session.started_at)}
                                 </Text>
-                                {session.staff_called && (
+                                {session.call_staff_requested && (
                                   <View style={styles.sessionBadgeStaff}>
                                     <Text style={styles.sessionBadgeStaffText}>STAFF</Text>
                                   </View>
@@ -2802,7 +2835,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               selectedTable.sessions.map((session, idx) => (
                 <TouchableOpacity key={session.id} style={styles.sessionCard} onPress={() => handleSessionClick(session)}>
                   <View>
-                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, #${session.restaurant_session_number}` : ''}</Text>
+                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, Order #${session.restaurant_session_number}` : ''}</Text>
                     <Text style={styles.sessionInfo}>{session.pax} pax • Dining {formatDuration(session.started_at)}</Text>
                   </View>
                   <Text style={styles.chevron}>›</Text>
@@ -2929,7 +2962,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       {isTablet && currentView === 'sessionDetail' && selectedSession && selectedTable && (
         <View style={styles.sessionSidePanel}>
           <View style={styles.sessionSidePanelHeader}>
-            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • #${selectedSession.restaurant_session_number}` : ''}</Text>
+            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • Order #${selectedSession.restaurant_session_number}` : ''}</Text>
             <TouchableOpacity onPress={() => { setCurrentView('grid'); setSelectedSession(null); }}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
@@ -2969,6 +3002,20 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             </>
           )}
           <ScrollView style={styles.content}>
+            {selectedSession.call_staff_requested && (
+              <TouchableOpacity
+                style={{ backgroundColor: '#ef4444', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                onPress={() => clearCallStaff(selectedSession.id)}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 Staff Called</Text>
+                <Text style={{ color: '#fff', fontSize: 12 }}>Tap to acknowledge</Text>
+              </TouchableOpacity>
+            )}
+            {selectedSession.bill_closure_requested && (
+              <View style={{ backgroundColor: '#f59e0b', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
+              </View>
+            )}
             <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
             {sessionOrders.length === 0 ? (
               <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>

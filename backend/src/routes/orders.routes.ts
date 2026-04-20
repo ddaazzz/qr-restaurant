@@ -506,6 +506,9 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         };
       }
 
+      // Skip rows with no order items (LEFT JOIN produced null)
+      if (!row.order_item_id) continue;
+
       const itemTotal =
         Number(row.unit_price_cents) * Number(row.quantity);
 

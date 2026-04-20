@@ -41,17 +41,11 @@ class APIClient {
 
   private async setupAuthToken() {
     try {
-      const token = await SecureStore.getItemAsync('authToken');
-      const restaurantId = await SecureStore.getItemAsync('restaurantId');
+      // Only restore dev environment URL — no token/session restoration
       const devEnvUrl = await SecureStore.getItemAsync('devEnvironmentUrl');
-      const apiBaseUrl = await SecureStore.getItemAsync('apiBaseUrl');
-      if (token) this.token = token;
-      if (restaurantId) this.restaurantId = restaurantId;
-      // Dev environment override takes priority, then per-restaurant override
       if (devEnvUrl) this.client.defaults.baseURL = devEnvUrl;
-      else if (apiBaseUrl) this.client.defaults.baseURL = apiBaseUrl;
     } catch (error) {
-      console.error('Failed to load auth token:', error);
+      console.error('Failed to load environment config:', error);
     }
   }
 
