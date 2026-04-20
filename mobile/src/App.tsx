@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { ActivityIndicator, View, Text, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TranslationProvider } from './contexts/TranslationContext';
@@ -6,7 +6,7 @@ import { ToastProvider } from './components/ToastProvider';
 import { LoginScreen } from './screens/LoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
-import { CustomWebViewScreen } from './screens/CustomWebViewScreen';
+const CustomWebViewScreen = React.lazy(() => import('./screens/CustomWebViewScreen').then(m => ({ default: m.CustomWebViewScreen })));
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
 import { apiClient } from './services/apiClient';
@@ -69,11 +69,13 @@ const RootNavigator = () => {
     // Custom restaurant with WebView UI
     if (restaurantConfig?.ui_mode === 'webview' && restaurantConfig?.custom_frontend_url) {
       return (
-        <CustomWebViewScreen
-          url={restaurantConfig.custom_frontend_url}
-          restaurantId={user.restaurantId}
-          token={user.token}
-        />
+        <Suspense fallback={<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#2C3E50" /></View>}>
+          <CustomWebViewScreen
+            url={restaurantConfig.custom_frontend_url}
+            restaurantId={user.restaurantId}
+            token={user.token}
+          />
+        </Suspense>
       );
     }
 

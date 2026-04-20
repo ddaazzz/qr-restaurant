@@ -546,6 +546,12 @@ async function openRestaurantDetail(restId) {
     bodyHtml += '  <select id="ui-menustyle-' + rest.id + '" class="deploy-input"><option value="photo_cards"' + (uiCfg.menu_style === 'photo_cards' ? ' selected' : '') + '>Photo Cards</option><option value="compact"' + (uiCfg.menu_style === 'compact' ? ' selected' : '') + '>Compact</option><option value="minimal"' + (uiCfg.menu_style === 'minimal' ? ' selected' : '') + '>Minimal</option></select>';
     bodyHtml += '</div>';
 
+    bodyHtml += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">';
+    bodyHtml += '<label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151; cursor: pointer;"><input type="checkbox" id="ui-showprices-' + rest.id + '" ' + (uiCfg.show_prices !== false ? 'checked' : '') + ' style="accent-color: #6366f1;"> Show Prices</label>';
+    bodyHtml += '<label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151; cursor: pointer;"><input type="checkbox" id="ui-showdesc-' + rest.id + '" ' + (uiCfg.show_descriptions !== false ? 'checked' : '') + ' style="accent-color: #6366f1;"> Show Descriptions</label>';
+    bodyHtml += '<label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151; cursor: pointer;"><input type="checkbox" id="ui-showcatimg-' + rest.id + '" ' + (uiCfg.show_category_images ? 'checked' : '') + ' style="accent-color: #6366f1;"> Category Images</label>';
+    bodyHtml += '</div>';
+
     bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
     bodyHtml += '  <label class="detail-label">Custom CSS</label>';
     bodyHtml += '  <textarea id="ui-css-' + rest.id + '" class="deploy-input" rows="3" placeholder="Optional custom CSS...">' + escapeHtml(uiCfg.custom_css || '') + '</textarea>';
@@ -602,6 +608,9 @@ async function saveRestaurantConfig(restId) {
   var ui_config = {
     layout: document.getElementById('ui-layout-' + restId).value,
     menu_style: document.getElementById('ui-menustyle-' + restId).value,
+    show_prices: document.getElementById('ui-showprices-' + restId).checked,
+    show_descriptions: document.getElementById('ui-showdesc-' + restId).checked,
+    show_category_images: document.getElementById('ui-showcatimg-' + restId).checked,
     custom_css: document.getElementById('ui-css-' + restId).value.trim() || null,
   };
 

@@ -1,35 +1,9 @@
 import { Router } from "express";
 import pool from "../config/db";
+import jwt from "jsonwebtoken";
+import { DEFAULT_FEATURE_FLAGS, DEFAULT_UI_CONFIG, mergeFeatureFlags, mergeUiConfig } from "../config/restaurantDefaults";
 
 const router = Router();
-
-// Default feature flags for standard restaurants
-const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
-  bookings: true,
-  waitlist: true,
-  order_pay: false,
-  coupons: true,
-  addons: true,
-  variants: true,
-  item_status_visible: false,
-  staff_timekeeping: true,
-  kitchen_display: true,
-  printer_support: true,
-  crm: true,
-  multi_language: true,
-};
-
-// Default UI config for standard restaurants
-const DEFAULT_UI_CONFIG: Record<string, any> = {
-  layout: "list",
-  menu_style: "photo_cards",
-  show_prices: true,
-  show_descriptions: true,
-  show_category_images: false,
-  header_style: "banner",
-  cart_style: "bottom_sheet",
-  custom_css: null,
-};
 
 /**
  * GET /api/restaurants/:restaurantId/config
@@ -66,25 +40,8 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 
     const r = result.rows[0];
 
-    // Merge stored flags with defaults (stored values override defaults)
-    const featureFlags = {
-      ...DEFAULT_FEATURE_FLAGS,
-      ...(r.feature_flags || {}),
-      // Derive order_pay from existing payment config for backward compat
-      order_pay:
-        r.active_payment_vendor === "payment-asia" &&
-        r.active_payment_terminal_id != null &&
-        r.payment_asia_order_pay_enabled !== false,
-      item_status_visible: r.show_item_status_to_diners || false,
-    };
-
-    // Merge stored UI config with defaults
-    const uiConfig = {
-      ...DEFAULT_UI_CONFIG,
-      ...(r.ui_config || {}),
-      // Always include current theme values
-      primary_color: r.theme_color || DEFAULT_UI_CONFIG.primary_color,
-    };
+    const featureFlags = mergeFeatureFlags(r.feature_flags, r);
+    const uiConfig = mergeUiConfig(r.ui_config);
 
     res.json({
       id: r.id,
@@ -128,7 +85,26 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
  */
 router.patch("/restaurants/:restaurantId/config", async (req, res) => {
   try {
+    // Auth: require admin or superadmin
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Authentication required" });
+    let caller: any;
+    try {
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+      const userResult = await pool.query("SELECT id, role, restaurant_id FROM users WHERE id = $1", [decoded.id]);
+      caller = userResult.rows[0];
+    } catch { return res.status(401).json({ error: "Invalid token" }); }
+    if (!caller || (caller.role !== "admin" && caller.role !== "superadmin")) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
     const { restaurantId } = req.params;
+
+    // Admin can only edit their own restaurant
+    if (caller.role !== "superadmin" && String(caller.restaurant_id) !== restaurantId) {
+      return res.status(403).json({ error: "Cannot edit another restaurant" });
+    }
+
     const { feature_flags, ui_config, ui_mode, custom_frontend_url, custom_domain, is_customized } = req.body;
 
     const updates: string[] = [];

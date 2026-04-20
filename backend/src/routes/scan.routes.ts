@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pool from "../config/db";
+import { mergeFeatureFlags, mergeUiConfig } from "../config/restaurantDefaults";
 
 const router = Router();
 
@@ -71,9 +72,9 @@ router.post("/scan/:qrToken", async (req, res) => {
       service_charge_percent: restaurant?.service_charge_percent || 0,
       session_id: session?.id || null,
       pax: session?.pax || null,
-      // Config for rendering
-      feature_flags: restaurant?.feature_flags || {},
-      ui_config: restaurant?.ui_config || {},
+      // Config for rendering (merged with defaults)
+      feature_flags: mergeFeatureFlags(restaurant?.feature_flags || null),
+      ui_config: mergeUiConfig(restaurant?.ui_config || null),
       ui_mode: restaurant?.ui_mode || "native",
       custom_frontend_url: restaurant?.custom_frontend_url || null,
     });
