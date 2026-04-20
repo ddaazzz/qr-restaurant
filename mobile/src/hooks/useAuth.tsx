@@ -48,11 +48,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const bootstrapAsync = async () => {
     try {
-      // Always require fresh login on app launch — clear stored credentials
-      await apiClient.logout();
-      setIsLoading(false);
+      const token = await SecureStore.getItemAsync('authToken');
+      const restaurantId = await SecureStore.getItemAsync('restaurantId');
+      const role = await SecureStore.getItemAsync('role');
+      const userId = await SecureStore.getItemAsync('userId');
+      const accessRightsStr = await SecureStore.getItemAsync('accessRights');
+      const clockedInStr = await SecureStore.getItemAsync('clockedIn');
+
+      if (token && restaurantId && role) {
+        // Validate token with server before restoring session
+        apiClient.setToken(token);
+        apiClient.setRestaurantId(restaurantId);
+
+        try {
+          await apiClient.getProfile();
+        } catch {
+          // Token is invalid/expired — clear stored credentials
+          await apiClient.logout();
+          setIsLoading(false);
+          return;
+        }
+
+        let access_rights: Record<string, any> | string[] | undefined;
+        if (accessRightsStr) {
+          try { access_rights = JSON.parse(accessRightsStr); } catch {}
+        }
+
+        setUser({
+          token,
+          restaurantId,
+          role: role as AuthResponse['role'],
+          userId: userId || '',
+          access_rights,
+          currently_clocked_in: clockedInStr === 'true',
+        });
+      }
     } catch (error) {
-      console.error('[Auth] Failed to clear token', error);
+      console.error('[Auth] Failed to restore token', error);
+    } finally {
       setIsLoading(false);
     }
   };

@@ -55,6 +55,13 @@ export class WebSocketServer {
         socket.join(roomName);
         console.log(`[WebSocket] ✅ Client ${socket.id} subscribed to kitchen-orders room: ${roomName}`);
       });
+
+      // When staff subscribes to service request events
+      socket.on('subscribe-service-requests', (data: { restaurantId: number }) => {
+        const roomName = `restaurant-${data.restaurantId}-service-requests`;
+        socket.join(roomName);
+        console.log(`[WebSocket] Client ${socket.id} subscribed to service-requests room: ${roomName}`);
+      });
     });
 
     // Set up listener for new session events from PostgreSQL

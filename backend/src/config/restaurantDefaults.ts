@@ -12,6 +12,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   printer_support: true,
   crm: true,
   multi_language: true,
+  service_requests: false,
 };
 
 // Default UI config for customer-facing menu
