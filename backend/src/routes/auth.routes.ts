@@ -1535,6 +1535,7 @@ router.get("/manage/restaurants", async (req, res) => {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
                 r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                r.feature_flags,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r ORDER BY r.id`
       );
@@ -1542,6 +1543,7 @@ router.get("/manage/restaurants", async (req, res) => {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
                 r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                r.feature_flags,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r WHERE r.id = $1`,
         [caller.restaurant_id]
@@ -1590,10 +1592,10 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     return res.status(403).json({ error: "Cannot edit another restaurant" });
   }
 
-  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url } = req.body;
+  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url, feature_flags } = req.body;
 
   // Only superadmin can change customization fields
-  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || render_service_id !== undefined || api_base_url !== undefined)) {
+  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || render_service_id !== undefined || api_base_url !== undefined || feature_flags !== undefined)) {
     return res.status(403).json({ error: "Only superadmin can change customization settings" });
   }
 
@@ -1613,6 +1615,7 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (custom_branch !== undefined) { updates.push(`custom_branch = $${i++}`); params.push(custom_branch); }
     if (render_service_id !== undefined) { updates.push(`render_service_id = $${i++}`); params.push(render_service_id); }
     if (api_base_url !== undefined) { updates.push(`api_base_url = $${i++}`); params.push(api_base_url); }
+    if (feature_flags !== undefined) { updates.push(`feature_flags = $${i++}`); params.push(JSON.stringify(feature_flags)); }
 
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
