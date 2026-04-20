@@ -6,6 +6,9 @@ import { generateESCPOS, generateKitchenOrderESCPOS, generateKPayReceiptESCPOS, 
 
 const router = express.Router();
 
+// QR code domain — set CHUIO_DOMAIN env var for different environments
+const QR_DOMAIN = process.env.CHUIO_DOMAIN || 'chuio.io';
+
 // Printer queue service instance
 let printerQueue: PrinterQueueService | null = null;
 
@@ -721,7 +724,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
 
     // If browser printing, return HTML for client-side printing
     if (printerConfig.printer_type === 'browser') {
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://chuio.io/${qrToken}`)}`;
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://${QR_DOMAIN}/${qrToken}`)}`;
       const html = `
         <!DOCTYPE html>
         <html>
@@ -770,7 +773,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       console.log('[PrintQR] Returning Bluetooth payload for client-side printing');
       
       // Generate QR image URL
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://chuio.io/${qrToken}`)}`;
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://${QR_DOMAIN}/${qrToken}`)}`;
       
       // Get session details (table info)
       let tablePaxInfo = '';
@@ -857,7 +860,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       type: 'qr' as const,
       tableNumber: tableName,
       qrToken: qrToken,
-      qrDataUrl: `https://chuio.io/${qrToken}`,
+      qrDataUrl: `https://${QR_DOMAIN}/${qrToken}`,
       restaurantName: restaurantName,
       printerConfig: {
         type: printerConfig.printer_type,

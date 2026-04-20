@@ -43,7 +43,8 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
 
   // === QR CODE ONLY RECEIPT (When no items) ===
   // For QR receipts, make QR code the dominant element covering full paper
-  const qrData = receipt.qrToken ? `https://chuio.io/${receipt.qrToken}` : receipt.qrCode;
+  const qrDomain = process.env.CHUIO_DOMAIN || 'chuio.io';
+  const qrData = receipt.qrToken ? `https://${qrDomain}/${receipt.qrToken}` : receipt.qrCode;
   
   if (qrData && (!receipt.items || receipt.items.length === 0)) {
     // QR-only layout: matches preview format exactly

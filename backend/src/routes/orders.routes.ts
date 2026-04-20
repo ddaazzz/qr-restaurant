@@ -445,7 +445,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.quantity,
         oi.price_cents AS unit_price_cents,
 
-        mi.name AS item_name,
+        COALESCE(mi.name, 'Deleted Item') AS item_name,
         COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
 
         COALESCE(

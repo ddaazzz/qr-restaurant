@@ -21,9 +21,19 @@ import {
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
-import { apiClient, API_URL } from '../../services/apiClient';
+import { apiClient, API_URL, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
+
+// Derive QR code base URL from current API environment
+const getQrBaseUrl = () => {
+  const currentUrl = apiClient.getCurrentBaseUrl();
+  // Map API URLs to their frontend domains
+  if (currentUrl === ENVIRONMENTS['Development'] || currentUrl === 'https://dev.chuio.io') {
+    return 'https://dev.chuio.io';
+  }
+  return 'https://chuio.io';
+};
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import { Ionicons } from '@expo/vector-icons';
@@ -163,6 +173,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [sessionOrders, setSessionOrders] = useState<Order[]>([]);
+  const [serviceRequests, setServiceRequests] = useState<any[]>([]);
   const [sessionBill, setSessionBill] = useState<Bill | null>(null);
 
   // Modal states
@@ -414,7 +425,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
       setQrLoading(true);
       // Generate QR code using QR server API - Large 800x800 to fill the receipt paper
-      const qrDataUrl = `https://chuio.io/${qrToken}`;
+      const qrDataUrl = `${getQrBaseUrl()}/${qrToken}`;
       
       // Use qr-server.com API to generate QR code (800x800 to fill receipt)
       const qrServerUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&data=${encodeURIComponent(qrDataUrl)}`;
@@ -602,6 +613,31 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     setSelectedSession(session);
     setCurrentView('sessionDetail');
     await loadSessionOrders(session.id);
+    await loadServiceRequests(session.id);
+  };
+
+  const loadServiceRequests = async (sessionId: number) => {
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-requests?status=pending`);
+      // Filter to requests for this session
+      const sessionRequests = (res.data || []).filter((r: any) => r.table_session_id === sessionId);
+      setServiceRequests(sessionRequests);
+    } catch (err) {
+      // Silently fail — feature may not be enabled
+      setServiceRequests([]);
+    }
+  };
+
+  const fulfillServiceRequest = async (requestId: number) => {
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/service-requests/${requestId}`, {
+        status: 'fulfilled',
+      });
+      // Remove from list
+      setServiceRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch (err) {
+      console.error('Error fulfilling service request:', err);
+    }
   };
 
   const clearCallStaff = async (sessionId: number) => {
@@ -841,7 +877,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               tableNumber: table.name,
               pax: newSession.pax,
               startTime: startTimeStr,
-              qrCode: `https://chuio.io/${qrToken}`,
+              qrCode: `${getQrBaseUrl()}/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
             };
 
@@ -1152,7 +1188,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const generateQRHTML = async (tableName: string, qrToken: string, qrTextAbove?: string, qrTextBelow?: string) => {
     try {
       // Build the URL that will be encoded in the QR code
-      const qrDataUrl = `https://chuio.io/${qrToken}`;
+      const qrDataUrl = `${getQrBaseUrl()}/${qrToken}`;
       
       // Use QR server API to generate QR code image (1200x1200 for high quality)
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(qrDataUrl)}`;
@@ -1402,7 +1438,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               tableNumber: selectedTable.name,
               pax: selectedSession.pax,
               startTime: startTimeStr,
-              qrCode: `https://chuio.io/${qrToken}`,
+              qrCode: `${getQrBaseUrl()}/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
             };
             
@@ -1997,6 +2033,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
             </View>
           )}
+          {serviceRequests.length > 0 && serviceRequests.map((req) => (
+            <TouchableOpacity
+              key={req.id}
+              style={{ backgroundColor: '#8b5cf6', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              onPress={() => fulfillServiceRequest(req.id)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🛎️ {req.label}</Text>
+              <Text style={{ color: '#fff', fontSize: 12 }}>Tap to fulfill</Text>
+            </TouchableOpacity>
+          ))}
           <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
           {sessionOrders.length === 0 ? (
             <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
@@ -3016,6 +3062,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
               </View>
             )}
+            {serviceRequests.length > 0 && serviceRequests.map((req) => (
+              <TouchableOpacity
+                key={req.id}
+                style={{ backgroundColor: '#8b5cf6', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                onPress={() => fulfillServiceRequest(req.id)}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🛎️ {req.label}</Text>
+                <Text style={{ color: '#fff', fontSize: 12 }}>Tap to fulfill</Text>
+              </TouchableOpacity>
+            ))}
             <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
             {sessionOrders.length === 0 ? (
               <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>

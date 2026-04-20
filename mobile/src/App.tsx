@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, Text, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TranslationProvider } from './contexts/TranslationContext';
@@ -25,7 +25,16 @@ LogBox.ignoreLogs([
 const IS_DEV = process.env.EXPO_PUBLIC_APP_ENV === 'dev';
 
 const DevBanner = () => {
-  const currentUrl = apiClient.getCurrentBaseUrl();
+  const [currentUrl, setCurrentUrl] = useState(apiClient.getCurrentBaseUrl());
+  
+  useEffect(() => {
+    // Re-check after setupAuthToken completes (async SecureStore read)
+    const timer = setTimeout(() => {
+      setCurrentUrl(apiClient.getCurrentBaseUrl());
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const isDevRuntime = currentUrl !== ENVIRONMENTS['Production'];
   
   if (!IS_DEV && !isDevRuntime) return null;

@@ -1095,7 +1095,8 @@ function onVariantChange(itemId, variantId, optionId, checked) {
   variantSelections[itemId][variantId] = selected;
 
   // ------------------------------
-  updateVariantCounter(itemId, variant);\n  updateAddToCartButton(item);
+  updateVariantCounter(itemId, variant);
+  updateAddToCartButton(item);
 }
 
 async function loadOrderStatus() {
@@ -1569,7 +1570,8 @@ function startOrderPolling() {
   setInterval(loadOrderStatus, 5000);
 }
 
-// ============= COUPON FUNCTIONS =============\nfunction applyCouponToOrders() {
+// ============= COUPON FUNCTIONS =============
+function applyCouponToOrders() {
   const couponCode = document.getElementById("orders-coupon-input").value.trim().toUpperCase();
   if (!couponCode) {
     alert(t('menu.enter-coupon'));
