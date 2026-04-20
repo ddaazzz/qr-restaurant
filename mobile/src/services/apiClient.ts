@@ -6,11 +6,6 @@ import { AuthResponse, LoginCredentials } from '../types';
 const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
 export const API_URL = defaultUrl;
 
-export const ENVIRONMENTS: Record<string, string> = {
-  'Production': 'https://chuio.io',
-  'Development': 'https://dev.chuio.io',
-};
-
 class APIClient {
   private client: AxiosInstance;
   private restaurantId: string | null = null;
@@ -169,18 +164,8 @@ class APIClient {
     await SecureStore.deleteItemAsync('role');
     await SecureStore.deleteItemAsync('accessRights');
     await SecureStore.deleteItemAsync('clockedIn');
-    await SecureStore.deleteItemAsync('devEnvironmentUrl');
     this.token = null;
     this.restaurantId = null;
-    // Preserve current baseURL — environment selection stays active
-  }
-
-  getCurrentBaseUrl(): string {
-    return (this.client.defaults.baseURL as string) || API_URL;
-  }
-
-  async switchEnvironment(url: string): Promise<void> {
-    this.client.defaults.baseURL = url;
   }
 
   // Menu endpoints

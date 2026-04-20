@@ -21,19 +21,12 @@ import {
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
-import { apiClient, API_URL, ENVIRONMENTS } from '../../services/apiClient';
+import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
 
-// Derive QR code base URL from current API environment
-const getQrBaseUrl = () => {
-  const currentUrl = apiClient.getCurrentBaseUrl();
-  // Map API URLs to their frontend domains
-  if (currentUrl === ENVIRONMENTS['Development'] || currentUrl === 'https://dev.chuio.io') {
-    return 'https://dev.chuio.io';
-  }
-  return 'https://chuio.io';
-};
+// QR code base URL matches the API URL (set at build time)
+const getQrBaseUrl = () => API_URL;
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import { Ionicons } from '@expo/vector-icons';

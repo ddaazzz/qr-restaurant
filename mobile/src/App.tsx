@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, View, Text, LogBox } from 'react-native';
+import React from 'react';
+import { ActivityIndicator, View, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TranslationProvider } from './contexts/TranslationContext';
 import { ToastProvider } from './components/ToastProvider';
@@ -8,7 +8,6 @@ import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
-import { apiClient, ENVIRONMENTS } from './services/apiClient';
 
 // Fix animation batching issues at startup
 patchAnimationErrors();
@@ -21,29 +20,6 @@ LogBox.ignoreLogs([
   'nw_endpoint_flow_failed_with_error',
   'nw_connection'
 ]);
-
-const DevBanner = () => {
-  const [currentUrl, setCurrentUrl] = useState(apiClient.getCurrentBaseUrl());
-  
-  useEffect(() => {
-    // Poll periodically to detect environment switches
-    const interval = setInterval(() => {
-      const url = apiClient.getCurrentBaseUrl();
-      setCurrentUrl(prev => prev !== url ? url : prev);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isDevRuntime = currentUrl !== ENVIRONMENTS['Production'];
-  
-  if (!isDevRuntime) return null;
-
-  return (
-    <View style={{ backgroundColor: '#dc2626', paddingVertical: 2, alignItems: 'center' }}>
-      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>DEV MODE — {currentUrl}</Text>
-    </View>
-  );
-};
 
 const RootNavigator = () => {
   const { user, isLoading, isSignedIn } = useAuth();
@@ -74,7 +50,6 @@ export default function App() {
     <TranslationProvider>
       <AuthProvider>
         <ToastProvider>
-          <DevBanner />
           <RootNavigator />
         </ToastProvider>
       </AuthProvider>
