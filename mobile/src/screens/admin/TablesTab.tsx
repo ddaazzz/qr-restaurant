@@ -596,7 +596,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       console.log('[LoadOrders] API Response:', res.data);
       const orders = res.data.items || res.data || [];
       console.log('[LoadOrders] Parsed orders:', orders);
-      setSessionOrders(Array.isArray(orders) ? orders : []);
+      // Filter out orders with no valid items (empty orders or all deleted items)
+      const validOrders = (Array.isArray(orders) ? orders : []).filter((order: any) => {
+        if (!order.items || order.items.length === 0) return false;
+        return order.items.some((item: any) => {
+          const name = item.name || item.item_name || item.menu_item_name;
+          return name && name !== 'Deleted Item';
+        });
+      });
+      setSessionOrders(validOrders);
 
       const billRes = await apiClient.get(
         `/api/sessions/${sessionId}/bill`

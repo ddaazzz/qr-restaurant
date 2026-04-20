@@ -558,7 +558,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
     }
 
     res.json({
-      items: Object.values(ordersMap)
+      items: Object.values(ordersMap).filter((order: any) => order.items.length > 0)
     });
   } catch (err) {
     console.error("Failed to load session orders:", err);

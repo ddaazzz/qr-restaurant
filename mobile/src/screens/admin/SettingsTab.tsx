@@ -29,6 +29,7 @@ import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
+import appJson from '../../../app.json';
 
 interface RestaurantSettings {
   id: number;
@@ -2587,7 +2588,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       {/* Version label — tap 7 times to reveal dev menu */}
       <TouchableOpacity onPress={handleDevTap} activeOpacity={1}>
         <Text style={{ textAlign: 'center', fontSize: 11, color: currentEnv !== ENVIRONMENTS['Production'] ? '#ef4444' : '#9ca3af', marginBottom: 8 }}>
-          v1.0.0{currentEnv !== ENVIRONMENTS['Production'] ? ` • DEV MODE (${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'})` : (showDevMenu ? ` • Production` : '')}
+          v{appJson.expo.version}{currentEnv !== ENVIRONMENTS['Production'] ? ` • DEV MODE (${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'})` : (showDevMenu ? ` • Production` : '')}
         </Text>
       </TouchableOpacity>
 
