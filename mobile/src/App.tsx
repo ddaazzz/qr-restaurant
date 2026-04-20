@@ -22,22 +22,21 @@ LogBox.ignoreLogs([
   'nw_connection'
 ]);
 
-const IS_DEV = process.env.EXPO_PUBLIC_APP_ENV === 'dev';
-
 const DevBanner = () => {
   const [currentUrl, setCurrentUrl] = useState(apiClient.getCurrentBaseUrl());
   
   useEffect(() => {
-    // Re-check after setupAuthToken completes (async SecureStore read)
-    const timer = setTimeout(() => {
-      setCurrentUrl(apiClient.getCurrentBaseUrl());
-    }, 500);
-    return () => clearTimeout(timer);
+    // Poll periodically to detect environment switches
+    const interval = setInterval(() => {
+      const url = apiClient.getCurrentBaseUrl();
+      setCurrentUrl(prev => prev !== url ? url : prev);
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const isDevRuntime = currentUrl !== ENVIRONMENTS['Production'];
   
-  if (!IS_DEV && !isDevRuntime) return null;
+  if (!isDevRuntime) return null;
 
   return (
     <View style={{ backgroundColor: '#dc2626', paddingVertical: 2, alignItems: 'center' }}>

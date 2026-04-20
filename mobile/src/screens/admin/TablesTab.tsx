@@ -2052,13 +2052,19 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               return (
                 <View key={idx} style={styles.orderCard}>
                   <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                  {order.items && order.items.length > 0 ? (
-                    order.items.map((item, itemIdx) => (
+                  {order.items && order.items.filter(item => {
+                    const name = item.name || item.item_name || item.menu_item_name;
+                    return name && name !== 'Deleted Item';
+                  }).length > 0 ? (
+                    order.items.filter(item => {
+                      const name = item.name || item.item_name || item.menu_item_name;
+                      return name && name !== 'Deleted Item';
+                    }).map((item, itemIdx) => (
                       <View key={itemIdx}>
                         <View style={styles.orderItem}>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.itemName}>
-                              {item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}
+                              {item.name || item.item_name || item.menu_item_name} x{item.quantity}
                             </Text>
                             <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
                             {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
@@ -3079,12 +3085,18 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               sessionOrders.map((order, idx) => (
                 <View key={idx} style={styles.orderCard}>
                   <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                  {order.items && order.items.length > 0 ? (
-                    order.items.map((item, itemIdx) => (
+                  {order.items && order.items.filter(item => {
+                    const name = item.name || item.item_name || item.menu_item_name;
+                    return name && name !== 'Deleted Item';
+                  }).length > 0 ? (
+                    order.items.filter(item => {
+                      const name = item.name || item.item_name || item.menu_item_name;
+                      return name && name !== 'Deleted Item';
+                    }).map((item, itemIdx) => (
                       <View key={itemIdx}>
                         <View style={styles.orderItem}>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.itemName}>{item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}</Text>
+                            <Text style={styles.itemName}>{item.name || item.item_name || item.menu_item_name} x{item.quantity}</Text>
                             <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
                             {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
                           </View>
