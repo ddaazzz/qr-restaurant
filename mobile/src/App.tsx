@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, View, LogBox } from 'react-native';
+import { ActivityIndicator, View, Text, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TranslationProvider } from './contexts/TranslationContext';
 import { ToastProvider } from './components/ToastProvider';
@@ -8,10 +8,13 @@ import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
+import { API_URL } from './services/apiClient';
 
 // Fix animation batching issues at startup
 patchAnimationErrors();
 configureAnimationPerformance();
+
+const IS_DEV_BUILD = API_URL !== 'https://chuio.io';
 
 // Suppress only specific known harmless warnings
 LogBox.ignoreLogs([
@@ -50,6 +53,11 @@ export default function App() {
     <TranslationProvider>
       <AuthProvider>
         <ToastProvider>
+          {IS_DEV_BUILD && (
+            <View style={{ backgroundColor: '#dc2626', paddingVertical: 2, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>DEV BUILD</Text>
+            </View>
+          )}
           <RootNavigator />
         </ToastProvider>
       </AuthProvider>
