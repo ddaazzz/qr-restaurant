@@ -8,6 +8,7 @@ import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
+import { apiClient, ENVIRONMENTS } from './services/apiClient';
 
 // Fix animation batching issues at startup
 patchAnimationErrors();
@@ -24,11 +25,14 @@ LogBox.ignoreLogs([
 const IS_DEV = process.env.EXPO_PUBLIC_APP_ENV === 'dev';
 
 const DevBanner = () => {
-  if (!IS_DEV) return null;
+  const currentUrl = apiClient.getCurrentBaseUrl();
+  const isDevRuntime = currentUrl !== ENVIRONMENTS['Production'];
+  
+  if (!IS_DEV && !isDevRuntime) return null;
 
   return (
     <View style={{ backgroundColor: '#dc2626', paddingVertical: 2, alignItems: 'center' }}>
-      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>DEV MODE</Text>
+      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>DEV MODE — {currentUrl}</Text>
     </View>
   );
 };

@@ -150,7 +150,7 @@ interface PaymentTerminal {
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const { t, lang, setLanguage } = useTranslation();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout: authLogout } = useAuth();
   const isSuperadmin = currentUser?.role === 'superadmin';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -191,11 +191,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             try {
               await apiClient.switchEnvironment(url);
               setCurrentEnv(url);
-              await apiClient.logout();
-              navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+              await authLogout();
             } catch (e) {
               console.error('Env switch error:', e);
-              navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+              await authLogout();
             }
           },
         },
@@ -2587,8 +2586,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       {/* Version label — tap 7 times to reveal dev menu */}
       <TouchableOpacity onPress={handleDevTap} activeOpacity={1}>
-        <Text style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-          v1.0.0{showDevMenu ? ` • ${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'}` : ''}
+        <Text style={{ textAlign: 'center', fontSize: 11, color: currentEnv !== ENVIRONMENTS['Production'] ? '#ef4444' : '#9ca3af', marginBottom: 8 }}>
+          v1.0.0{currentEnv !== ENVIRONMENTS['Production'] ? ` • DEV MODE (${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'})` : (showDevMenu ? ` • Production` : '')}
         </Text>
       </TouchableOpacity>
 

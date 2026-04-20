@@ -22,6 +22,7 @@ import presetsRoutes from "./routes/presets.routes";
 import paymentTerminalsRoutes from "./routes/payment-terminals.routes";
 import paymentTransactionsRoutes from "./routes/payment-transactions.routes";
 import crmRoutes from "./routes/crm.routes";
+import serviceRequestsRoutes from "./routes/serviceRequests.routes";
 import { isR2Configured, s3Client, R2_BUCKET_NAME } from "./config/storage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 
@@ -178,6 +179,7 @@ app.use("/api", couponsRoutes);
 app.use("/api", bookingsRoutes);
 app.use("/api", waitlistRoutes);
 app.use("/api", crmRoutes);
+app.use("/api", serviceRequestsRoutes);
 
 /* ======================
    FRONTEND STATIC FILES

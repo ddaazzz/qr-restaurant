@@ -49,6 +49,35 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
   }
 });
 
+// GET restaurant config (lightweight — feature flags, ui config for mobile app)
+router.get("/restaurants/:restaurantId/config", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT feature_flags, ui_config, ui_mode, language_preference
+       FROM restaurants WHERE id = $1`,
+      [req.params.restaurantId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
+    res.json(result.rows[0]);
+  } catch (err: any) {
+    // Graceful fallback if columns don't exist (e.g. production before migration)
+    if (err.message?.includes("column")) {
+      try {
+        const fallback = await pool.query(
+          `SELECT ui_mode, language_preference FROM restaurants WHERE id = $1`,
+          [req.params.restaurantId]
+        );
+        if (fallback.rowCount === 0) return res.status(404).json({ error: "Not found" });
+        res.json({ ...fallback.rows[0], feature_flags: {}, ui_config: {} });
+      } catch (e2: any) {
+        res.status(500).json({ error: e2.message });
+      }
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
 // PATCH restaurant settings
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
