@@ -138,7 +138,7 @@ router.post("/restaurants/:restaurantId/addons", requireFeature("addons"), async
       return res.status(404).json({ error: "Menu item not found" });
     }
 
-    if (menuItemRes.rows[0].restaurant_id !== parseInt(restaurantId)) {
+    if (menuItemRes.rows[0].restaurant_id !== parseInt(restaurantId!)) {
       return res.status(403).json({ error: "Menu item doesn't belong to this restaurant" });
     }
 
@@ -156,7 +156,7 @@ router.post("/restaurants/:restaurantId/addons", requireFeature("addons"), async
       return res.status(404).json({ error: "Addon item not found" });
     }
 
-    if (addonItemRes.rows[0].restaurant_id !== parseInt(restaurantId)) {
+    if (addonItemRes.rows[0].restaurant_id !== parseInt(restaurantId!)) {
       return res.status(403).json({ error: "Addon item doesn't belong to this restaurant" });
     }
 

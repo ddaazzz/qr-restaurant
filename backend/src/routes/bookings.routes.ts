@@ -6,7 +6,7 @@ const router = Router();
 
 // GET bookings for a restaurant (optionally filtered by date or table)
 router.get("/restaurants/:restaurantId/bookings", requireFeature("bookings"), async (req, res) => {
-  const restaurantId = parseInt(req.params.restaurantId, 10);
+  const restaurantId = parseInt(req.params.restaurantId!, 10);
   const { date, table_id } = req.query;
 
   try {

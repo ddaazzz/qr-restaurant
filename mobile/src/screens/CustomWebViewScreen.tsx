@@ -1,7 +1,15 @@
 import React, { useRef, useCallback } from 'react';
-import { View, ActivityIndicator, StyleSheet, BackHandler, Platform } from 'react-native';
-import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import { View, ActivityIndicator, StyleSheet, BackHandler, Platform, Text } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
+
+// Dynamic import — react-native-webview requires a native build that includes it.
+// If the native module isn't available, we show a fallback message.
+let WebView: any = null;
+try {
+  WebView = require('react-native-webview').WebView;
+} catch {
+  // Native module not available in this build
+}
 
 interface CustomWebViewScreenProps {
   url: string;
@@ -18,8 +26,18 @@ interface CustomWebViewScreenProps {
  * (auth, push notifications, camera) via postMessage.
  */
 export const CustomWebViewScreen: React.FC<CustomWebViewScreenProps> = ({ url, restaurantId, token }) => {
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<any>(null);
   const { logout } = useAuth();
+
+  if (!WebView) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <Text style={{ fontSize: 16, color: '#374151', textAlign: 'center' }}>
+          WebView is not available in this build. Please update the app to use custom restaurant UIs.
+        </Text>
+      </View>
+    );
+  }
 
   // Inject auth credentials into the WebView so the custom frontend can make API calls
   const injectedJS = `
@@ -37,7 +55,7 @@ export const CustomWebViewScreen: React.FC<CustomWebViewScreenProps> = ({ url, r
   `;
 
   // Handle messages from the WebView (native feature requests)
-  const onMessage = useCallback((event: WebViewMessageEvent) => {
+  const onMessage = useCallback((event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       switch (data.type) {
