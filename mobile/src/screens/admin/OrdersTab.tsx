@@ -1111,6 +1111,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             const voidOutTradeNo = `VOID-${Date.now()}`;
             const voidResult = await kpayVoid(config, appPrivateKey!, voidOutTradeNo, outTradeNo, encPwd);
             if (!voidResult.success) throw new Error(voidResult.message + (voidResult.error ? ` (${voidResult.error})` : ''));
+            // Persist void trade no and status to DB
+            try {
+              await apiClient.patch(`/api/restaurants/${restaurantId}/kpay-transactions/${outTradeNo}/mark-void-refund`, {
+                type: 'voided', tradeNo: voidOutTradeNo,
+              });
+            } catch (_) {/* non-fatal */}
             Alert.alert(t('orders.success'), t('orders.void-success'));
             await reloadSelectedOrder(order.id);
           } catch (err: any) {
@@ -1160,6 +1166,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             : { transactionNo: kpayTxDetails?.transactionNo }),
         });
         if (!refundResult.success) throw new Error(refundResult.message + (refundResult.error ? ` (${refundResult.error})` : ''));
+        // Persist refund trade no and status to DB
+        try {
+          const refundAmtCents = kpayRefundAmount ? Math.round(parseFloat(kpayRefundAmount) * 100) : undefined;
+          await apiClient.patch(`/api/restaurants/${restaurantId}/kpay-transactions/${outTradeNo}/mark-void-refund`, {
+            type: 'refunded', tradeNo: refundOutTradeNo,
+            ...(refundAmtCents != null ? { refundAmountCents: refundAmtCents } : {}),
+          });
+        } catch (_) {/* non-fatal */}
         setShowKpayRefundModal(false);
         Alert.alert(t('orders.success'), t('orders.refund-kpay-success'));
         await reloadSelectedOrder(selectedHistoryOrder.id);
@@ -1708,12 +1722,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 8 }}>{t('orders.kpay-details')}</Text>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.order-ref')}</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-original-ref')}</Text>
                   <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
                 </View>
                 {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
                 {kpayTxDetails && (
                   <>
+                    {kpayTxDetails.refund_reference_id ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                          {kpayTxDetails.refund_reference_id.startsWith('VOID')
+                            ? t('orders.kpay-void-trade-no')
+                            : t('orders.kpay-refund-trade-no')}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refund_reference_id}</Text>
+                      </View>
+                    ) : null}
                     {kpayTxDetails.transactionNo ? (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-order-no')}</Text>

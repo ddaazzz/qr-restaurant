@@ -1028,6 +1028,53 @@ router.patch('/restaurants/:restaurantId/kpay-transactions/:outTradeNo/sync', as
 });
 
 /**
+ * PATCH /api/restaurants/:restaurantId/kpay-transactions/:outTradeNo/mark-void-refund
+ * Called by mobile after a direct void/refund to persist the new outTradeNo and status.
+ * Body: { type: 'voided' | 'refunded', tradeNo: string, refundAmountCents?: number }
+ */
+router.patch('/restaurants/:restaurantId/kpay-transactions/:outTradeNo/mark-void-refund', async (req, res) => {
+  try {
+    const { restaurantId, outTradeNo } = req.params;
+    const { type, tradeNo, refundAmountCents } = req.body;
+
+    if (!type || !tradeNo) {
+      return res.status(400).json({ error: 'type and tradeNo are required' });
+    }
+    if (type !== 'voided' && type !== 'refunded') {
+      return res.status(400).json({ error: 'type must be voided or refunded' });
+    }
+
+    const sets: string[] = [
+      'status = $1',
+      'refund_reference_id = $2',
+      'completed_at = COALESCE(completed_at, NOW())',
+    ];
+    const params: any[] = [type, tradeNo, outTradeNo, restaurantId];
+    if (refundAmountCents != null) {
+      sets.push(`refund_amount_cents = $${params.length + 1}`);
+      params.push(refundAmountCents);
+    }
+
+    await pool.query(
+      `UPDATE kpay_transactions SET ${sets.join(', ')}
+       WHERE kpay_reference_id = $3 AND restaurant_id = $4`,
+      params,
+    );
+
+    await pool.query(
+      `UPDATE orders SET payment_status = $1
+       WHERE chuio_order_reference = $2 AND restaurant_id = $3`,
+      [type, outTradeNo, restaurantId],
+    );
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('[KPay] mark-void-refund error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * GET /api/restaurants/:restaurantId/kpay-terminal/active
  * Returns the active KPay terminal config (for frontend gating)
  */
