@@ -648,15 +648,16 @@ router.post('/restaurants/:restaurantId/payment/return', handlePaymentReturn);
 
 /**
  * GET /api/restaurants/:restaurantId/orders/:orderId/payment-status
- * Check the payment status of an order
+ * Check the payment status of an order.
+ * Auto-resets orders stuck in 'pending' for more than 5 minutes (webhook/return never fired).
  */
 router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (req, res) => {
   try {
     const { restaurantId, orderId } = req.params;
 
     const result = await pool.query(
-      `SELECT id, payment_status, transaction_id, error_message, completed_at 
-       FROM order_payments 
+      `SELECT id, payment_status, transaction_id, error_message, completed_at, created_at
+       FROM order_payments
        WHERE order_id = $1 AND restaurant_id = $2
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -668,14 +669,85 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
     }
 
     const payment = result.rows[0];
+
+    // Auto-reset if pending for > 5 minutes (PA likely never fired webhook/return_url)
+    if (payment.payment_status === 'pending') {
+      const ageMs = Date.now() - new Date(payment.created_at).getTime();
+      if (ageMs > 5 * 60 * 1000) {
+        console.log('[PaymentStatus] Auto-resetting stale pending payment:', payment.id, 'age:', Math.round(ageMs / 1000), 's');
+        await pool.query(
+          `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL
+           WHERE id = $1 AND restaurant_id = $2 AND status != 'completed'`,
+          [orderId, restaurantId]
+        );
+        await pool.query(
+          `UPDATE order_payments SET payment_status = 'failed', error_message = 'Payment timed out — no response from gateway',
+           failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [payment.id]
+        );
+        return res.json({ payment_status: 'failed', reason: 'timeout' });
+      }
+    }
+
     res.json({
       payment_status: payment.payment_status,
       transaction_id: payment.transaction_id,
       error_message: payment.error_message,
       completed_at: payment.completed_at,
+      initiated_at: payment.created_at,
     });
   } catch (error: any) {
     console.error('[PaymentTransaction] Error getting payment status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/restaurants/:restaurantId/orders/:orderId/cancel-payment
+ * Allow the customer to cancel a stuck pending PA payment and retry.
+ * Only allowed if the order is not yet completed.
+ */
+router.post('/restaurants/:restaurantId/orders/:orderId/cancel-payment', async (req, res) => {
+  try {
+    const { restaurantId, orderId } = req.params;
+
+    const orderRes = await pool.query(
+      `SELECT id, status, payment_method FROM orders WHERE id = $1 AND restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+
+    if (orderRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orderRes.rows[0];
+
+    if (order.status === 'completed') {
+      return res.status(400).json({ error: 'Order is already completed and paid' });
+    }
+
+    if (order.payment_method !== 'payment-asia') {
+      return res.status(400).json({ error: 'No pending Payment Asia transaction to cancel' });
+    }
+
+    // Reset order so customer can initiate a new payment
+    await pool.query(
+      `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL WHERE id = $1 AND restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+
+    // Mark any pending payment records as cancelled
+    await pool.query(
+      `UPDATE order_payments SET payment_status = 'cancelled', error_message = 'Cancelled by customer',
+       updated_at = NOW()
+       WHERE order_id = $1 AND restaurant_id = $2 AND payment_status = 'pending'`,
+      [orderId, restaurantId]
+    );
+
+    console.log('[CancelPayment] Customer cancelled pending PA payment for order:', orderId);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[CancelPayment] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
