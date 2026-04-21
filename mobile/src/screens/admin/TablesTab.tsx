@@ -30,6 +30,7 @@ const getQrBaseUrl = () => API_URL;
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import { Ionicons } from '@expo/vector-icons';
+import { kpaySign, kpaySale, kpayQuery } from '../../services/kpayDirectService';
 
 interface TableCategory {
   id: number;
@@ -1088,34 +1089,50 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     setKpayStatusMsg('Initiating…');
     setKpayLogs([{ msg: '> Connecting to KPay terminal…', color: '#ffd43b' }]);
 
-    const amountInCents = String(finalAmount).padStart(12, '0');
     const addLog = (msg: string, color = '#00ff00') =>
       setKpayLogs(prev => [...prev, { msg, color }]);
 
+    const config = {
+      terminalIp: kpayTerminal.terminal_ip,
+      terminalPort: kpayTerminal.terminal_port,
+      appId: kpayTerminal.app_id,
+      appSecret: kpayTerminal.app_secret,
+      endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
+    };
+
+    const payAmount = String(finalAmount).padStart(12, '0');
+    const outTradeNo = `ORD-${restaurantId}-${kpayTerminal.id}-${Date.now()}`;
+
     try {
-      addLog(`> POST /payment-terminals/${kpayTerminal.id}/test`);
-      addLog(`> Amount: HKD ${(finalAmount / 100).toFixed(2)}`);
-
-      const resp = await apiClient.post(
-        `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test`,
-        { payAmount: amountInCents, tipsAmount: '000000000000', payCurrency: '344' }
-      );
-      const result = resp.data;
-      if (result.logs) result.logs.forEach((l: string) =>
-        addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
-
-      if (!result.initiated) {
-        setKpayStatusMsg('Failed to initiate');
-        addLog(`> ❌ ${result.message || 'Failed to initiate'}`, '#ff6b6b');
+      // Step 1: Key exchange (Sign) — direct to terminal, no RSA needed
+      addLog('> Step 1: Key exchange with terminal…');
+      const signResult = await kpaySign(config);
+      if (!signResult.success) {
+        addLog(`> ❌ Key exchange failed: ${signResult.message}${signResult.error ? ` (${signResult.error})` : ''}`, '#ff6b6b');
+        setKpayStatusMsg('Failed: cannot reach terminal');
         setKpayProcessing(false);
         return;
       }
+      addLog('> ✅ Key exchange successful', '#51cf66');
 
-      const outTradeNo = result.outTradeNo;
-      setKpayStatusMsg('Waiting for customer…');
+      const appPrivateKey = signResult.appPrivateKey!;
+
+      // Step 2: Initiate sale — signed POST direct to terminal
+      addLog(`> Step 2: Sale — HKD ${(finalAmount / 100).toFixed(2)}`);
+      const saleResult = await kpaySale(config, appPrivateKey, outTradeNo, payAmount);
+      if (!saleResult.success) {
+        addLog(`> ❌ Sale failed: ${saleResult.message}${saleResult.error ? ` (${saleResult.error})` : ''}`, '#ff6b6b');
+        setKpayStatusMsg('Sale failed');
+        setKpayProcessing(false);
+        return;
+      }
+      addLog('> ✅ Sale initiated — terminal is waiting for customer', '#51cf66');
       addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
       addLog('> Tap / scan card on terminal', '#ffd43b');
+      setKpayStatusMsg('Waiting for customer…');
 
+      // Step 3: Poll status — signed GET direct to terminal
+      // appPrivateKey stays valid until terminal settlement; reuse it for all polls.
       let attempts = 0;
       const maxAttempts = 22;
 
@@ -1129,15 +1146,9 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
         attempts++;
         addLog(`> Polling… (${attempts}/${maxAttempts})`);
         try {
-          const qResp = await apiClient.get(
-            `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test-status`,
-            { params: { outTradeNo } }
-          );
-          const qData = qResp.data;
-          if (qData.logs) qData.logs.forEach((l: string) =>
-            addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+          const statusResult = await kpayQuery(config, appPrivateKey, outTradeNo);
 
-          if (qData.status === 'success') {
+          if (statusResult.status === 'success') {
             setKpayStatusMsg('Payment confirmed ✅');
             addLog('> ✅ Payment confirmed by terminal', '#51cf66');
 
@@ -1168,9 +1179,9 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             return;
           }
 
-          if (qData.status === 'cancelled' || qData.status === 'failed') {
-            setKpayStatusMsg(qData.status === 'cancelled' ? 'Cancelled' : 'Payment failed');
-            addLog(`> ${qData.status}`, '#ff6b6b');
+          if (statusResult.status === 'cancelled' || statusResult.status === 'failed') {
+            setKpayStatusMsg(statusResult.status === 'cancelled' ? 'Cancelled' : 'Payment failed');
+            addLog(`> ${statusResult.status}`, '#ff6b6b');
             setKpayProcessing(false);
             return;
           }

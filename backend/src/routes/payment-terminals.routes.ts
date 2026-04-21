@@ -963,7 +963,7 @@ router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) =
   try {
     const { restaurantId } = req.params;
     const result = await pool.query(
-      `SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active
+      `SELECT id, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, is_active
        FROM payment_terminals
        WHERE restaurant_id = $1 AND vendor_name = 'kpay' AND is_active = true
        LIMIT 1`,
