@@ -158,7 +158,7 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef<TablesTabRef, TablesTabProps>(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }, ref) => {
+export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -3827,7 +3827,7 @@ export const TablesTab = forwardRef<TablesTabRef, TablesTabProps>(({ restaurantI
 
     </View>
   );
-});
+}) as React.ForwardRefExoticComponent<TablesTabProps & React.RefAttributes<TablesTabRef>>;
 
 const styles = StyleSheet.create({
   container: {
