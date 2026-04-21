@@ -30,7 +30,7 @@ const getQrBaseUrl = () => API_URL;
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import { Ionicons } from '@expo/vector-icons';
-import { kpaySign, kpaySale, kpayQuery } from '../../services/kpayDirectService';
+import { kpaySign, kpaySale, kpayQuery, kpayClose } from '../../services/kpayDirectService';
 
 interface TableCategory {
   id: number;
@@ -251,6 +251,10 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
   const [kpayStatusMsg, setKpayStatusMsg] = useState('');
   const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
   const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Stores live session so abort handler can call kpayClose on the terminal
+  const kpayActiveSessionRef = useRef<{ config: any; appPrivateKey: string; outTradeNo: string } | null>(null);
+  // Stores active session data so the abort handler can call kpayClose on the terminal
+  const kpayActiveSessionRef = useRef<{ config: any; appPrivateKey: string; outTradeNo: string } | null>(null);
 
   // Expose toggleEditMode and navigateToScannedQR through ref
   useImperativeHandle(ref, () => ({
@@ -1131,6 +1135,9 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
       addLog('> Tap / scan card on terminal', '#ffd43b');
       setKpayStatusMsg('Waiting for customer…');
 
+      // Save session so abort can call kpayClose
+      kpayActiveSessionRef.current = { config, appPrivateKey, outTradeNo };
+
       // Step 3: Poll status — signed GET direct to terminal
       // appPrivateKey stays valid until terminal settlement; reuse it for all polls.
       let attempts = 0;
@@ -1151,6 +1158,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
           if (statusResult.status === 'success') {
             setKpayStatusMsg('Payment confirmed ✅');
             addLog('> ✅ Payment confirmed by terminal', '#51cf66');
+            kpayActiveSessionRef.current = null;
 
             await apiClient.post(`/api/sessions/${sessionId}/close-bill`, {
               restaurantId: parseInt(restaurantId),
@@ -1182,6 +1190,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
           if (statusResult.status === 'cancelled' || statusResult.status === 'failed') {
             setKpayStatusMsg(statusResult.status === 'cancelled' ? 'Cancelled' : 'Payment failed');
             addLog(`> ${statusResult.status}`, '#ff6b6b');
+            kpayActiveSessionRef.current = null;
             setKpayProcessing(false);
             return;
           }
@@ -2430,9 +2439,27 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary, kpayProcessing && { opacity: 0.4 }]}
-                  onPress={() => { if (!kpayProcessing) { setShowCloseBillModal(false); setKpayLogs([]); setKpayStatusMsg(''); } }}
+                  onPress={async () => {
+                    if (kpayProcessing) {
+                      // Tell the terminal to release its in-progress transaction
+                      const session = kpayActiveSessionRef.current;
+                      if (session) {
+                        kpayActiveSessionRef.current = null;
+                        if (kpayPollRef.current) { clearTimeout(kpayPollRef.current); kpayPollRef.current = null; }
+                        setKpayStatusMsg('Cancelling…');
+                        await kpayClose(session.config, session.appPrivateKey, session.outTradeNo);
+                      }
+                      setKpayProcessing(false);
+                      setKpayLogs([]);
+                      setKpayStatusMsg('');
+                    } else {
+                      setShowCloseBillModal(false);
+                      setKpayLogs([]);
+                      setKpayStatusMsg('');
+                    }
+                  }}
                 >
-                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                  <Text style={styles.btnText}>{kpayProcessing ? 'Abort' : t('common.cancel')}</Text>
                 </TouchableOpacity>
                 {!(kpayProcessing || kpayLogs.length > 0) && (
                 <TouchableOpacity
@@ -3418,8 +3445,25 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 )}
 
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.btn, styles.btnSecondary, kpayProcessing && { opacity: 0.4 }]} onPress={() => { if (!kpayProcessing) { setShowCloseBillModal(false); setKpayLogs([]); setKpayStatusMsg(''); } }}>
-                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={async () => {
+                    if (kpayProcessing) {
+                      const session = kpayActiveSessionRef.current;
+                      if (session) {
+                        kpayActiveSessionRef.current = null;
+                        if (kpayPollRef.current) { clearTimeout(kpayPollRef.current); kpayPollRef.current = null; }
+                        setKpayStatusMsg('Cancelling…');
+                        await kpayClose(session.config, session.appPrivateKey, session.outTradeNo);
+                      }
+                      setKpayProcessing(false);
+                      setKpayLogs([]);
+                      setKpayStatusMsg('');
+                    } else {
+                      setShowCloseBillModal(false);
+                      setKpayLogs([]);
+                      setKpayStatusMsg('');
+                    }
+                  }}>
+                    <Text style={styles.btnText}>{kpayProcessing ? 'Abort' : t('common.cancel')}</Text>
                   </TouchableOpacity>
                   {!(kpayProcessing || kpayLogs.length > 0) && (
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={closeBill}>

@@ -4,7 +4,7 @@ import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import { Ionicons } from '@expo/vector-icons';
-import { kpaySign, kpaySale, kpayQuery } from '../../services/kpayDirectService';
+import { kpaySign, kpaySale, kpayQuery, kpayClose, kpayVoid, kpayRefund, encryptManagerPassword } from '../../services/kpayDirectService';
 
 interface MenuItem {
   id: number;
@@ -263,6 +263,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [kpayStatusMsg, setKpayStatusMsg] = useState('');
     const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
     const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Stores live session so abort handler can call kpayClose on the terminal
+    const kpayActiveSessionRef = useRef<{ config: any; appPrivateKey: string; outTradeNo: string } | null>(null);
 
     // Customer name prompt for To-Go orders
     const [showCustomerNameModal, setShowCustomerNameModal] = useState(false);
@@ -906,6 +908,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         addLog(`> ${t('orders.kpay-tap-scan')}`, '#ffd43b');
         setKpayStatusMsg(t('orders.kpay-waiting'));
 
+        // Save session so abort can call kpayClose
+        kpayActiveSessionRef.current = { config, appPrivateKey, outTradeNo };
+
         // Step 3: Poll status — signed GET direct to terminal
         // appPrivateKey is valid until terminal settlement; reuse for all polls.
         let attempts = 0;
@@ -927,6 +932,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             if (statusResult.status === 'success') {
               setKpayStatusMsg(t('orders.kpay-paid'));
               addLog(`> ✅ ${t('orders.kpay-confirmed')}`, '#51cf66');
+              kpayActiveSessionRef.current = null;
 
               await apiClient.post(
                 `/api/sessions/${paymentModalSessionId}/close-bill`,
@@ -955,6 +961,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             if (statusResult.status === 'cancelled' || statusResult.status === 'failed') {
               setKpayStatusMsg(statusResult.status === 'cancelled' ? t('orders.kpay-cancelled') : t('orders.kpay-failed'));
               addLog(`> ${statusResult.status}`, '#ff6b6b');
+              kpayActiveSessionRef.current = null;
               setKpayProcessing(false);
               return;
             }
@@ -974,10 +981,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    const abortKpayPayment = () => {
+    const abortKpayPayment = async () => {
+      const session = kpayActiveSessionRef.current;
       if (kpayPollRef.current) {
         clearTimeout(kpayPollRef.current);
         kpayPollRef.current = null;
+      }
+      kpayActiveSessionRef.current = null;
+      // Tell the terminal to release the in-progress transaction
+      if (session) {
+        setKpayStatusMsg('Cancelling…');
+        await kpayClose(session.config, session.appPrivateKey, session.outTradeNo);
       }
       setKpayProcessing(false);
       setKpayStatusMsg('');
@@ -1040,28 +1054,30 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         Alert.alert(t('orders.error'), t('orders.no-kpay-ref'));
         return;
       }
-      Alert.alert(
+      Alert.prompt(
         t('orders.void-kpay'),
-        t('orders.void-kpay-msg').replace('{0}', outTradeNo),
-        [
-          { text: t('orders.cancel') },
-          {
-            text: t('orders.void'),
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                await apiClient.post(
-                  `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/cancel`,
-                  { outTradeNo: `VOID-${Date.now()}`, originOutTradeNo: outTradeNo }
-                );
-                Alert.alert(t('orders.success'), t('orders.void-success'));
-                await reloadSelectedOrder(order.id);
-              } catch (err: any) {
-                Alert.alert(t('orders.void-failed'), err.response?.data?.error || err.message);
-              }
-            },
-          },
-        ]
+        t('orders.void-kpay-msg').replace('{0}', outTradeNo) + '\n\n' + t('orders.enter-manager-password'),
+        async (password) => {
+          if (!password) return;
+          try {
+            const config = {
+              terminalIp: kpayTerminal.terminal_ip,
+              terminalPort: kpayTerminal.terminal_port,
+              appId: kpayTerminal.app_id,
+              appSecret: kpayTerminal.app_secret,
+              endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
+            };
+            const { appPrivateKey, platformPublicKey } = await kpaySign(config);
+            const encPwd = await encryptManagerPassword(platformPublicKey!, password);
+            const voidOutTradeNo = `VOID-${Date.now()}`;
+            await kpayVoid(config, appPrivateKey!, voidOutTradeNo, outTradeNo, encPwd);
+            Alert.alert(t('orders.success'), t('orders.void-success'));
+            await reloadSelectedOrder(order.id);
+          } catch (err: any) {
+            Alert.alert(t('orders.void-failed'), err.message);
+          }
+        },
+        'secure-text'
       );
     };
 
@@ -1080,23 +1096,35 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         return;
       }
       try {
-        const body: any = {
-          outTradeNo: `REF-${Date.now()}`,
-          refundType: 2, // default QR
-          managerPassword: kpayManagerPassword,
+        const config = {
+          terminalIp: kpayTerminal.terminal_ip,
+          terminalPort: kpayTerminal.terminal_port,
+          appId: kpayTerminal.app_id,
+          appSecret: kpayTerminal.app_secret,
+          endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
         };
-        if (kpayRefundAmount) {
-          body.refundAmount = kpayRefundAmount;
-        }
-        await apiClient.post(
-          `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/refund`,
-          body
-        );
+        const { appPrivateKey, platformPublicKey } = await kpaySign(config);
+        const encPwd = await encryptManagerPassword(platformPublicKey!, kpayManagerPassword);
+        const refundOutTradeNo = `REF-${Date.now()}`;
+
+        // Determine refund type from tx details
+        // refundType 1 = Card (needs refNo + commitTime), 2 = QR (needs transactionNo)
+        const refundType = kpayTxDetails?.refNo ? 1 : 2;
+        await kpayRefund(config, appPrivateKey!, {
+          outTradeNo: refundOutTradeNo,
+          originOutTradeNo: outTradeNo,
+          refundType,
+          managerPassword: encPwd,
+          refundAmount: kpayRefundAmount ? String(kpayRefundAmount) : undefined,
+          ...(refundType === 1
+            ? { refNo: kpayTxDetails?.refNo, commitTime: kpayTxDetails?.commitTime }
+            : { transactionNo: kpayTxDetails?.transactionNo }),
+        });
         setShowKpayRefundModal(false);
         Alert.alert(t('orders.success'), t('orders.refund-kpay-success'));
         await reloadSelectedOrder(selectedHistoryOrder.id);
       } catch (err: any) {
-        Alert.alert(t('orders.refund-failed'), err.response?.data?.error || err.message);
+        Alert.alert(t('orders.refund-failed'), err.message);
       }
     };
 
