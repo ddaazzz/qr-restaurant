@@ -1700,6 +1700,7 @@
   "orders.kpay-details": "KPay Transaction Details",
   "orders.order-ref": "Order Ref",
   "orders.kpay-original-ref": "Original Order Ref.",
+  "orders.kpay-tx-not-loaded": "Transaction details not yet loaded. Please wait and try again.",
   "orders.kpay-void-trade-no": "Void Order No.",
   "orders.kpay-refund-trade-no": "Refund Order No.",
   "orders.amount": "Amount",

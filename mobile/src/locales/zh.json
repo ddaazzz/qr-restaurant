@@ -1840,6 +1840,7 @@
   "orders.kpay-details": "KPay 交易詳情",
   "orders.order-ref": "訂單參考",
   "orders.kpay-original-ref": "原始訂單參考",
+  "orders.kpay-tx-not-loaded": "交易詳情尚未載入，請稍後再試。",
   "orders.kpay-void-trade-no": "撤銷訂單號",
   "orders.kpay-refund-trade-no": "退款訂單號",
   "orders.amount": "金額",

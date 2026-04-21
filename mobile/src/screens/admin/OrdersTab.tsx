@@ -1147,6 +1147,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         Alert.alert(t('orders.error'), t('orders.password-required'));
         return;
       }
+      if (!kpayTxDetails) {
+        Alert.alert(t('orders.error'), t('orders.kpay-tx-not-loaded'));
+        return;
+      }
       try {
         const config = {
           terminalIp: kpayTerminal.terminal_ip,
@@ -1161,15 +1165,19 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
         // Determine refund type from tx details
         // refundType 1 = Card (needs refNo + commitTime), 2 = QR (needs transactionNo)
-        const refundType = kpayTxDetails?.refNo ? 1 : 2;
+        const refundType = kpayTxDetails.refNo ? 1 : 2;
+        // refundAmount must be 12-digit zero-padded cents (e.g. "000000005000" = HKD 50.00)
+        const refundAmountFormatted = kpayRefundAmount
+          ? String(Math.round(parseFloat(kpayRefundAmount) * 100)).padStart(12, '0')
+          : undefined;
         const refundResult = await kpayRefund(config, appPrivateKey!, {
           outTradeNo: refundOutTradeNo,
           refundType,
           encryptedManagerPassword: encPwd,
-          refundAmount: kpayRefundAmount ? String(kpayRefundAmount) : undefined,
+          refundAmount: refundAmountFormatted,
           ...(refundType === 1
-            ? { refNo: kpayTxDetails?.refNo, commitTime: kpayTxDetails?.commitTime }
-            : { transactionNo: kpayTxDetails?.transactionNo }),
+            ? { refNo: kpayTxDetails.refNo, commitTime: kpayTxDetails.commitTime }
+            : { transactionNo: kpayTxDetails.transactionNo }),
         });
         if (!refundResult.success) throw new Error(refundResult.message + (refundResult.error ? ` (${refundResult.error})` : ''));
         // Persist refund trade no and status to DB
@@ -1734,16 +1742,38 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
                 {kpayTxDetails && (
                   <>
-                    {kpayTxDetails.refund_reference_id ? (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                          {kpayTxDetails.refund_reference_id.startsWith('VOID')
-                            ? t('orders.kpay-void-trade-no')
-                            : t('orders.kpay-refund-trade-no')}
-                        </Text>
-                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refund_reference_id}</Text>
-                      </View>
-                    ) : null}
+                    {kpayTxDetails.refund_reference_id ? (() => {
+                      const isVoid = kpayTxDetails.refund_reference_id.startsWith('VOID');
+                      return (
+                        <View style={{ marginBottom: 8, marginTop: 2 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <View style={{ flex: 1, height: 1, backgroundColor: '#bfdbfe' }} />
+                          </View>
+                          <View style={{ backgroundColor: isVoid ? '#fef3c7' : '#fef2f2', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: isVoid ? '#fcd34d' : '#fca5a5' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isVoid ? '#92400e' : '#991b1b', marginBottom: 4 }}>
+                              {isVoid ? `↩ ${t('orders.kpay-void-trade-no')}` : `↩ ${t('orders.kpay-refund-trade-no')}`}
+                            </Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 11, color: '#6b7280' }}>{t('orders.kpay-original-ref')}</Text>
+                              <Text style={{ fontSize: 11, color: '#374151', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+                              <Text style={{ fontSize: 11, color: '#6b7280' }}>{isVoid ? t('orders.kpay-void-trade-no') : t('orders.kpay-refund-trade-no')}</Text>
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: isVoid ? '#92400e' : '#991b1b', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refund_reference_id}</Text>
+                            </View>
+                            {kpayTxDetails.refund_amount_cents > 0 && (
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+                                <Text style={{ fontSize: 11, color: '#6b7280' }}>{t('orders.amount')}</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: isVoid ? '#92400e' : '#991b1b' }}>HKD {(kpayTxDetails.refund_amount_cents / 100).toFixed(2)}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            <View style={{ flex: 1, height: 1, backgroundColor: '#bfdbfe' }} />
+                          </View>
+                        </View>
+                      );
+                    })() : null}
                     {kpayTxDetails.transactionNo ? (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-order-no')}</Text>
@@ -1800,12 +1830,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <View style={{ backgroundColor: '#fef2f2', borderRadius: 6, padding: 8, marginTop: 4 }}>
                         <Text style={{ fontSize: 11, fontWeight: '600', color: '#dc2626', marginBottom: 2 }}>Decline Reason</Text>
                         <Text style={{ fontSize: 12, color: '#7f1d1d' }}>{kpayTxDetails.reason || kpayTxDetails.terminalMessage}</Text>
-                      </View>
-                    )}
-                    {kpayTxDetails.refund_amount_cents > 0 && (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4, marginTop: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#ef4444' }}>HKD {(kpayTxDetails.refund_amount_cents / 100).toFixed(2)}</Text>
                       </View>
                     )}
                   </>
