@@ -417,7 +417,17 @@ router.post('/restaurants/:restaurantId/webhook/payment-asia', async (req, res) 
          WHERE id = $2 AND restaurant_id = $3`,
         [merchantRef, payment.order_id, restaurantId]
       );
+    } else if (paymentStatus === 'failed') {
+      // Reset payment_method so the customer can retry from the menu
+      console.log('[PaymentAsia Webhook] Payment failed — resetting order payment_method for retry:', payment.order_id);
+      await pool.query(
+        `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL
+         WHERE id = $1 AND restaurant_id = $2`,
+        [payment.order_id, restaurantId]
+      );
+    }
 
+    if (paymentStatus === 'completed') {
       // Write to unified chuio_payments ledger
       try {
         const paNetworkRes = await pool.query(
@@ -573,6 +583,16 @@ async function handlePaymentReturn(req: any, res: any) {
         [orderId, restaurantId]
       );
       console.log('[PaymentReturn] PA payment failed — order payment_method reset for retry:', orderId);
+    } else if (paymentStatus === 'processing') {
+      // PA returned the customer without a definitive result (status=4).
+      // Reset payment_method so the customer can retry; the webhook will confirm if payment later succeeds.
+      await pool.query(
+        `UPDATE orders
+         SET payment_method = NULL, chuio_order_reference = NULL
+         WHERE id = $1::int AND restaurant_id = $2::int`,
+        [orderId, restaurantId]
+      );
+      console.log('[PaymentReturn] PA payment still processing — order payment_method reset for retry:', orderId);
     }
 
       // Write to unified chuio_payments ledger

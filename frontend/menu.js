@@ -31,6 +31,8 @@ let showItemStatusToDiners = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
+let paStatusPollTimer = null; // timer for polling PA payment status when order is in processing state
+let paStatusPollOrderId = null; // the order being polled
 
 async function fetchAndApplyPaymentSettings() {
   try {
@@ -1252,9 +1254,13 @@ function renderOrdersDrawer(orders, tableName) {
           o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
         );
         // PA orders that are genuinely in-flight (not failed — backend clears payment_method on failure)
-        const hasPendingPAOrder = orders.some(o =>
+        const pendingPAOrder = orders.find(o =>
           o.order_payment_method === 'payment-asia' && o.order_status !== 'completed'
         );
+        const hasPendingPAOrder = !!pendingPAOrder;
+        if (!hasPendingPAOrder && paStatusPollTimer) {
+          clearInterval(paStatusPollTimer); paStatusPollTimer = null; paStatusPollOrderId = null;
+        }
         if (orderPayEnabled && unpaidNonPAOrder) {
           return `<button class="btn-primary" onclick="showPaymentPage(${unpaidNonPAOrder.order_id})">Pay Now</button>`;
         }
@@ -1262,8 +1268,12 @@ function renderOrdersDrawer(orders, tableName) {
           return `<button class="btn-primary" style="background:#059669;" onclick="endSessionFromMenu()">✅ End Session</button>`;
         }
         if (hasPendingPAOrder) {
-          // PA initiated but webhook not yet confirmed — prevent double-pay
-          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>`;
+          // PA initiated but webhook not yet confirmed — prevent double-pay, but allow manual status check
+          startPAStatusPoll(pendingPAOrder.order_id);
+          return `<div style="display:flex;flex-direction:column;gap:8px;align-items:stretch;">
+            <button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>
+            <button class="btn-secondary" style="font-size:13px;" onclick="checkPAPaymentStatus(${pendingPAOrder.order_id})">🔄 Check Payment Status</button>
+          </div>`;
         }
         if (orderPayEnabled) {
           // Order & Pay mode but no unpaid order yet — nothing to pay
@@ -1568,6 +1578,46 @@ function startOrderPolling() {
 
   loadOrderStatus(); // immediate
   setInterval(loadOrderStatus, 5000);
+}
+
+// Poll the payment status endpoint for a pending PA payment.
+// Stops automatically when the order is no longer in processing state (loadOrderStatus handles UI).
+function startPAStatusPoll(orderId) {
+  if (paStatusPollOrderId === orderId && paStatusPollTimer) return; // already polling this order
+  if (paStatusPollTimer) { clearInterval(paStatusPollTimer); paStatusPollTimer = null; }
+  paStatusPollOrderId = orderId;
+  paStatusPollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/payment-status`);
+      if (!res.ok) return;
+      const data = await res.json();
+      // If status is resolved (failed or completed), reload order list immediately
+      if (data.payment_status === 'failed' || data.payment_status === 'completed') {
+        clearInterval(paStatusPollTimer);
+        paStatusPollTimer = null;
+        paStatusPollOrderId = null;
+        loadOrderStatus(); // refresh the orders drawer — payment_method should now be cleared
+      }
+    } catch (e) { /* silent */ }
+  }, 4000);
+}
+
+// Manual "Check Payment Status" button handler — checks once and shows result
+async function checkPAPaymentStatus(orderId) {
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/payment-status`);
+    if (!res.ok) throw new Error('Network error');
+    const data = await res.json();
+    if (data.payment_status === 'failed') {
+      loadOrderStatus(); // refresh — backend should have cleared payment_method
+    } else if (data.payment_status === 'completed') {
+      loadOrderStatus();
+    } else {
+      alert('Payment is still being processed. Please wait a moment and try again.');
+    }
+  } catch (e) {
+    alert('Could not check payment status. Please try again.');
+  }
 }
 
 // ============= COUPON FUNCTIONS =============
