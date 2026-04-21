@@ -1747,9 +1747,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         <Text style={{ fontSize: 12, color: '#1f2937' }}>{KPAY_METHOD_MAP[kpayTxDetails.payMethod] || kpayTxDetails.payMethod}</Text>
                       </View>
                     )}
+                    {/* Decline / failure reason — may come as `reason`, `message`, or `remark` */}
+                    {(kpayTxDetails.reason || kpayTxDetails.terminalMessage) && (
+                      <View style={{ backgroundColor: '#fef2f2', borderRadius: 6, padding: 8, marginTop: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#dc2626', marginBottom: 2 }}>Decline Reason</Text>
+                        <Text style={{ fontSize: 12, color: '#7f1d1d' }}>{kpayTxDetails.reason || kpayTxDetails.terminalMessage}</Text>
+                      </View>
+                    )}
                     {kpayTxDetails.refund_amount_cents > 0 && (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4, marginTop: 4 }}>
                         <Text style={{ fontSize: 12, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#ef4444' }}>HKD {(kpayTxDetails.refund_amount_cents / 100).toFixed(2)}</Text>
                       </View>
                     )}
                   </>

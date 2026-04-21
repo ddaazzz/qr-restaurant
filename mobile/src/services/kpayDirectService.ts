@@ -86,9 +86,13 @@ export interface KPayStatusResult {
   status: KPayTransactionStatus;
   message: string;
   terminalMessage?: string;  // decline reason or status description from the terminal
+  reason?: string;           // raw `reason` field returned by terminal (e.g. decline reason)
   transactionNo?: string;
   refNo?: string;
+  commitTime?: string;
+  payMethod?: number;
   amount?: string;
+  raw?: Record<string, any>; // full data.data object so nothing is dropped
   error?: string;
 }
 
@@ -282,7 +286,8 @@ export async function kpayQuery(
     const data = await response.json();
 
     if (data.code === 10000 && data.data) {
-      const payResult: number = data.data.payResult;
+      const d = data.data;
+      const payResult: number = d.payResult;
       // payResult: 1=pending, 2=success, 3=failed, 4=cancelled
       const status: KPayTransactionStatus =
         payResult === 2 ? 'success' :
@@ -290,18 +295,22 @@ export async function kpayQuery(
         payResult === 4 ? 'cancelled' :
         'pending';
 
-      // Terminal may include a human-readable decline reason in data.message
+      // Terminal may include a human-readable decline reason in several undocumented fields
       const terminalMessage: string | undefined =
-        data.data.message || data.data.remark || undefined;
+        d.message || d.remark || d.reason || undefined;
 
       return {
         success: true,
         status,
         message: terminalMessage || `Transaction: ${status}`,
         terminalMessage,
-        transactionNo: data.data.transactionNo,
-        refNo: data.data.refNo,
-        amount: data.data.payAmount,
+        reason: d.reason || undefined,
+        transactionNo: d.transactionNo || undefined,
+        refNo: d.refNo || undefined,
+        commitTime: d.commitTime || undefined,
+        payMethod: d.payMethod ?? undefined,
+        amount: d.payAmount || undefined,
+        raw: d,
       };
     }
 
@@ -510,6 +519,9 @@ export interface KPayTxDetails {
   commitTime: string | null;
   payMethod: number | null;
   status: string;                  // human-readable derived label
+  reason?: string;                 // decline reason (1-128 chars) returned by terminal
+  terminalMessage?: string;        // any other message/remark from terminal
+  raw?: Record<string, any>;       // full data.data so no undocumented fields are lost
   error?: string;
 }
 
@@ -564,6 +576,7 @@ export async function kpayQueryDirect(
     if (data.code === 10000 && data.data) {
       const d = data.data;
       const payResult: number = d.payResult ?? null;
+      const terminalMessage: string | undefined = d.message || d.remark || d.reason || undefined;
       return {
         success: true,
         outTradeNo: d.outTradeNo || d.outTradeNO || outTradeNo,
@@ -575,6 +588,9 @@ export async function kpayQueryDirect(
         commitTime: d.commitTime || null,
         payMethod: d.payMethod ?? null,
         status: PAYRESULT_STATUS[payResult] || 'Unknown',
+        reason: d.reason || undefined,
+        terminalMessage,
+        raw: d,
       };
     }
 
