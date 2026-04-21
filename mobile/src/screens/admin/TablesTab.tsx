@@ -342,6 +342,8 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             bill_closure_requested: row.bill_closure_requested,
             call_staff_requested: row.call_staff_requested,
             restaurant_session_number: row.restaurant_session_number,
+            restaurant_order_number: row.restaurant_order_number,
+            order_id: row.order_id,
           });
         }
       });
@@ -1918,7 +1920,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             
             // Prepare receipt data for thermal printer
             const receiptData = {
-              orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
+              orderNumber: String(selectedSession?.restaurant_order_number || selectedSession?.restaurant_session_number || selectedSession?.id),
               tableNumber: selectedTable?.name || 'Receipt',
               items: sessionBill.items.map(item => ({
                 name: item.name,
@@ -2112,7 +2114,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • Order #${selectedSession.restaurant_session_number}` : ''}
+            {selectedTable.name} • {selectedSession.pax} pax{(selectedSession.restaurant_order_number || selectedSession.restaurant_session_number) ? ` • Order #${selectedSession.restaurant_order_number || selectedSession.restaurant_session_number}` : ''}
           </Text>
           <View style={{ position: 'relative' }}>
             <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
@@ -2678,7 +2680,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               >
                 <View>
                   <Text style={styles.sessionTitle}>
-                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, Order #${session.restaurant_session_number}` : ''}
+                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{(session.restaurant_order_number || session.restaurant_session_number) ? `, Order #${session.restaurant_order_number || session.restaurant_session_number}` : ''}
                   </Text>
                   <Text style={styles.sessionInfo}>
                     {session.pax} pax • Dining {formatDuration(session.started_at)}
@@ -2998,7 +3000,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                               <View key={session.id} style={styles.sessionTimeItem}>
                                 <Ionicons name="timer-outline" size={13} color={(textColor as any)?.color || '#fff'} />
                                 <Text style={[styles.sessionTimeText, textColor]}>
-                                  {session.restaurant_session_number ? `#${session.restaurant_session_number}` : ''} {formatDuration(session.started_at)}
+                                  {(session.restaurant_order_number || session.restaurant_session_number) ? `#${session.restaurant_order_number || session.restaurant_session_number}` : ''} {formatDuration(session.started_at)}
                                 </Text>
                                 {session.call_staff_requested && (
                                   <View style={styles.sessionBadgeStaff}>
@@ -3093,7 +3095,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               selectedTable.sessions.map((session, idx) => (
                 <TouchableOpacity key={session.id} style={styles.sessionCard} onPress={() => handleSessionClick(session)}>
                   <View>
-                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, Order #${session.restaurant_session_number}` : ''}</Text>
+                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{(session.restaurant_order_number || session.restaurant_session_number) ? `, Order #${session.restaurant_order_number || session.restaurant_session_number}` : ''}</Text>
                     <Text style={styles.sessionInfo}>{session.pax} pax • Dining {formatDuration(session.started_at)}</Text>
                   </View>
                   <Text style={styles.chevron}>›</Text>
@@ -3220,7 +3222,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
       {isTablet && currentView === 'sessionDetail' && selectedSession && selectedTable && (
         <View style={styles.sessionSidePanel}>
           <View style={styles.sessionSidePanelHeader}>
-            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • Order #${selectedSession.restaurant_session_number}` : ''}</Text>
+            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{(selectedSession.restaurant_order_number || selectedSession.restaurant_session_number) ? ` • Order #${selectedSession.restaurant_order_number || selectedSession.restaurant_session_number}` : ''}</Text>
             <TouchableOpacity onPress={() => { setCurrentView('grid'); setSelectedSession(null); }}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
