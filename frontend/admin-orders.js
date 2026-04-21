@@ -1436,9 +1436,10 @@ function displayOrderDetails(order) {
   
   html += `</div></div>`;
   
-  // Order Summary — use server-computed total_cents so SC is correct per order type
+  // Order Summary — use server-computed subtotal_cents & total_cents so SC is correct per order type
   const grandTotal = order.total_cents;
-  const serviceChargeCents = grandTotal - itemsTotal;
+  const subtotalCentsForSummary = (order.subtotal_cents != null) ? Number(order.subtotal_cents) : itemsTotal;
+  const serviceChargeCents = grandTotal - subtotalCentsForSummary;
 
   html += `
     <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
@@ -1446,7 +1447,7 @@ function displayOrderDetails(order) {
       
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
         <div style="color: #666;">Subtotal</div>
-        <div style="color: #333; font-weight: 500;">$${(itemsTotal / 100).toFixed(2)}</div>
+        <div style="color: #333; font-weight: 500;">$${(subtotalCentsForSummary / 100).toFixed(2)}</div>
       </div>
       
       ${serviceChargeCents > 0 ? `

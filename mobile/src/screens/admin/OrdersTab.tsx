@@ -78,6 +78,7 @@ interface Order {
   order_type: string;
   status: string;
   total_cents: number;
+  subtotal_cents?: number;
   created_at: string;
   items?: any[];
   table_id?: number;
@@ -1573,37 +1574,28 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {/* Order Summary */}
           <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 12 }}>
             <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-summary')}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
-              <Text style={{ fontSize: 13, color: '#1f2937' }}>
-                {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => {
-                  const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
-                  const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || a.unit_price_cents * a.quantity), 0);
-                  return sum + itemTotal + addonsTotal;
-                }, 0))}
-              </Text>
-            </View>
             {(() => {
-              const subtotal = (selectedHistoryOrder.items || []).reduce((sum: number, i: any) => {
-                const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
-                const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || a.unit_price_cents * a.quantity), 0);
-                return sum + itemTotal + addonsTotal;
-              }, 0);
+              const subtotal = selectedHistoryOrder.subtotal_cents ?? selectedHistoryOrder.total_cents;
               const serviceCharge = selectedHistoryOrder.total_cents - subtotal;
-              if (serviceCharge > 0) {
-                return (
+              return (
+                <>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.service-charge')}</Text>
-                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(subtotal)}</Text>
                   </View>
-                );
-              }
-              return null;
+                  {serviceCharge > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.service-charge')}</Text>
+                      <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
+                  </View>
+                </>
+              );
             })()}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
-            </View>
           </View>
 
           {/* Payment Information */}
