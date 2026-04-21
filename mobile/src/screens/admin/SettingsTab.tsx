@@ -775,7 +775,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const payload: any = {
         vendor_name: terminalForm.vendor_name,
         app_id: terminalForm.app_id,
-        app_secret: terminalForm.app_secret,
+        // Only send app_secret if it was actually changed (not blank and not the masked placeholder)
+        ...(terminalForm.app_secret && terminalForm.app_secret !== '••••••••' ? { app_secret: terminalForm.app_secret } : {}),
       };
 
       if (terminalForm.vendor_name === 'payment-asia') {
@@ -857,12 +858,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     ]);
   };
 
-  const editPaymentTerminal = (terminal: PaymentTerminal) => {
+  const editPaymentTerminal = async (terminal: PaymentTerminal) => {
     setEditingTerminalId(terminal.id);
+    // Populate form with known fields immediately so modal opens fast
     setTerminalForm({
       vendor_name: terminal.vendor_name,
       app_id: terminal.app_id,
-      app_secret: '', // Don't pre-fill secret for security
+      app_secret: '',
       terminal_ip: terminal.terminal_ip || '192.168.50.210',
       terminal_port: terminal.terminal_port?.toString() || '18080',
       endpoint_path: terminal.endpoint_path || '/v2/pos/sign',
@@ -872,6 +874,19 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     });
     setTerminalTestResult(null);
     setShowPaymentTerminalModal(true);
+    // Fetch full record to repopulate app_secret (returned for superadmin)
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${terminal.id}`);
+      const full = res.data;
+      setTerminalForm(prev => ({
+        ...prev,
+        app_id: full.app_id || prev.app_id,
+        app_secret: full.app_secret || '',
+        merchant_token: full.merchant_token || prev.merchant_token,
+      }));
+    } catch {
+      // Non-critical — form still works without the secret pre-filled
+    }
   };
 
   const resetTerminalForm = () => {

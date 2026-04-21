@@ -176,7 +176,7 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
       updates.push(`app_id = $${paramCount++}`);
       values.push(app_id);
     }
-    if (app_secret !== undefined) {
+    if (app_secret !== undefined && app_secret !== '') {
       updates.push(`app_secret = $${paramCount++}`);
       values.push(app_secret);
     }
