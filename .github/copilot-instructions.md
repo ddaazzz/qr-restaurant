@@ -14,7 +14,12 @@
 
 3. **Database**: The dev database is `chuio_dev_db` on `dpg-d7gq5j4p3tds73a44eo0-a.singapore-postgres.render.com`. Never run migrations, `psql`, or destructive queries against the production database without explicit instruction.
 
-4. **Mobile builds**: The `mobile/.env.local` file must always point to `https://dev.chuio.io` for day-to-day development. The only exception is when the user runs `scripts/bundle-production.sh` immediately before an Xcode App Store Archive — and `scripts/bundle-dev.sh` must be run immediately after to restore dev settings.
+4. **Mobile builds**: The `mobile/.env.local` file must always contain **both** of these lines for day-to-day development:
+   ```
+   EXPO_PUBLIC_API_URL=https://dev.chuio.io
+   EXPO_PUBLIC_APP_ENV=dev
+   ```
+   The dev banner (`IS_DEV_BUILD`) and API URL both depend on these being set together. If `EXPO_PUBLIC_APP_ENV` is missing from `.env.local`, Expo falls through to `.env.production` which sets it to `production` — causing no dev banner and pointing the app at `https://chuio.io`. Always ensure both lines are present after any script restores this file. The only exception is when running `scripts/bundle-production.sh` immediately before an Xcode App Store Archive — `scripts/bundle-dev.sh` must be run immediately after to restore both lines.
 
 5. **Render services**: There are two Render services — `dev.chuio.io` (dev) and `chuio.io` (prod). Dev deploys from `dev` branch; prod deploys from `main` branch. Never suggest or perform actions that affect the `main`-based production Render service unless told to merge.
 
