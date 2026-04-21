@@ -4,7 +4,7 @@ import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import { Ionicons } from '@expo/vector-icons';
-import { kpaySign, kpaySale, kpayQuery, kpayClose, kpayVoid, kpayRefund, encryptManagerPassword } from '../../services/kpayDirectService';
+import { kpaySign, kpaySale, kpayQuery, kpayClose, kpayVoid, kpayRefund, encryptManagerPassword, kpayQueryDirect } from '../../services/kpayDirectService';
 
 interface MenuItem {
   id: number;
@@ -476,8 +476,45 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setTxLoading(true);
       try {
         if (vendor === 'kpay') {
-          const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
-          setKpayTxDetails(res.data);
+          // Prefer querying the terminal directly — backend (Render) can't reach LAN terminal
+          let terminalQueried = false;
+          if (kpayTerminal) {
+            const config = {
+              terminalIp: kpayTerminal.terminal_ip,
+              terminalPort: kpayTerminal.terminal_port,
+              appId: kpayTerminal.app_id,
+              appSecret: kpayTerminal.app_secret,
+              endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
+            };
+            const terminalResult = await kpayQueryDirect(config, ref);
+            if (terminalResult.success) {
+              terminalQueried = true;
+              // Fetch DB record too for fields terminal doesn't return (refund_amount_cents, etc.)
+              let dbFields: any = {};
+              try {
+                const dbRes = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
+                dbFields = dbRes.data || {};
+              } catch { /* DB fetch is best-effort */ }
+              setKpayTxDetails({ ...dbFields, ...terminalResult });
+              // Push fresh status back to backend so DB stays consistent
+              try {
+                await apiClient.patch(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}/sync`, {
+                  payResult: terminalResult.payResult,
+                  transactionNo: terminalResult.transactionNo,
+                  refNo: terminalResult.refNo,
+                  commitTime: terminalResult.commitTime,
+                  payAmount: terminalResult.payAmount,
+                  payCurrency: terminalResult.payCurrency,
+                  payMethod: terminalResult.payMethod,
+                });
+              } catch { /* Sync failure is non-fatal */ }
+            }
+          }
+          if (!terminalQueried) {
+            // Fall back to backend DB data if terminal unreachable
+            const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
+            setKpayTxDetails(res.data);
+          }
         } else if (vendor === 'payment-asia') {
           const merchantRef = order.cp_vendor_ref || ref;
           const res = await apiClient.post(`/api/restaurants/${restaurantId}/payment-asia/query`, { merchant_reference: merchantRef });

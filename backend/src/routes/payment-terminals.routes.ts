@@ -956,6 +956,78 @@ router.get('/restaurants/:restaurantId/kpay-transactions/:outTradeNo', async (re
 });
 
 /**
+ * PATCH /api/restaurants/:restaurantId/kpay-transactions/:outTradeNo/sync
+ * Called by the mobile app after a direct terminal query to persist the fresh
+ * payResult (and related fields) into the DB so orders.payment_status stays consistent.
+ */
+router.patch('/restaurants/:restaurantId/kpay-transactions/:outTradeNo/sync', async (req, res) => {
+  try {
+    const { restaurantId, outTradeNo } = req.params;
+    const { payResult, transactionNo, refNo, commitTime, payAmount, payCurrency, payMethod } = req.body;
+
+    if (payResult === undefined || payResult === null) {
+      return res.status(400).json({ error: 'payResult is required' });
+    }
+
+    const liveData = { payResult, transactionNo, refNo, commitTime, payAmount, payCurrency, payMethod };
+
+    // Derive status string from payResult (same logic as GET handler)
+    const payResultNum = Number(payResult);
+    let derivedStatus: string | null = null;
+    if (payResultNum === 2) derivedStatus = 'completed';
+    else if (payResultNum === 3) derivedStatus = 'failed';
+    else if (payResultNum === 4) derivedStatus = 'refunded';
+    else if (payResultNum === 5 || payResultNum === 6) derivedStatus = 'cancelled';
+
+    if (derivedStatus) {
+      // Don't overwrite intentional voided/refunded statuses with a less-specific one
+      await pool.query(
+        `UPDATE kpay_transactions
+         SET status = CASE
+               WHEN status IN ('voided','refunded') THEN status
+               ELSE $1
+             END,
+             kpay_response = kpay_response || $2::jsonb,
+             pay_method = COALESCE($5, pay_method)
+         WHERE kpay_reference_id = $3 AND restaurant_id = $4`,
+        [derivedStatus, JSON.stringify(liveData), outTradeNo, restaurantId, payMethod ?? null]
+      );
+
+      // Sync orders.payment_status
+      if (payResultNum === 2) {
+        await pool.query(
+          `UPDATE orders SET payment_status = 'paid'
+           WHERE chuio_order_reference = $1 AND restaurant_id = $2
+           AND payment_status IS DISTINCT FROM 'voided'
+           AND payment_status IS DISTINCT FROM 'refunded'
+           AND payment_status IS DISTINCT FROM 'partial_refund'`,
+          [outTradeNo, restaurantId]
+        );
+      } else if (payResultNum === 4) {
+        await pool.query(
+          `UPDATE orders SET payment_status = 'refunded'
+           WHERE chuio_order_reference = $1 AND restaurant_id = $2`,
+          [outTradeNo, restaurantId]
+        );
+      } else if (payResultNum === 3 || payResultNum === 5 || payResultNum === 6) {
+        await pool.query(
+          `UPDATE orders SET payment_status = 'voided'
+           WHERE chuio_order_reference = $1 AND restaurant_id = $2
+           AND payment_status IS DISTINCT FROM 'refunded'
+           AND payment_status IS DISTINCT FROM 'partial_refund'`,
+          [outTradeNo, restaurantId]
+        );
+      }
+    }
+
+    return res.json({ ok: true, derivedStatus });
+  } catch (err: any) {
+    console.error('[KPay] Sync error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/restaurants/:restaurantId/kpay-terminal/active
  * Returns the active KPay terminal config (for frontend gating)
  */
