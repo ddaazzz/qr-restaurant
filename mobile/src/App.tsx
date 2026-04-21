@@ -8,13 +8,13 @@ import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
-import { API_URL } from './services/apiClient';
 
 // Fix animation batching issues at startup
 patchAnimationErrors();
 configureAnimationPerformance();
 
-const IS_DEV_BUILD = API_URL !== 'https://chuio.io';
+// Determine if this is a dev build - set to 'production' in EAS production profile
+const IS_DEV_BUILD = process.env.EXPO_PUBLIC_APP_ENV !== 'production';
 
 // Suppress only specific known harmless warnings
 LogBox.ignoreLogs([

@@ -205,6 +205,12 @@ async function initializeApp() {
     }
   }
 
+  // Show superadmin-only nav button
+  if (IS_SUPERADMIN) {
+    var usersNavBtn = document.getElementById('users-nav-btn');
+    if (usersNavBtn) usersNavBtn.style.display = '';
+  }
+
   // Note: staff.html uses feature-based access control via staff.css (.menu-btn / .menu-btn.visible)
   // Do NOT hide nav buttons here for IS_STAFF — that is handled by staff.js initializeStaffApp().
 
@@ -414,6 +420,13 @@ async function switchSection(sectionId) {
           try {
             var settingsResponse = await fetch('/admin-settings.html');
             settingsSection.innerHTML = await settingsResponse.text();
+            // Re-apply admin-visible class to newly loaded admin-only elements
+            var settingsAdminEls = settingsSection.querySelectorAll(".admin-only");
+            for (var i = 0; i < settingsAdminEls.length; i++) {
+              if (IS_ADMIN || IS_SUPERADMIN) {
+                settingsAdminEls[i].classList.add("admin-visible");
+              }
+            }
             reTranslateContent();
           } catch (err) {
             console.error("Error loading settings HTML:", err);
@@ -429,6 +442,20 @@ async function switchSection(sectionId) {
         console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
       }
       updateSectionHeader('admin.section-settings', 'edit-settings-header');
+    } else if (sectionId === "users") {
+      // Superadmin only - Users & Restaurants management
+      if (!IS_SUPERADMIN) {
+        console.warn("❌ User does not have access to users management (superadmin only)");
+        return;
+      }
+      
+      if (typeof loadUsersManagement === 'function') {
+        await loadUsersManagement();
+      } else {
+        console.warn('[admin.js] loadUsersManagement not yet loaded');
+      }
+      reTranslateContent();
+      updateSectionHeader('admin.users-restaurants', null);
     }
 
     IS_EDIT_MODE = false;
