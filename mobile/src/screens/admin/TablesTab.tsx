@@ -143,6 +143,14 @@ export interface TablesTabRef {
   navigateToScannedQR: (sessionId: number) => void;
 }
 
+interface TablesTabProps {
+  restaurantId: string;
+  onOrderForTable?: (sessionId: number, tableName: string) => void;
+  searchQuery?: string;
+  selectedRoomId?: number | null;
+  onCategoriesLoaded?: (cats: TableCategory[]) => void;
+}
+
 const getTableTextColor = (bgColor: string) => {
   if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b' || bgColor === '#dddddd') {
     return { color: '#000' };
@@ -150,7 +158,7 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrderForTable?: (sessionId: number, tableName: string) => void; searchQuery?: string; selectedRoomId?: number | null; onCategoriesLoaded?: (cats: TableCategory[]) => void }>(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }, ref) => {
+export const TablesTab = forwardRef<TablesTabRef, TablesTabProps>(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }, ref) => {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
