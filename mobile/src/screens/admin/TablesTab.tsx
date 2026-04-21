@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -236,6 +236,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   // Service charge
   const [serviceCharge, setServiceCharge] = useState(0);
 
+  // KPay terminal payment state
+  const [kpayTerminal, setKpayTerminal] = useState<any>(null);
+  const [showKpayModal, setShowKpayModal] = useState(false);
+  const [kpayProcessing, setKpayProcessing] = useState(false);
+  const [kpayStatusMsg, setKpayStatusMsg] = useState('');
+  const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
+  const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Expose toggleEditMode and navigateToScannedQR through ref
   useImperativeHandle(ref, () => ({
     toggleEditMode() {
@@ -401,6 +409,19 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     const interval = setInterval(loadTableData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, [restaurantId, loadTableData]);
+
+  // Load active KPay terminal
+  useEffect(() => {
+    const loadKpayTerminal = async () => {
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-terminal/active`);
+        setKpayTerminal(res.data?.configured ? res.data.terminal : null);
+      } catch {
+        setKpayTerminal(null);
+      }
+    };
+    loadKpayTerminal();
+  }, [restaurantId]);
 
   // Load QR image when modal opens
   useEffect(() => {
@@ -1052,12 +1073,132 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     return coupon.discount_value;
   };
 
+  const startKpayTerminalPayment = async (sessionId: number, finalAmount: number, discountCents: number) => {
+    if (!kpayTerminal) return;
+
+    setShowCloseBillModal(false);
+    setShowKpayModal(true);
+    setKpayProcessing(true);
+    setKpayStatusMsg('Initiating…');
+    setKpayLogs([{ msg: '> Connecting to KPay terminal…', color: '#ffd43b' }]);
+
+    const amountInCents = String(finalAmount).padStart(12, '0');
+    const addLog = (msg: string, color = '#00ff00') =>
+      setKpayLogs(prev => [...prev, { msg, color }]);
+
+    try {
+      addLog(`> POST /payment-terminals/${kpayTerminal.id}/test`);
+      addLog(`> Amount: HKD ${(finalAmount / 100).toFixed(2)}`);
+
+      const resp = await apiClient.post(
+        `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test`,
+        { payAmount: amountInCents, tipsAmount: '000000000000', payCurrency: '344' }
+      );
+      const result = resp.data;
+      if (result.logs) result.logs.forEach((l: string) =>
+        addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+
+      if (!result.initiated) {
+        setKpayStatusMsg('Failed to initiate');
+        addLog(`> ❌ ${result.message || 'Failed to initiate'}`, '#ff6b6b');
+        setKpayProcessing(false);
+        return;
+      }
+
+      const outTradeNo = result.outTradeNo;
+      setKpayStatusMsg('Waiting for customer…');
+      addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
+      addLog('> Tap / scan card on terminal', '#ffd43b');
+
+      let attempts = 0;
+      const maxAttempts = 22;
+
+      const poll = async () => {
+        if (attempts >= maxAttempts) {
+          setKpayStatusMsg('Timed out');
+          addLog('> TIMEOUT — no response from terminal', '#ffd43b');
+          setKpayProcessing(false);
+          return;
+        }
+        attempts++;
+        addLog(`> Polling… (${attempts}/${maxAttempts})`);
+        try {
+          const qResp = await apiClient.get(
+            `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test-status`,
+            { params: { outTradeNo } }
+          );
+          const qData = qResp.data;
+          if (qData.logs) qData.logs.forEach((l: string) =>
+            addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+
+          if (qData.status === 'success') {
+            setKpayStatusMsg('Payment confirmed ✅');
+            addLog('> ✅ Payment confirmed by terminal', '#51cf66');
+
+            await apiClient.post(`/api/sessions/${sessionId}/close-bill`, {
+              restaurantId: parseInt(restaurantId),
+              payment_method: 'kpay',
+              amount_paid: finalAmount,
+              discount_applied: discountCents,
+              service_charge: sessionBill?.service_charge_cents || 0,
+              notes: closeReason,
+              kpay_reference_id: outTradeNo,
+            });
+            addLog('> ✅ Bill closed', '#51cf66');
+            setKpayProcessing(false);
+
+            setTimeout(async () => {
+              setShowKpayModal(false);
+              setKpayLogs([]);
+              setPaymentMethod('cash');
+              setDiscountAmount('0');
+              setCloseReason('');
+              setSelectedCouponId(null);
+              setCoupons([]);
+              await loadTableData();
+              setCurrentView('grid');
+            }, 2000);
+            return;
+          }
+
+          if (qData.status === 'cancelled' || qData.status === 'failed') {
+            setKpayStatusMsg(qData.status === 'cancelled' ? 'Cancelled' : 'Payment failed');
+            addLog(`> ${qData.status}`, '#ff6b6b');
+            setKpayProcessing(false);
+            return;
+          }
+
+          kpayPollRef.current = setTimeout(poll, 3000);
+        } catch (e: any) {
+          addLog(`> Poll error: ${e.message}`, '#ffd43b');
+          kpayPollRef.current = setTimeout(poll, 3000);
+        }
+      };
+
+      kpayPollRef.current = setTimeout(poll, 2000);
+    } catch (err: any) {
+      addLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+      setKpayStatusMsg('Failed');
+      setKpayProcessing(false);
+    }
+  };
+
   const closeBill = async () => {
     if (!selectedSession) return;
 
     const discountCents = getDiscountCents();
     const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
     const finalAmount = grandTotal - discountCents;
+
+    // KPay: hand off to terminal payment flow
+    if (paymentMethod === 'kpay') {
+      if (!kpayTerminal) {
+        Alert.alert('Error', 'No active KPay terminal configured.');
+        return;
+      }
+      await startKpayTerminalPayment(selectedSession.id, finalAmount, discountCents);
+      return;
+    }
 
     try {
       await apiClient.post(
@@ -1080,7 +1221,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
         if (printerRes.data?.bill_auto_print === true) {
           console.log('[CloseBill] Bill auto-print enabled, printing bill...');
-          // Auto-print the bill with the handleBillPrint logic
           await printBill(true);
         }
       } catch (autoError) {
@@ -1092,7 +1232,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       setDiscountAmount('0');
       setCloseReason('');
       setSelectedCouponId(null);
-      setCoupons([]);      await loadTableData();
+      setCoupons([]);
+      await loadTableData();
       setCurrentView('grid');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
@@ -2175,7 +2316,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
               <Text style={styles.label}>{t('admin.payment-method')}</Text>
               <View style={styles.selectGroup}>
-                {['cash', 'card', 'online'].map((method) => (
+                {(kpayTerminal ? ['cash', 'kpay'] : ['cash', 'card', 'online']).map((method) => (
                   <TouchableOpacity
                     key={method}
                     style={[
@@ -2190,7 +2331,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                         paymentMethod === method && styles.selectOptionTextActive,
                       ]}
                     >
-                      {method.charAt(0).toUpperCase() + method.slice(1)}
+                      {method === 'kpay' ? 'KPay Terminal' : method.charAt(0).toUpperCase() + method.slice(1)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -3187,9 +3328,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 )}
                 <Text style={styles.label}>{t('admin.payment-method')}</Text>
                 <View style={styles.selectGroup}>
-                  {['cash', 'card', 'online'].map((method) => (
+                  {(kpayTerminal ? ['cash', 'kpay'] : ['cash', 'card', 'online']).map((method) => (
                     <TouchableOpacity key={method} style={[styles.selectOption, paymentMethod === method && styles.selectOptionActive]} onPress={() => setPaymentMethod(method)}>
-                      <Text style={[styles.selectOptionText, paymentMethod === method && styles.selectOptionTextActive]}>{method.charAt(0).toUpperCase() + method.slice(1)}</Text>
+                      <Text style={[styles.selectOptionText, paymentMethod === method && styles.selectOptionTextActive]}>{method === 'kpay' ? 'KPay Terminal' : method.charAt(0).toUpperCase() + method.slice(1)}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -3641,6 +3782,38 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           </View>
         </InputAccessoryView>
       )}
+
+      {/* KPay Terminal Payment Modal */}
+      <Modal visible={showKpayModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { width: '90%', maxWidth: 440 }]}>
+            <Text style={[styles.modalTitle, { marginBottom: 4 }]}>KPay Terminal Payment</Text>
+            <Text style={{ fontSize: 13, color: kpayProcessing ? '#b45309' : '#065f46', backgroundColor: kpayProcessing ? '#fef3c7' : '#d1fae5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 12, fontWeight: '600' }}>
+              {kpayStatusMsg}
+            </Text>
+
+            {/* Terminal log */}
+            <ScrollView style={{ backgroundColor: '#1a1a1a', borderRadius: 6, padding: 10, maxHeight: 200, marginBottom: 12 }}>
+              {kpayLogs.map((log, i) => (
+                <Text key={i} style={{ fontFamily: 'Courier New', fontSize: 11, color: log.color, marginBottom: 1 }}>{log.msg}</Text>
+              ))}
+            </ScrollView>
+
+            {!kpayProcessing && (
+              <TouchableOpacity
+                style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                onPress={() => {
+                  if (kpayPollRef.current) clearTimeout(kpayPollRef.current);
+                  setShowKpayModal(false);
+                  setKpayLogs([]);
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Close</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
