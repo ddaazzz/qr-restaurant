@@ -1436,10 +1436,10 @@ function displayOrderDetails(order) {
   
   html += `</div></div>`;
   
-  // Order Summary
-  const serviceCharge = Math.round(itemsTotal * 0.1);
-  const grandTotal = itemsTotal + serviceCharge;
-  
+  // Order Summary — use server-computed total_cents so SC is correct per order type
+  const grandTotal = order.total_cents;
+  const serviceChargeCents = grandTotal - itemsTotal;
+
   html += `
     <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
       <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #333;">Order Summary</h4>
@@ -1449,10 +1449,12 @@ function displayOrderDetails(order) {
         <div style="color: #333; font-weight: 500;">$${(itemsTotal / 100).toFixed(2)}</div>
       </div>
       
+      ${serviceChargeCents > 0 ? `
       <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; font-size: 13px;">
-        <div style="color: #666;">Service Charge (10%)</div>
-        <div style="color: #333; font-weight: 500;">$${(serviceCharge / 100).toFixed(2)}</div>
+        <div style="color: #666;">Service Charge</div>
+        <div style="color: #333; font-weight: 500;">$${(serviceChargeCents / 100).toFixed(2)}</div>
       </div>
+      ` : ''}
       
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div style="color: #333; font-size: 14px; font-weight: 600;">Total</div>

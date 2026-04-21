@@ -288,11 +288,11 @@ export async function kpayQuery(
     if (data.code === 10000 && data.data) {
       const d = data.data;
       const payResult: number = d.payResult;
-      // payResult: 1=pending, 2=success, 3=failed, 4=cancelled
+      // payResult: 1=pending, 2=success, 3=failed, 4=refunded/cancelled, 5=cancelled, 6=cancelled
       const status: KPayTransactionStatus =
         payResult === 2 ? 'success' :
         payResult === 3 ? 'failed' :
-        payResult === 4 ? 'cancelled' :
+        payResult === 4 || payResult === 5 || payResult === 6 ? 'cancelled' :
         'pending';
 
       // Terminal may include a human-readable decline reason in several undocumented fields

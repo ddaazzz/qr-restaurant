@@ -1108,7 +1108,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             const { appPrivateKey, platformPublicKey } = await kpaySign(config);
             const encPwd = await encryptManagerPassword(platformPublicKey!, password);
             const voidOutTradeNo = `VOID-${Date.now()}`;
-            await kpayVoid(config, appPrivateKey!, voidOutTradeNo, outTradeNo, encPwd);
+            const voidResult = await kpayVoid(config, appPrivateKey!, voidOutTradeNo, outTradeNo, encPwd);
+            if (!voidResult.success) throw new Error(voidResult.message + (voidResult.error ? ` (${voidResult.error})` : ''));
             Alert.alert(t('orders.success'), t('orders.void-success'));
             await reloadSelectedOrder(order.id);
           } catch (err: any) {
@@ -1148,16 +1149,16 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         // Determine refund type from tx details
         // refundType 1 = Card (needs refNo + commitTime), 2 = QR (needs transactionNo)
         const refundType = kpayTxDetails?.refNo ? 1 : 2;
-        await kpayRefund(config, appPrivateKey!, {
+        const refundResult = await kpayRefund(config, appPrivateKey!, {
           outTradeNo: refundOutTradeNo,
-          originOutTradeNo: outTradeNo,
           refundType,
-          managerPassword: encPwd,
+          encryptedManagerPassword: encPwd,
           refundAmount: kpayRefundAmount ? String(kpayRefundAmount) : undefined,
           ...(refundType === 1
             ? { refNo: kpayTxDetails?.refNo, commitTime: kpayTxDetails?.commitTime }
             : { transactionNo: kpayTxDetails?.transactionNo }),
         });
+        if (!refundResult.success) throw new Error(refundResult.message + (refundResult.error ? ` (${refundResult.error})` : ''));
         setShowKpayRefundModal(false);
         Alert.alert(t('orders.success'), t('orders.refund-kpay-success'));
         await reloadSelectedOrder(selectedHistoryOrder.id);
@@ -1321,17 +1322,30 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         <Text style={{ fontWeight: '600', color: '#dc2626' }}>{t('orders.abort')}</Text>
                       </TouchableOpacity>
                     ) : (
-                      <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: '#d1fae5', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#6ee7b7' }}
-                        onPress={() => {
-                          setShowPaymentModal(false);
-                          setKpayLogs([]);
-                          setKpayStatusMsg('');
-                          loadOrdersAndSessions();
-                        }}
-                      >
-                        <Text style={{ fontWeight: '600', color: '#065f46' }}>{t('orders.done')}</Text>
-                      </TouchableOpacity>
+                      // KPay finished (failed/cancelled/timeout) — let staff pick another method or pay later
+                      <>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                          onPress={() => {
+                            setShowPaymentModal(false);
+                            setKpayLogs([]);
+                            setKpayStatusMsg('');
+                          }}
+                        >
+                          <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.pay-later')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                          onPress={() => {
+                            // Return to payment method selector without closing modal
+                            setKpayLogs([]);
+                            setKpayStatusMsg('');
+                            setPaymentModalMethod('cash');
+                          }}
+                        >
+                          <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.try-another-method')}</Text>
+                        </TouchableOpacity>
+                      </>
                     )}
                   </View>
                 </View>
@@ -1643,11 +1657,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   </View>
                 )}
 
-                {/* Payment Method */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-method')}</Text>
-                  <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
-                </View>
+                {/* Payment Method — hide when unpaid/pending and no method set */}
+                {(() => {
+                  const isPending = !selectedHistoryOrder.payment_received && !selectedHistoryOrder.cp_status && (!selectedHistoryOrder.payment_status || selectedHistoryOrder.payment_status === 'pending') && !selectedHistoryOrder.payment_method_online;
+                  if (isPending) return null;
+                  return (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-method')}</Text>
+                      <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
+                    </View>
+                  );
+                })()}
 
                 {/* Vendor Reference */}
                 {selectedHistoryOrder.cp_vendor_ref && (
@@ -1702,52 +1722,58 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
                 {kpayTxDetails && (
                   <>
+                    {kpayTxDetails.transactionNo ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-order-no')}</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.transactionNo}</Text>
+                      </View>
+                    ) : null}
+                    {kpayTxDetails.refNo ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-ref-no')}</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refNo}</Text>
+                      </View>
+                    ) : null}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
                       <Text style={{ fontSize: 12, color: '#1f2937' }}>
-                        {kpayTxDetails.payCurrency || 'HKD'} {((Number(kpayTxDetails.payAmount) || kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
-                        {kpayTxDetails.payAmount ? ` (${kpayTxDetails.payAmount})` : ''}
+                        {kpayTxDetails.payCurrency === '344' ? 'HKD' : kpayTxDetails.payCurrency || 'HKD'}{' '}
+                        {kpayTxDetails.payAmount
+                          ? (Number(kpayTxDetails.payAmount) / 100).toFixed(2)
+                          : ((kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
                       <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{kpayTxDetails.status || '—'}</Text>
                     </View>
-                    {kpayTxDetails.payResult !== undefined && (
+                    {kpayTxDetails.commitTime ? (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>payResult</Text>
-                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{(KPAY_RESULT_MAP as any)[kpayTxDetails.payResult] || kpayTxDetails.payResult}</Text>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-tx-time')}</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>
+                          {(() => { const n = Number(kpayTxDetails.commitTime); return n ? new Date(n).toLocaleString() : kpayTxDetails.commitTime; })()}
+                        </Text>
                       </View>
-                    )}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 12, color: '#6b7280' }}>outTradeNo</Text>
-                      <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.outTradeNo || '—'}</Text>
-                    </View>
-                    {kpayTxDetails.transactionNo && (
+                    ) : null}
+                    {kpayTxDetails.payMethod != null ? (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>transactionNo</Text>
-                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.transactionNo}</Text>
-                      </View>
-                    )}
-                    {kpayTxDetails.refNo && (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>refNo</Text>
-                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refNo}</Text>
-                      </View>
-                    )}
-                    {kpayTxDetails.commitTime && (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>commitTime</Text>
-                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{kpayTxDetails.commitTime}</Text>
-                      </View>
-                    )}
-                    {kpayTxDetails.payMethod !== undefined && (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>payMethod</Text>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.method')}</Text>
                         <Text style={{ fontSize: 12, color: '#1f2937' }}>{KPAY_METHOD_MAP[kpayTxDetails.payMethod] || kpayTxDetails.payMethod}</Text>
                       </View>
-                    )}
-                    {/* Decline / failure reason — may come as `reason`, `message`, or `remark` */}
+                    ) : null}
+                    {kpayTxDetails.raw?.merchantNo ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-merchant-no')}</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.raw.merchantNo}</Text>
+                      </View>
+                    ) : null}
+                    {kpayTxDetails.raw?.terminalNo ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-terminal-no')}</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.raw.terminalNo}</Text>
+                      </View>
+                    ) : null}
+                    {/* Decline / failure reason */}
                     {(kpayTxDetails.reason || kpayTxDetails.terminalMessage) && (
                       <View style={{ backgroundColor: '#fef2f2', borderRadius: 6, padding: 8, marginTop: 4 }}>
                         <Text style={{ fontSize: 11, fontWeight: '600', color: '#dc2626', marginBottom: 2 }}>Decline Reason</Text>
@@ -2094,15 +2120,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         </View>
                       )}
                       <Text style={{ fontSize: 10, color: '#9ca3af' }}>
-                        {methodLabelMap[getPaymentMethodLabel(order)] || getPaymentMethodLabel(order)}
                         {(() => {
+                          const isPending = !order.payment_received && !order.cp_status && (!order.payment_status || order.payment_status === 'pending');
+                          if (isPending) return '';
+                          const method = methodLabelMap[getPaymentMethodLabel(order)] || getPaymentMethodLabel(order);
                           const v = resolveVendor(order);
                           if (v && v !== 'cash' && v !== 'card') {
                             const vLabel = vendorLabelMap[getVendorLabel(v)] || getVendorLabel(v);
-                            const mLabel = getPaymentMethodLabel(order);
-                            if (vLabel && mLabel !== vLabel) return ` · ${vLabel}`;
+                            if (vLabel && method !== vLabel) return `${method} · ${vLabel}`;
+                            return method;
                           }
-                          return '';
+                          return method;
                         })()}
                       </Text>
                     </View>

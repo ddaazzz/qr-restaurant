@@ -1702,6 +1702,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('admin.service-charge')} (%)</Text>
             <TextInput style={styles.input} value={formData.service_charge_percent?.toString() || '0'} onChangeText={(text) => setFormData({ ...formData, service_charge_percent: parseFloat(text) || 0 })} placeholder="0" keyboardType="decimal-pad" inputAccessoryViewID="numpadDone" />
+            <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{t('settings.service-charge-note')}</Text>
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.logo-url')}</Text>
@@ -1734,7 +1735,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.address')}</Text><Text style={styles.value}>{settings.address || '—'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.timezone')}</Text><Text style={styles.value}>{settings.timezone || 'UTC'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.preferred-language')}</Text><Text style={styles.value}>{settings.language_preference || '—'}</Text></View>
-          <View style={styles.settingItem}><Text style={styles.label}>{t('settings.service-charge')}</Text><Text style={styles.value}>{settings.service_charge_percent || 0} %</Text></View>
+          <View style={styles.settingItem}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>{t('settings.service-charge')}</Text>
+              <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{t('settings.service-charge-note')}</Text>
+            </View>
+            <Text style={styles.value}>{settings.service_charge_percent || 0} %</Text>
+          </View>
           {settings.logo_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.logo')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
           {settings.background_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.background')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
         </>
