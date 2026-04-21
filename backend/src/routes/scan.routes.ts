@@ -49,12 +49,23 @@ router.post("/scan/:qrToken", async (req, res) => {
     console.log("Restaurant ID:", unit.restaurant_id);
 
     // 3️⃣ Get restaurant details (logo, address, phone, etc) + config
-    const restaurantResult = await pool.query(
-      `SELECT id, name, address, phone, logo_url, background_url, theme_color,
-              service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url
-       FROM restaurants WHERE id = $1`,
-      [unit.restaurant_id]
-    );
+    let restaurantResult;
+    try {
+      restaurantResult = await pool.query(
+        `SELECT id, name, address, phone, logo_url, background_url, theme_color,
+                service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url
+         FROM restaurants WHERE id = $1`,
+        [unit.restaurant_id]
+      );
+    } catch (err) {
+      console.warn("Migration 074 might be missing: Falling back to legacy restaurant query.");
+      restaurantResult = await pool.query(
+        `SELECT id, name, address, phone, logo_url, background_url, theme_color,
+                service_charge_percent, custom_frontend_url
+         FROM restaurants WHERE id = $1`,
+        [unit.restaurant_id]
+      );
+    }
     const restaurant = restaurantResult.rows[0];
 
     // 4️⃣ Return table info, restaurant info, config, and session (if exists)

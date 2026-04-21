@@ -272,7 +272,8 @@ router.delete('/restaurants/:restaurantId/payment-terminals/:terminalId', async 
 router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', async (req, res) => {
   try {
     const { restaurantId, terminalId } = req.params;
-    const { payAmount, tipsAmount, payCurrency, description, customerName } = req.body;
+    const body = req.body || {};
+    const { payAmount, tipsAmount, payCurrency, description, customerName } = body;
 
     // Fetch the terminal configuration
     const terminalResult = await pool.query(

@@ -22,19 +22,31 @@ export function requireFeature(featureName: string) {
         return next(); // No restaurant context — skip check
       }
 
-      const result = await pool.query(
-        "SELECT feature_flags FROM restaurants WHERE id = $1",
-        [restaurantId]
-      );
+      let flags = {};
+      try {
+        const result = await pool.query(
+          "SELECT feature_flags FROM restaurants WHERE id = $1",
+          [restaurantId]
+        );
 
-      if (result.rowCount === 0) {
-        return res.status(404).json({ error: "Restaurant not found" });
+        if (result.rowCount === 0) {
+          return res.status(404).json({ error: "Restaurant not found" });
+        }
+
+        flags = result.rows[0].feature_flags || {};
+      } catch (dbErr: any) {
+        // If the feature_flags column doesn't exist, treat flags as an empty object (enabled by default)
+        if (dbErr.message && dbErr.message.includes("feature_flags")) {
+          console.warn("feature_flags column missing in restaurants table, defaulting to all enabled.");
+          flags = {};
+        } else {
+          // Re-throw other DB errors to be caught por the outer catch block
+          throw dbErr;
+        }
       }
 
-      const flags = result.rows[0].feature_flags || {};
-
       // Feature is enabled by default unless explicitly set to false
-      if (flags[featureName] === false) {
+      if ((flags as any)[featureName] === false) {
         return res.status(403).json({
           error: `Feature "${featureName}" is not enabled for this restaurant`,
           feature: featureName,

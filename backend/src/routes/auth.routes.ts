@@ -1573,22 +1573,51 @@ router.get("/manage/restaurants", async (req, res) => {
   try {
     let result;
     if (caller.role === "superadmin") {
-      result = await pool.query(
-        `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
-                r.feature_flags,
-                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
-         FROM restaurants r ORDER BY r.id`
-      );
+      try {
+        result = await pool.query(
+          `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                  r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                  r.feature_flags,
+                  (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+           FROM restaurants r ORDER BY r.id`
+        );
+      } catch (e: any) {
+        if (e.message.includes('column "feature_flags" does not exist')) {
+          console.warn("Falling back to query without feature_flags");
+          result = await pool.query(
+            `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                    r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                    (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+             FROM restaurants r ORDER BY r.id`
+          );
+        } else {
+          throw e;
+        }
+      }
     } else {
-      result = await pool.query(
-        `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
-                r.feature_flags,
-                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
-         FROM restaurants r WHERE r.id = $1`,
-        [caller.restaurant_id]
-      );
+      try {
+        result = await pool.query(
+          `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                  r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                  r.feature_flags,
+                  (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+           FROM restaurants r WHERE r.id = $1`,
+          [caller.restaurant_id]
+        );
+      } catch (e: any) {
+        if (e.message.includes('column "feature_flags" does not exist')) {
+          console.warn("Falling back to query without feature_flags");
+          result = await pool.query(
+            `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
+                    r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                    (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+             FROM restaurants r WHERE r.id = $1`,
+            [caller.restaurant_id]
+          );
+        } else {
+          throw e;
+        }
+      }
     }
     res.json(result.rows);
   } catch (err) {
@@ -1676,8 +1705,53 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
     params.push(restaurantId);
-    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
-    const result = await pool.query(query, params);
+    let query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
+    let result;
+    try {
+      result = await pool.query(query, params);
+    } catch (e: any) {
+      if (e.message.includes('column "feature_flags" does not exist') && updates.some(u => u.includes('feature_flags'))) {
+        console.warn("Falling back to update without feature_flags");
+        // Remove feature_flags from updates and update params
+        const ffIndex = updates.findIndex(u => u.includes('feature_flags'));
+        if (ffIndex !== -1) {
+          updates.splice(ffIndex, 1);
+          // We need to re-build query and potentially re-index params.
+          // Simplest is to just re-build the whole thing.
+          let newI = 1;
+          const newParams: any[] = [];
+          const newUpdates: string[] = [];
+          
+          if (name !== undefined) { newUpdates.push(`name = $${newI++}`); newParams.push(name); }
+          if (address !== undefined) { newUpdates.push(`address = $${newI++}`); newParams.push(address); }
+          if (phone !== undefined) { newUpdates.push(`phone = $${newI++}`); newParams.push(phone); }
+          if (timezone !== undefined) { newUpdates.push(`timezone = $${newI++}`); newParams.push(timezone); }
+          if (service_charge_percent !== undefined) { newUpdates.push(`service_charge_percent = $${newI++}`); newParams.push(service_charge_percent); }
+          if (language_preference !== undefined) { newUpdates.push(`language_preference = $${newI++}`); newParams.push(language_preference); }
+          if (is_customized !== undefined) { newUpdates.push(`is_customized = $${newI++}`); newParams.push(is_customized); }
+          if (app_version !== undefined) { newUpdates.push(`app_version = $${newI++}`); newParams.push(app_version); }
+          if (custom_branch !== undefined) { newUpdates.push(`custom_branch = $${newI++}`); newParams.push(custom_branch); }
+          if (render_service_id !== undefined) { newUpdates.push(`render_service_id = $${newI++}`); newParams.push(render_service_id); }
+          if (api_base_url !== undefined) { newUpdates.push(`api_base_url = $${newI++}`); newParams.push(api_base_url); }
+          // Skip feature_flags here
+          
+          if (newUpdates.length === 0) {
+            // Only feature_flags was requested to be updated, and it doesn't exist.
+            // Just return the existing object.
+            const fetchResult = await pool.query("SELECT id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url FROM restaurants WHERE id = $1", [restaurantId]);
+            return res.json({ restaurant: fetchResult.rows[0], success: true });
+          }
+          
+          newParams.push(restaurantId);
+          query = `UPDATE restaurants SET ${newUpdates.join(", ")} WHERE id = $${newI} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
+          result = await pool.query(query, newParams);
+        } else {
+          throw e;
+        }
+      } else {
+        throw e;
+      }
+    }
 
     if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
     res.json({ restaurant: result.rows[0], success: true });

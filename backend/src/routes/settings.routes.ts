@@ -6,7 +6,8 @@ const router = Router();
 // GET restaurant settings
 router.get("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
-    const result = await pool.query(
+    // Try to select all columns first (with migration 074 applied)
+    let result = await pool.query(
       `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
               language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
@@ -14,7 +15,22 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
               custom_domain, is_customized
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
-    );
+    ).catch(async (err: any) => {
+      // If columns don't exist yet, fetch without them
+      if (err.message?.includes('feature_flags') || err.message?.includes('ui_mode') || err.message?.includes('ui_config')) {
+        console.warn('[Settings] Migration 074 not yet applied, falling back to basic query');
+        return pool.query(
+          `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
+                  language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
+                  active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
+                  show_item_status_to_diners
+           FROM restaurants WHERE id = $1`,
+          [req.params.restaurantId]
+        );
+      }
+      throw err;
+    });
+    
     if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
     const r = result.rows[0];
     // Derive order_pay_enabled: PA terminal is active AND feature not explicitly disabled
@@ -22,8 +38,16 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
       r.active_payment_vendor === 'payment-asia' &&
       r.active_payment_terminal_id != null &&
       r.payment_asia_order_pay_enabled !== false;
+    // Provide defaults if columns weren't selected
+    r.feature_flags = r.feature_flags || {};
+    r.ui_config = r.ui_config || {};
+    r.ui_mode = r.ui_mode || 'native';
+    r.custom_frontend_url = r.custom_frontend_url || null;
+    r.custom_domain = r.custom_domain || null;
+    r.is_customized = r.is_customized || false;
     res.json(r);
   } catch (err: any) {
+    console.error('[Settings] Error fetching settings:', err);
     res.status(500).json({ error: err.message });
   }
 });
