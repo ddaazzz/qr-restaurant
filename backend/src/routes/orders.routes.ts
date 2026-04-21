@@ -1163,6 +1163,43 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
 });
 
 /**
+ * PATCH /restaurants/:restaurantId/orders/:orderId/kpay-attempt
+ * Called immediately after kpaySale succeeds on the mobile (before polling).
+ * Saves the outTradeNo + payment_method='kpay' to the order so order history
+ * shows a KPay attempt even if the payment ultimately fails or times out.
+ */
+router.patch("/restaurants/:restaurantId/orders/:orderId/kpay-attempt", async (req, res) => {
+  try {
+    const { restaurantId, orderId } = req.params;
+    const { outTradeNo, amountCents } = req.body;
+    if (!outTradeNo) return res.status(400).json({ error: "outTradeNo is required" });
+
+    // Only update if the order hasn't already been paid/voided
+    await pool.query(
+      `UPDATE orders
+       SET payment_method = 'kpay', chuio_order_reference = $1
+       WHERE id = $2 AND restaurant_id = $3
+         AND (payment_status IS NULL OR payment_status NOT IN ('paid', 'completed', 'voided'))`,
+      [outTradeNo, orderId, restaurantId]
+    );
+
+    // Create kpay_transactions record so /kpay-transactions/:outTradeNo endpoint works
+    try {
+      await pool.query(
+        `INSERT INTO kpay_transactions (restaurant_id, kpay_reference_id, status, amount_cents, currency_code, order_id)
+         VALUES ($1, $2, 'pending', $3, '344', $4)`,
+        [restaurantId, outTradeNo, amountCents || 0, orderId]
+      );
+    } catch (_) { /* already exists or constraint error — non-fatal */ }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * POST /restaurants/:restaurantId/orders/:orderId/void
  * Mark a non-KPay order as voided (cash/card manual correction)
  */

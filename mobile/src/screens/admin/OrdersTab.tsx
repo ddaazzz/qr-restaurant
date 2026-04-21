@@ -946,6 +946,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         addLog(`> ${t('orders.kpay-tap-scan')}`, '#ffd43b');
         setKpayStatusMsg(t('orders.kpay-waiting'));
 
+        // Save outTradeNo to the order immediately so history shows KPay attempt
+        // even if the payment ultimately fails or times out.
+        if (paymentModalOrderId) {
+          try {
+            await apiClient.patch(
+              `/api/restaurants/${restaurantId}/orders/${paymentModalOrderId}/kpay-attempt`,
+              { outTradeNo, amountCents: paymentModalTotal }
+            );
+          } catch (_) { /* non-fatal — polling continues regardless */ }
+        }
+
         // Save session so abort can call kpayClose
         kpayActiveSessionRef.current = { config, appPrivateKey, outTradeNo };
 

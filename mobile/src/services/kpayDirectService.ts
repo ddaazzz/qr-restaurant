@@ -314,12 +314,28 @@ export async function kpayQuery(
       };
     }
 
-    // Non-10000 code on query — distinguish terminal cancellation from genuinely-still-pending
-    const CANCEL_CODES = [20017, 700029];
-    const FAIL_CODES   = [700035];
-    const PENDING_CODES = [20011, 20014, 20016, 50006, 700034];
+    // Non-10000 response from query — use allowlist per spec:
+    // ONLY these codes mean "still processing, keep polling":
+    //   20011 = Transaction Processing
+    //   20014 = Transaction Query in Progress
+    //   20016 = Waiting for Foreground Application Processing
+    //   50006 = Last Transaction Not Completed
+    //   700034 = Transaction Not Completed
+    // Everything else (including unknown codes) → terminal ended the transaction → stop polling.
+    const PENDING_CODES = new Set([20011, 20014, 20016, 50006, 700034]);
+    const CANCEL_CODES  = new Set([20017, 700029]);   // user/terminal cancelled
+    const FAIL_CODES    = new Set([700035]);            // transaction failed
     const code: number = data.code;
-    if (CANCEL_CODES.includes(code)) {
+
+    if (PENDING_CODES.has(code)) {
+      return {
+        success: false,
+        status: 'pending',
+        message: data.message || 'Transaction still processing',
+        error: `code=${code}`,
+      };
+    }
+    if (CANCEL_CODES.has(code)) {
       return {
         success: false,
         status: 'cancelled',
@@ -327,19 +343,11 @@ export async function kpayQuery(
         error: `code=${code}`,
       };
     }
-    if (FAIL_CODES.includes(code)) {
-      return {
-        success: false,
-        status: 'failed',
-        message: data.message || 'Transaction failed',
-        error: `code=${code}`,
-      };
-    }
-    // Explicitly pending codes OR unknown non-success → keep polling
+    // FAIL_CODES + any unrecognised code → treat as failed/ended
     return {
       success: false,
-      status: 'pending',
-      message: data.message || 'Query returned non-success code',
+      status: 'failed',
+      message: data.message || 'Transaction ended',
       error: `code=${code}`,
     };
   } catch (err: any) {
