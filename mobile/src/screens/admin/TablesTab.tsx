@@ -238,7 +238,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
   // KPay terminal payment state
   const [kpayTerminal, setKpayTerminal] = useState<any>(null);
-  const [showKpayModal, setShowKpayModal] = useState(false);
   const [kpayProcessing, setKpayProcessing] = useState(false);
   const [kpayStatusMsg, setKpayStatusMsg] = useState('');
   const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
@@ -1076,8 +1075,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const startKpayTerminalPayment = async (sessionId: number, finalAmount: number, discountCents: number) => {
     if (!kpayTerminal) return;
 
-    setShowCloseBillModal(false);
-    setShowKpayModal(true);
+    // Stay inside the close bill modal — show KPay progress in-place (same as OrdersTab)
     setKpayProcessing(true);
     setKpayStatusMsg('Initiating…');
     setKpayLogs([{ msg: '> Connecting to KPay terminal…', color: '#ffd43b' }]);
@@ -1148,8 +1146,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             setKpayProcessing(false);
 
             setTimeout(async () => {
-              setShowKpayModal(false);
+              setShowCloseBillModal(false);
               setKpayLogs([]);
+              setKpayStatusMsg('');
               setPaymentMethod('cash');
               setDiscountAmount('0');
               setCloseReason('');
@@ -2390,19 +2389,40 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 placeholder="Optional notes"
               />
 
+              {/* KPay in-progress view */}
+              {(kpayProcessing || kpayLogs.length > 0) && (
+                <View style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>KPay Terminal</Text>
+                    {kpayStatusMsg ? (
+                      <View style={{ backgroundColor: kpayStatusMsg.includes('✅') ? '#d1fae5' : '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: kpayStatusMsg.includes('✅') ? '#065f46' : '#b45309' }}>{kpayStatusMsg}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <ScrollView style={{ backgroundColor: '#1a1a1a', borderRadius: 8, padding: 10, maxHeight: 160 }}>
+                    {kpayLogs.map((log, idx) => (
+                      <Text key={idx} style={{ color: log.color, fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 2 }}>{log.msg}</Text>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary]}
-                  onPress={() => setShowCloseBillModal(false)}
+                  style={[styles.btn, styles.btnSecondary, kpayProcessing && { opacity: 0.4 }]}
+                  onPress={() => { if (!kpayProcessing) { setShowCloseBillModal(false); setKpayLogs([]); setKpayStatusMsg(''); } }}
                 >
                   <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
+                {!(kpayProcessing || kpayLogs.length > 0) && (
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={closeBill}
                 >
                   <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
                 </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>
@@ -3358,13 +3378,35 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 )}
                 <Text style={styles.label}>{t('admin.notes')}</Text>
                 <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder="Optional notes" />
+
+                {/* KPay in-progress view */}
+                {(kpayProcessing || kpayLogs.length > 0) && (
+                  <View style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>KPay Terminal</Text>
+                      {kpayStatusMsg ? (
+                        <View style={{ backgroundColor: kpayStatusMsg.includes('✅') ? '#d1fae5' : '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: kpayStatusMsg.includes('✅') ? '#065f46' : '#b45309' }}>{kpayStatusMsg}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <ScrollView style={{ backgroundColor: '#1a1a1a', borderRadius: 8, padding: 10, maxHeight: 160 }}>
+                      {kpayLogs.map((log, idx) => (
+                        <Text key={idx} style={{ color: log.color, fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 2 }}>{log.msg}</Text>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowCloseBillModal(false)}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary, kpayProcessing && { opacity: 0.4 }]} onPress={() => { if (!kpayProcessing) { setShowCloseBillModal(false); setKpayLogs([]); setKpayStatusMsg(''); } }}>
                     <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
+                  {!(kpayProcessing || kpayLogs.length > 0) && (
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={closeBill}>
                     <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
                   </TouchableOpacity>
+                  )}
                 </View>
               </View>
             </View>
@@ -3774,46 +3816,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
       {/* Done button for iOS number-pad */}
       {Platform.OS === 'ios' && (
-        <InputAccessoryView nativeID="numpadDone">
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', backgroundColor: '#f1f1f1', borderTopWidth: 1, borderTopColor: '#ccc', paddingHorizontal: 12, paddingVertical: 6 }}>
-            <TouchableOpacity onPress={() => Keyboard.dismiss()} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </InputAccessoryView>
-      )}
-
-      {/* KPay Terminal Payment Modal */}
-      <Modal visible={showKpayModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { width: '90%', maxWidth: 440 }]}>
-            <Text style={[styles.modalTitle, { marginBottom: 4 }]}>KPay Terminal Payment</Text>
-            <Text style={{ fontSize: 13, color: kpayProcessing ? '#b45309' : '#065f46', backgroundColor: kpayProcessing ? '#fef3c7' : '#d1fae5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 12, fontWeight: '600' }}>
-              {kpayStatusMsg}
-            </Text>
-
-            {/* Terminal log */}
-            <ScrollView style={{ backgroundColor: '#1a1a1a', borderRadius: 6, padding: 10, maxHeight: 200, marginBottom: 12 }}>
-              {kpayLogs.map((log, i) => (
-                <Text key={i} style={{ fontFamily: 'Courier New', fontSize: 11, color: log.color, marginBottom: 1 }}>{log.msg}</Text>
-              ))}
-            </ScrollView>
-
-            {!kpayProcessing && (
-              <TouchableOpacity
-                style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
-                onPress={() => {
-                  if (kpayPollRef.current) clearTimeout(kpayPollRef.current);
-                  setShowKpayModal(false);
-                  setKpayLogs([]);
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Close</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </Modal>
 
     </View>
   );
