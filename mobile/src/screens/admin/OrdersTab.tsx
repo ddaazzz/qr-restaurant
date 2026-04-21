@@ -951,18 +951,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
         // Step 3: Poll status — signed GET direct to terminal
         // appPrivateKey is valid until terminal settlement; reuse for all polls.
+        // No app-side timeout — we poll until the terminal itself times out and
+        // returns a terminal-side cancelled/failed status (payResult 5/6/3).
         let attempts = 0;
-        const maxAttempts = 22;
 
         const poll = async () => {
-          if (attempts >= maxAttempts) {
-            setKpayStatusMsg(t('orders.kpay-timeout'));
-            addLog('> TIMEOUT', '#ffd43b');
-            setKpayProcessing(false);
-            return;
-          }
           attempts++;
-          addLog(`> Polling… (${attempts}/${maxAttempts})`);
+          addLog(`> Polling… (${attempts})`);
 
           try {
             const statusResult = await kpayQuery(config, appPrivateKey, outTradeNo);
