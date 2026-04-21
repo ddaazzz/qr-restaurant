@@ -85,6 +85,7 @@ export interface KPayStatusResult {
   success: boolean;
   status: KPayTransactionStatus;
   message: string;
+  terminalMessage?: string;  // decline reason or status description from the terminal
   transactionNo?: string;
   refNo?: string;
   amount?: string;
@@ -289,10 +290,15 @@ export async function kpayQuery(
         payResult === 4 ? 'cancelled' :
         'pending';
 
+      // Terminal may include a human-readable decline reason in data.message
+      const terminalMessage: string | undefined =
+        data.data.message || data.data.remark || undefined;
+
       return {
         success: true,
         status,
-        message: `Transaction: ${status}`,
+        message: terminalMessage || `Transaction: ${status}`,
+        terminalMessage,
         transactionNo: data.data.transactionNo,
         refNo: data.data.refNo,
         amount: data.data.payAmount,

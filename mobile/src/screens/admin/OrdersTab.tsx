@@ -996,8 +996,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             }
 
             if (statusResult.status === 'cancelled' || statusResult.status === 'failed') {
-              setKpayStatusMsg(statusResult.status === 'cancelled' ? t('orders.kpay-cancelled') : t('orders.kpay-failed'));
-              addLog(`> ${statusResult.status}`, '#ff6b6b');
+              const reason = statusResult.terminalMessage ? `: ${statusResult.terminalMessage}` : '';
+              setKpayStatusMsg(statusResult.status === 'cancelled' ? t('orders.kpay-cancelled') : `${t('orders.kpay-failed')}${reason}`);
+              addLog(`> ${statusResult.status}${reason}`, '#ff6b6b');
               kpayActiveSessionRef.current = null;
               setKpayProcessing(false);
               return;

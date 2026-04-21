@@ -1188,8 +1188,9 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
           }
 
           if (statusResult.status === 'cancelled' || statusResult.status === 'failed') {
-            setKpayStatusMsg(statusResult.status === 'cancelled' ? 'Cancelled' : 'Payment failed');
-            addLog(`> ${statusResult.status}`, '#ff6b6b');
+            const reason = statusResult.terminalMessage ? `: ${statusResult.terminalMessage}` : '';
+            setKpayStatusMsg(statusResult.status === 'cancelled' ? 'Cancelled' : `Payment failed${reason}`);
+            addLog(`> ${statusResult.status}${reason}`, '#ff6b6b');
             kpayActiveSessionRef.current = null;
             setKpayProcessing(false);
             return;
