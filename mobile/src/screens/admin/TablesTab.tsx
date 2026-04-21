@@ -253,8 +253,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
   const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Stores live session so abort handler can call kpayClose on the terminal
   const kpayActiveSessionRef = useRef<{ config: any; appPrivateKey: string; outTradeNo: string } | null>(null);
-  // Stores active session data so the abort handler can call kpayClose on the terminal
-  const kpayActiveSessionRef = useRef<{ config: any; appPrivateKey: string; outTradeNo: string } | null>(null);
 
   // Expose toggleEditMode and navigateToScannedQR through ref
   useImperativeHandle(ref, () => ({
