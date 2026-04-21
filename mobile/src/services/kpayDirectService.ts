@@ -314,12 +314,33 @@ export async function kpayQuery(
       };
     }
 
-    // Non-10000 code on query usually means still pending (terminal busy)
+    // Non-10000 code on query — distinguish terminal cancellation from genuinely-still-pending
+    const CANCEL_CODES = [20017, 700029];
+    const FAIL_CODES   = [700035];
+    const PENDING_CODES = [20011, 20014, 20016, 50006, 700034];
+    const code: number = data.code;
+    if (CANCEL_CODES.includes(code)) {
+      return {
+        success: false,
+        status: 'cancelled',
+        message: data.message || 'Transaction cancelled by terminal',
+        error: `code=${code}`,
+      };
+    }
+    if (FAIL_CODES.includes(code)) {
+      return {
+        success: false,
+        status: 'failed',
+        message: data.message || 'Transaction failed',
+        error: `code=${code}`,
+      };
+    }
+    // Explicitly pending codes OR unknown non-success → keep polling
     return {
       success: false,
       status: 'pending',
       message: data.message || 'Query returned non-success code',
-      error: `code=${data.code}`,
+      error: `code=${code}`,
     };
   } catch (err: any) {
     const msg = err.name === 'AbortError' ? 'Timed out (10s) — terminal unreachable' : err.message;
