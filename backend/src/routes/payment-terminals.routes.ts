@@ -492,6 +492,21 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/test-status
           endpointPath: terminal.endpoint_path || '/v2/pos/sign',
         });
 
+        // Key exchange is required before every signed request — appPrivateKey
+        // lives only in the singleton's memory for the lifetime of the request.
+        const signResult = await kpayTerminalService.testConnection();
+        const signLogs = kpayTerminalService.flushLogs();
+        if (!signResult.success) {
+          return res.json({
+            success: false,
+            code: 10001,
+            status: 'pending',   // keep polling — may be a transient terminal timeout
+            message: 'Key exchange failed during status poll: ' + signResult.message,
+            outTradeNo,
+            logs: signLogs,
+          });
+        }
+
         // Query transaction status from terminal
         const queryResult = await kpayTerminalService.queryTransactionStatus(String(outTradeNo));
         const queryLogs = kpayTerminalService.flushLogs();
