@@ -112,6 +112,22 @@ export interface KPayStatusResult {
   error?: string;
 }
 
+// ─── Internal fetch with timeout ─────────────────────────────────────────────
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 // ─── Step 1: Sign (key exchange) — no RSA needed ─────────────────────────────
 
 export async function kpaySign(config: KPayTerminalConfig): Promise<KPaySignResult> {
@@ -128,7 +144,7 @@ export async function kpaySign(config: KPayTerminalConfig): Promise<KPaySignResu
   const nonceStr = generateNonce();
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -136,7 +152,7 @@ export async function kpaySign(config: KPayTerminalConfig): Promise<KPaySignResu
         nonceStr,
       },
       body: JSON.stringify({ appId, appSecret }),
-    });
+    }, 10000);
 
     const data = await response.json();
 
@@ -159,10 +175,11 @@ export async function kpaySign(config: KPayTerminalConfig): Promise<KPaySignResu
       error: `code=${data.code}`,
     };
   } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Timed out (10s) — terminal unreachable or wrong IP/port' : err.message;
     return {
       success: false,
       message: 'Cannot reach terminal',
-      error: err.message,
+      error: msg,
     };
   }
 }
@@ -206,7 +223,7 @@ export async function kpaySale(
   }
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -216,7 +233,7 @@ export async function kpaySale(
         signature,
       },
       body: bodyJson,
-    });
+    }, 70000);  // KPay sale can take up to 65s (customer payment)
 
     const data = await response.json();
 
@@ -230,11 +247,12 @@ export async function kpaySale(
       error: `code=${data.code}`,
     };
   } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Timed out (70s)' : err.message;
     return {
       success: false,
       message: 'Cannot reach terminal',
       outTradeNo,
-      error: err.message,
+      error: msg,
     };
   }
 }
@@ -271,7 +289,7 @@ export async function kpayQuery(
   }
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'GET',
       headers: {
         appId,
@@ -279,7 +297,7 @@ export async function kpayQuery(
         nonceStr,
         signature,
       },
-    });
+    }, 10000);
 
     const data = await response.json();
 
@@ -310,11 +328,12 @@ export async function kpayQuery(
       error: `code=${data.code}`,
     };
   } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Timed out (10s) — terminal unreachable' : err.message;
     return {
       success: false,
-      status: 'unknown',
+      status: 'pending',  // treat timeout as pending — retry on next poll
       message: 'Query request failed',
-      error: err.message,
+      error: msg,
     };
   }
 }
