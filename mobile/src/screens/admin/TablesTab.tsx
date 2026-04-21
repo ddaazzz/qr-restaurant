@@ -3824,6 +3824,14 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
 
       {/* Done button for iOS number-pad */}
       {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID="numpadDone">
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', backgroundColor: '#f1f1f1', borderTopWidth: 1, borderTopColor: '#ccc', paddingHorizontal: 12, paddingVertical: 6 }}>
+            <TouchableOpacity onPress={() => Keyboard.dismiss()} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
+      )}
 
     </View>
   );
