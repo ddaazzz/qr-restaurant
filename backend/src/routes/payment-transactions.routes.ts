@@ -649,17 +649,23 @@ router.post('/restaurants/:restaurantId/payment/return', handlePaymentReturn);
 /**
  * GET /api/restaurants/:restaurantId/orders/:orderId/payment-status
  * Check the payment status of an order.
- * Auto-resets orders stuck in 'pending' for more than 5 minutes (webhook/return never fired).
+ * When our DB is still 'pending', queries Payment Asia directly for the authoritative status
+ * and updates the DB + resets the order if PA says failed/succeeded.
  */
 router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (req, res) => {
   try {
     const { restaurantId, orderId } = req.params;
 
     const result = await pool.query(
-      `SELECT id, payment_status, transaction_id, error_message, completed_at, created_at
-       FROM order_payments
-       WHERE order_id = $1 AND restaurant_id = $2
-       ORDER BY created_at DESC
+      `SELECT op.id, op.payment_status, op.transaction_id, op.error_message,
+              op.completed_at, op.created_at, op.chuio_order_reference,
+              pt.merchant_token, pt.secret_code, pt.payment_gateway_env
+       FROM order_payments op
+       JOIN restaurants r ON r.id = op.restaurant_id
+       LEFT JOIN payment_terminals pt
+         ON pt.id = r.active_payment_terminal_id AND pt.vendor_name = 'payment-asia'
+       WHERE op.order_id = $1 AND op.restaurant_id = $2
+       ORDER BY op.created_at DESC
        LIMIT 1`,
       [orderId, restaurantId]
     );
@@ -670,22 +676,62 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
 
     const payment = result.rows[0];
 
-    // Auto-reset if pending for > 5 minutes (PA likely never fired webhook/return_url)
-    if (payment.payment_status === 'pending') {
-      const ageMs = Date.now() - new Date(payment.created_at).getTime();
-      if (ageMs > 5 * 60 * 1000) {
-        console.log('[PaymentStatus] Auto-resetting stale pending payment:', payment.id, 'age:', Math.round(ageMs / 1000), 's');
-        await pool.query(
-          `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL
-           WHERE id = $1 AND restaurant_id = $2 AND status != 'completed'`,
-          [orderId, restaurantId]
-        );
-        await pool.query(
-          `UPDATE order_payments SET payment_status = 'failed', error_message = 'Payment timed out — no response from gateway',
-           failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
-          [payment.id]
-        );
-        return res.json({ payment_status: 'failed', reason: 'timeout' });
+    // If our DB says pending, go ask PA directly
+    if (payment.payment_status === 'pending' && payment.chuio_order_reference && payment.merchant_token) {
+      try {
+        console.log('[PaymentStatus] DB pending — querying PA directly for:', payment.chuio_order_reference);
+        paymentAsiaService.initialize({
+          merchantToken: payment.merchant_token,
+          secretCode: payment.secret_code,
+          environment: payment.payment_gateway_env || 'sandbox',
+        });
+        const records = await paymentAsiaService.queryPayment(payment.chuio_order_reference);
+        // Find the sale record (type=1); ignore refund records
+        const saleRecord = records.find((r: any) => String(r.type) === '1') || records[0];
+
+        if (saleRecord) {
+          const paStatusCode = parseInt(String(saleRecord.status));
+          const resolvedStatus = paymentStatusMapper.getPaymentAsiaStatus(paStatusCode);
+          console.log('[PaymentStatus] PA query result: status code', paStatusCode, '→', resolvedStatus);
+
+          // Update our DB with the real status
+          await pool.query(
+            `UPDATE order_payments SET payment_status = $1,
+               transaction_id = COALESCE($2, transaction_id),
+               completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE completed_at END,
+               failed_at    = CASE WHEN $1 = 'failed'    THEN NOW() ELSE failed_at END,
+               updated_at = NOW()
+             WHERE id = $3`,
+            [resolvedStatus, saleRecord.request_reference || null, payment.id]
+          );
+
+          if (resolvedStatus === 'completed') {
+            await pool.query(
+              `UPDATE orders SET status = 'completed', payment_method = 'payment-asia'
+               WHERE id = $1 AND restaurant_id = $2`,
+              [orderId, restaurantId]
+            );
+          } else if (resolvedStatus === 'failed') {
+            await pool.query(
+              `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL
+               WHERE id = $1 AND restaurant_id = $2 AND status != 'completed'`,
+              [orderId, restaurantId]
+            );
+          }
+
+          return res.json({
+            payment_status: resolvedStatus,
+            transaction_id: saleRecord.request_reference || null,
+            initiated_at: payment.created_at,
+            pa_status_code: paStatusCode,
+          });
+        } else {
+          // PA has no record yet — still genuinely pending (very fresh payment)
+          console.log('[PaymentStatus] PA query returned no records for:', payment.chuio_order_reference);
+        }
+      } catch (paErr: any) {
+        // PA query failed — fall through and return our DB status, don't crash
+        console.warn('[PaymentStatus] PA direct query failed:', paErr.message);
       }
     }
 
