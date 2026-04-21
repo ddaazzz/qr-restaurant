@@ -6,34 +6,18 @@
  * runs in the cloud and cannot reach private LAN IPs (e.g. 192.168.x.x).
  * The mobile device IS on the restaurant LAN and can reach the terminal.
  *
- * Signing uses the Web Crypto API (crypto.subtle) available in Hermes / RN 0.73+.
+ * Signing uses node-forge (pure JS RSA) because crypto.subtle is not available
+ * in Hermes (React Native's JS engine).
  * Algorithm: RSASSA-PKCS1-v1_5 with SHA-256.
  * The appPrivateKey returned by the Sign endpoint is PKCS#8 DER base64-encoded.
  */
+
+import forge from 'node-forge';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function generateNonce(): string {
   return Math.random().toString(36).substring(2, 34).padEnd(32, '0');
-}
-
-function base64ToUint8Array(b64: string): Uint8Array {
-  const cleaned = b64.replace(/\s+/g, '');
-  const decoded = atob(cleaned);
-  const bytes = new Uint8Array(decoded.length);
-  for (let i = 0; i < decoded.length; i++) {
-    bytes[i] = decoded.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function arrayBufferToBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }
 
 /**
@@ -54,25 +38,20 @@ function buildCanonical(
 }
 
 /**
- * RSA-SHA256 sign (RSASSA-PKCS1-v1_5) using the Web Crypto API.
+ * RSA-SHA256 sign (RSASSA-PKCS1-v1_5) using node-forge (pure JS).
  * appPrivateKeyB64 is PKCS#8 DER base64, as returned by the KPay Sign endpoint.
+ * node-forge handles both PKCS#8 (BEGIN PRIVATE KEY) and PKCS#1 formats.
  */
-async function rsaSign(appPrivateKeyB64: string, canonical: string): Promise<string> {
-  // crypto.subtle is available in React Native 0.73+ (Hermes)
-  const subtle: SubtleCrypto = (globalThis.crypto as Crypto).subtle;
-  const keyBytes = base64ToUint8Array(appPrivateKeyB64);
+function rsaSign(appPrivateKeyB64: string, canonical: string): string {
+  const b64 = appPrivateKeyB64.replace(/\s+/g, '');
+  const lines = b64.match(/.{1,64}/g)!.join('\r\n');
+  const pem = `-----BEGIN PRIVATE KEY-----\r\n${lines}\r\n-----END PRIVATE KEY-----`;
 
-  const cryptoKey = await subtle.importKey(
-    'pkcs8',
-    keyBytes.buffer as ArrayBuffer,
-    { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } },
-    false,
-    ['sign'],
-  );
-
-  const dataBytes = new TextEncoder().encode(canonical);
-  const sigBuf = await subtle.sign({ name: 'RSASSA-PKCS1-v1_5' }, cryptoKey, dataBytes);
-  return arrayBufferToBase64(sigBuf);
+  const privateKey = forge.pki.privateKeyFromPem(pem) as forge.pki.rsa.PrivateKey;
+  const md = forge.md.sha256.create();
+  md.update(canonical, 'utf8');
+  const signature = (privateKey as any).sign(md);
+  return forge.util.encode64(signature);
 }
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -212,7 +191,7 @@ export async function kpaySale(
 
   let signature: string;
   try {
-    signature = await rsaSign(appPrivateKey, canonical);
+    signature = rsaSign(appPrivateKey, canonical);
   } catch (signErr: any) {
     return {
       success: false,
@@ -278,7 +257,7 @@ export async function kpayQuery(
 
   let signature: string;
   try {
-    signature = await rsaSign(appPrivateKey, canonical);
+    signature = rsaSign(appPrivateKey, canonical);
   } catch (signErr: any) {
     return {
       success: false,
