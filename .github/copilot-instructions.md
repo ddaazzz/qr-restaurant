@@ -1,5 +1,39 @@
 # QR Restaurant AI - Copilot Instructions
 
+---
+
+## ⚠️ CRITICAL: Dev-Only Policy — Read Before Anything Else
+
+**All code changes, commits, and deployments target the `dev` branch and `dev.chuio.io` environment ONLY.**
+
+### Rules — enforced without exception unless user explicitly says otherwise:
+
+1. **Branch**: Always work on `dev`. Never `git checkout main`, `git push origin main`, or merge `dev → main` unless the user explicitly says "merge to main" or "deploy to production".
+
+2. **API URLs in code**: Use `https://dev.chuio.io` as the backend URL for any dev/test context. Never hardcode `https://chuio.io` (production) into source code unless the user explicitly requests a production change.
+
+3. **Database**: The dev database is `chuio_dev_db` on `dpg-d7gq5j4p3tds73a44eo0-a.singapore-postgres.render.com`. Never run migrations, `psql`, or destructive queries against the production database without explicit instruction.
+
+4. **Mobile builds**: The `mobile/.env.local` file must always point to `https://dev.chuio.io` for day-to-day development. The only exception is when the user runs `scripts/bundle-production.sh` immediately before an Xcode App Store Archive — and `scripts/bundle-dev.sh` must be run immediately after to restore dev settings.
+
+5. **Render services**: There are two Render services — `dev.chuio.io` (dev) and `chuio.io` (prod). Dev deploys from `dev` branch; prod deploys from `main` branch. Never suggest or perform actions that affect the `main`-based production Render service unless told to merge.
+
+6. **Migrations**: Write and run new SQL migrations against the dev database only. Mirror to production only on explicit merge instruction.
+
+7. **Secrets and environment variables**: The dev and prod environments use separate secrets. When generating `.env` snippets or editing env config, use dev values unless a production context is explicitly requested.
+
+8. **Git operations to avoid without explicit approval**:
+   - `git push origin main`
+   - `git checkout main`
+   - `git merge dev` (on main)
+   - `git reset --hard` or `git push --force`
+   - Any command that writes to the production database
+
+### When the user says "merge to main" or "go to production":
+Only then switch to `main` branch, merge `dev → main`, push, and confirm Render will redeploy `chuio.io`.
+
+---
+
 ## System Architecture
 
 **Frontend-Backend Split:**
