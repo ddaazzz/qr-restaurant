@@ -293,6 +293,7 @@ body {
   min-height: 100vh;
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 88px 72px 0;
 }
 
@@ -302,6 +303,7 @@ body {
   gap: 40px;
   align-items: center;
   width: 100%;
+  max-width: 1400px;
 }
 
 .hero-col-left {
@@ -335,9 +337,10 @@ body {
 
 .hero-col-center {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: visible;
+  width: 100%;
 }
 
 .hero-col-center img {
@@ -356,6 +359,40 @@ body {
   color: var(--white);
   line-height: 1.6;
   text-align: left;
+}
+
+.app-store-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 64px;
+  text-decoration: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.app-store-button img {
+  display: block;
+  height: 180px;
+  width: auto;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.app-store-button:hover img {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.app-store-button:active img {
+  transform: scale(0.98);
+}
+
+.app-store-subtitle {
+  margin-top: 32px;
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--text-on-glass-muted);
+  text-align: center;
+  line-height: 1.4;
 }
 
 .hero-device-img {
