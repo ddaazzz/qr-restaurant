@@ -2066,6 +2066,120 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     };
 
     // ============= HISTORY VIEW =============
+    const kpayActionModals = (
+      <>
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showKpayVoidModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => { if (!kpayActionBusy) setShowKpayVoidModal(false); }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.void-kpay')}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                secureTextEntry
+                editable={!kpayActionBusy}
+                value={kpayVoidPassword}
+                onChangeText={setKpayVoidPassword}
+                placeholder={t('orders.required-field')}
+              />
+              {kpayActionLogs.length > 0 && (
+                <View style={{ backgroundColor: '#0f172a', borderRadius: 8, padding: 10, marginBottom: 12, maxHeight: 140 }}>
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    {kpayActionLogs.map((entry, i) => (
+                      <Text key={i} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: entry.color, lineHeight: 16 }}>{entry.msg}</Text>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
+                  disabled={kpayActionBusy}
+                  onPress={() => setShowKpayVoidModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#f59e0b', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
+                  disabled={kpayActionBusy}
+                  onPress={submitKpayVoid}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{kpayActionBusy ? '…' : t('orders.void-btn')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showKpayRefundModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => { if (!kpayActionBusy) setShowKpayRefundModal(false); }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
+                keyboardType="numeric"
+                editable={!kpayActionBusy}
+                value={kpayRefundAmount}
+                onChangeText={setKpayRefundAmount}
+                placeholder={t('orders.full-refund')}
+              />
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                secureTextEntry
+                editable={!kpayActionBusy}
+                value={kpayManagerPassword}
+                onChangeText={setKpayManagerPassword}
+                placeholder={t('orders.required-field')}
+              />
+              {kpayActionLogs.length > 0 && (
+                <View style={{ backgroundColor: '#0f172a', borderRadius: 8, padding: 10, marginBottom: 12, maxHeight: 140 }}>
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    {kpayActionLogs.map((entry, i) => (
+                      <Text key={i} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: entry.color, lineHeight: 16 }}>{entry.msg}</Text>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
+                  disabled={kpayActionBusy}
+                  onPress={() => setShowKpayRefundModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
+                  disabled={kpayActionBusy}
+                  onPress={submitKpayRefund}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{kpayActionBusy ? '…' : t('orders.submit-refund')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </>
+    );
+
     if (showHistory) {
       const historyIsTablet = (Platform as any).isPad;
 
@@ -2085,6 +2199,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               </ScrollView>
             </View>
             {paymentModal}
+            {kpayActionModals}
           </>
         );
       }
@@ -2268,6 +2383,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           )}
         </View>
         {paymentModal}
+        {kpayActionModals}
         </>
       );
     }
@@ -2871,118 +2987,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
         {tablePickerModal}
 
-        {/* KPay Void Modal */}
-        <Modal
-          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-          visible={showKpayVoidModal}
-          animationType="fade"
-          transparent
-          onRequestClose={() => { if (!kpayActionBusy) setShowKpayVoidModal(false); }}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.void-kpay')}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-                secureTextEntry
-                editable={!kpayActionBusy}
-                value={kpayVoidPassword}
-                onChangeText={setKpayVoidPassword}
-                placeholder={t('orders.required-field')}
-              />
-              {kpayActionLogs.length > 0 && (
-                <View style={{ backgroundColor: '#0f172a', borderRadius: 8, padding: 10, marginBottom: 12, maxHeight: 140 }}>
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    {kpayActionLogs.map((entry, i) => (
-                      <Text key={i} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: entry.color, lineHeight: 16 }}>{entry.msg}</Text>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={() => setShowKpayVoidModal(false)}
-                >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#f59e0b', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={submitKpayVoid}
-                >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>{kpayActionBusy ? '…' : t('orders.void-btn')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* KPay Refund Modal */}
-        <Modal
-          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-          visible={showKpayRefundModal}
-          animationType="fade"
-          transparent
-          onRequestClose={() => { if (!kpayActionBusy) setShowKpayRefundModal(false); }}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
-                keyboardType="numeric"
-                editable={!kpayActionBusy}
-                value={kpayRefundAmount}
-                onChangeText={setKpayRefundAmount}
-                placeholder={t('orders.full-refund')}
-              />
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-                secureTextEntry
-                editable={!kpayActionBusy}
-                value={kpayManagerPassword}
-                onChangeText={setKpayManagerPassword}
-                placeholder={t('orders.required-field')}
-              />
-              {kpayActionLogs.length > 0 && (
-                <View style={{ backgroundColor: '#0f172a', borderRadius: 8, padding: 10, marginBottom: 12, maxHeight: 140 }}>
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    {kpayActionLogs.map((entry, i) => (
-                      <Text key={i} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: entry.color, lineHeight: 16 }}>{entry.msg}</Text>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={() => setShowKpayRefundModal(false)}
-                >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={submitKpayRefund}
-                >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>{kpayActionBusy ? '…' : t('orders.submit-refund')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        {kpayActionModals}
 
         {/* Payment Asia Refund Modal */}
         <Modal
