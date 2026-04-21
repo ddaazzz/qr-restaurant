@@ -16,6 +16,8 @@
 
 4. **Mobile builds**: The mobile app is a **React Native app built and run via Xcode**. It is **NOT run with Expo Go or `expo start`**. The app is compiled as a native iOS binary via Xcode — never suggest using Expo Go, `npx expo start`, or the Expo dev client to run or test the app.
 
+   **Testing**: The app is tested by running it directly in **Xcode on the iOS Simulator** (or a connected device). There is no OTA update workflow for dev — redeploying Render **only updates the backend**. Any mobile JS/TS code change requires re-running the Xcode build to take effect. Never suggest pushing an EAS OTA update (`eas update`) as a way to deliver mobile changes during development.
+
    The `mobile/.env.local` file must always contain **both** of these lines for day-to-day development:
    ```
    EXPO_PUBLIC_API_URL=https://dev.chuio.io
