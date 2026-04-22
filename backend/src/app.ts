@@ -187,11 +187,6 @@ app.use("/api", serviceRequestsRoutes);
 ====================== */
 const FRONTEND_PATH = path.join(__dirname, "../../frontend");
 
-const isSupportHost = (host: string | undefined) => {
-  const normalized = (host || "").toLowerCase().split(":")[0];
-  return normalized === "support.dev.chuio.io" || normalized === "support.chuio.io";
-};
-
 app.use(express.static(FRONTEND_PATH, {    
   index: false,
   setHeaders: (res, filePath) => {
@@ -207,9 +202,6 @@ app.use(express.static(FRONTEND_PATH, {
    PAGE ROUTES
 ====================== */
 app.get("/", (_req, res) => {
-  if (isSupportHost(_req.headers.host)) {
-    return res.sendFile(path.join(FRONTEND_PATH, "support", "index.html"));
-  }
   res.sendFile(path.join(FRONTEND_PATH, "home.html"));
 });
 
