@@ -2625,39 +2625,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <Text style={styles.btnText}>{t('settings.logout')}</Text>
       </TouchableOpacity>
 
-      {/* Version label — tap 7 times to reveal dev menu */}
-      <TouchableOpacity onPress={handleDevTap} activeOpacity={1}>
-        <Text style={{ textAlign: 'center', fontSize: 11, color: currentEnv !== ENVIRONMENTS['Production'] ? '#ef4444' : '#9ca3af', marginBottom: 8 }}>
-          v1.0.0{currentEnv !== ENVIRONMENTS['Production'] ? ` • DEV MODE (${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'})` : (showDevMenu ? ` • Production` : '')}
-        </Text>
-      </TouchableOpacity>
-
-      {showDevMenu && (
-        <View style={{ backgroundColor: '#1e1b4b', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-          <Text style={{ color: '#c7d2fe', fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Developer Mode</Text>
-          <Text style={{ color: '#818cf8', fontSize: 11, marginBottom: 12 }}>API: {currentEnv}</Text>
-          {Object.entries(ENVIRONMENTS).map(([name, url]) => (
-            <TouchableOpacity
-              key={name}
-              style={{
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                padding: 12, borderRadius: 8, marginBottom: 6,
-                backgroundColor: currentEnv === url ? '#312e81' : '#1e1b4b',
-                borderWidth: 1, borderColor: currentEnv === url ? '#6366f1' : '#374151',
-              }}
-              onPress={() => currentEnv !== url && switchEnv(name, url)}
-            >
-              <View>
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{name}</Text>
-                <Text style={{ color: '#9ca3af', fontSize: 11 }}>{url}</Text>
-              </View>
-              {currentEnv === url && (
-                <View style={{ backgroundColor: '#22c55e', width: 8, height: 8, borderRadius: 4 }} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {/* Version label */}
+      <Text style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
+        v{appJson.expo.version}
+      </Text>
     </ScrollView>
   );
 
