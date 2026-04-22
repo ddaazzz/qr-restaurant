@@ -11,7 +11,6 @@ import {
   Modal,
   FlatList,
   RefreshControl,
-  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
@@ -40,7 +39,6 @@ interface Restaurant {
   service_charge_percent: number | null;
   language_preference: string | null;
   user_count: number;
-  feature_flags: Record<string, boolean> | null;
 }
 
 type Tab = 'users' | 'restaurants';
@@ -870,7 +868,6 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                               const newFlags = { ...flags, [flag]: val };
                               await apiClient.updateRestaurant(selectedRestaurant.id, { feature_flags: newFlags });
                               setSelectedRestaurant({ ...selectedRestaurant, feature_flags: newFlags });
-                              // Also update in the list
                               setRestaurants(prev => prev.map(r => r.id === selectedRestaurant.id ? { ...r, feature_flags: newFlags } : r));
                             } catch (err: any) {
                               Alert.alert('Error', err.message || 'Failed to update feature flag');
