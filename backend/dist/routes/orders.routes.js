@@ -452,7 +452,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
             }
         }
         res.json({
-            items: Object.values(ordersMap).filter((order) => order.items.length > 0)
+            items: Object.values(ordersMap)
         });
     }
     catch (err) {
@@ -755,11 +755,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         COALESCE(ts.discount_applied, 0) as discount_cents,
         COUNT(oi.id) as item_count,
         COALESCE(SUM(oi.price_cents * oi.quantity), 0) as subtotal_cents,
-        CASE
-          WHEN COALESCE(ts.order_type, 'counter') = 'table'
-          THEN ROUND(COALESCE(SUM(oi.price_cents * oi.quantity), 0) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0))
-          ELSE COALESCE(SUM(oi.price_cents * oi.quantity), 0)
-        END as total_cents,
+        ROUND(COALESCE(SUM(oi.price_cents * oi.quantity), 0) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0)) as total_cents,
         COALESCE(array_agg(DISTINCT mi.name) FILTER (WHERE mi.name IS NOT NULL), '{}') AS item_names,
         COALESCE(array_agg(DISTINCT mc.name) FILTER (WHERE mc.name IS NOT NULL), '{}') AS category_names,
         u.name AS closed_by_staff_name,
@@ -825,12 +821,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         o.chuio_order_reference AS kpay_reference_id,
         o.payment_status,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-        SUM(oi.price_cents * oi.quantity) as subtotal_cents,
-        CASE
-          WHEN COALESCE(ts.order_type, 'counter') = 'table'
-          THEN ROUND(SUM(oi.price_cents * oi.quantity) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0))
-          ELSE SUM(oi.price_cents * oi.quantity)
-        END as total_cents,
+        SUM(oi.price_cents * oi.quantity) as total_cents,
         COALESCE(ts.order_type, 'counter') AS order_type,
         ts.table_id,
         COALESCE(t.name, '') as table_name,
@@ -851,7 +842,6 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         to_char(cpay.refunded_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_refunded_at,
         cpay.refund_amount_cents AS cp_refund_amount_cents
       FROM orders o
-      JOIN restaurants r ON r.id = o.restaurant_id
       LEFT JOIN table_sessions ts ON o.session_id = ts.id
       LEFT JOIN tables t ON ts.table_id = t.id
       LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
@@ -863,7 +853,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         LIMIT 1
       ) cpay ON true
       WHERE o.id = $1 AND o.restaurant_id = $2
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
       `, [orderId, restaurantId]);
         if (orderRes.rowCount === 0) {
             return res.status(404).json({ error: "Order not found" });
@@ -949,36 +939,6 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         // Add payment method label
         order.payment_method_label = getPaymentMethodLabel(order.payment_method_online, order.payment_received);
         res.json(order);
-    }
-    catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-/**
- * PATCH /restaurants/:restaurantId/orders/:orderId/kpay-attempt
- * Called immediately after kpaySale succeeds on the mobile (before polling).
- * Saves the outTradeNo + payment_method='kpay' to the order so order history
- * shows a KPay attempt even if the payment ultimately fails or times out.
- */
-router.patch("/restaurants/:restaurantId/orders/:orderId/kpay-attempt", async (req, res) => {
-    try {
-        const { restaurantId, orderId } = req.params;
-        const { outTradeNo, amountCents } = req.body;
-        if (!outTradeNo)
-            return res.status(400).json({ error: "outTradeNo is required" });
-        // Only update if the order hasn't already been paid/voided
-        await db_1.default.query(`UPDATE orders
-       SET payment_method = 'kpay', chuio_order_reference = $1
-       WHERE id = $2 AND restaurant_id = $3
-         AND (payment_status IS NULL OR payment_status NOT IN ('paid', 'completed', 'voided'))`, [outTradeNo, orderId, restaurantId]);
-        // Create kpay_transactions record so /kpay-transactions/:outTradeNo endpoint works
-        try {
-            await db_1.default.query(`INSERT INTO kpay_transactions (restaurant_id, kpay_reference_id, status, amount_cents, currency_code, order_id)
-         VALUES ($1, $2, 'pending', $3, '344', $4)`, [restaurantId, outTradeNo, amountCents || 0, orderId]);
-        }
-        catch (_) { /* already exists or constraint error — non-fatal */ }
-        res.json({ success: true });
     }
     catch (err) {
         console.error(err);

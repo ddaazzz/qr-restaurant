@@ -186,7 +186,6 @@ app.use("/api", serviceRequestsRoutes);
    (CRITICAL — DO NOT MOVE)
 ====================== */
 const FRONTEND_PATH = path.join(__dirname, "../../frontend");
-
 app.use(express.static(FRONTEND_PATH, {    
   index: false,
   setHeaders: (res, filePath) => {
@@ -203,18 +202,6 @@ app.use(express.static(FRONTEND_PATH, {
 ====================== */
 app.get("/", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "home.html"));
-});
-
-app.get("/support", (_req, res) => {
-  res.sendFile(path.join(FRONTEND_PATH, "support", "index.html"));
-});
-
-app.get("/support/", (_req, res) => {
-  res.sendFile(path.join(FRONTEND_PATH, "support", "index.html"));
-});
-
-app.get("/support/topic", (_req, res) => {
-  res.sendFile(path.join(FRONTEND_PATH, "support", "topic.html"));
 });
 
 app.get("/zh", (_req, res) => {

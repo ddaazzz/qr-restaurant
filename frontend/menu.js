@@ -1268,12 +1268,11 @@ function renderOrdersDrawer(orders, tableName) {
           return `<button class="btn-primary" style="background:#059669;" onclick="endSessionFromMenu()">✅ End Session</button>`;
         }
         if (hasPendingPAOrder) {
-          // PA initiated but webhook not yet confirmed — prevent double-pay, but let customer check/cancel
+          // PA initiated but webhook not yet confirmed — prevent double-pay, but allow manual status check
           startPAStatusPoll(pendingPAOrder.order_id);
           return `<div style="display:flex;flex-direction:column;gap:8px;align-items:stretch;">
             <button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>
             <button class="btn-secondary" style="font-size:13px;" onclick="checkPAPaymentStatus(${pendingPAOrder.order_id})">🔄 Check Payment Status</button>
-            <button class="btn-secondary" style="font-size:13px;color:#dc2626;border-color:#dc2626;" onclick="cancelPAPayment(${pendingPAOrder.order_id})">✖ Payment Failed? Cancel &amp; Retry</button>
           </div>`;
         }
         if (orderPayEnabled) {
@@ -1609,37 +1608,15 @@ async function checkPAPaymentStatus(orderId) {
     const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/payment-status`);
     if (!res.ok) throw new Error('Network error');
     const data = await res.json();
-    if (data.payment_status === 'failed' || data.payment_status === 'cancelled') {
-      loadOrderStatus(); // refresh — backend has cleared payment_method
+    if (data.payment_status === 'failed') {
+      loadOrderStatus(); // refresh — backend should have cleared payment_method
     } else if (data.payment_status === 'completed') {
       loadOrderStatus();
     } else {
-      // Still genuinely pending — show how long ago it was initiated
-      const initiatedAt = data.initiated_at ? new Date(data.initiated_at) : null;
-      const minAgo = initiatedAt ? Math.round((Date.now() - initiatedAt.getTime()) / 60000) : null;
-      const timeStr = minAgo !== null ? ` (initiated ${minAgo} min ago)` : '';
-      alert(`Payment gateway is still processing${timeStr}. If your payment was declined, tap "Cancel & Retry" below.`);
+      alert('Payment is still being processed. Please wait a moment and try again.');
     }
   } catch (e) {
     alert('Could not check payment status. Please try again.');
-  }
-}
-
-// "Cancel & Retry" button — cancels a stuck pending PA payment so the customer can pay again
-async function cancelPAPayment(orderId) {
-  try {
-    const res = await fetch(
-      `${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/cancel-payment`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' } }
-    );
-    const data = await res.json();
-    if (res.ok && data.success) {
-      loadOrderStatus(); // drawer refreshes — payment_method cleared, Pay Now button reappears
-    } else {
-      alert(data.error || 'Could not cancel payment. Please ask staff for help.');
-    }
-  } catch (e) {
-    alert('Could not cancel payment. Please ask staff for help.');
   }
 }
 

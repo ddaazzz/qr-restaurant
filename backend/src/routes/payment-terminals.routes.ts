@@ -103,15 +103,31 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
     const { restaurantId } = req.params;
     const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata } = req.body;
 
-    // Validate required fields
-    if (!vendor_name || !app_id || !app_secret || !terminal_ip || !terminal_port) {
-      return res.status(400).json({
-        error: 'Missing required fields: vendor_name, app_id, app_secret, terminal_ip, terminal_port',
-      });
+    // Validate required fields based on vendor
+    if (!vendor_name) {
+      return res.status(400).json({ error: 'Missing required field: vendor_name' });
+    }
+
+    const { merchant_token, secret_code, payment_gateway_env } = req.body;
+
+    if (vendor_name === 'payment-asia') {
+      if (!app_id && !merchant_token) {
+        return res.status(400).json({ error: 'Payment Asia requires merchant_token (or app_id)' });
+      }
+    } else if (vendor_name === 'payment-asia-terminal') {
+      if (!app_secret || !terminal_ip || !terminal_port) {
+        return res.status(400).json({ error: 'PA Terminal requires app_secret (API Key), terminal_ip, terminal_port' });
+      }
+    } else {
+      if (!app_id || !app_secret || !terminal_ip || !terminal_port) {
+        return res.status(400).json({
+          error: 'Missing required fields: vendor_name, app_id, app_secret, terminal_ip, terminal_port',
+        });
+      }
     }
 
     // Validate vendor name
-    const validVendors = ['kpay', 'other'];
+    const validVendors = ['kpay', 'payment-asia', 'payment-asia-terminal', 'other'];
     if (!validVendors.includes(vendor_name)) {
       return res.status(400).json({
         error: `Invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
@@ -130,13 +146,18 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
       });
     }
 
+    const insertMerchantToken = merchant_token || (vendor_name === 'payment-asia' ? app_id : null);
+    const insertSecretCode = secret_code || (vendor_name === 'payment-asia' ? app_secret : null);
+    const insertGatewayEnv = payment_gateway_env || (vendor_name === 'payment-asia' ? 'sandbox' : null);
+
     const result = await pool.query(
       `INSERT INTO payment_terminals 
-       (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path, 
-                 metadata, created_at, updated_at`,
-      [restaurantId, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path || '/v2/pos/sign', metadata || {}]
+       (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, merchant_token, secret_code, payment_gateway_env, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path,
+                 merchant_token, payment_gateway_env, metadata, created_at, updated_at`,
+      [restaurantId, vendor_name, app_id || null, app_secret || null, terminal_ip || null, terminal_port || null,
+       endpoint_path || null, insertMerchantToken, insertSecretCode, insertGatewayEnv, metadata || {}]
     );
 
     res.status(201).json(result.rows[0]);
@@ -154,8 +175,8 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
   const user = await verifyUser(req);
   if (!user) return res.status(403).json({ error: 'Admin access required' });
 
-  // Non-superadmins can only update connection details
-  const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path'];
+  // Non-superadmins can only update connection details (including API key for PA terminal)
+  const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path', 'app_secret'];
   if (user.role !== 'superadmin') {
     const requestedFields = Object.keys(req.body);
     const disallowed = requestedFields.filter(f => !adminAllowedFields.includes(f));
@@ -165,7 +186,8 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
   }
   try {
     const { restaurantId, terminalId } = req.params;
-    const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active } = req.body;
+    const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active,
+            merchant_token, secret_code, payment_gateway_env } = req.body;
 
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -179,6 +201,18 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
     if (app_secret !== undefined && app_secret !== '') {
       updates.push(`app_secret = $${paramCount++}`);
       values.push(app_secret);
+    }
+    if (merchant_token !== undefined) {
+      updates.push(`merchant_token = $${paramCount++}`);
+      values.push(merchant_token);
+    }
+    if (secret_code !== undefined && secret_code !== '') {
+      updates.push(`secret_code = $${paramCount++}`);
+      values.push(secret_code);
+    }
+    if (payment_gateway_env !== undefined) {
+      updates.push(`payment_gateway_env = $${paramCount++}`);
+      values.push(payment_gateway_env);
     }
     if (terminal_ip !== undefined) {
       updates.push(`terminal_ip = $${paramCount++}`);
@@ -272,8 +306,7 @@ router.delete('/restaurants/:restaurantId/payment-terminals/:terminalId', async 
 router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', async (req, res) => {
   try {
     const { restaurantId, terminalId } = req.params;
-    const body = req.body || {};
-    const { payAmount, tipsAmount, payCurrency, description, customerName } = body;
+    const { payAmount, tipsAmount, payCurrency, description, customerName } = req.body;
 
     // Fetch the terminal configuration
     const terminalResult = await pool.query(
@@ -441,12 +474,49 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
       }
     }
 
+    // Payment Asia POS Terminal: LAN-only, initiated from mobile device
+    if (terminal.vendor_name === 'payment-asia-terminal') {
+      const now = new Date();
+      await pool.query(
+        `UPDATE payment_terminals SET last_tested_at = $1 WHERE id = $2`,
+        [now, terminalId]
+      );
+      return res.json({
+        success: true,
+        message: `PA Terminal config saved. Connection test must be performed from the mobile app (terminal is LAN-only at ${terminal.terminal_ip}:${terminal.terminal_port}).`,
+        timestamp: now,
+      });
+    }
+
     // For other vendors
     res.status(400).json({
       error: `Payment not yet implemented for vendor: ${terminal.vendor_name}`,
     });
   } catch (err: any) {
     console.error('[PaymentTerminal] Error processing payment:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/restaurants/:restaurantId/pa-terminal/active
+ * Returns the active Payment Asia POS terminal config (for mobile gating)
+ */
+router.get('/restaurants/:restaurantId/pa-terminal/active', async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const result = await pool.query(
+      `SELECT id, app_secret, terminal_ip, terminal_port, is_active
+       FROM payment_terminals
+       WHERE restaurant_id = $1 AND vendor_name = 'payment-asia-terminal' AND is_active = true
+       LIMIT 1`,
+      [restaurantId]
+    );
+    if (result.rowCount === 0) {
+      return res.json({ configured: false });
+    }
+    return res.json({ configured: true, terminal: result.rows[0] });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -491,21 +561,6 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/test-status
           terminalPort: terminal.terminal_port,
           endpointPath: terminal.endpoint_path || '/v2/pos/sign',
         });
-
-        // Key exchange is required before every signed request — appPrivateKey
-        // lives only in the singleton's memory for the lifetime of the request.
-        const signResult = await kpayTerminalService.testConnection();
-        const signLogs = kpayTerminalService.flushLogs();
-        if (!signResult.success) {
-          return res.json({
-            success: false,
-            code: 10001,
-            status: 'pending',   // keep polling — may be a transient terminal timeout
-            message: 'Key exchange failed during status poll: ' + signResult.message,
-            outTradeNo,
-            logs: signLogs,
-          });
-        }
 
         // Query transaction status from terminal
         const queryResult = await kpayTerminalService.queryTransactionStatus(String(outTradeNo));
@@ -956,125 +1011,6 @@ router.get('/restaurants/:restaurantId/kpay-transactions/:outTradeNo', async (re
 });
 
 /**
- * PATCH /api/restaurants/:restaurantId/kpay-transactions/:outTradeNo/sync
- * Called by the mobile app after a direct terminal query to persist the fresh
- * payResult (and related fields) into the DB so orders.payment_status stays consistent.
- */
-router.patch('/restaurants/:restaurantId/kpay-transactions/:outTradeNo/sync', async (req, res) => {
-  try {
-    const { restaurantId, outTradeNo } = req.params;
-    const { payResult, transactionNo, refNo, commitTime, payAmount, payCurrency, payMethod } = req.body;
-
-    if (payResult === undefined || payResult === null) {
-      return res.status(400).json({ error: 'payResult is required' });
-    }
-
-    const liveData = { payResult, transactionNo, refNo, commitTime, payAmount, payCurrency, payMethod };
-
-    // Derive status string from payResult (same logic as GET handler)
-    const payResultNum = Number(payResult);
-    let derivedStatus: string | null = null;
-    if (payResultNum === 2) derivedStatus = 'completed';
-    else if (payResultNum === 3) derivedStatus = 'failed';
-    else if (payResultNum === 4) derivedStatus = 'refunded';
-    else if (payResultNum === 5 || payResultNum === 6) derivedStatus = 'cancelled';
-
-    if (derivedStatus) {
-      // Don't overwrite intentional voided/refunded statuses with a less-specific one
-      await pool.query(
-        `UPDATE kpay_transactions
-         SET status = CASE
-               WHEN status IN ('voided','refunded') THEN status
-               ELSE $1
-             END,
-             kpay_response = kpay_response || $2::jsonb,
-             pay_method = COALESCE($5, pay_method)
-         WHERE kpay_reference_id = $3 AND restaurant_id = $4`,
-        [derivedStatus, JSON.stringify(liveData), outTradeNo, restaurantId, payMethod ?? null]
-      );
-
-      // Sync orders.payment_status
-      if (payResultNum === 2) {
-        await pool.query(
-          `UPDATE orders SET payment_status = 'paid'
-           WHERE chuio_order_reference = $1 AND restaurant_id = $2
-           AND payment_status IS DISTINCT FROM 'voided'
-           AND payment_status IS DISTINCT FROM 'refunded'
-           AND payment_status IS DISTINCT FROM 'partial_refund'`,
-          [outTradeNo, restaurantId]
-        );
-      } else if (payResultNum === 4) {
-        await pool.query(
-          `UPDATE orders SET payment_status = 'refunded'
-           WHERE chuio_order_reference = $1 AND restaurant_id = $2`,
-          [outTradeNo, restaurantId]
-        );
-      } else if (payResultNum === 3 || payResultNum === 5 || payResultNum === 6) {
-        await pool.query(
-          `UPDATE orders SET payment_status = 'voided'
-           WHERE chuio_order_reference = $1 AND restaurant_id = $2
-           AND payment_status IS DISTINCT FROM 'refunded'
-           AND payment_status IS DISTINCT FROM 'partial_refund'`,
-          [outTradeNo, restaurantId]
-        );
-      }
-    }
-
-    return res.json({ ok: true, derivedStatus });
-  } catch (err: any) {
-    console.error('[KPay] Sync error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * PATCH /api/restaurants/:restaurantId/kpay-transactions/:outTradeNo/mark-void-refund
- * Called by mobile after a direct void/refund to persist the new outTradeNo and status.
- * Body: { type: 'voided' | 'refunded', tradeNo: string, refundAmountCents?: number }
- */
-router.patch('/restaurants/:restaurantId/kpay-transactions/:outTradeNo/mark-void-refund', async (req, res) => {
-  try {
-    const { restaurantId, outTradeNo } = req.params;
-    const { type, tradeNo, refundAmountCents } = req.body;
-
-    if (!type || !tradeNo) {
-      return res.status(400).json({ error: 'type and tradeNo are required' });
-    }
-    if (type !== 'voided' && type !== 'refunded') {
-      return res.status(400).json({ error: 'type must be voided or refunded' });
-    }
-
-    const sets: string[] = [
-      'status = $1',
-      'refund_reference_id = $2',
-      'completed_at = COALESCE(completed_at, NOW())',
-    ];
-    const params: any[] = [type, tradeNo, outTradeNo, restaurantId];
-    if (refundAmountCents != null) {
-      sets.push(`refund_amount_cents = $${params.length + 1}`);
-      params.push(refundAmountCents);
-    }
-
-    await pool.query(
-      `UPDATE kpay_transactions SET ${sets.join(', ')}
-       WHERE kpay_reference_id = $3 AND restaurant_id = $4`,
-      params,
-    );
-
-    await pool.query(
-      `UPDATE orders SET payment_status = $1
-       WHERE chuio_order_reference = $2 AND restaurant_id = $3`,
-      [type, outTradeNo, restaurantId],
-    );
-
-    return res.json({ success: true });
-  } catch (err: any) {
-    console.error('[KPay] mark-void-refund error:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
  * GET /api/restaurants/:restaurantId/kpay-terminal/active
  * Returns the active KPay terminal config (for frontend gating)
  */
@@ -1082,7 +1018,7 @@ router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) =
   try {
     const { restaurantId } = req.params;
     const result = await pool.query(
-      `SELECT id, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, is_active
+      `SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active
        FROM payment_terminals
        WHERE restaurant_id = $1 AND vendor_name = 'kpay' AND is_active = true
        LIMIT 1`,

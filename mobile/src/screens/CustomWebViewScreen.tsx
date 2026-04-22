@@ -21,6 +21,7 @@ interface CustomWebViewScreenProps {
  * WebView bridge for custom restaurant UIs.'
  
  *
+ 
  * When a restaurant has ui_mode="webview", the app renders this screen
  * instead of the native Admin/Kitchen dashboard. The WebView loads
  * the restaurant's custom frontend URL and bridges native features

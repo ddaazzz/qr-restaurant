@@ -188,15 +188,6 @@ app.use(express_1.default.static(FRONTEND_PATH, {
 app.get("/", (_req, res) => {
     res.sendFile(path_1.default.join(FRONTEND_PATH, "home.html"));
 });
-app.get("/support", (_req, res) => {
-    res.sendFile(path_1.default.join(FRONTEND_PATH, "support", "index.html"));
-});
-app.get("/support/", (_req, res) => {
-    res.sendFile(path_1.default.join(FRONTEND_PATH, "support", "index.html"));
-});
-app.get("/support/topic", (_req, res) => {
-    res.sendFile(path_1.default.join(FRONTEND_PATH, "support", "topic.html"));
-});
 app.get("/zh", (_req, res) => {
     res.sendFile(path_1.default.join(FRONTEND_PATH, "home.html"));
 });

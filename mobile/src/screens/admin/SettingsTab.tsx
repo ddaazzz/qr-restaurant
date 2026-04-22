@@ -21,7 +21,8 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
-import { apiClient } from '../../services/apiClient';
+import { apiClient, API_URL } from '../../services/apiClient';
+import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +30,6 @@ import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
-import appJson from '../../../app.json';
 
 interface RestaurantSettings {
   id: number;
@@ -132,7 +132,7 @@ interface VariantPreset {
 
 interface PaymentTerminal {
   id: number;
-  vendor_name: 'kpay' | 'payment-asia' | 'other';
+  vendor_name: 'kpay' | 'payment-asia' | 'payment-asia-terminal' | 'other';
   is_active: boolean;
   app_id: string;
   terminal_ip?: string;
@@ -161,6 +161,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
 
   // Settings page navigation
   type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile';
@@ -243,7 +245,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     description: '',
   });
   const [terminalForm, setTerminalForm] = useState({
-    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'other',
+    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'payment-asia-terminal' | 'other',
     app_id: '',
     app_secret: '',
     terminal_ip: '192.168.50.210',
@@ -497,6 +499,28 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     return label;
   };
 
+  const pickAndUploadImage = async (type: 'logo' | 'background') => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: type === 'logo' ? [1, 1] : [16, 9],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    const uri = result.assets[0].uri;
+    if (type === 'logo') setUploadingLogo(true);
+    else setUploadingBackground(true);
+    try {
+      const url = await apiClient.uploadImage(uri, type);
+      setFormData((prev: any) => ({ ...prev, [`${type === 'logo' ? 'logo' : 'background'}_url`]: url }));
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.message || 'Upload failed');
+    } finally {
+      if (type === 'logo') setUploadingLogo(false);
+      else setUploadingBackground(false);
+    }
+  };
+
   const saveSettings = async () => {
     try {
       if (!formData) return;
@@ -746,11 +770,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           Alert.alert(t('common.error'), 'Only superadmins can create new terminals');
           return;
         }
-        const payload: any = {
-          terminal_ip: terminalForm.terminal_ip,
-          terminal_port: parseInt(terminalForm.terminal_port),
-          endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
-        };
+        const payload: any = {};
+        if (terminalForm.terminal_ip) payload.terminal_ip = terminalForm.terminal_ip;
+        if (terminalForm.terminal_port) payload.terminal_port = parseInt(terminalForm.terminal_port);
+        if (terminalForm.vendor_name === 'payment-asia-terminal') {
+          // PA Terminal: allow updating API key
+          if (terminalForm.app_secret) payload.app_secret = terminalForm.app_secret;
+        } else {
+          if (terminalForm.endpoint_path) payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
+        }
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-updated'));
         await fetchPaymentTerminals();
@@ -765,6 +793,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           Alert.alert(t('settings.pa-validation'), t('settings.pa-validation-msg'));
           return;
         }
+      } else if (terminalForm.vendor_name === 'payment-asia-terminal') {
+        if (!terminalForm.app_secret || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
+          Alert.alert(t('settings.validation'), 'PA Terminal requires API Key, Terminal IP, and Port');
+          return;
+        }
       } else {
         if (!terminalForm.app_id || !terminalForm.app_secret || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
           Alert.alert(t('settings.validation'), t('settings.fill-required'));
@@ -772,18 +805,19 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         }
       }
 
-      const payload: any = {
-        vendor_name: terminalForm.vendor_name,
-        app_id: terminalForm.app_id,
-        // Only send app_secret if it was actually changed (not blank and not the masked placeholder)
-        ...(terminalForm.app_secret && terminalForm.app_secret !== '••••••••' ? { app_secret: terminalForm.app_secret } : {}),
-      };
+      const payload: any = { vendor_name: terminalForm.vendor_name };
 
       if (terminalForm.vendor_name === 'payment-asia') {
-        payload.merchant_token = terminalForm.merchant_token;
-        payload.secret_code = terminalForm.secret_code;
-        payload.environment = terminalForm.environment;
+        payload.app_id = terminalForm.merchant_token;
+        payload.app_secret = terminalForm.secret_code;
+        payload.payment_gateway_env = terminalForm.environment;
+      } else if (terminalForm.vendor_name === 'payment-asia-terminal') {
+        payload.app_secret = terminalForm.app_secret;
+        payload.terminal_ip = terminalForm.terminal_ip;
+        payload.terminal_port = parseInt(terminalForm.terminal_port);
       } else {
+        payload.app_id = terminalForm.app_id;
+        payload.app_secret = terminalForm.app_secret;
         payload.terminal_ip = terminalForm.terminal_ip;
         payload.terminal_port = parseInt(terminalForm.terminal_port);
         payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
@@ -858,13 +892,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     ]);
   };
 
-  const editPaymentTerminal = async (terminal: PaymentTerminal) => {
+  const editPaymentTerminal = (terminal: PaymentTerminal) => {
     setEditingTerminalId(terminal.id);
-    // Populate form with known fields immediately so modal opens fast
     setTerminalForm({
       vendor_name: terminal.vendor_name,
       app_id: terminal.app_id,
-      app_secret: '',
+      app_secret: '', // Don't pre-fill secret for security
       terminal_ip: terminal.terminal_ip || '192.168.50.210',
       terminal_port: terminal.terminal_port?.toString() || '18080',
       endpoint_path: terminal.endpoint_path || '/v2/pos/sign',
@@ -874,19 +907,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     });
     setTerminalTestResult(null);
     setShowPaymentTerminalModal(true);
-    // Fetch full record to repopulate app_secret (returned for superadmin)
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${terminal.id}`);
-      const full = res.data;
-      setTerminalForm(prev => ({
-        ...prev,
-        app_id: full.app_id || prev.app_id,
-        app_secret: full.app_secret || '',
-        merchant_token: full.merchant_token || prev.merchant_token,
-      }));
-    } catch {
-      // Non-critical — form still works without the secret pre-filled
-    }
   };
 
   const resetTerminalForm = () => {
@@ -1702,15 +1722,44 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('admin.service-charge')} (%)</Text>
             <TextInput style={styles.input} value={formData.service_charge_percent?.toString() || '0'} onChangeText={(text) => setFormData({ ...formData, service_charge_percent: parseFloat(text) || 0 })} placeholder="0" keyboardType="decimal-pad" inputAccessoryViewID="numpadDone" />
-            <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{t('settings.service-charge-note')}</Text>
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.logo-url')}</Text>
-            <TextInput style={styles.input} value={formData.logo_url || ''} onChangeText={(text) => setFormData({ ...formData, logo_url: text })} placeholder="https://..." />
+            <TouchableOpacity
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', height: 100, backgroundColor: '#f9fafb' }}
+              onPress={() => pickAndUploadImage('logo')}
+              disabled={uploadingLogo}
+            >
+              {uploadingLogo ? (
+                <ActivityIndicator color="#4f46e5" />
+              ) : formData.logo_url ? (
+                <Image source={{ uri: formData.logo_url.startsWith('http') ? formData.logo_url : `${API_URL}${formData.logo_url}` }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <Ionicons name="camera-outline" size={28} color="#9ca3af" />
+                  <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Tap to upload logo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.background-url')}</Text>
-            <TextInput style={styles.input} value={formData.background_url || ''} onChangeText={(text) => setFormData({ ...formData, background_url: text })} placeholder="https://..." />
+            <TouchableOpacity
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', height: 120, backgroundColor: '#f9fafb' }}
+              onPress={() => pickAndUploadImage('background')}
+              disabled={uploadingBackground}
+            >
+              {uploadingBackground ? (
+                <ActivityIndicator color="#4f46e5" />
+              ) : formData.background_url ? (
+                <Image source={{ uri: formData.background_url.startsWith('http') ? formData.background_url : `${API_URL}${formData.background_url}` }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <Ionicons name="image-outline" size={28} color="#9ca3af" />
+                  <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Tap to upload background</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.booking-allowance')}</Text>
@@ -1735,13 +1784,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.address')}</Text><Text style={styles.value}>{settings.address || '—'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.timezone')}</Text><Text style={styles.value}>{settings.timezone || 'UTC'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.preferred-language')}</Text><Text style={styles.value}>{settings.language_preference || '—'}</Text></View>
-          <View style={styles.settingItem}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>{t('settings.service-charge')}</Text>
-              <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{t('settings.service-charge-note')}</Text>
-            </View>
-            <Text style={styles.value}>{settings.service_charge_percent || 0} %</Text>
-          </View>
+          <View style={styles.settingItem}><Text style={styles.label}>{t('settings.service-charge')}</Text><Text style={styles.value}>{settings.service_charge_percent || 0} %</Text></View>
           {settings.logo_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.logo')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
           {settings.background_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.background')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
         </>
@@ -1841,15 +1884,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
+                          <Text style={styles.terminalVendor}>
+                            {terminal.vendor_name === 'kpay' ? 'KPay'
+                              : terminal.vendor_name === 'payment-asia' ? 'Payment Asia (Cloud)'
+                              : terminal.vendor_name === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
+                              : terminal.vendor_name.toUpperCase()}
+                          </Text>
                           {terminal.is_active && (
                             <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
                               <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
                             </View>
                           )}
                         </View>
-                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
-                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                        {terminal.vendor_name === 'payment-asia' ? (
+                          <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Env: {terminal.environment || 'sandbox'}</Text>
+                        ) : (
+                          <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                        )}
                         {terminal.last_tested_at && (<Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>)}
                         {terminal.last_error_message && (<Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>)}
                       </View>
@@ -2016,15 +2067,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
+                        <Text style={styles.terminalVendor}>
+                          {terminal.vendor_name === 'kpay' ? 'KPay'
+                            : terminal.vendor_name === 'payment-asia' ? 'Payment Asia (Cloud)'
+                            : terminal.vendor_name === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
+                            : terminal.vendor_name.toUpperCase()}
+                        </Text>
                         {terminal.is_active && (
                           <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
                             <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
-                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                      {terminal.vendor_name === 'payment-asia' ? (
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Env: {terminal.environment || 'sandbox'}</Text>
+                      ) : (
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                      )}
                       {terminal.last_tested_at && (<Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>)}
                       {terminal.last_error_message && (<Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>)}
                     </View>
@@ -2566,10 +2625,39 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <Text style={styles.btnText}>{t('settings.logout')}</Text>
       </TouchableOpacity>
 
-      {/* Version label */}
-      <Text style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-        v{appJson.expo.version}
-      </Text>
+      {/* Version label — tap 7 times to reveal dev menu */}
+      <TouchableOpacity onPress={handleDevTap} activeOpacity={1}>
+        <Text style={{ textAlign: 'center', fontSize: 11, color: currentEnv !== ENVIRONMENTS['Production'] ? '#ef4444' : '#9ca3af', marginBottom: 8 }}>
+          v1.0.0{currentEnv !== ENVIRONMENTS['Production'] ? ` • DEV MODE (${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'})` : (showDevMenu ? ` • Production` : '')}
+        </Text>
+      </TouchableOpacity>
+
+      {showDevMenu && (
+        <View style={{ backgroundColor: '#1e1b4b', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <Text style={{ color: '#c7d2fe', fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Developer Mode</Text>
+          <Text style={{ color: '#818cf8', fontSize: 11, marginBottom: 12 }}>API: {currentEnv}</Text>
+          {Object.entries(ENVIRONMENTS).map(([name, url]) => (
+            <TouchableOpacity
+              key={name}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                padding: 12, borderRadius: 8, marginBottom: 6,
+                backgroundColor: currentEnv === url ? '#312e81' : '#1e1b4b',
+                borderWidth: 1, borderColor: currentEnv === url ? '#6366f1' : '#374151',
+              }}
+              onPress={() => currentEnv !== url && switchEnv(name, url)}
+            >
+              <View>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{name}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11 }}>{url}</Text>
+              </View>
+              {currentEnv === url && (
+                <View style={{ backgroundColor: '#22c55e', width: 8, height: 8, borderRadius: 4 }} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 
@@ -2801,7 +2889,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
               <View>
-                {(['kpay', 'payment-asia', 'other'] as const).map((vendor) => (
+                {(['kpay', 'payment-asia', 'payment-asia-terminal', 'other'] as const).map((vendor) => (
                   <TouchableOpacity
                     key={vendor}
                     style={{ paddingVertical: 8 }}
@@ -2824,7 +2912,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         )}
                       </View>
                       <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
-                        {vendor === 'kpay' ? 'KPay' : vendor === 'payment-asia' ? 'Payment Asia' : t('settings.other')}
+                        {vendor === 'kpay' ? 'KPay'
+                          : vendor === 'payment-asia' ? 'Payment Asia (Cloud)'
+                          : vendor === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
+                          : t('settings.other')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -2838,7 +2929,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
                 <Text style={{ fontSize: 14, color: '#6b7280', paddingVertical: 8 }}>
-                  {terminalForm.vendor_name === 'kpay' ? 'KPay' : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia' : 'Other'}
+                  {terminalForm.vendor_name === 'kpay' ? 'KPay'
+                    : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia (Cloud)'
+                    : terminalForm.vendor_name === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
+                    : 'Other'}
                 </Text>
               </View>
             )}
@@ -2955,6 +3049,47 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       </TouchableOpacity>
                     ))}
                   </View>
+                </View>
+              </>
+            )}
+
+            {/* Payment Asia POS Terminal fields */}
+            {terminalForm.vendor_name === 'payment-asia-terminal' && (
+              <>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>API Key *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.app_secret}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, app_secret: text })}
+                    placeholder="Enter PA Terminal API Key"
+                    placeholderTextColor="#9ca3af"
+                    secureTextEntry
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Terminal IP *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.terminal_ip}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, terminal_ip: text })}
+                    placeholder="e.g., 192.168.1.100"
+                    placeholderTextColor="#9ca3af"
+                    keyboardType="decimal-pad"
+                    inputAccessoryViewID="numpadDone"
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Terminal Port *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.terminal_port}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, terminal_port: text })}
+                    placeholder="e.g., 8080"
+                    placeholderTextColor="#9ca3af"
+                    keyboardType="number-pad"
+                    inputAccessoryViewID="numpadDone"
+                  />
                 </View>
               </>
             )}
