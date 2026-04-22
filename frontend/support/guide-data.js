@@ -5,6 +5,14 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Menu Setup',
     summary: 'Set up categories, menu items, variants, and combos/add-ons before going live.',
     keywords: ['menu', 'category', 'item', 'variant', 'addons', 'combo', 'price', 'image'],
+    images: [
+      { src: '/support/images/image1.png', alt: 'Menu Setup overview' },
+      { src: '/support/images/image2.png', alt: 'Adding a menu category' },
+      { src: '/support/images/image3.png', alt: 'Adding a menu item' },
+      { src: '/support/images/image4.png', alt: 'Configuring item variants' },
+      { src: '/support/images/image5.png', alt: 'Setting up combos and add-ons' },
+      { src: '/support/images/image6.png', alt: 'Menu item price and availability' },
+    ],
     sections: [
       {
         heading: 'What You Configure',
@@ -31,6 +39,12 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Table Setup',
     summary: 'Configure table categories and physical tables, then prepare QR usage and table status flow.',
     keywords: ['table', 'tables', 'floor', 'section', 'qr', 'session', 'pax', 'status'],
+    images: [
+      { src: '/support/images/image7.png', alt: 'Table categories overview' },
+      { src: '/support/images/image8.png', alt: 'Creating a table' },
+      { src: '/support/images/image9.png', alt: 'Table QR code' },
+      { src: '/support/images/image10.png', alt: 'Table status indicators' },
+    ],
     sections: [
       {
         heading: 'What You Configure',
@@ -56,6 +70,11 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Staff Setup',
     summary: 'Create users, assign PINs and roles, and ensure each role has correct permissions.',
     keywords: ['staff', 'users', 'pin', 'role', 'admin', 'kitchen', 'permissions', 'clock'],
+    images: [
+      { src: '/support/images/image11.png', alt: 'Staff list' },
+      { src: '/support/images/image12.png', alt: 'Adding a staff member' },
+      { src: '/support/images/image13.png', alt: 'Role permissions overview' },
+    ],
     sections: [
       {
         heading: 'What You Configure',
@@ -80,6 +99,10 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Managing Orders',
     summary: 'Monitor active orders, create POS orders, process payments, and handle void/refund actions.',
     keywords: ['orders', 'pos', 'table order', 'counter', 'to-go', 'payment', 'refund', 'void'],
+    images: [
+      { src: '/support/images/image14.png', alt: 'Orders overview' },
+      { src: '/support/images/image15.png', alt: 'Creating a POS order' },
+    ],
     sections: [
       {
         heading: 'Core Workflows',
@@ -105,6 +128,7 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Managing Tables',
     summary: 'Use the table dashboard to control sessions, pax, table moves, bills, and split operations.',
     keywords: ['tables', 'dashboard', 'session', 'move table', 'split bill', 'close bill', 'pax'],
+    images: [],
     sections: [
       {
         heading: 'Core Workflows',
@@ -130,6 +154,11 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Printer Setup',
     summary: 'Set up QR, Bill, Kitchen, and terminal-related printers with proper connection mode and test output.',
     keywords: ['printer', 'network printer', 'bluetooth printer', 'qr printer', 'bill printer', 'kitchen printer', 'test print'],
+    images: [
+      { src: '/support/images/image16.png', alt: 'Printer settings overview' },
+      { src: '/support/images/image17.png', alt: 'Bill printer configuration' },
+      { src: '/support/images/image18.png', alt: 'Kitchen printer settings' },
+    ],
     sections: [
       {
         heading: 'What You Configure',
@@ -154,6 +183,10 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Bookings',
     summary: 'Manage reservations, guest details, statuses, and check-in flow into active sessions.',
     keywords: ['booking', 'reservation', 'calendar', 'guest', 'check in', 'session'],
+    images: [
+      { src: '/support/images/image19.png', alt: 'Bookings calendar view' },
+      { src: '/support/images/image20.png', alt: 'Creating a booking' },
+    ],
     sections: [
       {
         heading: 'Core Workflows',
@@ -178,6 +211,9 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Coupons and Discounts',
     summary: 'Create and control fixed or percentage discounts with rules and active state management.',
     keywords: ['coupon', 'discount', 'promo', 'percentage', 'fixed amount', 'minimum spend'],
+    images: [
+      { src: '/support/images/image21.png', alt: 'Coupons and discounts list' },
+    ],
     sections: [
       {
         heading: 'What You Configure',
@@ -202,6 +238,10 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Payment Terminal Setup',
     summary: 'Integrate KPay or Payment Asia terminals and verify end-to-end payment execution.',
     keywords: ['kpay', 'payment asia', 'terminal', 'app id', 'secret', 'device ip', 'card payment'],
+    images: [
+      { src: '/support/images/image22.png', alt: 'Payment terminal setup' },
+      { src: '/support/images/image23.png', alt: 'Terminal credentials configuration' },
+    ],
     sections: [
       {
         heading: 'What You Configure',
@@ -226,6 +266,9 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Kitchen Display',
     summary: 'Operate kitchen workflow with real-time order queue and item status progression.',
     keywords: ['kitchen', 'kds', 'pending', 'preparing', 'ready', 'served', 'category filter'],
+    images: [
+      { src: '/support/images/image24.png', alt: 'Kitchen display order queue' },
+    ],
     sections: [
       {
         heading: 'Core Workflows',
@@ -250,6 +293,10 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Reports and Analytics',
     summary: 'Track revenue and operations performance using daily, hourly, and item-level metrics.',
     keywords: ['reports', 'analytics', 'revenue', 'top items', 'hourly', 'daily trends', 'metrics'],
+    images: [
+      { src: '/support/images/image25.png', alt: 'Reports dashboard' },
+      { src: '/support/images/image26.png', alt: 'Revenue analytics breakdown' },
+    ],
     sections: [
       {
         heading: 'Key Insights',
@@ -274,6 +321,11 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Bill Printing',
     summary: 'Configure bill printer hardware and receipt format, then validate with test bill output.',
     keywords: ['bill printing', 'receipt', 'paper width', '58mm', '80mm', 'bill format', 'footer', 'logo'],
+    images: [
+      { src: '/support/images/image27.png', alt: 'Bill printer settings' },
+      { src: '/support/images/image28.png', alt: 'Bill format configuration' },
+      { src: '/support/images/image29.png', alt: 'Test bill print output' },
+    ],
     sections: [
       {
         heading: 'What You Configure',
@@ -299,6 +351,7 @@ window.CHUIO_GUIDE_TOPICS = [
     title: 'Customer Ordering Flow',
     summary: 'Test the full guest journey from scanning QR to checkout and post-order confirmation.',
     keywords: ['customer flow', 'scan qr', 'menu', 'cart', 'checkout', 'coupon', 'order submit'],
+    images: [],
     sections: [
       {
         heading: 'End-to-End Test',
