@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   RefreshControl,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
@@ -39,6 +40,7 @@ interface Restaurant {
   service_charge_percent: number | null;
   language_preference: string | null;
   user_count: number;
+  feature_flags: Record<string, boolean> | null;
 }
 
 type Tab = 'users' | 'restaurants';
