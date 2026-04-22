@@ -1,0 +1,265 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = __importDefault(require("../config/db"));
+const upload_1 = require("../config/upload");
+const storage_1 = require("../config/storage");
+const router = (0, express_1.Router)();
+/**
+ * GET active sessions + orders + items (staff view)
+ */
+//Admin Settings (get)
+router.get("/:id/settings", async (req, res) => {
+    const { id } = req.params;
+    try {
+        console.log("Fetching settings for restaurant:", id);
+        const { rows } = await db_1.default.query(`SELECT r.*, rps.printer_type, rps.printer_host, rps.printer_port,
+              rps.printer_usb_vendor_id, rps.printer_usb_product_id,
+              rps.bluetooth_device_id, rps.bluetooth_device_name,
+              rps.kitchen_auto_print, rps.bill_auto_print, rps.print_logo,
+              rps.enable_zone_printing,
+              rps.print_queue_enabled, rps.print_queue_timeout_seconds, rps.print_queue_max_concurrent,
+              rps.receipt_show_qr, rps.receipt_show_barcode, rps.receipt_barcode_type,
+              rps.receipt_include_order_qr, rps.receipt_include_payment_link,
+              rps.receipt_include_loyalty_qr, rps.receipt_loyalty_program_url,
+              rps.customer_receipt_enabled, rps.customer_receipt_type,
+              rps.customer_receipt_printer_id, rps.customer_sms_api_key, rps.customer_email_from,
+              rps.qr_printer_type, rps.qr_printer_host, rps.qr_printer_port,
+              rps.qr_bluetooth_device_id, rps.qr_bluetooth_device_name, rps.qr_auto_print,
+              rps.bill_printer_type, rps.bill_printer_host, rps.bill_printer_port,
+              rps.bill_bluetooth_device_id, rps.bill_bluetooth_device_name,
+              rps.kitchen_printer_type, rps.kitchen_printer_host, rps.kitchen_printer_port,
+              rps.kitchen_bluetooth_device_id, rps.kitchen_bluetooth_device_name,
+              rps.qr_restaurant_name_format, rps.qr_show_time, rps.qr_table_layout,
+              rps.qr_size, rps.qr_footer_text
+       FROM restaurants r
+       LEFT JOIN restaurant_printer_settings rps ON rps.restaurant_id = r.id
+       WHERE r.id = $1`, [id]);
+        console.log("Query result:", rows);
+        if (!rows || rows.length === 0) {
+            console.warn("No restaurant found with id:", id);
+            return res.status(404).json({ error: "Restaurant not found" });
+        }
+        console.log("Sending settings:", rows[0]);
+        res.json(rows[0]);
+    }
+    catch (err) {
+        console.error("Load settings failed:", err);
+        res.status(500).json({ error: "Failed to load settings", details: err.message });
+    }
+});
+//Update Admin Settings (PATCH)
+router.patch("/:id/settings", async (req, res) => {
+    const { id } = req.params;
+    const { name, logo_url, address, phone, timezone, theme_color, service_charge_percent, regenerate_qr_per_session, qr_mode, pos_webhook_url, pos_api_key, booking_time_allowance_mins, language_preference } = req.body;
+    try {
+        await db_1.default.query(`UPDATE restaurants
+       SET name = $1,
+           logo_url = $2,
+           address = $3,
+           phone = $4,
+           timezone = $5,
+           theme_color = $6,
+           service_charge_percent = $7,
+           regenerate_qr_per_session = $8,
+           qr_mode = $9,
+           pos_webhook_url = $10,
+           pos_api_key = $11,
+           booking_time_allowance_mins = COALESCE($12, booking_time_allowance_mins),
+           language_preference = COALESCE($13, language_preference)
+       WHERE id = $14`, [
+            name,
+            logo_url,
+            address,
+            phone,
+            timezone || 'UTC',
+            theme_color,
+            service_charge_percent,
+            regenerate_qr_per_session,
+            qr_mode,
+            pos_webhook_url,
+            pos_api_key,
+            booking_time_allowance_mins,
+            language_preference,
+            id
+        ]);
+        res.json({ success: true });
+    }
+    catch (err) {
+        console.error("Update settings failed:", err);
+        res.status(500).json({ error: "Failed to update settings" });
+    }
+});
+//Update Restaurant Logo
+router.post("/:id/logo", upload_1.upload.single("image"), async (req, res) => {
+    console.log("REQ FILE:", req.file);
+    console.log("REQ PARAM ID:", req.params.id);
+    const id = req.params.id;
+    if (!req.file) {
+        return res.status(400).json({ error: "Logo upload failed" });
+    }
+    let logoPath;
+    if ((0, storage_1.isR2Configured)() && req.file.buffer) {
+        logoPath = await (0, storage_1.uploadToR2)(req.file.buffer, req.file.originalname, (0, storage_1.getR2Folder)("logo", id), req.file.mimetype);
+    }
+    else {
+        logoPath = `/uploads/restaurants/${id}/${req.file.filename}`;
+    }
+    console.log(logoPath);
+    console.log("Updating logo_url for restaurant ID:", id, "with path:", logoPath);
+    try {
+        await db_1.default.query(`UPDATE restaurants SET logo_url = $1 WHERE id = $2`, [logoPath, id]);
+        console.log("Logo updated successfully for restaurant ID:", id);
+        res.json({ logo_url: logoPath });
+    }
+    catch (err) {
+        console.error("Error updating logo URL:", err);
+        res.status(500).json({ error: "Failed to upload logo" });
+    }
+});
+router.get("/restaurants/:restaurantId/active-sessions-with-orders", async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const result = await db_1.default.query(`
+        SELECT
+          ts.id            AS session_id,
+          t.id             AS table_id,
+          t.name           AS table_name,
+
+          o.id             AS order_id,
+
+          oi.id            AS order_item_id,
+          oi.quantity,
+          oi.status        AS item_status,
+
+          mi.name          AS item_name,
+          mi.price_cents   AS price_cents,
+
+          COALESCE(
+            json_agg(
+              DISTINCT jsonb_build_object(
+                'variant', v.name,
+                'option', vo.name
+              )
+            ) FILTER (WHERE v.id IS NOT NULL),
+            '[]'
+          ) AS variants
+
+        FROM table_sessions ts
+        JOIN tables t
+          ON t.id = ts.table_id
+
+        LEFT JOIN orders o
+          ON o.session_id = ts.id
+
+        LEFT JOIN order_items oi
+          ON oi.order_id = o.id
+
+        LEFT JOIN menu_items mi
+          ON mi.id = oi.menu_item_id
+
+        -- ✅ SAME VARIANT JOINS AS orders.routes.ts
+        LEFT JOIN order_item_variants oiv
+          ON oiv.order_item_id = oi.id
+
+        LEFT JOIN menu_item_variant_options vo
+          ON vo.id = oiv.variant_option_id
+
+        LEFT JOIN menu_item_variants v
+          ON v.id = vo.variant_id
+
+        WHERE t.restaurant_id = $1
+          AND ts.ended_at IS NULL 
+
+        GROUP BY
+          ts.id, t.id, t.name,
+          o.id,
+          oi.id, oi.quantity, oi.status,
+          mi.name, mi.price_cents
+
+        ORDER BY t.id, ts.id, o.id, oi.id
+        `, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error("Staff dashboard query failed:", err);
+        res.status(500).json([]);
+    }
+});
+// Get Restaurant Info
+router.get("/restaurant/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await db_1.default.query(`SELECT name, logo_url, address, phone FROM restaurants WHERE id = $1`, [id]);
+        // Check if the restaurant exists
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Restaurant not found" });
+        }
+        const restaurant = result.rows[0];
+        res.json(restaurant);
+    }
+    catch (err) {
+        console.error("Failed to load restaurant info:", err);
+        res.status(500).json({ error: "Failed to load restaurant info" });
+    }
+});
+// Get bill for a session - ✅ MULTI-RESTAURANT SUPPORT
+router.get("/:sessionId/bill", async (req, res) => {
+    const { sessionId } = req.params;
+    try {
+        // Get session with restaurant_id validation
+        const sessionRes = await db_1.default.query(`
+      SELECT ts.id, t.restaurant_id
+      FROM table_sessions ts
+      JOIN tables t ON t.id = ts.table_id
+      WHERE ts.id = $1
+    `, [sessionId]);
+        if (sessionRes.rowCount === 0) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+        const restaurantId = sessionRes.rows[0].restaurant_id;
+        // Fetch orders and total for the session
+        const result = await db_1.default.query(`
+      SELECT
+        oi.quantity,
+        oi.price_cents,
+        mi.name AS item_name,
+        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+        o.id AS order_id
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      WHERE o.session_id = $1
+    `, [sessionId]);
+        const orders = result.rows.map(row => ({
+            item_name: row.item_name,
+            quantity: row.quantity,
+            unit_price_cents: row.price_cents,
+            total_price_cents: row.price_cents * row.quantity,
+        }));
+        const totalCents = orders.reduce((sum, order) => sum + order.total_price_cents, 0);
+        // Fetch restaurant details - USE RESTAURANT_ID FROM SESSION
+        const restaurantRes = await db_1.default.query(`
+      SELECT name, logo_url, address, phone FROM restaurants WHERE id = $1
+    `, [restaurantId]);
+        if (restaurantRes.rowCount === 0) {
+            return res.status(404).json({ error: "Restaurant not found" });
+        }
+        const restaurant = restaurantRes.rows[0];
+        // Send the full bill data
+        res.json({
+            items: orders,
+            total_cents: totalCents,
+            restaurant,
+        });
+    }
+    catch (err) {
+        console.error("Failed to load session bill:", err);
+        res.status(500).json({ error: "Failed to load bill" });
+    }
+});
+exports.default = router;
+//# sourceMappingURL=staff.routes.js.map

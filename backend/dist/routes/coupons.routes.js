@@ -1,0 +1,181 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const db_1 = __importDefault(require("../config/db"));
+const featureFlags_1 = require("../middleware/featureFlags");
+const router = express_1.default.Router();
+// Get all coupons for a restaurant (Admin only)
+router.get("/restaurants/:restaurantId/coupons", (0, featureFlags_1.requireFeature)("coupons"), async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const result = await db_1.default.query("SELECT * FROM coupons WHERE restaurant_id = $1 ORDER BY created_at DESC", [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error("Error fetching coupons:", error.message);
+        res.status(500).json({ error: "Failed to fetch coupons" });
+    }
+});
+// Create a new coupon (Admin only)
+router.post("/restaurants/:restaurantId/coupons", (0, featureFlags_1.requireFeature)("coupons"), async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value } = req.body;
+        if (!code || !discount_type || !discount_value) {
+            return res.status(400).json({ error: "Code, discount_type, and discount_value are required" });
+        }
+        const result = await db_1.default.query(`INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`, [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_until || null, minimum_order_value || 0]);
+        res.json(result.rows[0]);
+    }
+    catch (error) {
+        console.error("Error creating coupon:", error);
+        if (error.code === "23505") {
+            res.status(400).json({ error: "Coupon code already exists" });
+        }
+        else {
+            res.status(500).json({ error: "Failed to create coupon" });
+        }
+    }
+});
+// Update a coupon (Admin only) - ✅ MULTI-RESTAURANT SUPPORT
+router.put("/coupons/:couponId", async (req, res) => {
+    try {
+        const { couponId } = req.params;
+        const { code, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, restaurantId } = req.body;
+        if (!restaurantId) {
+            return res.status(400).json({ error: "Restaurant ID is required" });
+        }
+        // Verify coupon belongs to restaurant
+        const couponCheck = await db_1.default.query("SELECT id FROM coupons WHERE id = $1 AND restaurant_id = $2", [couponId, restaurantId]);
+        if (couponCheck.rowCount === 0) {
+            return res.status(404).json({ error: "Coupon not found or doesn't belong to this restaurant" });
+        }
+        const result = await db_1.default.query(`UPDATE coupons SET code = COALESCE($1, code), discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value), description = COALESCE($4, description), is_active = COALESCE($5, is_active), max_uses = COALESCE($6, max_uses), valid_until = COALESCE($7, valid_until), minimum_order_value = COALESCE($8, minimum_order_value), updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND restaurant_id = $10 RETURNING *`, [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, couponId, restaurantId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Coupon not found" });
+        }
+        res.json(result.rows[0]);
+    }
+    catch (error) {
+        console.error("Error updating coupon:", error);
+        res.status(500).json({ error: "Failed to update coupon" });
+    }
+});
+// Delete a coupon (Admin only) - ✅ MULTI-RESTAURANT SUPPORT
+router.delete("/coupons/:couponId", async (req, res) => {
+    try {
+        const { couponId } = req.params;
+        const { restaurantId } = req.body;
+        if (!restaurantId) {
+            return res.status(400).json({ error: "Restaurant ID is required" });
+        }
+        // Verify coupon belongs to restaurant
+        const couponCheck = await db_1.default.query("SELECT id FROM coupons WHERE id = $1 AND restaurant_id = $2", [couponId, restaurantId]);
+        if (couponCheck.rowCount === 0) {
+            return res.status(404).json({ error: "Coupon not found or doesn't belong to this restaurant" });
+        }
+        const result = await db_1.default.query("DELETE FROM coupons WHERE id = $1 AND restaurant_id = $2", [couponId, restaurantId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Coupon not found" });
+        }
+        res.json({ message: "Coupon deleted successfully" });
+    }
+    catch (error) {
+        console.error("Error deleting coupon:", error);
+        res.status(500).json({ error: "Failed to delete coupon" });
+    }
+});
+// Apply coupon to session (Customer)
+router.post("/sessions/:sessionId/apply-coupon", async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { coupon_code } = req.body;
+        if (!coupon_code) {
+            return res.status(400).json({ error: "Coupon code is required" });
+        }
+        // Get session and restaurant info from table_sessions
+        const sessionResult = await db_1.default.query(`SELECT ts.id, t.restaurant_id
+       FROM table_sessions ts
+       JOIN tables t ON t.id = ts.table_id
+       WHERE ts.id = $1`, [sessionId]);
+        if (sessionResult.rows.length === 0) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+        const session = sessionResult.rows[0];
+        // Calculate order total from order items
+        const totalResult = await db_1.default.query(`SELECT COALESCE(SUM(oi.unit_price_cents * oi.quantity), 0) AS total_cents
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       WHERE o.session_id = $1`, [sessionId]);
+        const totalCents = parseInt(totalResult.rows[0].total_cents, 10);
+        // Get coupon
+        const couponResult = await db_1.default.query("SELECT * FROM coupons WHERE code = $1 AND restaurant_id = $2 AND is_active = true", [coupon_code.toUpperCase(), session.restaurant_id]);
+        if (couponResult.rows.length === 0) {
+            return res.status(400).json({ error: "Coupon not found or inactive" });
+        }
+        const coupon = couponResult.rows[0];
+        // Validate coupon
+        const now = new Date();
+        if (coupon.valid_from && new Date(coupon.valid_from) > now) {
+            return res.status(400).json({ error: "Coupon is not yet valid" });
+        }
+        if (coupon.valid_until && new Date(coupon.valid_until) < now) {
+            return res.status(400).json({ error: "Coupon has expired" });
+        }
+        if (coupon.max_uses && coupon.current_uses >= coupon.max_uses) {
+            return res.status(400).json({ error: "Coupon usage limit reached" });
+        }
+        if (totalCents < coupon.minimum_order_value * 100) {
+            return res.status(400).json({ error: `Minimum order value of $${coupon.minimum_order_value.toFixed(2)} required` });
+        }
+        // Calculate discount
+        let discount_cents = 0;
+        if (coupon.discount_type === "percentage") {
+            discount_cents = Math.floor((totalCents * coupon.discount_value) / 100);
+        }
+        else {
+            discount_cents = Math.floor(coupon.discount_value * 100);
+        }
+        discount_cents = Math.min(discount_cents, totalCents);
+        // Apply coupon to table_sessions
+        await db_1.default.query("UPDATE table_sessions SET discount_applied = $1 WHERE id = $2", [discount_cents, sessionId]);
+        // Increment coupon usage
+        await db_1.default.query("UPDATE coupons SET current_uses = current_uses + 1 WHERE id = $1", [coupon.id]);
+        res.json({
+            success: true,
+            coupon_code: coupon.code,
+            discount_type: coupon.discount_type,
+            discount_value: coupon.discount_value,
+            discount_applied_cents: discount_cents,
+            message: `Discount of $${(discount_cents / 100).toFixed(2)} applied`
+        });
+    }
+    catch (error) {
+        console.error("Error applying coupon:", error);
+        res.status(500).json({ error: "Failed to apply coupon" });
+    }
+});
+// Remove coupon from session (Customer)
+router.post("/sessions/:sessionId/remove-coupon", async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const sessionResult = await db_1.default.query("SELECT discount_applied FROM table_sessions WHERE id = $1", [sessionId]);
+        if (sessionResult.rows.length === 0) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+        // Remove coupon discount from table_sessions
+        await db_1.default.query("UPDATE table_sessions SET discount_applied = 0 WHERE id = $1", [sessionId]);
+        res.json({ success: true, message: "Coupon removed" });
+    }
+    catch (error) {
+        console.error("Error removing coupon:", error);
+        res.status(500).json({ error: "Failed to remove coupon" });
+    }
+});
+exports.default = router;
+//# sourceMappingURL=coupons.routes.js.map

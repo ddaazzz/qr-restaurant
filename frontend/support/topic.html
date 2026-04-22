@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guide Topic | Chuio Support</title>
+  <meta name="description" content="Chuio guide topic details" />
+  <link rel="stylesheet" href="/support/guide.css" />
+</head>
+<body>
+  <main class="shell">
+    <a class="back" href="/support/index.html">← Back to Guide Index</a>
+    <article id="topicView" class="topic"></article>
+    <div id="notFound" class="empty" hidden>Topic not found. Return to the guide index and select a topic.</div>
+  </main>
+
+  <script src="/support/guide-data.js"></script>
+  <script>
+    (function () {
+      const topics = window.CHUIO_GUIDE_TOPICS || [];
+      const root = document.getElementById('topicView');
+      const missing = document.getElementById('notFound');
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('slug');
+
+      const topic = topics.find(t => t.slug === slug);
+      if (!topic) {
+        root.hidden = true;
+        missing.hidden = false;
+        document.title = 'Topic Not Found | Chuio Support';
+        return;
+      }
+
+      document.title = `Step ${topic.step} - ${topic.title} | Chuio Support`;
+
+      const sections = (topic.sections || []).map(section => `
+        <section class="section">
+          <h2>${section.heading}</h2>
+          <ul>
+            ${(section.points || []).map(point => `<li>${point}</li>`).join('')}
+          </ul>
+        </section>
+      `).join('');
+
+      root.innerHTML = `
+        <span class="eyebrow">STEP ${topic.step}</span>
+        <h1>${topic.title}</h1>
+        <p>${topic.summary}</p>
+        ${sections}
+      `;
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chuio Merchant Reference Guide</title>
+  <meta name="description" content="Searchable Chuio merchant reference guide by subtopic." />
+  <link rel="stylesheet" href="/support/guide.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <span class="eyebrow">CHUIO SUPPORT</span>
+      <h1>Merchant Reference Guide</h1>
+      <p class="subtitle">Browse by subtopic and search by keywords. Each topic has its own link so your team can share exactly what they need.</p>
+      <div class="searchWrap">
+        <input id="searchInput" type="search" placeholder="Search keywords like: printer, coupon, payment, kitchen, tables" aria-label="Search guide topics" />
+        <button id="clearBtn" type="button">Clear</button>
+      </div>
+      <p id="resultMeta" class="meta"></p>
+    </section>
+
+    <section id="topicGrid" class="grid" aria-live="polite"></section>
+    <div id="emptyState" class="empty" hidden>No matching topic found. Try another keyword.</div>
+  </main>
+
+  <script src="/support/guide-data.js"></script>
+  <script>
+    (function () {
+      const topics = (window.CHUIO_GUIDE_TOPICS || []).slice().sort((a, b) => a.step - b.step);
+      const grid = document.getElementById('topicGrid');
+      const input = document.getElementById('searchInput');
+      const clearBtn = document.getElementById('clearBtn');
+      const meta = document.getElementById('resultMeta');
+      const empty = document.getElementById('emptyState');
+
+      function matches(topic, query) {
+        if (!query) return true;
+        const q = query.toLowerCase().trim();
+        const haystack = [
+          topic.title,
+          topic.summary,
+          (topic.keywords || []).join(' '),
+          ...(topic.sections || []).map(s => s.heading + ' ' + (s.points || []).join(' '))
+        ].join(' ').toLowerCase();
+        return haystack.includes(q);
+      }
+
+      function card(topic) {
+        const keywords = (topic.keywords || []).slice(0, 5);
+        return `
+          <article class="card">
+            <div class="cardHead">
+              <span class="step">Step ${topic.step}</span>
+            </div>
+            <h3>${topic.title}</h3>
+            <p>${topic.summary}</p>
+            <div class="tags">${keywords.map(k => `<span class="tag">${k}</span>`).join('')}</div>
+            <a class="open" href="/support/topic.html?slug=${encodeURIComponent(topic.slug)}">Open Topic</a>
+          </article>
+        `;
+      }
+
+      function render() {
+        const query = input.value;
+        const filtered = topics.filter(t => matches(t, query));
+        grid.innerHTML = filtered.map(card).join('');
+        empty.hidden = filtered.length !== 0;
+        meta.textContent = `${filtered.length} topic${filtered.length === 1 ? '' : 's'} shown`;
+      }
+
+      input.addEventListener('input', render);
+      clearBtn.addEventListener('click', function () {
+        input.value = '';
+        render();
+        input.focus();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
