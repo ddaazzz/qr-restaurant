@@ -30,6 +30,7 @@ import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
+import appJson from '../../../app.json';
 
 interface RestaurantSettings {
   id: number;
