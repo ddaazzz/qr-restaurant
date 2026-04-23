@@ -16,8 +16,9 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Create Categories',
+        slug: 'create-categories',
+        summary: 'Organize your menu with categories. Categories appear as sections in the customer menu to help diners find what they want quickly.',
         points: [
-          'Categories organize your food items and make browsing easy for customers. Examples include Appetizers, Main Course, Drinks, and Desserts.',
           'Click on Menu Tab in the SideMenu Bar.',
           'Click Add Category (click "Edit" in Header first if not displayed).',
           'Enter category name.',
@@ -26,6 +27,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Create Menu Items',
+        slug: 'create-menu-items',
+        summary: 'Add your food and drink items to the menu. Each item can have a name, description, price, and image.',
         points: [
           'Click Add Item.',
           'Enter item name, add a description if necessary, enter price and upload a food item image [280x280].',
@@ -34,8 +37,9 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Add Variants For Food Items',
+        slug: 'add-variants-for-food-items',
+        summary: 'Variants allow you to offer customizable options for a menu item — such as size, toppings, spice level, or extras. Each variant group contains selectable options that can carry an additional price upcharge.',
         points: [
-          'Variants let you add customizable option groups to a menu item — such as Size, Toppings, Spice Level, or Extras. Each variant group contains selectable options that can carry an additional price upcharge.',
           'Example: Food item "Caesar Salad", Variant name: Meat Options, Required: Yes, Min: 1, Max: 1, Variant Options: Grilled Chicken, Salmon (+$10), No Meat (-$20).',
           'Go to the Menu tab in admin.',
           'Click on the menu item you want to add variants to.',
@@ -54,8 +58,9 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Add Combo / Add-ons For Food Items',
+        slug: 'add-combo-add-ons-for-food-items',
+        summary: 'The Addon/Combo feature lets you create customizable meal deals. You can offer supplementary items (e.g. a drink or side) at a special discounted price when customers order a specific menu item.',
         points: [
-          'The Addon/Combo feature lets you turn any menu item into a customizable meal deal. Customers are prompted to add supplementary items (e.g. a drink or side) at a special discounted price.',
           'Go to the Menu tab in admin.',
           'Click on the menu item you want to turn into a combo.',
           'In the edit modal, check "Is Meal/Combo (Enable Add-ons)".',
@@ -89,6 +94,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Create a Table Category',
+        slug: 'create-a-table-category',
+        summary: 'Table categories (or rooms/sections) help organize your seating layout. They are used as filters in the table dashboard and can be included in the QR code label.',
         points: [
           'Open the Tables tab.',
           'Tap Edit in the top right.',
@@ -99,6 +106,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Create a Table',
+        slug: 'create-a-table',
+        summary: 'Each table represents a physical seating location in your restaurant. When customers scan the QR code for that table, they are placing orders for that specific location. You can assign tables to categories/rooms for better organization.',
         points: [
           'In the Tables tab, tap Edit.',
           'Tap + Add Table.',
@@ -111,6 +120,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Generate and Print QR Codes',
+        slug: 'generate-and-print-qr-codes',
+        summary: 'QR codes link customers to the ordering page for their specific table. Choose between Regenerate mode (most secure), Static Table mode (one QR per table), or Static Seat mode (one QR per seat/unit). Customize the QR code layout and print directly from the app.',
         points: [
           'Go to Settings → Restaurant Info.',
           'Under QR Mode, select one of: Regenerate (a fresh QR code is generated for each new session — most secure), Static Table (one fixed QR code per table — same QR always works), or Static Seat (one fixed QR code per seat/unit — best for counter seating).',
@@ -122,6 +133,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Table Status Colors',
+        slug: 'table-status-colors',
+        summary: 'Table status colors help staff quickly identify the current state of each table.',
         points: [
           'Gray — Available',
           'Dark Blue — Active session (less than 30 min)',
@@ -149,6 +162,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Create a Staff Member',
+        slug: 'create-a-staff-member',
+        summary: 'Each staff member needs an account to log in and access the system. Assigning the correct role (Admin, Staff, or Kitchen) ensures they see only the features relevant to their job function.',
         points: [
           'Go to the Staff tab.',
           'Tap Edit in the top right.',
@@ -163,6 +178,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Role Types',
+        slug: 'role-types',
+        summary: 'There are 3 role types with different access levels. Choose the appropriate role for each staff member based on their job responsibilities.',
         points: [
           'Admin — Full access to all features and settings.',
           'Staff — Access limited to assigned tabs only.',
@@ -171,6 +188,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Staff Timekeeping',
+        slug: 'staff-timekeeping',
+        summary: 'Staff can clock in and out to track their shifts. The system logs total hours worked and shift history for each staff member.',
         points: [
           "Tap on a staff member's card to view their details.",
           'Use Clock In / Clock Out to track shifts.',
@@ -192,6 +211,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Viewing Orders',
+        slug: 'viewing-orders',
+        summary: 'The Orders tab shows all active orders in real time. Use the History view to see past orders and search by item, table, or order ID.',
         points: [
           'Open the Orders tab.',
           'Active orders appear in the main view.',
@@ -201,6 +222,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Creating Orders from Admin (POS Mode)',
+        slug: 'creating-orders-from-admin-pos-mode',
+        summary: 'Staff can create orders directly from the admin interface — ideal for phone orders, walk-ins, or when assisting customers at the table. Orders created from admin follow the same flow as customer orders and appear in the Kitchen Display.',
         points: [
           'Tap the Orders tab in the side menu.',
           'Browse the menu, add items to cart with variants and addons.',
@@ -210,6 +233,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Payment Processing — Table Orders (Dine-in)',
+        slug: 'payment-processing-table-orders-dine-in',
+        summary: 'When customers are ready to pay, staff can close the bill from the table session and process payment. Choose between Cash (manually mark as paid) or Card/Terminal (process via KPay or Payment Asia terminal). After payment, the bill is closed and the order is marked as Paid.',
         points: [
           'Go to the Tables tab.',
           'Select the table.',
@@ -220,6 +245,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Payment Processing — Counter / To-Go Orders',
+        slug: 'payment-processing-counter-to-go-orders',
+        summary: 'For counter or to-go orders, staff can process payment immediately after placing the order. Choose between Cash (manually mark as paid) or Card/Terminal (process via KPay or Payment Asia terminal). After payment, the order is marked as Paid.',
         points: [
           'Go to the Orders tab and create a counter or to-go order.',
           'Payment is prompted immediately after placing the order.',
@@ -229,6 +256,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Refunds & Voids',
+        slug: 'refunds-voids',
+        summary: 'If a customer needs to cancel an order or request a refund, staff can process this from the order details. For terminal payments, refunds are processed through the payment terminal. For cash payments, refunds are recorded manually in the system.',
         points: [
           'From a paid order, tap Refund or Void.',
           'For terminal payments (KPay/Payment Asia), refunds are processed through the terminal.',
@@ -247,6 +276,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Session Management',
+        slug: 'session-management',
+        summary: 'The table dashboard provides a real-time overview of all tables and their current status. Staff can tap into each table to view session details, manage orders, adjust Pax size, move customers to a different table, print QR codes or bills, split bills, and close out sessions when customers pay.',
         points: [
           'Tap a table to view its active session.',
           'View session details: Pax, duration, orders placed, bill total.',
@@ -262,6 +293,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Quick Actions',
+        slug: 'quick-actions',
+        summary: 'Use the QR Scanner for quick access to any table session, and filter tables by category/room to find what you need faster.',
         points: [
           "Use the QR Scanner button (top right) to scan a table's QR code and jump directly to that session.",
           'Filter tables by room/category using the dropdown in the header.'
@@ -283,6 +316,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Printer Types',
+        slug: 'printer-types',
+        summary: 'The system supports 4 types of printers, each serving a different purpose in the restaurant workflow. You can configure multiple printers of each type if needed.',
         points: [
           'QR Code Printer — prints table QR codes.',
           'Bill/Receipt Printer — prints customer bills.',
@@ -292,6 +327,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Set Up a Printer',
+        slug: 'set-up-a-printer',
+        summary: 'Each printer can be set up with either a Network (TCP/IP) or Bluetooth connection. After entering the required details, use the Test Connection feature to verify the printer is reachable before saving.',
         points: [
           'Go to Settings → Printer.',
           'Select the printer type you want to configure (QR / Bill / Kitchen).',
@@ -302,6 +339,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'QR Print Format Settings',
+        slug: 'qr-print-format-settings',
+        summary: 'Customize the appearance of QR codes printed for tables.',
         points: [
           'Set the Code Size (Small / Medium / Large).',
           'Set Text Above Code (e.g. "Scan to Order").',
@@ -325,6 +364,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Create a Booking',
+        slug: 'create-a-booking',
+        summary: 'Use the Bookings tab to create and manage reservations. Each booking includes guest details, party size, date/time, and optional table assignment. When guests arrive, staff can check them in to create a session linked to their booking.',
         points: [
           'Go to the Bookings tab.',
           'Tap the date on the calendar.',
@@ -335,6 +376,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Manage Bookings',
+        slug: 'manage-bookings',
+        summary: 'The calendar view provides an overview of all bookings. Dates with reservations show a dot indicator and count. Tap into a date to see the list of bookings, then tap a booking to view details, edit, or delete. Use the search bar to find bookings by guest name, phone, or email across all dates.',
         points: [
           'Dates with bookings show a dot indicator (●) and a count.',
           'Tap a date to see all bookings for that day.',
@@ -344,6 +387,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Check In a Booking',
+        slug: 'check-in-a-booking',
+        summary: 'When guests with a booking arrive, staff can check them in to create an active session linked to their reservation. This allows all orders placed during that session to be associated with the booking for better tracking and service.',
         points: [
           'When the guest arrives, tap the booking and select Check In.',
           'This automatically creates a session at the assigned table.',
@@ -352,6 +397,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Booking Statuses',
+        slug: 'booking-statuses',
+        summary: 'Each booking has a status to help staff track reservations at a glance.',
         points: [
           'Confirmed — Reservation confirmed.',
           'Pending — Awaiting confirmation.',
@@ -372,6 +419,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Create a Coupon',
+        slug: 'create-a-coupon',
+        summary: 'Coupons allow you to offer discounts to customers. You can create percentage-based discounts (e.g. 10% off) or fixed amount discounts (e.g. $5 off). Set a minimum order value if you want the coupon to only apply to orders above a certain amount.',
         points: [
           'Go to Settings → Coupons.',
           'Tap + Add Coupon.',
@@ -385,6 +434,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Manage Coupons',
+        slug: 'manage-coupons',
+        summary: 'The Coupons page shows a list of all created coupons. You can toggle each coupon on/off to control whether it is active and can be used by customers. Edit or delete coupons as needed. Customers enter the coupon code in the cart before submitting their order. The system validates the code, checks if it is active, verifies that the order meets the minimum spend (if set), and applies the discount automatically.',
         points: [
           'View all coupons in the list with their code, type, value, and minimum.',
           'Toggle Active/Inactive per coupon.',
@@ -407,6 +458,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'KPay Terminal',
+        slug: 'kpay-terminal',
+        summary: 'KPay is a popular payment terminal that supports a wide range of payment methods including credit/debit cards, Alipay, WeChat Pay, Octopus, and FPS. To connect KPay to your system, you need to enter the App ID and App Secret provided by KPay, as well as the terminal’s IP address, port, and endpoint path for API communication. After entering the details, use the Test Connection feature to verify that your system can communicate with the terminal before saving.',
         points: [
           'Go to Settings → Payment Terminals.',
           'Tap + Add Terminal.',
@@ -418,6 +471,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Payment Asia Terminal',
+        slug: 'payment-asia-terminal',
+        summary: 'Payment Asia is another widely used payment terminal that supports various payment methods. To connect Payment Asia to your system, you need to enter the Merchant Token and Secret Code provided by Payment Asia, as well as select the appropriate environment (Sandbox for testing or Production for live transactions). After entering the details, use the Test Connection feature to verify that your system can communicate with the terminal before saving.',
         points: [
           'Go to Settings → Payment Terminals.',
           'Tap + Add Terminal.',
@@ -442,6 +497,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'How It Works',
+        slug: 'how-it-works',
+        summary: 'The Kitchen Display System (KDS) provides a real-time view of incoming orders for kitchen staff. Orders appear as cards with all relevant details, allowing staff to track preparation status and manage workflow efficiently.',
         points: [
           'Kitchen staff log in with their PIN.',
           'Clock in to start their shift.',
@@ -451,6 +508,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Updating Order Status',
+        slug: 'updating-order-status',
+        summary: 'Kitchen staff can tap on an order card to update the preparation status of the items. The status progresses from Pending → Confirmed → Preparing → Ready. The card displays the least ready status across all items, so if any item is still Pending, the whole order shows as Pending.',
         points: [
           'Tap an order card to update item status: Pending → Confirmed → Preparing → Ready.',
           'The card displays the least ready status across all items (e.g. if one item is Pending, the whole order shows Pending).'
@@ -458,6 +517,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Filtering & Printing',
+        slug: 'filtering-printing',
+        summary: 'Kitchen staff can filter the order queue to focus on their assigned categories or specific order statuses. They can also manually print kitchen tickets for any order, which is useful for keeping a physical copy at the prep station or for archiving.',
         points: [
           'Filter orders by food category (kitchen staff only see their assigned categories).',
           'Filter by order status.',
@@ -481,6 +542,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Accessing Reports',
+        slug: 'accessing-reports',
+        summary: 'The Reports tab provides insights into your restaurant’s performance. You can select different date ranges to analyze trends and make informed business decisions.',
         points: [
           'Open the Reports tab.',
           'Select a date range: Today, Last 7 Days, Last 30 Days, or All Time.'
@@ -488,6 +551,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Key Metrics',
+        slug: 'key-metrics',
+        summary: 'The dashboard displays key performance indicators to give you a quick overview of how your restaurant is doing.',
         points: [
           'Total Orders',
           'Total Revenue',
@@ -497,6 +562,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Available Reports',
+        slug: 'available-reports',
+        summary: 'Dive deeper into specific reports to analyze sales performance, customer behavior, and operational efficiency.',
         points: [
           'Top Items — Best-selling items ranked by quantity sold and revenue.',
           'Top Tables — Revenue and order count by table.',
@@ -520,6 +587,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'Configure Bill Printer',
+        slug: 'configure-bill-printer',
+        summary: 'Set up your bill printer with the correct connection type and details. Then customize the bill format to ensure all necessary information is included and properly aligned on the receipt.',
         points: [
           'Go to Printer Settings and open Bill Printer.',
           'Select the bill printer device and confirm connection.',
@@ -530,6 +599,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'How Bill Printing Works',
+        slug: 'how-bill-printing-works',
+        summary: 'When a bill is closed, the system sends the print job to the configured bill printer. If auto-print is enabled, this happens automatically without staff needing to manually trigger it. The bill includes all relevant details such as items ordered, variants/addons, total amount, table number, and any custom footer text you set.',
         points: [
           'When closing a bill (or when auto-print is enabled), the system automatically prints the customer bill from this bill printer configuration.',
           'QR printing is for table QR slips only.',
@@ -548,6 +619,8 @@ window.CHUIO_GUIDE_TOPICS = [
     sections: [
       {
         heading: 'End-to-End Test',
+        slug: 'end-to-end-test',
+        summary: 'Before going live, it’s crucial to test the entire customer ordering flow to ensure a smooth experience. This includes scanning the QR code, browsing the menu, adding items to the cart, applying coupons, submitting the order, and verifying it appears correctly in the admin and kitchen display.',
         points: [
           'Scan a table QR code with a phone camera.',
           'The restaurant menu loads automatically in the browser.',
@@ -563,6 +636,8 @@ window.CHUIO_GUIDE_TOPICS = [
       },
       {
         heading: 'Go-Live Checklist',
+        slug: 'go-live-checklist',
+        summary: 'Use this checklist to ensure everything is set up correctly before opening to customers.',
         points: [
           'Menu created with categories, items, prices, and images.',
           'Variants and addons configured where needed.',

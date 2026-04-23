@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chuio Merchant Reference Guide</title>
-  <meta name="description" content="Searchable Chuio merchant reference guide by subtopic." />
+  <meta name="description" content="Searchable Chuio merchant reference guide by heading pages." />
   <link rel="stylesheet" href="/support/guide.css" />
 </head>
 <body>
@@ -23,9 +23,9 @@
     <section class="hero">
       <span class="eyebrow">CHUIO SUPPORT</span>
       <h1>Merchant Reference Guide</h1>
-      <p class="subtitle">Browse by subtopic and search by keywords. Each topic has its own link so your team can share exactly what they need.</p>
+      <p class="subtitle">Browse by heading and search by keywords. Each heading has its own shareable page link.</p>
       <div class="searchWrap">
-        <input id="searchInput" type="search" placeholder="Search keywords like: printer, coupon, payment, kitchen, tables" aria-label="Search guide topics" />
+        <input id="searchInput" type="search" placeholder="Search keywords like: printer, coupon, payment, kitchen, tables" aria-label="Search guide headings" />
         <button id="clearBtn" type="button">Clear</button>
       </div>
       <p id="resultMeta" class="meta"></p>
@@ -38,46 +38,71 @@
   <script src="/support/guide-data.js"></script>
   <script>
     (function () {
+      function slugify(text) {
+        return String(text || '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+      }
+
       const topics = (window.CHUIO_GUIDE_TOPICS || []).slice().sort((a, b) => a.step - b.step);
+      const headingPages = topics.flatMap(topic => {
+        const sections = topic.sections || [];
+        return sections.map((section, index) => ({
+          step: topic.step,
+          topicTitle: topic.title,
+          topicSlug: topic.slug,
+          heading: section.heading,
+          headingSlug: section.slug || slugify(section.heading) || `heading-${index + 1}`,
+          summary: section.summary || topic.summary,
+          keywords: topic.keywords || [],
+          pointsText: (section.points || []).join(' ')
+        }));
+      });
+
       const grid = document.getElementById('topicGrid');
       const input = document.getElementById('searchInput');
       const clearBtn = document.getElementById('clearBtn');
       const meta = document.getElementById('resultMeta');
       const empty = document.getElementById('emptyState');
 
-      function matches(topic, query) {
+      function matches(page, query) {
         if (!query) return true;
         const q = query.toLowerCase().trim();
         const haystack = [
-          topic.title,
-          topic.summary,
-          (topic.keywords || []).join(' '),
-          ...(topic.sections || []).map(s => s.heading + ' ' + (s.points || []).join(' '))
+          page.topicTitle,
+          page.heading,
+          page.summary,
+          (page.keywords || []).join(' '),
+          page.pointsText
         ].join(' ').toLowerCase();
         return haystack.includes(q);
       }
 
-      function card(topic) {
-        const keywords = (topic.keywords || []).slice(0, 5);
+      function card(page) {
+        const keywords = (page.keywords || []).slice(0, 5);
         return `
           <article class="card">
             <div class="cardHead">
-              <span class="step">Step ${topic.step}</span>
+              <span class="step">Step ${page.step}</span>
             </div>
-            <h3>${topic.title}</h3>
-            <p>${topic.summary}</p>
+            <h3>${page.heading}</h3>
+            <p><strong>${page.topicTitle}</strong></p>
+            <p>${page.summary}</p>
             <div class="tags">${keywords.map(k => `<span class="tag">${k}</span>`).join('')}</div>
-            <a class="open" href="/support/topic.html?slug=${encodeURIComponent(topic.slug)}">Open Topic</a>
+            <a class="open" href="/support/topic.html?slug=${encodeURIComponent(page.topicSlug)}&section=${encodeURIComponent(page.headingSlug)}">Open Heading</a>
           </article>
         `;
       }
 
       function render() {
         const query = input.value;
-        const filtered = topics.filter(t => matches(t, query));
+        const filtered = headingPages.filter(p => matches(p, query));
         grid.innerHTML = filtered.map(card).join('');
         empty.hidden = filtered.length !== 0;
-        meta.textContent = `${filtered.length} topic${filtered.length === 1 ? '' : 's'} shown`;
+        meta.textContent = `${filtered.length} heading page${filtered.length === 1 ? '' : 's'} shown`;
       }
 
       input.addEventListener('input', render);

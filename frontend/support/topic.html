@@ -28,11 +28,21 @@
   <script src="/support/guide-data.js"></script>
   <script>
     (function () {
+      function slugify(text) {
+        return String(text || '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+      }
+
       const topics = window.CHUIO_GUIDE_TOPICS || [];
       const root = document.getElementById('topicView');
       const missing = document.getElementById('notFound');
       const params = new URLSearchParams(window.location.search);
       const slug = params.get('slug');
+      const sectionSlugParam = params.get('section');
 
       const topic = topics.find(t => t.slug === slug);
       if (!topic) {
@@ -42,7 +52,51 @@
         return;
       }
 
-      document.title = `Step ${topic.step} - ${topic.title} | Chuio Support`;
+      const topicSections = (topic.sections || []).map((section, index) => ({
+        section,
+        sectionIndex: index,
+        sectionSlug: section.slug || slugify(section.heading) || `heading-${index + 1}`
+      }));
+
+      const activeSectionEntry = sectionSlugParam
+        ? topicSections.find(entry => entry.sectionSlug === sectionSlugParam)
+        : topicSections[0];
+
+      if (!activeSectionEntry) {
+        root.hidden = true;
+        missing.hidden = false;
+        document.title = 'Heading Not Found | Chuio Support';
+        return;
+      }
+
+      const { section, sectionIndex, sectionSlug } = activeSectionEntry;
+      document.title = `Step ${topic.step} - ${section.heading} | Chuio Support`;
+
+      const pageSequence = [];
+      topics
+        .slice()
+        .sort((a, b) => a.step - b.step)
+        .forEach(t => {
+          (t.sections || []).forEach((s, i) => {
+            const sSlug = s.slug || slugify(s.heading) || `heading-${i + 1}`;
+            pageSequence.push({
+              step: t.step,
+              topicTitle: t.title,
+              topicSlug: t.slug,
+              heading: s.heading,
+              sectionSlug: sSlug,
+              href: `/support/topic.html?slug=${encodeURIComponent(t.slug)}&section=${encodeURIComponent(sSlug)}`
+            });
+          });
+        });
+
+      const currentPageIndex = pageSequence.findIndex(
+        p => p.topicSlug === topic.slug && p.sectionSlug === sectionSlug
+      );
+      const previousPage = currentPageIndex > 0 ? pageSequence[currentPageIndex - 1] : null;
+      const nextPage = currentPageIndex >= 0 && currentPageIndex < pageSequence.length - 1
+        ? pageSequence[currentPageIndex + 1]
+        : null;
 
       const topicImages = (topic.images || []).filter(img => img && img.src);
       const sectionImageMapByStep = {
@@ -62,67 +116,39 @@
       };
 
       const allImages = [];
-      const seenSrc = new Set();
       const addLightboxImage = (img) => {
         if (!img || !img.src) return -1;
-        if (seenSrc.has(img.src)) {
-          return allImages.findIndex(existing => existing.src === img.src);
-        }
         allImages.push(img);
-        seenSrc.add(img.src);
         return allImages.length - 1;
       };
 
-      const sections = (topic.sections || []).map((section, sectionIndex) => {
-        const explicitSectionImages = (section.images || []).filter(img => img && img.src);
-        const mappedIndexes = ((sectionImageMapByStep[topic.step] || [])[sectionIndex] || []);
-        const mappedSectionImages = mappedIndexes
-          .map(index => topicImages[index])
-          .filter(Boolean);
-        const sectionImages = explicitSectionImages.length ? explicitSectionImages : mappedSectionImages;
+      const explicitSectionImages = (section.images || []).filter(img => img && img.src);
+      const mappedIndexes = ((sectionImageMapByStep[topic.step] || [])[sectionIndex] || []);
+      const mappedSectionImages = mappedIndexes
+        .map(index => topicImages[index])
+        .filter(Boolean);
+      const sectionImages = explicitSectionImages.length ? explicitSectionImages : mappedSectionImages;
 
-        const sectionGallery = sectionImages.length ? `
-          <div class="gallery sectionGallery">
-            ${sectionImages.map((img) => {
-              const i = addLightboxImage(img);
-              return `
-                <figure class="galleryFig" onclick="openLightbox(${i})">
-                  <img src="${img.src}" alt="${img.alt || ''}" loading="lazy" onerror="this.closest('.galleryFig').style.display='none'" />
-                  <figcaption>${img.alt || ''}</figcaption>
-                </figure>
-              `;
-            }).join('')}
-          </div>
-        ` : '';
-
-        return `
-          <section class="section">
-            <h2>${section.heading}</h2>
-            <ul>
-              ${(section.points || []).map(point => `<li>${point}</li>`).join('')}
-            </ul>
-            ${sectionGallery}
-          </section>
-        `;
-      }).join('');
-
-      const remainingImages = topicImages.filter(img => !seenSrc.has(img.src));
-      const fallbackGallery = remainingImages.length ? `
-        <section class="section">
-          <h2>Reference Images</h2>
-          <div class="gallery sectionGallery">
-            ${remainingImages.map((img) => {
-              const i = addLightboxImage(img);
-              return `
-                <figure class="galleryFig" onclick="openLightbox(${i})">
-                  <img src="${img.src}" alt="${img.alt || ''}" loading="lazy" onerror="this.closest('.galleryFig').style.display='none'" />
-                  <figcaption>${img.alt || ''}</figcaption>
-                </figure>
-              `;
-            }).join('')}
-          </div>
-        </section>
+      const sectionGallery = sectionImages.length ? `
+        <div class="gallery sectionGallery">
+          ${sectionImages.map((img) => {
+            const i = addLightboxImage(img);
+            return `
+              <figure class="galleryFig" onclick="openLightbox(${i})">
+                <img src="${img.src}" alt="${img.alt || ''}" loading="lazy" onerror="this.closest('.galleryFig').style.display='none'" />
+                <figcaption>${img.alt || ''}</figcaption>
+              </figure>
+            `;
+          }).join('')}
+        </div>
       ` : '';
+
+      const bottomNav = `
+        <nav class="pageNav" aria-label="Heading navigation">
+          ${previousPage ? `<a class="pageNavLink prev" href="${previousPage.href}">← ${previousPage.heading}</a>` : '<span class="pageNavGhost"></span>'}
+          ${nextPage ? `<a class="pageNavLink next" href="${nextPage.href}">${nextPage.heading} →</a>` : '<span class="pageNavGhost"></span>'}
+        </nav>
+      `;
 
       const lightbox = allImages.length ? `
         <div id="lightbox" class="lightbox" onclick="closeLightbox()">
@@ -135,10 +161,17 @@
 
       root.innerHTML = `
         <span class="eyebrow">STEP ${topic.step}</span>
-        <h1>${topic.title}</h1>
-        <p>${topic.summary}</p>
-        ${sections}
-        ${fallbackGallery}
+        <h1>${section.heading}</h1>
+        <p class="topicParent">${topic.title}</p>
+        <p>${section.summary || topic.summary}</p>
+        <section class="section">
+          <h2>${section.heading}</h2>
+          <ul>
+            ${(section.points || []).map(point => `<li>${point}</li>`).join('')}
+          </ul>
+          ${sectionGallery}
+        </section>
+        ${bottomNav}
         ${lightbox}
       `;
 

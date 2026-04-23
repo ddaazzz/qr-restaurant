@@ -276,6 +276,13 @@ h1 {
   margin-top: 8px;
 }
 
+.topicParent {
+  margin: 0 0 8px;
+  color: #d2efff;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .section {
   margin-top: 18px;
   border-top: 1px solid rgba(255, 255, 255, 0.20);
@@ -323,6 +330,40 @@ h1 {
 
 .sectionGallery {
   margin-top: 12px;
+}
+
+.pageNav {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pageNavLink {
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(0, 0, 0, 0.24);
+  color: #e6f6ff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 600;
+  max-width: 48%;
+}
+
+.pageNavLink.next {
+  text-align: right;
+  margin-left: auto;
+}
+
+.pageNavLink:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pageNavGhost {
+  width: 48%;
 }
 
 .galleryFig {
