@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   Image,
   Platform,
   Animated,
+  PanResponder,
   Keyboard,
   InputAccessoryView,
 } from 'react-native';
@@ -148,6 +149,179 @@ interface PaymentTerminal {
   merchant_token?: string;
   secret_code?: string;
   environment?: 'sandbox' | 'production';
+}
+
+const DRAG_ITEM_H = 62;
+
+interface DraggableSRItemProps {
+  item: any;
+  index: number;
+  totalCount: number;
+  isActive: boolean;
+  activeDragIndex: number | null;
+  hoverIndex: number | null;
+  onDragGrant: (index: number, animY: Animated.Value) => void;
+  onDragMove: (dy: number) => void;
+  onDragRelease: (dy: number) => void;
+  onDragTerminate: () => void;
+  onEdit: (item: any) => void;
+  onDelete: (id: number) => void;
+  t: (key: string) => string;
+}
+
+const DraggableSRItem = React.memo(function DraggableSRItem({
+  item, index, isActive, activeDragIndex, hoverIndex,
+  onDragGrant, onDragMove, onDragRelease, onDragTerminate,
+  onEdit, onDelete, t,
+}: DraggableSRItemProps) {
+  const animY = useRef(new Animated.Value(0)).current;
+
+  // Keep callback refs fresh so PanResponder (created once) always calls latest
+  const onDragGrantRef = useRef(onDragGrant);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragReleaseRef = useRef(onDragRelease);
+  const onDragTerminateRef = useRef(onDragTerminate);
+  useEffect(() => { onDragGrantRef.current = onDragGrant; }, [onDragGrant]);
+  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
+  useEffect(() => { onDragReleaseRef.current = onDragRelease; }, [onDragRelease]);
+  useEffect(() => { onDragTerminateRef.current = onDragTerminate; }, [onDragTerminate]);
+  const indexRef = useRef(index);
+  useEffect(() => { indexRef.current = index; }, [index]);
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      onDragGrantRef.current(indexRef.current, animY);
+    },
+    onPanResponderMove: (_, { dy }) => {
+      animY.setValue(dy);
+      onDragMoveRef.current(dy);
+    },
+    onPanResponderRelease: (_, { dy }) => {
+      animY.setValue(0);
+      onDragReleaseRef.current(dy);
+    },
+    onPanResponderTerminate: () => {
+      animY.setValue(0);
+      onDragTerminateRef.current();
+    },
+  })).current;
+
+  // Shift non-active items to show insertion point
+  let shift = 0;
+  if (!isActive && activeDragIndex !== null && hoverIndex !== null && activeDragIndex !== hoverIndex) {
+    if (activeDragIndex < hoverIndex && index > activeDragIndex && index <= hoverIndex) shift = -DRAG_ITEM_H;
+    if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_ITEM_H;
+  }
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY: isActive ? animY : shift }],
+        zIndex: isActive ? 1000 : 1,
+        backgroundColor: isActive ? '#f0f0ff' : 'transparent',
+        borderRadius: isActive ? 8 : 0,
+        shadowColor: isActive ? '#000' : 'transparent',
+        shadowOpacity: isActive ? 0.15 : 0,
+        shadowRadius: isActive ? 6 : 0,
+        elevation: isActive ? 6 : 0,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+          <Ionicons name="menu-outline" size={22} color="#9ca3af" />
+        </View>
+        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: item.color || '#6366f1', marginRight: 10, borderWidth: 1, borderColor: '#ddd' }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{item.label_en}</Text>
+          {item.label_zh ? <Text style={{ fontSize: 12, color: '#6b7280' }}>{item.label_zh}</Text> : null}
+          <Text style={{ fontSize: 11, color: '#9ca3af' }}>{item.request_type}{!item.is_active ? ` · ${t('settings.inactive')}` : ''}</Text>
+        </View>
+        <TouchableOpacity onPress={() => onEdit(item)} style={{ padding: 6, marginRight: 4 }}>
+          <Ionicons name="pencil-outline" size={18} color="#4f46e5" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(item.id)} style={{ padding: 6 }}>
+          <Ionicons name="trash-outline" size={18} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+});
+
+interface DraggableSRListProps {
+  items: any[];
+  onReorder: (newItems: any[]) => void;
+  onEdit: (item: any) => void;
+  onDelete: (id: number) => void;
+  onScrollEnabled: (v: boolean) => void;
+  t: (key: string) => string;
+}
+
+function DraggableSRList({ items, onReorder, onEdit, onDelete, onScrollEnabled, t }: DraggableSRListProps) {
+  const [orderedItems, setOrderedItems] = useState<any[]>(items);
+  useEffect(() => { setOrderedItems(items); }, [items]);
+  const orderedRef = useRef(orderedItems);
+  useEffect(() => { orderedRef.current = orderedItems; }, [orderedItems]);
+
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const fromIndexRef = useRef<number>(0);
+
+  const handleDragGrant = useCallback((index: number, _animY: Animated.Value) => {
+    fromIndexRef.current = index;
+    setActiveDragIndex(index);
+    setHoverIndex(index);
+    onScrollEnabled(false);
+  }, [onScrollEnabled]);
+
+  const handleDragMove = useCallback((dy: number) => {
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_ITEM_H)));
+    setHoverIndex(to);
+  }, []);
+
+  const handleDragRelease = useCallback((dy: number) => {
+    onScrollEnabled(true);
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_ITEM_H)));
+    if (fromIndexRef.current !== to) {
+      const newItems = [...orderedRef.current];
+      const [moved] = newItems.splice(fromIndexRef.current, 1);
+      newItems.splice(to, 0, moved);
+      setOrderedItems(newItems);
+      onReorder(newItems);
+    }
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled, onReorder]);
+
+  const handleDragTerminate = useCallback(() => {
+    onScrollEnabled(true);
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled]);
+
+  return (
+    <View style={{ minHeight: orderedItems.length * DRAG_ITEM_H }}>
+      {orderedItems.map((item, idx) => (
+        <DraggableSRItem
+          key={item.id}
+          item={item}
+          index={idx}
+          totalCount={orderedItems.length}
+          isActive={activeDragIndex === idx}
+          activeDragIndex={activeDragIndex}
+          hoverIndex={hoverIndex}
+          onDragGrant={handleDragGrant}
+          onDragMove={handleDragMove}
+          onDragRelease={handleDragRelease}
+          onDragTerminate={handleDragTerminate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          t={t}
+        />
+      ))}
+    </View>
+  );
 }
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
@@ -287,8 +461,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [srItemsLoading, setSrItemsLoading] = useState(false);
   const [showSRItemModal, setShowSRItemModal] = useState(false);
   const [editingSRItemId, setEditingSRItemId] = useState<number | null>(null);
-  const [srItemForm, setSrItemForm] = useState({ label_en: '', label_zh: '', request_type: '', color: '#6366f1', sort_order: '0', is_active: true });
+  const [srItemForm, setSrItemForm] = useState({ label_en: '', label_zh: '', color: '#6366f1', is_active: true });
   const [showColorPicker, setShowColorPicker] = useState<{ target: 'timing' | 'srItem'; index: number } | null>(null);
+  const [tablesScrollEnabled, setTablesScrollEnabled] = useState(true);
 
   const fetchSettings = async () => {
     try {
@@ -532,35 +707,44 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const openAddSRItem = () => {
     setEditingSRItemId(null);
-    setSrItemForm({ label_en: '', label_zh: '', request_type: '', color: '#6366f1', sort_order: String(srItems.length), is_active: true });
+    setSrItemForm({ label_en: '', label_zh: '', color: '#6366f1', is_active: true });
     setShowSRItemModal(true);
   };
 
   const openEditSRItem = (item: any) => {
     setEditingSRItemId(item.id);
-    setSrItemForm({ label_en: item.label_en || '', label_zh: item.label_zh || '', request_type: item.request_type || '', color: item.color || '#6366f1', sort_order: String(item.sort_order ?? 0), is_active: item.is_active !== false });
+    setSrItemForm({ label_en: item.label_en || '', label_zh: item.label_zh || '', color: item.color || '#6366f1', is_active: item.is_active !== false });
     setShowSRItemModal(true);
   };
 
   const saveSRItem = async () => {
     if (!srItemForm.label_en.trim()) { Alert.alert(t('common.error'), t('settings.sr-label-required')); return; }
-    if (!editingSRItemId && !srItemForm.request_type.trim()) { Alert.alert(t('common.error'), t('settings.sr-key-required')); return; }
     try {
       if (editingSRItemId) {
         await apiClient.patch(`/api/restaurants/${restaurantId}/service-request-items/${editingSRItemId}`, {
           label_en: srItemForm.label_en.trim(), label_zh: srItemForm.label_zh.trim() || null,
-          color: srItemForm.color, sort_order: parseInt(srItemForm.sort_order) || 0, is_active: srItemForm.is_active,
+          color: srItemForm.color, is_active: srItemForm.is_active,
         });
       } else {
+        // Auto-generate request_type from label_en
+        const autoKey = srItemForm.label_en.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
         await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
-          request_type: srItemForm.request_type.trim().toLowerCase().replace(/\s+/g, '_'),
+          request_type: autoKey,
           label_en: srItemForm.label_en.trim(), label_zh: srItemForm.label_zh.trim() || null,
-          color: srItemForm.color, sort_order: parseInt(srItemForm.sort_order) || 0,
+          color: srItemForm.color, sort_order: srItems.length,
         });
       }
       setShowSRItemModal(false);
       await loadTablesSettings();
     } catch (err: any) { Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to save item'); }
+  };
+
+  const saveSRItemOrder = async (newItems: any[]) => {
+    try {
+      await apiClient.put(`/api/restaurants/${restaurantId}/service-request-items/reorder`, {
+        items: newItems.map((item, idx) => ({ id: item.id, sort_order: idx })),
+      });
+    } catch { /* non-critical — order will correct on next load */ }
   };
 
   const deleteSRItem = (id: number) => {
@@ -2693,7 +2877,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const renderTablesSettingsPage = () => (
     <View style={styles.container}>
       {renderSubPageHeader(t('settings.tables-settings'))}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={{ flex: 1 }} scrollEnabled={tablesScrollEnabled} contentContainerStyle={styles.scrollContent}>
 
         {/* --- Dining Time Colors --- */}
         <View style={styles.section}>
@@ -2709,7 +2893,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     : `${tableTimingColors[2].maxMinutes ?? '?'}+ ${t('settings.minutes')}`}
                 </Text>
               </View>
-              {/* Threshold input (not for last row) */}
               {idx < 3 && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <Text style={styles.label}>{t('settings.threshold-mins')}</Text>
@@ -2725,7 +2908,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   />
                 </View>
               )}
-              {/* Color swatches */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {COLOR_PALETTE.map((c) => (
                   <TouchableOpacity
@@ -2746,7 +2928,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </TouchableOpacity>
         </View>
 
-        {/* --- Service Request Items (only if feature enabled) --- */}
+        {/* --- Service Request Items --- */}
         {srFeatureEnabled ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -2761,22 +2943,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             ) : srItems.length === 0 ? (
               <Text style={styles.emptyText}>{t('settings.sr-items-empty')}</Text>
             ) : (
-              srItems.map((item) => (
-                <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                  <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: item.color || '#6366f1', marginRight: 10, borderWidth: 1, borderColor: '#ddd' }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{item.label_en}</Text>
-                    {item.label_zh ? <Text style={{ fontSize: 12, color: '#6b7280' }}>{item.label_zh}</Text> : null}
-                    <Text style={{ fontSize: 11, color: '#9ca3af' }}>{item.request_type}{!item.is_active ? ` · ${t('settings.inactive')}` : ''}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => openEditSRItem(item)} style={{ padding: 6, marginRight: 4 }}>
-                    <Ionicons name="pencil-outline" size={18} color="#4f46e5" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => deleteSRItem(item.id)} style={{ padding: 6 }}>
-                    <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              ))
+              <DraggableSRList
+                items={srItems}
+                onReorder={saveSRItemOrder}
+                onEdit={openEditSRItem}
+                onDelete={deleteSRItem}
+                onScrollEnabled={setTablesScrollEnabled}
+                t={t}
+              />
             )}
           </View>
         ) : (
@@ -2800,17 +2974,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('settings.sr-label-zh')}</Text>
                 <TextInput style={styles.input} value={srItemForm.label_zh} onChangeText={(v) => setSrItemForm(f => ({ ...f, label_zh: v }))} placeholder="e.g. 補茶" />
-              </View>
-              {!editingSRItemId && (
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>{t('settings.sr-key')} *</Text>
-                  <TextInput style={styles.input} value={srItemForm.request_type} onChangeText={(v) => setSrItemForm(f => ({ ...f, request_type: v }))} placeholder="e.g. tea_refill" autoCapitalize="none" />
-                  <Text style={styles.helperText}>{t('settings.sr-key-hint')}</Text>
-                </View>
-              )}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('settings.sr-sort-order')}</Text>
-                <TextInput style={styles.input} value={srItemForm.sort_order} onChangeText={(v) => setSrItemForm(f => ({ ...f, sort_order: v }))} keyboardType="numeric" placeholder="0" />
               </View>
               {editingSRItemId && (
                 <View style={[styles.toggleGroup, { marginBottom: 12 }]}>

@@ -96,6 +96,8 @@ interface TableState {
   order_id?: number;
   restaurant_order_number?: number;
   booking_time?: string;
+  pending_request_type?: string;
+  pending_request_color?: string;
 }
 
 interface Bill {

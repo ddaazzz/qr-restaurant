@@ -259,6 +259,34 @@ router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (
  * DELETE /api/restaurants/:restaurantId/service-request-items/:itemId
  * Admin — deletes a service request item.
  */
+/**
+ * PUT /api/restaurants/:restaurantId/service-request-items/reorder
+ * Admin — bulk-updates sort_order for service request items.
+ * Body: { items: Array<{ id: number, sort_order: number }> }
+ */
+router.put("/restaurants/:restaurantId/service-request-items/reorder", async (req, res) => {
+    const { restaurantId } = req.params;
+    const user = await verifyAdmin(req);
+    if (!user)
+        return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+    const { items } = req.body;
+    if (!Array.isArray(items))
+        return res.status(400).json({ error: "items array required" });
+    try {
+        await Promise.all(items.map(({ id, sort_order }) => db_1.default.query("UPDATE service_request_items SET sort_order = $1 WHERE id = $2 AND restaurant_id = $3", [sort_order, id, restaurantId])));
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: "Failed to reorder items" });
+    }
+});
+/**
+ * DELETE /api/restaurants/:restaurantId/service-request-items/:itemId
+ * Admin — deletes a service request item.
+ */
 router.delete("/restaurants/:restaurantId/service-request-items/:itemId", async (req, res) => {
     const { restaurantId, itemId } = req.params;
     const user = await verifyAdmin(req);
