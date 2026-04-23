@@ -4108,7 +4108,7 @@ const translations = {
 
 // Get translation by key
 function t(key, lang = null) {
-  const currentLang = lang || (localStorage.getItem('language') || 'zh');
+  const currentLang = lang || (localStorage.getItem('language') || 'en');
   
   // Direct key lookup (keys are stored as strings like 'nav.home', not nested objects)
   let value = translations[currentLang] && translations[currentLang][key];
@@ -4193,6 +4193,6 @@ function getCurrentLanguage() {
     return 'en';
   }
   
-  const lang = localStorage.getItem('language') || 'zh';
+  const lang = localStorage.getItem('language') || 'en';
   return lang;
 }

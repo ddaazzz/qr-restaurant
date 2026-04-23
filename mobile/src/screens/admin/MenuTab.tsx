@@ -262,24 +262,30 @@ function DraggableMenuCategoryList({
   );
 }
 
-interface DraggableMenuItemProps {
+const GRID_NUM_COLS = 3;
+
+interface GridDragCardProps {
   item: MenuItem;
   index: number;
   isActive: boolean;
-  activeDragIndex: number | null;
-  hoverIndex: number | null;
-  onDragGrant: (index: number, animY: Animated.Value) => void;
-  onDragMove: (dy: number) => void;
-  onDragRelease: (dy: number) => void;
-  onDragTerminate: () => void;
+  isHoverTarget: boolean;
   apiUrl: string;
+  formatPrice: (cents: number) => string;
+  onPress: (item: MenuItem) => void;
+  onToggleAvailability: (itemId: number, available: boolean) => void;
+  onDragGrant: (index: number) => void;
+  onDragMove: (dx: number, dy: number) => void;
+  onDragRelease: (dx: number, dy: number) => void;
+  onDragTerminate: () => void;
+  onMeasureHeight: (height: number) => void;
 }
 
-const DraggableMenuItem = React.memo(function DraggableMenuItem({
-  item, index, isActive, activeDragIndex, hoverIndex,
-  onDragGrant, onDragMove, onDragRelease, onDragTerminate,
-  apiUrl,
-}: DraggableMenuItemProps) {
+const GridDragCard = React.memo(function GridDragCard({
+  item, index, isActive, isHoverTarget, apiUrl, formatPrice,
+  onPress, onToggleAvailability,
+  onDragGrant, onDragMove, onDragRelease, onDragTerminate, onMeasureHeight,
+}: GridDragCardProps) {
+  const animX = useRef(new Animated.Value(0)).current;
   const animY = useRef(new Animated.Value(0)).current;
   const onDragGrantRef = useRef(onDragGrant);
   const onDragMoveRef = useRef(onDragMove);
@@ -295,17 +301,23 @@ const DraggableMenuItem = React.memo(function DraggableMenuItem({
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { onDragGrantRef.current(indexRef.current, animY); },
-    onPanResponderMove: (_, { dy }) => { animY.setValue(dy); onDragMoveRef.current(dy); },
-    onPanResponderRelease: (_, { dy }) => { animY.setValue(0); onDragReleaseRef.current(dy); },
-    onPanResponderTerminate: () => { animY.setValue(0); onDragTerminateRef.current(); },
+    onPanResponderGrant: () => { onDragGrantRef.current(indexRef.current); },
+    onPanResponderMove: (_, { dx, dy }) => {
+      animX.setValue(dx);
+      animY.setValue(dy);
+      onDragMoveRef.current(dx, dy);
+    },
+    onPanResponderRelease: (_, { dx, dy }) => {
+      animX.setValue(0);
+      animY.setValue(0);
+      onDragReleaseRef.current(dx, dy);
+    },
+    onPanResponderTerminate: () => {
+      animX.setValue(0);
+      animY.setValue(0);
+      onDragTerminateRef.current();
+    },
   })).current;
-
-  let shift = 0;
-  if (!isActive && activeDragIndex !== null && hoverIndex !== null && activeDragIndex !== hoverIndex) {
-    if (activeDragIndex < hoverIndex && index > activeDragIndex && index <= hoverIndex) shift = -DRAG_MENU_ITEM_H;
-    if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_MENU_ITEM_H;
-  }
 
   const imageUri = item.image_url
     ? (item.image_url.startsWith('http') ? item.image_url : `${apiUrl}${item.image_url}`)
@@ -313,66 +325,77 @@ const DraggableMenuItem = React.memo(function DraggableMenuItem({
 
   return (
     <Animated.View
-      style={{
-        transform: [{ translateY: isActive ? animY : shift }],
-        zIndex: isActive ? 1000 : 1,
-        shadowColor: isActive ? '#000' : 'transparent',
-        shadowOpacity: isActive ? 0.2 : 0,
-        shadowRadius: isActive ? 8 : 0,
-        elevation: isActive ? 8 : 0,
-        marginBottom: 8,
-        marginHorizontal: 12,
-      }}
+      style={[
+        styles.itemCardWrapper,
+        isHoverTarget && { borderWidth: 2, borderColor: '#4f46e5', borderRadius: 8 },
+        isActive && {
+          transform: [{ translateX: animX }, { translateY: animY }],
+          zIndex: 1000,
+          shadowColor: '#000',
+          shadowOpacity: 0.25,
+          shadowRadius: 10,
+          elevation: 10,
+          opacity: 0.9,
+        },
+      ]}
+      onLayout={(e) => { if (index === 0) onMeasureHeight(e.nativeEvent.layout.height); }}
     >
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderRadius: 10,
-        backgroundColor: isActive ? '#e8eaf6' : '#fff',
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        overflow: 'hidden',
-        height: DRAG_MENU_ITEM_H,
-      }}>
-        {/* Drag handle */}
-        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={{ width: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb', alignSelf: 'stretch' }}>
-          <Ionicons name="menu-outline" size={20} color="#9ca3af" />
-        </View>
-        {/* Thumbnail */}
-        <Image
-          source={{ uri: imageUri }}
-          style={{ width: 60, height: DRAG_MENU_ITEM_H, backgroundColor: '#f0f0f0' }}
-          resizeMode="cover"
-        />
-        {/* Name + price */}
-        <View style={{ flex: 1, paddingHorizontal: 12, justifyContent: 'center' }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }} numberOfLines={2}>{item.name}</Text>
-          <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>${(item.price_cents / 100).toFixed(2)}</Text>
-        </View>
-        {/* Availability badge */}
-        <View style={{ paddingRight: 12, alignItems: 'center' }}>
-          <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: item.available ? '#d1f0d1' : '#fdd' }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: item.available ? '#2d7a2d' : '#c33' }}>
-              {item.available ? '✓' : '✕'}
-            </Text>
+      {/* Drag handle - top-left corner */}
+      <View
+        {...panResponder.panHandlers}
+        style={{
+          position: 'absolute',
+          top: 4,
+          left: 4,
+          zIndex: 10,
+          backgroundColor: 'rgba(255,255,255,0.85)',
+          borderRadius: 4,
+          padding: 4,
+        }}
+      >
+        <Ionicons name="menu-outline" size={13} color="#6b7280" />
+      </View>
+      {/* Card body - same as normal grid */}
+      <TouchableOpacity style={styles.itemCard} onPress={() => onPress(item)}>
+        <Image source={{ uri: imageUri }} style={styles.itemImage} onError={() => {}} />
+        <View style={styles.itemContent}>
+          <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+          <View style={styles.itemMeta}>
+            <Text style={styles.itemPrice}>{formatPrice(item.price_cents)}</Text>
+            <View style={[styles.availabilityBadge, { backgroundColor: item.available ? '#d1f0d1' : '#fdd' }]}>
+              <Text style={[styles.availabilityText, { color: item.available ? '#2d7a2d' : '#c33' }]}>
+                {item.available ? '✓' : '✕'}
+              </Text>
+            </View>
           </View>
         </View>
+      </TouchableOpacity>
+      {/* Availability toggle */}
+      <View style={styles.itemActionButtons}>
+        <TouchableOpacity style={styles.itemActionBtn} onPress={() => onToggleAvailability(item.id, item.available)}>
+          <Ionicons name={item.available ? 'eye-outline' : 'eye-off-outline'} size={16} color={item.available ? '#059669' : '#dc2626'} />
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
 });
 
-interface DraggableMenuItemListProps {
+interface DraggableMenuItemGridProps {
   items: MenuItem[];
-  onReorder: (newItems: MenuItem[]) => void;
+  onReorder: (items: MenuItem[]) => void;
   onScrollEnabled: (v: boolean) => void;
   apiUrl: string;
+  onAddItem: () => void;
+  onItemPress: (item: MenuItem) => void;
+  onToggleAvailability: (itemId: number, available: boolean) => void;
+  formatPrice: (cents: number) => string;
+  addItemLabel: string;
 }
 
-function DraggableMenuItemList({
+function DraggableMenuItemGrid({
   items, onReorder, onScrollEnabled, apiUrl,
-}: DraggableMenuItemListProps) {
+  onAddItem, onItemPress, onToggleAvailability, formatPrice, addItemLabel,
+}: DraggableMenuItemGridProps) {
   const [orderedItems, setOrderedItems] = useState<MenuItem[]>(items);
   useEffect(() => { setOrderedItems(items); }, [items]);
   const orderedRef = useRef(orderedItems);
@@ -381,22 +404,34 @@ function DraggableMenuItemList({
   const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const fromIndexRef = useRef<number>(0);
+  const cardWidthRef = useRef<number>(100);
+  const cardHeightRef = useRef<number>(130);
 
-  const handleDragGrant = useCallback((index: number, _animY: Animated.Value) => {
-    fromIndexRef.current = index;
-    setActiveDragIndex(index);
-    setHoverIndex(index);
+  const calcHoverIndex = useCallback((fromIdx: number, dx: number, dy: number) => {
+    const fromRow = Math.floor(fromIdx / GRID_NUM_COLS);
+    const fromCol = fromIdx % GRID_NUM_COLS;
+    const dRow = Math.round(dy / cardHeightRef.current);
+    const dCol = Math.round(dx / cardWidthRef.current);
+    const maxRow = Math.floor((orderedRef.current.length - 1) / GRID_NUM_COLS);
+    const toRow = Math.max(0, Math.min(maxRow, fromRow + dRow));
+    const toCol = Math.max(0, Math.min(GRID_NUM_COLS - 1, fromCol + dCol));
+    return Math.min(orderedRef.current.length - 1, toRow * GRID_NUM_COLS + toCol);
+  }, []);
+
+  const handleDragGrant = useCallback((idx: number) => {
+    fromIndexRef.current = idx;
+    setActiveDragIndex(idx);
+    setHoverIndex(idx);
     onScrollEnabled(false);
   }, [onScrollEnabled]);
 
-  const handleDragMove = useCallback((dy: number) => {
-    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_ITEM_H)));
-    setHoverIndex(to);
-  }, []);
+  const handleDragMove = useCallback((dx: number, dy: number) => {
+    setHoverIndex(calcHoverIndex(fromIndexRef.current, dx, dy));
+  }, [calcHoverIndex]);
 
-  const handleDragRelease = useCallback((dy: number) => {
+  const handleDragRelease = useCallback((dx: number, dy: number) => {
     onScrollEnabled(true);
-    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_ITEM_H)));
+    const to = calcHoverIndex(fromIndexRef.current, dx, dy);
     if (fromIndexRef.current !== to) {
       const newItems = [...orderedRef.current];
       const [moved] = newItems.splice(fromIndexRef.current, 1);
@@ -406,7 +441,7 @@ function DraggableMenuItemList({
     }
     setActiveDragIndex(null);
     setHoverIndex(null);
-  }, [onScrollEnabled, onReorder]);
+  }, [onScrollEnabled, calcHoverIndex, onReorder]);
 
   const handleDragTerminate = useCallback(() => {
     onScrollEnabled(true);
@@ -415,20 +450,41 @@ function DraggableMenuItemList({
   }, [onScrollEnabled]);
 
   return (
-    <View style={{ paddingTop: 8, paddingBottom: 8 }}>
+    <View
+      style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 12, rowGap: 12, columnGap: 10 }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        cardWidthRef.current = (w - 24 - 10 * (GRID_NUM_COLS - 1)) / GRID_NUM_COLS;
+      }}
+    >
+      {/* Add Item card - same size as regular grid cards */}
+      <TouchableOpacity
+        style={[styles.itemCardWrapper, styles.itemCard, styles.addItemCard]}
+        onPress={onAddItem}
+      >
+        <View style={styles.addItemImageArea}>
+          <Text style={styles.addItemIcon}>+</Text>
+        </View>
+        <View style={styles.itemContent}>
+          <Text style={styles.addItemLabel}>{addItemLabel}</Text>
+        </View>
+      </TouchableOpacity>
       {orderedItems.map((item, idx) => (
-        <DraggableMenuItem
+        <GridDragCard
           key={item.id}
           item={item}
           index={idx}
           isActive={activeDragIndex === idx}
-          activeDragIndex={activeDragIndex}
-          hoverIndex={hoverIndex}
+          isHoverTarget={hoverIndex === idx && activeDragIndex !== idx}
+          apiUrl={apiUrl}
+          formatPrice={formatPrice}
+          onPress={onItemPress}
+          onToggleAvailability={onToggleAvailability}
           onDragGrant={handleDragGrant}
           onDragMove={handleDragMove}
           onDragRelease={handleDragRelease}
           onDragTerminate={handleDragTerminate}
-          apiUrl={apiUrl}
+          onMeasureHeight={(h) => { cardHeightRef.current = h; }}
         />
       ))}
     </View>
@@ -1372,30 +1428,28 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
           )}
         </View>
 
-        {/* Items area: edit mode = draggable item cards; normal = grid */}
+        {/* Items area: edit mode = draggable grid with handles; normal = grid */}
         <View style={styles.itemsGridWrapper}>
           {selectedCategory && showAvailabilityToggles ? (
-            /* Edit mode: draggable full item cards + Add Item button */
+            /* Edit mode: same grid layout but cards have ☰ drag handles */
             <ScrollView
               scrollEnabled={menuScrollEnabled}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
-              <TouchableOpacity
-                style={[styles.itemCard, styles.addItemCard, { marginHorizontal: 12, marginTop: 12, marginBottom: 4 }]}
-                onPress={() => setShowItemModal(true)}
-              >
-                <View style={styles.addItemImageArea}>
-                  <Text style={styles.addItemIcon}>+</Text>
-                </View>
-                <View style={styles.itemContent}>
-                  <Text style={styles.addItemLabel}>{t('menu.add-item-card')}</Text>
-                </View>
-              </TouchableOpacity>
-              <DraggableMenuItemList
+              <DraggableMenuItemGrid
                 items={filteredItems}
                 onReorder={(reorderedItems) => saveMenuItemOrder(selectedCategory, reorderedItems)}
                 onScrollEnabled={setMenuScrollEnabled}
                 apiUrl={API_URL}
+                onAddItem={() => setShowItemModal(true)}
+                onItemPress={(item) => {
+                  setSelectedItem(item);
+                  setShowDetailPanel(true);
+                  if (item.is_meal_combo) { loadAddonsForItem(item.id); } else { setAddons([]); }
+                }}
+                onToggleAvailability={toggleAvailability}
+                formatPrice={formatPrice}
+                addItemLabel={t('menu.add-item-card')}
               />
             </ScrollView>
           ) : (

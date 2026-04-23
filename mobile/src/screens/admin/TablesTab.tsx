@@ -165,42 +165,6 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-interface SectionDragHandleProps {
-  index: number;
-  onGrant: (index: number) => void;
-  onMove: (dy: number) => void;
-  onRelease: (dy: number) => void;
-  onTerminate: () => void;
-}
-
-const SectionDragHandle = React.memo(function SectionDragHandle({ index, onGrant, onMove, onRelease, onTerminate }: SectionDragHandleProps) {
-  const onGrantRef = useRef(onGrant);
-  const onMoveRef = useRef(onMove);
-  const onReleaseRef = useRef(onRelease);
-  const onTerminateRef = useRef(onTerminate);
-  useEffect(() => { onGrantRef.current = onGrant; }, [onGrant]);
-  useEffect(() => { onMoveRef.current = onMove; }, [onMove]);
-  useEffect(() => { onReleaseRef.current = onRelease; }, [onRelease]);
-  useEffect(() => { onTerminateRef.current = onTerminate; }, [onTerminate]);
-  const indexRef = useRef(index);
-  useEffect(() => { indexRef.current = index; }, [index]);
-
-  const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { onGrantRef.current(indexRef.current); },
-    onPanResponderMove: (_, { dy }) => { onMoveRef.current(dy); },
-    onPanResponderRelease: (_, { dy }) => { onReleaseRef.current(dy); },
-    onPanResponderTerminate: () => { onTerminateRef.current(); },
-  })).current;
-
-  return (
-    <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
-      <Ionicons name="menu-outline" size={22} color="#9ca3af" />
-    </View>
-  );
-});
-
 export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
@@ -247,10 +211,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
 
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
-  const [sectionDragActive, setSectionDragActive] = useState<number | null>(null);
-  const [sectionDragHover, setSectionDragHover] = useState<number | null>(null);
-  const sectionFromRef = useRef<number>(0);
-  const sectionAnimY = useRef(new Animated.Value(0)).current;
   const [selectedTableForEditControls, setSelectedTableForEditControls] = useState<number | null>(null);
   const [selectedCategoryForEditControls, setSelectedCategoryForEditControls] = useState<number | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
@@ -859,45 +819,18 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     }
   };
 
-  const DRAG_SECTION_H = 50;
-  const tableSectionsLengthRef = useRef(tableSections.length);
-  useEffect(() => { tableSectionsLengthRef.current = tableSections.length; }, [tableSections.length]);
   const orderedCategoriesRef = useRef(orderedCategories);
   useEffect(() => { orderedCategoriesRef.current = orderedCategories; }, [orderedCategories]);
 
-  const handleSectionDragGrant = useCallback((idx: number) => {
-    sectionFromRef.current = idx;
-    setSectionDragActive(idx);
-    setSectionDragHover(idx);
-  }, []);
+  const moveSectionOrder = (fromIdx: number, toIdx: number) => {
+    const newCats = [...orderedCategoriesRef.current];
+    const [moved] = newCats.splice(fromIdx, 1);
+    newCats.splice(toIdx, 0, moved);
+    setOrderedCategories(newCats);
+    saveTableCategoryOrder(newCats);
+  };
 
-  const handleSectionDragMove = useCallback((dy: number) => {
-    sectionAnimY.setValue(dy);
-    const to = Math.max(0, Math.min(tableSectionsLengthRef.current - 1, sectionFromRef.current + Math.round(dy / DRAG_SECTION_H)));
-    setSectionDragHover(to);
-  }, [sectionAnimY]);
-
-  const handleSectionDragRelease = useCallback((dy: number) => {
-    sectionAnimY.setValue(0);
-    const to = Math.max(0, Math.min(tableSectionsLengthRef.current - 1, sectionFromRef.current + Math.round(dy / DRAG_SECTION_H)));
-    if (sectionFromRef.current !== to) {
-      const newCats = [...orderedCategoriesRef.current];
-      const [moved] = newCats.splice(sectionFromRef.current, 1);
-      newCats.splice(to, 0, moved);
-      setOrderedCategories(newCats);
-      saveTableCategoryOrder(newCats);
-    }
-    setSectionDragActive(null);
-    setSectionDragHover(null);
-  }, [sectionAnimY]);
-
-  const handleSectionDragTerminate = useCallback(() => {
-    sectionAnimY.setValue(0);
-    setSectionDragActive(null);
-    setSectionDragHover(null);
-  }, [sectionAnimY]);
-
- = async () => {
+  const updateTable = async () => {
     if (!editingTableName.trim()) {
       Alert.alert('Error', 'Table name required');
       return;
@@ -3031,36 +2964,28 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             : sectionTables;
           const rows = chunkArray(dataForGrid, tableNumColumns);
 
-          let sectionShift = 0;
-          if (isEditMode && sectionDragActive !== null && sectionDragHover !== null && sectionDragActive !== sectionDragHover) {
-            if (sectionDragActive < sectionDragHover && sectionIdx > sectionDragActive && sectionIdx <= sectionDragHover) sectionShift = -DRAG_SECTION_H;
-            if (sectionDragActive > sectionDragHover && sectionIdx >= sectionDragHover && sectionIdx < sectionDragActive) sectionShift = DRAG_SECTION_H;
-          }
-
           return (
-            <Animated.View
-              key={section.category.id}
-              style={{
-                transform: [{ translateY: sectionDragActive === sectionIdx ? sectionAnimY : sectionShift }],
-                zIndex: sectionDragActive === sectionIdx ? 1000 : 1,
-                ...(sectionDragActive === sectionIdx ? { shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 6 } : {}),
-              }}
-            >
+            <View key={section.category.id}>
             <View style={styles.tableSectionContainer}>
               {/* Section Header */}
               <View style={styles.tableSectionHeader}>
-                {isEditMode && (
-                  <SectionDragHandle
-                    index={sectionIdx}
-                    onGrant={handleSectionDragGrant}
-                    onMove={handleSectionDragMove}
-                    onRelease={handleSectionDragRelease}
-                    onTerminate={handleSectionDragTerminate}
-                  />
-                )}
                 <Text style={styles.tableSectionTitle}>{section.category.key || section.category.name || `Category ${section.category.id}`}</Text>
                 {isEditMode && (
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <TouchableOpacity
+                      onPress={() => sectionIdx > 0 && moveSectionOrder(sectionIdx, sectionIdx - 1)}
+                      disabled={sectionIdx === 0}
+                      style={{ padding: 6, opacity: sectionIdx === 0 ? 0.3 : 1 }}
+                    >
+                      <Ionicons name="chevron-up-outline" size={20} color="#4f46e5" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => sectionIdx < tableSections.length - 1 && moveSectionOrder(sectionIdx, sectionIdx + 1)}
+                      disabled={sectionIdx === tableSections.length - 1}
+                      style={{ padding: 6, opacity: sectionIdx === tableSections.length - 1 ? 0.3 : 1 }}
+                    >
+                      <Ionicons name="chevron-down-outline" size={20} color="#4f46e5" />
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.categoryActionBtn}
                       onPress={() => {
@@ -3209,7 +3134,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 </View>
               ))}
             </View>
-            </Animated.View>
+            </View>
           );
         })}
 
