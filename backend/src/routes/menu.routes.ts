@@ -198,6 +198,57 @@ router.delete("/menu_categories/:id", async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/restaurants/:restaurantId/menu-categories/reorder
+ * Bulk-update sort_order for menu categories
+ */
+router.put("/restaurants/:restaurantId/menu-categories/reorder", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ error: "categories array required" });
+    }
+    await Promise.all(
+      categories.map(({ id, sort_order }) =>
+        pool.query(
+          "UPDATE menu_categories SET sort_order = $1 WHERE id = $2 AND restaurant_id = $3",
+          [sort_order, id, restaurantId]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("REORDER CATEGORIES ERROR:", err);
+    res.status(500).json({ error: "Failed to reorder categories" });
+  }
+});
+
+/**
+ * PUT /api/restaurants/:restaurantId/menu-items/reorder
+ * Bulk-update sort_order for menu items (within a category or globally)
+ */
+router.put("/restaurants/:restaurantId/menu-items/reorder", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { items } = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: "items array required" });
+    }
+    await Promise.all(
+      items.map(({ id, sort_order }) =>
+        pool.query(
+          "UPDATE menu_items SET sort_order = $1 WHERE id = $2",
+          [sort_order, id]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("REORDER ITEMS ERROR:", err);
+    res.status(500).json({ error: "Failed to reorder items" });
+  }
+});
 
 // Get full menu for a restaurant
 // GET /restaurants/:restaurantId/menu
@@ -220,7 +271,8 @@ router.get("/restaurants/:restaurantId/menu", async (req, res) => {
             `SELECT mi.*, mc.name AS category_name
              FROM menu_items mi
              JOIN menu_categories mc ON mi.category_id=mc.id
-             WHERE mi.available=true AND mc.restaurant_id=$1`,
+             WHERE mi.available=true AND mc.restaurant_id=$1
+             ORDER BY mi.sort_order, mi.id`,
             [restaurantId]
         );
 

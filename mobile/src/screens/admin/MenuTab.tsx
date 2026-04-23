@@ -20,6 +20,8 @@ import {
   Alert,
   Dimensions,
   Image,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
@@ -85,6 +87,11 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     // Edit mode - toggles item availability visibility and variant edit toggle visibility
     const [showAvailabilityToggles, setShowAvailabilityToggles] = useState(false);
+
+    // Drag-to-reorder states
+    const [categoryDragEnabled, setCategoryDragEnabled] = useState(false);
+    const [itemDragEnabled, setItemDragEnabled] = useState(false);
+    const [menuScrollEnabled, setMenuScrollEnabled] = useState(true);
 
     // Variant edit mode tracking - which variants are being edited
     const [editingVariantIds, setEditingVariantIds] = useState<Set<number>>(new Set());

@@ -591,5 +591,30 @@ router.delete("/restaurants/:restaurantId/tables/:tableId", async (req, res) => 
   }
 });
 
+/**
+ * PUT /api/restaurants/:restaurantId/table-categories/reorder
+ * Bulk-update sort_order for table categories
+ */
+router.put("/restaurants/:restaurantId/table-categories/reorder", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ error: "categories array required" });
+    }
+    await Promise.all(
+      categories.map(({ id, sort_order }) =>
+        pool.query(
+          "UPDATE table_categories SET sort_order = $1 WHERE id = $2 AND restaurant_id = $3",
+          [sort_order, id, restaurantId]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("REORDER TABLE CATEGORIES ERROR:", err);
+    res.status(500).json({ error: "Failed to reorder categories" });
+  }
+});
 
 export default router;
