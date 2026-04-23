@@ -84,6 +84,13 @@ async function initializeSettingsOnPageLoad() {
         setLanguage(settings.language_preference);
       }
     }
+
+    // Show/hide Service Requests card based on feature flag
+    const srCard = document.getElementById('service-requests-card');
+    if (srCard) {
+      const featureFlags = settings.feature_flags || {};
+      srCard.style.display = featureFlags.service_requests ? '' : 'none';
+    }
   } catch (err) {
     console.error("Failed to initialize settings on page load:", err);
   }
@@ -217,6 +224,9 @@ async function showSettingsPage(pageName) {
         break;
       case 'variant-presets':
         await loadVariantPresets();
+        break;
+      case 'service-requests':
+        await loadServiceRequestItems();
         break;
     }
   }
@@ -2256,5 +2266,138 @@ async function toggleOrderPayFeature() {
       toggleBtn.textContent = 'Retry';
     }
     showError('terminal-error', 'Failed to toggle Order & Pay: ' + err.message);
+  }
+}
+
+// ============= SERVICE REQUEST ITEMS =============
+
+let editingServiceItemId = null;
+
+async function loadServiceRequestItems() {
+  const list = document.getElementById('service-items-list');
+  const noMsg = document.getElementById('no-service-items-msg');
+  if (!list) return;
+  list.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items/all`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load');
+    const items = await res.json();
+    if (items.length === 0) {
+      list.innerHTML = '';
+      if (noMsg) noMsg.style.display = 'block';
+      return;
+    }
+    if (noMsg) noMsg.style.display = 'none';
+    list.innerHTML = items.map(item => `
+      <div style="display:flex;align-items:center;gap:10px;padding:12px;background:#fff;border:1px solid var(--border-color);border-radius:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:14px;">${escapeHtml(item.label_en)}${item.label_zh ? ` / ${escapeHtml(item.label_zh)}` : ''}</div>
+          <div style="font-size:12px;color:#888;font-family:monospace;">${escapeHtml(item.request_type)}</div>
+        </div>
+        <span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${item.is_active ? '#dcfce7' : '#f3f4f6'};color:${item.is_active ? '#16a34a' : '#6b7280'};">${item.is_active ? 'Active' : 'Hidden'}</span>
+        <button onclick="editServiceItem(${item.id}, '${escapeHtml(item.request_type)}', '${escapeHtml(item.label_en)}', '${escapeHtml(item.label_zh || '')}', ${item.sort_order}, ${item.is_active})" class="btn-secondary" style="padding:4px 10px;font-size:12px;">Edit</button>
+        <button onclick="deleteServiceItem(${item.id})" style="background:none;border:none;color:#dc2626;font-size:18px;cursor:pointer;padding:4px 6px;" title="Delete">✕</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    list.innerHTML = `<p style="color:#dc2626;font-size:13px;">Failed to load items.</p>`;
+  }
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function openAddServiceItemForm() {
+  editingServiceItemId = null;
+  document.getElementById('service-item-form-title').textContent = 'Add Service Item';
+  document.getElementById('service-item-submit-btn').textContent = 'Add Item';
+  document.getElementById('service-item-label-en').value = '';
+  document.getElementById('service-item-label-zh').value = '';
+  document.getElementById('service-item-type').value = '';
+  document.getElementById('service-item-sort').value = '0';
+  document.getElementById('service-item-type').readOnly = false;
+  document.getElementById('service-item-form-error').style.display = 'none';
+  document.getElementById('service-item-form-section').style.display = 'block';
+}
+
+function editServiceItem(id, type, labelEn, labelZh, sortOrder, isActive) {
+  editingServiceItemId = id;
+  document.getElementById('service-item-form-title').textContent = 'Edit Service Item';
+  document.getElementById('service-item-submit-btn').textContent = 'Save Changes';
+  document.getElementById('service-item-label-en').value = labelEn;
+  document.getElementById('service-item-label-zh').value = labelZh;
+  document.getElementById('service-item-type').value = type;
+  document.getElementById('service-item-type').readOnly = true;
+  document.getElementById('service-item-sort').value = sortOrder;
+  document.getElementById('service-item-form-error').style.display = 'none';
+  document.getElementById('service-item-form-section').style.display = 'block';
+}
+
+function closeServiceItemForm() {
+  document.getElementById('service-item-form-section').style.display = 'none';
+  editingServiceItemId = null;
+}
+
+async function submitServiceItemForm() {
+  const labelEn = document.getElementById('service-item-label-en').value.trim();
+  const labelZh = document.getElementById('service-item-label-zh').value.trim();
+  const type = document.getElementById('service-item-type').value.trim().replace(/\s+/g, '_').toLowerCase();
+  const sortOrder = parseInt(document.getElementById('service-item-sort').value) || 0;
+  const errEl = document.getElementById('service-item-form-error');
+
+  if (!labelEn || (!editingServiceItemId && !type)) {
+    errEl.textContent = 'English label and internal key are required.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('service-item-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    let res;
+    if (editingServiceItemId) {
+      res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items/${editingServiceItemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ label_en: labelEn, label_zh: labelZh || null, sort_order: sortOrder })
+      });
+    } else {
+      res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ request_type: type, label_en: labelEn, label_zh: labelZh || null, sort_order: sortOrder })
+      });
+    }
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Save failed');
+    }
+    closeServiceItemForm();
+    await loadServiceRequestItems();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = editingServiceItemId ? 'Save Changes' : 'Add Item';
+  }
+}
+
+async function deleteServiceItem(id) {
+  if (!confirm('Delete this service request item?')) return;
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Delete failed');
+    await loadServiceRequestItems();
+  } catch (err) {
+    alert('Failed to delete item: ' + err.message);
   }
 }

@@ -57,7 +57,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
-              show_item_status_to_diners
+              show_item_status_to_diners, feature_flags
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     );
@@ -67,7 +67,9 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
       r.active_payment_vendor === 'payment-asia' &&
       r.active_payment_terminal_id != null &&
       r.payment_asia_order_pay_enabled !== false;
-    res.json({ order_pay_enabled });
+    const flags = r.feature_flags || {};
+    const service_requests_enabled = flags.service_requests === true;
+    res.json({ order_pay_enabled, service_requests_enabled });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

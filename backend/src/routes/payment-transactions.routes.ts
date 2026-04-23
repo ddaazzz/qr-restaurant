@@ -676,8 +676,8 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
 
     const payment = result.rows[0];
 
-    // If our DB says pending, go ask PA directly
-    if (payment.payment_status === 'pending' && payment.chuio_order_reference && payment.merchant_token) {
+    // If our DB says pending or processing, go ask PA directly
+    if (['pending', 'processing'].includes(payment.payment_status) && payment.chuio_order_reference && payment.merchant_token) {
       try {
         console.log('[PaymentStatus] DB pending — querying PA directly for:', payment.chuio_order_reference);
         paymentAsiaService.initialize({

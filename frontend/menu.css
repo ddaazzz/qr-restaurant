@@ -2035,3 +2035,40 @@ body {
 .hide-descriptions .menu-item-desc {
   display: none;
 }
+
+/* ============= SERVICE REQUEST PANEL ============= */
+.service-request-panel {
+  margin-top: 16px;
+  padding: 14px;
+  background: #f8faff;
+  border: 1px solid #e0e7ff;
+  border-radius: 12px;
+}
+.service-request-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4338ca;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.service-request-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.service-request-item-btn {
+  padding: 8px 14px;
+  background: white;
+  border: 1.5px solid #c7d2fe;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3730a3;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.service-request-item-btn:active {
+  background: #e0e7ff;
+  border-color: #6366f1;
+}

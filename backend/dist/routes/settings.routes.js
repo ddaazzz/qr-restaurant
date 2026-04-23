@@ -53,7 +53,7 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
 router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
     try {
         const result = await db_1.default.query(`SELECT active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
-              show_item_status_to_diners
+              show_item_status_to_diners, feature_flags
        FROM restaurants WHERE id = $1`, [req.params.restaurantId]);
         if (result.rowCount === 0)
             return res.status(404).json({ error: "Not found" });
@@ -61,7 +61,9 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
         const order_pay_enabled = r.active_payment_vendor === 'payment-asia' &&
             r.active_payment_terminal_id != null &&
             r.payment_asia_order_pay_enabled !== false;
-        res.json({ order_pay_enabled });
+        const flags = r.feature_flags || {};
+        const service_requests_enabled = flags.service_requests === true;
+        res.json({ order_pay_enabled, service_requests_enabled });
     }
     catch (err) {
         res.status(500).json({ error: err.message });

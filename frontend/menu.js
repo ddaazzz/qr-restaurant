@@ -33,6 +33,8 @@ let paymentPageActive = false; // prevents polling from overwriting the inline p
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
 let paStatusPollTimer = null; // timer for polling PA payment status when order is in processing state
 let paStatusPollOrderId = null; // the order being polled
+let serviceRequestsEnabled = false; // service requests feature flag
+let serviceRequestItems = []; // items configured by the restaurant
 
 async function fetchAndApplyPaymentSettings() {
   try {
@@ -40,9 +42,14 @@ async function fetchAndApplyPaymentSettings() {
     const data = await res.json();
     orderPayEnabled = data.order_pay_enabled === true;
     showItemStatusToDiners = data.show_item_status_to_diners !== false; // default true
+    serviceRequestsEnabled = data.service_requests_enabled === true;
+    if (serviceRequestsEnabled) {
+      await loadServiceRequestItems();
+    }
   } catch (e) {
     orderPayEnabled = false;
     showItemStatusToDiners = true;
+    serviceRequestsEnabled = false;
   }
 }
 
@@ -1283,6 +1290,7 @@ function renderOrdersDrawer(orders, tableName) {
       })()}
       <button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>
     </div>
+    ${renderServiceRequestPanel()}
     </div>
   `;
 
@@ -1612,12 +1620,76 @@ async function checkPAPaymentStatus(orderId) {
       loadOrderStatus(); // refresh — backend should have cleared payment_method
     } else if (data.payment_status === 'completed') {
       loadOrderStatus();
+    } else if (data.payment_status === 'processing') {
+      // Status 4 = PA is waiting for payment input — still in progress, no action needed
+      alert('Payment is awaiting input on the payment page. Please complete or cancel the payment and try again.');
     } else {
-      alert('Payment is still being processed. Please wait a moment and try again.');
+      alert('Payment status is pending. Please wait a moment and try again.');
     }
   } catch (e) {
     alert('Could not check payment status. Please try again.');
   }
+}
+
+// ============= SERVICE REQUESTS =============
+
+async function loadServiceRequestItems() {
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-request-items`);
+    if (!res.ok) return;
+    serviceRequestItems = await res.json();
+  } catch (e) {
+    serviceRequestItems = [];
+  }
+}
+
+async function submitServiceRequest(requestType, label) {
+  if (!sessionId) return;
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        table_session_id: sessionId,
+        table_unit_id: tableUnitId,
+        request_type: requestType,
+        label: label
+      })
+    });
+    if (res.ok) {
+      showServiceRequestFeedback(label);
+    } else {
+      const d = await res.json();
+      alert(d.error || 'Failed to send request');
+    }
+  } catch (e) {
+    alert('Could not send request. Please try again.');
+  }
+}
+
+function showServiceRequestFeedback(label) {
+  const panel = document.getElementById('service-request-panel');
+  if (!panel) return;
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;white-space:nowrap;';
+  toast.textContent = `✓ ${label} requested`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+function renderServiceRequestPanel() {
+  if (!serviceRequestsEnabled || !serviceRequestItems.length) return '';
+  const lang = localStorage.getItem('language') || 'zh';
+  const items = serviceRequestItems.map(item => {
+    const label = (lang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
+    return `<button class="service-request-item-btn" onclick="submitServiceRequest('${item.request_type.replace(/'/g,"\\'")}', '${label.replace(/'/g,"\\'")}')">
+      ${label}
+    </button>`;
+  }).join('');
+  return `<div id="service-request-panel" class="service-request-panel">
+    <div class="service-request-title">${t('menu.request-service') || '服務請求 / Request Service'}</div>
+    <div class="service-request-items">${items}</div>
+  </div>`;
 }
 
 // ============= COUPON FUNCTIONS =============

@@ -7,7 +7,27 @@ const express_1 = require("express");
 const db_1 = __importDefault(require("../config/db"));
 const featureFlags_1 = require("../middleware/featureFlags");
 const websocket_1 = require("../services/websocket");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const router = (0, express_1.Router)();
+// Auth helper for admin operations
+const verifyAdmin = async (req) => {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token)
+        return null;
+    try {
+        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || "devsecret");
+        const result = await db_1.default.query("SELECT id, role, restaurant_id FROM users WHERE id = $1", [decoded.id]);
+        if (!result.rows.length)
+            return null;
+        const user = result.rows[0];
+        if (user.role !== "admin" && user.role !== "superadmin")
+            return null;
+        return user;
+    }
+    catch {
+        return null;
+    }
+};
 /**
  * POST /api/restaurants/:restaurantId/service-requests
  * Customer creates a service request (tea refill, towel, etc.)
@@ -114,6 +134,143 @@ router.patch("/restaurants/:restaurantId/service-requests/:requestId", (0, featu
     catch (err) {
         console.error("Failed to update service request:", err);
         res.status(500).json({ error: "Failed to update service request" });
+    }
+});
+// ============================================================
+// SERVICE REQUEST ITEMS — configurable list per restaurant
+// ============================================================
+/**
+ * GET /api/restaurants/:restaurantId/service-request-items
+ * Public — fetches active items for the customer-facing menu.
+ */
+router.get("/restaurants/:restaurantId/service-request-items", (0, featureFlags_1.requireFeature)("service_requests"), async (req, res) => {
+    const { restaurantId } = req.params;
+    try {
+        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, sort_order
+       FROM service_request_items
+       WHERE restaurant_id = $1 AND is_active = TRUE
+       ORDER BY sort_order ASC, id ASC`, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        res.status(500).json({ error: "Failed to fetch service request items" });
+    }
+});
+/**
+ * GET /api/restaurants/:restaurantId/service-request-items/all
+ * Admin — fetches all items (including inactive) for management UI.
+ */
+router.get("/restaurants/:restaurantId/service-request-items/all", async (req, res) => {
+    const { restaurantId } = req.params;
+    const user = await verifyAdmin(req);
+    if (!user)
+        return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+    try {
+        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, is_active, sort_order
+       FROM service_request_items
+       WHERE restaurant_id = $1
+       ORDER BY sort_order ASC, id ASC`, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        res.status(500).json({ error: "Failed to fetch service request items" });
+    }
+});
+/**
+ * POST /api/restaurants/:restaurantId/service-request-items
+ * Admin — creates a new service request item.
+ */
+router.post("/restaurants/:restaurantId/service-request-items", async (req, res) => {
+    const { restaurantId } = req.params;
+    const user = await verifyAdmin(req);
+    if (!user)
+        return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+    const { request_type, label_en, label_zh, sort_order } = req.body;
+    if (!request_type || !label_en) {
+        return res.status(400).json({ error: "request_type and label_en are required" });
+    }
+    try {
+        const result = await db_1.default.query(`INSERT INTO service_request_items (restaurant_id, request_type, label_en, label_zh, sort_order)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`, [restaurantId, request_type.trim(), label_en.trim(), label_zh?.trim() || null, sort_order ?? 0]);
+        res.status(201).json(result.rows[0]);
+    }
+    catch (err) {
+        res.status(500).json({ error: "Failed to create service request item" });
+    }
+});
+/**
+ * PATCH /api/restaurants/:restaurantId/service-request-items/:itemId
+ * Admin — updates an existing item (label, active state, sort order).
+ */
+router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (req, res) => {
+    const { restaurantId, itemId } = req.params;
+    const user = await verifyAdmin(req);
+    if (!user)
+        return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+    const { label_en, label_zh, is_active, sort_order } = req.body;
+    const setClauses = [];
+    const params = [];
+    if (label_en !== undefined) {
+        params.push(label_en.trim());
+        setClauses.push(`label_en = $${params.length}`);
+    }
+    if (label_zh !== undefined) {
+        params.push(label_zh?.trim() || null);
+        setClauses.push(`label_zh = $${params.length}`);
+    }
+    if (is_active !== undefined) {
+        params.push(is_active);
+        setClauses.push(`is_active = $${params.length}`);
+    }
+    if (sort_order !== undefined) {
+        params.push(sort_order);
+        setClauses.push(`sort_order = $${params.length}`);
+    }
+    if (setClauses.length === 0)
+        return res.status(400).json({ error: "No fields to update" });
+    params.push(itemId, restaurantId);
+    try {
+        const result = await db_1.default.query(`UPDATE service_request_items SET ${setClauses.join(", ")}
+       WHERE id = $${params.length - 1} AND restaurant_id = $${params.length}
+       RETURNING *`, params);
+        if (result.rowCount === 0)
+            return res.status(404).json({ error: "Item not found" });
+        res.json(result.rows[0]);
+    }
+    catch (err) {
+        res.status(500).json({ error: "Failed to update service request item" });
+    }
+});
+/**
+ * DELETE /api/restaurants/:restaurantId/service-request-items/:itemId
+ * Admin — deletes a service request item.
+ */
+router.delete("/restaurants/:restaurantId/service-request-items/:itemId", async (req, res) => {
+    const { restaurantId, itemId } = req.params;
+    const user = await verifyAdmin(req);
+    if (!user)
+        return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+    try {
+        const result = await db_1.default.query("DELETE FROM service_request_items WHERE id = $1 AND restaurant_id = $2 RETURNING id", [itemId, restaurantId]);
+        if (result.rowCount === 0)
+            return res.status(404).json({ error: "Item not found" });
+        res.json({ deleted: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: "Failed to delete service request item" });
     }
 });
 exports.default = router;
