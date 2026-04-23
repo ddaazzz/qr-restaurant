@@ -166,7 +166,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [uploadingBackground, setUploadingBackground] = useState(false);
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'tables-settings';
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -270,6 +270,25 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [restaurantLicenseUri, setRestaurantLicenseUri] = useState<string | null>(null);
   const [submittingApplication, setSubmittingApplication] = useState(false);
   const [existingApplications, setExistingApplications] = useState<any[]>([]);
+
+  // Tables settings state
+  interface TimingRow { maxMinutes?: number; color: string; }
+  const DEFAULT_TIMING: TimingRow[] = [
+    { maxMinutes: 30, color: '#2C3E50' },
+    { maxMinutes: 60, color: '#9c27b0' },
+    { maxMinutes: 120, color: '#ff9800' },
+    { color: '#f44336' },
+  ];
+  const COLOR_PALETTE = ['#2C3E50', '#1565C0', '#0097A7', '#2e7d32', '#558B2F', '#6366f1', '#9c27b0', '#ec4899', '#ef4444', '#ff5722', '#ff9800', '#ffeb3b'];
+  const [tableTimingColors, setTableTimingColors] = useState<TimingRow[]>(DEFAULT_TIMING);
+  const [timingColorsSaving, setTimingColorsSaving] = useState(false);
+  const [srFeatureEnabled, setSrFeatureEnabled] = useState(false);
+  const [srItems, setSrItems] = useState<any[]>([]);
+  const [srItemsLoading, setSrItemsLoading] = useState(false);
+  const [showSRItemModal, setShowSRItemModal] = useState(false);
+  const [editingSRItemId, setEditingSRItemId] = useState<number | null>(null);
+  const [srItemForm, setSrItemForm] = useState({ label_en: '', label_zh: '', request_type: '', color: '#6366f1', sort_order: '0', is_active: true });
+  const [showColorPicker, setShowColorPicker] = useState<{ target: 'timing' | 'srItem'; index: number } | null>(null);
 
   const fetchSettings = async () => {
     try {
@@ -478,6 +497,82 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to remove item');
     }
+  };
+
+  // Tables Settings functions
+  const loadTablesSettings = async () => {
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
+      const cfg = res.data?.ui_config?.table_timing_colors;
+      if (Array.isArray(cfg) && cfg.length === 4) setTableTimingColors(cfg);
+      const featureEnabled = res.data?.feature_flags?.service_requests === true;
+      setSrFeatureEnabled(featureEnabled);
+      if (featureEnabled) {
+        setSrItemsLoading(true);
+        try {
+          const srRes = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`, {
+            headers: { Authorization: `Bearer ${(apiClient.defaults.headers as any)?.Authorization?.replace('Bearer ', '') || ''}` },
+          });
+          setSrItems(Array.isArray(srRes.data) ? srRes.data : []);
+        } catch { setSrItems([]); } finally { setSrItemsLoading(false); }
+      }
+    } catch (err) { /* silent */ }
+  };
+
+  const saveTimingColors = async () => {
+    setTimingColorsSaving(true);
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, {
+        ui_config: { table_timing_colors: tableTimingColors },
+      });
+      Alert.alert(t('common.success'), t('settings.timing-colors-saved'));
+    } catch { Alert.alert(t('common.error'), t('settings.timing-colors-save-failed')); }
+    finally { setTimingColorsSaving(false); }
+  };
+
+  const openAddSRItem = () => {
+    setEditingSRItemId(null);
+    setSrItemForm({ label_en: '', label_zh: '', request_type: '', color: '#6366f1', sort_order: String(srItems.length), is_active: true });
+    setShowSRItemModal(true);
+  };
+
+  const openEditSRItem = (item: any) => {
+    setEditingSRItemId(item.id);
+    setSrItemForm({ label_en: item.label_en || '', label_zh: item.label_zh || '', request_type: item.request_type || '', color: item.color || '#6366f1', sort_order: String(item.sort_order ?? 0), is_active: item.is_active !== false });
+    setShowSRItemModal(true);
+  };
+
+  const saveSRItem = async () => {
+    if (!srItemForm.label_en.trim()) { Alert.alert(t('common.error'), t('settings.sr-label-required')); return; }
+    if (!editingSRItemId && !srItemForm.request_type.trim()) { Alert.alert(t('common.error'), t('settings.sr-key-required')); return; }
+    try {
+      if (editingSRItemId) {
+        await apiClient.patch(`/api/restaurants/${restaurantId}/service-request-items/${editingSRItemId}`, {
+          label_en: srItemForm.label_en.trim(), label_zh: srItemForm.label_zh.trim() || null,
+          color: srItemForm.color, sort_order: parseInt(srItemForm.sort_order) || 0, is_active: srItemForm.is_active,
+        });
+      } else {
+        await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
+          request_type: srItemForm.request_type.trim().toLowerCase().replace(/\s+/g, '_'),
+          label_en: srItemForm.label_en.trim(), label_zh: srItemForm.label_zh.trim() || null,
+          color: srItemForm.color, sort_order: parseInt(srItemForm.sort_order) || 0,
+        });
+      }
+      setShowSRItemModal(false);
+      await loadTablesSettings();
+    } catch (err: any) { Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to save item'); }
+  };
+
+  const deleteSRItem = (id: number) => {
+    Alert.alert(t('common.delete'), t('settings.sr-delete-confirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: async () => {
+        try {
+          await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${id}`);
+          await loadTablesSettings();
+        } catch { Alert.alert(t('common.error'), 'Failed to delete item'); }
+      }},
+    ]);
   };
 
   useEffect(() => {
@@ -1584,6 +1679,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'profile', iconName: 'person-circle-outline', label: t('settings.my-profile'), description: currentUser?.role || t('settings.view-profile') },
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
+    { page: 'tables-settings', iconName: 'grid-outline', label: t('settings.tables-settings'), description: t('settings.tables-settings-desc') },
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
@@ -2593,6 +2689,166 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     );
   };
 
+  // Tables Settings page
+  const renderTablesSettingsPage = () => (
+    <View style={styles.container}>
+      {renderSubPageHeader(t('settings.tables-settings'))}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+
+        {/* --- Dining Time Colors --- */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings.timing-colors-title')}</Text>
+          <Text style={styles.sectionDescription}>{t('settings.timing-colors-desc')}</Text>
+          {tableTimingColors.map((row, idx) => (
+            <View key={idx} style={{ marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: row.color, marginRight: 8, borderWidth: 1, borderColor: '#ddd' }} />
+                <Text style={[styles.label, { marginBottom: 0, flex: 1 }]}>
+                  {idx < 3
+                    ? `${idx === 0 ? '0' : String(tableTimingColors[idx - 1].maxMinutes || 0)} – ${row.maxMinutes ?? '?'} ${t('settings.minutes')}`
+                    : `${tableTimingColors[2].maxMinutes ?? '?'}+ ${t('settings.minutes')}`}
+                </Text>
+              </View>
+              {/* Threshold input (not for last row) */}
+              {idx < 3 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <Text style={styles.label}>{t('settings.threshold-mins')}</Text>
+                  <TextInput
+                    style={[styles.input, { width: 80 }]}
+                    keyboardType="numeric"
+                    value={String(row.maxMinutes ?? '')}
+                    onChangeText={(v) => {
+                      const updated = [...tableTimingColors];
+                      updated[idx] = { ...updated[idx], maxMinutes: parseInt(v) || 0 };
+                      setTableTimingColors(updated);
+                    }}
+                  />
+                </View>
+              )}
+              {/* Color swatches */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {COLOR_PALETTE.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => { const u = [...tableTimingColors]; u[idx] = { ...u[idx], color: c }; setTableTimingColors(u); }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: row.color === c ? 3 : 1, borderColor: row.color === c ? '#1f2937' : '#ccc' }}
+                  />
+                ))}
+              </View>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={[styles.btn, styles.btnPrimary, { marginTop: 8 }, timingColorsSaving && { opacity: 0.6 }]}
+            onPress={saveTimingColors}
+            disabled={timingColorsSaving}
+          >
+            <Text style={styles.btnText}>{timingColorsSaving ? t('common.saving') : t('settings.save-timing-colors')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* --- Service Request Items (only if feature enabled) --- */}
+        {srFeatureEnabled ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('settings.sr-items-title')}</Text>
+              <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={openAddSRItem}>
+                <Text style={styles.btnSmallText}>+ {t('common.add')}</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.sectionDescription}>{t('settings.sr-items-desc')}</Text>
+            {srItemsLoading ? (
+              <ActivityIndicator color="#6366f1" />
+            ) : srItems.length === 0 ? (
+              <Text style={styles.emptyText}>{t('settings.sr-items-empty')}</Text>
+            ) : (
+              srItems.map((item) => (
+                <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                  <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: item.color || '#6366f1', marginRight: 10, borderWidth: 1, borderColor: '#ddd' }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{item.label_en}</Text>
+                    {item.label_zh ? <Text style={{ fontSize: 12, color: '#6b7280' }}>{item.label_zh}</Text> : null}
+                    <Text style={{ fontSize: 11, color: '#9ca3af' }}>{item.request_type}{!item.is_active ? ` · ${t('settings.inactive')}` : ''}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => openEditSRItem(item)} style={{ padding: 6, marginRight: 4 }}>
+                    <Ionicons name="pencil-outline" size={18} color="#4f46e5" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => deleteSRItem(item.id)} style={{ padding: 6 }}>
+                    <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        ) : (
+          <View style={[styles.section, { opacity: 0.55 }]}>
+            <Text style={styles.sectionTitle}>{t('settings.sr-items-title')}</Text>
+            <Text style={styles.sectionDescription}>{t('settings.sr-feature-disabled')}</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* SR Item Modal */}
+      <Modal supportedOrientations={['portrait','landscape','landscape-left','landscape-right']} visible={showSRItemModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+            <Text style={styles.modalTitle}>{editingSRItemId ? t('settings.sr-edit-item') : t('settings.sr-add-item')}</Text>
+            <ScrollView>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.sr-label-en')} *</Text>
+                <TextInput style={styles.input} value={srItemForm.label_en} onChangeText={(v) => setSrItemForm(f => ({ ...f, label_en: v }))} placeholder="e.g. Tea Refill" />
+              </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.sr-label-zh')}</Text>
+                <TextInput style={styles.input} value={srItemForm.label_zh} onChangeText={(v) => setSrItemForm(f => ({ ...f, label_zh: v }))} placeholder="e.g. 補茶" />
+              </View>
+              {!editingSRItemId && (
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>{t('settings.sr-key')} *</Text>
+                  <TextInput style={styles.input} value={srItemForm.request_type} onChangeText={(v) => setSrItemForm(f => ({ ...f, request_type: v }))} placeholder="e.g. tea_refill" autoCapitalize="none" />
+                  <Text style={styles.helperText}>{t('settings.sr-key-hint')}</Text>
+                </View>
+              )}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.sr-sort-order')}</Text>
+                <TextInput style={styles.input} value={srItemForm.sort_order} onChangeText={(v) => setSrItemForm(f => ({ ...f, sort_order: v }))} keyboardType="numeric" placeholder="0" />
+              </View>
+              {editingSRItemId && (
+                <View style={[styles.toggleGroup, { marginBottom: 12 }]}>
+                  <Text style={styles.label}>{t('settings.sr-active')}</Text>
+                  <Switch value={srItemForm.is_active} onValueChange={(v) => setSrItemForm(f => ({ ...f, is_active: v }))} trackColor={{ true: '#6366f1' }} />
+                </View>
+              )}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>{t('settings.sr-card-color')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: srItemForm.color, marginRight: 10, borderWidth: 1, borderColor: '#ccc' }} />
+                  <Text style={{ fontSize: 13, color: '#374151' }}>{srItemForm.color}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {COLOR_PALETTE.map((c) => (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => setSrItemForm(f => ({ ...f, color: c }))}
+                      style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c, borderWidth: srItemForm.color === c ? 3 : 1, borderColor: srItemForm.color === c ? '#1f2937' : '#ccc' }}
+                    />
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+            <View style={styles.formActions}>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowSRItemModal(false)}>
+                <Text style={{ color: '#374151', fontWeight: '600', fontSize: 13 }}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={saveSRItem}>
+                <Text style={styles.btnText}>{t('common.save')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+
   // Card grid main page
   const renderMainPage = () => (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -2638,6 +2894,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     switch (settingsPage) {
       case 'language': return renderLanguagePage();
       case 'restaurant-info': return renderRestaurantInfoPage();
+      case 'tables-settings':
+        if (srItems.length === 0 && !srItemsLoading) loadTablesSettings();
+        return renderTablesSettingsPage();
       case 'printer': return renderPrinterPage();
       case 'payment-terminals': return renderPaymentTerminalsPage();
       case 'qr-settings': return renderQRSettingsPage();

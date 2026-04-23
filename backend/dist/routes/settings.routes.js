@@ -100,7 +100,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners } = req.body;
+        const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config } = req.body;
         // Build dynamic UPDATE query
         const updates = [];
         const values = [];
@@ -159,6 +159,11 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
         if (show_item_status_to_diners !== undefined) {
             updates.push(`show_item_status_to_diners = $${paramCount++}`);
             values.push(show_item_status_to_diners);
+        }
+        if (ui_config !== undefined) {
+            // Merge with existing ui_config to avoid overwriting unrelated keys
+            updates.push(`ui_config = COALESCE(ui_config, '{}'::jsonb) || $${paramCount++}::jsonb`);
+            values.push(JSON.stringify(ui_config));
         }
         if (updates.length === 0) {
             return res.status(400).json({ error: "No fields to update" });

@@ -256,7 +256,15 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
         o.id            AS order_id,
         o.restaurant_order_number,
 
-        b.guest_name    AS booking_guest_name
+        b.guest_name    AS booking_guest_name,
+
+        (SELECT sr.request_type FROM service_requests sr
+         WHERE sr.table_session_id = ts.id AND sr.status = 'pending'
+         ORDER BY sr.created_at ASC LIMIT 1) AS pending_request_type,
+        (SELECT sri.color FROM service_requests sr
+         JOIN service_request_items sri ON sri.request_type = sr.request_type AND sri.restaurant_id = t.restaurant_id
+         WHERE sr.table_session_id = ts.id AND sr.status = 'pending'
+         ORDER BY sr.created_at ASC LIMIT 1) AS pending_request_color
 
       FROM tables t
       JOIN table_units tu

@@ -146,7 +146,7 @@ router.patch("/restaurants/:restaurantId/service-requests/:requestId", (0, featu
 router.get("/restaurants/:restaurantId/service-request-items", (0, featureFlags_1.requireFeature)("service_requests"), async (req, res) => {
     const { restaurantId } = req.params;
     try {
-        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, sort_order
+        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, sort_order, color
        FROM service_request_items
        WHERE restaurant_id = $1 AND is_active = TRUE
        ORDER BY sort_order ASC, id ASC`, [restaurantId]);
@@ -169,7 +169,7 @@ router.get("/restaurants/:restaurantId/service-request-items/all", async (req, r
         return res.status(403).json({ error: "Forbidden" });
     }
     try {
-        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, is_active, sort_order
+        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, is_active, sort_order, color
        FROM service_request_items
        WHERE restaurant_id = $1
        ORDER BY sort_order ASC, id ASC`, [restaurantId]);
@@ -191,14 +191,14 @@ router.post("/restaurants/:restaurantId/service-request-items", async (req, res)
     if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
         return res.status(403).json({ error: "Forbidden" });
     }
-    const { request_type, label_en, label_zh, sort_order } = req.body;
+    const { request_type, label_en, label_zh, sort_order, color } = req.body;
     if (!request_type || !label_en) {
         return res.status(400).json({ error: "request_type and label_en are required" });
     }
     try {
-        const result = await db_1.default.query(`INSERT INTO service_request_items (restaurant_id, request_type, label_en, label_zh, sort_order)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`, [restaurantId, request_type.trim(), label_en.trim(), label_zh?.trim() || null, sort_order ?? 0]);
+        const result = await db_1.default.query(`INSERT INTO service_request_items (restaurant_id, request_type, label_en, label_zh, sort_order, color)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`, [restaurantId, request_type.trim(), label_en.trim(), label_zh?.trim() || null, sort_order ?? 0, color || '#4f46e5']);
         res.status(201).json(result.rows[0]);
     }
     catch (err) {
@@ -217,7 +217,7 @@ router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (
     if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
         return res.status(403).json({ error: "Forbidden" });
     }
-    const { label_en, label_zh, is_active, sort_order } = req.body;
+    const { label_en, label_zh, is_active, sort_order, color } = req.body;
     const setClauses = [];
     const params = [];
     if (label_en !== undefined) {
@@ -235,6 +235,10 @@ router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (
     if (sort_order !== undefined) {
         params.push(sort_order);
         setClauses.push(`sort_order = $${params.length}`);
+    }
+    if (color !== undefined) {
+        params.push(color);
+        setClauses.push(`color = $${params.length}`);
     }
     if (setClauses.length === 0)
         return res.status(400).json({ error: "No fields to update" });

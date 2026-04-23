@@ -47,6 +47,8 @@ interface Session {
   order_id?: number;
   restaurant_order_number?: number;
   restaurant_session_number?: number;
+  pending_request_type?: string;
+  pending_request_color?: string;
 }
 
 interface Booking {
@@ -245,6 +247,15 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
   // Service charge
   const [serviceCharge, setServiceCharge] = useState(0);
 
+  // Table timing colors (from ui_config)
+  const DEFAULT_TIMING_COLORS = [
+    { maxMinutes: 30, color: '#2C3E50' },
+    { maxMinutes: 60, color: '#9c27b0' },
+    { maxMinutes: 120, color: '#ff9800' },
+    { color: '#f44336' },
+  ];
+  const [tableTimingColors, setTableTimingColors] = useState<Array<{ maxMinutes?: number; color: string }>>(DEFAULT_TIMING_COLORS);
+
   // KPay terminal payment state
   const [kpayTerminal, setKpayTerminal] = useState<any>(null);
   const [kpayProcessing, setKpayProcessing] = useState(false);
@@ -344,6 +355,8 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             restaurant_session_number: row.restaurant_session_number,
             restaurant_order_number: row.restaurant_order_number,
             order_id: row.order_id,
+            pending_request_type: row.pending_request_type,
+            pending_request_color: row.pending_request_color,
           });
         }
       });
@@ -404,8 +417,12 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
         if (settingsRes.data?.qr_mode) {
           setQrMode(settingsRes.data.qr_mode);
         }
+        // Load table timing colors
+        if (settingsRes.data?.ui_config?.table_timing_colors && Array.isArray(settingsRes.data.ui_config.table_timing_colors)) {
+          setTableTimingColors(settingsRes.data.ui_config.table_timing_colors);
+        }
       } catch (e) {
-        console.warn('Could not load service charge settings');
+        console.warn('Could not load service charge or table settings');
       }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
@@ -587,20 +604,26 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     if (table.sessions.length === 0 && !table.reserved) return '#dddddd';
     if (table.sessions.length > 1) return '#2C3E50';
     if (table.sessions.length === 1) {
-      const session = table.sessions[0];
-      if ((session as any).payment_received === true) return '#4caf50';
+      const session = table.sessions[0] as any;
+      if (session.payment_received === true) return '#4caf50';
+      // Pending service request color (if available)
+      if (session.pending_request_color) return session.pending_request_color;
+      // Legacy call staff (red)
       if (session.call_staff_requested) return '#ef4444';
       if (session.bill_closure_requested) return '#ffeb3b';
 
+      // Use configured timing colors
       try {
         const start = new Date(session.started_at);
         const now = new Date();
         const diffMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
 
-        if (diffMinutes < 30) return '#2C3E50';
-        if (diffMinutes < 60) return '#9c27b0';
-        if (diffMinutes < 120) return '#ff9800';
-        return '#f44336';
+        for (let i = 0; i < tableTimingColors.length; i++) {
+          const row = tableTimingColors[i];
+          if (row.maxMinutes === undefined) return row.color; // Last row (overflow)
+          if (diffMinutes < row.maxMinutes) return row.color;
+        }
+        return tableTimingColors[tableTimingColors.length - 1]?.color || '#f44336';
       } catch {
         return '#2C3E50';
       }
