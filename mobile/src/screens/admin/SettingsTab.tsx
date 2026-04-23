@@ -685,9 +685,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       if (featureEnabled) {
         setSrItemsLoading(true);
         try {
-          const srRes = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`, {
-            headers: { Authorization: `Bearer ${(apiClient.defaults.headers as any)?.Authorization?.replace('Bearer ', '') || ''}` },
-          });
+          const srRes = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`);
           setSrItems(Array.isArray(srRes.data) ? srRes.data : []);
         } catch { setSrItems([]); } finally { setSrItemsLoading(false); }
       }
