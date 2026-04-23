@@ -165,190 +165,46 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-const DRAG_CATEGORY_H = 50;
-
-interface DraggableTableCategoryProps {
-  category: TableCategory;
+interface SectionDragHandleProps {
   index: number;
-  isActive: boolean;
-  activeDragIndex: number | null;
-  hoverIndex: number | null;
-  onDragGrant: (index: number, animY: Animated.Value) => void;
-  onDragMove: (dy: number) => void;
-  onDragRelease: (dy: number) => void;
-  onDragTerminate: () => void;
-  onEdit: (categoryId: number) => void;
-  onDelete: (categoryId: number) => void;
-  isSelected: boolean;
-  onSelect: (categoryId: number) => void;
-  t: (key: string) => string;
+  onGrant: (index: number) => void;
+  onMove: (dy: number) => void;
+  onRelease: (dy: number) => void;
+  onTerminate: () => void;
 }
 
-const DraggableTableCategory = React.memo(function DraggableTableCategory({
-  category, index, isActive, activeDragIndex, hoverIndex,
-  onDragGrant, onDragMove, onDragRelease, onDragTerminate,
-  onEdit, onDelete, isSelected, onSelect, t,
-}: DraggableTableCategoryProps) {
-  const animY = useRef(new Animated.Value(0)).current;
-  const onDragGrantRef = useRef(onDragGrant);
-  const onDragMoveRef = useRef(onDragMove);
-  const onDragReleaseRef = useRef(onDragRelease);
-  const onDragTerminateRef = useRef(onDragTerminate);
-  useEffect(() => { onDragGrantRef.current = onDragGrant; }, [onDragGrant]);
-  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
-  useEffect(() => { onDragReleaseRef.current = onDragRelease; }, [onDragRelease]);
-  useEffect(() => { onDragTerminateRef.current = onDragTerminate; }, [onDragTerminate]);
+const SectionDragHandle = React.memo(function SectionDragHandle({ index, onGrant, onMove, onRelease, onTerminate }: SectionDragHandleProps) {
+  const onGrantRef = useRef(onGrant);
+  const onMoveRef = useRef(onMove);
+  const onReleaseRef = useRef(onRelease);
+  const onTerminateRef = useRef(onTerminate);
+  useEffect(() => { onGrantRef.current = onGrant; }, [onGrant]);
+  useEffect(() => { onMoveRef.current = onMove; }, [onMove]);
+  useEffect(() => { onReleaseRef.current = onRelease; }, [onRelease]);
+  useEffect(() => { onTerminateRef.current = onTerminate; }, [onTerminate]);
   const indexRef = useRef(index);
   useEffect(() => { indexRef.current = index; }, [index]);
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      onDragGrantRef.current(indexRef.current, animY);
-    },
-    onPanResponderMove: (_, { dy }) => {
-      animY.setValue(dy);
-      onDragMoveRef.current(dy);
-    },
-    onPanResponderRelease: (_, { dy }) => {
-      animY.setValue(0);
-      onDragReleaseRef.current(dy);
-    },
-    onPanResponderTerminate: () => {
-      animY.setValue(0);
-      onDragTerminateRef.current();
-    },
+    onPanResponderGrant: () => { onGrantRef.current(indexRef.current); },
+    onPanResponderMove: (_, { dy }) => { onMoveRef.current(dy); },
+    onPanResponderRelease: (_, { dy }) => { onReleaseRef.current(dy); },
+    onPanResponderTerminate: () => { onTerminateRef.current(); },
   })).current;
 
-  let shift = 0;
-  if (!isActive && activeDragIndex !== null && hoverIndex !== null && activeDragIndex !== hoverIndex) {
-    if (activeDragIndex < hoverIndex && index > activeDragIndex && index <= hoverIndex) shift = -DRAG_CATEGORY_H;
-    if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_CATEGORY_H;
-  }
-
   return (
-    <Animated.View
-      style={{
-        transform: [{ translateY: isActive ? animY : shift }],
-        zIndex: isActive ? 1000 : 1,
-        backgroundColor: isActive ? '#f0f0ff' : 'transparent',
-        shadowColor: isActive ? '#000' : 'transparent',
-        shadowOpacity: isActive ? 0.15 : 0,
-        shadowRadius: isActive ? 6 : 0,
-        elevation: isActive ? 6 : 0,
-      }}
-    >
-      <TouchableOpacity
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 12,
-          paddingHorizontal: 12,
-          backgroundColor: isSelected ? '#e8eaf6' : 'transparent',
-          borderBottomWidth: 1,
-          borderBottomColor: '#f0f0f0',
-        }}
-        onPress={() => onSelect(category.id)}
-      >
-        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8 }}>
-          <Ionicons name="menu-outline" size={20} color="#9ca3af" />
-        </View>
-        <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: '#1f2937', marginLeft: 8 }}>{category.key}</Text>
-        <TouchableOpacity onPress={() => onEdit(category.id)} style={{ padding: 6, marginRight: 4 }}>
-          <Ionicons name="pencil-outline" size={16} color="#4f46e5" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onDelete(category.id)} style={{ padding: 6 }}>
-          <Ionicons name="trash-outline" size={16} color="#ef4444" />
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-});
-
-interface DraggableTableCategoryListProps {
-  categories: TableCategory[];
-  selectedCategory: number | null;
-  onSelectCategory: (categoryId: number) => void;
-  onReorder: (newCategories: TableCategory[]) => void;
-  onEdit: (categoryId: number) => void;
-  onDelete: (categoryId: number) => void;
-  onScrollEnabled: (v: boolean) => void;
-  t: (key: string) => string;
-}
-
-function DraggableTableCategoryList({
-  categories, selectedCategory, onSelectCategory, onReorder, onEdit, onDelete, onScrollEnabled, t,
-}: DraggableTableCategoryListProps) {
-  const [orderedCats, setOrderedCats] = useState<TableCategory[]>(categories);
-  useEffect(() => { setOrderedCats(categories); }, [categories]);
-  const orderedRef = useRef(orderedCats);
-  useEffect(() => { orderedRef.current = orderedCats; }, [orderedCats]);
-
-  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const fromIndexRef = useRef<number>(0);
-
-  const handleDragGrant = useCallback((index: number, _animY: Animated.Value) => {
-    fromIndexRef.current = index;
-    setActiveDragIndex(index);
-    setHoverIndex(index);
-    onScrollEnabled(false);
-  }, [onScrollEnabled]);
-
-  const handleDragMove = useCallback((dy: number) => {
-    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_CATEGORY_H)));
-    setHoverIndex(to);
-  }, []);
-
-  const handleDragRelease = useCallback((dy: number) => {
-    onScrollEnabled(true);
-    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_CATEGORY_H)));
-    if (fromIndexRef.current !== to) {
-      const newCats = [...orderedRef.current];
-      const [moved] = newCats.splice(fromIndexRef.current, 1);
-      newCats.splice(to, 0, moved);
-      setOrderedCats(newCats);
-      onReorder(newCats);
-    }
-    setActiveDragIndex(null);
-    setHoverIndex(null);
-  }, [onScrollEnabled, onReorder]);
-
-  const handleDragTerminate = useCallback(() => {
-    onScrollEnabled(true);
-    setActiveDragIndex(null);
-    setHoverIndex(null);
-  }, [onScrollEnabled]);
-
-  return (
-    <View style={{ minHeight: orderedCats.length * DRAG_CATEGORY_H }}>
-      {orderedCats.map((cat, idx) => (
-        <DraggableTableCategory
-          key={cat.id}
-          category={cat}
-          index={idx}
-          isActive={activeDragIndex === idx}
-          activeDragIndex={activeDragIndex}
-          hoverIndex={hoverIndex}
-          onDragGrant={handleDragGrant}
-          onDragMove={handleDragMove}
-          onDragRelease={handleDragRelease}
-          onDragTerminate={handleDragTerminate}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          isSelected={selectedCategory === cat.id}
-          onSelect={onSelectCategory}
-          t={t}
-        />
-      ))}
+    <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+      <Ionicons name="menu-outline" size={22} color="#9ca3af" />
     </View>
   );
-}
+});
 
 export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
+  const [orderedCategories, setOrderedCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -391,7 +247,10 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
 
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
-  const [categoryScrollEnabled, setCategoryScrollEnabled] = useState(true);
+  const [sectionDragActive, setSectionDragActive] = useState<number | null>(null);
+  const [sectionDragHover, setSectionDragHover] = useState<number | null>(null);
+  const sectionFromRef = useRef<number>(0);
+  const sectionAnimY = useRef(new Animated.Value(0)).current;
   const [selectedTableForEditControls, setSelectedTableForEditControls] = useState<number | null>(null);
   const [selectedCategoryForEditControls, setSelectedCategoryForEditControls] = useState<number | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
@@ -497,6 +356,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
         `/api/restaurants/${restaurantId}/table-categories`
       );
       setCategories(categoriesRes.data);
+      setOrderedCategories(categoriesRes.data);
       onCategoriesLoaded?.(categoriesRes.data);
 
       // Load table state
@@ -729,7 +589,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     : [];
 
   // Build sections: all categories with their tables, filtered by room and search
-  const tableSections = categories
+  const tableSections = orderedCategories
     .filter(cat => !selectedRoomId || cat.id === selectedRoomId)
     .map(cat => ({
       category: cat,
@@ -999,7 +859,45 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     }
   };
 
-  const updateTable = async () => {
+  const DRAG_SECTION_H = 50;
+  const tableSectionsLengthRef = useRef(tableSections.length);
+  useEffect(() => { tableSectionsLengthRef.current = tableSections.length; }, [tableSections.length]);
+  const orderedCategoriesRef = useRef(orderedCategories);
+  useEffect(() => { orderedCategoriesRef.current = orderedCategories; }, [orderedCategories]);
+
+  const handleSectionDragGrant = useCallback((idx: number) => {
+    sectionFromRef.current = idx;
+    setSectionDragActive(idx);
+    setSectionDragHover(idx);
+  }, []);
+
+  const handleSectionDragMove = useCallback((dy: number) => {
+    sectionAnimY.setValue(dy);
+    const to = Math.max(0, Math.min(tableSectionsLengthRef.current - 1, sectionFromRef.current + Math.round(dy / DRAG_SECTION_H)));
+    setSectionDragHover(to);
+  }, [sectionAnimY]);
+
+  const handleSectionDragRelease = useCallback((dy: number) => {
+    sectionAnimY.setValue(0);
+    const to = Math.max(0, Math.min(tableSectionsLengthRef.current - 1, sectionFromRef.current + Math.round(dy / DRAG_SECTION_H)));
+    if (sectionFromRef.current !== to) {
+      const newCats = [...orderedCategoriesRef.current];
+      const [moved] = newCats.splice(sectionFromRef.current, 1);
+      newCats.splice(to, 0, moved);
+      setOrderedCategories(newCats);
+      saveTableCategoryOrder(newCats);
+    }
+    setSectionDragActive(null);
+    setSectionDragHover(null);
+  }, [sectionAnimY]);
+
+  const handleSectionDragTerminate = useCallback(() => {
+    sectionAnimY.setValue(0);
+    setSectionDragActive(null);
+    setSectionDragHover(null);
+  }, [sectionAnimY]);
+
+ = async () => {
     if (!editingTableName.trim()) {
       Alert.alert('Error', 'Table name required');
       return;
@@ -3117,41 +3015,15 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
       >
       {/* Edit mode: Add Category button */}
         {isEditMode && (
-          <>
             <TouchableOpacity
               style={[styles.categoryBtn, styles.categoryBtnAdd, { alignSelf: 'flex-start', marginHorizontal: 12, marginTop: 8 }]}
               onPress={() => setShowCategoryModal(true)}
             >
               <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>+ Add Category</Text>
             </TouchableOpacity>
-            
-            {/* Draggable Category List (for reordering) */}
-            <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginHorizontal: 12, marginBottom: 8 }}>Drag to reorder</Text>
-              <ScrollView scrollEnabled={categoryScrollEnabled} style={{ maxHeight: 300 }}>
-                <DraggableTableCategoryList
-                  categories={categories}
-                  selectedCategory={selectedCategory}
-                  onSelectCategory={setSelectedCategory}
-                  onReorder={saveTableCategoryOrder}
-                  onEdit={(id) => {
-                    const cat = categories.find(c => c.id === id);
-                    if (cat) {
-                      setEditingCategoryId(id);
-                      setEditingCategoryName(cat.name || cat.key || '');
-                      setShowEditCategoryModal(true);
-                    }
-                  }}
-                  onDelete={deleteCategory}
-                  onScrollEnabled={setCategoryScrollEnabled}
-                  t={t}
-                />
-              </ScrollView>
-            </View>
-          </>
         )}
 
-        {tableSections.map((section) => {
+        {tableSections.map((section, sectionIdx) => {
           const sectionTables = section.tables;
           if (sectionTables.length === 0 && !isEditMode) return null;
           const dataForGrid = isEditMode
@@ -3159,10 +3031,33 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             : sectionTables;
           const rows = chunkArray(dataForGrid, tableNumColumns);
 
+          let sectionShift = 0;
+          if (isEditMode && sectionDragActive !== null && sectionDragHover !== null && sectionDragActive !== sectionDragHover) {
+            if (sectionDragActive < sectionDragHover && sectionIdx > sectionDragActive && sectionIdx <= sectionDragHover) sectionShift = -DRAG_SECTION_H;
+            if (sectionDragActive > sectionDragHover && sectionIdx >= sectionDragHover && sectionIdx < sectionDragActive) sectionShift = DRAG_SECTION_H;
+          }
+
           return (
-            <View key={section.category.id} style={styles.tableSectionContainer}>
+            <Animated.View
+              key={section.category.id}
+              style={{
+                transform: [{ translateY: sectionDragActive === sectionIdx ? sectionAnimY : sectionShift }],
+                zIndex: sectionDragActive === sectionIdx ? 1000 : 1,
+                ...(sectionDragActive === sectionIdx ? { shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 6 } : {}),
+              }}
+            >
+            <View style={styles.tableSectionContainer}>
               {/* Section Header */}
               <View style={styles.tableSectionHeader}>
+                {isEditMode && (
+                  <SectionDragHandle
+                    index={sectionIdx}
+                    onGrant={handleSectionDragGrant}
+                    onMove={handleSectionDragMove}
+                    onRelease={handleSectionDragRelease}
+                    onTerminate={handleSectionDragTerminate}
+                  />
+                )}
                 <Text style={styles.tableSectionTitle}>{section.category.key || section.category.name || `Category ${section.category.id}`}</Text>
                 {isEditMode && (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -3314,6 +3209,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 </View>
               ))}
             </View>
+            </Animated.View>
           );
         })}
 

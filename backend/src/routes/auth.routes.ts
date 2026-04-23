@@ -1590,10 +1590,10 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     return res.status(403).json({ error: "Cannot edit another restaurant" });
   }
 
-  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, api_base_url } = req.body;
+  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, api_base_url, feature_flags } = req.body;
 
-  // Only superadmin can change customization fields
-  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || api_base_url !== undefined)) {
+  // Only superadmin can change customization and feature flag fields
+  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || api_base_url !== undefined || feature_flags !== undefined)) {
     return res.status(403).json({ error: "Only superadmin can change customization settings" });
   }
 
@@ -1612,11 +1612,12 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (app_version !== undefined) { updates.push(`app_version = $${i++}`); params.push(app_version); }
     if (custom_branch !== undefined) { updates.push(`custom_branch = $${i++}`); params.push(custom_branch); }
     if (api_base_url !== undefined) { updates.push(`api_base_url = $${i++}`); params.push(api_base_url); }
+    if (feature_flags !== undefined) { updates.push(`feature_flags = $${i++}`); params.push(JSON.stringify(feature_flags)); }
 
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
     params.push(restaurantId);
-    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, api_base_url`;
+    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, api_base_url, feature_flags`;
     const result = await pool.query(query, params);
 
     if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });

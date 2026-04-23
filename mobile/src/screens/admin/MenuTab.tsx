@@ -72,8 +72,8 @@ export interface MenuTabRef {
 
 // ==================== DRAGGABLE COMPONENTS ====================
 
-const DRAG_MENU_CATEGORY_H = 50;
-const DRAG_MENU_ITEM_H = 60;
+const DRAG_MENU_CATEGORY_H = 46;
+const DRAG_MENU_ITEM_H = 72;
 
 interface DraggableMenuCategoryProps {
   category: MenuCategory;
@@ -81,19 +81,21 @@ interface DraggableMenuCategoryProps {
   isActive: boolean;
   activeDragIndex: number | null;
   hoverIndex: number | null;
+  selectedCategory: number | null;
   onDragGrant: (index: number, animY: Animated.Value) => void;
   onDragMove: (dy: number) => void;
   onDragRelease: (dy: number) => void;
   onDragTerminate: () => void;
+  onSelect: (categoryId: number) => void;
   onEdit: (categoryId: number) => void;
   onDelete: (categoryId: number) => void;
   t: (key: string) => string;
 }
 
 const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
-  category, index, isActive, activeDragIndex, hoverIndex,
+  category, index, isActive, activeDragIndex, hoverIndex, selectedCategory,
   onDragGrant, onDragMove, onDragRelease, onDragTerminate,
-  onEdit, onDelete, t,
+  onSelect, onEdit, onDelete, t,
 }: DraggableMenuCategoryProps) {
   const animY = useRef(new Animated.Value(0)).current;
   const onDragGrantRef = useRef(onDragGrant);
@@ -110,21 +112,10 @@ const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      onDragGrantRef.current(indexRef.current, animY);
-    },
-    onPanResponderMove: (_, { dy }) => {
-      animY.setValue(dy);
-      onDragMoveRef.current(dy);
-    },
-    onPanResponderRelease: (_, { dy }) => {
-      animY.setValue(0);
-      onDragReleaseRef.current(dy);
-    },
-    onPanResponderTerminate: () => {
-      animY.setValue(0);
-      onDragTerminateRef.current();
-    },
+    onPanResponderGrant: () => { onDragGrantRef.current(indexRef.current, animY); },
+    onPanResponderMove: (_, { dy }) => { animY.setValue(dy); onDragMoveRef.current(dy); },
+    onPanResponderRelease: (_, { dy }) => { animY.setValue(0); onDragReleaseRef.current(dy); },
+    onPanResponderTerminate: () => { animY.setValue(0); onDragTerminateRef.current(); },
   })).current;
 
   let shift = 0;
@@ -133,47 +124,69 @@ const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
     if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_MENU_CATEGORY_H;
   }
 
+  const isSelected = selectedCategory === category.id;
+
   return (
     <Animated.View
       style={{
         transform: [{ translateY: isActive ? animY : shift }],
         zIndex: isActive ? 1000 : 1,
-        backgroundColor: isActive ? '#f0f0ff' : 'transparent',
         shadowColor: isActive ? '#000' : 'transparent',
-        shadowOpacity: isActive ? 0.15 : 0,
-        shadowRadius: isActive ? 6 : 0,
-        elevation: isActive ? 6 : 0,
+        shadowOpacity: isActive ? 0.2 : 0,
+        shadowRadius: isActive ? 8 : 0,
+        elevation: isActive ? 8 : 0,
       }}
     >
-      <TouchableOpacity
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 12,
-          paddingHorizontal: 12,
-          backgroundColor: 'transparent',
-          borderBottomWidth: 1,
-          borderBottomColor: '#f0f0f0',
-        }}
-      >
-        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8 }}>
-          <Ionicons name="menu-outline" size={20} color="#9ca3af" />
-        </View>
-        <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: '#1f2937', marginLeft: 8 }}>{category.name || category.key || `Category ${category.id}`}</Text>
-        <TouchableOpacity onPress={() => onEdit(category.id)} style={{ padding: 6, marginRight: 4 }}>
-          <Ionicons name="pencil-outline" size={16} color="#4f46e5" />
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
+        marginHorizontal: 4,
+        backgroundColor: isActive ? '#e8eaf6' : 'transparent',
+        borderRadius: 20,
+      }}>
+        {/* Actual category pill button */}
+        <TouchableOpacity
+          onPress={() => onSelect(category.id)}
+          style={[
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: isSelected ? '#4f46e5' : '#e5e7eb',
+              backgroundColor: isSelected ? '#4f46e5' : '#fff',
+              flex: 1,
+            },
+          ]}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: isSelected ? '#fff' : '#374151' }} numberOfLines={1}>
+            {category.name}
+          </Text>
+        </TouchableOpacity>
+        {/* Edit / Delete */}
+        <TouchableOpacity onPress={() => onEdit(category.id)} style={{ padding: 6, marginLeft: 4 }}>
+          <Ionicons name="pencil-outline" size={15} color="#4f46e5" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => onDelete(category.id)} style={{ padding: 6 }}>
-          <Ionicons name="trash-outline" size={16} color="#ef4444" />
+          <Ionicons name="trash-outline" size={15} color="#ef4444" />
         </TouchableOpacity>
-      </TouchableOpacity>
+        {/* Drag handle */}
+        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 8 }}>
+          <Ionicons name="menu-outline" size={20} color="#9ca3af" />
+        </View>
+      </View>
     </Animated.View>
   );
 });
 
 interface DraggableMenuCategoryListProps {
   categories: MenuCategory[];
+  selectedCategory: number | null;
   onReorder: (newCategories: MenuCategory[]) => void;
+  onSelect: (categoryId: number) => void;
   onEdit: (categoryId: number) => void;
   onDelete: (categoryId: number) => void;
   onScrollEnabled: (v: boolean) => void;
@@ -181,7 +194,7 @@ interface DraggableMenuCategoryListProps {
 }
 
 function DraggableMenuCategoryList({
-  categories, onReorder, onEdit, onDelete, onScrollEnabled, t,
+  categories, selectedCategory, onReorder, onSelect, onEdit, onDelete, onScrollEnabled, t,
 }: DraggableMenuCategoryListProps) {
   const [orderedCats, setOrderedCats] = useState<MenuCategory[]>(categories);
   useEffect(() => { setOrderedCats(categories); }, [categories]);
@@ -225,7 +238,7 @@ function DraggableMenuCategoryList({
   }, [onScrollEnabled]);
 
   return (
-    <View style={{ minHeight: orderedCats.length * DRAG_MENU_CATEGORY_H }}>
+    <View style={{ minHeight: orderedCats.length * DRAG_MENU_CATEGORY_H, paddingHorizontal: 8, paddingVertical: 4 }}>
       {orderedCats.map((cat, idx) => (
         <DraggableMenuCategory
           key={cat.id}
@@ -234,10 +247,12 @@ function DraggableMenuCategoryList({
           isActive={activeDragIndex === idx}
           activeDragIndex={activeDragIndex}
           hoverIndex={hoverIndex}
+          selectedCategory={selectedCategory}
           onDragGrant={handleDragGrant}
           onDragMove={handleDragMove}
           onDragRelease={handleDragRelease}
           onDragTerminate={handleDragTerminate}
+          onSelect={onSelect}
           onEdit={onEdit}
           onDelete={onDelete}
           t={t}
@@ -257,13 +272,13 @@ interface DraggableMenuItemProps {
   onDragMove: (dy: number) => void;
   onDragRelease: (dy: number) => void;
   onDragTerminate: () => void;
-  onEdit: (itemId: number) => void;
+  apiUrl: string;
 }
 
 const DraggableMenuItem = React.memo(function DraggableMenuItem({
   item, index, isActive, activeDragIndex, hoverIndex,
   onDragGrant, onDragMove, onDragRelease, onDragTerminate,
-  onEdit,
+  apiUrl,
 }: DraggableMenuItemProps) {
   const animY = useRef(new Animated.Value(0)).current;
   const onDragGrantRef = useRef(onDragGrant);
@@ -280,21 +295,10 @@ const DraggableMenuItem = React.memo(function DraggableMenuItem({
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      onDragGrantRef.current(indexRef.current, animY);
-    },
-    onPanResponderMove: (_, { dy }) => {
-      animY.setValue(dy);
-      onDragMoveRef.current(dy);
-    },
-    onPanResponderRelease: (_, { dy }) => {
-      animY.setValue(0);
-      onDragReleaseRef.current(dy);
-    },
-    onPanResponderTerminate: () => {
-      animY.setValue(0);
-      onDragTerminateRef.current();
-    },
+    onPanResponderGrant: () => { onDragGrantRef.current(indexRef.current, animY); },
+    onPanResponderMove: (_, { dy }) => { animY.setValue(dy); onDragMoveRef.current(dy); },
+    onPanResponderRelease: (_, { dy }) => { animY.setValue(0); onDragReleaseRef.current(dy); },
+    onPanResponderTerminate: () => { animY.setValue(0); onDragTerminateRef.current(); },
   })).current;
 
   let shift = 0;
@@ -303,42 +307,58 @@ const DraggableMenuItem = React.memo(function DraggableMenuItem({
     if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_MENU_ITEM_H;
   }
 
+  const imageUri = item.image_url
+    ? (item.image_url.startsWith('http') ? item.image_url : `${apiUrl}${item.image_url}`)
+    : `${apiUrl}/uploads/website/placeholder.png`;
+
   return (
     <Animated.View
       style={{
         transform: [{ translateY: isActive ? animY : shift }],
         zIndex: isActive ? 1000 : 1,
-        backgroundColor: isActive ? '#f0f0ff' : 'transparent',
         shadowColor: isActive ? '#000' : 'transparent',
-        shadowOpacity: isActive ? 0.15 : 0,
-        shadowRadius: isActive ? 6 : 0,
-        elevation: isActive ? 6 : 0,
+        shadowOpacity: isActive ? 0.2 : 0,
+        shadowRadius: isActive ? 8 : 0,
+        elevation: isActive ? 8 : 0,
+        marginBottom: 8,
+        marginHorizontal: 12,
       }}
     >
-      <TouchableOpacity
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 12,
-          paddingHorizontal: 12,
-          backgroundColor: 'transparent',
-          borderBottomWidth: 1,
-          borderBottomColor: '#f0f0f0',
-        }}
-      >
-        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8 }}>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 10,
+        backgroundColor: isActive ? '#e8eaf6' : '#fff',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        overflow: 'hidden',
+        height: DRAG_MENU_ITEM_H,
+      }}>
+        {/* Drag handle */}
+        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{ width: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb', alignSelf: 'stretch' }}>
           <Ionicons name="menu-outline" size={20} color="#9ca3af" />
         </View>
-        <View style={{ flex: 1, marginLeft: 8 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{item.name}</Text>
-          <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-            ${(item.price_cents / 100).toFixed(2)}
-          </Text>
+        {/* Thumbnail */}
+        <Image
+          source={{ uri: imageUri }}
+          style={{ width: 60, height: DRAG_MENU_ITEM_H, backgroundColor: '#f0f0f0' }}
+          resizeMode="cover"
+        />
+        {/* Name + price */}
+        <View style={{ flex: 1, paddingHorizontal: 12, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }} numberOfLines={2}>{item.name}</Text>
+          <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>${(item.price_cents / 100).toFixed(2)}</Text>
         </View>
-        <TouchableOpacity onPress={() => onEdit(item.id)} style={{ padding: 6 }}>
-          <Ionicons name="pencil-outline" size={16} color="#4f46e5" />
-        </TouchableOpacity>
-      </TouchableOpacity>
+        {/* Availability badge */}
+        <View style={{ paddingRight: 12, alignItems: 'center' }}>
+          <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: item.available ? '#d1f0d1' : '#fdd' }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: item.available ? '#2d7a2d' : '#c33' }}>
+              {item.available ? '✓' : '✕'}
+            </Text>
+          </View>
+        </View>
+      </View>
     </Animated.View>
   );
 });
@@ -346,12 +366,12 @@ const DraggableMenuItem = React.memo(function DraggableMenuItem({
 interface DraggableMenuItemListProps {
   items: MenuItem[];
   onReorder: (newItems: MenuItem[]) => void;
-  onEdit: (itemId: number) => void;
   onScrollEnabled: (v: boolean) => void;
+  apiUrl: string;
 }
 
 function DraggableMenuItemList({
-  items, onReorder, onEdit, onScrollEnabled,
+  items, onReorder, onScrollEnabled, apiUrl,
 }: DraggableMenuItemListProps) {
   const [orderedItems, setOrderedItems] = useState<MenuItem[]>(items);
   useEffect(() => { setOrderedItems(items); }, [items]);
@@ -395,7 +415,7 @@ function DraggableMenuItemList({
   }, [onScrollEnabled]);
 
   return (
-    <View style={{ minHeight: orderedItems.length * DRAG_MENU_ITEM_H }}>
+    <View style={{ paddingTop: 8, paddingBottom: 8 }}>
       {orderedItems.map((item, idx) => (
         <DraggableMenuItem
           key={item.id}
@@ -408,7 +428,7 @@ function DraggableMenuItemList({
           onDragMove={handleDragMove}
           onDragRelease={handleDragRelease}
           onDragTerminate={handleDragTerminate}
-          onEdit={onEdit}
+          apiUrl={apiUrl}
         />
       ))}
     </View>
@@ -1287,14 +1307,23 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       <View style={styles.container}>
         {/* Category Bar */}
         <View style={styles.categoryBarWrapper}>
-          {/* Draggable Category List (when in edit mode) */}
-          {showAvailabilityToggles && categories.length > 0 && (
-            <View style={{ borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, marginBottom: 8 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginHorizontal: 12, marginBottom: 8 }}>Drag to reorder</Text>
-              <ScrollView scrollEnabled={menuScrollEnabled} style={{ maxHeight: 250 }}>
+          {showAvailabilityToggles ? (
+            /* Edit mode: vertical draggable category list replacing the horizontal scroll */
+            <>
+              <TouchableOpacity
+                style={[styles.categoryBtn, styles.categoryBtnAdd, { margin: 8, alignSelf: 'flex-start' }]}
+                onPress={() => setShowCategoryModal(true)}
+              >
+                <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
+                  {t('menu.add-category') || '+ Add Category'}
+                </Text>
+              </TouchableOpacity>
+              <ScrollView scrollEnabled={menuScrollEnabled} style={{ maxHeight: 220 }}>
                 <DraggableMenuCategoryList
                   categories={categories}
+                  selectedCategory={selectedCategory}
                   onReorder={saveMenuCategoryOrder}
+                  onSelect={setSelectedCategory}
                   onEdit={(id) => {
                     const cat = categories.find(c => c.id === id);
                     if (cat) {
@@ -1308,30 +1337,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   t={t}
                 />
               </ScrollView>
-            </View>
-          )}
-          
-          <ScrollView
-            horizontal
-            scrollEnabled={true}
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoryScroll}
-            contentContainerStyle={styles.categoryContent}
-          >
-            {showAvailabilityToggles && (
-              <TouchableOpacity
-                style={[styles.categoryBtn, styles.categoryBtnAdd]}
-                onPress={() => setShowCategoryModal(true)}
-              >
-                <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
-                  {t('menu.add-category') || '+ Add Category'}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {categories.map((cat) => (
-              <View key={cat.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+            </>
+          ) : (
+            /* Normal mode: horizontal scroll */
+            <ScrollView
+              horizontal
+              scrollEnabled={true}
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryScroll}
+              contentContainerStyle={styles.categoryContent}
+            >
+              {categories.map((cat) => (
                 <TouchableOpacity
+                  key={cat.id}
                   style={[
                     styles.categoryBtn,
                     selectedCategory === cat.id && styles.categoryBtnActive,
@@ -1349,58 +1367,38 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
-                {/* Category edit/delete buttons - only visible when edit toggle is ON */}
-                {showAvailabilityToggles && (
-                  <View style={styles.categoryActionButtons}>
-                    <TouchableOpacity
-                      style={styles.categoryActionBtn}
-                      onPress={() => {
-                        setEditingCategoryId(cat.id);
-                        setEditingCategoryName(cat.name);
-                        setShowEditCategoryModal(true);
-                      }}
-                    >
-                      <Text style={styles.categoryActionBtnText}>{t('menu.edit')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.categoryActionBtn, styles.categoryActionBtnDelete]}
-                      onPress={() => deleteCategory(cat.id, cat.name)}
-                    >
-                      <Text style={styles.categoryActionBtnText}>{t('menu.del')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            ))}
-          </ScrollView>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
-        {/* Draggable Items List (when in edit mode with category selected) */}
-        {selectedCategory && showAvailabilityToggles && filteredItems.length > 0 && (
-          <View style={{ borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, marginBottom: 8, marginHorizontal: 12, marginTop: 8 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 8 }}>Drag to reorder items</Text>
-            <ScrollView scrollEnabled={menuScrollEnabled} style={{ maxHeight: 300 }}>
+        {/* Items area: edit mode = draggable item cards; normal = grid */}
+        <View style={styles.itemsGridWrapper}>
+          {selectedCategory && showAvailabilityToggles ? (
+            /* Edit mode: draggable full item cards + Add Item button */
+            <ScrollView
+              scrollEnabled={menuScrollEnabled}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
+              <TouchableOpacity
+                style={[styles.itemCard, styles.addItemCard, { marginHorizontal: 12, marginTop: 12, marginBottom: 4 }]}
+                onPress={() => setShowItemModal(true)}
+              >
+                <View style={styles.addItemImageArea}>
+                  <Text style={styles.addItemIcon}>+</Text>
+                </View>
+                <View style={styles.itemContent}>
+                  <Text style={styles.addItemLabel}>{t('menu.add-item-card')}</Text>
+                </View>
+              </TouchableOpacity>
               <DraggableMenuItemList
                 items={filteredItems}
                 onReorder={(reorderedItems) => saveMenuItemOrder(selectedCategory, reorderedItems)}
-                onEdit={(itemId) => {
-                  const item = filteredItems.find(i => i.id === itemId);
-                  if (item) {
-                    setEditingItemId(item.id);
-                    setEditingItemName(item.name);
-                    setEditingItemDesc(item.description || '');
-                    setEditingItemPrice((item.price_cents / 100).toFixed(2));
-                    setShowItemModal(true);
-                  }
-                }}
                 onScrollEnabled={setMenuScrollEnabled}
+                apiUrl={API_URL}
               />
             </ScrollView>
-          </View>
-        )}
-
-        {/* Items Grid */}
-        <View style={styles.itemsGridWrapper}>
+          ) : (
           <FlatList
             data={selectedCategory && showAvailabilityToggles
               ? [...filteredItems, { id: 'add-item', name: t('menu.add-item-card'), isAddButton: true } as any]
@@ -1497,6 +1495,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
             contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           />
+          )}
         </View>
 
         {/* Detail Panel */}
