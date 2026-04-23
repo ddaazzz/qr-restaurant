@@ -9,8 +9,91 @@ import pool from '../config/db';
 import { kpayTerminalService } from '../services/kpayTerminalService';
 import { paymentAsiaService } from '../services/paymentAsiaService';
 import jwt from 'jsonwebtoken';
+import axios from 'axios';
 
 const router = Router();
+
+const PA_TERMINAL_TIMEOUT_MS = 15000;
+type PATerminalStatus = 'pending' | 'success' | 'failed' | 'cancelled' | 'unknown';
+
+function getPATerminalApiKey(terminal: any): string {
+  return String(terminal.merchant_token || terminal.app_secret || terminal.app_id || '').trim();
+}
+
+function getPATerminalBaseUrl(terminal: any): string {
+  return `http://${terminal.terminal_ip}:${terminal.terminal_port}`;
+}
+
+function getPATerminalHeaders(apiKey: string, sessionToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Api-Key': apiKey,
+    'X-Merchant-Token': apiKey,
+  };
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
+  return headers;
+}
+
+function mapPATerminalStatus(payload: any): PATerminalStatus {
+  const rawStatus = payload?.status;
+  const numericStatus = Number(payload?.status ?? payload?.code ?? payload?.pay_status ?? -1);
+  if (rawStatus === 'success' || numericStatus === 1) return 'success';
+  if (rawStatus === 'failed' || numericStatus === 2) return 'failed';
+  if (rawStatus === 'cancelled' || numericStatus === 3) return 'cancelled';
+  if (rawStatus === 'pending' || numericStatus === 0) return 'pending';
+  return 'unknown';
+}
+
+async function paTerminalPing(terminal: any): Promise<{ success: boolean; message: string; raw?: any; error?: string }> {
+  const apiKey = getPATerminalApiKey(terminal);
+  if (!apiKey) return { success: false, message: 'Missing merchant_token (API Key)', error: 'missing_api_key' };
+
+  const baseUrl = getPATerminalBaseUrl(terminal);
+  const candidates = ['/api/ping', '/ping'];
+  let lastError = 'ping_failed';
+
+  for (const path of candidates) {
+    try {
+      const res = await axios.get(`${baseUrl}${path}`, {
+        headers: getPATerminalHeaders(apiKey),
+        timeout: PA_TERMINAL_TIMEOUT_MS,
+      });
+      return { success: true, message: `Ping OK (${path})`, raw: res.data };
+    } catch (err: any) {
+      lastError = err?.response?.data?.message || err?.message || 'ping_failed';
+    }
+  }
+
+  return { success: false, message: 'Ping failed', error: lastError };
+}
+
+async function paTerminalSign(terminal: any): Promise<{ success: boolean; message: string; sessionToken?: string; raw?: any; error?: string }> {
+  const apiKey = getPATerminalApiKey(terminal);
+  if (!apiKey) return { success: false, message: 'Missing merchant_token (API Key)', error: 'missing_api_key' };
+
+  try {
+    const res = await axios.post(
+      `${getPATerminalBaseUrl(terminal)}/api/sign`,
+      { api_key: apiKey, merchant_token: apiKey },
+      {
+        headers: getPATerminalHeaders(apiKey),
+        timeout: PA_TERMINAL_TIMEOUT_MS,
+      }
+    );
+    return {
+      success: true,
+      message: res.data?.message || 'Sign successful',
+      sessionToken: res.data?.session_token || res.data?.sessionToken || res.data?.token,
+      raw: res.data,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: 'Sign failed',
+      error: err?.response?.data?.message || err?.message || 'sign_failed',
+    };
+  }
+}
 
 // Auth helper: verifies JWT and returns user info
 const verifyUser = async (req: Request): Promise<{ id: number; role: string; restaurant_id: number | null } | null> => {
@@ -40,7 +123,8 @@ router.get('/restaurants/:restaurantId/payment-terminals', async (req, res) => {
     
     const result = await pool.query(
       `SELECT id, vendor_name, is_active, app_id, terminal_ip, terminal_port, 
-              endpoint_path, metadata, last_tested_at, last_error_message,
+              endpoint_path, merchant_token, payment_gateway_env,
+              metadata, last_tested_at, last_error_message,
               created_at, updated_at
        FROM payment_terminals
        WHERE restaurant_id = $1
@@ -67,7 +151,8 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
     
     const result = await pool.query(
       `SELECT id, vendor_name, is_active, app_id, app_secret, terminal_ip, 
-              terminal_port, endpoint_path, metadata, last_tested_at, 
+              terminal_port, endpoint_path, merchant_token, secret_code, payment_gateway_env,
+              metadata, last_tested_at, 
               last_error_message, created_at, updated_at
        FROM payment_terminals
        WHERE id = $1 AND restaurant_id = $2`,
@@ -82,6 +167,8 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
     // Non-superadmins should not see secrets
     if (user.role !== 'superadmin') {
       terminal.app_secret = terminal.app_secret ? '••••••••' : '';
+      terminal.merchant_token = terminal.merchant_token ? '••••••••' : '';
+      terminal.secret_code = terminal.secret_code ? '••••••••' : '';
     }
 
     res.json(terminal);
@@ -311,7 +398,8 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
 
     // Fetch the terminal configuration
     const terminalResult = await pool.query(
-      `SELECT id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path
+      `SELECT id, vendor_name, app_id, app_secret, merchant_token, secret_code,
+              terminal_ip, terminal_port, endpoint_path
        FROM payment_terminals
        WHERE id = $1 AND restaurant_id = $2`,
       [terminalId, restaurantId]
@@ -475,18 +563,97 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
       }
     }
 
-    // Payment Asia POS Terminal: LAN-only, initiated from mobile device
+    // Payment Asia POS Terminal
     if (terminal.vendor_name === 'payment-asia-terminal') {
-      const now = new Date();
-      await pool.query(
-        `UPDATE payment_terminals SET last_tested_at = $1 WHERE id = $2`,
-        [now, terminalId]
-      );
-      return res.json({
-        success: true,
-        message: `PA Terminal config saved. Connection test must be performed from the mobile app (terminal is LAN-only at ${terminal.terminal_ip}:${terminal.terminal_port}).`,
-        timestamp: now,
-      });
+      const pingResult = await paTerminalPing(terminal);
+      if (!pingResult.success) {
+        await pool.query(
+          `UPDATE payment_terminals
+           SET last_error_message = $1, updated_at = NOW()
+           WHERE id = $2`,
+          [pingResult.error || pingResult.message, terminalId]
+        );
+        return res.status(400).json({
+          success: false,
+          message: 'PA terminal ping failed',
+          error: pingResult.error || pingResult.message,
+        });
+      }
+
+      const signResult = await paTerminalSign(terminal);
+
+      // Without amount: only connectivity + auth check
+      if (!payAmount) {
+        const now = new Date();
+        await pool.query(
+          `UPDATE payment_terminals SET last_tested_at = $1, last_error_message = NULL, updated_at = NOW() WHERE id = $2`,
+          [now, terminalId]
+        );
+        return res.json({
+          success: signResult.success,
+          message: signResult.success ? 'PA terminal ping + sign successful' : 'PA terminal ping successful, sign failed',
+          ping: pingResult,
+          sign: signResult,
+          timestamp: now,
+        });
+      }
+
+      const apiKey = getPATerminalApiKey(terminal);
+      const outTradeNo = String(req.body.outTradeNo || req.body.tradeNo || `PA-${restaurantId}-${terminalId}-${Date.now()}`);
+      const amount = String(payAmount).padStart(12, '0');
+
+      try {
+        const saleRes = await axios.post(
+          `${getPATerminalBaseUrl(terminal)}/api/sale`,
+          {
+            api_key: apiKey,
+            merchant_token: apiKey,
+            trade_no: outTradeNo,
+            out_trade_no: outTradeNo,
+            amount,
+            currency: String(payCurrency || '344'),
+            description: description || 'Payment',
+            customer_name: customerName || 'Customer',
+          },
+          {
+            headers: getPATerminalHeaders(apiKey, signResult.sessionToken),
+            timeout: PA_TERMINAL_TIMEOUT_MS,
+          }
+        );
+
+        await pool.query(
+          `UPDATE payment_terminals SET last_tested_at = NOW(), last_error_message = NULL, updated_at = NOW() WHERE id = $1`,
+          [terminalId]
+        );
+
+        return res.json({
+          success: true,
+          initiated: true,
+          status: 'pending',
+          code: 10000,
+          message: saleRes.data?.message || 'PA terminal payment initiated',
+          outTradeNo,
+          amount,
+          currency: String(payCurrency || '344'),
+          ping: pingResult,
+          sign: signResult,
+          response: saleRes.data,
+        });
+      } catch (saleErr: any) {
+        const saleMessage = saleErr?.response?.data?.message || saleErr?.message || 'sale_failed';
+        await pool.query(
+          `UPDATE payment_terminals SET last_error_message = $1, updated_at = NOW() WHERE id = $2`,
+          [saleMessage, terminalId]
+        );
+        return res.status(400).json({
+          success: false,
+          initiated: false,
+          status: 'failed',
+          message: 'PA terminal sale failed',
+          error: saleMessage,
+        });
+      }
+
     }
 
     // For other vendors
@@ -507,7 +674,7 @@ router.get('/restaurants/:restaurantId/pa-terminal/active', async (req, res) => 
   try {
     const { restaurantId } = req.params;
     const result = await pool.query(
-      `SELECT id, app_secret, terminal_ip, terminal_port, is_active
+      `SELECT id, app_secret, merchant_token, secret_code, terminal_ip, terminal_port, is_active
        FROM payment_terminals
        WHERE restaurant_id = $1 AND vendor_name = 'payment-asia-terminal' AND is_active = true
        LIMIT 1`,
@@ -516,7 +683,14 @@ router.get('/restaurants/:restaurantId/pa-terminal/active', async (req, res) => 
     if (result.rowCount === 0) {
       return res.json({ configured: false });
     }
-    return res.json({ configured: true, terminal: result.rows[0] });
+    const terminal = result.rows[0];
+    return res.json({
+      configured: true,
+      terminal: {
+        ...terminal,
+        api_key: terminal.merchant_token || terminal.app_secret || '',
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -540,7 +714,8 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/test-status
 
     // Fetch the terminal configuration
     const terminalResult = await pool.query(
-      `SELECT id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path
+      `SELECT id, vendor_name, app_id, app_secret, merchant_token, secret_code,
+              terminal_ip, terminal_port, endpoint_path
        FROM payment_terminals
        WHERE id = $1 AND restaurant_id = $2`,
       [terminalId, restaurantId]
@@ -601,6 +776,47 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/test-status
           status: 'error',
           message: 'Status query failed',
           error: err.message,
+        });
+      }
+    }
+
+    if (terminal.vendor_name === 'payment-asia-terminal') {
+      const apiKey = getPATerminalApiKey(terminal);
+      if (!apiKey) {
+        return res.status(400).json({
+          success: false,
+          status: 'unknown',
+          message: 'Missing merchant_token (API Key)',
+        });
+      }
+
+      try {
+        const signResult = await paTerminalSign(terminal);
+        const sessionToken = req.query.sessionToken ? String(req.query.sessionToken) : signResult.sessionToken;
+        const queryRes = await axios.get(
+          `${getPATerminalBaseUrl(terminal)}/api/query?trade_no=${encodeURIComponent(String(outTradeNo))}`,
+          {
+            headers: getPATerminalHeaders(apiKey, sessionToken),
+            timeout: PA_TERMINAL_TIMEOUT_MS,
+          }
+        );
+
+        const status = mapPATerminalStatus(queryRes.data);
+        return res.json({
+          success: true,
+          status,
+          code: queryRes.data?.code ?? queryRes.data?.status ?? null,
+          message: queryRes.data?.message || `Status: ${status}`,
+          outTradeNo,
+          response: queryRes.data,
+          sign: signResult,
+        });
+      } catch (queryErr: any) {
+        return res.status(400).json({
+          success: false,
+          status: 'unknown',
+          message: 'PA terminal query failed',
+          error: queryErr?.response?.data?.message || queryErr?.message || 'query_failed',
         });
       }
     }
@@ -702,6 +918,61 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/cancel', a
     const { restaurantId, terminalId } = req.params;
     const { outTradeNo, originOutTradeNo, callbackUrl } = req.body;
 
+    const terminalRowResult = await pool.query(
+      `SELECT id, vendor_name, app_id, app_secret, merchant_token, terminal_ip, terminal_port
+       FROM payment_terminals
+       WHERE id = $1 AND restaurant_id = $2`,
+      [terminalId, restaurantId]
+    );
+    if (terminalRowResult.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+    }
+    const terminalConfig = terminalRowResult.rows[0];
+
+    if (terminalConfig.vendor_name === 'payment-asia-terminal') {
+      const cancelReference = originOutTradeNo || outTradeNo;
+      if (!cancelReference) {
+        return res.status(400).json({ error: 'outTradeNo or originOutTradeNo is required' });
+      }
+
+      const apiKey = getPATerminalApiKey(terminalConfig);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, error: 'Missing merchant_token (API Key)' });
+      }
+
+      try {
+        const signResult = await paTerminalSign(terminalConfig);
+        const cancelRes = await axios.post(
+          `${getPATerminalBaseUrl(terminalConfig)}/api/cancel`,
+          {
+            api_key: apiKey,
+            merchant_token: apiKey,
+            out_trade_no: cancelReference,
+            trade_no: cancelReference,
+            origin_out_trade_no: originOutTradeNo || undefined,
+            callback_url: callbackUrl,
+          },
+          {
+            headers: getPATerminalHeaders(apiKey, signResult.sessionToken),
+            timeout: PA_TERMINAL_TIMEOUT_MS,
+          }
+        );
+
+        return res.json({
+          success: true,
+          message: cancelRes.data?.message || 'PA terminal cancel request submitted',
+          outTradeNo,
+          originOutTradeNo,
+          response: cancelRes.data,
+        });
+      } catch (cancelErr: any) {
+        return res.status(400).json({
+          success: false,
+          error: cancelErr?.response?.data?.message || cancelErr?.message || 'cancel_failed',
+        });
+      }
+    }
+
     if (!outTradeNo || !originOutTradeNo) {
       return res.status(400).json({ error: 'outTradeNo and originOutTradeNo are required' });
     }
@@ -734,6 +1005,75 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/cancel', a
 });
 
 /**
+ * POST /api/restaurants/:restaurantId/payment-terminals/:terminalId/void
+ * Void a Payment Asia terminal transaction for terminals that expose /api/void.
+ * Body: { outTradeNo, originOutTradeNo?, callbackUrl? }
+ */
+router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/void', async (req, res) => {
+  try {
+    const { restaurantId, terminalId } = req.params;
+    const { outTradeNo, originOutTradeNo, callbackUrl } = req.body;
+    const voidReference = originOutTradeNo || outTradeNo;
+
+    if (!voidReference) {
+      return res.status(400).json({ error: 'outTradeNo or originOutTradeNo is required' });
+    }
+
+    const terminalResult = await pool.query(
+      `SELECT id, vendor_name, app_id, app_secret, merchant_token, terminal_ip, terminal_port
+       FROM payment_terminals
+       WHERE id = $1 AND restaurant_id = $2`,
+      [terminalId, restaurantId]
+    );
+
+    if (terminalResult.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+    }
+
+    const terminal = terminalResult.rows[0];
+    if (terminal.vendor_name !== 'payment-asia-terminal') {
+      return res.status(400).json({ success: false, error: `Vendor ${terminal.vendor_name} does not support /void route` });
+    }
+
+    const apiKey = getPATerminalApiKey(terminal);
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Missing merchant_token (API Key)' });
+    }
+
+    const signResult = await paTerminalSign(terminal);
+    const voidRes = await axios.post(
+      `${getPATerminalBaseUrl(terminal)}/api/void`,
+      {
+        api_key: apiKey,
+        merchant_token: apiKey,
+        out_trade_no: voidReference,
+        trade_no: voidReference,
+        origin_out_trade_no: originOutTradeNo || undefined,
+        callback_url: callbackUrl,
+      },
+      {
+        headers: getPATerminalHeaders(apiKey, signResult.sessionToken),
+        timeout: PA_TERMINAL_TIMEOUT_MS,
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: voidRes.data?.message || 'PA terminal void request submitted',
+      outTradeNo,
+      originOutTradeNo,
+      response: voidRes.data,
+    });
+  } catch (err: any) {
+    console.error('[PA Terminal] Void error:', err);
+    return res.status(400).json({
+      success: false,
+      error: err?.response?.data?.message || err?.message || 'void_failed',
+    });
+  }
+});
+
+/**
  * POST /api/restaurants/:restaurantId/payment-terminals/:terminalId/refund
  * Refund a settled transaction (full or partial).
  * Body: { outTradeNo, refundType, refNo?, transactionNo?, commitTime?,
@@ -743,6 +1083,66 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/refund', a
   try {
     const { restaurantId, terminalId } = req.params;
     const { outTradeNo, refundType, refNo, transactionNo, commitTime, refundAmount, managerPassword, callbackUrl } = req.body;
+
+    const terminalRowResult = await pool.query(
+      `SELECT id, vendor_name, app_id, app_secret, merchant_token, terminal_ip, terminal_port
+       FROM payment_terminals
+       WHERE id = $1 AND restaurant_id = $2`,
+      [terminalId, restaurantId]
+    );
+    if (terminalRowResult.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+    }
+
+    const terminalConfig = terminalRowResult.rows[0];
+    if (terminalConfig.vendor_name === 'payment-asia-terminal') {
+      const apiKey = getPATerminalApiKey(terminalConfig);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, error: 'Missing merchant_token (API Key)' });
+      }
+
+      const refundReference = String(req.body.originOutTradeNo || outTradeNo || transactionNo || refNo || '').trim();
+      if (!refundReference) {
+        return res.status(400).json({ success: false, error: 'outTradeNo (or originOutTradeNo/transactionNo/refNo) is required for refund' });
+      }
+
+      const amountFromRefundAmount = refundAmount
+        ? (Number(String(refundAmount).replace(/^0+/, '')) / 100).toFixed(2)
+        : undefined;
+      const amount = amountFromRefundAmount || '0.01';
+
+      try {
+        const signResult = await paTerminalSign(terminalConfig);
+        const refundRes = await axios.post(
+          `${getPATerminalBaseUrl(terminalConfig)}/api/refund`,
+          {
+            api_key: apiKey,
+            merchant_token: apiKey,
+            trade_no: refundReference,
+            out_trade_no: refundReference,
+            amount,
+            currency: '344',
+            callback_url: callbackUrl,
+          },
+          {
+            headers: getPATerminalHeaders(apiKey, signResult.sessionToken),
+            timeout: PA_TERMINAL_TIMEOUT_MS,
+          }
+        );
+
+        return res.json({
+          success: true,
+          message: refundRes.data?.message || 'PA terminal refund request submitted',
+          outTradeNo: refundReference,
+          response: refundRes.data,
+        });
+      } catch (refundErr: any) {
+        return res.status(400).json({
+          success: false,
+          error: refundErr?.response?.data?.message || refundErr?.message || 'refund_failed',
+        });
+      }
+    }
 
     if (!outTradeNo || !refundType || !managerPassword) {
       return res.status(400).json({ error: 'outTradeNo, refundType, and managerPassword are required' });
@@ -1031,6 +1431,52 @@ router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) =
     return res.json({ configured: true, terminal: result.rows[0] });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/restaurants/:restaurantId/payment-terminals/:terminalId/ping
+ * Ping a Payment Asia POS terminal to verify reachability.
+ */
+router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/ping', async (req, res) => {
+  try {
+    const { restaurantId, terminalId } = req.params;
+    const terminalResult = await pool.query(
+      `SELECT id, vendor_name, app_id, app_secret, merchant_token, terminal_ip, terminal_port
+       FROM payment_terminals
+       WHERE id = $1 AND restaurant_id = $2`,
+      [terminalId, restaurantId]
+    );
+
+    if (terminalResult.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+    }
+
+    const terminal = terminalResult.rows[0];
+    if (terminal.vendor_name !== 'payment-asia-terminal') {
+      return res.status(400).json({
+        success: false,
+        error: `Ping route is for payment-asia-terminal only (got ${terminal.vendor_name})`,
+      });
+    }
+
+    const pingResult = await paTerminalPing(terminal);
+    if (!pingResult.success) {
+      await pool.query(
+        `UPDATE payment_terminals SET last_error_message = $1, updated_at = NOW() WHERE id = $2`,
+        [pingResult.error || pingResult.message, terminalId]
+      );
+      return res.status(400).json(pingResult);
+    }
+
+    await pool.query(
+      `UPDATE payment_terminals SET last_tested_at = NOW(), last_error_message = NULL, updated_at = NOW() WHERE id = $1`,
+      [terminalId]
+    );
+
+    return res.json(pingResult);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Ping failed', error: err?.message || 'ping_failed' });
   }
 });
 

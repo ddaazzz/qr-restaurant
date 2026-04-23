@@ -40,6 +40,14 @@ export interface PATerminalSaleResult {
   error?: string;
 }
 
+export interface PATerminalActionResult {
+  success: boolean;
+  message: string;
+  tradeNo?: string;
+  error?: string;
+  raw?: Record<string, any>;
+}
+
 export type PATerminalStatus = 'pending' | 'success' | 'failed' | 'cancelled' | 'unknown';
 
 export interface PATerminalQueryResult {
@@ -71,6 +79,50 @@ function baseUrl(config: PATerminalConfig): string {
   return `http://${config.terminalIp}:${config.terminalPort}`;
 }
 
+function terminalHeaders(config: PATerminalConfig, sessionToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Api-Key': config.apiKey,
+    'X-Merchant-Token': config.apiKey,
+  };
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
+  return headers;
+}
+
+// ─── Ping ──────────────────────────────────────────────────────────────────
+
+export async function paTerminalPing(config: PATerminalConfig): Promise<PATerminalActionResult> {
+  const endpoints = ['/api/ping', '/ping'];
+  let lastError = 'ping_failed';
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetchWithTimeout(`${baseUrl(config)}${endpoint}`, {
+        method: 'GET',
+        headers: terminalHeaders(config),
+      });
+      const text = await res.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+      if (!res.ok) {
+        lastError = text || `HTTP ${res.status}`;
+        continue;
+      }
+
+      return {
+        success: true,
+        message: data.message || `Ping successful (${endpoint})`,
+        raw: data,
+      };
+    } catch (err: any) {
+      lastError = err?.name === 'AbortError' ? 'timeout' : (err?.message || 'ping_failed');
+    }
+  }
+
+  return { success: false, message: 'Ping failed', error: lastError };
+}
+
 // ─── Sign (session key exchange / auth) ────────────────────────────────────
 
 /**
@@ -82,11 +134,8 @@ export async function paTerminalSign(config: PATerminalConfig): Promise<PATermin
     const url = `${baseUrl(config)}/api/sign`;
     const res = await fetchWithTimeout(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': config.apiKey,
-      },
-      body: JSON.stringify({ api_key: config.apiKey }),
+      headers: terminalHeaders(config),
+      body: JSON.stringify({ api_key: config.apiKey, merchant_token: config.apiKey }),
     });
 
     const text = await res.text();
@@ -128,18 +177,16 @@ export async function paTerminalSale(
 ): Promise<PATerminalSaleResult> {
   try {
     const url = `${baseUrl(config)}/api/sale`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Api-Key': config.apiKey,
-    };
-    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+    const headers = terminalHeaders(config, sessionToken);
 
     const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
         api_key: config.apiKey,
+        merchant_token: config.apiKey,
         trade_no: tradeNo,
+        out_trade_no: tradeNo,
         amount: amountCents,
         currency: '344', // HKD
       }),
@@ -182,11 +229,7 @@ export async function paTerminalQuery(
 ): Promise<PATerminalQueryResult> {
   try {
     const url = `${baseUrl(config)}/api/query?trade_no=${encodeURIComponent(tradeNo)}`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Api-Key': config.apiKey,
-    };
-    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+    const headers = terminalHeaders(config, sessionToken);
 
     const res = await fetchWithTimeout(url, { method: 'GET', headers });
     const text = await res.text();
@@ -217,5 +260,127 @@ export async function paTerminalQuery(
       return { success: false, status: 'unknown', message: 'Query timed out', error: 'timeout' };
     }
     return { success: false, status: 'unknown', message: err.message, error: err.message };
+  }
+}
+
+// ─── Cancel / Void / Refund ────────────────────────────────────────────────
+
+export async function paTerminalCancel(
+  config: PATerminalConfig,
+  tradeNo: string,
+  sessionToken?: string,
+): Promise<PATerminalActionResult> {
+  try {
+    const res = await fetchWithTimeout(`${baseUrl(config)}/api/cancel`, {
+      method: 'POST',
+      headers: terminalHeaders(config, sessionToken),
+      body: JSON.stringify({
+        api_key: config.apiKey,
+        merchant_token: config.apiKey,
+        trade_no: tradeNo,
+        out_trade_no: tradeNo,
+      }),
+    });
+
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    if (!res.ok) {
+      return { success: false, message: `HTTP ${res.status}`, tradeNo, error: text };
+    }
+
+    return {
+      success: true,
+      message: data.message || 'Cancel submitted',
+      tradeNo,
+      raw: data,
+    };
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      return { success: false, message: 'Cancel timed out', tradeNo, error: 'timeout' };
+    }
+    return { success: false, message: err.message, tradeNo, error: err.message };
+  }
+}
+
+export async function paTerminalVoid(
+  config: PATerminalConfig,
+  tradeNo: string,
+  sessionToken?: string,
+): Promise<PATerminalActionResult> {
+  try {
+    const res = await fetchWithTimeout(`${baseUrl(config)}/api/void`, {
+      method: 'POST',
+      headers: terminalHeaders(config, sessionToken),
+      body: JSON.stringify({
+        api_key: config.apiKey,
+        merchant_token: config.apiKey,
+        trade_no: tradeNo,
+        out_trade_no: tradeNo,
+      }),
+    });
+
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    if (!res.ok) {
+      return { success: false, message: `HTTP ${res.status}`, tradeNo, error: text };
+    }
+
+    return {
+      success: true,
+      message: data.message || 'Void submitted',
+      tradeNo,
+      raw: data,
+    };
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      return { success: false, message: 'Void timed out', tradeNo, error: 'timeout' };
+    }
+    return { success: false, message: err.message, tradeNo, error: err.message };
+  }
+}
+
+export async function paTerminalRefund(
+  config: PATerminalConfig,
+  tradeNo: string,
+  amount: string,
+  sessionToken?: string,
+): Promise<PATerminalActionResult> {
+  try {
+    const res = await fetchWithTimeout(`${baseUrl(config)}/api/refund`, {
+      method: 'POST',
+      headers: terminalHeaders(config, sessionToken),
+      body: JSON.stringify({
+        api_key: config.apiKey,
+        merchant_token: config.apiKey,
+        trade_no: tradeNo,
+        out_trade_no: tradeNo,
+        amount,
+        currency: '344',
+      }),
+    });
+
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    if (!res.ok) {
+      return { success: false, message: `HTTP ${res.status}`, tradeNo, error: text };
+    }
+
+    return {
+      success: true,
+      message: data.message || 'Refund submitted',
+      tradeNo,
+      raw: data,
+    };
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      return { success: false, message: 'Refund timed out', tradeNo, error: 'timeout' };
+    }
+    return { success: false, message: err.message, tradeNo, error: err.message };
   }
 }
