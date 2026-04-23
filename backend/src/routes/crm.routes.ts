@@ -113,9 +113,9 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
       [restaurantId, customer.phone || '', customer.name]
     );
 
-    const now = new Date().toISOString().split('T')[0];
-    const pastBookings   = bookingsRes.rows.filter(b => b.booking_date < now || b.status === 'completed' || b.status === 'cancelled' || b.status === 'no-show');
-    const futureBookings = bookingsRes.rows.filter(b => b.booking_date >= now && b.status === 'confirmed');
+    const now: string = new Date().toISOString().split('T')[0]!;
+    const pastBookings   = bookingsRes.rows.filter(b => (b.booking_date as string) < now || b.status === 'completed' || b.status === 'cancelled' || b.status === 'no-show');
+    const futureBookings = bookingsRes.rows.filter(b => (b.booking_date as string) >= now && b.status === 'confirmed');
 
     // 4. Eligible coupons (active, not expired, not exhausted)
     const couponsRes = await pool.query(
