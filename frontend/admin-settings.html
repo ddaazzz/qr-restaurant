@@ -63,10 +63,22 @@
       <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
     </div>
 
+    <!-- Menu Settings Card -->
+    <div class="settings-card" onclick="showSettingsPage('menu-settings')">
+      <h3>Menu Settings</h3>
+      <p>Custom items &amp; market price options</p>
+    </div>
+
     <!-- Service Requests Card (shown when feature is enabled) -->
     <div class="settings-card" id="service-requests-card" style="display:none;" onclick="showSettingsPage('service-requests')">
       <h3>Service Requests</h3>
       <p>Configure items customers can request</p>
+    </div>
+
+    <!-- CRM Card -->
+    <div class="settings-card" onclick="showSettingsPage('crm')">
+      <h3>CRM</h3>
+      <p>Customer profiles &amp; history</p>
     </div>
 
     <!-- Users & Restaurants Card -->
@@ -697,6 +709,71 @@
   </div>
 </template>
 
+<!-- ===== CRM PAGE ===== -->
+<div id="page-crm" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideCRMPage()">&#8592; Back</button>
+      <h3>CRM</h3>
+    </div>
+    <div class="settings-page-content">
+
+      <!-- CRM Main View (customer list) -->
+      <div id="crm-main-view">
+        <!-- Sort + Search bar -->
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+          <input id="crm-search-input" type="text" placeholder="Search by name, phone or email…"
+            style="flex:1;min-width:180px;padding:9px 12px;border:1px solid var(--border-color);border-radius:6px;font-size:14px;"
+            oninput="onCRMSearch()" />
+          <select id="crm-sort-select" onchange="loadCRMCustomers()"
+            style="padding:9px 12px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:#fff;">
+            <option value="last_visit">Last Visit</option>
+            <option value="total_orders">Total Orders</option>
+            <option value="total_spent">Total Spent</option>
+            <option value="created_at">Date Joined</option>
+          </select>
+        </div>
+
+        <!-- Customer table -->
+        <div id="crm-customers-list" style="overflow-x:auto;">
+          <p style="color:#999;text-align:center;padding:24px;">Loading customers…</p>
+        </div>
+      </div>
+
+      <!-- CRM Detail View (hidden until a customer is clicked) -->
+      <div id="crm-detail-view" style="display:none;">
+        <button onclick="showCRMMain()" style="background:none;border:none;cursor:pointer;color:var(--primary-color);font-size:14px;font-weight:600;margin-bottom:16px;">&#8592; Back to Customers</button>
+
+        <!-- Customer header card -->
+        <div class="crm-profile-card" id="crm-profile-card"></div>
+
+        <!-- Orders section -->
+        <div class="section-card" style="margin-top:16px;">
+          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Order History</h4>
+          <div id="crm-orders-list"></div>
+        </div>
+
+        <!-- Bookings sections -->
+        <div class="section-card" style="margin-top:16px;">
+          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Upcoming Reservations</h4>
+          <div id="crm-future-bookings"></div>
+        </div>
+        <div class="section-card" style="margin-top:16px;">
+          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Past Reservations</h4>
+          <div id="crm-past-bookings"></div>
+        </div>
+
+        <!-- Eligible coupons -->
+        <div class="section-card" style="margin-top:16px;">
+          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Eligible Coupons</h4>
+          <div id="crm-coupons-list"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- Language initialization script -->
 <script>
   (function() {
@@ -807,6 +884,47 @@
   </div>
 </div>
 
+  <!-- HIDDEN: Menu Settings Page -->
+  <div id="page-menu-settings" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('menu-settings')">&#8592; Back</button>
+      <h3>Menu Settings</h3>
+    </div>
+    <div class="settings-page-content">
+
+      <!-- Custom Menu Items Toggle -->
+      <div style="background:#fff;border:1px solid var(--border-color);border-radius:10px;padding:16px;margin-bottom:16px;">
+        <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="font-weight:600;font-size:15px;">Custom Food Item &amp; Market Price</span>
+              <span style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.3px;">
+                &#x1F451; Premium
+              </span>
+            </div>
+            <p style="font-size:13px;color:#666;margin:0;line-height:1.5;">Allow staff to add a custom food item with a manually entered name and price at the time of ordering — ideal for market-price dishes that change daily.</p>
+          </div>
+          <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;margin-top:2px;">
+            <input type="checkbox" id="custom-menu-items-toggle" onchange="saveMenuFeatureFlag('custom_menu_items', this.checked)" style="opacity:0;width:0;height:0;">
+            <span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;"></span>
+          </label>
+        </label>
+      </div>
+
+    </div>
+  </div>
+  </div>
+
+  <style>
+    #custom-menu-items-toggle:checked + .toggle-slider { background: var(--primary-color, #3b49df); }
+    #custom-menu-items-toggle:checked + .toggle-slider::before { transform: translateX(22px); }
+    .toggle-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
+    #custom-sr-items-toggle:checked + .toggle-slider-sr { background: var(--primary-color, #3b49df); }
+    #custom-sr-items-toggle:checked + .toggle-slider-sr::before { transform: translateX(22px); }
+    .toggle-slider-sr::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
+  </style>
+
   <!-- HIDDEN: Service Requests Settings Page -->
   <div id="page-service-requests" class="settings-page hidden">
   <div class="settings-page-inner">
@@ -817,6 +935,25 @@
     </div>
     <div class="settings-page-content">
       <p style="color:#666;font-size:13px;margin-bottom:16px;">Configure what items customers can request at their table (e.g. Tea Refill, Towel). Both English and Chinese labels are shown on the customer menu based on their language.</p>
+
+      <!-- Custom SR Items Toggle -->
+      <div style="background:#fff;border:1px solid var(--border-color);border-radius:10px;padding:16px;margin-bottom:20px;">
+        <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="font-weight:600;font-size:15px;">Custom Service Request Item</span>
+              <span style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.3px;">
+                &#x1F451; Premium
+              </span>
+            </div>
+            <p style="font-size:13px;color:#666;margin:0;line-height:1.5;">Allow staff to submit a custom service request with a manually entered description — for one-off requests not covered by the preset list.</p>
+          </div>
+          <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;margin-top:2px;">
+            <input type="checkbox" id="custom-sr-items-toggle" onchange="saveMenuFeatureFlag('custom_sr_items', this.checked)" style="opacity:0;width:0;height:0;">
+            <span class="toggle-slider-sr" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;"></span>
+          </label>
+        </label>
+      </div>
 
       <!-- Add / Edit Form -->
       <div id="service-item-form-section" style="display:none;margin-bottom:20px;background:#f9fafb;border:1px solid var(--border-color);border-radius:8px;padding:16px;">

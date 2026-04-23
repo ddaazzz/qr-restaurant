@@ -4,27 +4,140 @@ import { requireFeature } from "../middleware/featureFlags";
 
 const router = Router();
 
-// GET /restaurants/:restaurantId/crm/customers?search=...
-// Search CRM customers by name or phone
+// GET /restaurants/:restaurantId/crm/customers
+// List / search CRM customers with optional sort
+// Query params: search, sort_by (total_orders|total_spent|created_at|last_visit), limit, offset
 router.get("/restaurants/:restaurantId/crm/customers", requireFeature("crm"), async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { search } = req.query;
+    const { search, sort_by, limit = '50', offset = '0' } = req.query;
 
-    let query = `SELECT id, name, phone, email, total_visits, total_spent_cents, last_visit_at
-                 FROM crm_customers
-                 WHERE restaurant_id = $1`;
+    const validSorts: Record<string, string> = {
+      total_orders: 'total_visits DESC NULLS LAST',
+      total_spent:  'total_spent_cents DESC NULLS LAST',
+      created_at:   'created_at DESC',
+      last_visit:   'last_visit_at DESC NULLS LAST',
+    };
+    const sortClause = validSorts[(sort_by as string) || ''] || 'last_visit_at DESC NULLS LAST';
+
     const params: any[] = [restaurantId];
+    let whereExtra = '';
 
     if (search && typeof search === 'string' && search.trim()) {
-      query += ` AND (name ILIKE $2 OR phone ILIKE $2)`;
+      whereExtra = ` AND (name ILIKE $2 OR phone ILIKE $2 OR email ILIKE $2)`;
       params.push(`%${search.trim()}%`);
     }
 
-    query += ` ORDER BY last_visit_at DESC NULLS LAST LIMIT 20`;
+    const limitVal  = Math.min(Math.max(parseInt(limit  as string, 10) || 50, 1), 200);
+    const offsetVal = Math.max(parseInt(offset as string, 10) || 0, 0);
+    params.push(limitVal, offsetVal);
+    const pLimit  = params.length - 1;
+    const pOffset = params.length;
+
+    const query = `
+      SELECT id, name, phone, email, total_visits, total_spent_cents,
+             last_visit_at, created_at
+      FROM crm_customers
+      WHERE restaurant_id = $1${whereExtra}
+      ORDER BY ${sortClause}
+      LIMIT $${pLimit} OFFSET $${pOffset}`;
 
     const result = await pool.query(query, params);
     res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /restaurants/:restaurantId/crm/customers/:customerId
+// Full customer profile: info + orders + bookings + eligible coupons
+router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeature("crm"), async (req, res) => {
+  try {
+    const { restaurantId, customerId } = req.params;
+
+    // 1. Customer row
+    const custRes = await pool.query(
+      `SELECT id, name, phone, email, notes, total_visits, total_spent_cents, last_visit_at, created_at
+       FROM crm_customers WHERE id = $1 AND restaurant_id = $2`,
+      [customerId, restaurantId]
+    );
+    if (custRes.rowCount === 0) {
+      return res.status(404).json({ error: "Customer not found" });
+    }
+    const customer = custRes.rows[0];
+
+    // 2. Orders – prefer crm_customer_orders link; also match sessions by phone/name
+    const ordersRes = await pool.query(
+      `SELECT DISTINCT ON (o.id)
+         o.id AS order_id,
+         o.restaurant_order_number,
+         o.status,
+         o.payment_method,
+         o.created_at,
+         ts.order_type,
+         COALESCE(t.name, ts.table_name, 'Counter') AS table_label,
+         ts.pax,
+         (
+           SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
+           FROM order_items oi2
+           WHERE oi2.order_id = o.id AND oi2.removed = false
+         ) AS total_cents
+       FROM orders o
+       JOIN table_sessions ts ON ts.id = o.session_id
+       LEFT JOIN tables t ON t.id = ts.table_id
+       LEFT JOIN crm_customer_orders cco ON cco.order_id = o.id
+       WHERE o.restaurant_id = $1
+         AND (
+           cco.customer_id = $2
+           OR (ts.customer_phone IS NOT NULL AND ts.customer_phone = $3 AND $3 <> '')
+           OR (ts.customer_name  IS NOT NULL AND ts.customer_name  = $4 AND $4 <> '')
+         )
+       ORDER BY o.id DESC, o.created_at DESC`,
+      [restaurantId, customerId, customer.phone || '', customer.name]
+    );
+
+    // 3. Bookings matched by phone or name
+    const bookingsRes = await pool.query(
+      `SELECT b.id, b.guest_name, b.phone, b.pax, b.booking_date, b.booking_time,
+              b.status, b.notes, b.created_at,
+              COALESCE(t.name, '') AS table_label
+       FROM bookings b
+       LEFT JOIN tables t ON t.id = b.table_id
+       WHERE b.restaurant_id = $1
+         AND (
+           (b.phone IS NOT NULL AND b.phone = $2 AND $2 <> '')
+           OR (b.guest_name = $3)
+         )
+       ORDER BY b.booking_date DESC, b.booking_time DESC`,
+      [restaurantId, customer.phone || '', customer.name]
+    );
+
+    const now = new Date().toISOString().split('T')[0];
+    const pastBookings   = bookingsRes.rows.filter(b => b.booking_date < now || b.status === 'completed' || b.status === 'cancelled' || b.status === 'no-show');
+    const futureBookings = bookingsRes.rows.filter(b => b.booking_date >= now && b.status === 'confirmed');
+
+    // 4. Eligible coupons (active, not expired, not exhausted)
+    const couponsRes = await pool.query(
+      `SELECT id, code, discount_type, discount_value, min_order_cents,
+              max_uses, current_uses, valid_from, valid_until, is_active
+       FROM coupons
+       WHERE restaurant_id = $1
+         AND is_active = true
+         AND (valid_until IS NULL OR valid_until >= NOW())
+         AND (max_uses IS NULL OR current_uses < max_uses)
+       ORDER BY created_at DESC`,
+      [restaurantId]
+    );
+
+    res.json({
+      customer,
+      orders: ordersRes.rows,
+      total_transacted_cents: ordersRes.rows.reduce((sum: number, r: any) => sum + Number(r.total_cents), 0),
+      past_bookings:   pastBookings,
+      future_bookings: futureBookings,
+      eligible_coupons: couponsRes.rows,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

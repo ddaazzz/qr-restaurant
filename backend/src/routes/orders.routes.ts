@@ -81,6 +81,21 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
 
     // ✅ LOOP STARTS HERE — item is now defined
     for (const item of items) {
+      // === CUSTOM ITEM (market-price, no menu_item_id) ===
+      if (item.menu_item_id == null) {
+        const customName = (item.custom_item_name || '').trim();
+        const customPrice = parseInt(item.custom_price_cents, 10);
+        if (!customName) throw new Error('Custom items require a name');
+        if (!isFinite(customPrice) || customPrice < 0) throw new Error('Invalid custom item price');
+        await pool.query(
+          `INSERT INTO order_items
+             (order_id, menu_item_id, quantity, price_cents, status, restaurant_id, notes, custom_item_name)
+           VALUES ($1, NULL, $2, $3, 'pending', $4, $5, $6)`,
+          [orderId, item.quantity || 1, customPrice, restaurantId, item.notes || null, customName]
+        );
+        continue;
+      }
+
       const optionIds: number[] = item.selected_option_ids || [];
 
       /* ------------------------------
@@ -307,14 +322,14 @@ for (const v of variants) {
               oi.menu_item_id,
               oi.quantity, 
               oi.price_cents, 
-              mi.name as item_name,
+              COALESCE(mi.name, oi.custom_item_name, 'Custom Item') as item_name,
               mi.category_id as menu_category_id,
               oi.print_category_id,
               ts.table_name, 
               o.created_at
             FROM order_items oi
             JOIN orders o ON oi.order_id = o.id
-            JOIN menu_items mi ON oi.menu_item_id = mi.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             LEFT JOIN table_sessions ts ON o.session_id = ts.id
             WHERE oi.order_id = $1 AND o.restaurant_id = $2
             ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
@@ -445,7 +460,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.quantity,
         oi.price_cents AS unit_price_cents,
 
-        COALESCE(mi.name, 'Deleted Item') AS item_name,
+        COALESCE(mi.name, oi.custom_item_name, 'Custom Item') AS item_name,
         COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
 
         COALESCE(
@@ -479,6 +494,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.quantity,
         oi.price_cents,
         mi.name,
+        oi.custom_item_name,
         ts.restaurant_id,
         mc.restaurant_id
 
@@ -586,8 +602,9 @@ router.get("/kitchen/items", async (req, res) => {
         oi.is_addon,
         oi.parent_order_item_id,
 
-        mi.name AS item_name,
+        COALESCE(mi.name, oi.custom_item_name, 'Custom Item') AS item_name,
         mi.category_id,
+        oi.custom_item_name,
 
         COALESCE(tu.display_name, 'Unknown Table') AS table_name,
         ts.order_type,
@@ -611,7 +628,7 @@ router.get("/kitchen/items", async (req, res) => {
       JOIN orders o ON oi.order_id = o.id
       JOIN table_sessions ts ON o.session_id = ts.id
       LEFT JOIN table_units tu ON ts.table_unit_id = tu.id
-      JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
       LEFT JOIN menu_categories mc ON mi.category_id = mc.id
 
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
@@ -628,6 +645,7 @@ router.get("/kitchen/items", async (req, res) => {
         oi.is_addon,
         oi.parent_order_item_id,
         mi.name,
+        oi.custom_item_name,
         mi.category_id,
         tu.display_name,
         ts.order_type,
@@ -1069,7 +1087,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         oi.status,
         oi.is_addon,
         oi.parent_order_item_id,
-        mi.name as menu_item_name,
+        COALESCE(mi.name, oi.custom_item_name, 'Custom Item') as menu_item_name,
         mi.image_url,
         STRING_AGG(
           DISTINCT vo.id::text,
@@ -1080,12 +1098,12 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
           '; '
         ) as variants
       FROM order_items oi
-      JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
       LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
       LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
       WHERE oi.order_id = $1 AND oi.removed = false
-      GROUP BY oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price_cents, oi.status, oi.is_addon, oi.parent_order_item_id, mi.name, mi.image_url
+      GROUP BY oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price_cents, oi.status, oi.is_addon, oi.parent_order_item_id, mi.name, oi.custom_item_name, mi.image_url
       ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
       `,
       [orderId]
@@ -1419,6 +1437,171 @@ router.get("/restaurants/:restaurantId/reports/sales-by-category", async (req, r
   } catch (err) {
     console.error("[sales-by-category]", err);
     res.status(500).json({ error: "Failed to load sales by category" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/export
+ * Export orders as CSV with rich filters.
+ *
+ * Query params:
+ *   date_from        – ISO date string (inclusive), e.g. 2026-01-01
+ *   date_to          – ISO date string (inclusive), e.g. 2026-04-30
+ *   period           – breakfast|lunch|tea|dinner|custom
+ *   period_from      – HH:MM  (required when period=custom)
+ *   period_to        – HH:MM  (required when period=custom)
+ *   order_type       – comma-separated list of: table,now,to_go   (empty = all)
+ *   pax_min          – min party size (integer, optional)
+ *   pax_max          – max party size (integer, optional)
+ */
+router.get("/restaurants/:restaurantId/reports/export", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const {
+      date_from, date_to,
+      period, period_from, period_to,
+      order_type,
+      pax_min, pax_max,
+    } = req.query as Record<string, string | undefined>;
+
+    // ── Period → time window ────────────────────────────────────
+    const PERIOD_TIMES: Record<string, [string, string]> = {
+      breakfast: ['07:00', '10:30'],
+      lunch:     ['11:00', '15:00'],
+      tea:       ['15:00', '17:30'],
+      dinner:    ['17:30', '23:00'],
+    };
+
+    let timeFrom: string | null = null;
+    let timeTo:   string | null = null;
+
+    if (period && period !== 'all') {
+      if (period === 'custom') {
+        timeFrom = period_from || null;
+        timeTo   = period_to   || null;
+      } else if (PERIOD_TIMES[period]) {
+        [timeFrom, timeTo] = PERIOD_TIMES[period];
+      }
+    }
+
+    // ── Build WHERE clauses ─────────────────────────────────────
+    const params: any[] = [restaurantId];
+    const conditions: string[] = ['o.restaurant_id = $1', 'oi.removed = false'];
+
+    if (date_from) {
+      params.push(date_from);
+      conditions.push(`o.created_at >= $${params.length}::date`);
+    }
+    if (date_to) {
+      params.push(date_to);
+      conditions.push(`o.created_at < ($${params.length}::date + INTERVAL '1 day')`);
+    }
+    if (timeFrom) {
+      params.push(timeFrom);
+      conditions.push(`o.created_at::time >= $${params.length}::time`);
+    }
+    if (timeTo) {
+      params.push(timeTo);
+      conditions.push(`o.created_at::time <= $${params.length}::time`);
+    }
+    if (order_type && order_type.trim()) {
+      // map frontend labels → DB values
+      const labelMap: Record<string, string> = {
+        table: 'table', now: 'now', to_go: 'to_go',
+      };
+      const types = order_type.split(',')
+        .map(t => labelMap[t.trim()])
+        .filter(Boolean);
+      if (types.length) {
+        params.push(types);
+        conditions.push(`COALESCE(ts.order_type, 'table') = ANY($${params.length}::text[])`);
+      }
+    }
+    if (pax_min) {
+      params.push(parseInt(pax_min, 10));
+      conditions.push(`COALESCE(ts.pax, 1) >= $${params.length}`);
+    }
+    if (pax_max) {
+      params.push(parseInt(pax_max, 10));
+      conditions.push(`COALESCE(ts.pax, 1) <= $${params.length}`);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const result = await pool.query(
+      `SELECT
+         o.id                                      AS order_id,
+         o.restaurant_order_number                 AS order_number,
+         to_char(o.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS created_at,
+         COALESCE(ts.order_type, 'table')          AS order_type,
+         COALESCE(t.name, ts.table_name, 'Counter') AS table_name,
+         COALESCE(ts.pax, 1)                       AS party_size,
+         ts.customer_name,
+         ts.customer_phone,
+         o.status                                  AS order_status,
+         o.payment_method,
+         mi.name                                   AS item_name,
+         COALESCE(mc.name, '')                     AS category,
+         oi.quantity,
+         oi.price_cents,
+         (oi.price_cents * oi.quantity)            AS line_total_cents
+       FROM orders o
+       JOIN order_items oi  ON oi.order_id  = o.id
+       JOIN menu_items  mi  ON mi.id        = oi.menu_item_id
+       LEFT JOIN menu_categories mc ON mc.id = mi.category_id
+       LEFT JOIN table_sessions ts ON ts.id = o.session_id
+       LEFT JOIN tables t ON t.id = ts.table_id
+       WHERE ${whereClause}
+         AND oi.is_addon = false
+       ORDER BY o.created_at DESC, o.id, oi.id`,
+      params
+    );
+
+    // ── Build CSV ───────────────────────────────────────────────
+    const escape = (v: any): string => {
+      const s = v == null ? '' : String(v);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+
+    const headers = [
+      'Order ID','Order #','Date/Time','Order Type','Table',
+      'Party Size','Customer Name','Customer Phone',
+      'Status','Payment Method',
+      'Item','Category','Qty','Unit Price','Line Total',
+    ];
+
+    const lines: string[] = [headers.map(escape).join(',')];
+    for (const row of result.rows) {
+      lines.push([
+        row.order_id,
+        row.order_number || '',
+        row.created_at,
+        row.order_type,
+        row.table_name,
+        row.party_size,
+        row.customer_name || '',
+        row.customer_phone || '',
+        row.order_status,
+        row.payment_method || '',
+        row.item_name,
+        row.category,
+        row.quantity,
+        (Number(row.price_cents)      / 100).toFixed(2),
+        (Number(row.line_total_cents) / 100).toFixed(2),
+      ].map(escape).join(','));
+    }
+
+    const csv = lines.join('\r\n');
+    const filename = `orders_export_${new Date().toISOString().slice(0,10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\uFEFF' + csv); // BOM for Excel UTF-8 compatibility
+  } catch (err) {
+    console.error("[reports/export]", err);
+    res.status(500).json({ error: "Failed to export report" });
   }
 });
 

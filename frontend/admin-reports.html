@@ -11,6 +11,11 @@
       <button class="global-date-btn active" data-range="month" style="padding: 6px 14px; border: none; border-radius: 6px; background: #4a90e2; color: white; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('month')" data-i18n="admin.monthly-sales">30 Days</button>
       <button class="global-date-btn" data-range="all" style="padding: 6px 14px; border: 2px solid #4a90e2; border-radius: 6px; background: transparent; color: #4a90e2; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('all')" data-i18n="admin.all-orders">All Time</button>
     </div>
+    <div style="margin-left: auto;">
+      <button onclick="showExportPage()" style="padding: 8px 18px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+        ⬇ Export
+      </button>
+    </div>
   </div>
 
   <!-- Metrics Row -->
@@ -326,3 +331,89 @@
     }
   })();
 </script>
+
+<!-- ================== EXPORT PAGE ================== -->
+<div id="reports-export-page" style="display:none;">
+  <div style="max-width:680px;margin:0 auto;padding:20px 0;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+      <button onclick="hideExportPage()" style="background:none;border:none;cursor:pointer;color:var(--primary-color);font-size:14px;font-weight:600;padding:0;">&#8592; Back to Reports</button>
+      <h3 style="margin:0;flex:1;font-size:18px;font-weight:700;">Export Orders</h3>
+    </div>
+
+    <div class="section-card" style="padding:20px;">
+
+      <!-- Date Range -->
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Date Range</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">From</label>
+            <input type="date" id="export-date-from" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">To</label>
+            <input type="date" id="export-date-to" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Time Period -->
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Period</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;" id="export-period-buttons">
+          <button class="export-period-btn active" data-period="all"      onclick="selectExportPeriod('all')"       style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:#4a90e2;color:white;cursor:pointer;font-size:12px;font-weight:600;">All Day</button>
+          <button class="export-period-btn"        data-period="breakfast" onclick="selectExportPeriod('breakfast')" style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Breakfast (07:00–10:30)</button>
+          <button class="export-period-btn"        data-period="lunch"     onclick="selectExportPeriod('lunch')"     style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Lunch (11:00–15:00)</button>
+          <button class="export-period-btn"        data-period="tea"       onclick="selectExportPeriod('tea')"       style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Tea (15:00–17:30)</button>
+          <button class="export-period-btn"        data-period="dinner"    onclick="selectExportPeriod('dinner')"    style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Dinner (17:30–23:00)</button>
+          <button class="export-period-btn"        data-period="custom"    onclick="selectExportPeriod('custom')"    style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Custom</button>
+        </div>
+        <!-- Custom time fields (shown only when Custom is selected) -->
+        <div id="export-custom-time" style="display:none;margin-top:12px;display:none;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">From Time</label>
+            <input type="time" id="export-period-from" value="00:00" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">To Time</label>
+            <input type="time" id="export-period-to" value="23:59" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Dining Type -->
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Dining Type <span style="font-size:11px;color:#9ca3af;font-weight:400;">(multi-select)</span></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <label class="export-type-chip" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:#4a90e2;color:white;user-select:none;">
+            <input type="checkbox" value="table" id="export-type-table" checked style="display:none;" onchange="updateExportTypeChip(this)" />Tables</label>
+          <label class="export-type-chip" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:#4a90e2;color:white;user-select:none;">
+            <input type="checkbox" value="now" id="export-type-now" checked style="display:none;" onchange="updateExportTypeChip(this)" />Order-Now</label>
+          <label class="export-type-chip" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:#4a90e2;color:white;user-select:none;">
+            <input type="checkbox" value="to_go" id="export-type-to-go" checked style="display:none;" onchange="updateExportTypeChip(this)" />To-Go</label>
+        </div>
+      </div>
+
+      <!-- Party Size -->
+      <div style="margin-bottom:24px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Party Size</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">Min</label>
+            <input type="number" id="export-pax-min" min="1" placeholder="Any" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">Max</label>
+            <input type="number" id="export-pax-max" min="1" placeholder="Any" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+        </div>
+      </div>
+
+      <button onclick="downloadExportCSV()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;">
+        ⬇ Download CSV
+      </button>
+      <div id="export-error" style="display:none;margin-top:10px;color:#dc2626;font-size:13px;text-align:center;"></div>
+    </div>
+  </div>
+</div>

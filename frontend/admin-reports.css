@@ -35,3 +35,6 @@
 @media (max-width: 480px) {
 
 }
+/* ============= EXPORT PAGE ============= */
+#reports-export-page .export-period-btn:hover { opacity: 0.85; }
+.export-type-chip:hover { opacity: 0.85; }

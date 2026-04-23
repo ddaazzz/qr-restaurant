@@ -1052,8 +1052,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         if (terminalForm.terminal_ip) payload.terminal_ip = terminalForm.terminal_ip;
         if (terminalForm.terminal_port) payload.terminal_port = parseInt(terminalForm.terminal_port);
         if (terminalForm.vendor_name === 'payment-asia-terminal') {
-          // PA Terminal: allow updating API key
-          if (terminalForm.app_secret) payload.app_secret = terminalForm.app_secret;
+          // PA Terminal: allow updating credentials and connection details
+          if (terminalForm.merchant_token) payload.merchant_token = terminalForm.merchant_token;
+          if (terminalForm.secret_code) payload.secret_code = terminalForm.secret_code;
         } else {
           if (terminalForm.endpoint_path) payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
         }
@@ -1072,8 +1073,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           return;
         }
       } else if (terminalForm.vendor_name === 'payment-asia-terminal') {
-        if (!terminalForm.app_secret || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
-          Alert.alert(t('settings.validation'), 'PA Terminal requires API Key, Terminal IP, and Port');
+        if (!terminalForm.merchant_token || !terminalForm.secret_code || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
+          Alert.alert(t('settings.validation'), 'PA Terminal requires Merchant Token, Secret Code, Terminal IP, and Port');
           return;
         }
       } else {
@@ -1086,11 +1087,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const payload: any = { vendor_name: terminalForm.vendor_name };
 
       if (terminalForm.vendor_name === 'payment-asia') {
-        payload.app_id = terminalForm.merchant_token;
-        payload.app_secret = terminalForm.secret_code;
+        payload.merchant_token = terminalForm.merchant_token;
+        payload.secret_code = terminalForm.secret_code;
         payload.payment_gateway_env = terminalForm.environment;
       } else if (terminalForm.vendor_name === 'payment-asia-terminal') {
-        payload.app_secret = terminalForm.app_secret;
+        payload.merchant_token = terminalForm.merchant_token;
+        payload.secret_code = terminalForm.secret_code;
         payload.terminal_ip = terminalForm.terminal_ip;
         payload.terminal_port = parseInt(terminalForm.terminal_port);
       } else {
@@ -3329,8 +3331,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </View>
             )}
 
-            {/* App ID - superadmin only */}
-            {isSuperadmin && (
+            {/* App ID - superadmin only, not for Payment Asia vendors (they use merchant_token) */}
+            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-terminal' && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-id')}</Text>
               <TextInput
@@ -3342,8 +3344,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
             )}
 
-            {/* App Secret - superadmin only */}
-            {isSuperadmin && (
+            {/* App Secret - superadmin only, not for Payment Asia vendors */}
+            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-terminal' && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-secret')}</Text>
               <TextInput
@@ -3449,18 +3451,28 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             {terminalForm.vendor_name === 'payment-asia-terminal' && (
               <>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>API Key *</Text>
+                  <Text style={styles.label}>{t('settings.merchant-token')} *</Text>
                   <TextInput
                     style={styles.input}
-                    value={terminalForm.app_secret}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, app_secret: text })}
-                    placeholder="Enter PA Terminal API Key"
+                    value={terminalForm.merchant_token}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, merchant_token: text })}
+                    placeholder={t('settings.enter-merchant-token')}
+                    placeholderTextColor="#9ca3af"
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>{t('settings.secret-code')} *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.secret_code}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, secret_code: text })}
+                    placeholder={t('settings.enter-secret-code')}
                     placeholderTextColor="#9ca3af"
                     secureTextEntry
                   />
                 </View>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Terminal IP *</Text>
+                  <Text style={styles.label}>{t('settings.terminal-ip')} *</Text>
                   <TextInput
                     style={styles.input}
                     value={terminalForm.terminal_ip}
@@ -3472,7 +3484,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   />
                 </View>
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Terminal Port *</Text>
+                  <Text style={styles.label}>{t('settings.terminal-port')} *</Text>
                   <TextInput
                     style={styles.input}
                     value={terminalForm.terminal_port}

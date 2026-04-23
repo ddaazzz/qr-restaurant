@@ -169,8 +169,8 @@ router.get("/restaurants/:restaurantId/active-sessions-with-orders",
           oi.quantity,
           oi.status        AS item_status,
 
-          mi.name          AS item_name,
-          mi.price_cents   AS price_cents,
+          COALESCE(mi.name, oi.custom_item_name, 'Custom Item') AS item_name,
+          COALESCE(mi.price_cents, oi.price_cents) AS price_cents,
 
           COALESCE(
             json_agg(
@@ -212,7 +212,7 @@ router.get("/restaurants/:restaurantId/active-sessions-with-orders",
           ts.id, t.id, t.name,
           o.id,
           oi.id, oi.quantity, oi.status,
-          mi.name, mi.price_cents
+          mi.name, mi.price_cents, oi.custom_item_name, oi.price_cents
 
         ORDER BY t.id, ts.id, o.id, oi.id
         `,
@@ -275,12 +275,12 @@ router.get("/:sessionId/bill", async (req, res) => {
       SELECT
         oi.quantity,
         oi.price_cents,
-        mi.name AS item_name,
+        COALESCE(mi.name, oi.custom_item_name, 'Custom Item') AS item_name,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
         o.id AS order_id
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE o.session_id = $1
     `, [sessionId]);
 

@@ -224,6 +224,29 @@
       </div>
     </template>
 
+    <!-- Customer Details Modal (To-Go order creation & edit customer) -->
+    <div id="customer-details-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;justify-content:center;align-items:center;">
+      <div style="background:#fff;border-radius:12px;padding:24px;width:90%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <h3 id="customer-modal-title" style="margin:0 0 16px;font-size:16px;font-weight:700;color:#1f2937;">Customer Details</h3>
+        <div style="position:relative;margin-bottom:12px;">
+          <label style="font-size:12px;color:#6b7280;font-weight:600;display:block;margin-bottom:4px;">Name *</label>
+          <input type="text" id="customer-modal-name" autocomplete="off" placeholder="Search or type name…"
+            style="width:100%;padding:9px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;outline:none;"
+            oninput="onCustomerModalNameInput(this.value)">
+          <div id="customer-modal-suggestions" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #d1d5db;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:100;max-height:160px;overflow-y:auto;margin-top:2px;"></div>
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:12px;color:#6b7280;font-weight:600;display:block;margin-bottom:4px;">Phone</label>
+          <input type="text" id="customer-modal-phone" placeholder="Phone number"
+            style="width:100%;padding:9px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;outline:none;">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="cancelCustomerModal()" style="flex:1;padding:10px;background:#e5e7eb;color:#374151;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:14px;">Cancel</button>
+          <button onclick="confirmCustomerModal()" style="flex:1;padding:10px;background:#667eea;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:14px;">Confirm</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Close Containers -->
     </div>
     </div>

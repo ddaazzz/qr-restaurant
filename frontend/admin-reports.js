@@ -1239,3 +1239,115 @@ function renderBookingsStatusBar(bookings) {
   reTranslateContent();
 }
 
+// ============= EXPORT PAGE =============
+
+var currentExportPeriod = 'all';
+
+function showExportPage() {
+  var dashboard = document.getElementById('reports-dashboard');
+  var loading = document.getElementById('reports-loading');
+  var exportPage = document.getElementById('reports-export-page');
+  if (dashboard) dashboard.style.display = 'none';
+  if (loading) loading.style.display = 'none';
+  if (exportPage) exportPage.style.display = '';
+  // Set default dates: last 30 days
+  var today = new Date();
+  var from = new Date(today);
+  from.setDate(from.getDate() - 30);
+  var toInput = document.getElementById('export-date-to');
+  var fromInput = document.getElementById('export-date-from');
+  if (toInput && !toInput.value) toInput.value = today.toISOString().split('T')[0];
+  if (fromInput && !fromInput.value) fromInput.value = from.toISOString().split('T')[0];
+}
+
+function hideExportPage() {
+  var exportPage = document.getElementById('reports-export-page');
+  if (exportPage) exportPage.style.display = 'none';
+  var dashboard = document.getElementById('reports-dashboard');
+  if (dashboard) dashboard.style.display = '';
+}
+
+function selectExportPeriod(period) {
+  currentExportPeriod = period;
+  document.querySelectorAll('.export-period-btn').forEach(function(btn) {
+    if (btn.dataset.period === period) {
+      btn.style.background = '#4a90e2';
+      btn.style.color = 'white';
+      btn.style.border = '2px solid #4a90e2';
+    } else {
+      btn.style.background = 'transparent';
+      btn.style.color = '#4a90e2';
+      btn.style.border = '2px solid #4a90e2';
+    }
+  });
+  var customTime = document.getElementById('export-custom-time');
+  if (customTime) {
+    customTime.style.display = period === 'custom' ? 'grid' : 'none';
+  }
+}
+
+function updateExportTypeChip(checkbox) {
+  var label = checkbox.closest('label') || checkbox.parentElement;
+  if (checkbox.checked) {
+    label.style.background = '#4a90e2';
+    label.style.color = 'white';
+  } else {
+    label.style.background = 'transparent';
+    label.style.color = '#4a90e2';
+  }
+}
+
+async function downloadExportCSV() {
+  var errEl = document.getElementById('export-error');
+  if (errEl) errEl.style.display = 'none';
+
+  var params = new URLSearchParams();
+
+  var dateFrom = document.getElementById('export-date-from') ? document.getElementById('export-date-from').value : '';
+  var dateTo = document.getElementById('export-date-to') ? document.getElementById('export-date-to').value : '';
+  if (dateFrom) params.set('date_from', dateFrom);
+  if (dateTo) params.set('date_to', dateTo);
+
+  if (currentExportPeriod && currentExportPeriod !== 'all') {
+    params.set('period', currentExportPeriod);
+    if (currentExportPeriod === 'custom') {
+      var pFrom = document.getElementById('export-period-from') ? document.getElementById('export-period-from').value : '';
+      var pTo = document.getElementById('export-period-to') ? document.getElementById('export-period-to').value : '';
+      if (pFrom) params.set('period_from', pFrom);
+      if (pTo) params.set('period_to', pTo);
+    }
+  }
+
+  var types = [];
+  if (document.getElementById('export-type-table') && document.getElementById('export-type-table').checked) types.push('table');
+  if (document.getElementById('export-type-now') && document.getElementById('export-type-now').checked) types.push('now');
+  if (document.getElementById('export-type-to-go') && document.getElementById('export-type-to-go').checked) types.push('to_go');
+  if (types.length > 0 && types.length < 3) params.set('order_type', types.join(','));
+
+  var paxMin = document.getElementById('export-pax-min') ? document.getElementById('export-pax-min').value : '';
+  var paxMax = document.getElementById('export-pax-max') ? document.getElementById('export-pax-max').value : '';
+  if (paxMin) params.set('pax_min', paxMin);
+  if (paxMax) params.set('pax_max', paxMax);
+
+  var url = API + '/restaurants/' + restaurantId + '/reports/export?' + params.toString();
+
+  try {
+    var resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!resp.ok) {
+      var err = {};
+      try { err = await resp.json(); } catch (e2) {}
+      throw new Error(err.error || 'Export failed (' + resp.status + ')');
+    }
+    var blob = await resp.blob();
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'orders_export_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+

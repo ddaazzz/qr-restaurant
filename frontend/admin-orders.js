@@ -12,6 +12,7 @@ let SELECTED_ORDERS_CATEGORY = null;
 let ORDER_HISTORY_FILTER = 'all'; // Filter for order history tabs: 'all', 'table', 'order-now', 'to-go'
 let ALL_ORDERS_DATA = []; // Store all orders for filtering
 let ORDERS_MENU_ITEMS = [];
+let ORDERS_FEATURE_FLAGS = {};
 let ORDERS_HISTORY_MODE = false;
 let VIEWING_HISTORICAL_ORDER = null;
 let _historyRefreshInterval = null;
@@ -140,7 +141,10 @@ async function loadOrdersMenu() {
   try {
     const url = `${API}/restaurants/${restaurantId}/menu`;
     
-    const response = await fetch(url);
+    const [response, settingsRes] = await Promise.all([
+      fetch(url),
+      fetch(`${API}/restaurants/${restaurantId}/settings`).catch(() => null),
+    ]);
     
     if (!response.ok) {
       const errorBody = await response.text();
@@ -153,6 +157,12 @@ async function loadOrdersMenu() {
     }
     
     const menuData = await response.json();
+
+    // Load feature flags for premium features
+    if (settingsRes && settingsRes.ok) {
+      const settings = await settingsRes.json();
+      ORDERS_FEATURE_FLAGS = settings.feature_flags || {};
+    }
     
     // Extract categories and items from response
     ORDERS_CATEGORIES = menuData.categories || [];
@@ -184,6 +194,18 @@ function renderOrdersMenuItems() {
   // Clear container first
   container.innerHTML = '';
   
+  // Custom item tile (premium feature) — shown first
+  if (ORDERS_FEATURE_FLAGS.custom_menu_items) {
+    var customCard = document.createElement('div');
+    customCard.className = 'orders-item-card';
+    customCard.style.cssText = 'border: 2px dashed #6366f1; background: #f5f3ff; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;';
+    customCard.onclick = function() { showCustomOrderItemModal(); };
+    customCard.innerHTML = '<div style="font-size:28px;color:#6366f1;line-height:1;">+</div>'
+      + '<div style="font-size:12px;font-weight:700;color:#6366f1;margin-top:6px;text-align:center;">Custom Item</div>'
+      + '<div style="font-size:11px;color:#a5b4fc;margin-top:2px;text-align:center;">Market Price</div>';
+    container.appendChild(customCard);
+  }
+
   // Filter items by selected category
   var categoryItems = ORDERS_MENU_ITEMS.filter(function(item) {
     return SELECTED_ORDERS_CATEGORY && item.category_id === SELECTED_ORDERS_CATEGORY.id;
@@ -240,8 +262,65 @@ function renderOrdersMenuItems() {
   renderOrdersCategoryBar();
 }
 
+function showCustomOrderItemModal() {
+  var existing = document.getElementById('custom-order-item-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'custom-order-item-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:24px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">Custom Menu Item</h3>
+        <button onclick="document.getElementById('custom-order-item-modal').remove()" style="background:none;border:none;font-size:20px;color:#9ca3af;cursor:pointer;padding:0;">&#x2715;</button>
+      </div>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 16px;">Enter a name and price for a market-price or one-off dish.</p>
+      <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">Item Name *</label>
+      <input id="custom-order-item-name" type="text" placeholder="e.g. Fresh Crab (Market Price)"
+        style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:14px;box-sizing:border-box;" />
+      <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;">Price ($) *</label>
+      <input id="custom-order-item-price" type="number" placeholder="e.g. 68.00" step="0.01" min="0"
+        style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:20px;box-sizing:border-box;" />
+      <div style="display:flex;gap:10px;">
+        <button onclick="confirmCustomOrderItem()" style="flex:1;padding:10px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Add to Cart</button>
+        <button onclick="document.getElementById('custom-order-item-modal').remove()" style="flex:1;padding:10px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(function() { var el = document.getElementById('custom-order-item-name'); if (el) el.focus(); }, 50);
+}
+
+function confirmCustomOrderItem() {
+  var nameEl = document.getElementById('custom-order-item-name');
+  var priceEl = document.getElementById('custom-order-item-price');
+  if (!nameEl || !priceEl) return;
+
+  var name = (nameEl.value || '').trim();
+  var priceNum = parseFloat(priceEl.value);
+
+  if (!name) { alert('Please enter an item name'); nameEl.focus(); return; }
+  if (!isFinite(priceNum) || priceNum < 0) { alert('Please enter a valid price'); priceEl.focus(); return; }
+
+  var priceCents = Math.round(priceNum * 100);
+  var cartItem = {
+    id: null,
+    name: name,
+    price_cents: priceCents,
+    variants: [],
+    quantity: 1,
+    notes: '',
+    cartItemId: Math.random().toString(36).substr(2, 9),
+    isCustomItem: true,
+    custom_item_name: name,
+    custom_price_cents: priceCents,
+  };
+  ORDERS_CART.push(cartItem);
+  updateOrdersCartDisplay();
+  document.getElementById('custom-order-item-modal').remove();
+}
+
 function renderOrdersCategoryBar() {
-  // Try to render to bottom tabs first (desktop), fallback to sidebar (mobile)
   let categoryTabsContainer = document.getElementById('orders-category-tabs');
   let categoryTabsBottomContainer = document.querySelector('.orders-category-tabs-bottom');
   let categorySidebarContainer = document.getElementById('orders-category-sidebar');
@@ -720,12 +799,23 @@ async function submitPayNowOrder() {
   }
 
   try {
-    const items = ORDERS_CART.map(cartItem => ({
-      menu_item_id: cartItem.id,
-      quantity: cartItem.quantity,
-      notes: cartItem.notes || null,
-      selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
-    }));
+    const items = ORDERS_CART.map(cartItem => {
+      if (cartItem.isCustomItem) {
+        return {
+          menu_item_id: null,
+          custom_item_name: cartItem.custom_item_name,
+          custom_price_cents: cartItem.custom_price_cents,
+          quantity: cartItem.quantity,
+          notes: cartItem.notes || null,
+        };
+      }
+      return {
+        menu_item_id: cartItem.id,
+        quantity: cartItem.quantity,
+        notes: cartItem.notes || null,
+        selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
+      };
+    });
 
     // Create counter-order session + order (NOT settled yet — let the modal handle payment)
     const orderRes = await fetch(`${API}/restaurants/${restaurantId}/counter-order`, {
@@ -890,17 +980,33 @@ async function submitToGoOrder() {
   
   try {
     // For "To Go", create items array directly with correct format
-    const items = ORDERS_CART.map(cartItem => ({
-      menu_item_id: cartItem.id,
-      quantity: cartItem.quantity,
-      selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
-    }));
+    const items = ORDERS_CART.map(cartItem => {
+      if (cartItem.isCustomItem) {
+        return {
+          menu_item_id: null,
+          custom_item_name: cartItem.custom_item_name,
+          custom_price_cents: cartItem.custom_price_cents,
+          quantity: cartItem.quantity,
+          notes: cartItem.notes || null,
+        };
+      }
+      return {
+        menu_item_id: cartItem.id,
+        quantity: cartItem.quantity,
+        selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
+      };
+    });
     
-    // Get customer contact info
-    const customerName = prompt('Customer name:', '');
-    if (!customerName) throw new Error('Customer name required for to-go order');
-    const customerPhone = prompt('Customer phone (optional):', '');
-    
+    // Get customer contact info via CRM modal
+    let customerName, customerPhone;
+    try {
+      const customer = await showCustomerModal('To-Go Order — Customer Details', '', '');
+      customerName = customer.name;
+      customerPhone = customer.phone;
+    } catch (e) {
+      return; // user cancelled
+    }
+
     // Use to-go-order endpoint
     const orderRes = await fetch(`${API}/restaurants/${restaurantId}/to-go-order`, {
       method: 'POST',
@@ -986,12 +1092,23 @@ async function createOrder(tableId, sessionId) {
   if (!targetSessionId) throw new Error('No valid session');
   
   // Create items for the order with correct format
-  const items = ORDERS_CART.map(cartItem => ({
-    menu_item_id: cartItem.id,
-    quantity: cartItem.quantity,
-    notes: cartItem.notes || null,
-    selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
-  }));
+  const items = ORDERS_CART.map(cartItem => {
+    if (cartItem.isCustomItem) {
+      return {
+        menu_item_id: null,
+        custom_item_name: cartItem.custom_item_name,
+        custom_price_cents: cartItem.custom_price_cents,
+        quantity: cartItem.quantity,
+        notes: cartItem.notes || null,
+      };
+    }
+    return {
+      menu_item_id: cartItem.id,
+      quantity: cartItem.quantity,
+      notes: cartItem.notes || null,
+      selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
+    };
+  });
   
   const res = await fetch(`${API}/sessions/${targetSessionId}/orders`, {
     method: 'POST',
@@ -1357,7 +1474,14 @@ function displayOrderDetails(order) {
   const detailsTitle = document.getElementById('order-details-title');
   
   if (!detailsContent) return;
-  
+
+  // Store customer context for the modal
+  window._currentOrderCustomer = {
+    name: order.customer_name || '',
+    phone: order.customer_phone || '',
+    sessionId: order.session_id
+  };
+
   // Clear and build HTML from scratch
   let html = '<div style="display: flex; flex-direction: column; gap: 16px;">';
   
@@ -1387,22 +1511,19 @@ function displayOrderDetails(order) {
           <div style="font-size: 13px; color: #333; margin-top: 4px;">${order.items ? order.items.length : 0} items</div>
         </div>
       </div>
-      ${(order.customer_name || order.customer_phone) ? `
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0;">
-        <div>
-          <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;">Customer</div>
-          <div id="order-customer-name-display" style="font-size: 13px; color: #333; margin-top: 4px;">${order.customer_name || '—'}</div>
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <div style="display: flex; gap: 20px; flex: 1;">
+          <div>
+            <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;">Customer</div>
+            <div style="font-size: 13px; color: #333; margin-top: 4px;">${order.customer_name || '—'}</div>
+          </div>
+          <div>
+            <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;">Phone</div>
+            <div style="font-size: 13px; color: #333; margin-top: 4px;">${order.customer_phone || '—'}</div>
+          </div>
         </div>
-        <div>
-          <div style="font-size: 12px; color: #999; text-transform: uppercase; font-weight: 600;">Phone</div>
-          <div id="order-customer-phone-display" style="font-size: 13px; color: #333; margin-top: 4px;">${order.customer_phone || '—'}</div>
-        </div>
+        <button onclick="editOrderCustomerInfo()" style="flex-shrink:0;padding: 5px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 5px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 500;">${order.customer_name ? '✏️ Edit' : '+ Add'}</button>
       </div>
-      ` : `
-      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0;">
-        <button onclick="editOrderCustomerInfo(${order.session_id})" style="padding: 6px 14px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 5px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 500;">+ Add Customer Info</button>
-      </div>
-      `}
     </div>
   `;
   
@@ -1631,20 +1752,26 @@ async function restoreOrderToCart(orderId) {
   return selectOrderFromHistory(orderId);
 }
 
-async function editOrderCustomerInfo(sessionId) {
-  const name = prompt('Customer name:', '');
-  if (name === null) return;
-  const phone = prompt('Customer phone:', '');
-  if (phone === null) return;
+async function editOrderCustomerInfo() {
+  const ctx = window._currentOrderCustomer || {};
+  let customer;
+  try {
+    customer = await showCustomerModal(
+      ctx.name ? 'Edit Customer Info' : 'Add Customer Info',
+      ctx.name || '',
+      ctx.phone || ''
+    );
+  } catch (e) {
+    return; // user cancelled
+  }
 
   try {
-    const res = await fetch(`${API}/sessions/${sessionId}/customer`, {
+    const res = await fetch(`${API}/sessions/${ctx.sessionId}/customer`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_name: name || null, customer_phone: phone || null })
+      body: JSON.stringify({ customer_name: customer.name || null, customer_phone: customer.phone || null })
     });
     if (!res.ok) throw new Error('Failed to update customer info');
-    // Refresh the order detail
     if (VIEWING_HISTORICAL_ORDER) {
       await selectOrderFromHistory(VIEWING_HISTORICAL_ORDER);
     }
@@ -2370,4 +2497,78 @@ async function emailSessionOrder(sessionId) {
     console.error('Error emailing receipt:', err);
     alert('Error emailing receipt: ' + err.message);
   }
+}
+// ============= CUSTOMER DETAILS MODAL (CRM) =============
+let _customerModalResolve = null;
+let _customerModalReject = null;
+let _customerModalTimer = null;
+
+function showCustomerModal(title, initialName, initialPhone) {
+  return new Promise(function(resolve, reject) {
+    _customerModalResolve = resolve;
+    _customerModalReject = reject;
+    var modal = document.getElementById('customer-details-modal');
+    if (!modal) { reject(new Error('no modal')); return; }
+    document.getElementById('customer-modal-title').textContent = title || 'Customer Details';
+    document.getElementById('customer-modal-name').value = initialName || '';
+    document.getElementById('customer-modal-phone').value = initialPhone || '';
+    document.getElementById('customer-modal-suggestions').style.display = 'none';
+    modal.style.display = 'flex';
+    setTimeout(function() {
+      var nameInput = document.getElementById('customer-modal-name');
+      if (nameInput) nameInput.focus();
+    }, 50);
+  });
+}
+
+function cancelCustomerModal() {
+  var modal = document.getElementById('customer-details-modal');
+  if (modal) modal.style.display = 'none';
+  if (_customerModalReject) { _customerModalReject(new Error('cancelled')); _customerModalReject = null; _customerModalResolve = null; }
+}
+
+function confirmCustomerModal() {
+  var name = (document.getElementById('customer-modal-name').value || '').trim();
+  var phone = (document.getElementById('customer-modal-phone').value || '').trim();
+  if (!name) { alert('Customer name is required'); return; }
+  var modal = document.getElementById('customer-details-modal');
+  if (modal) modal.style.display = 'none';
+  if (_customerModalResolve) { _customerModalResolve({ name: name, phone: phone }); _customerModalResolve = null; _customerModalReject = null; }
+}
+
+function onCustomerModalNameInput(value) {
+  if (_customerModalTimer) clearTimeout(_customerModalTimer);
+  var suggestions = document.getElementById('customer-modal-suggestions');
+  if (!value || value.length < 2) { if (suggestions) suggestions.style.display = 'none'; return; }
+  _customerModalTimer = setTimeout(function() { searchCustomerModalCRM(value); }, 300);
+}
+
+async function searchCustomerModalCRM(query) {
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/customers?search=' + encodeURIComponent(query), {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    var customers = await res.json();
+    var container = document.getElementById('customer-modal-suggestions');
+    if (!container) return;
+    if (!customers || customers.length === 0) { container.style.display = 'none'; return; }
+    container.innerHTML = customers.map(function(c) {
+      var safeName = (c.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var safePhone = (c.phone || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<div onclick="selectCustomerFromModal(\'' + safeName + '\',\'' + safePhone + '\')"'
+        + ' style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:13px;"'
+        + ' onmouseover="this.style.background=\'#f9fafb\'" onmouseout="this.style.background=\'\'">'
+        + '<div style="font-weight:600;color:#1f2937;">' + escapeHtml(c.name) + '</div>'
+        + (c.phone ? '<div style="font-size:11px;color:#6b7280;">' + escapeHtml(c.phone) + '</div>' : '')
+        + '</div>';
+    }).join('');
+    container.style.display = 'block';
+  } catch (e) { /* ignore */ }
+}
+
+function selectCustomerFromModal(name, phone) {
+  document.getElementById('customer-modal-name').value = name;
+  document.getElementById('customer-modal-phone').value = phone;
+  document.getElementById('customer-modal-suggestions').style.display = 'none';
 }

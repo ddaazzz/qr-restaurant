@@ -745,3 +745,63 @@ function buildBookingCardHTML_DEPRECATED(booking, allTables) {
     </div>
   `;
 }
+
+// ============= BOOKING FORM CRM SEARCH =============
+let _bookingNameTimer = null;
+
+function onBookingNameInput(value) {
+  if (_bookingNameTimer) clearTimeout(_bookingNameTimer);
+  var suggestions = document.getElementById('booking-customer-suggestions');
+  if (!value || value.length < 2) { if (suggestions) suggestions.style.display = 'none'; return; }
+  _bookingNameTimer = setTimeout(function() { searchBookingCustomers(value); }, 300);
+}
+
+async function searchBookingCustomers(query) {
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/customers?search=' + encodeURIComponent(query), {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    var customers = await res.json();
+    var container = document.getElementById('booking-customer-suggestions');
+    if (!container) return;
+    if (!customers || customers.length === 0) { container.style.display = 'none'; return; }
+    container.innerHTML = customers.map(function(c) {
+      var id = c.id;
+      var safeName = (c.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var safePhone = (c.phone || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var safeEmail = (c.email || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<div onclick="selectBookingCustomer(\'' + safeName + '\',\'' + safePhone + '\',\'' + safeEmail + '\')"'
+        + ' style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:13px;"'
+        + ' onmouseover="this.style.background=\'#f0f7ff\'" onmouseout="this.style.background=\'\'">'
+        + '<div style="font-weight:600;color:#1f2937;">' + (c.name || '') + '</div>'
+        + '<div style="font-size:11px;color:#6b7280;">'
+        + (c.phone ? c.phone : '')
+        + (c.phone && c.email ? ' · ' : '')
+        + (c.email ? c.email : '')
+        + '</div>'
+        + '</div>';
+    }).join('');
+    container.style.display = 'block';
+  } catch (e) { /* ignore */ }
+}
+
+function selectBookingCustomer(name, phone, email) {
+  var nameEl = document.getElementById('booking-guest-name');
+  var phoneEl = document.getElementById('booking-phone');
+  var emailEl = document.getElementById('booking-email');
+  if (nameEl) nameEl.value = name;
+  if (phoneEl && phone) phoneEl.value = phone;
+  if (emailEl && email) emailEl.value = email;
+  var suggestions = document.getElementById('booking-customer-suggestions');
+  if (suggestions) suggestions.style.display = 'none';
+}
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+  var suggestions = document.getElementById('booking-customer-suggestions');
+  var nameInput = document.getElementById('booking-guest-name');
+  if (suggestions && nameInput && !nameInput.contains(e.target) && !suggestions.contains(e.target)) {
+    suggestions.style.display = 'none';
+  }
+});

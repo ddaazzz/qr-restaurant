@@ -227,6 +227,10 @@ async function showSettingsPage(pageName) {
         break;
       case 'service-requests':
         await loadServiceRequestItems();
+        await loadMenuSettingsPage(); // also loads custom_sr_items toggle
+        break;
+      case 'menu-settings':
+        await loadMenuSettingsPage();
         break;
     }
   }
@@ -757,6 +761,59 @@ async function saveShowItemStatusSetting(enabled) {
   } catch (err) {
     console.error("Error saving show item status setting:", err);
     alert('Failed to save setting');
+  }
+}
+
+// ============= MENU SETTINGS =============
+async function loadMenuSettingsPage() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    if (!res.ok) throw new Error('Failed to load settings');
+    const settings = await res.json();
+    const flags = settings.feature_flags || {};
+
+    const customMenuToggle = document.getElementById('custom-menu-items-toggle');
+    if (customMenuToggle) customMenuToggle.checked = !!flags.custom_menu_items;
+
+    const customSrToggle = document.getElementById('custom-sr-items-toggle');
+    if (customSrToggle) customSrToggle.checked = !!flags.custom_sr_items;
+  } catch (err) {
+    console.error('Failed to load menu settings:', err);
+  }
+}
+
+async function saveMenuFeatureFlag(flagName, enabled) {
+  try {
+    const currentRes = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    if (!currentRes.ok) throw new Error('Failed to load settings');
+    const settings = await currentRes.json();
+    const flags = { ...(settings.feature_flags || {}), [flagName]: enabled };
+
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: flags })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 403) {
+        alert('This is a premium feature. Please contact support to enable it.');
+      } else {
+        alert('Failed to save setting: ' + (err.error || res.status));
+      }
+      // Revert toggle
+      const toggle = document.getElementById(
+        flagName === 'custom_menu_items' ? 'custom-menu-items-toggle' : 'custom-sr-items-toggle'
+      );
+      if (toggle) toggle.checked = !enabled;
+    }
+  } catch (err) {
+    console.error('Error saving feature flag:', err);
+    alert('Failed to save setting');
+    const toggle = document.getElementById(
+      flagName === 'custom_menu_items' ? 'custom-menu-items-toggle' : 'custom-sr-items-toggle'
+    );
+    if (toggle) toggle.checked = !enabled;
   }
 }
 
@@ -2399,5 +2456,211 @@ async function deleteServiceItem(id) {
     await loadServiceRequestItems();
   } catch (err) {
     alert('Failed to delete item: ' + err.message);
+  }
+}
+
+// ============= CRM =============
+let crmSearchTimer = null;
+
+function hideCRMPage() {
+  showCRMMain();
+  hideSettingsPage('crm');
+}
+
+function showCRMMain() {
+  document.getElementById('crm-main-view').style.display  = '';
+  document.getElementById('crm-detail-view').style.display = 'none';
+}
+
+function onCRMSearch() {
+  clearTimeout(crmSearchTimer);
+  crmSearchTimer = setTimeout(loadCRMCustomers, 300);
+}
+
+async function loadCRMCustomers() {
+  const search  = (document.getElementById('crm-search-input')?.value  || '').trim();
+  const sort_by = document.getElementById('crm-sort-select')?.value || 'last_visit';
+
+  const params = new URLSearchParams({ sort_by, limit: '100' });
+  if (search) params.set('search', search);
+
+  const listEl = document.getElementById('crm-customers-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading…</p>';
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/crm/customers?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load customers');
+    const customers = await res.json();
+
+    if (!customers.length) {
+      listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">No customers found.</p>';
+      return;
+    }
+
+    const fmt = v => v != null ? (Number(v) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const fmtDate = v => v ? new Date(v).toLocaleDateString() : '—';
+
+    const table = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#f9fafb;text-align:left;">
+            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Name</th>
+            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Phone</th>
+            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Email</th>
+            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;text-align:center;">Visits</th>
+            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;text-align:right;">Total Spent</th>
+            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Last Visit</th>
+            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Joined</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${customers.map(c => `
+            <tr class="crm-customer-row" onclick="loadCRMCustomerDetail(${c.id})" style="cursor:pointer;border-bottom:1px solid #f3f4f6;transition:background 0.15s;">
+              <td style="padding:10px 12px;font-weight:600;color:var(--primary-color);">${escapeHtml(c.name)}</td>
+              <td style="padding:10px 12px;color:#6b7280;">${escapeHtml(c.phone || '—')}</td>
+              <td style="padding:10px 12px;color:#6b7280;">${escapeHtml(c.email || '—')}</td>
+              <td style="padding:10px 12px;text-align:center;">${c.total_visits || 0}</td>
+              <td style="padding:10px 12px;text-align:right;">$${fmt(c.total_spent_cents)}</td>
+              <td style="padding:10px 12px;">${fmtDate(c.last_visit_at)}</td>
+              <td style="padding:10px 12px;">${fmtDate(c.created_at)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    listEl.innerHTML = table;
+  } catch (err) {
+    listEl.innerHTML = `<p style="color:#dc2626;text-align:center;padding:24px;">Failed to load customers: ${err.message}</p>`;
+  }
+}
+
+async function loadCRMCustomerDetail(customerId) {
+  document.getElementById('crm-main-view').style.display  = 'none';
+  document.getElementById('crm-detail-view').style.display = '';
+
+  const profileEl  = document.getElementById('crm-profile-card');
+  const ordersEl   = document.getElementById('crm-orders-list');
+  const futureBEl  = document.getElementById('crm-future-bookings');
+  const pastBEl    = document.getElementById('crm-past-bookings');
+  const couponsEl  = document.getElementById('crm-coupons-list');
+
+  profileEl.innerHTML  = '<p style="color:#999;padding:16px;">Loading…</p>';
+  ordersEl.innerHTML   = '<p style="color:#999;">Loading…</p>';
+  futureBEl.innerHTML  = '<p style="color:#999;">Loading…</p>';
+  pastBEl.innerHTML    = '<p style="color:#999;">Loading…</p>';
+  couponsEl.innerHTML  = '<p style="color:#999;">Loading…</p>';
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/crm/customers/${customerId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load customer');
+    const data = await res.json();
+    const c = data.customer;
+
+    const fmt     = v => v != null ? (Number(v) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+    const fmtDT   = v => v ? new Date(v).toLocaleString() : '—';
+    const fmtDate = v => v ? new Date(v).toLocaleDateString() : '—';
+
+    // Profile card
+    profileEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;padding:16px;background:white;border-radius:8px;border:1px solid var(--border-color);">
+        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Name</div><div style="font-weight:700;font-size:16px;">${escapeHtml(c.name)}</div></div>
+        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Phone</div><div>${escapeHtml(c.phone || '—')}</div></div>
+        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Email</div><div>${escapeHtml(c.email || '—')}</div></div>
+        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Joined</div><div>${fmtDT(c.created_at)}</div></div>
+        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total Orders</div><div style="font-size:20px;font-weight:700;color:var(--primary-color);">${c.total_visits || 0}</div></div>
+        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total Transacted</div><div style="font-size:20px;font-weight:700;color:#059669;">$${fmt(data.total_transacted_cents)}</div></div>
+        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Last Visit</div><div>${fmtDate(c.last_visit_at)}</div></div>
+        ${c.notes ? `<div style="grid-column:1/-1;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Notes</div><div style="color:#374151;">${escapeHtml(c.notes)}</div></div>` : ''}
+      </div>`;
+
+    // Orders
+    if (data.orders && data.orders.length) {
+      ordersEl.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f9fafb;">
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Order #</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Date</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Type</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Table</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:center;">Pax</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Status</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Payment</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:right;">Amount</th>
+          </tr></thead>
+          <tbody>
+            ${data.orders.map(o => `
+              <tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:8px 10px;font-weight:600;">#${o.restaurant_order_number || o.order_id}</td>
+                <td style="padding:8px 10px;color:#6b7280;">${fmtDT(o.created_at)}</td>
+                <td style="padding:8px 10px;">${escapeHtml(o.order_type || '—')}</td>
+                <td style="padding:8px 10px;">${escapeHtml(o.table_label || '—')}</td>
+                <td style="padding:8px 10px;text-align:center;">${o.pax || '—'}</td>
+                <td style="padding:8px 10px;">${escapeHtml(o.status || '—')}</td>
+                <td style="padding:8px 10px;">${escapeHtml(o.payment_method || '—')}</td>
+                <td style="padding:8px 10px;text-align:right;font-weight:600;">$${fmt(o.total_cents)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    } else {
+      ordersEl.innerHTML = '<p style="color:#9ca3af;font-size:13px;">No orders on record.</p>';
+    }
+
+    // Helper: render bookings table
+    const renderBookings = (bookings, container) => {
+      if (!bookings || !bookings.length) {
+        container.innerHTML = '<p style="color:#9ca3af;font-size:13px;">None.</p>';
+        return;
+      }
+      container.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f9fafb;">
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Date</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Time</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Table</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:center;">Pax</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Status</th>
+            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Notes</th>
+          </tr></thead>
+          <tbody>
+            ${bookings.map(b => `
+              <tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:8px 10px;">${fmtDate(b.booking_date)}</td>
+                <td style="padding:8px 10px;">${b.booking_time || '—'}</td>
+                <td style="padding:8px 10px;">${escapeHtml(b.table_label || '—')}</td>
+                <td style="padding:8px 10px;text-align:center;">${b.pax || '—'}</td>
+                <td style="padding:8px 10px;"><span class="crm-status-badge crm-status-${b.status}">${b.status}</span></td>
+                <td style="padding:8px 10px;color:#6b7280;">${escapeHtml(b.notes || '')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    };
+
+    renderBookings(data.future_bookings, futureBEl);
+    renderBookings(data.past_bookings,   pastBEl);
+
+    // Eligible coupons
+    if (data.eligible_coupons && data.eligible_coupons.length) {
+      couponsEl.innerHTML = data.eligible_coupons.map(cp => {
+        const disc = cp.discount_type === 'percentage'
+          ? `${cp.discount_value}% off`
+          : `$${(Number(cp.discount_value) || 0).toFixed(2)} off`;
+        const expiry = cp.valid_until ? `Expires ${fmtDate(cp.valid_until)}` : 'No expiry';
+        const minOrder = cp.min_order_cents ? `Min order $${fmt(cp.min_order_cents)}` : '';
+        return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <div><strong style="font-family:monospace;font-size:15px;letter-spacing:1px;">${escapeHtml(cp.code)}</strong></div>
+          <div style="font-size:13px;color:#166534;">${disc}</div>
+          ${minOrder ? `<div style="font-size:12px;color:#6b7280;">${minOrder}</div>` : ''}
+          <div style="font-size:12px;color:#6b7280;">${expiry}</div>
+        </div>`;
+      }).join('');
+    } else {
+      couponsEl.innerHTML = '<p style="color:#9ca3af;font-size:13px;">No eligible coupons.</p>';
+    }
+
+  } catch (err) {
+    profileEl.innerHTML = `<p style="color:#dc2626;padding:16px;">Failed to load: ${err.message}</p>`;
   }
 }

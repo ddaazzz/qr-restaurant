@@ -228,6 +228,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // Cart state
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartEditMode, setCartEditMode] = useState(false);
+
+    // Custom item modal (market-price / ad-hoc items)
+    const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
+    const [showCustomItemModal, setShowCustomItemModal] = useState(false);
+    const [customItemName, setCustomItemName] = useState('');
+    const [customItemPrice, setCustomItemPrice] = useState('');
     const [phoneView, setPhoneView] = useState<'menu' | 'variant' | 'cart'>('menu');
     const [orderType, setOrderType] = useState<'table' | 'pay-now' | 'to-go' | null>(null);
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -549,12 +555,16 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       try {
         setLoading(true);
         setError(null);
-        const response = await apiClient.get(`/api/restaurants/${restaurantId}/menu`);
-        setCategories(response.data.categories || []);
-        setMenuItems(response.data.items || []);
-        if (response.data.categories?.length > 0) {
-          setSelectedCategory(response.data.categories[0].id);
+        const [menuResponse, settingsResponse] = await Promise.all([
+          apiClient.get(`/api/restaurants/${restaurantId}/menu`),
+          apiClient.get(`/api/restaurants/${restaurantId}/settings`).catch(() => ({ data: {} })),
+        ]);
+        setCategories(menuResponse.data.categories || []);
+        setMenuItems(menuResponse.data.items || []);
+        if (menuResponse.data.categories?.length > 0) {
+          setSelectedCategory(menuResponse.data.categories[0].id);
         }
+        setFeatureFlags((settingsResponse.data as any)?.feature_flags || {});
       } catch (err: any) {
         console.error('Error loading menu:', err);
         setError('Failed to load menu');
@@ -763,6 +773,43 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       );
     };
 
+    const handleAddCustomItemToCart = () => {
+      const name = customItemName.trim();
+      const priceNum = parseFloat(customItemPrice);
+      if (!name) {
+        Alert.alert(t('common.error'), 'Please enter an item name');
+        return;
+      }
+      if (!isFinite(priceNum) || priceNum < 0) {
+        Alert.alert(t('common.error'), 'Please enter a valid price');
+        return;
+      }
+      const priceCents = Math.round(priceNum * 100);
+      const customItem: CartItem = {
+        id: -(Date.now()),
+        name,
+        price_cents: priceCents,
+        category_id: -1,
+        available: true,
+        quantity: 1,
+        variants: [],
+        notes: '',
+        addons: [],
+      };
+      setCart(prev => {
+        const idx = prev.findIndex(i => i.id < 0 && i.name === name && i.price_cents === priceCents);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + 1 };
+          return updated;
+        }
+        return [...prev, customItem];
+      });
+      setCustomItemName('');
+      setCustomItemPrice('');
+      setShowCustomItemModal(false);
+    };
+
     const handleSubmitOrder = async () => {
       if (cart.length === 0) {
         Alert.alert(t('orders.empty-cart'), t('orders.empty-cart-msg'));
@@ -791,13 +838,25 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const doSubmitOrder = async (toGoCustomerName?: string) => {
       try {
         // Prepare items for API submission
-        const items = cart.map(cartItem => ({
-          menu_item_id: cartItem.id,
-          quantity: cartItem.quantity,
-          notes: cartItem.notes || null,
-          selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
-          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
-        }));
+        const items = cart.map(cartItem => {
+          if (cartItem.id < 0) {
+            // Custom / market-price item — no real menu_item_id
+            return {
+              menu_item_id: null as null,
+              custom_item_name: cartItem.name,
+              custom_price_cents: cartItem.price_cents,
+              quantity: cartItem.quantity,
+              notes: cartItem.notes || null,
+            };
+          }
+          return {
+            menu_item_id: cartItem.id,
+            quantity: cartItem.quantity,
+            notes: cartItem.notes || null,
+            selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
+            addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
+          };
+        });
 
         console.log('[OrderSubmit] Submitting order:', {
           orderType,
@@ -2869,17 +2928,34 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               <FlatList
                 key={`menu-${selectedCategory}-${menuNumColumns}`}
                 data={(() => {
-                  const remainder = filteredMenuItems.length % menuNumColumns;
-                  if (remainder === 0) return filteredMenuItems;
+                  const base: any[] = featureFlags.custom_menu_items
+                    ? [{ id: 'custom-item-tile', isCustomItemTile: true }, ...filteredMenuItems]
+                    : filteredMenuItems;
+                  const remainder = base.length % menuNumColumns;
+                  if (remainder === 0) return base;
                   const spacers = Array.from({ length: menuNumColumns - remainder }, (_, i) => ({ id: `spacer-${i}`, isSpacer: true }));
-                  return [...filteredMenuItems, ...spacers];
-                })()}
+                  return [...base, ...spacers];
+                })()}}
                 keyExtractor={(item: any) => item.id.toString()}
                 numColumns={menuNumColumns}
                 columnWrapperStyle={styles.gridRow}
                 renderItem={({ item }: any) => {
                 if (item.isSpacer) {
                   return <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]} />;
+                }
+                if (item.isCustomItemTile) {
+                  return (
+                    <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]}>
+                      <TouchableOpacity
+                        style={[styles.menuItem, { borderStyle: 'dashed', borderWidth: 2, borderColor: '#6366f1', backgroundColor: '#f5f3ff', justifyContent: 'center', alignItems: 'center', minHeight: 110 }]}
+                        onPress={() => setShowCustomItemModal(true)}
+                      >
+                        <Text style={{ fontSize: 28, color: '#6366f1' }}>＋</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#6366f1', textAlign: 'center', marginTop: 4 }}>Custom Item</Text>
+                        <Text style={{ fontSize: 10, color: '#a5b4fc', textAlign: 'center', marginTop: 2 }}>Market Price</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
                 }
                 return (
                 <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]}>
@@ -2965,6 +3041,59 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           )}
         </View>
+
+        {/* Custom Item Modal (market-price / ad-hoc items) */}
+        <Modal
+          visible={showCustomItemModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowCustomItemModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.variantModalContent, { maxWidth: 380, borderRadius: 16, padding: 0 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#1f2937' }}>Custom Menu Item</Text>
+                <TouchableOpacity onPress={() => setShowCustomItemModal(false)}>
+                  <Text style={{ fontSize: 20, color: '#9ca3af' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>Enter the item name and price — for market-price dishes that aren't on the fixed menu.</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Item Name *</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 14, backgroundColor: '#fff' }}
+                  value={customItemName}
+                  onChangeText={setCustomItemName}
+                  placeholder="e.g. Fresh Crab (Market Price)"
+                  placeholderTextColor="#9ca3af"
+                />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Price ($) *</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 20, backgroundColor: '#fff' }}
+                  value={customItemPrice}
+                  onChangeText={setCustomItemPrice}
+                  placeholder="e.g. 68.00"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="decimal-pad"
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#6366f1', padding: 12, borderRadius: 8, alignItems: 'center' }}
+                    onPress={handleAddCustomItemToCart}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Add to Cart</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#f3f4f6', padding: 12, borderRadius: 8, alignItems: 'center' }}
+                    onPress={() => setShowCustomItemModal(false)}
+                  >
+                    <Text style={{ color: '#374151', fontWeight: '600', fontSize: 14 }}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Variant Modal (iPad only — phone uses full-page view) */}
         {menuIsTablet && (
