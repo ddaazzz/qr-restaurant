@@ -397,7 +397,16 @@ function DraggableMenuItemGrid({
   onAddItem, onItemPress, onToggleAvailability, formatPrice, addItemLabel,
 }: DraggableMenuItemGridProps) {
   const [orderedItems, setOrderedItems] = useState<MenuItem[]>(items);
-  useEffect(() => { setOrderedItems(items); }, [items]);
+  // Only reset when the set of item IDs actually changes (e.g. category switch / item added/deleted)
+  // NOT on every parent render (filteredItems is a new array reference each time)
+  const prevItemIdsRef = useRef<string>('');
+  useEffect(() => {
+    const ids = items.map(i => i.id).join(',');
+    if (ids !== prevItemIdsRef.current) {
+      prevItemIdsRef.current = ids;
+      setOrderedItems(items);
+    }
+  }, [items]);
   const orderedRef = useRef(orderedItems);
   useEffect(() => { orderedRef.current = orderedItems; }, [orderedItems]);
 
@@ -732,6 +741,11 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
     };
 
     const saveMenuItemOrder = async (categoryId: number, reorderedItems: MenuItem[]) => {
+      // Update parent state immediately so filteredItems stays in the new order
+      setItems(prev => {
+        const otherItems = prev.filter(i => i.category_id !== categoryId);
+        return [...otherItems, ...reorderedItems];
+      });
       try {
         await apiClient.put(
           `/api/restaurants/${restaurantId}/menu-items/reorder`,
