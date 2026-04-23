@@ -150,6 +150,19 @@
         </nav>
       `;
 
+      const stepEntry = pageSequence.find(p => p.topicSlug === topic.slug);
+      const stepHref = stepEntry ? stepEntry.href : `/support/topic.html?slug=${encodeURIComponent(topic.slug)}&section=${encodeURIComponent(sectionSlug)}`;
+
+      const breadcrumb = `
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="/support/index.html">Guide</a>
+          <span class="crumbSep">/</span>
+          <a href="${stepHref}">Step ${topic.step}: ${topic.title}</a>
+          <span class="crumbSep">/</span>
+          <span>${section.heading}</span>
+        </nav>
+      `;
+
       const lightbox = allImages.length ? `
         <div id="lightbox" class="lightbox" onclick="closeLightbox()">
           <button class="lbPrev" onclick="event.stopPropagation();moveLightbox(-1)">&#8249;</button>
@@ -160,6 +173,7 @@
       ` : '';
 
       root.innerHTML = `
+        ${breadcrumb}
         <span class="eyebrow">STEP ${topic.step}</span>
         <h1>${section.heading}</h1>
         <p class="topicParent">${topic.title}</p>
