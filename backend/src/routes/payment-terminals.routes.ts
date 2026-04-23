@@ -115,8 +115,9 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
         return res.status(400).json({ error: 'Payment Asia requires merchant_token (or app_id)' });
       }
     } else if (vendor_name === 'payment-asia-terminal') {
-      if (!app_secret || !terminal_ip || !terminal_port) {
-        return res.status(400).json({ error: 'PA Terminal requires app_secret (API Key), terminal_ip, terminal_port' });
+      const paTerminalKey = merchant_token || app_secret; // API Key = merchant_token (same format)
+      if (!paTerminalKey || !terminal_ip || !terminal_port) {
+        return res.status(400).json({ error: 'PA Terminal requires merchant_token (API Key), terminal_ip, terminal_port' });
       }
     } else {
       if (!app_id || !app_secret || !terminal_ip || !terminal_port) {
@@ -146,7 +147,7 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
       });
     }
 
-    const insertMerchantToken = merchant_token || (vendor_name === 'payment-asia' ? app_id : null);
+    const insertMerchantToken = merchant_token || (vendor_name === 'payment-asia' ? app_id : null) || (vendor_name === 'payment-asia-terminal' ? app_secret : null);
     const insertSecretCode = secret_code || (vendor_name === 'payment-asia' ? app_secret : null);
     const insertGatewayEnv = payment_gateway_env || (vendor_name === 'payment-asia' ? 'sandbox' : null);
 
@@ -175,8 +176,8 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
   const user = await verifyUser(req);
   if (!user) return res.status(403).json({ error: 'Admin access required' });
 
-  // Non-superadmins can only update connection details (including API key for PA terminal)
-  const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path', 'app_secret'];
+  // Non-superadmins can only update connection details (including API key / merchant_token for PA terminal)
+  const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path', 'app_secret', 'merchant_token', 'secret_code'];
   if (user.role !== 'superadmin') {
     const requestedFields = Object.keys(req.body);
     const disallowed = requestedFields.filter(f => !adminAllowedFields.includes(f));
