@@ -70,6 +70,351 @@ export interface MenuTabRef {
   toggleEditMode: () => void;
 }
 
+// ==================== DRAGGABLE COMPONENTS ====================
+
+const DRAG_MENU_CATEGORY_H = 50;
+const DRAG_MENU_ITEM_H = 60;
+
+interface DraggableMenuCategoryProps {
+  category: MenuCategory;
+  index: number;
+  isActive: boolean;
+  activeDragIndex: number | null;
+  hoverIndex: number | null;
+  onDragGrant: (index: number, animY: Animated.Value) => void;
+  onDragMove: (dy: number) => void;
+  onDragRelease: (dy: number) => void;
+  onDragTerminate: () => void;
+  onEdit: (categoryId: number) => void;
+  onDelete: (categoryId: number) => void;
+  t: (key: string) => string;
+}
+
+const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
+  category, index, isActive, activeDragIndex, hoverIndex,
+  onDragGrant, onDragMove, onDragRelease, onDragTerminate,
+  onEdit, onDelete, t,
+}: DraggableMenuCategoryProps) {
+  const animY = useRef(new Animated.Value(0)).current;
+  const onDragGrantRef = useRef(onDragGrant);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragReleaseRef = useRef(onDragRelease);
+  const onDragTerminateRef = useRef(onDragTerminate);
+  useEffect(() => { onDragGrantRef.current = onDragGrant; }, [onDragGrant]);
+  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
+  useEffect(() => { onDragReleaseRef.current = onDragRelease; }, [onDragRelease]);
+  useEffect(() => { onDragTerminateRef.current = onDragTerminate; }, [onDragTerminate]);
+  const indexRef = useRef(index);
+  useEffect(() => { indexRef.current = index; }, [index]);
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      onDragGrantRef.current(indexRef.current, animY);
+    },
+    onPanResponderMove: (_, { dy }) => {
+      animY.setValue(dy);
+      onDragMoveRef.current(dy);
+    },
+    onPanResponderRelease: (_, { dy }) => {
+      animY.setValue(0);
+      onDragReleaseRef.current(dy);
+    },
+    onPanResponderTerminate: () => {
+      animY.setValue(0);
+      onDragTerminateRef.current();
+    },
+  })).current;
+
+  let shift = 0;
+  if (!isActive && activeDragIndex !== null && hoverIndex !== null && activeDragIndex !== hoverIndex) {
+    if (activeDragIndex < hoverIndex && index > activeDragIndex && index <= hoverIndex) shift = -DRAG_MENU_CATEGORY_H;
+    if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_MENU_CATEGORY_H;
+  }
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY: isActive ? animY : shift }],
+        zIndex: isActive ? 1000 : 1,
+        backgroundColor: isActive ? '#f0f0ff' : 'transparent',
+        shadowColor: isActive ? '#000' : 'transparent',
+        shadowOpacity: isActive ? 0.15 : 0,
+        shadowRadius: isActive ? 6 : 0,
+        elevation: isActive ? 6 : 0,
+      }}
+    >
+      <TouchableOpacity
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+          backgroundColor: 'transparent',
+          borderBottomWidth: 1,
+          borderBottomColor: '#f0f0f0',
+        }}
+      >
+        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8 }}>
+          <Ionicons name="menu-outline" size={20} color="#9ca3af" />
+        </View>
+        <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: '#1f2937', marginLeft: 8 }}>{category.name || category.key || `Category ${category.id}`}</Text>
+        <TouchableOpacity onPress={() => onEdit(category.id)} style={{ padding: 6, marginRight: 4 }}>
+          <Ionicons name="pencil-outline" size={16} color="#4f46e5" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(category.id)} style={{ padding: 6 }}>
+          <Ionicons name="trash-outline" size={16} color="#ef4444" />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+
+interface DraggableMenuCategoryListProps {
+  categories: MenuCategory[];
+  onReorder: (newCategories: MenuCategory[]) => void;
+  onEdit: (categoryId: number) => void;
+  onDelete: (categoryId: number) => void;
+  onScrollEnabled: (v: boolean) => void;
+  t: (key: string) => string;
+}
+
+function DraggableMenuCategoryList({
+  categories, onReorder, onEdit, onDelete, onScrollEnabled, t,
+}: DraggableMenuCategoryListProps) {
+  const [orderedCats, setOrderedCats] = useState<MenuCategory[]>(categories);
+  useEffect(() => { setOrderedCats(categories); }, [categories]);
+  const orderedRef = useRef(orderedCats);
+  useEffect(() => { orderedRef.current = orderedCats; }, [orderedCats]);
+
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const fromIndexRef = useRef<number>(0);
+
+  const handleDragGrant = useCallback((index: number, _animY: Animated.Value) => {
+    fromIndexRef.current = index;
+    setActiveDragIndex(index);
+    setHoverIndex(index);
+    onScrollEnabled(false);
+  }, [onScrollEnabled]);
+
+  const handleDragMove = useCallback((dy: number) => {
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_CATEGORY_H)));
+    setHoverIndex(to);
+  }, []);
+
+  const handleDragRelease = useCallback((dy: number) => {
+    onScrollEnabled(true);
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_CATEGORY_H)));
+    if (fromIndexRef.current !== to) {
+      const newCats = [...orderedRef.current];
+      const [moved] = newCats.splice(fromIndexRef.current, 1);
+      newCats.splice(to, 0, moved);
+      setOrderedCats(newCats);
+      onReorder(newCats);
+    }
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled, onReorder]);
+
+  const handleDragTerminate = useCallback(() => {
+    onScrollEnabled(true);
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled]);
+
+  return (
+    <View style={{ minHeight: orderedCats.length * DRAG_MENU_CATEGORY_H }}>
+      {orderedCats.map((cat, idx) => (
+        <DraggableMenuCategory
+          key={cat.id}
+          category={cat}
+          index={idx}
+          isActive={activeDragIndex === idx}
+          activeDragIndex={activeDragIndex}
+          hoverIndex={hoverIndex}
+          onDragGrant={handleDragGrant}
+          onDragMove={handleDragMove}
+          onDragRelease={handleDragRelease}
+          onDragTerminate={handleDragTerminate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          t={t}
+        />
+      ))}
+    </View>
+  );
+}
+
+interface DraggableMenuItemProps {
+  item: MenuItem;
+  index: number;
+  isActive: boolean;
+  activeDragIndex: number | null;
+  hoverIndex: number | null;
+  onDragGrant: (index: number, animY: Animated.Value) => void;
+  onDragMove: (dy: number) => void;
+  onDragRelease: (dy: number) => void;
+  onDragTerminate: () => void;
+  onEdit: (itemId: number) => void;
+}
+
+const DraggableMenuItem = React.memo(function DraggableMenuItem({
+  item, index, isActive, activeDragIndex, hoverIndex,
+  onDragGrant, onDragMove, onDragRelease, onDragTerminate,
+  onEdit,
+}: DraggableMenuItemProps) {
+  const animY = useRef(new Animated.Value(0)).current;
+  const onDragGrantRef = useRef(onDragGrant);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragReleaseRef = useRef(onDragRelease);
+  const onDragTerminateRef = useRef(onDragTerminate);
+  useEffect(() => { onDragGrantRef.current = onDragGrant; }, [onDragGrant]);
+  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
+  useEffect(() => { onDragReleaseRef.current = onDragRelease; }, [onDragRelease]);
+  useEffect(() => { onDragTerminateRef.current = onDragTerminate; }, [onDragTerminate]);
+  const indexRef = useRef(index);
+  useEffect(() => { indexRef.current = index; }, [index]);
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      onDragGrantRef.current(indexRef.current, animY);
+    },
+    onPanResponderMove: (_, { dy }) => {
+      animY.setValue(dy);
+      onDragMoveRef.current(dy);
+    },
+    onPanResponderRelease: (_, { dy }) => {
+      animY.setValue(0);
+      onDragReleaseRef.current(dy);
+    },
+    onPanResponderTerminate: () => {
+      animY.setValue(0);
+      onDragTerminateRef.current();
+    },
+  })).current;
+
+  let shift = 0;
+  if (!isActive && activeDragIndex !== null && hoverIndex !== null && activeDragIndex !== hoverIndex) {
+    if (activeDragIndex < hoverIndex && index > activeDragIndex && index <= hoverIndex) shift = -DRAG_MENU_ITEM_H;
+    if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_MENU_ITEM_H;
+  }
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY: isActive ? animY : shift }],
+        zIndex: isActive ? 1000 : 1,
+        backgroundColor: isActive ? '#f0f0ff' : 'transparent',
+        shadowColor: isActive ? '#000' : 'transparent',
+        shadowOpacity: isActive ? 0.15 : 0,
+        shadowRadius: isActive ? 6 : 0,
+        elevation: isActive ? 6 : 0,
+      }}
+    >
+      <TouchableOpacity
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+          backgroundColor: 'transparent',
+          borderBottomWidth: 1,
+          borderBottomColor: '#f0f0f0',
+        }}
+      >
+        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8 }}>
+          <Ionicons name="menu-outline" size={20} color="#9ca3af" />
+        </View>
+        <View style={{ flex: 1, marginLeft: 8 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{item.name}</Text>
+          <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+            ${(item.price_cents / 100).toFixed(2)}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => onEdit(item.id)} style={{ padding: 6 }}>
+          <Ionicons name="pencil-outline" size={16} color="#4f46e5" />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+
+interface DraggableMenuItemListProps {
+  items: MenuItem[];
+  onReorder: (newItems: MenuItem[]) => void;
+  onEdit: (itemId: number) => void;
+  onScrollEnabled: (v: boolean) => void;
+}
+
+function DraggableMenuItemList({
+  items, onReorder, onEdit, onScrollEnabled,
+}: DraggableMenuItemListProps) {
+  const [orderedItems, setOrderedItems] = useState<MenuItem[]>(items);
+  useEffect(() => { setOrderedItems(items); }, [items]);
+  const orderedRef = useRef(orderedItems);
+  useEffect(() => { orderedRef.current = orderedItems; }, [orderedItems]);
+
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const fromIndexRef = useRef<number>(0);
+
+  const handleDragGrant = useCallback((index: number, _animY: Animated.Value) => {
+    fromIndexRef.current = index;
+    setActiveDragIndex(index);
+    setHoverIndex(index);
+    onScrollEnabled(false);
+  }, [onScrollEnabled]);
+
+  const handleDragMove = useCallback((dy: number) => {
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_ITEM_H)));
+    setHoverIndex(to);
+  }, []);
+
+  const handleDragRelease = useCallback((dy: number) => {
+    onScrollEnabled(true);
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_ITEM_H)));
+    if (fromIndexRef.current !== to) {
+      const newItems = [...orderedRef.current];
+      const [moved] = newItems.splice(fromIndexRef.current, 1);
+      newItems.splice(to, 0, moved);
+      setOrderedItems(newItems);
+      onReorder(newItems);
+    }
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled, onReorder]);
+
+  const handleDragTerminate = useCallback(() => {
+    onScrollEnabled(true);
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled]);
+
+  return (
+    <View style={{ minHeight: orderedItems.length * DRAG_MENU_ITEM_H }}>
+      {orderedItems.map((item, idx) => (
+        <DraggableMenuItem
+          key={item.id}
+          item={item}
+          index={idx}
+          isActive={activeDragIndex === idx}
+          activeDragIndex={activeDragIndex}
+          hoverIndex={hoverIndex}
+          onDragGrant={handleDragGrant}
+          onDragMove={handleDragMove}
+          onDragRelease={handleDragRelease}
+          onDragTerminate={handleDragTerminate}
+          onEdit={onEdit}
+        />
+      ))}
+    </View>
+  );
+}
+
 // ==================== COMPONENT ====================
 
 export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuery?: string }>(
@@ -297,6 +642,28 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
           },
         ]
       );
+    };
+
+    const saveMenuCategoryOrder = async (reorderedCategories: MenuCategory[]) => {
+      try {
+        await apiClient.put(
+          `/api/restaurants/${restaurantId}/menu-categories/reorder`,
+          { categories: reorderedCategories.map((cat, idx) => ({ id: cat.id, sort_order: idx })) }
+        );
+      } catch (err) {
+        console.warn('Failed to save menu category order:', err);
+      }
+    };
+
+    const saveMenuItemOrder = async (categoryId: number, reorderedItems: MenuItem[]) => {
+      try {
+        await apiClient.put(
+          `/api/restaurants/${restaurantId}/menu-items/reorder`,
+          { items: reorderedItems.map((item, idx) => ({ id: item.id, sort_order: idx })) }
+        );
+      } catch (err) {
+        console.warn('Failed to save menu item order:', err);
+      }
     };
 
     // ==================== FOOD ITEM OPERATIONS ====================
@@ -920,6 +1287,30 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       <View style={styles.container}>
         {/* Category Bar */}
         <View style={styles.categoryBarWrapper}>
+          {/* Draggable Category List (when in edit mode) */}
+          {showAvailabilityToggles && categories.length > 0 && (
+            <View style={{ borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, marginBottom: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginHorizontal: 12, marginBottom: 8 }}>Drag to reorder</Text>
+              <ScrollView scrollEnabled={menuScrollEnabled} style={{ maxHeight: 250 }}>
+                <DraggableMenuCategoryList
+                  categories={categories}
+                  onReorder={saveMenuCategoryOrder}
+                  onEdit={(id) => {
+                    const cat = categories.find(c => c.id === id);
+                    if (cat) {
+                      setEditingCategoryId(id);
+                      setEditingCategoryName(cat.name);
+                      setShowEditCategoryModal(true);
+                    }
+                  }}
+                  onDelete={deleteCategory}
+                  onScrollEnabled={setMenuScrollEnabled}
+                  t={t}
+                />
+              </ScrollView>
+            </View>
+          )}
+          
           <ScrollView
             horizontal
             scrollEnabled={true}
@@ -983,6 +1374,30 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
             ))}
           </ScrollView>
         </View>
+
+        {/* Draggable Items List (when in edit mode with category selected) */}
+        {selectedCategory && showAvailabilityToggles && filteredItems.length > 0 && (
+          <View style={{ borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, marginBottom: 8, marginHorizontal: 12, marginTop: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 8 }}>Drag to reorder items</Text>
+            <ScrollView scrollEnabled={menuScrollEnabled} style={{ maxHeight: 300 }}>
+              <DraggableMenuItemList
+                items={filteredItems}
+                onReorder={(reorderedItems) => saveMenuItemOrder(selectedCategory, reorderedItems)}
+                onEdit={(itemId) => {
+                  const item = filteredItems.find(i => i.id === itemId);
+                  if (item) {
+                    setEditingItemId(item.id);
+                    setEditingItemName(item.name);
+                    setEditingItemDesc(item.description || '');
+                    setEditingItemPrice((item.price_cents / 100).toFixed(2));
+                    setShowItemModal(true);
+                  }
+                }}
+                onScrollEnabled={setMenuScrollEnabled}
+              />
+            </ScrollView>
+          </View>
+        )}
 
         {/* Items Grid */}
         <View style={styles.itemsGridWrapper}>
