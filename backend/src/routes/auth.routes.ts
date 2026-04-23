@@ -1534,14 +1534,14 @@ router.get("/manage/restaurants", async (req, res) => {
     if (caller.role === "superadmin") {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                r.is_customized, r.app_version, r.custom_branch, r.api_base_url,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r ORDER BY r.id`
       );
     } else {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.custom_branch, r.render_service_id, r.api_base_url,
+                r.is_customized, r.app_version, r.custom_branch, r.api_base_url,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r WHERE r.id = $1`,
         [caller.restaurant_id]
@@ -1590,10 +1590,10 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     return res.status(403).json({ error: "Cannot edit another restaurant" });
   }
 
-  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url } = req.body;
+  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, api_base_url } = req.body;
 
   // Only superadmin can change customization fields
-  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || render_service_id !== undefined || api_base_url !== undefined)) {
+  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || api_base_url !== undefined)) {
     return res.status(403).json({ error: "Only superadmin can change customization settings" });
   }
 
@@ -1611,13 +1611,12 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (is_customized !== undefined) { updates.push(`is_customized = $${i++}`); params.push(is_customized); }
     if (app_version !== undefined) { updates.push(`app_version = $${i++}`); params.push(app_version); }
     if (custom_branch !== undefined) { updates.push(`custom_branch = $${i++}`); params.push(custom_branch); }
-    if (render_service_id !== undefined) { updates.push(`render_service_id = $${i++}`); params.push(render_service_id); }
     if (api_base_url !== undefined) { updates.push(`api_base_url = $${i++}`); params.push(api_base_url); }
 
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
     params.push(restaurantId);
-    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
+    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, api_base_url`;
     const result = await pool.query(query, params);
 
     if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
@@ -1665,7 +1664,7 @@ router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req
   const { enable } = req.body;
 
   try {
-    const restResult = await pool.query("SELECT id, name, is_customized, custom_branch, render_service_id FROM restaurants WHERE id = $1", [restaurantId]);
+    const restResult = await pool.query("SELECT id, name, is_customized, custom_branch FROM restaurants WHERE id = $1", [restaurantId]);
     if (!restResult.rows.length) return res.status(404).json({ error: "Restaurant not found" });
 
     const restaurant = restResult.rows[0];
@@ -1692,7 +1691,7 @@ router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req
         }
       }
 
-      let renderServiceId = restaurant.render_service_id;
+      let renderServiceId: string | null = null;
       let apiBaseUrl: string | null = null;
       let renderSlug: string | null = null;
 
@@ -1905,13 +1904,13 @@ router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req
 
       // ===== Step 5: Update restaurant record =====
       await pool.query(
-        `UPDATE restaurants SET is_customized = TRUE, custom_branch = $1, render_service_id = $2, api_base_url = $3 WHERE id = $4`,
-        [branchName, renderServiceId || null, apiBaseUrl || null, restaurantId]
+        `UPDATE restaurants SET is_customized = TRUE, custom_branch = $1, api_base_url = $2 WHERE id = $3`,
+        [branchName, apiBaseUrl || null, restaurantId]
       );
       steps.push("Restaurant marked as customized");
 
       const updatedResult = await pool.query(
-        `SELECT id, name, is_customized, app_version, custom_branch, render_service_id, api_base_url FROM restaurants WHERE id = $1`,
+        `SELECT id, name, is_customized, app_version, custom_branch, api_base_url FROM restaurants WHERE id = $1`,
         [restaurantId]
       );
 
@@ -1929,7 +1928,7 @@ router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req
       );
 
       const updatedResult = await pool.query(
-        `SELECT id, name, is_customized, app_version, custom_branch, render_service_id, api_base_url FROM restaurants WHERE id = $1`,
+        `SELECT id, name, is_customized, app_version, custom_branch, api_base_url FROM restaurants WHERE id = $1`,
         [restaurantId]
       );
 

@@ -102,6 +102,12 @@ a {
   background: rgba(255, 255, 255, 0.62);
 }
 
+.support-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .support-links a {
   color: #111;
   text-decoration: none;
@@ -297,6 +303,36 @@ h1 {
 
 .crumbSep {
   opacity: 0.7;
+}
+
+.langBtn {
+  margin-left: auto;
+  background: rgba(0,0,0,0.07);
+  border: 1px solid rgba(0,0,0,0.18);
+  color: #1a1a1a;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: background 0.18s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.langBtn:hover {
+  background: rgba(0,0,0,0.14);
+}
+
+.breadcrumb .langBtn {
+  background: rgba(255,255,255,0.13);
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+
+.breadcrumb .langBtn:hover {
+  background: rgba(255,255,255,0.22);
 }
 
 .topicParent {

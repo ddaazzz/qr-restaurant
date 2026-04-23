@@ -14,6 +14,7 @@ const translations = {
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
     'nav.login': 'Login',
+    'nav.support': 'Support',
     'nav.back-home': '← Home',
     'nav.kitchen-dashboard': 'Kitchen Dashboard',
 
@@ -1842,6 +1843,7 @@ const translations = {
     'nav.privacy': '隱私政策',
     'nav.terms': '服務條款',
     'nav.login': '登錄',
+    'nav.support': '支援指南',
     'nav.back-home': '← 首頁',
     'nav.kitchen-dashboard': '廚房儀表板',
 

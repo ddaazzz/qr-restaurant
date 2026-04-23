@@ -26,6 +26,7 @@
   </main>
 
   <script src="/support/guide-data.js"></script>
+  <script src="/support/guide-data-zh.js"></script>
   <script>
     (function () {
       function slugify(text) {
@@ -37,23 +38,54 @@
           .replace(/-+/g, '-');
       }
 
-      const topics = window.CHUIO_GUIDE_TOPICS || [];
+      // Language helpers
+      function getLang() {
+        return localStorage.getItem('guide-lang') || 'en';
+      }
+      function setLang(l) {
+        localStorage.setItem('guide-lang', l);
+      }
+      function localize(topic, lang) {
+        if (lang !== 'zh') return topic;
+        const zh = (window.CHUIO_GUIDE_TOPICS_ZH || []).find(t => t.slug === topic.slug);
+        if (!zh) return topic;
+        return {
+          ...topic,
+          title: zh.title || topic.title,
+          summary: zh.summary || topic.summary,
+          keywords: zh.keywords || topic.keywords,
+          images: topic.images.map((img, i) => ({
+            ...img,
+            alt: zh.images && zh.images[i] ? zh.images[i].alt : img.alt
+          })),
+          sections: topic.sections.map((s, i) => {
+            const zhs = zh.sections && zh.sections[i];
+            if (!zhs) return s;
+            return { ...s, heading: zhs.heading || s.heading, summary: zhs.summary || s.summary, points: zhs.points || s.points };
+          })
+        };
+      }
+
+      const rawTopics = window.CHUIO_GUIDE_TOPICS || [];
       const root = document.getElementById('topicView');
       const missing = document.getElementById('notFound');
       const params = new URLSearchParams(window.location.search);
       const slug = params.get('slug');
       const sectionSlugParam = params.get('section');
 
-      const topic = topics.find(t => t.slug === slug);
-      if (!topic) {
+      const lang = getLang();
+
+      const rawTopic = rawTopics.find(t => t.slug === slug);
+      if (!rawTopic) {
         root.hidden = true;
         missing.hidden = false;
         document.title = 'Topic Not Found | Chuio Support';
         return;
       }
+      const topic = localize(rawTopic, lang);
 
-      const topicSections = (topic.sections || []).map((section, index) => ({
-        section,
+      const topicSections = (rawTopic.sections || []).map((section, index) => ({
+        section: localize(rawTopic, lang).sections[index],
         sectionIndex: index,
         sectionSlug: section.slug || slugify(section.heading) || `heading-${index + 1}`
       }));
@@ -73,17 +105,19 @@
       document.title = `Step ${topic.step} - ${section.heading} | Chuio Support`;
 
       const pageSequence = [];
-      topics
+      rawTopics
         .slice()
         .sort((a, b) => a.step - b.step)
         .forEach(t => {
+          const lt = localize(t, lang);
           (t.sections || []).forEach((s, i) => {
             const sSlug = s.slug || slugify(s.heading) || `heading-${i + 1}`;
+            const lHeading = lt.sections[i] ? lt.sections[i].heading : s.heading;
             pageSequence.push({
               step: t.step,
-              topicTitle: t.title,
+              topicTitle: lt.title,
               topicSlug: t.slug,
-              heading: s.heading,
+              heading: lHeading,
               sectionSlug: sSlug,
               href: `/support/topic.html?slug=${encodeURIComponent(t.slug)}&section=${encodeURIComponent(sSlug)}`
             });
@@ -160,6 +194,7 @@
           <a href="${stepHref}">Step ${topic.step}: ${topic.title}</a>
           <span class="crumbSep">/</span>
           <span>${section.heading}</span>
+          <button class="langBtn" id="langToggle">${lang === 'zh' ? 'EN' : '中文'}</button>
         </nav>
       `;
 
@@ -215,6 +250,15 @@
         if (e.key === 'ArrowRight') window.moveLightbox(1);
         if (e.key === 'Escape') window.closeLightbox();
       });
+
+      // Language toggle
+      const langBtn = document.getElementById('langToggle');
+      if (langBtn) {
+        langBtn.addEventListener('click', function () {
+          setLang(lang === 'zh' ? 'en' : 'zh');
+          location.reload();
+        });
+      }
     })();
   </script>
 </body>
