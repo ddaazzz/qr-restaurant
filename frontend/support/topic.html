@@ -12,15 +12,18 @@
   <header class="support-nav">
     <div class="support-nav-inner">
       <a class="support-logo" href="/">CHUIO</a>
-      <nav class="support-links">
-        <a href="/">Home</a>
-        <a href="/support" class="active">Support</a>
-        <a href="/login">Login</a>
-      </nav>
+      <div class="support-nav-right">
+        <button class="langBtn" id="headerLangToggle"></button>
+        <nav class="support-links">
+          <a href="/" id="navHome">Home</a>
+          <a href="/support" class="active" id="navSupport">Support</a>
+          <a href="/login" id="navLogin">Login</a>
+        </nav>
+      </div>
     </div>
   </header>
   <main class="shell">
-    <a class="back" href="/support/index.html">← Back to Guide Index</a>
+    <a class="back" href="/support/index.html" id="backLink">← Back to Guide Index</a>
     <article id="topicView" class="topic"></article>
     <div id="notFound" class="empty" hidden>Topic not found. Return to the guide index and select a topic.</div>
   </main>
@@ -79,10 +82,44 @@
       if (!rawTopic) {
         root.hidden = true;
         missing.hidden = false;
+        missing.textContent = lang === 'zh' ? '找不到主題。請返回指南索引並選擇主題。' : 'Topic not found. Return to the guide index and select a topic.';
         document.title = 'Topic Not Found | Chuio Support';
         return;
       }
       const topic = localize(rawTopic, lang);
+
+      // Static UI strings
+      const ui = lang === 'zh' ? {
+        navHome: '首頁', navSupport: '支援', navLogin: '登錄',
+        backLink: '← 返回指南索引',
+        guideLabel: '指南',
+        stepPrefix: '第',
+        stepSuffix: '步：',
+        eyePrefix: '第',
+        eyeSuffix: '步'
+      } : {
+        navHome: 'Home', navSupport: 'Support', navLogin: 'Login',
+        backLink: '← Back to Guide Index',
+        guideLabel: 'Guide',
+        stepPrefix: 'Step ',
+        stepSuffix: ': ',
+        eyePrefix: 'STEP ',
+        eyeSuffix: ''
+      };
+      document.getElementById('navHome').textContent = ui.navHome;
+      document.getElementById('navSupport').textContent = ui.navSupport;
+      document.getElementById('navLogin').textContent = ui.navLogin;
+      document.getElementById('backLink').textContent = ui.backLink;
+
+      // Set header lang toggle
+      const headerLangBtn = document.getElementById('headerLangToggle');
+      if (headerLangBtn) {
+        headerLangBtn.textContent = lang === 'zh' ? 'EN' : '中文';
+        headerLangBtn.addEventListener('click', function () {
+          setLang(lang === 'zh' ? 'en' : 'zh');
+          location.reload();
+        });
+      }
 
       const topicSections = (rawTopic.sections || []).map((section, index) => ({
         section: localize(rawTopic, lang).sections[index],
@@ -97,12 +134,15 @@
       if (!activeSectionEntry) {
         root.hidden = true;
         missing.hidden = false;
+        missing.textContent = lang === 'zh' ? '找不到標題。請返回指南索引並選擇標題。' : 'Heading Not Found. Return to the guide index.';
         document.title = 'Heading Not Found | Chuio Support';
         return;
       }
 
       const { section, sectionIndex, sectionSlug } = activeSectionEntry;
-      document.title = `Step ${topic.step} - ${section.heading} | Chuio Support`;
+      document.title = lang === 'zh'
+        ? `第 ${topic.step} 步 - ${section.heading} | Chuio 支援`
+        : `Step ${topic.step} - ${section.heading} | Chuio Support`;
 
       const pageSequence = [];
       rawTopics
@@ -189,9 +229,9 @@
 
       const breadcrumb = `
         <nav class="breadcrumb" aria-label="Breadcrumb">
-          <a href="/support/index.html">Guide</a>
+          <a href="/support/index.html">${ui.guideLabel}</a>
           <span class="crumbSep">/</span>
-          <a href="${stepHref}">Step ${topic.step}: ${topic.title}</a>
+          <a href="${stepHref}">${ui.stepPrefix}${topic.step}${ui.stepSuffix}${topic.title}</a>
           <span class="crumbSep">/</span>
           <span>${section.heading}</span>
           <button class="langBtn" id="langToggle">${lang === 'zh' ? 'EN' : '中文'}</button>
@@ -209,7 +249,7 @@
 
       root.innerHTML = `
         ${breadcrumb}
-        <span class="eyebrow">STEP ${topic.step}</span>
+        <span class="eyebrow">${ui.eyePrefix}${topic.step}${ui.eyeSuffix}</span>
         <h1>${section.heading}</h1>
         <p class="topicParent">${topic.title}</p>
         <p>${section.summary || topic.summary}</p>

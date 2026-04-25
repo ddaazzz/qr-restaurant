@@ -15,18 +15,18 @@
       <div class="support-nav-right">
         <button class="langBtn" id="langToggle"></button>
         <nav class="support-links">
-          <a href="/">Home</a>
-          <a href="/support" class="active">Support</a>
-          <a href="/login">Login</a>
+          <a href="/" id="navHome">Home</a>
+          <a href="/support" class="active" id="navSupport">Support</a>
+          <a href="/login" id="navLogin">Login</a>
         </nav>
       </div>
     </div>
   </header>
   <main class="shell">
     <section class="hero">
-      <span class="eyebrow">CHUIO SUPPORT</span>
-      <h1>Merchant Reference Guide</h1>
-      <p class="subtitle">Browse by heading and search by keywords. Each heading has its own shareable page link.</p>
+      <span class="eyebrow" id="eyebrow">CHUIO SUPPORT</span>
+      <h1 id="heroTitle">Merchant Reference Guide</h1>
+      <p class="subtitle" id="heroSubtitle">Browse by heading and search by keywords. Each heading has its own shareable page link.</p>
       <div class="searchWrap">
         <input id="searchInput" type="search" placeholder="Search keywords like: printer, coupon, payment, kitchen, tables" aria-label="Search guide headings" />
         <button id="clearBtn" type="button">Clear</button>
@@ -35,7 +35,7 @@
     </section>
 
     <section id="topicGrid" class="grid" aria-live="polite"></section>
-    <div id="emptyState" class="empty" hidden>No matching topic found. Try another keyword.</div>
+    <div id="emptyState" class="empty" hidden></div>
   </main>
 
   <script src="/support/guide-data.js"></script>
@@ -94,6 +94,34 @@
       const meta = document.getElementById('resultMeta');
       const empty = document.getElementById('emptyState');
 
+      // Static UI strings
+      const ui = lang === 'zh' ? {
+        navHome: '首頁', navSupport: '支援', navLogin: '登錄',
+        eyebrow: 'CHUIO 支援',
+        heroTitle: '商戶參考指南',
+        heroSubtitle: '按標題瀏覽並按關鍵字搜索。每個標題都有自己的可分享頁面連結。',
+        searchPlaceholder: '搜索關鍵字，例如：打印機、優惠券、付款、廚房、餐桌',
+        clearLabel: '清除',
+        emptyState: '找不到相關內容，請嘗試其他關鍵字。'
+      } : {
+        navHome: 'Home', navSupport: 'Support', navLogin: 'Login',
+        eyebrow: 'CHUIO SUPPORT',
+        heroTitle: 'Merchant Reference Guide',
+        heroSubtitle: 'Browse by heading and search by keywords. Each heading has its own shareable page link.',
+        searchPlaceholder: 'Search keywords like: printer, coupon, payment, kitchen, tables',
+        clearLabel: 'Clear',
+        emptyState: 'No matching topic found. Try another keyword.'
+      };
+      document.getElementById('navHome').textContent = ui.navHome;
+      document.getElementById('navSupport').textContent = ui.navSupport;
+      document.getElementById('navLogin').textContent = ui.navLogin;
+      document.getElementById('eyebrow').textContent = ui.eyebrow;
+      document.getElementById('heroTitle').textContent = ui.heroTitle;
+      document.getElementById('heroSubtitle').textContent = ui.heroSubtitle;
+      input.placeholder = ui.searchPlaceholder;
+      clearBtn.textContent = ui.clearLabel;
+      empty.textContent = ui.emptyState;
+
       function matches(page, query) {
         if (!query) return true;
         const q = query.toLowerCase().trim();
@@ -110,10 +138,11 @@
       function card(page) {
         const keywords = (page.keywords || []).slice(0, 5);
         const openLabel = lang === 'zh' ? '開啟頁面' : 'Open Heading';
+        const stepLabel = lang === 'zh' ? `第 ${page.step} 步` : `Step ${page.step}`;
         return `
           <article class="card">
             <div class="cardHead">
-              <span class="step">Step ${page.step}</span>
+              <span class="step">${stepLabel}</span>
             </div>
             <h3>${page.heading}</h3>
             <p><strong>${page.topicTitle}</strong></p>
