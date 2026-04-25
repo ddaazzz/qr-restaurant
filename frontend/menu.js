@@ -31,10 +31,6 @@ let showItemStatusToDiners = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
-let paStatusPollTimer = null; // timer for polling PA payment status when order is in processing state
-let paStatusPollOrderId = null; // the order being polled
-let serviceRequestsEnabled = false; // service requests feature flag
-let serviceRequestItems = []; // items configured by the restaurant
 
 async function fetchAndApplyPaymentSettings() {
   try {
@@ -42,14 +38,9 @@ async function fetchAndApplyPaymentSettings() {
     const data = await res.json();
     orderPayEnabled = data.order_pay_enabled === true;
     showItemStatusToDiners = data.show_item_status_to_diners !== false; // default true
-    serviceRequestsEnabled = data.service_requests_enabled === true;
-    if (serviceRequestsEnabled) {
-      await loadServiceRequestItems();
-    }
   } catch (e) {
     orderPayEnabled = false;
     showItemStatusToDiners = true;
-    serviceRequestsEnabled = false;
   }
 }
 
@@ -1261,13 +1252,9 @@ function renderOrdersDrawer(orders, tableName) {
           o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
         );
         // PA orders that are genuinely in-flight (not failed — backend clears payment_method on failure)
-        const pendingPAOrder = orders.find(o =>
+        const hasPendingPAOrder = orders.some(o =>
           o.order_payment_method === 'payment-asia' && o.order_status !== 'completed'
         );
-        const hasPendingPAOrder = !!pendingPAOrder;
-        if (!hasPendingPAOrder && paStatusPollTimer) {
-          clearInterval(paStatusPollTimer); paStatusPollTimer = null; paStatusPollOrderId = null;
-        }
         if (orderPayEnabled && unpaidNonPAOrder) {
           return `<button class="btn-primary" onclick="showPaymentPage(${unpaidNonPAOrder.order_id})">Pay Now</button>`;
         }
@@ -1275,12 +1262,8 @@ function renderOrdersDrawer(orders, tableName) {
           return `<button class="btn-primary" style="background:#059669;" onclick="endSessionFromMenu()">✅ End Session</button>`;
         }
         if (hasPendingPAOrder) {
-          // PA initiated but webhook not yet confirmed — prevent double-pay, but allow manual status check
-          startPAStatusPoll(pendingPAOrder.order_id);
-          return `<div style="display:flex;flex-direction:column;gap:8px;align-items:stretch;">
-            <button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>
-            <button class="btn-secondary" style="font-size:13px;" onclick="checkPAPaymentStatus(${pendingPAOrder.order_id})">🔄 Check Payment Status</button>
-          </div>`;
+          // PA initiated but webhook not yet confirmed — prevent double-pay
+          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>`;
         }
         if (orderPayEnabled) {
           // Order & Pay mode but no unpaid order yet — nothing to pay
@@ -1290,7 +1273,6 @@ function renderOrdersDrawer(orders, tableName) {
       })()}
       <button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>
     </div>
-    ${renderServiceRequestPanel()}
     </div>
   `;
 
@@ -1586,110 +1568,6 @@ function startOrderPolling() {
 
   loadOrderStatus(); // immediate
   setInterval(loadOrderStatus, 5000);
-}
-
-// Poll the payment status endpoint for a pending PA payment.
-// Stops automatically when the order is no longer in processing state (loadOrderStatus handles UI).
-function startPAStatusPoll(orderId) {
-  if (paStatusPollOrderId === orderId && paStatusPollTimer) return; // already polling this order
-  if (paStatusPollTimer) { clearInterval(paStatusPollTimer); paStatusPollTimer = null; }
-  paStatusPollOrderId = orderId;
-  paStatusPollTimer = setInterval(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/payment-status`);
-      if (!res.ok) return;
-      const data = await res.json();
-      // If status is resolved (failed or completed), reload order list immediately
-      if (data.payment_status === 'failed' || data.payment_status === 'completed') {
-        clearInterval(paStatusPollTimer);
-        paStatusPollTimer = null;
-        paStatusPollOrderId = null;
-        loadOrderStatus(); // refresh the orders drawer — payment_method should now be cleared
-      }
-    } catch (e) { /* silent */ }
-  }, 4000);
-}
-
-// Manual "Check Payment Status" button handler — checks once and shows result
-async function checkPAPaymentStatus(orderId) {
-  try {
-    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/payment-status`);
-    if (!res.ok) throw new Error('Network error');
-    const data = await res.json();
-    if (data.payment_status === 'failed') {
-      loadOrderStatus(); // refresh — backend should have cleared payment_method
-    } else if (data.payment_status === 'completed') {
-      loadOrderStatus();
-    } else if (data.payment_status === 'processing') {
-      // Status 4 = PA is waiting for payment input — still in progress, no action needed
-      alert('Payment is awaiting input on the payment page. Please complete or cancel the payment and try again.');
-    } else {
-      alert('Payment status is pending. Please wait a moment and try again.');
-    }
-  } catch (e) {
-    alert('Could not check payment status. Please try again.');
-  }
-}
-
-// ============= SERVICE REQUESTS =============
-
-async function loadServiceRequestItems() {
-  try {
-    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-request-items`);
-    if (!res.ok) return;
-    serviceRequestItems = await res.json();
-  } catch (e) {
-    serviceRequestItems = [];
-  }
-}
-
-async function submitServiceRequest(requestType, label) {
-  if (!sessionId) return;
-  try {
-    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-requests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        table_session_id: sessionId,
-        table_unit_id: tableUnitId,
-        request_type: requestType,
-        label: label
-      })
-    });
-    if (res.ok) {
-      showServiceRequestFeedback(label);
-    } else {
-      const d = await res.json();
-      alert(d.error || 'Failed to send request');
-    }
-  } catch (e) {
-    alert('Could not send request. Please try again.');
-  }
-}
-
-function showServiceRequestFeedback(label) {
-  const panel = document.getElementById('service-request-panel');
-  if (!panel) return;
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;white-space:nowrap;';
-  toast.textContent = `✓ ${label} requested`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2500);
-}
-
-function renderServiceRequestPanel() {
-  if (!serviceRequestsEnabled || !serviceRequestItems.length) return '';
-  const lang = localStorage.getItem('language') || 'zh';
-  const items = serviceRequestItems.map(item => {
-    const label = (lang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
-    return `<button class="service-request-item-btn" onclick="submitServiceRequest('${item.request_type.replace(/'/g,"\\'")}', '${label.replace(/'/g,"\\'")}')">
-      ${label}
-    </button>`;
-  }).join('');
-  return `<div id="service-request-panel" class="service-request-panel">
-    <div class="service-request-title">${t('menu.request-service') || '服務請求 / Request Service'}</div>
-    <div class="service-request-items">${items}</div>
-  </div>`;
 }
 
 // ============= COUPON FUNCTIONS =============

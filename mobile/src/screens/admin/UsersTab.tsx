@@ -11,7 +11,6 @@ import {
   Modal,
   FlatList,
   RefreshControl,
-  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
@@ -40,7 +39,6 @@ interface Restaurant {
   service_charge_percent: number | null;
   language_preference: string | null;
   user_count: number;
-  feature_flags: Record<string, boolean> | null;
 }
 
 type Tab = 'users' | 'restaurants';
@@ -852,35 +850,6 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                   <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant?.user_count || 0}</Text>
                 </View>
               </View>
-
-              {/* Feature Flags */}
-              {isSuperadmin && selectedRestaurant && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 10 }}>Feature Flags</Text>
-                  {['service_requests'].map(flag => {
-                    const flags = selectedRestaurant.feature_flags || {};
-                    const isEnabled = flags[flag] === true;
-                    return (
-                      <View key={flag} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                        <Text style={{ fontSize: 13, color: '#374151' }}>{flag.replace(/_/g, ' ')}</Text>
-                        <Switch
-                          value={isEnabled}
-                          onValueChange={async (val) => {
-                            try {
-                              const newFlags = { ...flags, [flag]: val };
-                              await apiClient.updateRestaurant(selectedRestaurant.id, { feature_flags: newFlags });
-                              setSelectedRestaurant({ ...selectedRestaurant, feature_flags: newFlags });
-                              setRestaurants(prev => prev.map(r => r.id === selectedRestaurant.id ? { ...r, feature_flags: newFlags } : r));
-                            } catch (err: any) {
-                              Alert.alert('Error', err.message || 'Failed to update feature flag');
-                            }
-                          }}
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
 
               {/* Payment Terminal Applications */}
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 10 }}>Payment Terminal Applications</Text>

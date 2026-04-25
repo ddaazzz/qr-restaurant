@@ -4,7 +4,6 @@ import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import { Ionicons } from '@expo/vector-icons';
-import { kpaySign, kpaySale, kpayQuery, kpayClose, kpayVoid, kpayRefund, encryptManagerPassword, kpayQueryDirect } from '../../services/kpayDirectService';
 
 interface MenuItem {
   id: number;
@@ -78,7 +77,6 @@ interface Order {
   order_type: string;
   status: string;
   total_cents: number;
-  subtotal_cents?: number;
   created_at: string;
   items?: any[];
   table_id?: number;
@@ -228,12 +226,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // Cart state
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartEditMode, setCartEditMode] = useState(false);
-
-    // Custom item modal (market-price / ad-hoc items)
-    const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
-    const [showCustomItemModal, setShowCustomItemModal] = useState(false);
-    const [customItemName, setCustomItemName] = useState('');
-    const [customItemPrice, setCustomItemPrice] = useState('');
     const [phoneView, setPhoneView] = useState<'menu' | 'variant' | 'cart'>('menu');
     const [orderType, setOrderType] = useState<'table' | 'pay-now' | 'to-go' | null>(null);
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -270,8 +262,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [kpayStatusMsg, setKpayStatusMsg] = useState('');
     const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
     const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // Stores live session so abort handler can call kpayClose on the terminal
-    const kpayActiveSessionRef = useRef<{ config: any; appPrivateKey: string; outTradeNo: string } | null>(null);
 
     // Customer name prompt for To-Go orders
     const [showCustomerNameModal, setShowCustomerNameModal] = useState(false);
@@ -292,15 +282,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     // Payment terminal state for refund/void
     const [kpayTerminal, setKpayTerminal] = useState<any>(null);
-    const [showKpayVoidModal, setShowKpayVoidModal] = useState(false);
-    const [kpayVoidPassword, setKpayVoidPassword] = useState('');
     const [showKpayRefundModal, setShowKpayRefundModal] = useState(false);
     const [kpayRefundAmount, setKpayRefundAmount] = useState('');
     const [kpayManagerPassword, setKpayManagerPassword] = useState('');
     const [showPaRefundModal, setShowPaRefundModal] = useState(false);
     const [paRefundAmount, setPaRefundAmount] = useState('');
-    const [kpayActionLogs, setKpayActionLogs] = useState<Array<{ msg: string; color: string }>>([]);
-    const [kpayActionBusy, setKpayActionBusy] = useState(false);
 
     // Live transaction details
     const [kpayTxDetails, setKpayTxDetails] = useState<any>(null);
@@ -487,45 +473,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setTxLoading(true);
       try {
         if (vendor === 'kpay') {
-          // Prefer querying the terminal directly — backend (Render) can't reach LAN terminal
-          let terminalQueried = false;
-          if (kpayTerminal) {
-            const config = {
-              terminalIp: kpayTerminal.terminal_ip,
-              terminalPort: kpayTerminal.terminal_port,
-              appId: kpayTerminal.app_id,
-              appSecret: kpayTerminal.app_secret,
-              endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
-            };
-            const terminalResult = await kpayQueryDirect(config, ref);
-            if (terminalResult.success) {
-              terminalQueried = true;
-              // Fetch DB record too for fields terminal doesn't return (refund_amount_cents, etc.)
-              let dbFields: any = {};
-              try {
-                const dbRes = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
-                dbFields = dbRes.data || {};
-              } catch { /* DB fetch is best-effort */ }
-              setKpayTxDetails({ ...dbFields, ...terminalResult });
-              // Push fresh status back to backend so DB stays consistent
-              try {
-                await apiClient.patch(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}/sync`, {
-                  payResult: terminalResult.payResult,
-                  transactionNo: terminalResult.transactionNo,
-                  refNo: terminalResult.refNo,
-                  commitTime: terminalResult.commitTime,
-                  payAmount: terminalResult.payAmount,
-                  payCurrency: terminalResult.payCurrency,
-                  payMethod: terminalResult.payMethod,
-                });
-              } catch { /* Sync failure is non-fatal */ }
-            }
-          }
-          if (!terminalQueried) {
-            // Fall back to backend DB data if terminal unreachable
-            const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
-            setKpayTxDetails(res.data);
-          }
+          const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
+          setKpayTxDetails(res.data);
         } else if (vendor === 'payment-asia') {
           const merchantRef = order.cp_vendor_ref || ref;
           const res = await apiClient.post(`/api/restaurants/${restaurantId}/payment-asia/query`, { merchant_reference: merchantRef });
@@ -555,16 +504,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       try {
         setLoading(true);
         setError(null);
-        const [menuResponse, settingsResponse] = await Promise.all([
-          apiClient.get(`/api/restaurants/${restaurantId}/menu`),
-          apiClient.get(`/api/restaurants/${restaurantId}/settings`).catch(() => ({ data: {} })),
-        ]);
-        setCategories(menuResponse.data.categories || []);
-        setMenuItems(menuResponse.data.items || []);
-        if (menuResponse.data.categories?.length > 0) {
-          setSelectedCategory(menuResponse.data.categories[0].id);
+        const response = await apiClient.get(`/api/restaurants/${restaurantId}/menu`);
+        setCategories(response.data.categories || []);
+        setMenuItems(response.data.items || []);
+        if (response.data.categories?.length > 0) {
+          setSelectedCategory(response.data.categories[0].id);
         }
-        setFeatureFlags((settingsResponse.data as any)?.feature_flags || {});
       } catch (err: any) {
         console.error('Error loading menu:', err);
         setError('Failed to load menu');
@@ -773,43 +718,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       );
     };
 
-    const handleAddCustomItemToCart = () => {
-      const name = customItemName.trim();
-      const priceNum = parseFloat(customItemPrice);
-      if (!name) {
-        Alert.alert(t('common.error'), 'Please enter an item name');
-        return;
-      }
-      if (!isFinite(priceNum) || priceNum < 0) {
-        Alert.alert(t('common.error'), 'Please enter a valid price');
-        return;
-      }
-      const priceCents = Math.round(priceNum * 100);
-      const customItem: CartItem = {
-        id: -(Date.now()),
-        name,
-        price_cents: priceCents,
-        category_id: -1,
-        available: true,
-        quantity: 1,
-        variants: [],
-        notes: '',
-        addons: [],
-      };
-      setCart(prev => {
-        const idx = prev.findIndex(i => i.id < 0 && i.name === name && i.price_cents === priceCents);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + 1 };
-          return updated;
-        }
-        return [...prev, customItem];
-      });
-      setCustomItemName('');
-      setCustomItemPrice('');
-      setShowCustomItemModal(false);
-    };
-
     const handleSubmitOrder = async () => {
       if (cart.length === 0) {
         Alert.alert(t('orders.empty-cart'), t('orders.empty-cart-msg'));
@@ -838,25 +746,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const doSubmitOrder = async (toGoCustomerName?: string) => {
       try {
         // Prepare items for API submission
-        const items = cart.map(cartItem => {
-          if (cartItem.id < 0) {
-            // Custom / market-price item — no real menu_item_id
-            return {
-              menu_item_id: null as null,
-              custom_item_name: cartItem.name,
-              custom_price_cents: cartItem.price_cents,
-              quantity: cartItem.quantity,
-              notes: cartItem.notes || null,
-            };
-          }
-          return {
-            menu_item_id: cartItem.id,
-            quantity: cartItem.quantity,
-            notes: cartItem.notes || null,
-            selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
-            addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
-          };
-        });
+        const items = cart.map(cartItem => ({
+          menu_item_id: cartItem.id,
+          quantity: cartItem.quantity,
+          notes: cartItem.notes || null,
+          selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
+          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
+        }));
 
         console.log('[OrderSubmit] Submitting order:', {
           orderType,
@@ -958,7 +854,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    // KPay terminal payment: direct to terminal from mobile (backend on Render can't reach LAN)
+    // KPay terminal payment: initiate sale + poll for result
     const startKpayTerminalPayment = async () => {
       if (!kpayTerminal || !paymentModalSessionId) return;
 
@@ -966,81 +862,62 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayStatusMsg(t('orders.kpay-initiating'));
       setKpayLogs([{ msg: `> ${t('orders.kpay-connecting')}`, color: '#ffd43b' }]);
 
+      const amountInCents = String(paymentModalTotal).padStart(12, '0');
       const addLog = (msg: string, color: string = '#00ff00') => {
         setKpayLogs(prev => [...prev, { msg, color }]);
       };
 
-      const config = {
-        terminalIp: kpayTerminal.terminal_ip,
-        terminalPort: kpayTerminal.terminal_port,
-        appId: kpayTerminal.app_id,
-        appSecret: kpayTerminal.app_secret,
-        endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
-      };
-
-      const payAmount = String(paymentModalTotal).padStart(12, '0');
-      const outTradeNo = `ORD-${restaurantId}-${kpayTerminal.id}-${Date.now()}`;
-
       try {
-        // Step 1: Key exchange (Sign) — direct to terminal
-        addLog('> Step 1: Key exchange with terminal…');
-        const signResult = await kpaySign(config);
-        if (!signResult.success) {
-          addLog(`> ❌ Key exchange failed: ${signResult.message}${signResult.error ? ` (${signResult.error})` : ''}`, '#ff6b6b');
+        // Step 1: Initiate sale on terminal
+        addLog(`> POST /payment-terminals/${kpayTerminal.id}/test`);
+        addLog(`> Amount: ${formatPrice(paymentModalTotal)}`);
+
+        const resp = await apiClient.post(
+          `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test`,
+          { payAmount: amountInCents, tipsAmount: '000000000000', payCurrency: '344' }
+        );
+        const result = resp.data;
+
+        if (result.logs) result.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+
+        if (!result.initiated) {
           setKpayStatusMsg(t('orders.kpay-failed'));
-          setKpayProcessing(false);
+          addLog(`> ❌ ${result.message || 'Failed to initiate'}`, '#ff6b6b');
           return;
         }
-        addLog('> ✅ Key exchange successful', '#51cf66');
 
-        const appPrivateKey = signResult.appPrivateKey!;
-
-        // Step 2: Initiate sale — signed POST direct to terminal
-        addLog(`> Step 2: Sale — ${formatPrice(paymentModalTotal)}`);
-        const saleResult = await kpaySale(config, appPrivateKey, outTradeNo, payAmount);
-        if (!saleResult.success) {
-          addLog(`> ❌ Sale failed: ${saleResult.message}${saleResult.error ? ` (${saleResult.error})` : ''}`, '#ff6b6b');
-          setKpayStatusMsg(t('orders.kpay-failed'));
-          setKpayProcessing(false);
-          return;
-        }
-        addLog('> ✅ Sale initiated — terminal is waiting for customer', '#51cf66');
+        const outTradeNo = result.outTradeNo;
+        setKpayStatusMsg(t('orders.kpay-waiting'));
         addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
         addLog(`> ${t('orders.kpay-tap-scan')}`, '#ffd43b');
-        setKpayStatusMsg(t('orders.kpay-waiting'));
 
-        // Save outTradeNo to the order immediately so history shows KPay attempt
-        // even if the payment ultimately fails or times out.
-        if (paymentModalOrderId) {
-          try {
-            await apiClient.patch(
-              `/api/restaurants/${restaurantId}/orders/${paymentModalOrderId}/kpay-attempt`,
-              { outTradeNo, amountCents: paymentModalTotal }
-            );
-          } catch (_) { /* non-fatal — polling continues regardless */ }
-        }
-
-        // Save session so abort can call kpayClose
-        kpayActiveSessionRef.current = { config, appPrivateKey, outTradeNo };
-
-        // Step 3: Poll status — signed GET direct to terminal
-        // appPrivateKey is valid until terminal settlement; reuse for all polls.
-        // No app-side timeout — we poll until the terminal itself times out and
-        // returns a terminal-side cancelled/failed status (payResult 5/6/3).
+        // Step 2: Poll for result
         let attempts = 0;
+        const maxAttempts = 22;
 
         const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatusMsg(t('orders.kpay-timeout'));
+            addLog('> TIMEOUT', '#ffd43b');
+            setKpayProcessing(false);
+            return;
+          }
           attempts++;
-          addLog(`> Polling… (${attempts})`);
+          addLog(`> Polling… (${attempts}/${maxAttempts})`);
 
           try {
-            const statusResult = await kpayQuery(config, appPrivateKey, outTradeNo);
+            const qResp = await apiClient.get(
+              `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test-status`,
+              { params: { outTradeNo } }
+            );
+            const qData = qResp.data;
+            if (qData.logs) qData.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
 
-            if (statusResult.status === 'success') {
+            if (qData.status === 'success') {
               setKpayStatusMsg(t('orders.kpay-paid'));
               addLog(`> ✅ ${t('orders.kpay-confirmed')}`, '#51cf66');
-              kpayActiveSessionRef.current = null;
 
+              // Close the bill
               await apiClient.post(
                 `/api/sessions/${paymentModalSessionId}/close-bill`,
                 {
@@ -1055,7 +932,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               );
               addLog(`> ✅ ${t('orders.bill-closed')}`, '#51cf66');
               setKpayProcessing(false);
-
+              
+              // Auto-dismiss after 2 seconds
               setTimeout(() => {
                 setShowPaymentModal(false);
                 setKpayLogs([]);
@@ -1065,15 +943,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               return;
             }
 
-            if (statusResult.status === 'cancelled' || statusResult.status === 'failed') {
-              const reason = statusResult.terminalMessage ? `: ${statusResult.terminalMessage}` : '';
-              setKpayStatusMsg(statusResult.status === 'cancelled' ? t('orders.kpay-cancelled') : `${t('orders.kpay-failed')}${reason}`);
-              addLog(`> ${statusResult.status}${reason}`, '#ff6b6b');
-              kpayActiveSessionRef.current = null;
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatusMsg(qData.status === 'cancelled' ? t('orders.kpay-cancelled') : t('orders.kpay-failed'));
+              addLog(`> ${qData.status}`, '#ff6b6b');
               setKpayProcessing(false);
               return;
             }
 
+            // Still pending — poll again
             kpayPollRef.current = setTimeout(poll, 3000);
           } catch (e: any) {
             addLog(`> Poll error: ${e.message}`, '#ffd43b');
@@ -1089,17 +966,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    const abortKpayPayment = async () => {
-      const session = kpayActiveSessionRef.current;
+    const abortKpayPayment = () => {
       if (kpayPollRef.current) {
         clearTimeout(kpayPollRef.current);
         kpayPollRef.current = null;
-      }
-      kpayActiveSessionRef.current = null;
-      // Tell the terminal to release the in-progress transaction
-      if (session) {
-        setKpayStatusMsg('Cancelling…');
-        await kpayClose(session.config, session.appPrivateKey, session.outTradeNo);
       }
       setKpayProcessing(false);
       setKpayStatusMsg('');
@@ -1162,67 +1032,35 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         Alert.alert(t('orders.error'), t('orders.no-kpay-ref'));
         return;
       }
-      setKpayVoidPassword('');
-      setKpayActionLogs([]);
-      setKpayActionBusy(false);
-      setShowKpayVoidModal(true);
-    };
-
-    const submitKpayVoid = async () => {
-      if (!selectedHistoryOrder || !kpayTerminal) return;
-      const outTradeNo = selectedHistoryOrder.kpay_reference_id;
-      if (!outTradeNo || !kpayVoidPassword) {
-        Alert.alert(t('orders.error'), t('orders.password-required'));
-        return;
-      }
-      const addLog = (msg: string, color: string = '#00ff00') =>
-        setKpayActionLogs(prev => [...prev, { msg, color }]);
-      setKpayActionBusy(true);
-      setKpayActionLogs([{ msg: `> ${t('orders.kpay-connecting')}`, color: '#ffd43b' }]);
-      try {
-        const config = {
-          terminalIp: kpayTerminal.terminal_ip,
-          terminalPort: kpayTerminal.terminal_port,
-          appId: kpayTerminal.app_id,
-          appSecret: kpayTerminal.app_secret,
-          endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
-        };
-        addLog('> Step 1: Key exchange with terminal…');
-        const { appPrivateKey, platformPublicKey } = await kpaySign(config);
-        if (!appPrivateKey) throw new Error('Key exchange failed');
-        addLog('> ✅ Key exchange successful', '#51cf66');
-        const encPwd = await encryptManagerPassword(platformPublicKey!, kpayVoidPassword);
-        const voidOutTradeNo = `VOID-${Date.now()}`;
-        addLog(`> Step 2: Sending void request…`);
-        addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
-        const voidResult = await kpayVoid(config, appPrivateKey!, voidOutTradeNo, outTradeNo, encPwd);
-        if (!voidResult.success) throw new Error(voidResult.message + (voidResult.error ? ` (${voidResult.error})` : ''));
-        addLog('> ✅ Void successful', '#51cf66');
-        addLog(`> Void trade no: ${voidOutTradeNo}`, '#ffd43b');
-        // Persist void trade no and status to DB
-        addLog('> Saving to database…');
-        try {
-          await apiClient.patch(`/api/restaurants/${restaurantId}/kpay-transactions/${outTradeNo}/mark-void-refund`, {
-            type: 'voided', tradeNo: voidOutTradeNo,
-          });
-          addLog('> ✅ Saved', '#51cf66');
-        } catch (_) { addLog('> ⚠️ DB save failed (non-fatal)', '#ffd43b'); }
-        setKpayActionBusy(false);
-        setShowKpayVoidModal(false);
-        Alert.alert(t('orders.success'), t('orders.void-success'));
-        await reloadSelectedOrder(selectedHistoryOrder.id);
-      } catch (err: any) {
-        addLog(`> ❌ ${err.message}`, '#ff6b6b');
-        setKpayActionBusy(false);
-      }
+      Alert.alert(
+        t('orders.void-kpay'),
+        t('orders.void-kpay-msg').replace('{0}', outTradeNo),
+        [
+          { text: t('orders.cancel') },
+          {
+            text: t('orders.void'),
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await apiClient.post(
+                  `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/cancel`,
+                  { outTradeNo: `VOID-${Date.now()}`, originOutTradeNo: outTradeNo }
+                );
+                Alert.alert(t('orders.success'), t('orders.void-success'));
+                await reloadSelectedOrder(order.id);
+              } catch (err: any) {
+                Alert.alert(t('orders.void-failed'), err.response?.data?.error || err.message);
+              }
+            },
+          },
+        ]
+      );
     };
 
     // === KPay Refund ===
     const openKpayRefund = () => {
       setKpayRefundAmount('');
       setKpayManagerPassword('');
-      setKpayActionLogs([]);
-      setKpayActionBusy(false);
       setShowKpayRefundModal(true);
     };
 
@@ -1233,68 +1071,24 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         Alert.alert(t('orders.error'), t('orders.password-required'));
         return;
       }
-      if (!kpayTxDetails) {
-        Alert.alert(t('orders.error'), t('orders.kpay-tx-not-loaded'));
-        return;
-      }
-      const addLog = (msg: string, color: string = '#00ff00') =>
-        setKpayActionLogs(prev => [...prev, { msg, color }]);
-      setKpayActionBusy(true);
-      setKpayActionLogs([{ msg: `> ${t('orders.kpay-connecting')}`, color: '#ffd43b' }]);
       try {
-        const config = {
-          terminalIp: kpayTerminal.terminal_ip,
-          terminalPort: kpayTerminal.terminal_port,
-          appId: kpayTerminal.app_id,
-          appSecret: kpayTerminal.app_secret,
-          endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
+        const body: any = {
+          outTradeNo: `REF-${Date.now()}`,
+          refundType: 2, // default QR
+          managerPassword: kpayManagerPassword,
         };
-        addLog('> Step 1: Key exchange with terminal…');
-        const { appPrivateKey, platformPublicKey } = await kpaySign(config);
-        if (!appPrivateKey) throw new Error('Key exchange failed');
-        addLog('> ✅ Key exchange successful', '#51cf66');
-        const encPwd = await encryptManagerPassword(platformPublicKey!, kpayManagerPassword);
-        const refundOutTradeNo = `REF-${Date.now()}`;
-
-        // Determine refund type from tx details
-        // refundType 1 = Card (needs refNo + commitTime), 2 = QR (needs transactionNo)
-        const refundType = kpayTxDetails.refNo ? 1 : 2;
-        // refundAmount must be 12-digit zero-padded cents (e.g. "000000005000" = HKD 50.00)
-        const refundAmountFormatted = kpayRefundAmount
-          ? String(Math.round(parseFloat(kpayRefundAmount) * 100)).padStart(12, '0')
-          : undefined;
-        addLog(`> Step 2: Sending refund request (type=${refundType === 1 ? 'Card' : 'QR'})…`);
-        addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
-        addLog(`> refundOutTradeNo: ${refundOutTradeNo}`, '#ffd43b');
-        if (refundAmountFormatted) addLog(`> amount: ${refundAmountFormatted}`, '#ffd43b');
-        const refundResult = await kpayRefund(config, appPrivateKey!, {
-          outTradeNo: refundOutTradeNo,
-          refundType,
-          encryptedManagerPassword: encPwd,
-          refundAmount: refundAmountFormatted,
-          ...(refundType === 1
-            ? { refNo: kpayTxDetails.refNo, commitTime: kpayTxDetails.commitTime }
-            : { transactionNo: kpayTxDetails.transactionNo }),
-        });
-        if (!refundResult.success) throw new Error(refundResult.message + (refundResult.error ? ` (${refundResult.error})` : ''));
-        addLog('> ✅ Refund successful', '#51cf66');
-        // Persist refund trade no and status to DB
-        addLog('> Saving to database…');
-        try {
-          const refundAmtCents = kpayRefundAmount ? Math.round(parseFloat(kpayRefundAmount) * 100) : undefined;
-          await apiClient.patch(`/api/restaurants/${restaurantId}/kpay-transactions/${outTradeNo}/mark-void-refund`, {
-            type: 'refunded', tradeNo: refundOutTradeNo,
-            ...(refundAmtCents != null ? { refundAmountCents: refundAmtCents } : {}),
-          });
-          addLog('> ✅ Saved', '#51cf66');
-        } catch (_) { addLog('> ⚠️ DB save failed (non-fatal)', '#ffd43b'); }
-        setKpayActionBusy(false);
+        if (kpayRefundAmount) {
+          body.refundAmount = kpayRefundAmount;
+        }
+        await apiClient.post(
+          `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/refund`,
+          body
+        );
         setShowKpayRefundModal(false);
         Alert.alert(t('orders.success'), t('orders.refund-kpay-success'));
         await reloadSelectedOrder(selectedHistoryOrder.id);
       } catch (err: any) {
-        addLog(`> ❌ ${err.message}`, '#ff6b6b');
-        setKpayActionBusy(false);
+        Alert.alert(t('orders.refund-failed'), err.response?.data?.error || err.message);
       }
     };
 
@@ -1453,30 +1247,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         <Text style={{ fontWeight: '600', color: '#dc2626' }}>{t('orders.abort')}</Text>
                       </TouchableOpacity>
                     ) : (
-                      // KPay finished (failed/cancelled/timeout) — let staff pick another method or pay later
-                      <>
-                        <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                          onPress={() => {
-                            setShowPaymentModal(false);
-                            setKpayLogs([]);
-                            setKpayStatusMsg('');
-                          }}
-                        >
-                          <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.pay-later')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                          onPress={() => {
-                            // Return to payment method selector without closing modal
-                            setKpayLogs([]);
-                            setKpayStatusMsg('');
-                            setPaymentModalMethod('cash');
-                          }}
-                        >
-                          <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.try-another-method')}</Text>
-                        </TouchableOpacity>
-                      </>
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: '#d1fae5', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#6ee7b7' }}
+                        onPress={() => {
+                          setShowPaymentModal(false);
+                          setKpayLogs([]);
+                          setKpayStatusMsg('');
+                          loadOrdersAndSessions();
+                        }}
+                      >
+                        <Text style={{ fontWeight: '600', color: '#065f46' }}>{t('orders.done')}</Text>
+                      </TouchableOpacity>
                     )}
                   </View>
                 </View>
@@ -1704,28 +1485,37 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {/* Order Summary */}
           <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 12 }}>
             <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>{t('orders.order-summary')}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
+              <Text style={{ fontSize: 13, color: '#1f2937' }}>
+                {formatPrice((selectedHistoryOrder.items || []).reduce((sum: number, i: any) => {
+                  const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
+                  const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || a.unit_price_cents * a.quantity), 0);
+                  return sum + itemTotal + addonsTotal;
+                }, 0))}
+              </Text>
+            </View>
             {(() => {
-              const subtotal = selectedHistoryOrder.subtotal_cents ?? selectedHistoryOrder.total_cents;
+              const subtotal = (selectedHistoryOrder.items || []).reduce((sum: number, i: any) => {
+                const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
+                const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || a.unit_price_cents * a.quantity), 0);
+                return sum + itemTotal + addonsTotal;
+              }, 0);
               const serviceCharge = selectedHistoryOrder.total_cents - subtotal;
-              return (
-                <>
+              if (serviceCharge > 0) {
+                return (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.subtotal')}</Text>
-                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(subtotal)}</Text>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.service-charge')}</Text>
+                    <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
                   </View>
-                  {serviceCharge > 0 && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.service-charge')}</Text>
-                      <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatPrice(serviceCharge)}</Text>
-                    </View>
-                  )}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
-                  </View>
-                </>
-              );
+                );
+              }
+              return null;
             })()}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{t('orders.grand-total')}</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatPrice(selectedHistoryOrder.total_cents)}</Text>
+            </View>
           </View>
 
           {/* Payment Information */}
@@ -1779,17 +1569,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   </View>
                 )}
 
-                {/* Payment Method — hide when unpaid/pending and no method set */}
-                {(() => {
-                  const isPending = !selectedHistoryOrder.payment_received && !selectedHistoryOrder.cp_status && (!selectedHistoryOrder.payment_status || selectedHistoryOrder.payment_status === 'pending') && !selectedHistoryOrder.payment_method_online;
-                  if (isPending) return null;
-                  return (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-method')}</Text>
-                      <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
-                    </View>
-                  );
-                })()}
+                {/* Payment Method */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.payment-method')}</Text>
+                  <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
+                </View>
 
                 {/* Vendor Reference */}
                 {selectedHistoryOrder.cp_vendor_ref && (
@@ -1838,100 +1622,60 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 8 }}>{t('orders.kpay-details')}</Text>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-original-ref')}</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.order-ref')}</Text>
                   <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
                 </View>
                 {txLoading && <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />}
                 {kpayTxDetails && (
                   <>
-                    {kpayTxDetails.refund_reference_id ? (() => {
-                      const isVoid = kpayTxDetails.refund_reference_id.startsWith('VOID');
-                      return (
-                        <View style={{ marginBottom: 8, marginTop: 2 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <View style={{ flex: 1, height: 1, backgroundColor: '#bfdbfe' }} />
-                          </View>
-                          <View style={{ backgroundColor: isVoid ? '#fef3c7' : '#fef2f2', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: isVoid ? '#fcd34d' : '#fca5a5' }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: isVoid ? '#92400e' : '#991b1b', marginBottom: 4 }}>
-                              {isVoid ? `↩ ${t('orders.kpay-void-trade-no')}` : `↩ ${t('orders.kpay-refund-trade-no')}`}
-                            </Text>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                              <Text style={{ fontSize: 11, color: '#6b7280' }}>{t('orders.kpay-original-ref')}</Text>
-                              <Text style={{ fontSize: 11, color: '#374151', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.kpay_reference_id}</Text>
-                            </View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-                              <Text style={{ fontSize: 11, color: '#6b7280' }}>{isVoid ? t('orders.kpay-void-trade-no') : t('orders.kpay-refund-trade-no')}</Text>
-                              <Text style={{ fontSize: 11, fontWeight: '600', color: isVoid ? '#92400e' : '#991b1b', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refund_reference_id}</Text>
-                            </View>
-                            {kpayTxDetails.refund_amount_cents > 0 && (
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-                                <Text style={{ fontSize: 11, color: '#6b7280' }}>{t('orders.amount')}</Text>
-                                <Text style={{ fontSize: 11, fontWeight: '600', color: isVoid ? '#92400e' : '#991b1b' }}>HKD {(kpayTxDetails.refund_amount_cents / 100).toFixed(2)}</Text>
-                              </View>
-                            )}
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                            <View style={{ flex: 1, height: 1, backgroundColor: '#bfdbfe' }} />
-                          </View>
-                        </View>
-                      );
-                    })() : null}
-                    {kpayTxDetails.transactionNo ? (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-order-no')}</Text>
-                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.transactionNo}</Text>
-                      </View>
-                    ) : null}
-                    {kpayTxDetails.refNo ? (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-ref-no')}</Text>
-                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refNo}</Text>
-                      </View>
-                    ) : null}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
                       <Text style={{ fontSize: 12, color: '#1f2937' }}>
-                        {kpayTxDetails.payCurrency === '344' ? 'HKD' : kpayTxDetails.payCurrency || 'HKD'}{' '}
-                        {kpayTxDetails.payAmount
-                          ? (Number(kpayTxDetails.payAmount) / 100).toFixed(2)
-                          : ((kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
+                        {kpayTxDetails.payCurrency || 'HKD'} {((Number(kpayTxDetails.payAmount) || kpayTxDetails.amount_cents || 0) / 100).toFixed(2)}
+                        {kpayTxDetails.payAmount ? ` (${kpayTxDetails.payAmount})` : ''}
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
                       <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{kpayTxDetails.status || '—'}</Text>
                     </View>
-                    {kpayTxDetails.commitTime ? (
+                    {kpayTxDetails.payResult !== undefined && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-tx-time')}</Text>
-                        <Text style={{ fontSize: 12, color: '#1f2937' }}>
-                          {(() => { const n = Number(kpayTxDetails.commitTime); return n ? new Date(n).toLocaleString() : kpayTxDetails.commitTime; })()}
-                        </Text>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>payResult</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{(KPAY_RESULT_MAP as any)[kpayTxDetails.payResult] || kpayTxDetails.payResult}</Text>
                       </View>
-                    ) : null}
-                    {kpayTxDetails.payMethod != null ? (
+                    )}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>outTradeNo</Text>
+                      <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.outTradeNo || '—'}</Text>
+                    </View>
+                    {kpayTxDetails.transactionNo && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.method')}</Text>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>transactionNo</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.transactionNo}</Text>
+                      </View>
+                    )}
+                    {kpayTxDetails.refNo && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>refNo</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.refNo}</Text>
+                      </View>
+                    )}
+                    {kpayTxDetails.commitTime && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>commitTime</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{kpayTxDetails.commitTime}</Text>
+                      </View>
+                    )}
+                    {kpayTxDetails.payMethod !== undefined && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>payMethod</Text>
                         <Text style={{ fontSize: 12, color: '#1f2937' }}>{KPAY_METHOD_MAP[kpayTxDetails.payMethod] || kpayTxDetails.payMethod}</Text>
                       </View>
-                    ) : null}
-                    {kpayTxDetails.raw?.merchantNo ? (
+                    )}
+                    {kpayTxDetails.refund_amount_cents > 0 && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-merchant-no')}</Text>
-                        <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.raw.merchantNo}</Text>
-                      </View>
-                    ) : null}
-                    {kpayTxDetails.raw?.terminalNo ? (
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.kpay-terminal-no')}</Text>
-                        <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{kpayTxDetails.raw.terminalNo}</Text>
-                      </View>
-                    ) : null}
-                    {/* Decline / failure reason */}
-                    {(kpayTxDetails.reason || kpayTxDetails.terminalMessage) && (
-                      <View style={{ backgroundColor: '#fef2f2', borderRadius: 6, padding: 8, marginTop: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#dc2626', marginBottom: 2 }}>Decline Reason</Text>
-                        <Text style={{ fontSize: 12, color: '#7f1d1d' }}>{kpayTxDetails.reason || kpayTxDetails.terminalMessage}</Text>
+                        <Text style={{ fontSize: 12, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
                       </View>
                     )}
                   </>
@@ -2125,120 +1869,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     };
 
     // ============= HISTORY VIEW =============
-    const kpayActionModals = (
-      <>
-        <Modal
-          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-          visible={showKpayVoidModal}
-          animationType="fade"
-          transparent
-          onRequestClose={() => { if (!kpayActionBusy) setShowKpayVoidModal(false); }}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.void-kpay')}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-                secureTextEntry
-                editable={!kpayActionBusy}
-                value={kpayVoidPassword}
-                onChangeText={setKpayVoidPassword}
-                placeholder={t('orders.required-field')}
-              />
-              {kpayActionLogs.length > 0 && (
-                <View style={{ backgroundColor: '#0f172a', borderRadius: 8, padding: 10, marginBottom: 12, maxHeight: 140 }}>
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    {kpayActionLogs.map((entry, i) => (
-                      <Text key={i} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: entry.color, lineHeight: 16 }}>{entry.msg}</Text>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={() => setShowKpayVoidModal(false)}
-                >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#f59e0b', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={submitKpayVoid}
-                >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>{kpayActionBusy ? '…' : t('orders.void-btn')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-        <Modal
-          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-          visible={showKpayRefundModal}
-          animationType="fade"
-          transparent
-          onRequestClose={() => { if (!kpayActionBusy) setShowKpayRefundModal(false); }}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
-                keyboardType="numeric"
-                editable={!kpayActionBusy}
-                value={kpayRefundAmount}
-                onChangeText={setKpayRefundAmount}
-                placeholder={t('orders.full-refund')}
-              />
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-                secureTextEntry
-                editable={!kpayActionBusy}
-                value={kpayManagerPassword}
-                onChangeText={setKpayManagerPassword}
-                placeholder={t('orders.required-field')}
-              />
-              {kpayActionLogs.length > 0 && (
-                <View style={{ backgroundColor: '#0f172a', borderRadius: 8, padding: 10, marginBottom: 12, maxHeight: 140 }}>
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    {kpayActionLogs.map((entry, i) => (
-                      <Text key={i} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: entry.color, lineHeight: 16 }}>{entry.msg}</Text>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={() => setShowKpayRefundModal(false)}
-                >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center', opacity: kpayActionBusy ? 0.5 : 1 }}
-                  disabled={kpayActionBusy}
-                  onPress={submitKpayRefund}
-                >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>{kpayActionBusy ? '…' : t('orders.submit-refund')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </>
-    );
-
     if (showHistory) {
       const historyIsTablet = (Platform as any).isPad;
 
@@ -2258,7 +1888,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               </ScrollView>
             </View>
             {paymentModal}
-            {kpayActionModals}
           </>
         );
       }
@@ -2383,17 +2012,15 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         </View>
                       )}
                       <Text style={{ fontSize: 10, color: '#9ca3af' }}>
+                        {methodLabelMap[getPaymentMethodLabel(order)] || getPaymentMethodLabel(order)}
                         {(() => {
-                          const isPending = !order.payment_received && !order.cp_status && (!order.payment_status || order.payment_status === 'pending');
-                          if (isPending) return '';
-                          const method = methodLabelMap[getPaymentMethodLabel(order)] || getPaymentMethodLabel(order);
                           const v = resolveVendor(order);
                           if (v && v !== 'cash' && v !== 'card') {
                             const vLabel = vendorLabelMap[getVendorLabel(v)] || getVendorLabel(v);
-                            if (vLabel && method !== vLabel) return `${method} · ${vLabel}`;
-                            return method;
+                            const mLabel = getPaymentMethodLabel(order);
+                            if (vLabel && mLabel !== vLabel) return ` · ${vLabel}`;
                           }
-                          return method;
+                          return '';
                         })()}
                       </Text>
                     </View>
@@ -2442,7 +2069,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           )}
         </View>
         {paymentModal}
-        {kpayActionModals}
         </>
       );
     }
@@ -2928,34 +2554,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               <FlatList
                 key={`menu-${selectedCategory}-${menuNumColumns}`}
                 data={(() => {
-                  const base: any[] = featureFlags.custom_menu_items
-                    ? [{ id: 'custom-item-tile', isCustomItemTile: true }, ...filteredMenuItems]
-                    : filteredMenuItems;
-                  const remainder = base.length % menuNumColumns;
-                  if (remainder === 0) return base;
+                  const remainder = filteredMenuItems.length % menuNumColumns;
+                  if (remainder === 0) return filteredMenuItems;
                   const spacers = Array.from({ length: menuNumColumns - remainder }, (_, i) => ({ id: `spacer-${i}`, isSpacer: true }));
-                  return [...base, ...spacers];
-                })()}}
+                  return [...filteredMenuItems, ...spacers];
+                })()}
                 keyExtractor={(item: any) => item.id.toString()}
                 numColumns={menuNumColumns}
                 columnWrapperStyle={styles.gridRow}
                 renderItem={({ item }: any) => {
                 if (item.isSpacer) {
                   return <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]} />;
-                }
-                if (item.isCustomItemTile) {
-                  return (
-                    <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]}>
-                      <TouchableOpacity
-                        style={[styles.menuItem, { borderStyle: 'dashed', borderWidth: 2, borderColor: '#6366f1', backgroundColor: '#f5f3ff', justifyContent: 'center', alignItems: 'center', minHeight: 110 }]}
-                        onPress={() => setShowCustomItemModal(true)}
-                      >
-                        <Text style={{ fontSize: 28, color: '#6366f1' }}>＋</Text>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#6366f1', textAlign: 'center', marginTop: 4 }}>Custom Item</Text>
-                        <Text style={{ fontSize: 10, color: '#a5b4fc', textAlign: 'center', marginTop: 2 }}>Market Price</Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
                 }
                 return (
                 <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]}>
@@ -3042,59 +2651,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           )}
         </View>
 
-        {/* Custom Item Modal (market-price / ad-hoc items) */}
-        <Modal
-          visible={showCustomItemModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowCustomItemModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.variantModalContent, { maxWidth: 380, borderRadius: 16, padding: 0 }]}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
-                <Text style={{ fontSize: 17, fontWeight: '700', color: '#1f2937' }}>Custom Menu Item</Text>
-                <TouchableOpacity onPress={() => setShowCustomItemModal(false)}>
-                  <Text style={{ fontSize: 20, color: '#9ca3af' }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={{ padding: 16 }}>
-                <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>Enter the item name and price — for market-price dishes that aren't on the fixed menu.</Text>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Item Name *</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 14, backgroundColor: '#fff' }}
-                  value={customItemName}
-                  onChangeText={setCustomItemName}
-                  placeholder="e.g. Fresh Crab (Market Price)"
-                  placeholderTextColor="#9ca3af"
-                />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Price ($) *</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 20, backgroundColor: '#fff' }}
-                  value={customItemPrice}
-                  onChangeText={setCustomItemPrice}
-                  placeholder="e.g. 68.00"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="decimal-pad"
-                />
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity
-                    style={{ flex: 1, backgroundColor: '#6366f1', padding: 12, borderRadius: 8, alignItems: 'center' }}
-                    onPress={handleAddCustomItemToCart}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Add to Cart</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={{ flex: 1, backgroundColor: '#f3f4f6', padding: 12, borderRadius: 8, alignItems: 'center' }}
-                    onPress={() => setShowCustomItemModal(false)}
-                  >
-                    <Text style={{ color: '#374151', fontWeight: '600', fontSize: 14 }}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
         {/* Variant Modal (iPad only — phone uses full-page view) */}
         {menuIsTablet && (
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
@@ -3116,7 +2672,53 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
         {tablePickerModal}
 
-        {kpayActionModals}
+        {/* KPay Refund Modal */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showKpayRefundModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowKpayRefundModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
+                keyboardType="numeric"
+                value={kpayRefundAmount}
+                onChangeText={setKpayRefundAmount}
+                placeholder={t('orders.full-refund')}
+              />
+              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                secureTextEntry
+                value={kpayManagerPassword}
+                onChangeText={setKpayManagerPassword}
+                placeholder={t('orders.required-field')}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => setShowKpayRefundModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={submitKpayRefund}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Payment Asia Refund Modal */}
         <Modal

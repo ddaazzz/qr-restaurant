@@ -45,6 +45,12 @@
       <p id="booking-settings-preview" data-i18n="admin.manage-reservations">Manage reservations</p>
     </div>
 
+    <!-- Menu Settings Card -->
+    <div class="settings-card" onclick="showSettingsPage('menu-settings')">
+      <h3 data-i18n="admin.menu-settings">Menu Settings</h3>
+      <p data-i18n="admin.menu-settings-desc">Layout and feature options</p>
+    </div>
+
     <!-- Addon Presets Card -->
     <div class="settings-card" onclick="showSettingsPage('addon-presets')">
       <h3 data-i18n="admin.addon-presets">Addon Presets</h3>
@@ -63,22 +69,10 @@
       <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
     </div>
 
-    <!-- Menu Settings Card -->
-    <div class="settings-card" onclick="showSettingsPage('menu-settings')">
-      <h3>Menu Settings</h3>
-      <p>Custom items &amp; market price options</p>
-    </div>
-
-    <!-- Service Requests Card (shown when feature is enabled) -->
-    <div class="settings-card" id="service-requests-card" style="display:none;" onclick="showSettingsPage('service-requests')">
-      <h3>Service Requests</h3>
-      <p>Configure items customers can request</p>
-    </div>
-
     <!-- CRM Card -->
     <div class="settings-card" onclick="showSettingsPage('crm')">
-      <h3>CRM</h3>
-      <p>Customer profiles &amp; history</p>
+      <h3 data-i18n="admin.crm">CRM</h3>
+      <p id="crm-count-preview" data-i18n="admin.crm-desc">Customer relationships</p>
     </div>
 
     <!-- Users & Restaurants Card -->
@@ -359,7 +353,6 @@
     <h3 data-i18n="admin.coupons">Coupons</h3>
     <button onclick="openAddCouponForm()" class="btn-primary" style="padding: 6px 12px; font-size: 13px;" data-i18n="admin.add-coupon-btn">+ Add Coupon</button>
   </div>
-      </div>
       <div class="settings-page-content">
 
         <!-- Coupon Add/Edit Form (hidden until triggered) -->
@@ -450,6 +443,58 @@
           <button onclick="saveBookingSettings()" class="btn-primary" data-i18n="admin.save-booking-settings">Save Settings</button>
           <button onclick="hideSettingsPage('booking-settings')" class="btn-secondary" data-i18n="admin.cancel">Cancel</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Menu Settings Page -->
+  <div id="page-menu-settings" class="settings-page hidden">
+  <div class="settings-page-inner">
+      <div class="settings-page-header">
+    <button class="btn-back" onclick="hideSettingsPage('menu-settings')">&#8592; Back</button>
+    <h3 data-i18n="admin.menu-settings">Menu Settings</h3>
+  </div>
+      <div class="settings-page-content">
+
+        <!-- Section: Admin Portal -->
+        <div class="settings-section" style="margin-bottom: 24px;">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--text-main);" data-i18n="admin.menu-settings-admin-portal">Admin Portal</h4>
+
+          <div class="settings-row" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <div style="font-size: 14px; font-weight: 500;" data-i18n="admin.custom-food-item">Custom Food Item</div>
+              <div style="font-size: 12px; color: var(--text-light);" data-i18n="admin.custom-food-item-desc">Allow staff to add free-text custom items to orders</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="custom-food-item-toggle" onchange="saveCustomFoodItemSetting(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Section: Customer Menu -->
+        <div class="settings-section">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--text-main);" data-i18n="admin.menu-settings-customer-menu">Customer Menu</h4>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 8px;" data-i18n="admin.menu-layout">Menu Layout</label>
+            <div style="display: flex; gap: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1)">
+                <span data-i18n="admin.single-column">Single Column</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2)">
+                <span data-i18n="admin.two-column">Two Columns</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #0369a1;">
+            <strong data-i18n="admin.image-tip-title">Image tip:</strong> <span data-i18n="admin.image-tip-desc">Optimal food image size is 800 × 600 px (4:3 ratio).</span>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -709,71 +754,6 @@
   </div>
 </template>
 
-<!-- ===== CRM PAGE ===== -->
-<div id="page-crm" class="settings-page hidden">
-  <div class="settings-page-inner">
-    <div class="settings-page-header">
-      <button class="btn-back" onclick="hideCRMPage()">&#8592; Back</button>
-      <h3>CRM</h3>
-    </div>
-    <div class="settings-page-content">
-
-      <!-- CRM Main View (customer list) -->
-      <div id="crm-main-view">
-        <!-- Sort + Search bar -->
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
-          <input id="crm-search-input" type="text" placeholder="Search by name, phone or email…"
-            style="flex:1;min-width:180px;padding:9px 12px;border:1px solid var(--border-color);border-radius:6px;font-size:14px;"
-            oninput="onCRMSearch()" />
-          <select id="crm-sort-select" onchange="loadCRMCustomers()"
-            style="padding:9px 12px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:#fff;">
-            <option value="last_visit">Last Visit</option>
-            <option value="total_orders">Total Orders</option>
-            <option value="total_spent">Total Spent</option>
-            <option value="created_at">Date Joined</option>
-          </select>
-        </div>
-
-        <!-- Customer table -->
-        <div id="crm-customers-list" style="overflow-x:auto;">
-          <p style="color:#999;text-align:center;padding:24px;">Loading customers…</p>
-        </div>
-      </div>
-
-      <!-- CRM Detail View (hidden until a customer is clicked) -->
-      <div id="crm-detail-view" style="display:none;">
-        <button onclick="showCRMMain()" style="background:none;border:none;cursor:pointer;color:var(--primary-color);font-size:14px;font-weight:600;margin-bottom:16px;">&#8592; Back to Customers</button>
-
-        <!-- Customer header card -->
-        <div class="crm-profile-card" id="crm-profile-card"></div>
-
-        <!-- Orders section -->
-        <div class="section-card" style="margin-top:16px;">
-          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Order History</h4>
-          <div id="crm-orders-list"></div>
-        </div>
-
-        <!-- Bookings sections -->
-        <div class="section-card" style="margin-top:16px;">
-          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Upcoming Reservations</h4>
-          <div id="crm-future-bookings"></div>
-        </div>
-        <div class="section-card" style="margin-top:16px;">
-          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Past Reservations</h4>
-          <div id="crm-past-bookings"></div>
-        </div>
-
-        <!-- Eligible coupons -->
-        <div class="section-card" style="margin-top:16px;">
-          <h4 style="margin:0 0 12px;font-size:15px;font-weight:700;">Eligible Coupons</h4>
-          <div id="crm-coupons-list"></div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</div>
-
 <!-- Language initialization script -->
 <script>
   (function() {
@@ -819,6 +799,46 @@
         </div>
         <div id="restaurants-list"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============= CRM PAGE ============= -->
+<div id="page-crm" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('crm')">&#8592; Back</button>
+      <h3 data-i18n="admin.crm">CRM</h3>
+      <button id="crm-import-btn" onclick="crmImportFromBookings()" class="btn-secondary" style="padding:6px 14px;font-size:12px;" data-i18n="admin.crm-import-bookings">Import from Bookings</button>
+    </div>
+    <div class="settings-page-content">
+
+      <!-- Customer list view -->
+      <div id="crm-list-view">
+        <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;">
+          <input type="search" id="crm-search-input" placeholder="Search name, phone or email…" style="flex:1;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" oninput="crmSearchDebounce()" data-i18n-placeholder="admin.crm-search-placeholder" />
+          <select id="crm-sort-select" onchange="loadCrmPage()" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff;">
+            <option value="last_visit" data-i18n="admin.crm-sort-last-visit">Last Visit</option>
+            <option value="total_spent" data-i18n="admin.crm-sort-spent">Most Spent</option>
+            <option value="total_orders" data-i18n="admin.crm-sort-orders">Most Orders</option>
+            <option value="created_at" data-i18n="admin.crm-sort-newest">Newest</option>
+          </select>
+        </div>
+        <div id="crm-customer-count" style="font-size:12px;color:#6b7280;margin-bottom:12px;"></div>
+        <div id="crm-customer-list" style="display:flex;flex-direction:column;gap:0;">
+          <p style="color:#999;text-align:center;padding:24px;" data-i18n="admin.loading">Loading...</p>
+        </div>
+        <div id="crm-load-more-wrapper" style="text-align:center;margin-top:12px;display:none;">
+          <button onclick="crmLoadMore()" class="btn-secondary" style="font-size:13px;" data-i18n="admin.load-more">Load More</button>
+        </div>
+      </div>
+
+      <!-- Customer profile view (hidden by default) -->
+      <div id="crm-profile-view" style="display:none;">
+        <button onclick="crmBackToList()" style="background:none;border:none;color:#667eea;cursor:pointer;font-size:13px;padding:0;margin-bottom:16px;">&#8592; <span data-i18n="admin.back-to-list">Back to list</span></button>
+        <div id="crm-profile-content"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -883,116 +903,6 @@
     </div>
   </div>
 </div>
-
-  <!-- HIDDEN: Menu Settings Page -->
-  <div id="page-menu-settings" class="settings-page hidden">
-  <div class="settings-page-inner">
-    <div class="settings-page-header">
-      <button class="btn-back" onclick="hideSettingsPage('menu-settings')">&#8592; Back</button>
-      <h3>Menu Settings</h3>
-    </div>
-    <div class="settings-page-content">
-
-      <!-- Custom Menu Items Toggle -->
-      <div style="background:#fff;border:1px solid var(--border-color);border-radius:10px;padding:16px;margin-bottom:16px;">
-        <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-          <div style="flex:1;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-              <span style="font-weight:600;font-size:15px;">Custom Food Item &amp; Market Price</span>
-              <span style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.3px;">
-                &#x1F451; Premium
-              </span>
-            </div>
-            <p style="font-size:13px;color:#666;margin:0;line-height:1.5;">Allow staff to add a custom food item with a manually entered name and price at the time of ordering — ideal for market-price dishes that change daily.</p>
-          </div>
-          <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;margin-top:2px;">
-            <input type="checkbox" id="custom-menu-items-toggle" onchange="saveMenuFeatureFlag('custom_menu_items', this.checked)" style="opacity:0;width:0;height:0;">
-            <span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;"></span>
-          </label>
-        </label>
-      </div>
-
-    </div>
-  </div>
-  </div>
-
-  <style>
-    #custom-menu-items-toggle:checked + .toggle-slider { background: var(--primary-color, #3b49df); }
-    #custom-menu-items-toggle:checked + .toggle-slider::before { transform: translateX(22px); }
-    .toggle-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
-    #custom-sr-items-toggle:checked + .toggle-slider-sr { background: var(--primary-color, #3b49df); }
-    #custom-sr-items-toggle:checked + .toggle-slider-sr::before { transform: translateX(22px); }
-    .toggle-slider-sr::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
-  </style>
-
-  <!-- HIDDEN: Service Requests Settings Page -->
-  <div id="page-service-requests" class="settings-page hidden">
-  <div class="settings-page-inner">
-    <div class="settings-page-header">
-      <button class="btn-back" onclick="hideSettingsPage('service-requests')">&#8592; Back</button>
-      <h3>Service Request Items</h3>
-      <button onclick="openAddServiceItemForm()" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">+ Add Item</button>
-    </div>
-    <div class="settings-page-content">
-      <p style="color:#666;font-size:13px;margin-bottom:16px;">Configure what items customers can request at their table (e.g. Tea Refill, Towel). Both English and Chinese labels are shown on the customer menu based on their language.</p>
-
-      <!-- Custom SR Items Toggle -->
-      <div style="background:#fff;border:1px solid var(--border-color);border-radius:10px;padding:16px;margin-bottom:20px;">
-        <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-          <div style="flex:1;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-              <span style="font-weight:600;font-size:15px;">Custom Service Request Item</span>
-              <span style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.3px;">
-                &#x1F451; Premium
-              </span>
-            </div>
-            <p style="font-size:13px;color:#666;margin:0;line-height:1.5;">Allow staff to submit a custom service request with a manually entered description — for one-off requests not covered by the preset list.</p>
-          </div>
-          <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;margin-top:2px;">
-            <input type="checkbox" id="custom-sr-items-toggle" onchange="saveMenuFeatureFlag('custom_sr_items', this.checked)" style="opacity:0;width:0;height:0;">
-            <span class="toggle-slider-sr" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;"></span>
-          </label>
-        </label>
-      </div>
-
-      <!-- Add / Edit Form -->
-      <div id="service-item-form-section" style="display:none;margin-bottom:20px;background:#f9fafb;border:1px solid var(--border-color);border-radius:8px;padding:16px;">
-        <h4 id="service-item-form-title" style="margin:0 0 16px 0;font-size:14px;font-weight:600;">Add Service Item</h4>
-        <div id="service-item-form-error" style="display:none;background:#fef2f2;color:#dc2626;padding:8px 12px;border-radius:6px;font-size:13px;margin-bottom:12px;"></div>
-        <div class="form-row two-col">
-          <div class="form-group">
-            <label>English Label *</label>
-            <input id="service-item-label-en" type="text" placeholder="e.g. Tea Refill" />
-          </div>
-          <div class="form-group">
-            <label>中文標籤</label>
-            <input id="service-item-label-zh" type="text" placeholder="e.g. 加茶" />
-          </div>
-        </div>
-        <div class="form-row two-col">
-          <div class="form-group">
-            <label>Internal Key *</label>
-            <input id="service-item-type" type="text" placeholder="e.g. tea_refill" style="font-family:monospace;" />
-          </div>
-          <div class="form-group">
-            <label>Sort Order</label>
-            <input id="service-item-sort" type="number" value="0" min="0" />
-          </div>
-        </div>
-        <div class="form-actions">
-          <button id="service-item-submit-btn" onclick="submitServiceItemForm()" class="btn-primary">Add Item</button>
-          <button onclick="closeServiceItemForm()" class="btn-secondary">Cancel</button>
-        </div>
-      </div>
-
-      <!-- Items List -->
-      <div id="service-items-list" style="display:flex;flex-direction:column;gap:10px;">
-        <!-- JS renders items here -->
-      </div>
-      <p id="no-service-items-msg" style="text-align:center;color:var(--text-light);padding:20px;display:none;">No items yet. Click "+ Add Item" to create one.</p>
-    </div>
-  </div>
-  </div>
 
 <!-- Restaurant Modal -->
 <div id="restaurant-modal" class="modal-overlay" style="display: none;">

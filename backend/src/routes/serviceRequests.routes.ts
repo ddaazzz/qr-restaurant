@@ -2,6 +2,8 @@ import { Router } from "express";
 import pool from "../config/db";
 import { requireFeature } from "../middleware/featureFlags";
 import { webSocketServer } from "../services/websocket";
+import { upload } from "../config/upload";
+import { isR2Configured, uploadToR2, getR2Folder } from "../config/storage";
 import jwt from "jsonwebtoken";
 
 const router = Router();
@@ -166,7 +168,7 @@ router.get("/restaurants/:restaurantId/service-request-items", requireFeature("s
   const { restaurantId } = req.params;
   try {
     const result = await pool.query(
-      `SELECT id, request_type, label_en, label_zh, sort_order, color
+      `SELECT id, request_type, label_en, label_zh, sort_order, color, image_url
        FROM service_request_items
        WHERE restaurant_id = $1 AND is_active = TRUE
        ORDER BY sort_order ASC, id ASC`,
@@ -191,7 +193,7 @@ router.get("/restaurants/:restaurantId/service-request-items/all", async (req, r
   }
   try {
     const result = await pool.query(
-      `SELECT id, request_type, label_en, label_zh, is_active, sort_order, color
+      `SELECT id, request_type, label_en, label_zh, is_active, sort_order, color, image_url
        FROM service_request_items
        WHERE restaurant_id = $1
        ORDER BY sort_order ASC, id ASC`,
@@ -214,16 +216,16 @@ router.post("/restaurants/:restaurantId/service-request-items", async (req, res)
   if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
     return res.status(403).json({ error: "Forbidden" });
   }
-  const { request_type, label_en, label_zh, sort_order, color } = req.body;
+  const { request_type, label_en, label_zh, sort_order, color, image_url } = req.body;
   if (!request_type || !label_en) {
     return res.status(400).json({ error: "request_type and label_en are required" });
   }
   try {
     const result = await pool.query(
-      `INSERT INTO service_request_items (restaurant_id, request_type, label_en, label_zh, sort_order, color)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO service_request_items (restaurant_id, request_type, label_en, label_zh, sort_order, color, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [restaurantId, request_type.trim(), label_en.trim(), label_zh?.trim() || null, sort_order ?? 0, color || '#4f46e5']
+      [restaurantId, request_type.trim(), label_en.trim(), label_zh?.trim() || null, sort_order ?? 0, color || '#4f46e5', image_url || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err: any) {
@@ -242,7 +244,7 @@ router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (
   if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
     return res.status(403).json({ error: "Forbidden" });
   }
-  const { label_en, label_zh, is_active, sort_order, color } = req.body;
+  const { label_en, label_zh, is_active, sort_order, color, image_url } = req.body;
   const setClauses: string[] = [];
   const params: any[] = [];
 
@@ -251,6 +253,7 @@ router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (
   if (is_active !== undefined) { params.push(is_active); setClauses.push(`is_active = $${params.length}`); }
   if (sort_order !== undefined) { params.push(sort_order); setClauses.push(`sort_order = $${params.length}`); }
   if (color !== undefined) { params.push(color); setClauses.push(`color = $${params.length}`); }
+  if (image_url !== undefined) { params.push(image_url || null); setClauses.push(`image_url = $${params.length}`); }
 
   if (setClauses.length === 0) return res.status(400).json({ error: "No fields to update" });
 
@@ -324,5 +327,47 @@ router.delete("/restaurants/:restaurantId/service-request-items/:itemId", async 
     res.status(500).json({ error: "Failed to delete service request item" });
   }
 });
+
+/**
+ * POST /api/restaurants/:restaurantId/service-request-items/:itemId/image
+ * Admin — uploads an image for a service request item.
+ */
+router.post("/restaurants/:restaurantId/service-request-items/:itemId/image",
+  upload.single("image"),
+  async (req, res) => {
+    const { restaurantId, itemId } = req.params as { restaurantId: string; itemId: string };
+    const user = await verifyAdmin(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (!req.file) return res.status(400).json({ error: "Image required" });
+
+    try {
+      const itemCheck = await pool.query(
+        "SELECT id FROM service_request_items WHERE id = $1 AND restaurant_id = $2",
+        [itemId, restaurantId]
+      );
+      if (itemCheck.rowCount === 0) return res.status(404).json({ error: "Item not found" });
+
+      let imageUrl: string;
+      const origName = req.file.originalname || 'upload.jpg';
+      if (isR2Configured() && req.file.buffer) {
+        imageUrl = await uploadToR2(req.file.buffer, origName, getR2Folder("menu", String(restaurantId)), req.file.mimetype);
+      } else {
+        imageUrl = `/uploads/restaurants/${restaurantId}/service-requests/${req.file.filename || origName}`;
+      }
+
+      const result = await pool.query(
+        "UPDATE service_request_items SET image_url = $1 WHERE id = $2 RETURNING id, image_url",
+        [imageUrl, itemId]
+      );
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      console.error("SR item image upload error:", err);
+      res.status(500).json({ error: "Failed to upload image" });
+    }
+  }
+);
 
 export default router;

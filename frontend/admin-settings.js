@@ -44,7 +44,10 @@ async function initializeSettings() {
   } catch (err) {
     console.error("Failed to initialize settings:", err);
   }
-  
+
+  // Load CRM count preview for the settings card
+  loadCrmCountPreview();
+
   // Attach event listeners only once
   if (!settingsInitialized) {
     settingsInitialized = true;
@@ -83,13 +86,6 @@ async function initializeSettingsOnPageLoad() {
       if (typeof setLanguage === 'function') {
         setLanguage(settings.language_preference);
       }
-    }
-
-    // Show/hide Service Requests card based on feature flag
-    const srCard = document.getElementById('service-requests-card');
-    if (srCard) {
-      const featureFlags = settings.feature_flags || {};
-      srCard.style.display = featureFlags.service_requests ? '' : 'none';
     }
   } catch (err) {
     console.error("Failed to initialize settings on page load:", err);
@@ -219,18 +215,17 @@ async function showSettingsPage(pageName) {
       case 'booking-settings':
         await loadBookingSettingsModal();
         break;
+      case 'menu-settings':
+        await loadMenuSettingsPage();
+        break;
       case 'addon-presets':
         await loadAddonPresets();
         break;
       case 'variant-presets':
         await loadVariantPresets();
         break;
-      case 'service-requests':
-        await loadServiceRequestItems();
-        await loadMenuSettingsPage(); // also loads custom_sr_items toggle
-        break;
-      case 'menu-settings':
-        await loadMenuSettingsPage();
+      case 'crm':
+        await loadCrmPage();
         break;
     }
   }
@@ -764,59 +759,6 @@ async function saveShowItemStatusSetting(enabled) {
   }
 }
 
-// ============= MENU SETTINGS =============
-async function loadMenuSettingsPage() {
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
-    if (!res.ok) throw new Error('Failed to load settings');
-    const settings = await res.json();
-    const flags = settings.feature_flags || {};
-
-    const customMenuToggle = document.getElementById('custom-menu-items-toggle');
-    if (customMenuToggle) customMenuToggle.checked = !!flags.custom_menu_items;
-
-    const customSrToggle = document.getElementById('custom-sr-items-toggle');
-    if (customSrToggle) customSrToggle.checked = !!flags.custom_sr_items;
-  } catch (err) {
-    console.error('Failed to load menu settings:', err);
-  }
-}
-
-async function saveMenuFeatureFlag(flagName, enabled) {
-  try {
-    const currentRes = await fetch(`${API}/restaurants/${restaurantId}/settings`);
-    if (!currentRes.ok) throw new Error('Failed to load settings');
-    const settings = await currentRes.json();
-    const flags = { ...(settings.feature_flags || {}), [flagName]: enabled };
-
-    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feature_flags: flags })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      if (res.status === 403) {
-        alert('This is a premium feature. Please contact support to enable it.');
-      } else {
-        alert('Failed to save setting: ' + (err.error || res.status));
-      }
-      // Revert toggle
-      const toggle = document.getElementById(
-        flagName === 'custom_menu_items' ? 'custom-menu-items-toggle' : 'custom-sr-items-toggle'
-      );
-      if (toggle) toggle.checked = !enabled;
-    }
-  } catch (err) {
-    console.error('Error saving feature flag:', err);
-    alert('Failed to save setting');
-    const toggle = document.getElementById(
-      flagName === 'custom_menu_items' ? 'custom-menu-items-toggle' : 'custom-sr-items-toggle'
-    );
-    if (toggle) toggle.checked = !enabled;
-  }
-}
-
 // Load Coupons Modal
 async function loadCouponsModal() {
   try {
@@ -845,6 +787,56 @@ async function loadCouponsModal() {
     }
   } catch (err) {
     console.error("Failed to load coupons:", err);
+  }
+}
+
+// Load Menu Settings Page
+async function loadMenuSettingsPage() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    const settings = await res.json();
+
+    // Custom food item toggle (feature flag)
+    const toggle = document.getElementById('custom-food-item-toggle');
+    if (toggle) {
+      const flags = settings.feature_flags || {};
+      toggle.checked = flags.allow_custom_food_items === true;
+    }
+
+    // Menu layout columns
+    const cols = (settings.ui_config || {}).menu_columns || 1;
+    const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
+    if (radio) radio.checked = true;
+  } catch (err) {
+    console.error('Failed to load menu settings:', err);
+  }
+}
+
+async function saveCustomFoodItemSetting(enabled) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: { allow_custom_food_items: enabled } })
+    });
+    if (!res.ok) throw new Error('Failed to save setting');
+  } catch (err) {
+    console.error('Error saving custom food item setting:', err);
+    alert('Failed to save setting');
+  }
+}
+
+async function saveMenuLayoutSetting(columns) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ui_config: { menu_columns: columns } })
+    });
+    if (!res.ok) throw new Error('Failed to save setting');
+  } catch (err) {
+    console.error('Error saving menu layout setting:', err);
+    alert('Failed to save setting');
   }
 }
 
@@ -2326,341 +2318,249 @@ async function toggleOrderPayFeature() {
   }
 }
 
-// ============= SERVICE REQUEST ITEMS =============
+// ============================================================
+// ==================== CRM ===================================
+// ============================================================
 
-let editingServiceItemId = null;
+var CRM_OFFSET = 0;
+var CRM_LIMIT  = 30;
+var CRM_SEARCH_TIMER = null;
 
-async function loadServiceRequestItems() {
-  const list = document.getElementById('service-items-list');
-  const noMsg = document.getElementById('no-service-items-msg');
-  if (!list) return;
-  list.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
+async function loadCrmCountPreview() {
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items/all`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/count', {
+      headers: { Authorization: 'Bearer ' + token }
     });
-    if (!res.ok) throw new Error('Failed to load');
-    const items = await res.json();
-    if (items.length === 0) {
-      list.innerHTML = '';
-      if (noMsg) noMsg.style.display = 'block';
-      return;
+    if (!res.ok) return;
+    var data = await res.json();
+    var el = document.getElementById('crm-count-preview');
+    if (el) {
+      el.textContent = (data.total === 1 ? '1 customer' : (data.total || 0) + ' customers');
+      el.removeAttribute('data-i18n');
     }
-    if (noMsg) noMsg.style.display = 'none';
-    list.innerHTML = items.map(item => `
-      <div style="display:flex;align-items:center;gap:10px;padding:12px;background:#fff;border:1px solid var(--border-color);border-radius:8px;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;font-size:14px;">${escapeHtml(item.label_en)}${item.label_zh ? ` / ${escapeHtml(item.label_zh)}` : ''}</div>
-          <div style="font-size:12px;color:#888;font-family:monospace;">${escapeHtml(item.request_type)}</div>
-        </div>
-        <span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${item.is_active ? '#dcfce7' : '#f3f4f6'};color:${item.is_active ? '#16a34a' : '#6b7280'};">${item.is_active ? 'Active' : 'Hidden'}</span>
-        <button onclick="editServiceItem(${item.id}, '${escapeHtml(item.request_type)}', '${escapeHtml(item.label_en)}', '${escapeHtml(item.label_zh || '')}', ${item.sort_order}, ${item.is_active})" class="btn-secondary" style="padding:4px 10px;font-size:12px;">Edit</button>
-        <button onclick="deleteServiceItem(${item.id})" style="background:none;border:none;color:#dc2626;font-size:18px;cursor:pointer;padding:4px 6px;" title="Delete">✕</button>
-      </div>
-    `).join('');
-  } catch (err) {
-    list.innerHTML = `<p style="color:#dc2626;font-size:13px;">Failed to load items.</p>`;
-  }
+  } catch (e) { /* silent */ }
 }
 
-function escapeHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-function openAddServiceItemForm() {
-  editingServiceItemId = null;
-  document.getElementById('service-item-form-title').textContent = 'Add Service Item';
-  document.getElementById('service-item-submit-btn').textContent = 'Add Item';
-  document.getElementById('service-item-label-en').value = '';
-  document.getElementById('service-item-label-zh').value = '';
-  document.getElementById('service-item-type').value = '';
-  document.getElementById('service-item-sort').value = '0';
-  document.getElementById('service-item-type').readOnly = false;
-  document.getElementById('service-item-form-error').style.display = 'none';
-  document.getElementById('service-item-form-section').style.display = 'block';
-}
-
-function editServiceItem(id, type, labelEn, labelZh, sortOrder, isActive) {
-  editingServiceItemId = id;
-  document.getElementById('service-item-form-title').textContent = 'Edit Service Item';
-  document.getElementById('service-item-submit-btn').textContent = 'Save Changes';
-  document.getElementById('service-item-label-en').value = labelEn;
-  document.getElementById('service-item-label-zh').value = labelZh;
-  document.getElementById('service-item-type').value = type;
-  document.getElementById('service-item-type').readOnly = true;
-  document.getElementById('service-item-sort').value = sortOrder;
-  document.getElementById('service-item-form-error').style.display = 'none';
-  document.getElementById('service-item-form-section').style.display = 'block';
-}
-
-function closeServiceItemForm() {
-  document.getElementById('service-item-form-section').style.display = 'none';
-  editingServiceItemId = null;
-}
-
-async function submitServiceItemForm() {
-  const labelEn = document.getElementById('service-item-label-en').value.trim();
-  const labelZh = document.getElementById('service-item-label-zh').value.trim();
-  const type = document.getElementById('service-item-type').value.trim().replace(/\s+/g, '_').toLowerCase();
-  const sortOrder = parseInt(document.getElementById('service-item-sort').value) || 0;
-  const errEl = document.getElementById('service-item-form-error');
-
-  if (!labelEn || (!editingServiceItemId && !type)) {
-    errEl.textContent = 'English label and internal key are required.';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  const btn = document.getElementById('service-item-submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-
-  try {
-    let res;
-    if (editingServiceItemId) {
-      res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items/${editingServiceItemId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ label_en: labelEn, label_zh: labelZh || null, sort_order: sortOrder })
-      });
-    } else {
-      res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ request_type: type, label_en: labelEn, label_zh: labelZh || null, sort_order: sortOrder })
-      });
-    }
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Save failed');
-    }
-    closeServiceItemForm();
-    await loadServiceRequestItems();
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = editingServiceItemId ? 'Save Changes' : 'Add Item';
-  }
-}
-
-async function deleteServiceItem(id) {
-  if (!confirm('Delete this service request item?')) return;
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/service-request-items/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error('Delete failed');
-    await loadServiceRequestItems();
-  } catch (err) {
-    alert('Failed to delete item: ' + err.message);
-  }
-}
-
-// ============= CRM =============
-let crmSearchTimer = null;
-
-function hideCRMPage() {
-  showCRMMain();
-  hideSettingsPage('crm');
-}
-
-function showCRMMain() {
-  document.getElementById('crm-main-view').style.display  = '';
-  document.getElementById('crm-detail-view').style.display = 'none';
-}
-
-function onCRMSearch() {
-  clearTimeout(crmSearchTimer);
-  crmSearchTimer = setTimeout(loadCRMCustomers, 300);
-}
-
-async function loadCRMCustomers() {
-  const search  = (document.getElementById('crm-search-input')?.value  || '').trim();
-  const sort_by = document.getElementById('crm-sort-select')?.value || 'last_visit';
-
-  const params = new URLSearchParams({ sort_by, limit: '100' });
-  if (search) params.set('search', search);
-
-  const listEl = document.getElementById('crm-customers-list');
+async function loadCrmPage() {
+  CRM_OFFSET = 0;
+  var listEl    = document.getElementById('crm-customer-list');
+  var countEl   = document.getElementById('crm-customer-count');
+  var loadMoreEl = document.getElementById('crm-load-more-wrapper');
   if (!listEl) return;
-  listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading…</p>';
+
+  listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading...</p>';
+  if (loadMoreEl) loadMoreEl.style.display = 'none';
+
+  var search = (document.getElementById('crm-search-input') || {}).value || '';
+  var sortBy = (document.getElementById('crm-sort-select') || {}).value || 'last_visit';
+  var url = API + '/restaurants/' + restaurantId + '/crm/customers?limit=' + CRM_LIMIT + '&offset=0&sort_by=' + sortBy;
+  if (search.trim()) url += '&search=' + encodeURIComponent(search.trim());
 
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/crm/customers?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error('Failed to load customers');
-    const customers = await res.json();
+    var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
 
-    if (!customers.length) {
-      listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">No customers found.</p>';
+    if (countEl) countEl.textContent = data.length === 0 ? '0 customers' : data.length + (data.length === CRM_LIMIT ? '+' : '') + ' customer' + (data.length !== 1 ? 's' : '');
+
+    if (data.length === 0) {
+      listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">No customers found. Import from bookings to get started.</p>';
       return;
     }
 
-    const fmt = v => v != null ? (Number(v) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-    const fmtDate = v => v ? new Date(v).toLocaleDateString() : '—';
+    listEl.innerHTML = '';
+    data.forEach(function(c) { listEl.appendChild(crmBuildRow(c)); });
 
-    const table = `
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead>
-          <tr style="background:#f9fafb;text-align:left;">
-            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Name</th>
-            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Phone</th>
-            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Email</th>
-            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;text-align:center;">Visits</th>
-            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;text-align:right;">Total Spent</th>
-            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Last Visit</th>
-            <th style="padding:10px 12px;border-bottom:2px solid #e5e7eb;">Joined</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${customers.map(c => `
-            <tr class="crm-customer-row" onclick="loadCRMCustomerDetail(${c.id})" style="cursor:pointer;border-bottom:1px solid #f3f4f6;transition:background 0.15s;">
-              <td style="padding:10px 12px;font-weight:600;color:var(--primary-color);">${escapeHtml(c.name)}</td>
-              <td style="padding:10px 12px;color:#6b7280;">${escapeHtml(c.phone || '—')}</td>
-              <td style="padding:10px 12px;color:#6b7280;">${escapeHtml(c.email || '—')}</td>
-              <td style="padding:10px 12px;text-align:center;">${c.total_visits || 0}</td>
-              <td style="padding:10px 12px;text-align:right;">$${fmt(c.total_spent_cents)}</td>
-              <td style="padding:10px 12px;">${fmtDate(c.last_visit_at)}</td>
-              <td style="padding:10px 12px;">${fmtDate(c.created_at)}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>`;
-    listEl.innerHTML = table;
+    CRM_OFFSET = data.length;
+    if (loadMoreEl) loadMoreEl.style.display = data.length >= CRM_LIMIT ? 'block' : 'none';
+    reTranslateContent();
   } catch (err) {
-    listEl.innerHTML = `<p style="color:#dc2626;text-align:center;padding:24px;">Failed to load customers: ${err.message}</p>`;
+    console.error('[CRM]', err);
+    listEl.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">Failed to load customers.</p>';
   }
 }
 
-async function loadCRMCustomerDetail(customerId) {
-  document.getElementById('crm-main-view').style.display  = 'none';
-  document.getElementById('crm-detail-view').style.display = '';
+async function crmLoadMore() {
+  var listEl    = document.getElementById('crm-customer-list');
+  var loadMoreEl = document.getElementById('crm-load-more-wrapper');
+  if (!listEl) return;
 
-  const profileEl  = document.getElementById('crm-profile-card');
-  const ordersEl   = document.getElementById('crm-orders-list');
-  const futureBEl  = document.getElementById('crm-future-bookings');
-  const pastBEl    = document.getElementById('crm-past-bookings');
-  const couponsEl  = document.getElementById('crm-coupons-list');
-
-  profileEl.innerHTML  = '<p style="color:#999;padding:16px;">Loading…</p>';
-  ordersEl.innerHTML   = '<p style="color:#999;">Loading…</p>';
-  futureBEl.innerHTML  = '<p style="color:#999;">Loading…</p>';
-  pastBEl.innerHTML    = '<p style="color:#999;">Loading…</p>';
-  couponsEl.innerHTML  = '<p style="color:#999;">Loading…</p>';
+  var search = (document.getElementById('crm-search-input') || {}).value || '';
+  var sortBy = (document.getElementById('crm-sort-select') || {}).value || 'last_visit';
+  var url = API + '/restaurants/' + restaurantId + '/crm/customers?limit=' + CRM_LIMIT + '&offset=' + CRM_OFFSET + '&sort_by=' + sortBy;
+  if (search.trim()) url += '&search=' + encodeURIComponent(search.trim());
 
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/crm/customers/${customerId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error('Failed to load customer');
-    const data = await res.json();
-    const c = data.customer;
-
-    const fmt     = v => v != null ? (Number(v) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    const fmtDT   = v => v ? new Date(v).toLocaleString() : '—';
-    const fmtDate = v => v ? new Date(v).toLocaleDateString() : '—';
-
-    // Profile card
-    profileEl.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;padding:16px;background:white;border-radius:8px;border:1px solid var(--border-color);">
-        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Name</div><div style="font-weight:700;font-size:16px;">${escapeHtml(c.name)}</div></div>
-        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Phone</div><div>${escapeHtml(c.phone || '—')}</div></div>
-        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Email</div><div>${escapeHtml(c.email || '—')}</div></div>
-        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Joined</div><div>${fmtDT(c.created_at)}</div></div>
-        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total Orders</div><div style="font-size:20px;font-weight:700;color:var(--primary-color);">${c.total_visits || 0}</div></div>
-        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total Transacted</div><div style="font-size:20px;font-weight:700;color:#059669;">$${fmt(data.total_transacted_cents)}</div></div>
-        <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Last Visit</div><div>${fmtDate(c.last_visit_at)}</div></div>
-        ${c.notes ? `<div style="grid-column:1/-1;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Notes</div><div style="color:#374151;">${escapeHtml(c.notes)}</div></div>` : ''}
-      </div>`;
-
-    // Orders
-    if (data.orders && data.orders.length) {
-      ordersEl.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead><tr style="background:#f9fafb;">
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Order #</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Date</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Type</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Table</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:center;">Pax</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Status</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Payment</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:right;">Amount</th>
-          </tr></thead>
-          <tbody>
-            ${data.orders.map(o => `
-              <tr style="border-bottom:1px solid #f3f4f6;">
-                <td style="padding:8px 10px;font-weight:600;">#${o.restaurant_order_number || o.order_id}</td>
-                <td style="padding:8px 10px;color:#6b7280;">${fmtDT(o.created_at)}</td>
-                <td style="padding:8px 10px;">${escapeHtml(o.order_type || '—')}</td>
-                <td style="padding:8px 10px;">${escapeHtml(o.table_label || '—')}</td>
-                <td style="padding:8px 10px;text-align:center;">${o.pax || '—'}</td>
-                <td style="padding:8px 10px;">${escapeHtml(o.status || '—')}</td>
-                <td style="padding:8px 10px;">${escapeHtml(o.payment_method || '—')}</td>
-                <td style="padding:8px 10px;text-align:right;font-weight:600;">$${fmt(o.total_cents)}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
-    } else {
-      ordersEl.innerHTML = '<p style="color:#9ca3af;font-size:13px;">No orders on record.</p>';
-    }
-
-    // Helper: render bookings table
-    const renderBookings = (bookings, container) => {
-      if (!bookings || !bookings.length) {
-        container.innerHTML = '<p style="color:#9ca3af;font-size:13px;">None.</p>';
-        return;
-      }
-      container.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead><tr style="background:#f9fafb;">
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Date</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Time</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Table</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:center;">Pax</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Status</th>
-            <th style="padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left;">Notes</th>
-          </tr></thead>
-          <tbody>
-            ${bookings.map(b => `
-              <tr style="border-bottom:1px solid #f3f4f6;">
-                <td style="padding:8px 10px;">${fmtDate(b.booking_date)}</td>
-                <td style="padding:8px 10px;">${b.booking_time || '—'}</td>
-                <td style="padding:8px 10px;">${escapeHtml(b.table_label || '—')}</td>
-                <td style="padding:8px 10px;text-align:center;">${b.pax || '—'}</td>
-                <td style="padding:8px 10px;"><span class="crm-status-badge crm-status-${b.status}">${b.status}</span></td>
-                <td style="padding:8px 10px;color:#6b7280;">${escapeHtml(b.notes || '')}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
-    };
-
-    renderBookings(data.future_bookings, futureBEl);
-    renderBookings(data.past_bookings,   pastBEl);
-
-    // Eligible coupons
-    if (data.eligible_coupons && data.eligible_coupons.length) {
-      couponsEl.innerHTML = data.eligible_coupons.map(cp => {
-        const disc = cp.discount_type === 'percentage'
-          ? `${cp.discount_value}% off`
-          : `$${(Number(cp.discount_value) || 0).toFixed(2)} off`;
-        const expiry = cp.valid_until ? `Expires ${fmtDate(cp.valid_until)}` : 'No expiry';
-        const minOrder = cp.min_order_cents ? `Min order $${fmt(cp.min_order_cents)}` : '';
-        return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-          <div><strong style="font-family:monospace;font-size:15px;letter-spacing:1px;">${escapeHtml(cp.code)}</strong></div>
-          <div style="font-size:13px;color:#166534;">${disc}</div>
-          ${minOrder ? `<div style="font-size:12px;color:#6b7280;">${minOrder}</div>` : ''}
-          <div style="font-size:12px;color:#6b7280;">${expiry}</div>
-        </div>`;
-      }).join('');
-    } else {
-      couponsEl.innerHTML = '<p style="color:#9ca3af;font-size:13px;">No eligible coupons.</p>';
-    }
-
+    var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+    data.forEach(function(c) { listEl.appendChild(crmBuildRow(c)); });
+    CRM_OFFSET += data.length;
+    if (loadMoreEl) loadMoreEl.style.display = data.length >= CRM_LIMIT ? 'block' : 'none';
   } catch (err) {
-    profileEl.innerHTML = `<p style="color:#dc2626;padding:16px;">Failed to load: ${err.message}</p>`;
+    console.error('[CRM load more]', err);
+  }
+}
+
+function crmSearchDebounce() {
+  clearTimeout(CRM_SEARCH_TIMER);
+  CRM_SEARCH_TIMER = setTimeout(loadCrmPage, 350);
+}
+
+function crmBuildRow(c) {
+  var div = document.createElement('div');
+  div.className = 'crm-customer-row';
+  div.style.cssText = 'display:flex;align-items:center;padding:12px 4px;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+  div.onclick = function() { crmOpenProfile(c.id); };
+
+  var initials  = (c.name || '?').slice(0, 2).toUpperCase();
+  var lastVisit = c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString() : '—';
+  var spent     = c.total_spent_cents > 0 ? '$' + (c.total_spent_cents / 100).toFixed(2) : '—';
+
+  div.innerHTML =
+    '<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">' + initials + '</div>' +
+    '<div style="flex:1;margin-left:12px;min-width:0;">' +
+      '<div style="font-weight:600;font-size:13px;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.name || '—') + '</div>' +
+      '<div style="font-size:11px;color:#6b7280;">' + (c.phone || c.email || '') + '</div>' +
+    '</div>' +
+    '<div style="text-align:right;flex-shrink:0;">' +
+      '<div style="font-size:12px;color:#059669;font-weight:600;">' + spent + '</div>' +
+      '<div style="font-size:11px;color:#6b7280;">' + (c.total_visits || 0) + ' visits &middot; ' + lastVisit + '</div>' +
+    '</div>';
+
+  return div;
+}
+
+async function crmOpenProfile(customerId) {
+  var profileView   = document.getElementById('crm-profile-view');
+  var listView      = document.getElementById('crm-list-view');
+  var profileContent = document.getElementById('crm-profile-content');
+  if (!profileView || !profileContent) return;
+
+  listView.style.display   = 'none';
+  profileView.style.display = 'block';
+  profileContent.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading...</p>';
+
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/customers/' + customerId, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Failed');
+    var d = await res.json();
+    profileContent.innerHTML = crmBuildProfile(d);
+    reTranslateContent();
+  } catch (err) {
+    profileContent.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">Failed to load customer.</p>';
+  }
+}
+
+function crmBackToList() {
+  document.getElementById('crm-profile-view').style.display = 'none';
+  document.getElementById('crm-list-view').style.display   = 'block';
+}
+
+function crmStatBox(label, value) {
+  return '<div style="flex:1;text-align:center;padding:12px 8px;border-right:1px solid #e5e7eb;">' +
+    '<div style="font-size:14px;font-weight:700;color:#1f2937;">' + value + '</div>' +
+    '<div style="font-size:11px;color:#6b7280;">' + label + '</div>' +
+    '</div>';
+}
+
+function crmBuildProfile(d) {
+  var c        = d.customer;
+  var orders   = d.orders || [];
+  var pastBk   = d.past_bookings || [];
+  var futureBk = d.future_bookings || [];
+  var initials = (c.name || '?').slice(0, 2).toUpperCase();
+  var spent    = c.total_spent_cents > 0 ? '$' + (c.total_spent_cents / 100).toFixed(2) : '$0.00';
+  var totalTransacted = d.total_transacted_cents > 0 ? '$' + (d.total_transacted_cents / 100).toFixed(2) : '$0.00';
+
+  var html =
+    '<div class="crm-profile-card" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">' +
+      '<div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:20px;color:#fff;display:flex;align-items:center;gap:14px;">' +
+        '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">' + initials + '</div>' +
+        '<div>' +
+          '<div style="font-size:18px;font-weight:700;">' + (c.name || '—') + '</div>' +
+          '<div style="font-size:12px;opacity:0.85;">' + (c.phone || '') + (c.phone && c.email ? '  ·  ' : '') + (c.email || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;">' +
+        crmStatBox('Visits', c.total_visits || 0) +
+        crmStatBox('Spent (est.)', spent) +
+        crmStatBox('Transacted', totalTransacted) +
+      '</div>' +
+      (c.notes ? '<div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f0f0f0;">📝 ' + c.notes + '</div>' : '') +
+    '</div>';
+
+  // Upcoming bookings
+  if (futureBk.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Upcoming Bookings</h4>';
+    futureBk.forEach(function(b) {
+      html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:4px;">' +
+        '<strong>' + b.booking_date + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' pax' +
+        (b.table_label ? '  ·  Table ' + b.table_label : '') + '</div>';
+    });
+  }
+
+  // Recent orders
+  if (orders.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Recent Orders</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+      '<thead><tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">' +
+        '<th style="padding:8px;text-align:left;color:#6b7280;">#</th>' +
+        '<th style="padding:8px;text-align:left;color:#6b7280;">Table</th>' +
+        '<th style="padding:8px;text-align:right;color:#6b7280;">Total</th>' +
+        '<th style="padding:8px;text-align:right;color:#6b7280;">Date</th>' +
+      '</tr></thead><tbody>';
+    orders.slice(0, 10).forEach(function(o) {
+      var total = parseInt(o.total_cents, 10) || 0;
+      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.id) + '</td>' +
+        '<td style="padding:8px;">' + (o.table_label || '—') + '</td>' +
+        '<td style="padding:8px;text-align:right;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</td>' +
+        '<td style="padding:8px;text-align:right;color:#6b7280;">' + new Date(o.created_at).toLocaleDateString() + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  // Past bookings
+  if (pastBk.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Past Bookings</h4>';
+    pastBk.slice(0, 8).forEach(function(b) {
+      var badgeColor = b.status === 'confirmed' ? '#059669' : b.status === 'cancelled' ? '#e74c3c' : '#6b7280';
+      html += '<div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:6px 0;border-bottom:1px solid #f5f5f5;">' +
+        '<span>' + b.booking_date + '</span>' +
+        '<span style="color:#6b7280;">' + b.pax + ' pax</span>' +
+        '<span style="padding:2px 8px;border-radius:12px;background:' + badgeColor + '20;color:' + badgeColor + ';font-size:11px;font-weight:600;">' + b.status + '</span>' +
+        '</div>';
+    });
+  }
+
+  if (orders.length === 0 && pastBk.length === 0 && futureBk.length === 0) {
+    html += '<p style="color:#999;font-size:13px;padding:16px 0;text-align:center;">No order or booking history yet.</p>';
+  }
+
+  return html;
+}
+
+async function crmImportFromBookings() {
+  var btn = document.getElementById('crm-import-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/import-from-bookings', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+    alert('Import complete: ' + data.inserted + ' new, ' + data.updated + ' updated.');
+    await loadCrmPage();
+    loadCrmCountPreview();
+  } catch (err) {
+    console.error('[CRM import]', err);
+    alert('Import failed. Please try again.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Import from Bookings'; }
   }
 }

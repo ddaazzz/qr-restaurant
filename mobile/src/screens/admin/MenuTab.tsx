@@ -66,6 +66,17 @@ interface MenuCategory {
   name: string;
 }
 
+interface SRItem {
+  id: number;
+  request_type: string;
+  label_en: string;
+  label_zh?: string;
+  is_active: boolean;
+  sort_order: number;
+  color?: string;
+  image_url?: string;
+}
+
 export interface MenuTabRef {
   toggleEditMode: () => void;
 }
@@ -594,6 +605,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
     // Image upload states
     const [uploadingImageItemId, setUploadingImageItemId] = useState<number | null>(null);
     const [uploadingImageContext, setUploadingImageContext] = useState<'inline' | 'new' | 'edit' | null>(null);
+
+    // Service request items management
+    const [showServiceRequestsSection, setShowServiceRequestsSection] = useState(false);
+    const [srItems, setSRItems] = useState<SRItem[]>([]);
+    const [loadingSRItems, setLoadingSRItems] = useState(false);
+    const [showSRItemModal, setShowSRItemModal] = useState(false);
+    const [editingSRItem, setEditingSRItem] = useState<SRItem | null>(null);
+    const [srItemLabelEn, setSRItemLabelEn] = useState('');
+    const [srItemLabelZh, setSRItemLabelZh] = useState('');
+    const [srItemRequestType, setSRItemRequestType] = useState('');
+    const [srItemColor, setSRItemColor] = useState('#4f46e5');
+    const [srItemIsActive, setSRItemIsActive] = useState(true);
+    const [uploadingSRItemImageId, setUploadingSRItemImageId] = useState<number | null>(null);
 
     // Addon management states
     const [addons, setAddons] = useState<Addon[]>([]);
@@ -1355,6 +1379,96 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       }
     };
 
+    // ==================== SERVICE REQUEST ITEM OPERATIONS ====================
+
+    const loadSRItems = async () => {
+      setLoadingSRItems(true);
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`);
+        setSRItems(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        Alert.alert(t('common.error'), 'Failed to load service request items');
+      } finally {
+        setLoadingSRItems(false);
+      }
+    };
+
+    const createSRItem = async () => {
+      if (!srItemRequestType.trim() || !srItemLabelEn.trim()) {
+        Alert.alert(t('common.error'), 'Request type and English label are required');
+        return;
+      }
+      try {
+        await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
+          request_type: srItemRequestType.trim(),
+          label_en: srItemLabelEn.trim(),
+          label_zh: srItemLabelZh.trim() || null,
+          color: srItemColor,
+          is_active: srItemIsActive,
+        });
+        setShowSRItemModal(false);
+        setEditingSRItem(null);
+        await loadSRItems();
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message || 'Failed to create item');
+      }
+    };
+
+    const saveSRItem = async () => {
+      if (!editingSRItem) return;
+      if (!srItemLabelEn.trim()) {
+        Alert.alert(t('common.error'), 'English label is required');
+        return;
+      }
+      try {
+        await apiClient.patch(
+          `/api/restaurants/${restaurantId}/service-request-items/${editingSRItem.id}`,
+          { label_en: srItemLabelEn.trim(), label_zh: srItemLabelZh.trim() || null, color: srItemColor, is_active: srItemIsActive }
+        );
+        setShowSRItemModal(false);
+        setEditingSRItem(null);
+        await loadSRItems();
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message || 'Failed to save item');
+      }
+    };
+
+    const deleteSRItem = (itemId: number) => {
+      Alert.alert('Delete Item', 'Delete this service request item?', [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${itemId}`);
+              await loadSRItems();
+            } catch {
+              Alert.alert(t('common.error'), 'Failed to delete item');
+            }
+          },
+        },
+      ]);
+    };
+
+    const uploadSRItemImageHandler = async (itemId: number) => {
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (result.canceled || !result.assets[0]?.uri) return;
+        setUploadingSRItemImageId(itemId);
+        const imageUrl = await apiClient.uploadSRItemImage(restaurantId, itemId, result.assets[0].uri);
+        setSRItems(prev => prev.map(it => it.id === itemId ? { ...it, image_url: imageUrl } : it));
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message || 'Failed to upload image');
+      } finally {
+        setUploadingSRItemImageId(null);
+      }
+    };
+
     const filteredItems = items.filter(i => {
       if (selectedCategory && i.category_id !== selectedCategory) return false;
       if (searchQuery && searchQuery.trim()) {
@@ -1422,14 +1536,14 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   key={cat.id}
                   style={[
                     styles.categoryBtn,
-                    selectedCategory === cat.id && styles.categoryBtnActive,
+                    selectedCategory === cat.id && !showServiceRequestsSection && styles.categoryBtnActive,
                   ]}
-                  onPress={() => setSelectedCategory(cat.id)}
+                  onPress={() => { setSelectedCategory(cat.id); setShowServiceRequestsSection(false); }}
                 >
                   <Text
                     style={[
                       styles.categoryBtnText,
-                      selectedCategory === cat.id && styles.categoryBtnTextActive,
+                      selectedCategory === cat.id && !showServiceRequestsSection && styles.categoryBtnTextActive,
                     ]}
                     numberOfLines={1}
                     ellipsizeMode="tail"
@@ -1438,13 +1552,98 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                   </Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity
+                style={[styles.categoryBtn, showServiceRequestsSection && styles.categoryBtnActive]}
+                onPress={() => {
+                  setShowServiceRequestsSection(prev => {
+                    if (!prev) loadSRItems();
+                    return !prev;
+                  });
+                  setSelectedCategory(null);
+                }}
+              >
+                <Text style={[styles.categoryBtnText, showServiceRequestsSection && styles.categoryBtnTextActive]}>
+                  🛎️ Service
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
           )}
         </View>
 
         {/* Items area: edit mode = draggable grid with handles; normal = grid */}
         <View style={styles.itemsGridWrapper}>
-          {selectedCategory && showAvailabilityToggles ? (
+          {showServiceRequestsSection ? (
+            /* Service Requests section */
+            <ScrollView
+              contentContainerStyle={{ padding: 12 }}
+              refreshControl={<RefreshControl refreshing={loadingSRItems} onRefresh={loadSRItems} />}
+            >
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, { marginBottom: 12, alignSelf: 'flex-start' }]}
+                onPress={() => {
+                  setEditingSRItem(null);
+                  setSRItemLabelEn('');
+                  setSRItemLabelZh('');
+                  setSRItemRequestType('');
+                  setSRItemColor('#4f46e5');
+                  setSRItemIsActive(true);
+                  setShowSRItemModal(true);
+                }}
+              >
+                <Text style={styles.btnText}>+ Add Service Request Item</Text>
+              </TouchableOpacity>
+              {loadingSRItems ? (
+                <ActivityIndicator color="#3b82f6" style={{ marginTop: 24 }} />
+              ) : srItems.length === 0 ? (
+                <Text style={styles.emptyText}>No service request items yet.</Text>
+              ) : (
+                srItems.map(item => (
+                  <View key={item.id} style={{ flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
+                    <TouchableOpacity onPress={() => uploadSRItemImageHandler(item.id)} style={{ width: 72, height: 72, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }}>
+                      {getFullImageUrl(item.image_url) ? (
+                        <Image source={{ uri: getFullImageUrl(item.image_url)! }} style={{ width: 72, height: 72 }} />
+                      ) : (
+                        <Text style={{ fontSize: 10, color: '#9ca3af', textAlign: 'center' }}>{uploadingSRItemImageId === item.id ? '...' : '📷\nAdd Image'}</Text>
+                      )}
+                    </TouchableOpacity>
+                    <View style={{ flex: 1, padding: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color || '#4f46e5' }} />
+                        <Text style={{ fontWeight: '700', fontSize: 13, flex: 1 }} numberOfLines={1}>{item.label_en}</Text>
+                        <View style={{ backgroundColor: item.is_active ? '#d1fae5' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 10, color: item.is_active ? '#065f46' : '#991b1b', fontWeight: '600' }}>{item.is_active ? 'Active' : 'Off'}</Text>
+                        </View>
+                      </View>
+                      {item.label_zh ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.label_zh}</Text> : null}
+                      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Type: {item.request_type}</Text>
+                    </View>
+                    <View style={{ justifyContent: 'center', gap: 6, paddingHorizontal: 8 }}>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#dbeafe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                        onPress={() => {
+                          setEditingSRItem(item);
+                          setSRItemLabelEn(item.label_en);
+                          setSRItemLabelZh(item.label_zh || '');
+                          setSRItemRequestType(item.request_type);
+                          setSRItemColor(item.color || '#4f46e5');
+                          setSRItemIsActive(item.is_active);
+                          setShowSRItemModal(true);
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#fee2e2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                        onPress={() => deleteSRItem(item.id)}
+                      >
+                        <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          ) : selectedCategory && showAvailabilityToggles ? (
             /* Edit mode: same grid layout but cards have ☰ drag handles */
             <ScrollView
               scrollEnabled={menuScrollEnabled}
@@ -3205,6 +3404,79 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
+
+        {/* SR Item Create/Edit Modal */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSRItemModal} animationType="fade" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{editingSRItem ? 'Edit Service Request Item' : 'New Service Request Item'}</Text>
+
+              {!editingSRItem && (
+                <>
+                  <Text style={styles.label}>Request Type (unique key)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={srItemRequestType}
+                    onChangeText={setSRItemRequestType}
+                    placeholder="e.g. napkins, water"
+                    autoCapitalize="none"
+                  />
+                </>
+              )}
+
+              <Text style={styles.label}>English Label</Text>
+              <TextInput
+                style={styles.input}
+                value={srItemLabelEn}
+                onChangeText={setSRItemLabelEn}
+                placeholder="e.g. Extra Napkins"
+              />
+
+              <Text style={styles.label}>Chinese Label (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={srItemLabelZh}
+                onChangeText={setSRItemLabelZh}
+                placeholder="e.g. 额外纸巾"
+              />
+
+              <Text style={styles.label}>Color (hex)</Text>
+              <TextInput
+                style={styles.input}
+                value={srItemColor}
+                onChangeText={setSRItemColor}
+                placeholder="#4f46e5"
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}
+                onPress={() => setSRItemIsActive(prev => !prev)}
+              >
+                <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: '#3b82f6', backgroundColor: srItemIsActive ? '#3b82f6' : '#fff', justifyContent: 'center', alignItems: 'center' }}>
+                  {srItemIsActive && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                </View>
+                <Text style={{ fontSize: 14, color: '#374151' }}>Active</Text>
+              </TouchableOpacity>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => { setShowSRItemModal(false); setEditingSRItem(null); }}
+                >
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={editingSRItem ? saveSRItem : createSRItem}
+                >
+                  <Text style={styles.btnText}>{editingSRItem ? t('menu.save') : t('menu.create')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     );
   }

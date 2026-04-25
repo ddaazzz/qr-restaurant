@@ -7,6 +7,8 @@ const express_1 = require("express");
 const db_1 = __importDefault(require("../config/db"));
 const featureFlags_1 = require("../middleware/featureFlags");
 const websocket_1 = require("../services/websocket");
+const upload_1 = require("../config/upload");
+const storage_1 = require("../config/storage");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const router = (0, express_1.Router)();
 // Auth helper for admin operations
@@ -146,7 +148,7 @@ router.patch("/restaurants/:restaurantId/service-requests/:requestId", (0, featu
 router.get("/restaurants/:restaurantId/service-request-items", (0, featureFlags_1.requireFeature)("service_requests"), async (req, res) => {
     const { restaurantId } = req.params;
     try {
-        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, sort_order, color
+        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, sort_order, color, image_url
        FROM service_request_items
        WHERE restaurant_id = $1 AND is_active = TRUE
        ORDER BY sort_order ASC, id ASC`, [restaurantId]);
@@ -169,7 +171,7 @@ router.get("/restaurants/:restaurantId/service-request-items/all", async (req, r
         return res.status(403).json({ error: "Forbidden" });
     }
     try {
-        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, is_active, sort_order, color
+        const result = await db_1.default.query(`SELECT id, request_type, label_en, label_zh, is_active, sort_order, color, image_url
        FROM service_request_items
        WHERE restaurant_id = $1
        ORDER BY sort_order ASC, id ASC`, [restaurantId]);
@@ -191,14 +193,14 @@ router.post("/restaurants/:restaurantId/service-request-items", async (req, res)
     if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
         return res.status(403).json({ error: "Forbidden" });
     }
-    const { request_type, label_en, label_zh, sort_order, color } = req.body;
+    const { request_type, label_en, label_zh, sort_order, color, image_url } = req.body;
     if (!request_type || !label_en) {
         return res.status(400).json({ error: "request_type and label_en are required" });
     }
     try {
-        const result = await db_1.default.query(`INSERT INTO service_request_items (restaurant_id, request_type, label_en, label_zh, sort_order, color)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`, [restaurantId, request_type.trim(), label_en.trim(), label_zh?.trim() || null, sort_order ?? 0, color || '#4f46e5']);
+        const result = await db_1.default.query(`INSERT INTO service_request_items (restaurant_id, request_type, label_en, label_zh, sort_order, color, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`, [restaurantId, request_type.trim(), label_en.trim(), label_zh?.trim() || null, sort_order ?? 0, color || '#4f46e5', image_url || null]);
         res.status(201).json(result.rows[0]);
     }
     catch (err) {
@@ -217,7 +219,7 @@ router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (
     if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
         return res.status(403).json({ error: "Forbidden" });
     }
-    const { label_en, label_zh, is_active, sort_order, color } = req.body;
+    const { label_en, label_zh, is_active, sort_order, color, image_url } = req.body;
     const setClauses = [];
     const params = [];
     if (label_en !== undefined) {
@@ -239,6 +241,10 @@ router.patch("/restaurants/:restaurantId/service-request-items/:itemId", async (
     if (color !== undefined) {
         params.push(color);
         setClauses.push(`color = $${params.length}`);
+    }
+    if (image_url !== undefined) {
+        params.push(image_url || null);
+        setClauses.push(`image_url = $${params.length}`);
     }
     if (setClauses.length === 0)
         return res.status(400).json({ error: "No fields to update" });
@@ -303,6 +309,40 @@ router.delete("/restaurants/:restaurantId/service-request-items/:itemId", async 
     }
     catch (err) {
         res.status(500).json({ error: "Failed to delete service request item" });
+    }
+});
+/**
+ * POST /api/restaurants/:restaurantId/service-request-items/:itemId/image
+ * Admin — uploads an image for a service request item.
+ */
+router.post("/restaurants/:restaurantId/service-request-items/:itemId/image", upload_1.upload.single("image"), async (req, res) => {
+    const { restaurantId, itemId } = req.params;
+    const user = await verifyAdmin(req);
+    if (!user)
+        return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "superadmin" && user.restaurant_id !== parseInt(restaurantId)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+    if (!req.file)
+        return res.status(400).json({ error: "Image required" });
+    try {
+        const itemCheck = await db_1.default.query("SELECT id FROM service_request_items WHERE id = $1 AND restaurant_id = $2", [itemId, restaurantId]);
+        if (itemCheck.rowCount === 0)
+            return res.status(404).json({ error: "Item not found" });
+        let imageUrl;
+        const origName = req.file.originalname || 'upload.jpg';
+        if ((0, storage_1.isR2Configured)() && req.file.buffer) {
+            imageUrl = await (0, storage_1.uploadToR2)(req.file.buffer, origName, (0, storage_1.getR2Folder)("menu", String(restaurantId)), req.file.mimetype);
+        }
+        else {
+            imageUrl = `/uploads/restaurants/${restaurantId}/service-requests/${req.file.filename || origName}`;
+        }
+        const result = await db_1.default.query("UPDATE service_request_items SET image_url = $1 WHERE id = $2 RETURNING id, image_url", [imageUrl, itemId]);
+        res.json(result.rows[0]);
+    }
+    catch (err) {
+        console.error("SR item image upload error:", err);
+        res.status(500).json({ error: "Failed to upload image" });
     }
 });
 exports.default = router;

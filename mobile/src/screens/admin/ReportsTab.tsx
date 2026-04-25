@@ -19,6 +19,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 interface Order {
   id: number;
   total_cents: number;
+  discount_cents?: number;
   status: string;
   created_at: string;
   items: Array<{
@@ -30,6 +31,34 @@ interface Order {
   }>;
   table_name?: string;
   waiter_name?: string;
+}
+
+interface PaymentByType {
+  payment_method: string;
+  order_count: number;
+  total_revenue_cents: number;
+}
+
+interface StaffHour {
+  staff_name: string;
+  role: string;
+  shift_count: number;
+  total_minutes: number;
+}
+
+interface StatusTransition {
+  from_status: string;
+  to_status: string;
+  transition_count: number;
+  avg_minutes: number;
+  min_minutes: number;
+  max_minutes: number;
+}
+
+interface FastestItem {
+  item_name: string;
+  avg_minutes: number;
+  sample_count: number;
 }
 
 interface TopItem {
@@ -64,7 +93,9 @@ interface AnalyticsStats {
   total_revenue: number;
   average_bill: number;
   active_sessions: number;
+  total_discount: number;
   revenue_by_day: Record<string, number>;
+  daily_discount: Record<string, number>;
   daily_order_counts: Record<string, number>;
   revenue_by_hour: Record<string, number>;
   orders_by_hour: Record<string, number>;
@@ -88,6 +119,10 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
   const [topTables, setTopTables] = useState<TopTable[]>([]);
   const [salesByCategory, setSalesByCategory] = useState<SalesByCategory[]>([]);
   const [salesByItem, setSalesByItem] = useState<SalesByItem[]>([]);
+  const [paymentByType, setPaymentByType] = useState<PaymentByType[]>([]);
+  const [staffHours, setStaffHours] = useState<StaffHour[]>([]);
+  const [statusTransitions, setStatusTransitions] = useState<StatusTransition[]>([]);
+  const [fastestItems, setFastestItems] = useState<FastestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,6 +130,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
   const [showTrendModal, setShowTrendModal] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>('30days');
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+  const [revenueSort, setRevenueSort] = useState<{ col: 'date' | 'orders' | 'discount' | 'revenue'; asc: boolean }>({ col: 'date', asc: false });
 
   // Date range days mapping
   const dateRangeDays: Record<DateRange, number> = {
@@ -117,12 +153,15 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       const days = dateRangeDays[dateRange];
       
       // Fetch orders + top items + top tables + sales breakdowns in parallel
-      const [ordersRes, topItemsRes, topTablesRes, salesByCategoryRes, salesByItemRes] = await Promise.all([
+      const [ordersRes, topItemsRes, topTablesRes, salesByCategoryRes, salesByItemRes, paymentByTypeRes, staffHoursRes, statusTimingRes] = await Promise.all([
         apiClient.get(`/api/restaurants/${restaurantId}/orders?limit=1000`),
         apiClient.get(`/api/restaurants/${restaurantId}/reports/top-items?days=${days}`).catch(() => ({ data: [] })),
         apiClient.get(`/api/restaurants/${restaurantId}/reports/top-tables?days=${days}`).catch(() => ({ data: [] })),
         apiClient.get(`/api/restaurants/${restaurantId}/reports/sales-by-category?days=${days}`).catch(() => ({ data: [] })),
         apiClient.get(`/api/restaurants/${restaurantId}/reports/sales-by-item?days=${days}`).catch(() => ({ data: [] })),
+        apiClient.get(`/api/restaurants/${restaurantId}/reports/payment-by-type?days=${days}`).catch(() => ({ data: [] })),
+        apiClient.get(`/api/restaurants/${restaurantId}/reports/staff-hours?days=${days}`).catch(() => ({ data: [] })),
+        apiClient.get(`/api/restaurants/${restaurantId}/reports/order-status-timing?days=${days}`).catch(() => ({ data: { transitions: [], fastest_items: [] } })),
       ]);
 
       const allOrders: Order[] = ordersRes.data || [];
@@ -141,6 +180,11 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       setTopTables(topTablesRes.data || []);
       setSalesByCategory(salesByCategoryRes.data || []);
       setSalesByItem(salesByItemRes.data || []);
+      setPaymentByType((paymentByTypeRes as any).data || []);
+      setStaffHours((staffHoursRes as any).data || []);
+      const timingData = (statusTimingRes as any).data || {};
+      setStatusTransitions(timingData.transitions || []);
+      setFastestItems(timingData.fastest_items || []);
 
       if (filteredOrders.length > 0) {
         const calculatedStats = calculateAnalyticsStats(filteredOrders);
@@ -151,7 +195,9 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
           total_revenue: 0,
           average_bill: 0,
           active_sessions: 0,
+          total_discount: 0,
           revenue_by_day: {},
+          daily_discount: {},
           daily_order_counts: {},
           revenue_by_hour: {},
           orders_by_hour: {},
@@ -173,7 +219,9 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       total_revenue: 0,
       average_bill: 0,
       active_sessions: allOrders.length,
+      total_discount: 0,
       revenue_by_day: {},
+      daily_discount: {},
       daily_order_counts: {},
       revenue_by_hour: {},
       orders_by_hour: {},
@@ -182,7 +230,9 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
     for (const order of allOrders) {
       const orderAmount = parseInt(order.total_cents?.toString() || '0', 10) || 0;
+      const discountAmount = parseInt(order.discount_cents?.toString() || '0', 10) || 0;
       stats.total_revenue += orderAmount;
+      stats.total_discount += discountAmount;
 
       // Status breakdown
       const status = order.status || 'unknown';
@@ -192,6 +242,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       const createdDate = new Date(order.created_at);
       const dateStr = createdDate.toISOString().split('T')[0];
       stats.revenue_by_day[dateStr] = (stats.revenue_by_day[dateStr] || 0) + orderAmount;
+      stats.daily_discount[dateStr] = (stats.daily_discount[dateStr] || 0) + discountAmount;
       stats.daily_order_counts[dateStr] = (stats.daily_order_counts[dateStr] || 0) + 1;
 
       // Revenue by hour
@@ -300,108 +351,13 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               <Text style={styles.metricValue}>{formatPrice(stats.average_bill)}</Text>
             </View>
 
-            <View style={[styles.metricCard, { borderLeftColor: '#8b5cf6' }]}>
-              <Text style={styles.metricLabel}>{t('admin.active-sessions') || 'Active Sessions'}</Text>
-              <Text style={styles.metricValue}>{stats.active_sessions}</Text>
+            <View style={[styles.metricCard, { borderLeftColor: '#dc2626' }]}>
+              <Text style={styles.metricLabel}>{t('admin.total-discounts') || 'Total Discounts'}</Text>
+              <Text style={[styles.metricValue, { color: '#dc2626' }]}>{formatPrice(stats.total_discount)}</Text>
             </View>
           </View>
 
-          {/* Revenue Report */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('admin.revenue-report') || 'Revenue'}</Text>
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableCell, { flex: 1 }]}>{t('admin.date') || 'Date'}</Text>
-                <Text style={[styles.tableCell, { flex: 0.8 }]}>{t('admin.orders') || 'Orders'}</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>{t('admin.revenue') || 'Revenue'}</Text>
-              </View>
-              <FlatList
-                data={Object.entries(stats.revenue_by_day)
-                  .sort(([a], [b]) => b.localeCompare(a))
-                  .slice(0, 10)}
-                renderItem={({ item: [date, revenue] }) => (
-                  <View style={styles.tableRow}>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{date}</Text>
-                    <Text style={[styles.tableCell, { flex: 0.8 }]}>
-                      {stats.daily_order_counts[date] || 0}
-                    </Text>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{formatPrice(revenue)}</Text>
-                  </View>
-                )}
-                keyExtractor={(item) => item[0]}
-                scrollEnabled={false}
-              />
-            </View>
-          </View>
-
-          {/* Top Selling Items */}
-          {topItems.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{t('admin.top-selling-items') || 'Top Selling Items'}</Text>
-              {topItems.map((item, idx) => (
-                <View key={idx} style={styles.topItemRow}>
-                  <View style={styles.topItemRank}>
-                    <Text style={styles.topItemRankText}>#{idx + 1}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.topItemName}>{item.item_name}</Text>
-                    <Text style={styles.topItemSub}>
-                      {item.total_qty} {t('admin.sold') || 'sold'} · {formatPrice(item.total_revenue_cents)}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Busiest Tables */}
-          {topTables.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{t('admin.busiest-tables') || 'Busiest Tables'}</Text>
-              {topTables.map((table, idx) => {
-                const maxOrders = topTables[0]?.order_count || 1;
-                const barWidth = (table.order_count / maxOrders) * 100;
-                return (
-                  <View key={idx} style={styles.tableBarRow}>
-                    <Text style={styles.tableBarLabel}>{table.table_name}</Text>
-                    <View style={styles.tableBarContainer}>
-                      <View style={[styles.tableBar, { width: `${barWidth}%` }]} />
-                    </View>
-                    <Text style={styles.tableBarValue}>
-                      {table.order_count} · {formatPrice(table.total_revenue_cents)}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Hourly Revenue (Bar Chart) */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('admin.hourly-revenue') || 'Hourly Revenue'}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.hourlyChart}>
-                {Array.from({ length: 24 }, (_, i) => {
-                  const hour = String(i).padStart(2, '0');
-                  const hourKey = `${hour}:00`;
-                  const revenue = stats.revenue_by_hour[hourKey] || 0;
-                  const orders = stats.orders_by_hour[hourKey] || 0;
-                  const barHeight = revenue > 0 ? Math.max((revenue / maxHourlyRevenue) * 120, 4) : 0;
-                  return (
-                    <View key={hourKey} style={styles.hourlyBarCol}>
-                      <Text style={styles.hourlyBarValue}>
-                        {orders > 0 ? orders : ''}
-                      </Text>
-                      <View style={[styles.hourlyBar, { height: barHeight }]} />
-                      <Text style={styles.hourlyBarLabel}>{hour}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-
-          {/* Top Revenue Days */}
+          {/* Top Revenue Days (moved above Revenue table) */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('admin.top-revenue-days') || 'Top Revenue Days'}</Text>
             <View style={styles.cardsContainer}>
@@ -421,10 +377,111 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
             </View>
           </View>
 
-          {/* Daily Trends */}
+          {/* Revenue Report */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('admin.revenue-report') || 'Revenue'}</Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeader}>
+                <TouchableOpacity style={{ flex: 1.2 }} onPress={() => setRevenueSort(s => ({ col: 'date', asc: s.col === 'date' ? !s.asc : false }))}>  
+                  <Text style={styles.tableCell}>{t('admin.date') || 'Date'}{revenueSort.col === 'date' ? (revenueSort.asc ? ' ▲' : ' ▼') : ''}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ flex: 0.6 }} onPress={() => setRevenueSort(s => ({ col: 'orders', asc: s.col === 'orders' ? !s.asc : false }))}>
+                  <Text style={styles.tableCell}>{t('admin.orders') || 'Orders'}{revenueSort.col === 'orders' ? (revenueSort.asc ? ' ▲' : ' ▼') : ''}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ flex: 0.9 }} onPress={() => setRevenueSort(s => ({ col: 'discount', asc: s.col === 'discount' ? !s.asc : false }))}>
+                  <Text style={styles.tableCell}>{t('admin.col-discount') || 'Discount'}{revenueSort.col === 'discount' ? (revenueSort.asc ? ' ▲' : ' ▼') : ''}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ flex: 1 }} onPress={() => setRevenueSort(s => ({ col: 'revenue', asc: s.col === 'revenue' ? !s.asc : false }))}>
+                  <Text style={styles.tableCell}>{t('admin.revenue') || 'Revenue'}{revenueSort.col === 'revenue' ? (revenueSort.asc ? ' ▲' : ' ▼') : ''}</Text>
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={Object.entries(stats.revenue_by_day)
+                  .sort(([a, aRev], [b, bRev]) => {
+                    const aDisc = stats.daily_discount[a] || 0;
+                    const bDisc = stats.daily_discount[b] || 0;
+                    const aOrd = stats.daily_order_counts[a] || 0;
+                    const bOrd = stats.daily_order_counts[b] || 0;
+                    let cmp = 0;
+                    if (revenueSort.col === 'date') cmp = a.localeCompare(b);
+                    else if (revenueSort.col === 'orders') cmp = aOrd - bOrd;
+                    else if (revenueSort.col === 'discount') cmp = aDisc - bDisc;
+                    else cmp = aRev - bRev;
+                    return revenueSort.asc ? cmp : -cmp;
+                  })
+                  .slice(0, 10)}
+                renderItem={({ item: [date, revenue] }) => (
+                  <View style={styles.tableRow}>
+                    <Text style={[styles.tableCell, { flex: 1.2 }]}>{date}</Text>
+                    <Text style={[styles.tableCell, { flex: 0.6 }]}>{stats.daily_order_counts[date] || 0}</Text>
+                    <Text style={[styles.tableCell, { flex: 0.9, color: '#dc2626' }]}>
+                      {stats.daily_discount[date] ? `-${formatPrice(stats.daily_discount[date])}` : '—'}
+                    </Text>
+                    <Text style={[styles.tableCell, { flex: 1 }]}>{formatPrice(revenue)}</Text>
+                  </View>
+                )}
+                keyExtractor={(item) => item[0]}
+                scrollEnabled={false}
+              />
+            </View>
+          </View>
+
+          {/* Busiest Tables - table style matching webapp */}
+          {topTables.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.busiest-tables') || 'Busiest Tables'}</Text>
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>{t('admin.col-table') || 'Table'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: 'right' }]}>{t('admin.col-orders') || 'Orders'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'right' }]}>{t('admin.col-revenue') || 'Revenue'}</Text>
+                </View>
+                {topTables.map((table, idx) => {
+                  const maxOrders = topTables[0]?.order_count || 1;
+                  const barPct = (table.order_count / maxOrders) * 100;
+                  return (
+                    <View key={idx} style={styles.tableRow}>
+                      <Text style={[styles.tableCell, { flex: 1.2, fontWeight: '500', color: '#1f2937' }]}>{table.table_name}</Text>
+                      <Text style={[styles.tableCell, { flex: 0.7, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{table.order_count}</Text>
+                      <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{formatPrice(table.total_revenue_cents)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Hourly Revenue - table style matching webapp */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('admin.report-hourly') || 'Hourly Revenue'}</Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderCell, { flex: 0.6 }]}>{t('admin.col-hour') || 'Hour'}</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 0.6, textAlign: 'right' }]}>{t('admin.col-orders') || 'Orders'}</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'right' }]}>{t('admin.col-revenue') || 'Revenue'}</Text>
+              </View>
+              {Array.from({ length: 24 }, (_, i) => {
+                const hourKey = `${String(i).padStart(2, '0')}:00`;
+                const revenue = stats.revenue_by_hour[hourKey] || 0;
+                const orders = stats.orders_by_hour[hourKey] || 0;
+                if (orders === 0 && revenue === 0) return null;
+                return (
+                  <View key={hourKey} style={styles.tableRow}>
+                    <Text style={[styles.tableCell, { flex: 0.6, fontWeight: '500', color: '#1f2937' }]}>{hourKey}</Text>
+                    <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{orders}</Text>
+                    <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{formatPrice(revenue)}</Text>
+                  </View>
+                );
+              }).filter(Boolean)}
+            </View>
+          </View>
+
+          {/* Top Revenue Days — moved above, shown here is a placeholder removed */}
+
+          {/* Daily Trends renamed to Revenue Trends */}
           <View style={styles.section}>
             <View style={styles.trendHeader}>
-              <Text style={styles.sectionTitle}>{t('admin.daily-trends') || 'Trends'}</Text>
+              <Text style={styles.sectionTitle}>{t('admin.report-revenue-trends') || 'Revenue Trends'}</Text>
               <TouchableOpacity onPress={() => setShowTrendModal(true)} style={styles.trendBtn}>
                 <Text style={styles.trendBtnText}>{trendMode.toUpperCase()}</Text>
               </TouchableOpacity>
@@ -459,7 +516,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
           {/* Order Status Breakdown */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('admin.order-status') || 'Order Status'}</Text>
+            <Text style={styles.sectionTitle}>{t('admin.report-order-status') || 'Order Status'}</Text>
             {Object.entries(stats.order_count_by_status).map(([status, count]) => (
               <View key={status} style={styles.statusItem}>
                 <Text style={styles.statusLabel}>
@@ -470,7 +527,51 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
             ))}
           </View>
 
-          {/* Sales by Category */}
+          {/* Order Status Timing */}
+          {(statusTransitions.length > 0 || fastestItems.length > 0) && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.report-status-timing') || 'Dish Preparation Speed'}</Text>
+              {statusTransitions.length > 0 && (
+                <View style={styles.table}>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.4 }]}>{t('admin.col-transition') || 'Transition'}</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: 'right' }]}>{t('admin.col-count') || 'Count'}</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 0.9, textAlign: 'right' }]}>{t('admin.col-avg-time') || 'Avg (min)'}</Text>
+                  </View>
+                  {statusTransitions.map((tr, idx) => (
+                    <View key={idx} style={styles.tableRow}>
+                      <Text style={[styles.tableCell, { flex: 1.4, color: '#1f2937', fontWeight: '500' }]}>
+                        {`${tr.from_status || '—'} → ${tr.to_status}`}
+                      </Text>
+                      <Text style={[styles.tableCell, { flex: 0.7, textAlign: 'right', color: '#6b7280' }]}>{tr.transition_count}</Text>
+                      <Text style={[styles.tableCell, { flex: 0.9, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{tr.avg_minutes}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {fastestItems.length > 0 && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>
+                    {t('admin.fastest-dishes') || 'Fastest Dishes (preparing → ready)'}
+                  </Text>
+                  <View style={styles.table}>
+                    <View style={styles.tableHeader}>
+                      <Text style={[styles.tableHeaderCell, { flex: 1.4 }]}>{t('admin.col-item') || 'Item'}</Text>
+                      <Text style={[styles.tableHeaderCell, { flex: 0.9, textAlign: 'right' }]}>{t('admin.col-avg-time') || 'Avg (min)'}</Text>
+                    </View>
+                    {fastestItems.map((f, idx) => (
+                      <View key={idx} style={styles.tableRow}>
+                        <Text style={[styles.tableCell, { flex: 1.4, fontWeight: '500', color: '#1f2937' }]}>{f.item_name}</Text>
+                        <Text style={[styles.tableCell, { flex: 0.9, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{f.avg_minutes}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Sales by Category (moved above Sales by Item) */}
           {salesByCategory.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>{t('admin.report-sales-by-category') || 'Sales by Category'}</Text>
@@ -498,19 +599,92 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
           {salesByItem.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>{t('admin.report-sales-by-item') || 'Sales by Item'}</Text>
-              {salesByItem.slice(0, 20).map((item, idx) => {
-                const rev = parseInt(item.total_revenue_cents?.toString() || '0', 10) || 0;
-                return (
-                  <View key={item.item_name || idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937' }}>{item.item_name || 'Unknown'}</Text>
-                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{item.category_name || ''}</Text>
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.4 }]}>{t('admin.col-item') || 'Item'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: 'right' }]}>{t('admin.col-qty-sold') || 'Qty'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'right' }]}>{t('admin.col-revenue') || 'Revenue'}</Text>
+                </View>
+                {salesByItem.slice(0, 20).map((item, idx) => {
+                  const rev = parseInt(item.total_revenue_cents?.toString() || '0', 10) || 0;
+                  return (
+                    <View key={item.item_name || idx} style={styles.tableRow}>
+                      <View style={{ flex: 1.4 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937' }}>{item.item_name || 'Unknown'}</Text>
+                        {item.category_name ? <Text style={{ fontSize: 11, color: '#6b7280' }}>{item.category_name}</Text> : null}
+                      </View>
+                      <Text style={[styles.tableCell, { flex: 0.7, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{item.total_qty}</Text>
+                      <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{formatPrice(rev)}</Text>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#667eea', fontWeight: '600', marginRight: 12 }}>{item.total_qty} sold</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669' }}>${(rev / 100).toFixed(2)}</Text>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Payment by Type */}
+          {paymentByType.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.report-payment-by-type') || 'Payment by Type'}</Text>
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>{t('admin.col-payment-method') || 'Method'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.7, textAlign: 'right' }]}>{t('admin.col-orders') || 'Orders'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'right' }]}>{t('admin.col-revenue') || 'Revenue'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.6, textAlign: 'right' }]}>%</Text>
+                </View>
+                {(() => {
+                  const totalRev = paymentByType.reduce((s, p) => s + (parseInt(p.total_revenue_cents?.toString() || '0', 10) || 0), 0);
+                  const payColors: Record<string, string> = { cash: '#059669', kpay: '#667eea', 'payment-asia': '#e67e22', card: '#8b5cf6' };
+                  return paymentByType.map((p, idx) => {
+                    const rev = parseInt(p.total_revenue_cents?.toString() || '0', 10) || 0;
+                    const pct = totalRev > 0 ? ((rev / totalRev) * 100).toFixed(1) : '0.0';
+                    const color = payColors[p.payment_method] || '#6b7280';
+                    return (
+                      <View key={p.payment_method || idx} style={styles.tableRow}>
+                        <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center' }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color, marginRight: 6 }} />
+                          <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937', textTransform: 'capitalize' }}>{p.payment_method}</Text>
+                        </View>
+                        <Text style={[styles.tableCell, { flex: 0.7, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{p.order_count}</Text>
+                        <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{formatPrice(rev)}</Text>
+                        <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#6b7280' }]}>{pct}%</Text>
+                      </View>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
+          )}
+
+          {/* Staff Hours */}
+          {staffHours.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.report-staff-hours') || 'Staff Hours'}</Text>
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>{t('admin.col-staff') || 'Staff'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.6, textAlign: 'right' }]}>{t('admin.col-shifts') || 'Shifts'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.9, textAlign: 'right' }]}>{t('admin.col-total-hours') || 'Hours'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.9, textAlign: 'right' }]}>{t('admin.col-avg-shift') || 'Avg Shift'}</Text>
+                </View>
+                {staffHours.map((s, idx) => {
+                  const totalMin = parseFloat(s.total_minutes?.toString() || '0') || 0;
+                  const totalHours = (totalMin / 60).toFixed(1);
+                  const avgShift = s.shift_count > 0 ? (totalMin / s.shift_count / 60).toFixed(1) : '—';
+                  return (
+                    <View key={s.staff_name || idx} style={styles.tableRow}>
+                      <View style={{ flex: 1.2 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937' }}>{s.staff_name}</Text>
+                        {s.role ? <Text style={{ fontSize: 11, color: '#6b7280', textTransform: 'capitalize' }}>{s.role}</Text> : null}
+                      </View>
+                      <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{s.shift_count}</Text>
+                      <Text style={[styles.tableCell, { flex: 0.9, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{totalHours} hrs</Text>
+                      <Text style={[styles.tableCell, { flex: 0.9, textAlign: 'right', color: '#6b7280' }]}>{avgShift} hrs</Text>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           )}
         </View>
@@ -670,6 +844,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     paddingVertical: 10,
     paddingHorizontal: 8,
+  },
+  tableHeaderCell: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '600',
+    flex: 1,
   },
   tableRow: {
     flexDirection: 'row',

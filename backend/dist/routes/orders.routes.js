@@ -578,6 +578,8 @@ router.patch("/order-items/:orderItemId/status", async (req, res) => {
         if (orderCheck.rowCount === 0) {
             return res.status(404).json({ error: "Order item not found or doesn't belong to this restaurant" });
         }
+        // Fetch current status before updating (for history log)
+        const currentItem = await db_1.default.query(`SELECT status, order_id FROM order_items WHERE id = $1`, [orderItemId]);
         const result = await db_1.default.query(`
       UPDATE order_items
       SET status = $1
@@ -586,6 +588,12 @@ router.patch("/order-items/:orderItemId/status", async (req, res) => {
       `, [status, orderItemId]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Order item not found" });
+        }
+        // Log status change to history table (best-effort, non-blocking)
+        if (currentItem.rowCount > 0) {
+            const prev = currentItem.rows[0];
+            db_1.default.query(`INSERT INTO order_item_status_history (order_item_id, order_id, restaurant_id, from_status, to_status)
+         VALUES ($1, $2, $3, $4, $5)`, [orderItemId, prev.order_id, restaurantId, prev.status, status]).catch((e) => console.error("[status-history] insert failed:", e.message));
         }
         res.json(result.rows[0]);
     }
@@ -1169,6 +1177,127 @@ router.get("/restaurants/:restaurantId/reports/sales-by-category", async (req, r
     catch (err) {
         console.error("[sales-by-category]", err);
         res.status(500).json({ error: "Failed to load sales by category" });
+    }
+});
+/**
+ * GET /restaurants/:restaurantId/reports/payment-by-type
+ * Returns order count and revenue grouped by payment method
+ */
+router.get("/restaurants/:restaurantId/reports/payment-by-type", async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { days } = req.query;
+        const daysBack = days ? parseInt(days, 10) : 30;
+        const result = await db_1.default.query(`SELECT
+        COALESCE(o.payment_method, 'cash') AS payment_method,
+        COUNT(o.id) AS order_count,
+        SUM(o.total_cents) AS total_revenue_cents
+       FROM orders o
+       WHERE o.restaurant_id = $1
+         AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+       GROUP BY COALESCE(o.payment_method, 'cash')
+       ORDER BY total_revenue_cents DESC`, [restaurantId, daysBack]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error("[payment-by-type]", err);
+        res.status(500).json({ error: "Failed to load payment type report" });
+    }
+});
+/**
+ * GET /restaurants/:restaurantId/reports/staff-hours
+ * Returns staff hours summary from timekeeping records
+ */
+router.get("/restaurants/:restaurantId/reports/staff-hours", async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { days } = req.query;
+        const daysBack = days ? parseInt(days, 10) : 30;
+        const result = await db_1.default.query(`SELECT
+        u.name AS staff_name,
+        u.role,
+        COUNT(st.id) AS shift_count,
+        SUM(COALESCE(st.duration_minutes,
+          CASE WHEN st.clock_out_at IS NOT NULL
+               THEN EXTRACT(EPOCH FROM (st.clock_out_at - st.clock_in_at)) / 60
+               ELSE NULL END
+        )) AS total_minutes,
+        MIN(st.clock_in_at) AS first_shift,
+        MAX(COALESCE(st.clock_out_at, st.clock_in_at)) AS last_shift
+       FROM staff_timekeeping st
+       JOIN users u ON u.id = st.user_id
+       WHERE st.restaurant_id = $1
+         AND st.clock_in_at >= NOW() - ($2::int * INTERVAL '1 day')
+       GROUP BY u.id, u.name, u.role
+       ORDER BY total_minutes DESC NULLS LAST`, [restaurantId, daysBack]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error("[staff-hours]", err);
+        res.status(500).json({ error: "Failed to load staff hours report" });
+    }
+});
+/**
+ * GET /restaurants/:restaurantId/reports/order-status-timing
+ * Returns average minutes between status transitions per item
+ */
+router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { days } = req.query;
+        const daysBack = days ? parseInt(days, 10) : 30;
+        const result = await db_1.default.query(`SELECT
+        from_status,
+        to_status,
+        COUNT(*) AS transition_count,
+        ROUND(AVG(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS avg_minutes,
+        ROUND(MIN(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS min_minutes,
+        ROUND(MAX(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS max_minutes
+       FROM order_item_status_history h1
+       JOIN order_item_status_history h2
+         ON h1.order_item_id = h2.order_item_id
+        AND h2.id = (
+          SELECT id FROM order_item_status_history h3
+          WHERE h3.order_item_id = h1.order_item_id
+            AND h3.changed_at > h1.changed_at
+          ORDER BY h3.changed_at ASC LIMIT 1
+        )
+       WHERE h1.restaurant_id = $1
+         AND h1.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
+         AND EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) > 0
+       GROUP BY from_status, to_status
+       ORDER BY from_status, to_status`, [restaurantId, daysBack]);
+        // Also return per-item averages for top 10 fastest/slowest items
+        const itemResult = await db_1.default.query(`SELECT
+        mi.name AS item_name,
+        h1.from_status,
+        h1.to_status,
+        ROUND(AVG(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS avg_minutes,
+        COUNT(*) AS sample_count
+       FROM order_item_status_history h1
+       JOIN order_item_status_history h2
+         ON h1.order_item_id = h2.order_item_id
+        AND h2.id = (
+          SELECT id FROM order_item_status_history h3
+          WHERE h3.order_item_id = h1.order_item_id
+            AND h3.changed_at > h1.changed_at
+          ORDER BY h3.changed_at ASC LIMIT 1
+        )
+       JOIN order_items oi ON oi.id = h1.order_item_id
+       JOIN menu_items mi ON mi.id = oi.menu_item_id
+       WHERE h1.restaurant_id = $1
+         AND h1.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
+         AND h1.from_status = 'preparing' AND h1.to_status = 'ready'
+         AND EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) > 0
+       GROUP BY mi.name, h1.from_status, h1.to_status
+       HAVING COUNT(*) >= 2
+       ORDER BY avg_minutes ASC
+       LIMIT 10`, [restaurantId, daysBack]);
+        res.json({ transitions: result.rows, fastest_items: itemResult.rows });
+    }
+    catch (err) {
+        console.error("[order-status-timing]", err);
+        res.status(500).json({ error: "Failed to load status timing report" });
     }
 });
 exports.default = router;

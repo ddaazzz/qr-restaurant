@@ -43,7 +43,8 @@ router.post("/scan/:qrToken", async (req, res) => {
         let restaurantResult;
         try {
             restaurantResult = await db_1.default.query(`SELECT id, name, address, phone, logo_url, background_url, theme_color,
-                service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url
+                service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
+                timezone, language_preference
          FROM restaurants WHERE id = $1`, [unit.restaurant_id]);
         }
         catch (err) {
@@ -73,6 +74,8 @@ router.post("/scan/:qrToken", async (req, res) => {
             ui_config: (0, restaurantDefaults_1.mergeUiConfig)(restaurant?.ui_config || null),
             ui_mode: restaurant?.ui_mode || "native",
             custom_frontend_url: restaurant?.custom_frontend_url || null,
+            timezone: restaurant?.timezone || "Asia/Hong_Kong",
+            language_preference: restaurant?.language_preference || null,
         });
     }
     catch (err) {

@@ -69,7 +69,10 @@ router.get("/restaurants/:restaurantId/menu_categories",
 
       const result = await pool.query(
         `
-        SELECT id, name, sort_order
+        SELECT id, name, sort_order,
+               COALESCE(time_restricted, FALSE) AS time_restricted,
+               TO_CHAR(available_from, 'HH24:MI') AS available_from,
+               TO_CHAR(available_to,   'HH24:MI') AS available_to
         FROM menu_categories
         WHERE restaurant_id = $1
         ORDER BY sort_order, id
@@ -115,24 +118,45 @@ router.post("/restaurants/:restaurantId/menu_categories",
   }
 );
 
-//Update Category Name
+//Update Category (name + time restriction)
 router.patch("/menu_categories/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, time_restricted, available_from, available_to } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ error: "name required" });
+    const updates: string[] = [];
+    const values: any[] = [];
+    let p = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${p++}`);
+      values.push(name.trim());
+    }
+    if (time_restricted !== undefined) {
+      updates.push(`time_restricted = $${p++}`);
+      values.push(!!time_restricted);
+    }
+    if (available_from !== undefined) {
+      updates.push(`available_from = $${p++}`);
+      values.push(available_from || null);
+    }
+    if (available_to !== undefined) {
+      updates.push(`available_to = $${p++}`);
+      values.push(available_to || null);
     }
 
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "Nothing to update" });
+    }
+
+    values.push(id);
     const result = await pool.query(
-      `
-      UPDATE menu_categories
-      SET name = $1
-      WHERE id = $2
-      RETURNING *
-      `,
-      [name.trim(), id]
+      `UPDATE menu_categories SET ${updates.join(", ")} WHERE id = $${p}
+       RETURNING id, name, sort_order,
+                 COALESCE(time_restricted, FALSE) AS time_restricted,
+                 TO_CHAR(available_from, 'HH24:MI') AS available_from,
+                 TO_CHAR(available_to,   'HH24:MI') AS available_to`,
+      values
     );
 
     if (result.rowCount === 0) {

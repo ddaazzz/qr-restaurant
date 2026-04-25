@@ -256,15 +256,7 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
         o.id            AS order_id,
         o.restaurant_order_number,
 
-        b.guest_name    AS booking_guest_name,
-
-        (SELECT sr.request_type FROM service_requests sr
-         WHERE sr.table_session_id = ts.id AND sr.status = 'pending'
-         ORDER BY sr.created_at ASC LIMIT 1) AS pending_request_type,
-        (SELECT sri.color FROM service_requests sr
-         JOIN service_request_items sri ON sri.request_type = sr.request_type AND sri.restaurant_id = t.restaurant_id
-         WHERE sr.table_session_id = ts.id AND sr.status = 'pending'
-         ORDER BY sr.created_at ASC LIMIT 1) AS pending_request_color
+        b.guest_name    AS booking_guest_name
 
       FROM tables t
       JOIN table_units tu
@@ -913,33 +905,24 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
 
       // Insert order items
       for (const item of items) {
-        let price: number;
-        let customItemName: string | null = null;
+        const menuRes = await client.query(
+          'SELECT price_cents FROM menu_items WHERE id = $1',
+          [item.menu_item_id]
+        );
 
-        if (item.menu_item_id == null) {
-          // Custom / market-price item
-          customItemName = (item.custom_item_name || '').trim();
-          if (!customItemName) throw new Error('Custom items require a name');
-          price = parseInt(item.custom_price_cents, 10);
-          if (!isFinite(price) || price < 0) throw new Error('Invalid custom item price');
-        } else {
-          const menuRes = await client.query(
-            'SELECT price_cents FROM menu_items WHERE id = $1',
-            [item.menu_item_id]
-          );
-          if (menuRes.rows.length === 0) {
-            throw new Error(`Menu item ${item.menu_item_id} not found`);
-          }
-          price = menuRes.rows[0].price_cents;
+        if (menuRes.rows.length === 0) {
+          throw new Error(`Menu item ${item.menu_item_id} not found`);
         }
+
+        const price = menuRes.rows[0].price_cents;
 
         const orderItemRes = await client.query(
           `
-          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status, custom_item_name)
-          VALUES ($1, $2, $3, $4, 'pending', $5)
+          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status)
+          VALUES ($1, $2, $3, $4, 'pending')
           RETURNING id
           `,
-          [order.id, item.menu_item_id || null, item.quantity || 1, price, customItemName]
+          [order.id, item.menu_item_id, item.quantity || 1, price]
         );
 
         const orderItemId = orderItemRes.rows[0].id;
@@ -1025,33 +1008,24 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
 
       // Insert order items
       for (const item of items) {
-        let price: number;
-        let customItemName: string | null = null;
+        const menuRes = await client.query(
+          'SELECT price_cents FROM menu_items WHERE id = $1',
+          [item.menu_item_id]
+        );
 
-        if (item.menu_item_id == null) {
-          // Custom / market-price item
-          customItemName = (item.custom_item_name || '').trim();
-          if (!customItemName) throw new Error('Custom items require a name');
-          price = parseInt(item.custom_price_cents, 10);
-          if (!isFinite(price) || price < 0) throw new Error('Invalid custom item price');
-        } else {
-          const menuRes = await client.query(
-            'SELECT price_cents FROM menu_items WHERE id = $1',
-            [item.menu_item_id]
-          );
-          if (menuRes.rows.length === 0) {
-            throw new Error(`Menu item ${item.menu_item_id} not found`);
-          }
-          price = menuRes.rows[0].price_cents;
+        if (menuRes.rows.length === 0) {
+          throw new Error(`Menu item ${item.menu_item_id} not found`);
         }
+
+        const price = menuRes.rows[0].price_cents;
 
         const orderItemRes = await client.query(
           `
-          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status, custom_item_name)
-          VALUES ($1, $2, $3, $4, 'pending', $5)
+          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status)
+          VALUES ($1, $2, $3, $4, 'pending')
           RETURNING id
           `,
-          [order.id, item.menu_item_id || null, item.quantity || 1, price, customItemName]
+          [order.id, item.menu_item_id, item.quantity || 1, price]
         );
 
         const orderItemId = orderItemRes.rows[0].id;

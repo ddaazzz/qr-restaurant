@@ -33,7 +33,7 @@
       </div>
       </div>
       <div class="form-group">
-        <label data-i18n="admin.item-image">Food Item Image <span class="info-hint" data-i18n="admin.recommended-size">(Recommended: 400px × 300px)</span></label>
+        <label data-i18n="admin.item-image">Food Item Image <span class="info-hint">(Optimal: 800 × 600 px · 4:3 ratio)</span></label>
         <div class="image-upload-input">
           <div id="new-item-image-preview" class="image-preview-box" style="cursor: pointer;" onclick="document.getElementById('new-item-image').click()">
             <div class="upload-placeholder" data-i18n="admin.upload-image">📸 Click to upload image</div>
@@ -240,6 +240,44 @@
 
 <!-- Category Sidebar (Mobile Only) - Outside menu-container -->
 <div class="menu-category-sidebar"></div>
+
+<!-- ============= IMAGE CROP MODAL ============= -->
+<div id="image-crop-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:20px;max-width:380px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
+    <h3 style="margin:0 0 4px 0;font-size:16px;font-weight:700;">Crop Image</h3>
+    <p style="font-size:12px;color:#888;margin:0 0 14px 0;">Drag the image to reposition. Scroll or use the slider to zoom. Output: 800 × 600 px (4:3).</p>
+
+    <!-- Crop viewport -->
+    <div id="crop-viewport"
+      style="position:relative;width:100%;padding-bottom:75%;border-radius:8px;overflow:hidden;background:#111;cursor:grab;touch-action:none;user-select:none;"
+      onmousedown="cropDragStart(event)"
+      ontouchstart="cropTouchStart(event)"
+      onwheel="cropWheel(event)">
+      <img id="crop-img" src=""
+        style="position:absolute;transform-origin:0 0;pointer-events:none;max-width:none;max-height:none;"
+        draggable="false" />
+    </div>
+
+    <!-- Zoom slider -->
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;color:#888;">Zoom</span>
+      <input type="range" id="crop-zoom-slider" min="100" max="400" value="100" step="1"
+        style="flex:1;accent-color:var(--primary-color,#3b49df);"
+        oninput="cropZoomFromSlider(this.value)" />
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button onclick="confirmImageCrop()"
+        style="flex:1;padding:10px;background:var(--primary-color,#3b49df);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+        ✓ Use Cropped Image
+      </button>
+      <button onclick="cancelImageCrop()"
+        style="padding:10px 16px;background:#f3f4f6;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ============= HTML TEMPLATES ============= -->
 

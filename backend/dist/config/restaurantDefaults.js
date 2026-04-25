@@ -18,6 +18,8 @@ exports.DEFAULT_FEATURE_FLAGS = {
     crm: true,
     multi_language: true,
     service_requests: false,
+    custom_menu_items: false,
+    custom_sr_items: false,
 };
 // Default UI config for customer-facing menu
 exports.DEFAULT_UI_CONFIG = {

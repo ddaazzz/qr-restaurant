@@ -267,9 +267,6 @@ function renderAnalyticsDashboard(stats) {
   if (metricAvgBill) {
     metricAvgBill.textContent = "$" + (stats.average_bill / 100).toFixed(2);
   }
-  if (metricActiveSessions) {
-    metricActiveSessions.textContent = stats.active_sessions;
-  }
 
   // Calculate new metrics
   var dayKeys = Object.keys(stats.revenue_by_day || {});
@@ -311,6 +308,9 @@ function renderAnalyticsDashboard(stats) {
 
   loadSalesByCategory();
   loadSalesByItem();
+  loadPaymentByType();
+  loadStaffHours();
+  loadOrderStatusTiming();
 
   renderBookingsAnalytics(stats);
 }
@@ -406,6 +406,54 @@ function renderRevenueReport(stats) {
   filterRevenueReport();
 }
 
+function sortRevenueTable(col) {
+  var container = document.getElementById("revenue-report-content");
+  if (!container || !window._revenueByDate) return;
+  
+  var sortState = window._revenueCurrentSort || { col: 'date', asc: false };
+  if (sortState.col === col) {
+    sortState.asc = !sortState.asc;
+  } else {
+    sortState.col = col;
+    sortState.asc = col !== 'revenue'; // revenue defaults descending
+  }
+  window._revenueCurrentSort = sortState;
+
+  // Update sort indicators
+  ['date', 'orders', 'discount', 'revenue'].forEach(function(c) {
+    var el = document.getElementById('sort-indicator-' + c);
+    if (el) el.innerHTML = c === col ? (sortState.asc ? '&#9650;' : '&#9660;') : '';
+  });
+
+  var revenueByDate = window._revenueByDate;
+  var rowTemplate = document.getElementById("revenue-report-row-template");
+  var tbody = container.querySelector('[data-rows-container]');
+  if (!tbody || !rowTemplate) return;
+
+  var dates = Object.keys(revenueByDate);
+  dates.sort(function(a, b) {
+    var da = revenueByDate[a], db = revenueByDate[b];
+    var va, vb;
+    if (col === 'date') { va = new Date(a).getTime(); vb = new Date(b).getTime(); }
+    else if (col === 'orders') { va = da.count; vb = db.count; }
+    else if (col === 'discount') { va = da.discount; vb = db.discount; }
+    else { va = da.revenue; vb = db.revenue; }
+    return sortState.asc ? (va - vb) : (vb - va);
+  });
+
+  tbody.innerHTML = '';
+  for (var di = 0; di < dates.length; di++) {
+    var date = dates[di];
+    var data = revenueByDate[date];
+    var row = rowTemplate.content.cloneNode(true);
+    row.querySelector('[data-field="date"]').textContent = date;
+    row.querySelector('[data-field="orders"]').textContent = data.count;
+    row.querySelector('[data-field="discount"]').textContent = data.discount > 0 ? '-$' + (data.discount / 100).toFixed(2) : '\u2014';
+    row.querySelector('[data-field="revenue"]').textContent = '$' + (data.revenue / 100).toFixed(2);
+    tbody.appendChild(row);
+  }
+}
+
 function filterRevenueReport() {
   var container = document.getElementById("revenue-report-content");
   if (!container || !window.allOrders) {
@@ -467,13 +515,16 @@ function filterRevenueReport() {
 
   // Calculate totals
   var totalRevenue = 0;
+  var totalDiscount = 0;
   var totalOrders = filteredOrders.length;
   
   for (var oi = 0; oi < filteredOrders.length; oi++) {
     totalRevenue += parseInt(filteredOrders[oi].total_cents, 10) || 0;
+    totalDiscount += parseInt(filteredOrders[oi].discount_cents, 10) || 0;
   }
 
   var avgBill = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  var netSales = totalRevenue - totalDiscount;
 
   // Group by date for template
   var revenueByDate = {};
@@ -481,9 +532,10 @@ function filterRevenueReport() {
     var order = filteredOrders[oi];
     var dateStr = new Date(order.created_at).toLocaleDateString();
     if (!revenueByDate[dateStr]) {
-      revenueByDate[dateStr] = { revenue: 0, count: 0 };
+      revenueByDate[dateStr] = { revenue: 0, count: 0, discount: 0 };
     }
     revenueByDate[dateStr].revenue += parseInt(order.total_cents, 10) || 0;
+    revenueByDate[dateStr].discount += parseInt(order.discount_cents, 10) || 0;
     revenueByDate[dateStr].count++;
   }
 
@@ -498,8 +550,11 @@ function filterRevenueReport() {
   fragment.querySelector('[data-field="total-revenue"]').textContent = '$' + (totalRevenue / 100).toFixed(2);
   fragment.querySelector('[data-field="total-orders"]').textContent = totalOrders;
   fragment.querySelector('[data-field="avg-bill"]').textContent = '$' + (avgBill / 100).toFixed(2);
+  fragment.querySelector('[data-field="total-discounts"]').textContent = '-$' + (totalDiscount / 100).toFixed(2);
+  fragment.querySelector('[data-field="net-sales"]').textContent = '$' + (netSales / 100).toFixed(2);
   
-  // Populate table rows
+  // Populate table rows — default sort: date descending
+  window._revenueByDate = revenueByDate;
   var tbody = fragment.querySelector('[data-rows-container]');
   var dates = Object.keys(revenueByDate).sort().reverse();
   for (var di = 0; di < dates.length; di++) {
@@ -508,57 +563,57 @@ function filterRevenueReport() {
     var row = rowTemplate.content.cloneNode(true);
     row.querySelector('[data-field="date"]').textContent = date;
     row.querySelector('[data-field="orders"]').textContent = data.count;
+    row.querySelector('[data-field="discount"]').textContent = data.discount > 0 ? '-$' + (data.discount / 100).toFixed(2) : '—';
     row.querySelector('[data-field="revenue"]').textContent = '$' + (data.revenue / 100).toFixed(2);
+    row.setAttribute && row.setAttribute('data-date', date);
     tbody.appendChild(row);
   }
   
   container.innerHTML = '';
   container.appendChild(fragment);
+  window._revenueCurrentSort = { col: 'date', asc: false };
   reTranslateContent();
 }
 
 function renderBusiestTables(stats) {
   var container = document.getElementById("chart-busiest-tables");
-  if (!container) {
-    return;
-  }
+  if (!container) return;
 
   var topTables = stats.topTables || [];
 
   if (topTables.length === 0) {
-    container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No table data available.</p>';
+    container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;" data-i18n="admin.no-data">No data available.</p>';
     return;
   }
 
   var maxOrders = parseInt(topTables[0].order_count, 10) || 1;
-
-  // Clone template and populate with data
-  var template = document.getElementById("busiest-tables-chart-template");
-  var columnTemplate = document.getElementById("busiest-tables-column-template");
-  if (!template || !columnTemplate) return;
-
-  var fragment = template.content.cloneNode(true);
-  var columnsContainer = fragment.querySelector('[data-columns-container]');
+  var html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+    '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
+    '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-table">Table</th>' +
+    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-orders">Orders</th>' +
+    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-revenue">Revenue</th>' +
+    '<th style="padding:10px 12px;" ></th>' +
+    '</tr></thead><tbody>';
 
   for (var ti = 0; ti < topTables.length; ti++) {
     var tbl = topTables[ti];
     var orderCount = parseInt(tbl.order_count, 10) || 0;
     var revenue = parseInt(tbl.total_revenue_cents, 10) || 0;
-    var height = (orderCount / maxOrders) * 180;
-
-    var column = columnTemplate.content.cloneNode(true);
-    var bar = column.querySelector('[data-field="bar"]');
-    bar.style.height = height + 'px';
-    bar.title = tbl.table_name + ': ' + orderCount + ' orders ($' + (revenue / 100).toFixed(2) + ')';
-
-    column.querySelector('[data-field="date"]').textContent = tbl.table_name;
-    column.querySelector('[data-field="orders"]').textContent = orderCount;
-
-    columnsContainer.appendChild(column);
+    var barPct = Math.round((orderCount / maxOrders) * 100);
+    html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+      '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' + tbl.table_name + '</td>' +
+      '<td style="padding:10px 12px;text-align:right;color:#667eea;font-weight:600;">' + orderCount + '</td>' +
+      '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">$' + (revenue / 100).toFixed(2) + '</td>' +
+      '<td style="padding:10px 12px;min-width:120px;">' +
+        '<div style="background:#f3f4f6;border-radius:4px;height:8px;overflow:hidden;">' +
+          '<div style="background:#667eea;height:100%;width:' + barPct + '%;border-radius:4px;"></div>' +
+        '</div>' +
+      '</td>' +
+      '</tr>';
   }
 
-  container.innerHTML = '';
-  container.appendChild(fragment);
+  html += '</tbody></table>';
+  container.innerHTML = html;
   reTranslateContent();
 }
 
@@ -566,83 +621,52 @@ function renderHourlyRevenue(stats) {
   var container = document.getElementById("chart-hourly-revenue");
   if (!container) return;
 
-  // Ensure revenue_by_hour and orders_by_hour exist
   if (!stats.revenue_by_hour) stats.revenue_by_hour = {};
   if (!stats.orders_by_hour) stats.orders_by_hour = {};
-  
-  var revenueValues = [];
-  for (var hour in stats.revenue_by_hour) {
-    if (stats.revenue_by_hour.hasOwnProperty(hour)) {
-      revenueValues.push(stats.revenue_by_hour[hour]);
-    }
-  }
+
+  var revenueValues = Object.values(stats.revenue_by_hour);
   var maxRevenue = Math.max.apply(null, revenueValues.length > 0 ? revenueValues : [1]);
   if (maxRevenue <= 0) maxRevenue = 1;
-  
-  // Clone template and populate with data
-  var template = document.getElementById("hourly-revenue-chart-template");
-  var columnTemplate = document.getElementById("hourly-revenue-column-template");
-  if (!template || !columnTemplate) return;
 
-  var fragment = template.content.cloneNode(true);
-  var columnsContainer = fragment.querySelector('[data-columns-container]');
+  var html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+    '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
+    '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-hour">Hour</th>' +
+    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-orders">Orders</th>' +
+    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-revenue">Revenue</th>' +
+    '<th style="padding:10px 12px;"></th>' +
+    '</tr></thead><tbody>';
 
   for (var i = 0; i < 24; i++) {
     var hourKey = i + ':00';
     var revenue = stats.revenue_by_hour[hourKey] || 0;
     var orderCount = stats.orders_by_hour[hourKey] || 0;
-    var height = Math.round((revenue / maxRevenue) * 220);
-    var tooltipText = 'Hour: ' + hourKey + ' | Revenue: $' + (revenue / 100).toFixed(2) + ' | Orders: ' + orderCount;
-    
-    var column = columnTemplate.content.cloneNode(true);
-    var bar = column.querySelector('[data-field="bar"]');
-    bar.style.height = height + 'px';
-    bar.title = tooltipText;
-    
-    column.querySelector('[data-field="hour"]').textContent = i;
-    
-    columnsContainer.appendChild(column);
+    if (orderCount === 0 && revenue === 0) continue;
+    var barPct = Math.round((revenue / maxRevenue) * 100);
+    html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+      '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' + String(i).padStart(2, '0') + ':00</td>' +
+      '<td style="padding:10px 12px;text-align:right;color:#667eea;font-weight:600;">' + orderCount + '</td>' +
+      '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">$' + (revenue / 100).toFixed(2) + '</td>' +
+      '<td style="padding:10px 12px;min-width:120px;">' +
+        '<div style="background:#f3f4f6;border-radius:4px;height:8px;overflow:hidden;">' +
+          '<div style="background:linear-gradient(to right,#667eea,#764ba2);height:100%;width:' + barPct + '%;border-radius:4px;"></div>' +
+        '</div>' +
+      '</td>' +
+      '</tr>';
   }
 
-  container.innerHTML = '';
-  container.appendChild(fragment);
+  if (html.indexOf('<tr') === -1) {
+    html += '<tr><td colspan="4" style="padding:20px;text-align:center;color:#999;" data-i18n="admin.no-data">No data available.</td></tr>';
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
   reTranslateContent();
 }
 
 function renderTopItems(stats) {
-  var container = document.getElementById("chart-top-items");
-  if (!container) return;
-
-  var topItems = stats.topItems || [];
-
-  if (topItems.length === 0) {
-    container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No item sales data available.</p>';
-    return;
-  }
-
-  // Clone template and populate with data
-  var template = document.getElementById("top-items-cards-template");
-  var cardTemplate = document.getElementById("top-items-card-template");
-  if (!template || !cardTemplate) {
-    container.innerHTML = '<p style="color: #ccc; text-align: center;">No item data</p>';
-    return;
-  }
-
-  var fragment = template.content.cloneNode(true);
-  var cardsContainer = fragment.querySelector('[data-cards-container]');
-
-  for (var ti = 0; ti < topItems.length; ti++) {
-    var item = topItems[ti];
-    var card = cardTemplate.content.cloneNode(true);
-    card.querySelector('[data-field="item-name"]').textContent = item.item_name || 'Unknown';
-    card.querySelector('[data-field="item-qty"]').textContent = item.total_qty + ' ' + (typeof t === 'function' ? t('admin.sold') : 'sold');
-    card.querySelector('[data-field="item-revenue"]').textContent = '$' + (parseInt(item.total_revenue_cents, 10) / 100).toFixed(2);
-    cardsContainer.appendChild(card);
-  }
-
-  container.innerHTML = '';
-  container.appendChild(fragment);
-  reTranslateContent();
+  // Deprecated: the Sales by Item section (below) renders a better version.
+  // We no longer render a separate Top Selling Items section.
+  // The old #chart-top-items container is removed from the HTML.
 }
 
 function renderTopRevenueDays(stats) {
@@ -998,6 +1022,198 @@ async function loadSalesByItem() {
   } catch (err) {
     console.error('[sales-by-item]', err);
     container.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 16px;">Failed to load data.</p>';
+  }
+}
+
+// ========== ORDER STATUS TIMING ==========
+
+async function loadOrderStatusTiming() {
+  var container = document.getElementById('order-status-timing');
+  if (!container) return;
+
+  var days = getGlobalDays();
+  container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.loading">Loading...</p>';
+
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/reports/order-status-timing?days=' + days);
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+
+    var transitions = data.transitions || [];
+    var fastest = data.fastest_items || [];
+
+    if (transitions.length === 0 && fastest.length === 0) {
+      container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.no-timing-data">No timing data yet — data appears once staff change item status (preparing → ready).</p>';
+      return;
+    }
+
+    var html = '';
+
+    if (transitions.length > 0) {
+      html += '<table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:16px;">' +
+        '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
+        '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-transition">Transition</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-count">Count</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-avg-time">Avg (min)</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-min-time">Min</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-max-time">Max</th>' +
+        '</tr></thead><tbody>';
+
+      for (var i = 0; i < transitions.length; i++) {
+        var t = transitions[i];
+        html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+          '<td style="padding:10px 12px;color:#1f2937;font-weight:500;">' +
+            '<span style="text-transform:capitalize;">' + (t.from_status || '—') + '</span>' +
+            ' → <span style="text-transform:capitalize;">' + t.to_status + '</span>' +
+          '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + t.transition_count + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">' + t.avg_minutes + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + t.min_minutes + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + t.max_minutes + '</td>' +
+          '</tr>';
+      }
+      html += '</tbody></table>';
+    }
+
+    if (fastest.length > 0) {
+      html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:8px 0;" data-i18n="admin.fastest-dishes">Fastest Dishes (preparing → ready)</h4>' +
+        '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+        '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
+        '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-item">Item</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-avg-time">Avg (min)</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-samples">Samples</th>' +
+        '</tr></thead><tbody>';
+
+      for (var j = 0; j < fastest.length; j++) {
+        var f = fastest[j];
+        html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+          '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' + f.item_name + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">' + f.avg_minutes + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + f.sample_count + '</td>' +
+          '</tr>';
+      }
+      html += '</tbody></table>';
+    }
+
+    container.innerHTML = html;
+    reTranslateContent();
+  } catch (err) {
+    console.error('[order-status-timing]', err);
+    container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.no-timing-data">No timing data yet.</p>';
+  }
+}
+
+// ========== PAYMENT BY TYPE ==========
+
+async function loadPaymentByType() {
+  var container = document.getElementById('payment-by-type-content');
+  if (!container) return;
+
+  var days = getGlobalDays();
+  container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.loading">Loading...</p>';
+
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/reports/payment-by-type?days=' + days);
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.no-data">No data available.</p>';
+      return;
+    }
+
+    var totalRev = 0;
+    for (var i = 0; i < data.length; i++) {
+      totalRev += parseInt(data[i].total_revenue_cents, 10) || 0;
+    }
+
+    var paymentColors = { cash: '#059669', kpay: '#667eea', 'payment-asia': '#e67e22', card: '#8b5cf6', alipay: '#dc2626', wechat: '#06b6d4' };
+    var html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+      '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
+      '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-payment-method">Payment Method</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-orders">Orders</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-revenue">Revenue</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;">%</th>' +
+      '<th style="padding:10px 12px;"></th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var rev = parseInt(row.total_revenue_cents, 10) || 0;
+      var pct = totalRev > 0 ? ((rev / totalRev) * 100) : 0;
+      var color = paymentColors[row.payment_method] || '#6b7280';
+      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+        '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' +
+          '<span style="display:inline-block;width:10px;height:10px;background:' + color + ';border-radius:2px;margin-right:6px;"></span>' +
+          row.payment_method +
+        '</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#667eea;font-weight:600;">' + row.order_count + '</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">$' + (rev / 100).toFixed(2) + '</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + pct.toFixed(1) + '%</td>' +
+        '<td style="padding:10px 12px;min-width:100px;">' +
+          '<div style="background:#f3f4f6;border-radius:4px;height:8px;overflow:hidden;">' +
+            '<div style="background:' + color + ';height:100%;width:' + pct.toFixed(0) + '%;border-radius:4px;"></div>' +
+          '</div>' +
+        '</td>' +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    reTranslateContent();
+  } catch (err) {
+    console.error('[payment-by-type]', err);
+    container.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:16px;">Failed to load data.</p>';
+  }
+}
+
+// ========== STAFF HOURS ==========
+
+async function loadStaffHours() {
+  var container = document.getElementById('staff-hours-content');
+  if (!container) return;
+
+  var days = getGlobalDays();
+  container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.loading">Loading...</p>';
+
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/reports/staff-hours?days=' + days);
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.no-staff-hours">No timekeeping records found. Staff need to clock in/out.</p>';
+      return;
+    }
+
+    var html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+      '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
+      '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-staff">Staff</th>' +
+      '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-role">Role</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-shifts">Shifts</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-total-hours">Total Hours</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-avg-shift">Avg Shift</th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var totalMin = parseFloat(row.total_minutes) || 0;
+      var shiftCount = parseInt(row.shift_count, 10) || 0;
+      var totalHours = (totalMin / 60).toFixed(1);
+      var avgShift = shiftCount > 0 ? (totalMin / shiftCount / 60).toFixed(1) : '—';
+      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+        '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' + row.staff_name + '</td>' +
+        '<td style="padding:10px 12px;color:#6b7280;font-size:12px;text-transform:capitalize;">' + (row.role || '—') + '</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#667eea;font-weight:600;">' + shiftCount + '</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">' + totalHours + ' hrs</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + avgShift + ' hrs</td>' +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    reTranslateContent();
+  } catch (err) {
+    console.error('[staff-hours]', err);
+    container.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:16px;">Failed to load data.</p>';
   }
 }
 

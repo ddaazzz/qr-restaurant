@@ -98,30 +98,14 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
     try {
         const { restaurantId } = req.params;
         const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata } = req.body;
-        // Validate required fields based on vendor
-        if (!vendor_name) {
-            return res.status(400).json({ error: 'Missing required field: vendor_name' });
-        }
-        const { merchant_token, secret_code, payment_gateway_env } = req.body;
-        if (vendor_name === 'payment-asia') {
-            if (!app_id && !merchant_token) {
-                return res.status(400).json({ error: 'Payment Asia requires merchant_token (or app_id)' });
-            }
-        }
-        else if (vendor_name === 'payment-asia-terminal') {
-            if (!app_secret || !terminal_ip || !terminal_port) {
-                return res.status(400).json({ error: 'PA Terminal requires app_secret (API Key), terminal_ip, terminal_port' });
-            }
-        }
-        else {
-            if (!app_id || !app_secret || !terminal_ip || !terminal_port) {
-                return res.status(400).json({
-                    error: 'Missing required fields: vendor_name, app_id, app_secret, terminal_ip, terminal_port',
-                });
-            }
+        // Validate required fields
+        if (!vendor_name || !app_id || !app_secret || !terminal_ip || !terminal_port) {
+            return res.status(400).json({
+                error: 'Missing required fields: vendor_name, app_id, app_secret, terminal_ip, terminal_port',
+            });
         }
         // Validate vendor name
-        const validVendors = ['kpay', 'payment-asia', 'payment-asia-terminal', 'other'];
+        const validVendors = ['kpay', 'other'];
         if (!validVendors.includes(vendor_name)) {
             return res.status(400).json({
                 error: `Invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
@@ -134,15 +118,11 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
                 error: `Payment terminal for vendor '${vendor_name}' already exists for this restaurant`,
             });
         }
-        const insertMerchantToken = merchant_token || (vendor_name === 'payment-asia' ? app_id : null);
-        const insertSecretCode = secret_code || (vendor_name === 'payment-asia' ? app_secret : null);
-        const insertGatewayEnv = payment_gateway_env || (vendor_name === 'payment-asia' ? 'sandbox' : null);
         const result = await db_1.default.query(`INSERT INTO payment_terminals 
-       (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, merchant_token, secret_code, payment_gateway_env, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path,
-                 merchant_token, payment_gateway_env, metadata, created_at, updated_at`, [restaurantId, vendor_name, app_id || null, app_secret || null, terminal_ip || null, terminal_port || null,
-            endpoint_path || null, insertMerchantToken, insertSecretCode, insertGatewayEnv, metadata || {}]);
+       (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path, 
+                 metadata, created_at, updated_at`, [restaurantId, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path || '/v2/pos/sign', metadata || {}]);
         res.status(201).json(result.rows[0]);
     }
     catch (err) {
@@ -158,8 +138,8 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
     const user = await verifyUser(req);
     if (!user)
         return res.status(403).json({ error: 'Admin access required' });
-    // Non-superadmins can only update connection details (including API key for PA terminal)
-    const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path', 'app_secret'];
+    // Non-superadmins can only update connection details
+    const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path'];
     if (user.role !== 'superadmin') {
         const requestedFields = Object.keys(req.body);
         const disallowed = requestedFields.filter(f => !adminAllowedFields.includes(f));
@@ -169,7 +149,7 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
     }
     try {
         const { restaurantId, terminalId } = req.params;
-        const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active, merchant_token, secret_code, payment_gateway_env } = req.body;
+        const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active } = req.body;
         // Build dynamic UPDATE query
         const updates = [];
         const values = [];
@@ -178,21 +158,9 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
             updates.push(`app_id = $${paramCount++}`);
             values.push(app_id);
         }
-        if (app_secret !== undefined && app_secret !== '') {
+        if (app_secret !== undefined) {
             updates.push(`app_secret = $${paramCount++}`);
             values.push(app_secret);
-        }
-        if (merchant_token !== undefined) {
-            updates.push(`merchant_token = $${paramCount++}`);
-            values.push(merchant_token);
-        }
-        if (secret_code !== undefined && secret_code !== '') {
-            updates.push(`secret_code = $${paramCount++}`);
-            values.push(secret_code);
-        }
-        if (payment_gateway_env !== undefined) {
-            updates.push(`payment_gateway_env = $${paramCount++}`);
-            values.push(payment_gateway_env);
         }
         if (terminal_ip !== undefined) {
             updates.push(`terminal_ip = $${paramCount++}`);
@@ -415,16 +383,6 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
                 return res.status(500).json({ success: false, error: paErr.message || 'Payment Asia test failed' });
             }
         }
-        // Payment Asia POS Terminal: LAN-only, initiated from mobile device
-        if (terminal.vendor_name === 'payment-asia-terminal') {
-            const now = new Date();
-            await db_1.default.query(`UPDATE payment_terminals SET last_tested_at = $1 WHERE id = $2`, [now, terminalId]);
-            return res.json({
-                success: true,
-                message: `PA Terminal config saved. Connection test must be performed from the mobile app (terminal is LAN-only at ${terminal.terminal_ip}:${terminal.terminal_port}).`,
-                timestamp: now,
-            });
-        }
         // For other vendors
         res.status(400).json({
             error: `Payment not yet implemented for vendor: ${terminal.vendor_name}`,
@@ -432,26 +390,6 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
     }
     catch (err) {
         console.error('[PaymentTerminal] Error processing payment:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-/**
- * GET /api/restaurants/:restaurantId/pa-terminal/active
- * Returns the active Payment Asia POS terminal config (for mobile gating)
- */
-router.get('/restaurants/:restaurantId/pa-terminal/active', async (req, res) => {
-    try {
-        const { restaurantId } = req.params;
-        const result = await db_1.default.query(`SELECT id, app_secret, terminal_ip, terminal_port, is_active
-       FROM payment_terminals
-       WHERE restaurant_id = $1 AND vendor_name = 'payment-asia-terminal' AND is_active = true
-       LIMIT 1`, [restaurantId]);
-        if (result.rowCount === 0) {
-            return res.json({ configured: false });
-        }
-        return res.json({ configured: true, terminal: result.rows[0] });
-    }
-    catch (err) {
         res.status(500).json({ error: err.message });
     }
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -18,21 +18,25 @@ import {
   KeyboardAvoidingView,
   Platform,
   InputAccessoryView,
-  Animated,
-  PanResponder,
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
-import { apiClient, API_URL } from '../../services/apiClient';
+import { apiClient, API_URL, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
 
-// QR code base URL matches the API URL (set at build time)
-const getQrBaseUrl = () => API_URL;
+// Derive QR code base URL from current API environment
+const getQrBaseUrl = () => {
+  const currentUrl = apiClient.getCurrentBaseUrl();
+  // Map API URLs to their frontend domains
+  if (currentUrl === ENVIRONMENTS['Development'] || currentUrl === 'https://dev.chuio.io') {
+    return 'https://dev.chuio.io';
+  }
+  return 'https://chuio.io';
+};
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import { Ionicons } from '@expo/vector-icons';
-import { kpaySign, kpaySale, kpayQuery, kpayClose } from '../../services/kpayDirectService';
 
 interface TableCategory {
   id: number;
@@ -49,8 +53,6 @@ interface Session {
   order_id?: number;
   restaurant_order_number?: number;
   restaurant_session_number?: number;
-  pending_request_type?: string;
-  pending_request_color?: string;
 }
 
 interface Booking {
@@ -98,8 +100,6 @@ interface TableState {
   order_id?: number;
   restaurant_order_number?: number;
   booking_time?: string;
-  pending_request_type?: string;
-  pending_request_color?: string;
 }
 
 interface Bill {
@@ -150,14 +150,6 @@ export interface TablesTabRef {
   navigateToScannedQR: (sessionId: number) => void;
 }
 
-interface TablesTabProps {
-  restaurantId: string;
-  onOrderForTable?: (sessionId: number, tableName: string) => void;
-  searchQuery?: string;
-  selectedRoomId?: number | null;
-  onCategoriesLoaded?: (cats: TableCategory[]) => void;
-}
-
 const getTableTextColor = (bgColor: string) => {
   if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b' || bgColor === '#dddddd') {
     return { color: '#000' };
@@ -165,10 +157,9 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) {
+export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrderForTable?: (sessionId: number, tableName: string) => void; searchQuery?: string; selectedRoomId?: number | null; onCategoriesLoaded?: (cats: TableCategory[]) => void }>(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }, ref) => {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
-  const [orderedCategories, setOrderedCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,7 +173,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [sessionOrders, setSessionOrders] = useState<Order[]>([]);
-  const [serviceRequests, setServiceRequests] = useState<any[]>([]);
   const [sessionBill, setSessionBill] = useState<Bill | null>(null);
 
   // Modal states
@@ -252,24 +242,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
   // Service charge
   const [serviceCharge, setServiceCharge] = useState(0);
 
-  // Table timing colors (from ui_config)
-  const DEFAULT_TIMING_COLORS = [
-    { maxMinutes: 30, color: '#2C3E50' },
-    { maxMinutes: 60, color: '#9c27b0' },
-    { maxMinutes: 120, color: '#ff9800' },
-    { color: '#f44336' },
-  ];
-  const [tableTimingColors, setTableTimingColors] = useState<Array<{ maxMinutes?: number; color: string }>>(DEFAULT_TIMING_COLORS);
-
-  // KPay terminal payment state
-  const [kpayTerminal, setKpayTerminal] = useState<any>(null);
-  const [kpayProcessing, setKpayProcessing] = useState(false);
-  const [kpayStatusMsg, setKpayStatusMsg] = useState('');
-  const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
-  const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Stores live session so abort handler can call kpayClose on the terminal
-  const kpayActiveSessionRef = useRef<{ config: any; appPrivateKey: string; outTradeNo: string } | null>(null);
-
   // Expose toggleEditMode and navigateToScannedQR through ref
   useImperativeHandle(ref, () => ({
     toggleEditMode() {
@@ -316,7 +288,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
         `/api/restaurants/${restaurantId}/table-categories`
       );
       setCategories(categoriesRes.data);
-      setOrderedCategories(categoriesRes.data);
       onCategoriesLoaded?.(categoriesRes.data);
 
       // Load table state
@@ -359,10 +330,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             bill_closure_requested: row.bill_closure_requested,
             call_staff_requested: row.call_staff_requested,
             restaurant_session_number: row.restaurant_session_number,
-            restaurant_order_number: row.restaurant_order_number,
-            order_id: row.order_id,
-            pending_request_type: row.pending_request_type,
-            pending_request_color: row.pending_request_color,
           });
         }
       });
@@ -423,12 +390,8 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
         if (settingsRes.data?.qr_mode) {
           setQrMode(settingsRes.data.qr_mode);
         }
-        // Load table timing colors
-        if (settingsRes.data?.ui_config?.table_timing_colors && Array.isArray(settingsRes.data.ui_config.table_timing_colors)) {
-          setTableTimingColors(settingsRes.data.ui_config.table_timing_colors);
-        }
       } catch (e) {
-        console.warn('Could not load service charge or table settings');
+        console.warn('Could not load service charge settings');
       }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
@@ -444,19 +407,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     const interval = setInterval(loadTableData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, [restaurantId, loadTableData]);
-
-  // Load active KPay terminal
-  useEffect(() => {
-    const loadKpayTerminal = async () => {
-      try {
-        const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-terminal/active`);
-        setKpayTerminal(res.data?.configured ? res.data.terminal : null);
-      } catch {
-        setKpayTerminal(null);
-      }
-    };
-    loadKpayTerminal();
-  }, [restaurantId]);
 
   // Load QR image when modal opens
   useEffect(() => {
@@ -549,7 +499,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     : [];
 
   // Build sections: all categories with their tables, filtered by room and search
-  const tableSections = orderedCategories
+  const tableSections = categories
     .filter(cat => !selectedRoomId || cat.id === selectedRoomId)
     .map(cat => ({
       category: cat,
@@ -610,26 +560,20 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     if (table.sessions.length === 0 && !table.reserved) return '#dddddd';
     if (table.sessions.length > 1) return '#2C3E50';
     if (table.sessions.length === 1) {
-      const session = table.sessions[0] as any;
-      if (session.payment_received === true) return '#4caf50';
-      // Pending service request color (if available)
-      if (session.pending_request_color) return session.pending_request_color;
-      // Legacy call staff (red)
+      const session = table.sessions[0];
+      if ((session as any).payment_received === true) return '#4caf50';
       if (session.call_staff_requested) return '#ef4444';
       if (session.bill_closure_requested) return '#ffeb3b';
 
-      // Use configured timing colors
       try {
         const start = new Date(session.started_at);
         const now = new Date();
         const diffMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
 
-        for (let i = 0; i < tableTimingColors.length; i++) {
-          const row = tableTimingColors[i];
-          if (row.maxMinutes === undefined) return row.color; // Last row (overflow)
-          if (diffMinutes < row.maxMinutes) return row.color;
-        }
-        return tableTimingColors[tableTimingColors.length - 1]?.color || '#f44336';
+        if (diffMinutes < 30) return '#2C3E50';
+        if (diffMinutes < 60) return '#9c27b0';
+        if (diffMinutes < 120) return '#ff9800';
+        return '#f44336';
       } catch {
         return '#2C3E50';
       }
@@ -651,15 +595,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
       console.log('[LoadOrders] API Response:', res.data);
       const orders = res.data.items || res.data || [];
       console.log('[LoadOrders] Parsed orders:', orders);
-      // Filter out orders with no valid items (empty orders or all deleted items)
-      const validOrders = (Array.isArray(orders) ? orders : []).filter((order: any) => {
-        if (!order.items || order.items.length === 0) return false;
-        return order.items.some((item: any) => {
-          const name = item.name || item.item_name || item.menu_item_name;
-          return name && name !== 'Deleted Item';
-        });
-      });
-      setSessionOrders(validOrders);
+      setSessionOrders(Array.isArray(orders) ? orders : []);
 
       const billRes = await apiClient.get(
         `/api/sessions/${sessionId}/bill`
@@ -676,31 +612,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     setSelectedSession(session);
     setCurrentView('sessionDetail');
     await loadSessionOrders(session.id);
-    await loadServiceRequests(session.id);
-  };
-
-  const loadServiceRequests = async (sessionId: number) => {
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-requests?status=pending`);
-      // Filter to requests for this session
-      const sessionRequests = (res.data || []).filter((r: any) => r.table_session_id === sessionId);
-      setServiceRequests(sessionRequests);
-    } catch (err) {
-      // Silently fail — feature may not be enabled
-      setServiceRequests([]);
-    }
-  };
-
-  const fulfillServiceRequest = async (requestId: number) => {
-    try {
-      await apiClient.patch(`/api/restaurants/${restaurantId}/service-requests/${requestId}`, {
-        status: 'fulfilled',
-      });
-      // Remove from list
-      setServiceRequests(prev => prev.filter(r => r.id !== requestId));
-    } catch (err) {
-      console.error('Error fulfilling service request:', err);
-    }
   };
 
   const clearCallStaff = async (sessionId: number) => {
@@ -806,28 +717,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
         },
       ]
     );
-  };
-
-  const saveTableCategoryOrder = async (reorderedCategories: TableCategory[]) => {
-    try {
-      await apiClient.put(
-        `/api/restaurants/${restaurantId}/table-categories/reorder`,
-        { categories: reorderedCategories.map((cat, idx) => ({ id: cat.id, sort_order: idx })) }
-      );
-    } catch (err) {
-      console.warn('Failed to save table category order:', err);
-    }
-  };
-
-  const orderedCategoriesRef = useRef(orderedCategories);
-  useEffect(() => { orderedCategoriesRef.current = orderedCategories; }, [orderedCategories]);
-
-  const moveSectionOrder = (fromIdx: number, toIdx: number) => {
-    const newCats = [...orderedCategoriesRef.current];
-    const [moved] = newCats.splice(fromIdx, 1);
-    newCats.splice(toIdx, 0, moved);
-    setOrderedCategories(newCats);
-    saveTableCategoryOrder(newCats);
   };
 
   const updateTable = async () => {
@@ -1136,148 +1025,12 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
     return coupon.discount_value;
   };
 
-  const startKpayTerminalPayment = async (sessionId: number, finalAmount: number, discountCents: number) => {
-    if (!kpayTerminal) return;
-
-    // Stay inside the close bill modal — show KPay progress in-place (same as OrdersTab)
-    setKpayProcessing(true);
-    setKpayStatusMsg('Initiating…');
-    setKpayLogs([{ msg: '> Connecting to KPay terminal…', color: '#ffd43b' }]);
-
-    const addLog = (msg: string, color = '#00ff00') =>
-      setKpayLogs(prev => [...prev, { msg, color }]);
-
-    const config = {
-      terminalIp: kpayTerminal.terminal_ip,
-      terminalPort: kpayTerminal.terminal_port,
-      appId: kpayTerminal.app_id,
-      appSecret: kpayTerminal.app_secret,
-      endpointPath: kpayTerminal.endpoint_path || '/v2/pos/sign',
-    };
-
-    const payAmount = String(finalAmount).padStart(12, '0');
-    const outTradeNo = `ORD-${restaurantId}-${kpayTerminal.id}-${Date.now()}`;
-
-    try {
-      // Step 1: Key exchange (Sign) — direct to terminal, no RSA needed
-      addLog('> Step 1: Key exchange with terminal…');
-      const signResult = await kpaySign(config);
-      if (!signResult.success) {
-        addLog(`> ❌ Key exchange failed: ${signResult.message}${signResult.error ? ` (${signResult.error})` : ''}`, '#ff6b6b');
-        setKpayStatusMsg('Failed: cannot reach terminal');
-        setKpayProcessing(false);
-        return;
-      }
-      addLog('> ✅ Key exchange successful', '#51cf66');
-
-      const appPrivateKey = signResult.appPrivateKey!;
-
-      // Step 2: Initiate sale — signed POST direct to terminal
-      addLog(`> Step 2: Sale — HKD ${(finalAmount / 100).toFixed(2)}`);
-      const saleResult = await kpaySale(config, appPrivateKey, outTradeNo, payAmount);
-      if (!saleResult.success) {
-        addLog(`> ❌ Sale failed: ${saleResult.message}${saleResult.error ? ` (${saleResult.error})` : ''}`, '#ff6b6b');
-        setKpayStatusMsg('Sale failed');
-        setKpayProcessing(false);
-        return;
-      }
-      addLog('> ✅ Sale initiated — terminal is waiting for customer', '#51cf66');
-      addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
-      addLog('> Tap / scan card on terminal', '#ffd43b');
-      setKpayStatusMsg('Waiting for customer…');
-
-      // Save session so abort can call kpayClose
-      kpayActiveSessionRef.current = { config, appPrivateKey, outTradeNo };
-
-      // Step 3: Poll status — signed GET direct to terminal
-      // appPrivateKey stays valid until terminal settlement; reuse it for all polls.
-      let attempts = 0;
-      const maxAttempts = 22;
-
-      const poll = async () => {
-        if (attempts >= maxAttempts) {
-          setKpayStatusMsg('Timed out');
-          addLog('> TIMEOUT — no response from terminal', '#ffd43b');
-          setKpayProcessing(false);
-          return;
-        }
-        attempts++;
-        addLog(`> Polling… (${attempts}/${maxAttempts})`);
-        try {
-          const statusResult = await kpayQuery(config, appPrivateKey, outTradeNo);
-
-          if (statusResult.status === 'success') {
-            setKpayStatusMsg('Payment confirmed ✅');
-            addLog('> ✅ Payment confirmed by terminal', '#51cf66');
-            kpayActiveSessionRef.current = null;
-
-            await apiClient.post(`/api/sessions/${sessionId}/close-bill`, {
-              restaurantId: parseInt(restaurantId),
-              payment_method: 'kpay',
-              amount_paid: finalAmount,
-              discount_applied: discountCents,
-              service_charge: sessionBill?.service_charge_cents || 0,
-              notes: closeReason,
-              kpay_reference_id: outTradeNo,
-            });
-            addLog('> ✅ Bill closed', '#51cf66');
-            setKpayProcessing(false);
-
-            setTimeout(async () => {
-              setShowCloseBillModal(false);
-              setKpayLogs([]);
-              setKpayStatusMsg('');
-              setPaymentMethod('cash');
-              setDiscountAmount('0');
-              setCloseReason('');
-              setSelectedCouponId(null);
-              setCoupons([]);
-              await loadTableData();
-              setCurrentView('grid');
-            }, 2000);
-            return;
-          }
-
-          if (statusResult.status === 'cancelled' || statusResult.status === 'failed') {
-            const reason = statusResult.terminalMessage ? `: ${statusResult.terminalMessage}` : '';
-            setKpayStatusMsg(statusResult.status === 'cancelled' ? 'Cancelled' : `Payment failed${reason}`);
-            addLog(`> ${statusResult.status}${reason}`, '#ff6b6b');
-            kpayActiveSessionRef.current = null;
-            setKpayProcessing(false);
-            return;
-          }
-
-          kpayPollRef.current = setTimeout(poll, 3000);
-        } catch (e: any) {
-          addLog(`> Poll error: ${e.message}`, '#ffd43b');
-          kpayPollRef.current = setTimeout(poll, 3000);
-        }
-      };
-
-      kpayPollRef.current = setTimeout(poll, 2000);
-    } catch (err: any) {
-      addLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
-      setKpayStatusMsg('Failed');
-      setKpayProcessing(false);
-    }
-  };
-
   const closeBill = async () => {
     if (!selectedSession) return;
 
     const discountCents = getDiscountCents();
     const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
     const finalAmount = grandTotal - discountCents;
-
-    // KPay: hand off to terminal payment flow
-    if (paymentMethod === 'kpay') {
-      if (!kpayTerminal) {
-        Alert.alert('Error', 'No active KPay terminal configured.');
-        return;
-      }
-      await startKpayTerminalPayment(selectedSession.id, finalAmount, discountCents);
-      return;
-    }
 
     try {
       await apiClient.post(
@@ -1300,6 +1053,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
 
         if (printerRes.data?.bill_auto_print === true) {
           console.log('[CloseBill] Bill auto-print enabled, printing bill...');
+          // Auto-print the bill with the handleBillPrint logic
           await printBill(true);
         }
       } catch (autoError) {
@@ -1311,8 +1065,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
       setDiscountAmount('0');
       setCloseReason('');
       setSelectedCouponId(null);
-      setCoupons([]);
-      await loadTableData();
+      setCoupons([]);      await loadTableData();
       setCurrentView('grid');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
@@ -1972,7 +1725,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             
             // Prepare receipt data for thermal printer
             const receiptData = {
-              orderNumber: String(selectedSession?.restaurant_order_number || selectedSession?.restaurant_session_number || selectedSession?.id),
+              orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
               tableNumber: selectedTable?.name || 'Receipt',
               items: sessionBill.items.map(item => ({
                 name: item.name,
@@ -2166,7 +1919,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
             <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {selectedTable.name} • {selectedSession.pax} pax{(selectedSession.restaurant_order_number || selectedSession.restaurant_session_number) ? ` • Order #${selectedSession.restaurant_order_number || selectedSession.restaurant_session_number}` : ''}
+            {selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • Order #${selectedSession.restaurant_session_number}` : ''}
           </Text>
           <View style={{ position: 'relative' }}>
             <TouchableOpacity onPress={() => setShowSessionGearMenu(!showSessionGearMenu)}>
@@ -2254,16 +2007,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
             </View>
           )}
-          {serviceRequests.length > 0 && serviceRequests.map((req) => (
-            <TouchableOpacity
-              key={req.id}
-              style={{ backgroundColor: '#8b5cf6', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-              onPress={() => fulfillServiceRequest(req.id)}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🛎️ {req.label}</Text>
-              <Text style={{ color: '#fff', fontSize: 12 }}>Tap to fulfill</Text>
-            </TouchableOpacity>
-          ))}
           <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
           {sessionOrders.length === 0 ? (
             <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
@@ -2273,19 +2016,13 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               return (
                 <View key={idx} style={styles.orderCard}>
                   <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                  {order.items && order.items.filter(item => {
-                    const name = item.name || item.item_name || item.menu_item_name;
-                    return name && name !== 'Deleted Item';
-                  }).length > 0 ? (
-                    order.items.filter(item => {
-                      const name = item.name || item.item_name || item.menu_item_name;
-                      return name && name !== 'Deleted Item';
-                    }).map((item, itemIdx) => (
+                  {order.items && order.items.length > 0 ? (
+                    order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
                         <View style={styles.orderItem}>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.itemName}>
-                              {item.name || item.item_name || item.menu_item_name} x{item.quantity}
+                              {item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}
                             </Text>
                             <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
                             {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
@@ -2395,7 +2132,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
 
               <Text style={styles.label}>{t('admin.payment-method')}</Text>
               <View style={styles.selectGroup}>
-                {(kpayTerminal ? ['cash', 'kpay'] : ['cash', 'card', 'online']).map((method) => (
+                {['cash', 'card', 'online'].map((method) => (
                   <TouchableOpacity
                     key={method}
                     style={[
@@ -2410,7 +2147,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                         paymentMethod === method && styles.selectOptionTextActive,
                       ]}
                     >
-                      {method === 'kpay' ? 'KPay Terminal' : method.charAt(0).toUpperCase() + method.slice(1)}
+                      {method.charAt(0).toUpperCase() + method.slice(1)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -2469,58 +2206,19 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 placeholder="Optional notes"
               />
 
-              {/* KPay in-progress view */}
-              {(kpayProcessing || kpayLogs.length > 0) && (
-                <View style={{ marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>KPay Terminal</Text>
-                    {kpayStatusMsg ? (
-                      <View style={{ backgroundColor: kpayStatusMsg.includes('✅') ? '#d1fae5' : '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: kpayStatusMsg.includes('✅') ? '#065f46' : '#b45309' }}>{kpayStatusMsg}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <ScrollView style={{ backgroundColor: '#1a1a1a', borderRadius: 8, padding: 10, maxHeight: 160 }}>
-                    {kpayLogs.map((log, idx) => (
-                      <Text key={idx} style={{ color: log.color, fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 2 }}>{log.msg}</Text>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary, kpayProcessing && { opacity: 0.4 }]}
-                  onPress={async () => {
-                    if (kpayProcessing) {
-                      // Tell the terminal to release its in-progress transaction
-                      const session = kpayActiveSessionRef.current;
-                      if (session) {
-                        kpayActiveSessionRef.current = null;
-                        if (kpayPollRef.current) { clearTimeout(kpayPollRef.current); kpayPollRef.current = null; }
-                        setKpayStatusMsg('Cancelling…');
-                        await kpayClose(session.config, session.appPrivateKey, session.outTradeNo);
-                      }
-                      setKpayProcessing(false);
-                      setKpayLogs([]);
-                      setKpayStatusMsg('');
-                    } else {
-                      setShowCloseBillModal(false);
-                      setKpayLogs([]);
-                      setKpayStatusMsg('');
-                    }
-                  }}
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => setShowCloseBillModal(false)}
                 >
-                  <Text style={styles.btnText}>{kpayProcessing ? 'Abort' : t('common.cancel')}</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
-                {!(kpayProcessing || kpayLogs.length > 0) && (
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={closeBill}
                 >
                   <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
                 </TouchableOpacity>
-                )}
               </View>
             </View>
           </View>
@@ -2732,7 +2430,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               >
                 <View>
                   <Text style={styles.sessionTitle}>
-                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{(session.restaurant_order_number || session.restaurant_session_number) ? `, Order #${session.restaurant_order_number || session.restaurant_session_number}` : ''}
+                    {selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, Order #${session.restaurant_session_number}` : ''}
                   </Text>
                   <Text style={styles.sessionInfo}>
                     {session.pax} pax • Dining {formatDuration(session.started_at)}
@@ -2946,17 +2644,17 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-      {/* Edit mode: Add Category button */}
+        {/* Edit mode: Add Category button */}
         {isEditMode && (
-            <TouchableOpacity
-              style={[styles.categoryBtn, styles.categoryBtnAdd, { alignSelf: 'flex-start', marginHorizontal: 12, marginTop: 8 }]}
-              onPress={() => setShowCategoryModal(true)}
-            >
-              <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>+ Add Category</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.categoryBtn, styles.categoryBtnAdd, { alignSelf: 'flex-start', marginHorizontal: 12, marginTop: 8 }]}
+            onPress={() => setShowCategoryModal(true)}
+          >
+            <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>+ Add Category</Text>
+          </TouchableOpacity>
         )}
 
-        {tableSections.map((section, sectionIdx) => {
+        {tableSections.map((section) => {
           const sectionTables = section.tables;
           if (sectionTables.length === 0 && !isEditMode) return null;
           const dataForGrid = isEditMode
@@ -2965,27 +2663,12 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
           const rows = chunkArray(dataForGrid, tableNumColumns);
 
           return (
-            <View key={section.category.id}>
-            <View style={styles.tableSectionContainer}>
+            <View key={section.category.id} style={styles.tableSectionContainer}>
               {/* Section Header */}
               <View style={styles.tableSectionHeader}>
                 <Text style={styles.tableSectionTitle}>{section.category.key || section.category.name || `Category ${section.category.id}`}</Text>
                 {isEditMode && (
-                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                    <TouchableOpacity
-                      onPress={() => sectionIdx > 0 && moveSectionOrder(sectionIdx, sectionIdx - 1)}
-                      disabled={sectionIdx === 0}
-                      style={{ padding: 6, opacity: sectionIdx === 0 ? 0.3 : 1 }}
-                    >
-                      <Ionicons name="chevron-up-outline" size={20} color="#4f46e5" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => sectionIdx < tableSections.length - 1 && moveSectionOrder(sectionIdx, sectionIdx + 1)}
-                      disabled={sectionIdx === tableSections.length - 1}
-                      style={{ padding: 6, opacity: sectionIdx === tableSections.length - 1 ? 0.3 : 1 }}
-                    >
-                      <Ionicons name="chevron-down-outline" size={20} color="#4f46e5" />
-                    </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
                       style={styles.categoryActionBtn}
                       onPress={() => {
@@ -3067,7 +2750,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                               <View key={session.id} style={styles.sessionTimeItem}>
                                 <Ionicons name="timer-outline" size={13} color={(textColor as any)?.color || '#fff'} />
                                 <Text style={[styles.sessionTimeText, textColor]}>
-                                  {(session.restaurant_order_number || session.restaurant_session_number) ? `#${session.restaurant_order_number || session.restaurant_session_number}` : ''} {formatDuration(session.started_at)}
+                                  {session.restaurant_session_number ? `#${session.restaurant_session_number}` : ''} {formatDuration(session.started_at)}
                                 </Text>
                                 {session.call_staff_requested && (
                                   <View style={styles.sessionBadgeStaff}>
@@ -3134,7 +2817,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 </View>
               ))}
             </View>
-            </View>
           );
         })}
 
@@ -3163,7 +2845,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               selectedTable.sessions.map((session, idx) => (
                 <TouchableOpacity key={session.id} style={styles.sessionCard} onPress={() => handleSessionClick(session)}>
                   <View>
-                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{(session.restaurant_order_number || session.restaurant_session_number) ? `, Order #${session.restaurant_order_number || session.restaurant_session_number}` : ''}</Text>
+                    <Text style={styles.sessionTitle}>{selectedTable.name}{selectedTable.sessions.length > 1 ? String.fromCharCode(65 + idx) : ''}{session.restaurant_session_number ? `, Order #${session.restaurant_session_number}` : ''}</Text>
                     <Text style={styles.sessionInfo}>{session.pax} pax • Dining {formatDuration(session.started_at)}</Text>
                   </View>
                   <Text style={styles.chevron}>›</Text>
@@ -3290,7 +2972,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
       {isTablet && currentView === 'sessionDetail' && selectedSession && selectedTable && (
         <View style={styles.sessionSidePanel}>
           <View style={styles.sessionSidePanelHeader}>
-            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{(selectedSession.restaurant_order_number || selectedSession.restaurant_session_number) ? ` • Order #${selectedSession.restaurant_order_number || selectedSession.restaurant_session_number}` : ''}</Text>
+            <Text style={styles.sessionSidePanelTitle} numberOfLines={1}>{selectedTable.name} • {selectedSession.pax} pax{selectedSession.restaurant_session_number ? ` • Order #${selectedSession.restaurant_session_number}` : ''}</Text>
             <TouchableOpacity onPress={() => { setCurrentView('grid'); setSelectedSession(null); }}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
@@ -3344,16 +3026,6 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
               </View>
             )}
-            {serviceRequests.length > 0 && serviceRequests.map((req) => (
-              <TouchableOpacity
-                key={req.id}
-                style={{ backgroundColor: '#8b5cf6', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-                onPress={() => fulfillServiceRequest(req.id)}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🛎️ {req.label}</Text>
-                <Text style={{ color: '#fff', fontSize: 12 }}>Tap to fulfill</Text>
-              </TouchableOpacity>
-            ))}
             <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
             {sessionOrders.length === 0 ? (
               <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
@@ -3361,18 +3033,12 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
               sessionOrders.map((order, idx) => (
                 <View key={idx} style={styles.orderCard}>
                   <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                  {order.items && order.items.filter(item => {
-                    const name = item.name || item.item_name || item.menu_item_name;
-                    return name && name !== 'Deleted Item';
-                  }).length > 0 ? (
-                    order.items.filter(item => {
-                      const name = item.name || item.item_name || item.menu_item_name;
-                      return name && name !== 'Deleted Item';
-                    }).map((item, itemIdx) => (
+                  {order.items && order.items.length > 0 ? (
+                    order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
                         <View style={styles.orderItem}>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.itemName}>{item.name || item.item_name || item.menu_item_name} x{item.quantity}</Text>
+                            <Text style={styles.itemName}>{item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}</Text>
                             <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
                             {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
                           </View>
@@ -3462,9 +3128,9 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 )}
                 <Text style={styles.label}>{t('admin.payment-method')}</Text>
                 <View style={styles.selectGroup}>
-                  {(kpayTerminal ? ['cash', 'kpay'] : ['cash', 'card', 'online']).map((method) => (
+                  {['cash', 'card', 'online'].map((method) => (
                     <TouchableOpacity key={method} style={[styles.selectOption, paymentMethod === method && styles.selectOptionActive]} onPress={() => setPaymentMethod(method)}>
-                      <Text style={[styles.selectOptionText, paymentMethod === method && styles.selectOptionTextActive]}>{method === 'kpay' ? 'KPay Terminal' : method.charAt(0).toUpperCase() + method.slice(1)}</Text>
+                      <Text style={[styles.selectOptionText, paymentMethod === method && styles.selectOptionTextActive]}>{method.charAt(0).toUpperCase() + method.slice(1)}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -3492,52 +3158,13 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
                 )}
                 <Text style={styles.label}>{t('admin.notes')}</Text>
                 <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder="Optional notes" />
-
-                {/* KPay in-progress view */}
-                {(kpayProcessing || kpayLogs.length > 0) && (
-                  <View style={{ marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e40af' }}>KPay Terminal</Text>
-                      {kpayStatusMsg ? (
-                        <View style={{ backgroundColor: kpayStatusMsg.includes('✅') ? '#d1fae5' : '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '600', color: kpayStatusMsg.includes('✅') ? '#065f46' : '#b45309' }}>{kpayStatusMsg}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <ScrollView style={{ backgroundColor: '#1a1a1a', borderRadius: 8, padding: 10, maxHeight: 160 }}>
-                      {kpayLogs.map((log, idx) => (
-                        <Text key={idx} style={{ color: log.color, fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 2 }}>{log.msg}</Text>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={async () => {
-                    if (kpayProcessing) {
-                      const session = kpayActiveSessionRef.current;
-                      if (session) {
-                        kpayActiveSessionRef.current = null;
-                        if (kpayPollRef.current) { clearTimeout(kpayPollRef.current); kpayPollRef.current = null; }
-                        setKpayStatusMsg('Cancelling…');
-                        await kpayClose(session.config, session.appPrivateKey, session.outTradeNo);
-                      }
-                      setKpayProcessing(false);
-                      setKpayLogs([]);
-                      setKpayStatusMsg('');
-                    } else {
-                      setShowCloseBillModal(false);
-                      setKpayLogs([]);
-                      setKpayStatusMsg('');
-                    }
-                  }}>
-                    <Text style={styles.btnText}>{kpayProcessing ? 'Abort' : t('common.cancel')}</Text>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowCloseBillModal(false)}>
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
-                  {!(kpayProcessing || kpayLogs.length > 0) && (
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={closeBill}>
                     <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
                   </TouchableOpacity>
-                  )}
                 </View>
               </View>
             </View>
@@ -3958,7 +3585,7 @@ export const TablesTab = forwardRef(function TablesTabComponent({ restaurantId, 
 
     </View>
   );
-}) as React.ForwardRefExoticComponent<TablesTabProps & React.RefAttributes<TablesTabRef>>;
+});
 
 const styles = StyleSheet.create({
   container: {

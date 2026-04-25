@@ -1031,7 +1031,36 @@ router.post('/restaurants/:restaurantId/payment-asia/query', async (req, res) =>
             return res.status(400).json({ error: 'merchant_reference is required' });
         await initPaymentAsiaForRestaurant(restaurantId, terminal_id);
         const records = await paymentAsiaService_1.paymentAsiaService.queryPayment(merchant_reference);
-        return res.json({ success: true, records });
+        // If a Sale record with status=1 (completed) is found, sync the order status.
+        // This handles the case where the webhook/return callback did not arrive (or was dropped)
+        // but the payment has actually been processed successfully.
+        // Note: query API status codes differ from webhook: 1=completed, 2=pending, 3=failed, 4=processing
+        const isSaleRecord = (r) => { const t = String(r.type); return t === '1' || t.toLowerCase() === 'sale'; };
+        const completedSale = records.find((r) => isSaleRecord(r) && String(r.status) === '1');
+        let synced = false;
+        if (completedSale) {
+            // Look up order_payments via chuio_order_reference (= merchant_reference sent to PA)
+            const paymentRes = await db_1.default.query(`SELECT id, order_id FROM order_payments
+         WHERE chuio_order_reference = $1 AND restaurant_id = $2
+         LIMIT 1`, [merchant_reference, restaurantId]);
+            if (paymentRes.rows.length > 0) {
+                const pmtRow = paymentRes.rows[0];
+                // Update order_payments to completed if not already
+                await db_1.default.query(`UPDATE order_payments
+           SET payment_status = 'completed',
+               completed_at   = COALESCE(completed_at, NOW()),
+               updated_at     = NOW()
+           WHERE id = $1 AND payment_status NOT IN ('completed', 'refunded')`, [pmtRow.id]);
+                // Update order to completed if still pending/processing
+                await db_1.default.query(`UPDATE orders
+           SET status = 'completed',
+               payment_method = COALESCE(NULLIF(payment_method, ''), 'payment-asia')
+           WHERE id = $1 AND restaurant_id = $2 AND status IN ('pending', 'processing', 'payment_processing')`, [pmtRow.order_id, restaurantId]);
+                synced = true;
+                console.log('[PaymentQuery] Synced order status to completed for merchant_reference:', merchant_reference);
+            }
+        }
+        return res.json({ success: true, records, synced });
     }
     catch (err) {
         console.error('[PaymentQuery] Error:', err);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,15 +15,13 @@ import {
   Image,
   Platform,
   Animated,
-  PanResponder,
   Keyboard,
   InputAccessoryView,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
-import { apiClient, API_URL } from '../../services/apiClient';
-import * as ImagePicker from 'expo-image-picker';
+import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +29,6 @@ import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
-import appJson from '../../../app.json';
 
 interface RestaurantSettings {
   id: number;
@@ -134,7 +131,7 @@ interface VariantPreset {
 
 interface PaymentTerminal {
   id: number;
-  vendor_name: 'kpay' | 'payment-asia' | 'payment-asia-terminal' | 'other';
+  vendor_name: 'kpay' | 'payment-asia' | 'other';
   is_active: boolean;
   app_id: string;
   terminal_ip?: string;
@@ -151,179 +148,6 @@ interface PaymentTerminal {
   environment?: 'sandbox' | 'production';
 }
 
-const DRAG_ITEM_H = 62;
-
-interface DraggableSRItemProps {
-  item: any;
-  index: number;
-  totalCount: number;
-  isActive: boolean;
-  activeDragIndex: number | null;
-  hoverIndex: number | null;
-  onDragGrant: (index: number, animY: Animated.Value) => void;
-  onDragMove: (dy: number) => void;
-  onDragRelease: (dy: number) => void;
-  onDragTerminate: () => void;
-  onEdit: (item: any) => void;
-  onDelete: (id: number) => void;
-  t: (key: string) => string;
-}
-
-const DraggableSRItem = React.memo(function DraggableSRItem({
-  item, index, isActive, activeDragIndex, hoverIndex,
-  onDragGrant, onDragMove, onDragRelease, onDragTerminate,
-  onEdit, onDelete, t,
-}: DraggableSRItemProps) {
-  const animY = useRef(new Animated.Value(0)).current;
-
-  // Keep callback refs fresh so PanResponder (created once) always calls latest
-  const onDragGrantRef = useRef(onDragGrant);
-  const onDragMoveRef = useRef(onDragMove);
-  const onDragReleaseRef = useRef(onDragRelease);
-  const onDragTerminateRef = useRef(onDragTerminate);
-  useEffect(() => { onDragGrantRef.current = onDragGrant; }, [onDragGrant]);
-  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
-  useEffect(() => { onDragReleaseRef.current = onDragRelease; }, [onDragRelease]);
-  useEffect(() => { onDragTerminateRef.current = onDragTerminate; }, [onDragTerminate]);
-  const indexRef = useRef(index);
-  useEffect(() => { indexRef.current = index; }, [index]);
-
-  const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      onDragGrantRef.current(indexRef.current, animY);
-    },
-    onPanResponderMove: (_, { dy }) => {
-      animY.setValue(dy);
-      onDragMoveRef.current(dy);
-    },
-    onPanResponderRelease: (_, { dy }) => {
-      animY.setValue(0);
-      onDragReleaseRef.current(dy);
-    },
-    onPanResponderTerminate: () => {
-      animY.setValue(0);
-      onDragTerminateRef.current();
-    },
-  })).current;
-
-  // Shift non-active items to show insertion point
-  let shift = 0;
-  if (!isActive && activeDragIndex !== null && hoverIndex !== null && activeDragIndex !== hoverIndex) {
-    if (activeDragIndex < hoverIndex && index > activeDragIndex && index <= hoverIndex) shift = -DRAG_ITEM_H;
-    if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_ITEM_H;
-  }
-
-  return (
-    <Animated.View
-      style={{
-        transform: [{ translateY: isActive ? animY : shift }],
-        zIndex: isActive ? 1000 : 1,
-        backgroundColor: isActive ? '#f0f0ff' : 'transparent',
-        borderRadius: isActive ? 8 : 0,
-        shadowColor: isActive ? '#000' : 'transparent',
-        shadowOpacity: isActive ? 0.15 : 0,
-        shadowRadius: isActive ? 6 : 0,
-        elevation: isActive ? 6 : 0,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
-          <Ionicons name="menu-outline" size={22} color="#9ca3af" />
-        </View>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: item.color || '#6366f1', marginRight: 10, borderWidth: 1, borderColor: '#ddd' }} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{item.label_en}</Text>
-          {item.label_zh ? <Text style={{ fontSize: 12, color: '#6b7280' }}>{item.label_zh}</Text> : null}
-          <Text style={{ fontSize: 11, color: '#9ca3af' }}>{item.request_type}{!item.is_active ? ` · ${t('settings.inactive')}` : ''}</Text>
-        </View>
-        <TouchableOpacity onPress={() => onEdit(item)} style={{ padding: 6, marginRight: 4 }}>
-          <Ionicons name="pencil-outline" size={18} color="#4f46e5" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onDelete(item.id)} style={{ padding: 6 }}>
-          <Ionicons name="trash-outline" size={18} color="#ef4444" />
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
-  );
-});
-
-interface DraggableSRListProps {
-  items: any[];
-  onReorder: (newItems: any[]) => void;
-  onEdit: (item: any) => void;
-  onDelete: (id: number) => void;
-  onScrollEnabled: (v: boolean) => void;
-  t: (key: string) => string;
-}
-
-function DraggableSRList({ items, onReorder, onEdit, onDelete, onScrollEnabled, t }: DraggableSRListProps) {
-  const [orderedItems, setOrderedItems] = useState<any[]>(items);
-  useEffect(() => { setOrderedItems(items); }, [items]);
-  const orderedRef = useRef(orderedItems);
-  useEffect(() => { orderedRef.current = orderedItems; }, [orderedItems]);
-
-  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const fromIndexRef = useRef<number>(0);
-
-  const handleDragGrant = useCallback((index: number, _animY: Animated.Value) => {
-    fromIndexRef.current = index;
-    setActiveDragIndex(index);
-    setHoverIndex(index);
-    onScrollEnabled(false);
-  }, [onScrollEnabled]);
-
-  const handleDragMove = useCallback((dy: number) => {
-    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_ITEM_H)));
-    setHoverIndex(to);
-  }, []);
-
-  const handleDragRelease = useCallback((dy: number) => {
-    onScrollEnabled(true);
-    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_ITEM_H)));
-    if (fromIndexRef.current !== to) {
-      const newItems = [...orderedRef.current];
-      const [moved] = newItems.splice(fromIndexRef.current, 1);
-      newItems.splice(to, 0, moved);
-      setOrderedItems(newItems);
-      onReorder(newItems);
-    }
-    setActiveDragIndex(null);
-    setHoverIndex(null);
-  }, [onScrollEnabled, onReorder]);
-
-  const handleDragTerminate = useCallback(() => {
-    onScrollEnabled(true);
-    setActiveDragIndex(null);
-    setHoverIndex(null);
-  }, [onScrollEnabled]);
-
-  return (
-    <View style={{ minHeight: orderedItems.length * DRAG_ITEM_H }}>
-      {orderedItems.map((item, idx) => (
-        <DraggableSRItem
-          key={item.id}
-          item={item}
-          index={idx}
-          totalCount={orderedItems.length}
-          isActive={activeDragIndex === idx}
-          activeDragIndex={activeDragIndex}
-          hoverIndex={hoverIndex}
-          onDragGrant={handleDragGrant}
-          onDragMove={handleDragMove}
-          onDragRelease={handleDragRelease}
-          onDragTerminate={handleDragTerminate}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          t={t}
-        />
-      ))}
-    </View>
-  );
-}
-
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const { t, lang, setLanguage } = useTranslation();
   const { user: currentUser, logout: authLogout } = useAuth();
@@ -336,11 +160,50 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingBackground, setUploadingBackground] = useState(false);
+
+  // Dev environment switcher (hidden by default)
+  const [devTapCount, setDevTapCount] = useState(0);
+  const [showDevMenu, setShowDevMenu] = useState(false);
+  const [currentEnv, setCurrentEnv] = useState(apiClient.getCurrentBaseUrl());
+  const devTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDevTap = () => {
+    const newCount = devTapCount + 1;
+    setDevTapCount(newCount);
+    if (devTapTimer.current) clearTimeout(devTapTimer.current);
+    devTapTimer.current = setTimeout(() => setDevTapCount(0), 2000);
+    if (newCount >= 7) {
+      setShowDevMenu(!showDevMenu);
+      setDevTapCount(0);
+    }
+  };
+
+  const switchEnv = async (name: string, url: string) => {
+    Alert.alert(
+      'Switch Environment',
+      `Switch to ${name} (${url})?\n\nYou will be logged out.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.switchEnvironment(url);
+              setCurrentEnv(url);
+              await authLogout();
+            } catch (e) {
+              console.error('Env switch error:', e);
+              await authLogout();
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'tables-settings';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings';
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -392,6 +255,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [selectedAddonPreset, setSelectedAddonPreset] = useState<any>(null);
   const [addonPresetItems, setAddonPresetItems] = useState<any[]>([]);
   const [showStaffLogin, setShowStaffLogin] = useState(false);
+  // Menu settings state
+  const [menuSettingsLoading, setMenuSettingsLoading] = useState(false);
+  const [menuSettingsLoaded, setMenuSettingsLoaded] = useState(false);
+  const [menuColumns, setMenuColumns] = useState<1 | 2>(1);
+  const [allowCustomFoodItems, setAllowCustomFoodItems] = useState(false);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
   
@@ -420,7 +288,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     description: '',
   });
   const [terminalForm, setTerminalForm] = useState({
-    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'payment-asia-terminal' | 'other',
+    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'other',
     app_id: '',
     app_secret: '',
     terminal_ip: '192.168.50.210',
@@ -444,26 +312,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [restaurantLicenseUri, setRestaurantLicenseUri] = useState<string | null>(null);
   const [submittingApplication, setSubmittingApplication] = useState(false);
   const [existingApplications, setExistingApplications] = useState<any[]>([]);
-
-  // Tables settings state
-  interface TimingRow { maxMinutes?: number; color: string; }
-  const DEFAULT_TIMING: TimingRow[] = [
-    { maxMinutes: 30, color: '#2C3E50' },
-    { maxMinutes: 60, color: '#9c27b0' },
-    { maxMinutes: 120, color: '#ff9800' },
-    { color: '#f44336' },
-  ];
-  const COLOR_PALETTE = ['#2C3E50', '#1565C0', '#0097A7', '#2e7d32', '#558B2F', '#6366f1', '#9c27b0', '#ec4899', '#ef4444', '#ff5722', '#ff9800', '#ffeb3b'];
-  const [tableTimingColors, setTableTimingColors] = useState<TimingRow[]>(DEFAULT_TIMING);
-  const [timingColorsSaving, setTimingColorsSaving] = useState(false);
-  const [srFeatureEnabled, setSrFeatureEnabled] = useState(false);
-  const [srItems, setSrItems] = useState<any[]>([]);
-  const [srItemsLoading, setSrItemsLoading] = useState(false);
-  const [showSRItemModal, setShowSRItemModal] = useState(false);
-  const [editingSRItemId, setEditingSRItemId] = useState<number | null>(null);
-  const [srItemForm, setSrItemForm] = useState({ label_en: '', label_zh: '', color: '#6366f1', is_active: true });
-  const [showColorPicker, setShowColorPicker] = useState<{ target: 'timing' | 'srItem'; index: number } | null>(null);
-  const [tablesScrollEnabled, setTablesScrollEnabled] = useState(true);
 
   const fetchSettings = async () => {
     try {
@@ -674,89 +522,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
-  // Tables Settings functions
-  const loadTablesSettings = async () => {
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
-      const cfg = res.data?.ui_config?.table_timing_colors;
-      if (Array.isArray(cfg) && cfg.length === 4) setTableTimingColors(cfg);
-      const featureEnabled = res.data?.feature_flags?.service_requests === true;
-      setSrFeatureEnabled(featureEnabled);
-      if (featureEnabled) {
-        setSrItemsLoading(true);
-        try {
-          const srRes = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`);
-          setSrItems(Array.isArray(srRes.data) ? srRes.data : []);
-        } catch { setSrItems([]); } finally { setSrItemsLoading(false); }
-      }
-    } catch (err) { /* silent */ }
-  };
-
-  const saveTimingColors = async () => {
-    setTimingColorsSaving(true);
-    try {
-      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, {
-        ui_config: { table_timing_colors: tableTimingColors },
-      });
-      Alert.alert(t('common.success'), t('settings.timing-colors-saved'));
-    } catch { Alert.alert(t('common.error'), t('settings.timing-colors-save-failed')); }
-    finally { setTimingColorsSaving(false); }
-  };
-
-  const openAddSRItem = () => {
-    setEditingSRItemId(null);
-    setSrItemForm({ label_en: '', label_zh: '', color: '#6366f1', is_active: true });
-    setShowSRItemModal(true);
-  };
-
-  const openEditSRItem = (item: any) => {
-    setEditingSRItemId(item.id);
-    setSrItemForm({ label_en: item.label_en || '', label_zh: item.label_zh || '', color: item.color || '#6366f1', is_active: item.is_active !== false });
-    setShowSRItemModal(true);
-  };
-
-  const saveSRItem = async () => {
-    if (!srItemForm.label_en.trim()) { Alert.alert(t('common.error'), t('settings.sr-label-required')); return; }
-    try {
-      if (editingSRItemId) {
-        await apiClient.patch(`/api/restaurants/${restaurantId}/service-request-items/${editingSRItemId}`, {
-          label_en: srItemForm.label_en.trim(), label_zh: srItemForm.label_zh.trim() || null,
-          color: srItemForm.color, is_active: srItemForm.is_active,
-        });
-      } else {
-        // Auto-generate request_type from label_en
-        const autoKey = srItemForm.label_en.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-        await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
-          request_type: autoKey,
-          label_en: srItemForm.label_en.trim(), label_zh: srItemForm.label_zh.trim() || null,
-          color: srItemForm.color, sort_order: srItems.length,
-        });
-      }
-      setShowSRItemModal(false);
-      await loadTablesSettings();
-    } catch (err: any) { Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to save item'); }
-  };
-
-  const saveSRItemOrder = async (newItems: any[]) => {
-    try {
-      await apiClient.put(`/api/restaurants/${restaurantId}/service-request-items/reorder`, {
-        items: newItems.map((item, idx) => ({ id: item.id, sort_order: idx })),
-      });
-    } catch { /* non-critical — order will correct on next load */ }
-  };
-
-  const deleteSRItem = (id: number) => {
-    Alert.alert(t('common.delete'), t('settings.sr-delete-confirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('common.delete'), style: 'destructive', onPress: async () => {
-        try {
-          await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${id}`);
-          await loadTablesSettings();
-        } catch { Alert.alert(t('common.error'), 'Failed to delete item'); }
-      }},
-    ]);
-  };
-
   useEffect(() => {
     fetchSettings();
     fetchVariantPresets();
@@ -775,28 +540,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     const label = labels[type || ''] || '—';
     console.log('[Printer] getPrinterTypeLabel called with:', type, '-> result:', label);
     return label;
-  };
-
-  const pickAndUploadImage = async (type: 'logo' | 'background') => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: type === 'logo' ? [1, 1] : [16, 9],
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets[0]?.uri) return;
-    const uri = result.assets[0].uri;
-    if (type === 'logo') setUploadingLogo(true);
-    else setUploadingBackground(true);
-    try {
-      const url = await apiClient.uploadImage(uri, type);
-      setFormData((prev: any) => ({ ...prev, [`${type === 'logo' ? 'logo' : 'background'}_url`]: url }));
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.message || 'Upload failed');
-    } finally {
-      if (type === 'logo') setUploadingLogo(false);
-      else setUploadingBackground(false);
-    }
   };
 
   const saveSettings = async () => {
@@ -1048,16 +791,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           Alert.alert(t('common.error'), 'Only superadmins can create new terminals');
           return;
         }
-        const payload: any = {};
-        if (terminalForm.terminal_ip) payload.terminal_ip = terminalForm.terminal_ip;
-        if (terminalForm.terminal_port) payload.terminal_port = parseInt(terminalForm.terminal_port);
-        if (terminalForm.vendor_name === 'payment-asia-terminal') {
-          // PA Terminal: allow updating credentials and connection details
-          if (terminalForm.merchant_token) payload.merchant_token = terminalForm.merchant_token;
-          if (terminalForm.secret_code) payload.secret_code = terminalForm.secret_code;
-        } else {
-          if (terminalForm.endpoint_path) payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
-        }
+        const payload: any = {
+          terminal_ip: terminalForm.terminal_ip,
+          terminal_port: parseInt(terminalForm.terminal_port),
+          endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
+        };
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-updated'));
         await fetchPaymentTerminals();
@@ -1072,11 +810,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           Alert.alert(t('settings.pa-validation'), t('settings.pa-validation-msg'));
           return;
         }
-      } else if (terminalForm.vendor_name === 'payment-asia-terminal') {
-        if (!terminalForm.merchant_token || !terminalForm.secret_code || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
-          Alert.alert(t('settings.validation'), 'PA Terminal requires Merchant Token, Secret Code, Terminal IP, and Port');
-          return;
-        }
       } else {
         if (!terminalForm.app_id || !terminalForm.app_secret || !terminalForm.terminal_ip || !terminalForm.terminal_port) {
           Alert.alert(t('settings.validation'), t('settings.fill-required'));
@@ -1084,20 +817,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         }
       }
 
-      const payload: any = { vendor_name: terminalForm.vendor_name };
+      const payload: any = {
+        vendor_name: terminalForm.vendor_name,
+        app_id: terminalForm.app_id,
+        app_secret: terminalForm.app_secret,
+      };
 
       if (terminalForm.vendor_name === 'payment-asia') {
         payload.merchant_token = terminalForm.merchant_token;
         payload.secret_code = terminalForm.secret_code;
-        payload.payment_gateway_env = terminalForm.environment;
-      } else if (terminalForm.vendor_name === 'payment-asia-terminal') {
-        payload.merchant_token = terminalForm.merchant_token;
-        payload.secret_code = terminalForm.secret_code;
-        payload.terminal_ip = terminalForm.terminal_ip;
-        payload.terminal_port = parseInt(terminalForm.terminal_port);
+        payload.environment = terminalForm.environment;
       } else {
-        payload.app_id = terminalForm.app_id;
-        payload.app_secret = terminalForm.app_secret;
         payload.terminal_ip = terminalForm.terminal_ip;
         payload.terminal_port = parseInt(terminalForm.terminal_port);
         payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
@@ -1863,10 +1593,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'profile', iconName: 'person-circle-outline', label: t('settings.my-profile'), description: currentUser?.role || t('settings.view-profile') },
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
-    { page: 'tables-settings', iconName: 'grid-outline', label: t('settings.tables-settings'), description: t('settings.tables-settings-desc') },
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
+    { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
@@ -2006,41 +1736,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.logo-url')}</Text>
-            <TouchableOpacity
-              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', height: 100, backgroundColor: '#f9fafb' }}
-              onPress={() => pickAndUploadImage('logo')}
-              disabled={uploadingLogo}
-            >
-              {uploadingLogo ? (
-                <ActivityIndicator color="#4f46e5" />
-              ) : formData.logo_url ? (
-                <Image source={{ uri: formData.logo_url.startsWith('http') ? formData.logo_url : `${API_URL}${formData.logo_url}` }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-              ) : (
-                <View style={{ alignItems: 'center' }}>
-                  <Ionicons name="camera-outline" size={28} color="#9ca3af" />
-                  <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Tap to upload logo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <TextInput style={styles.input} value={formData.logo_url || ''} onChangeText={(text) => setFormData({ ...formData, logo_url: text })} placeholder="https://..." />
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.background-url')}</Text>
-            <TouchableOpacity
-              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', height: 120, backgroundColor: '#f9fafb' }}
-              onPress={() => pickAndUploadImage('background')}
-              disabled={uploadingBackground}
-            >
-              {uploadingBackground ? (
-                <ActivityIndicator color="#4f46e5" />
-              ) : formData.background_url ? (
-                <Image source={{ uri: formData.background_url.startsWith('http') ? formData.background_url : `${API_URL}${formData.background_url}` }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-              ) : (
-                <View style={{ alignItems: 'center' }}>
-                  <Ionicons name="image-outline" size={28} color="#9ca3af" />
-                  <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Tap to upload background</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <TextInput style={styles.input} value={formData.background_url || ''} onChangeText={(text) => setFormData({ ...formData, background_url: text })} placeholder="https://..." />
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.booking-allowance')}</Text>
@@ -2165,23 +1865,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <Text style={styles.terminalVendor}>
-                            {terminal.vendor_name === 'kpay' ? 'KPay'
-                              : terminal.vendor_name === 'payment-asia' ? 'Payment Asia (Cloud)'
-                              : terminal.vendor_name === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
-                              : terminal.vendor_name.toUpperCase()}
-                          </Text>
+                          <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
                           {terminal.is_active && (
                             <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
                               <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
                             </View>
                           )}
                         </View>
-                        {terminal.vendor_name === 'payment-asia' ? (
-                          <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Env: {terminal.environment || 'sandbox'}</Text>
-                        ) : (
-                          <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
-                        )}
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
                         {terminal.last_tested_at && (<Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>)}
                         {terminal.last_error_message && (<Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>)}
                       </View>
@@ -2348,23 +2040,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Text style={styles.terminalVendor}>
-                          {terminal.vendor_name === 'kpay' ? 'KPay'
-                            : terminal.vendor_name === 'payment-asia' ? 'Payment Asia (Cloud)'
-                            : terminal.vendor_name === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
-                            : terminal.vendor_name.toUpperCase()}
-                        </Text>
+                        <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
                         {terminal.is_active && (
                           <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
                             <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
                           </View>
                         )}
                       </View>
-                      {terminal.vendor_name === 'payment-asia' ? (
-                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Env: {terminal.environment || 'sandbox'}</Text>
-                      ) : (
-                        <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
-                      )}
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>ID: {terminal.app_id}</Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
                       {terminal.last_tested_at && (<Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>)}
                       {terminal.last_error_message && (<Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>)}
                     </View>
@@ -2873,145 +2557,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     );
   };
 
-  // Tables Settings page
-  const renderTablesSettingsPage = () => (
-    <View style={styles.container}>
-      {renderSubPageHeader(t('settings.tables-settings'))}
-      <ScrollView style={{ flex: 1 }} scrollEnabled={tablesScrollEnabled} contentContainerStyle={styles.scrollContent}>
-
-        {/* --- Dining Time Colors --- */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings.timing-colors-title')}</Text>
-          <Text style={styles.sectionDescription}>{t('settings.timing-colors-desc')}</Text>
-          {tableTimingColors.map((row, idx) => (
-            <View key={idx} style={{ marginBottom: 14 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: row.color, marginRight: 8, borderWidth: 1, borderColor: '#ddd' }} />
-                <Text style={[styles.label, { marginBottom: 0, flex: 1 }]}>
-                  {idx < 3
-                    ? `${idx === 0 ? '0' : String(tableTimingColors[idx - 1].maxMinutes || 0)} – ${row.maxMinutes ?? '?'} ${t('settings.minutes')}`
-                    : `${tableTimingColors[2].maxMinutes ?? '?'}+ ${t('settings.minutes')}`}
-                </Text>
-              </View>
-              {idx < 3 && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <Text style={styles.label}>{t('settings.threshold-mins')}</Text>
-                  <TextInput
-                    style={[styles.input, { width: 80 }]}
-                    keyboardType="numeric"
-                    value={String(row.maxMinutes ?? '')}
-                    onChangeText={(v) => {
-                      const updated = [...tableTimingColors];
-                      updated[idx] = { ...updated[idx], maxMinutes: parseInt(v) || 0 };
-                      setTableTimingColors(updated);
-                    }}
-                  />
-                </View>
-              )}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {COLOR_PALETTE.map((c) => (
-                  <TouchableOpacity
-                    key={c}
-                    onPress={() => { const u = [...tableTimingColors]; u[idx] = { ...u[idx], color: c }; setTableTimingColors(u); }}
-                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: row.color === c ? 3 : 1, borderColor: row.color === c ? '#1f2937' : '#ccc' }}
-                  />
-                ))}
-              </View>
-            </View>
-          ))}
-          <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary, { marginTop: 8 }, timingColorsSaving && { opacity: 0.6 }]}
-            onPress={saveTimingColors}
-            disabled={timingColorsSaving}
-          >
-            <Text style={styles.btnText}>{timingColorsSaving ? t('common.saving') : t('settings.save-timing-colors')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* --- Service Request Items --- */}
-        {srFeatureEnabled ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('settings.sr-items-title')}</Text>
-              <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={openAddSRItem}>
-                <Text style={styles.btnSmallText}>+ {t('common.add')}</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.sectionDescription}>{t('settings.sr-items-desc')}</Text>
-            {srItemsLoading ? (
-              <ActivityIndicator color="#6366f1" />
-            ) : srItems.length === 0 ? (
-              <Text style={styles.emptyText}>{t('settings.sr-items-empty')}</Text>
-            ) : (
-              <DraggableSRList
-                items={srItems}
-                onReorder={saveSRItemOrder}
-                onEdit={openEditSRItem}
-                onDelete={deleteSRItem}
-                onScrollEnabled={setTablesScrollEnabled}
-                t={t}
-              />
-            )}
-          </View>
-        ) : (
-          <View style={[styles.section, { opacity: 0.55 }]}>
-            <Text style={styles.sectionTitle}>{t('settings.sr-items-title')}</Text>
-            <Text style={styles.sectionDescription}>{t('settings.sr-feature-disabled')}</Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* SR Item Modal */}
-      <Modal supportedOrientations={['portrait','landscape','landscape-left','landscape-right']} visible={showSRItemModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
-            <Text style={styles.modalTitle}>{editingSRItemId ? t('settings.sr-edit-item') : t('settings.sr-add-item')}</Text>
-            <ScrollView>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('settings.sr-label-en')} *</Text>
-                <TextInput style={styles.input} value={srItemForm.label_en} onChangeText={(v) => setSrItemForm(f => ({ ...f, label_en: v }))} placeholder="e.g. Tea Refill" />
-              </View>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('settings.sr-label-zh')}</Text>
-                <TextInput style={styles.input} value={srItemForm.label_zh} onChangeText={(v) => setSrItemForm(f => ({ ...f, label_zh: v }))} placeholder="e.g. 補茶" />
-              </View>
-              {editingSRItemId && (
-                <View style={[styles.toggleGroup, { marginBottom: 12 }]}>
-                  <Text style={styles.label}>{t('settings.sr-active')}</Text>
-                  <Switch value={srItemForm.is_active} onValueChange={(v) => setSrItemForm(f => ({ ...f, is_active: v }))} trackColor={{ true: '#6366f1' }} />
-                </View>
-              )}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>{t('settings.sr-card-color')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: srItemForm.color, marginRight: 10, borderWidth: 1, borderColor: '#ccc' }} />
-                  <Text style={{ fontSize: 13, color: '#374151' }}>{srItemForm.color}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {COLOR_PALETTE.map((c) => (
-                    <TouchableOpacity
-                      key={c}
-                      onPress={() => setSrItemForm(f => ({ ...f, color: c }))}
-                      style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c, borderWidth: srItemForm.color === c ? 3 : 1, borderColor: srItemForm.color === c ? '#1f2937' : '#ccc' }}
-                    />
-                  ))}
-                </View>
-              </View>
-            </ScrollView>
-            <View style={styles.formActions}>
-              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowSRItemModal(false)}>
-                <Text style={{ color: '#374151', fontWeight: '600', fontSize: 13 }}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={saveSRItem}>
-                <Text style={styles.btnText}>{t('common.save')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-
   // Card grid main page
   const renderMainPage = () => (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -3045,21 +2590,140 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <Text style={styles.btnText}>{t('settings.logout')}</Text>
       </TouchableOpacity>
 
-      {/* Version label */}
-      <Text style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-        v{appJson.expo.version}
-      </Text>
+      {/* Version label — tap 7 times to reveal dev menu */}
+      <TouchableOpacity onPress={handleDevTap} activeOpacity={1}>
+        <Text style={{ textAlign: 'center', fontSize: 11, color: currentEnv !== ENVIRONMENTS['Production'] ? '#ef4444' : '#9ca3af', marginBottom: 8 }}>
+          v1.0.0{currentEnv !== ENVIRONMENTS['Production'] ? ` • DEV MODE (${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'})` : (showDevMenu ? ` • Production` : '')}
+        </Text>
+      </TouchableOpacity>
+
+      {showDevMenu && (
+        <View style={{ backgroundColor: '#1e1b4b', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <Text style={{ color: '#c7d2fe', fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Developer Mode</Text>
+          <Text style={{ color: '#818cf8', fontSize: 11, marginBottom: 12 }}>API: {currentEnv}</Text>
+          {Object.entries(ENVIRONMENTS).map(([name, url]) => (
+            <TouchableOpacity
+              key={name}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                padding: 12, borderRadius: 8, marginBottom: 6,
+                backgroundColor: currentEnv === url ? '#312e81' : '#1e1b4b',
+                borderWidth: 1, borderColor: currentEnv === url ? '#6366f1' : '#374151',
+              }}
+              onPress={() => currentEnv !== url && switchEnv(name, url)}
+            >
+              <View>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{name}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11 }}>{url}</Text>
+              </View>
+              {currentEnv === url && (
+                <View style={{ backgroundColor: '#22c55e', width: 8, height: 8, borderRadius: 4 }} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 
   // Route to sub-page content
+  const loadMenuSettings = async () => {
+    setMenuSettingsLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
+      const s = res.data;
+      const flags = s.feature_flags || {};
+      const uiConf = s.ui_config || {};
+      setAllowCustomFoodItems(flags.allow_custom_food_items === true);
+      setMenuColumns((uiConf.menu_columns === 2 ? 2 : 1) as 1 | 2);
+      setMenuSettingsLoaded(true);
+    } catch (err: any) {
+      console.warn('[MenuSettings] Failed to load:', err.message);
+    } finally {
+      setMenuSettingsLoading(false);
+    }
+  };
+
+  const saveMenuSettings = async (patch: object) => {
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, patch);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.settings-failed'));
+    }
+  };
+
+  const renderMenuSettingsPage = () => {
+    if (menuSettingsLoading) {
+      return (
+        <View style={styles.container}>
+          {renderSubPageHeader(t('admin.menu-settings') || 'Menu Settings')}
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader(t('admin.menu-settings') || 'Menu Settings')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+
+          {/* Admin Portal section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('admin.menu-settings-admin-portal') || 'Admin Portal'}</Text>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={styles.label}>{t('admin.custom-food-item') || 'Custom Food Item'}</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('admin.custom-food-item-desc') || 'Allow staff to add free-text custom items to orders'}</Text>
+              </View>
+              <Switch
+                value={allowCustomFoodItems}
+                onValueChange={(val) => {
+                  setAllowCustomFoodItems(val);
+                  saveMenuSettings({ feature_flags: { allow_custom_food_items: val } });
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Customer Menu section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('admin.menu-settings-customer-menu') || 'Customer Menu'}</Text>
+
+            <Text style={[styles.label, { marginBottom: 10 }]}>{t('admin.menu-layout') || 'Menu Layout'}</Text>
+            {([1, 2] as const).map((cols) => (
+              <TouchableOpacity
+                key={cols}
+                style={[styles.option, menuColumns === cols && styles.optionActive]}
+                onPress={() => {
+                  setMenuColumns(cols);
+                  saveMenuSettings({ ui_config: { menu_columns: cols } });
+                }}
+              >
+                <Text style={[styles.optionText, menuColumns === cols && styles.optionTextActive]}>
+                  {cols === 1 ? (t('admin.single-column') || 'Single Column') : (t('admin.two-column') || 'Two Columns')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={{ backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#bae6fd', borderRadius: 6, padding: 10, marginTop: 16 }}>
+              <Text style={{ fontSize: 12, color: '#0369a1' }}>
+                <Text style={{ fontWeight: '600' }}>{t('admin.image-tip-title') || 'Image tip: '}</Text>
+                {t('admin.image-tip-desc') || 'Optimal food image size is 800 × 600 px (4:3 ratio).'}
+              </Text>
+            </View>
+          </View>
+
+        </ScrollView>
+      </View>
+    );
+  };
+
   const renderCurrentPage = () => {
     switch (settingsPage) {
       case 'language': return renderLanguagePage();
       case 'restaurant-info': return renderRestaurantInfoPage();
-      case 'tables-settings':
-        if (srItems.length === 0 && !srItemsLoading) loadTablesSettings();
-        return renderTablesSettingsPage();
       case 'printer': return renderPrinterPage();
       case 'payment-terminals': return renderPaymentTerminalsPage();
       case 'qr-settings': return renderQRSettingsPage();
@@ -3067,6 +2731,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'coupons': return renderCouponsPage();
       case 'variant-presets': return renderVariantPresetsPage();
       case 'addon-presets': return renderAddonPresetsPage();
+      case 'menu-settings':
+        if (!menuSettingsLoading && !menuSettingsLoaded) loadMenuSettings();
+        return renderMenuSettingsPage();
       case 'users': return <UsersTab onBack={navigateBack} />;
       case 'profile':
         if (!profileData && !profileLoading) loadProfile();
@@ -3283,7 +2950,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
               <View>
-                {(['kpay', 'payment-asia', 'payment-asia-terminal', 'other'] as const).map((vendor) => (
+                {(['kpay', 'payment-asia', 'other'] as const).map((vendor) => (
                   <TouchableOpacity
                     key={vendor}
                     style={{ paddingVertical: 8 }}
@@ -3306,10 +2973,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         )}
                       </View>
                       <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
-                        {vendor === 'kpay' ? 'KPay'
-                          : vendor === 'payment-asia' ? 'Payment Asia (Cloud)'
-                          : vendor === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
-                          : t('settings.other')}
+                        {vendor === 'kpay' ? 'KPay' : vendor === 'payment-asia' ? 'Payment Asia' : t('settings.other')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -3323,16 +2987,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
                 <Text style={{ fontSize: 14, color: '#6b7280', paddingVertical: 8 }}>
-                  {terminalForm.vendor_name === 'kpay' ? 'KPay'
-                    : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia (Cloud)'
-                    : terminalForm.vendor_name === 'payment-asia-terminal' ? 'Payment Asia (POS Terminal)'
-                    : 'Other'}
+                  {terminalForm.vendor_name === 'kpay' ? 'KPay' : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia' : 'Other'}
                 </Text>
               </View>
             )}
 
-            {/* App ID - superadmin only, not for Payment Asia vendors (they use merchant_token) */}
-            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-terminal' && (
+            {/* App ID - superadmin only */}
+            {isSuperadmin && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-id')}</Text>
               <TextInput
@@ -3344,8 +3005,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
             )}
 
-            {/* App Secret - superadmin only, not for Payment Asia vendors */}
-            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-terminal' && (
+            {/* App Secret - superadmin only */}
+            {isSuperadmin && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-secret')}</Text>
               <TextInput
@@ -3443,57 +3104,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       </TouchableOpacity>
                     ))}
                   </View>
-                </View>
-              </>
-            )}
-
-            {/* Payment Asia POS Terminal fields */}
-            {terminalForm.vendor_name === 'payment-asia-terminal' && (
-              <>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>{t('settings.merchant-token')} *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={terminalForm.merchant_token}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, merchant_token: text })}
-                    placeholder={t('settings.enter-merchant-token')}
-                    placeholderTextColor="#9ca3af"
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>{t('settings.secret-code')} *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={terminalForm.secret_code}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, secret_code: text })}
-                    placeholder={t('settings.enter-secret-code')}
-                    placeholderTextColor="#9ca3af"
-                    secureTextEntry
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>{t('settings.terminal-ip')} *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={terminalForm.terminal_ip}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, terminal_ip: text })}
-                    placeholder="e.g., 192.168.1.100"
-                    placeholderTextColor="#9ca3af"
-                    keyboardType="decimal-pad"
-                    inputAccessoryViewID="numpadDone"
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>{t('settings.terminal-port')} *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={terminalForm.terminal_port}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, terminal_port: text })}
-                    placeholder="e.g., 8080"
-                    placeholderTextColor="#9ca3af"
-                    keyboardType="number-pad"
-                    inputAccessoryViewID="numpadDone"
-                  />
                 </View>
               </>
             )}
