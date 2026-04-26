@@ -460,6 +460,8 @@ function toggleMenuEditMode() {
       if (editModal) editModal.style.display = 'none';
       const variantModal = document.getElementById('variant-edit-modal');
       if (variantModal) variantModal.style.display = 'none';
+      // Close create-item panel if open
+      cancelCreateItem();
     }
   }
   
