@@ -376,14 +376,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-      </View>
-    );
-  }
-
+  // All computed values and useMemo hooks MUST be before any early return (Rules of Hooks)
   const dailyTrends = getDailyTrends(trendMode);
   const bookingTrends = getBookingsTrends(bookingsTrendMode);
 
@@ -451,6 +444,14 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
     });
     return Object.entries(tc).sort(([, a], [, b]) => b.count - a.count).slice(0, 8).map(([name, v]) => ({ name, ...v }));
   }, [bookings]);
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
 
   const renderFilterChip = (label: string, value: string, onPress: () => void) => (
     <TouchableOpacity
