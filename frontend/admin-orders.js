@@ -85,6 +85,7 @@ function attachEventListeners() {
   // Language change listener
   window.addEventListener('languageChanged', () => {
     console.log('[Orders] Language changed - re-rendering tabs');
+    renderOrdersMenuGrid();
     renderOrdersCategoryBar();
   });
   
@@ -214,7 +215,8 @@ function renderOrdersMenuItems() {
       // Name
       var nameDiv = document.createElement('div');
       nameDiv.className = 'orders-item-name';
-      nameDiv.textContent = item.name;
+      var _ordersLang = getCurrentLanguage();
+      nameDiv.textContent = (_ordersLang === 'zh' && item.name_zh) ? item.name_zh : item.name;
       infoDiv.appendChild(nameDiv);
       
       // Price
@@ -266,7 +268,8 @@ function renderOrdersCategoryBar() {
     if (SELECTED_ORDERS_CATEGORY && SELECTED_ORDERS_CATEGORY.id === cat.id) {
       btn.classList.add('active');
     }
-    btn.textContent = cat.name;
+    var _catLang = getCurrentLanguage();
+    btn.textContent = (_catLang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
     btn.setAttribute('data-category', cat.id);
     btn.onclick = () => selectOrdersCategory(cat.id);
     

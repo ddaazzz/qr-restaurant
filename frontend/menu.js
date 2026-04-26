@@ -850,6 +850,7 @@ function addToCart(item) {
     const cartItem = {
       menuItemId: item.id,
       name: item.name,
+      name_zh: item.name_zh || null,
       image_url: item.image_url || null,
       quantity: 1,
       basePriceCents: item.price_cents,
@@ -1318,7 +1319,7 @@ function renderCartDrawer() {
           ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${item.name}" loading="lazy">` : ''}
           <div class="cart-item-details">
             <div class="cart-item-header">
-              <strong>${item.name}</strong>
+              <strong>${(localStorage.getItem('language') === 'zh' && item.name_zh) ? item.name_zh : item.name}</strong>
               <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
             </div>
             ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}

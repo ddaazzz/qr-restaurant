@@ -77,7 +77,8 @@ function createMenuItemCardElement(item, isEditMode) {
     imgEl.style.display = '';
   }
   
-  card.querySelector('.menu-item-name').textContent = item.name;
+  const _itemLang = getCurrentLanguage();
+  card.querySelector('.menu-item-name').textContent = (_itemLang === 'zh' && item.name_zh) ? item.name_zh : item.name;
   card.querySelector('.menu-item-price').textContent = '$' + (item.price_cents / 100).toFixed(2);
   
   // Add controls if in edit mode
@@ -533,7 +534,8 @@ function renderMenuCategoryTabs() {
       SELECTED_MENU_CATEGORY && SELECTED_MENU_CATEGORY.id === cat.id
         ? "tab active"
         : "tab";
-    btn.textContent = cat.name;
+    const _catLang = getCurrentLanguage();
+    btn.textContent = (_catLang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
     // Show clock indicator if time-restricted
     if (cat.time_restricted) {
       const clock = document.createElement('span');
@@ -604,7 +606,7 @@ function renderMenuCategoryTabs() {
       
       const sidebarBtn = document.createElement("button");
       sidebarBtn.className = btn.className;
-      sidebarBtn.textContent = cat.name;
+      sidebarBtn.textContent = (_catLang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
       sidebarBtn.categoryId = cat.id;
       sidebarBtn.style.width = "100%";
       sidebarBtn.style.flex = IS_EDIT_MODE ? "1" : "auto";
