@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   RefreshControl,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
@@ -94,6 +95,9 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantApplications, setRestaurantApplications] = useState<any[]>([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
+  const [restaurantFlags, setRestaurantFlags] = useState<Record<string, boolean>>({});
+  const [restaurantUiConfig, setRestaurantUiConfig] = useState<Record<string, any>>({});
+  const [savingFlag, setSavingFlag] = useState(false);
 
   const fetchData = useCallback(async () => {
     setFetchError(null);
@@ -307,15 +311,48 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
 
   const openRestaurantDetail = async (r: Restaurant) => {
     setSelectedRestaurant(r);
+    setRestaurantFlags({});
+    setRestaurantUiConfig({});
     setLoadingApplications(true);
     try {
-      const apps = await apiClient.getTerminalApplications(r.id);
+      const [apps, settingsRes] = await Promise.all([
+        apiClient.getTerminalApplications(r.id),
+        apiClient.get(`/api/restaurants/${r.id}/settings`).catch(() => ({ data: {} })),
+      ]);
       setRestaurantApplications(apps);
+      setRestaurantFlags(settingsRes.data?.feature_flags || {});
+      setRestaurantUiConfig(settingsRes.data?.ui_config || {});
     } catch (err: any) {
-      console.warn('Failed to load applications:', err.message);
+      console.warn('Failed to load restaurant detail:', err.message);
       setRestaurantApplications([]);
     } finally {
       setLoadingApplications(false);
+    }
+  };
+
+  const saveRestaurantFlag = async (restId: number, key: string, value: boolean) => {
+    setRestaurantFlags(prev => ({ ...prev, [key]: value }));
+    setSavingFlag(true);
+    try {
+      await apiClient.patch(`/api/restaurants/${restId}/settings`, {
+        feature_flags: { [key]: value },
+      });
+    } catch (err: any) {
+      setRestaurantFlags(prev => ({ ...prev, [key]: !value }));
+      Alert.alert('Error', err.response?.data?.error || 'Failed to save flag');
+    } finally {
+      setSavingFlag(false);
+    }
+  };
+
+  const saveRestaurantUiConfig = async (restId: number, key: string, value: any) => {
+    setRestaurantUiConfig(prev => ({ ...prev, [key]: value }));
+    try {
+      await apiClient.patch(`/api/restaurants/${restId}/settings`, {
+        ui_config: { [key]: value },
+      });
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to save setting');
     }
   };
 
@@ -848,6 +885,73 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                 <View style={{ flexDirection: 'row', marginBottom: 4 }}>
                   <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Users:</Text>
                   <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant?.user_count || 0}</Text>
+                </View>
+              </View>
+
+              {/* Feature Flags */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 12 }}>Feature Flags</Text>
+                {([
+                  { key: 'bookings',              label: 'Bookings Module' },
+                  { key: 'waitlist',              label: 'Waitlist' },
+                  { key: 'crm',                   label: 'CRM' },
+                  { key: 'coupons',               label: 'Coupons' },
+                  { key: 'service_requests',      label: 'Service Requests' },
+                  { key: 'allow_custom_food_items', label: 'Custom Food Items' },
+                ] as { key: string; label: string }[]).map((def, idx, arr) => {
+                  const isOn = restaurantFlags[def.key] !== false;
+                  return (
+                    <View
+                      key={def.key}
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingVertical: 10,
+                        borderBottomWidth: idx < arr.length - 1 ? 1 : 0,
+                        borderBottomColor: '#f3f4f6',
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, color: '#374151' }}>{def.label}</Text>
+                      <Switch
+                        value={isOn}
+                        onValueChange={(val) =>
+                          selectedRestaurant && saveRestaurantFlag(selectedRestaurant.id, def.key, val)
+                        }
+                        disabled={savingFlag}
+                        trackColor={{ false: '#d1d5db', true: '#6366f1' }}
+                        thumbColor="#ffffff"
+                      />
+                    </View>
+                  );
+                })}
+
+                {/* Customer Menu Columns */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10 }}>
+                  <Text style={{ fontSize: 13, color: '#374151' }}>Customer Menu Columns</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {([1, 2] as const).map((n) => {
+                      const active = (restaurantUiConfig.menu_columns || 1) === n;
+                      return (
+                        <TouchableOpacity
+                          key={n}
+                          onPress={() => selectedRestaurant && saveRestaurantUiConfig(selectedRestaurant.id, 'menu_columns', n)}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 6,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: active ? '#6366f1' : '#d1d5db',
+                            backgroundColor: active ? '#eef2ff' : '#fff',
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, color: active ? '#4f46e5' : '#6b7280', fontWeight: active ? '600' : '400' }}>
+                            {n}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
               </View>
 

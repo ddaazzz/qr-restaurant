@@ -75,6 +75,12 @@
       <p id="crm-count-preview" data-i18n="admin.crm-desc">Customer relationships</p>
     </div>
 
+    <!-- Service Requests Card -->
+    <div class="settings-card" id="service-requests-settings-card" onclick="showSettingsPage('service-requests')">
+      <h3 data-i18n="admin.service-requests">Service Requests</h3>
+      <p data-i18n="admin.service-requests-desc">Configure customer service request types</p>
+    </div>
+
     <!-- Users & Restaurants Card -->
     <div class="settings-card admin-only" onclick="showSettingsPage('users-restaurants'); loadUsersManagement();">
       <h3 data-i18n="admin.users-restaurants">Users & Restaurants</h3>
@@ -840,6 +846,64 @@
         <div id="crm-profile-content"></div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Service Requests Settings Page -->
+<div id="page-service-requests" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('service-requests')">&#8592; Back</button>
+      <h3 data-i18n="admin.service-requests">Service Requests</h3>
+      <div style="width:60px;"></div>
+    </div>
+    <div class="settings-page-content">
+      <p style="color:#6b7280;font-size:13px;margin-bottom:16px;" data-i18n="admin.service-requests-help">Configure the types of requests customers can make from the table (e.g. tea refill, extra napkins).</p>
+
+      <div style="margin-bottom:16px;">
+        <button onclick="showAddServiceRequestItemForm()" style="padding:9px 18px;background:#4a90e2;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" data-i18n="admin.add-service-request-item">+ Add Item</button>
+      </div>
+
+      <!-- Add/Edit form (hidden by default) -->
+      <div id="sr-item-form" style="display:none;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:16px;">
+        <h4 style="margin:0 0 12px 0;font-size:14px;font-weight:700;" id="sr-item-form-title">Add Item</h4>
+        <input type="hidden" id="sr-item-id" value="" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Type Key *</label>
+            <input id="sr-item-type" type="text" placeholder="e.g. tea_refill" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Color</label>
+            <input id="sr-item-color" type="color" value="#4f46e5" style="width:100%;height:36px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Label (EN) *</label>
+            <input id="sr-item-label-en" type="text" placeholder="Tea Refill" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Label (ZH)</label>
+            <input id="sr-item-label-zh" type="text" placeholder="加茶" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Sort Order</label>
+          <input id="sr-item-sort" type="number" value="0" min="0" style="width:120px;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />
+        </div>
+        <div id="sr-item-form-error" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="saveServiceRequestItem()" style="padding:8px 18px;background:#059669;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" data-i18n="admin.save">Save</button>
+          <button onclick="cancelServiceRequestItemForm()" style="padding:8px 14px;background:transparent;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px;" data-i18n="admin.cancel">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Items list -->
+      <div id="sr-items-list">
+        <p style="color:#999;text-align:center;padding:24px;" data-i18n="admin.loading">Loading...</p>
+      </div>
     </div>
   </div>
 </div>

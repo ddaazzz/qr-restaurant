@@ -81,7 +81,7 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", (0, featureFl
          o.payment_method,
          o.created_at,
          ts.order_type,
-         COALESCE(t.name, ts.table_name, 'Counter') AS table_label,
+         COALESCE(t.name, 'Counter') AS table_label,
          ts.pax,
          (
            SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)

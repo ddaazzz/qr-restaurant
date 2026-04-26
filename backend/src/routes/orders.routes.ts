@@ -1525,8 +1525,8 @@ router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req,
 
     const result = await pool.query(
       `SELECT
-        from_status,
-        to_status,
+        h1.from_status,
+        h1.to_status,
         COUNT(*) AS transition_count,
         ROUND(AVG(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS avg_minutes,
         ROUND(MIN(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS min_minutes,
@@ -1543,8 +1543,8 @@ router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req,
        WHERE h1.restaurant_id = $1
          AND h1.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
          AND EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) > 0
-       GROUP BY from_status, to_status
-       ORDER BY from_status, to_status`,
+       GROUP BY h1.from_status, h1.to_status
+       ORDER BY h1.from_status, h1.to_status`,
       [restaurantId, daysBack]
     );
 
@@ -1582,6 +1582,128 @@ router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req,
   } catch (err) {
     console.error("[order-status-timing]", err);
     res.status(500).json({ error: "Failed to load status timing report" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/export
+ * Returns filtered orders as a CSV file download.
+ * Query params: date_from, date_to, period (breakfast|lunch|tea|dinner|custom),
+ *               period_from, period_to (HH:MM), order_type (comma-list), pax_min, pax_max
+ */
+router.get("/restaurants/:restaurantId/reports/export", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { date_from, date_to, period, period_from, period_to, order_type, pax_min, pax_max } = req.query as Record<string, string>;
+
+    // Period presets
+    const PERIODS: Record<string, { from: string; to: string }> = {
+      breakfast: { from: '07:00', to: '10:30' },
+      lunch:     { from: '11:00', to: '15:00' },
+      tea:       { from: '15:00', to: '17:30' },
+      dinner:    { from: '17:30', to: '23:00' },
+    };
+
+    const conditions: string[] = ['o.restaurant_id = $1'];
+    const params: any[] = [restaurantId];
+
+    if (date_from) {
+      params.push(date_from);
+      conditions.push(`o.created_at::date >= $${params.length}`);
+    }
+    if (date_to) {
+      params.push(date_to);
+      conditions.push(`o.created_at::date <= $${params.length}`);
+    }
+
+    // Time-of-day filter
+    let timeFrom: string | null = null;
+    let timeTo: string | null = null;
+    if (period && PERIODS[period]) {
+      timeFrom = PERIODS[period].from;
+      timeTo   = PERIODS[period].to;
+    } else if (period === 'custom' && period_from && period_to) {
+      timeFrom = period_from;
+      timeTo   = period_to;
+    }
+    if (timeFrom && timeTo) {
+      params.push(timeFrom); conditions.push(`o.created_at::time >= $${params.length}::time`);
+      params.push(timeTo);   conditions.push(`o.created_at::time <= $${params.length}::time`);
+    }
+
+    // Dining type
+    if (order_type) {
+      const types = order_type.split(',').map((t: string) => t.trim()).filter(Boolean);
+      if (types.length > 0) {
+        params.push(types);
+        conditions.push(`ts.order_type = ANY($${params.length}::text[])`);
+      }
+    }
+
+    // Pax
+    if (pax_min) { params.push(parseInt(pax_min)); conditions.push(`ts.pax >= $${params.length}`); }
+    if (pax_max) { params.push(parseInt(pax_max)); conditions.push(`ts.pax <= $${params.length}`); }
+
+    const where = conditions.join(' AND ');
+
+    const result = await pool.query(
+      `SELECT
+         o.id,
+         o.restaurant_order_number,
+         o.created_at,
+         COALESCE(t.name, 'Counter') AS table_label,
+         ts.order_type,
+         o.status,
+         ts.pax,
+         (SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
+          FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.removed = false) AS subtotal_cents,
+         COALESCE(o.discount_cents, 0) AS discount_cents,
+         COALESCE(o.total_cents, 0) AS total_cents,
+         u.name AS staff_name
+       FROM orders o
+       JOIN table_sessions ts ON ts.id = o.session_id
+       LEFT JOIN tables t ON t.id = ts.table_id
+       LEFT JOIN users u ON u.id = o.staff_id
+       WHERE ${where}
+       ORDER BY o.created_at ASC`,
+      params
+    );
+
+    // Build CSV
+    const CRLF = '\r\n';
+    const esc = (v: any) => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = ['Order ID', 'Date', 'Time', 'Table', 'Order Type', 'Status', 'Pax', 'Subtotal', 'Discount', 'Total', 'Staff'];
+    const rows = result.rows.map((r: any) => {
+      const d = new Date(r.created_at);
+      const dateStr = d.toISOString().slice(0, 10);
+      const timeStr = d.toISOString().slice(11, 16);
+      return [
+        r.restaurant_order_number ?? r.id,
+        dateStr,
+        timeStr,
+        r.table_label,
+        r.order_type || '',
+        r.status,
+        r.pax ?? '',
+        (Number(r.subtotal_cents) / 100).toFixed(2),
+        (Number(r.discount_cents) / 100).toFixed(2),
+        (Number(r.total_cents) / 100).toFixed(2),
+        r.staff_name || '',
+      ].map(esc).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join(CRLF) + CRLF;
+    const filename = `orders_${date_from || 'all'}_to_${date_to || 'all'}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error("[reports/export]", err);
+    res.status(500).json({ error: "Export failed" });
   }
 });
 

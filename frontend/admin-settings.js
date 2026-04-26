@@ -227,6 +227,9 @@ async function showSettingsPage(pageName) {
       case 'crm':
         await loadCrmPage();
         break;
+      case 'service-requests':
+        await loadServiceRequestItems();
+        break;
     }
   }
 }
@@ -2557,3 +2560,148 @@ function crmBuildProfile(d) {
   return html;
 }
 
+// ============= SERVICE REQUESTS SETTINGS =============
+
+var srEditingId = null;
+
+async function loadServiceRequestItems() {
+  var container = document.getElementById('sr-items-list');
+  if (!container) return;
+  container.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading...</p>';
+  try {
+    var resp = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/all', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!resp.ok) throw new Error('Failed to load');
+    var items = await resp.json();
+    renderServiceRequestItems(items);
+  } catch (e) {
+    container.innerHTML = '<p style="color:#dc2626;text-align:center;padding:16px;">Failed to load service request items.</p>';
+  }
+}
+
+function renderServiceRequestItems(items) {
+  var container = document.getElementById('sr-items-list');
+  if (!container) return;
+  if (!items || items.length === 0) {
+    container.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">No service request types yet. Add one above.</p>';
+    return;
+  }
+  var html = '<div style="display:flex;flex-direction:column;gap:0;">';
+  items.forEach(function(item) {
+    var color = item.color || '#4f46e5';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f1f5f9;">' +
+      '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:14px;font-weight:600;color:#1e293b;">' + (item.label_en || '') + (item.label_zh ? ' / ' + item.label_zh : '') + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (item.request_type || '') + ' · order: ' + (item.sort_order ?? 0) + '</div>' +
+      '</div>' +
+      '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:#6b7280;">' +
+        '<input type="checkbox" ' + (item.is_active ? 'checked' : '') + ' onchange="toggleServiceRequestItem(' + item.id + ', this.checked)" style="cursor:pointer;" />' +
+        'Active' +
+      '</label>' +
+      '<button onclick="editServiceRequestItem(' + JSON.stringify(item).replace(/'/g, "\\'") + ')" style="padding:4px 10px;border:1px solid #4a90e2;color:#4a90e2;background:white;border-radius:5px;cursor:pointer;font-size:12px;">Edit</button>' +
+      '<button onclick="deleteServiceRequestItem(' + item.id + ')" style="padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:white;border-radius:5px;cursor:pointer;font-size:12px;">Delete</button>' +
+      '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function showAddServiceRequestItemForm() {
+  srEditingId = null;
+  document.getElementById('sr-item-form-title').textContent = 'Add Item';
+  document.getElementById('sr-item-id').value = '';
+  document.getElementById('sr-item-type').value = '';
+  document.getElementById('sr-item-label-en').value = '';
+  document.getElementById('sr-item-label-zh').value = '';
+  document.getElementById('sr-item-color').value = '#4f46e5';
+  document.getElementById('sr-item-sort').value = '0';
+  if (document.getElementById('sr-item-form-error')) document.getElementById('sr-item-form-error').style.display = 'none';
+  document.getElementById('sr-item-form').style.display = 'block';
+}
+
+function editServiceRequestItem(item) {
+  srEditingId = item.id;
+  document.getElementById('sr-item-form-title').textContent = 'Edit Item';
+  document.getElementById('sr-item-id').value = item.id;
+  document.getElementById('sr-item-type').value = item.request_type || '';
+  document.getElementById('sr-item-label-en').value = item.label_en || '';
+  document.getElementById('sr-item-label-zh').value = item.label_zh || '';
+  document.getElementById('sr-item-color').value = item.color || '#4f46e5';
+  document.getElementById('sr-item-sort').value = item.sort_order ?? 0;
+  if (document.getElementById('sr-item-form-error')) document.getElementById('sr-item-form-error').style.display = 'none';
+  document.getElementById('sr-item-form').style.display = 'block';
+}
+
+function cancelServiceRequestItemForm() {
+  document.getElementById('sr-item-form').style.display = 'none';
+  srEditingId = null;
+}
+
+async function saveServiceRequestItem() {
+  var errEl = document.getElementById('sr-item-form-error');
+  var request_type = document.getElementById('sr-item-type').value.trim();
+  var label_en = document.getElementById('sr-item-label-en').value.trim();
+  var label_zh = document.getElementById('sr-item-label-zh').value.trim();
+  var color = document.getElementById('sr-item-color').value;
+  var sort_order = parseInt(document.getElementById('sr-item-sort').value) || 0;
+
+  if (!request_type || !label_en) {
+    if (errEl) { errEl.textContent = 'Type key and English label are required.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  var body = { request_type, label_en, label_zh: label_zh || null, color, sort_order };
+  var url, method;
+  if (srEditingId) {
+    url = API + '/restaurants/' + restaurantId + '/service-request-items/' + srEditingId;
+    method = 'PATCH';
+  } else {
+    url = API + '/restaurants/' + restaurantId + '/service-request-items';
+    method = 'POST';
+  }
+
+  try {
+    var resp = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      throw new Error(err.error || 'Save failed');
+    }
+    cancelServiceRequestItemForm();
+    await loadServiceRequestItems();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+
+async function toggleServiceRequestItem(id, isActive) {
+  try {
+    await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ is_active: isActive })
+    });
+  } catch (e) {
+    console.error('Failed to toggle service request item', e);
+    await loadServiceRequestItems();
+  }
+}
+
+async function deleteServiceRequestItem(id) {
+  if (!confirm('Delete this service request type?')) return;
+  try {
+    var resp = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/' + id, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!resp.ok) throw new Error('Delete failed');
+    await loadServiceRequestItems();
+  } catch (e) {
+    alert('Failed to delete: ' + e.message);
+  }
+}
