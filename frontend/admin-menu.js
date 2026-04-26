@@ -663,25 +663,62 @@ function renderMenuCategoryTabs() {
 }
 
 async function addMenuCategoryPrompt() {
-  const categoryName = prompt("Enter new menu category name (e.g., Appetizers, Mains):", "");
-  if (!categoryName || !categoryName.trim()) return;
+  // Show a small inline modal for English + Chinese name
+  const existing = document.getElementById('add-category-modal');
+  if (existing) existing.remove();
 
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: categoryName.trim() })
-    });
+  const modal = document.createElement('div');
+  modal.id = 'add-category-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:22px;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);">
+      <h3 style="margin:0 0 16px 0;font-size:16px;font-weight:700;">New Category</h3>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Category Name (English)</label>
+        <input id="add-cat-name" type="text" placeholder="e.g., Appetizers"
+          style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Chinese Name (optional)</label>
+        <input id="add-cat-name-zh" type="text" placeholder="e.g., 前菜"
+          style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="add-cat-confirm-btn"
+          style="flex:1;padding:10px;background:var(--primary-color,#3b49df);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          ✓ Create
+        </button>
+        <button onclick="document.getElementById('add-category-modal').remove()"
+          style="padding:10px 16px;background:#f3f4f6;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => modal.querySelector('#add-cat-name').focus(), 50);
 
-    if (!res.ok) {
-      const err = await res.json();
-      return alert(err.error || "Failed to create category");
+  modal.querySelector('#add-cat-confirm-btn').onclick = async () => {
+    const name = document.getElementById('add-cat-name')?.value.trim();
+    const name_zh = document.getElementById('add-cat-name-zh')?.value.trim() || null;
+    if (!name) { alert('Category name is required'); return; }
+    try {
+      const res = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, name_zh })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        return alert(err.error || 'Failed to create category');
+      }
+      modal.remove();
+      await loadMenuItems();
+    } catch (err) {
+      alert('Error creating category: ' + err.message);
     }
-
-    await loadMenuItems();
-  } catch (err) {
-    alert("Error creating category: " + err.message);
-  }
+  };
 }
 
 // ============= CATEGORY EDIT MODAL =============
@@ -708,8 +745,16 @@ function openCategoryEditModal(cat) {
 
       <!-- Name -->
       <div style="margin-bottom:14px;">
-        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Category Name</label>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Category Name (English)</label>
         <input id="cat-edit-name" type="text" value="${cat.name.replace(/"/g, '&quot;')}"
+          style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+      </div>
+
+      <!-- Chinese Name -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Chinese Name (optional)</label>
+        <input id="cat-edit-name-zh" type="text" value="${(cat.name_zh || '').replace(/"/g, '&quot;')}"
+          placeholder="e.g., 前菜"
           style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
       </div>
 
@@ -793,11 +838,13 @@ function openCategoryEditModal(cat) {
 
 async function saveCategoryEdit(categoryId) {
   const nameInput = document.getElementById('cat-edit-name');
+  const nameZhInput = document.getElementById('cat-edit-name-zh');
   const timeRestrictedInput = document.getElementById('cat-edit-time-restricted');
   const fromInput = document.getElementById('cat-edit-from');
   const toInput   = document.getElementById('cat-edit-to');
 
   const name = nameInput?.value.trim();
+  const name_zh = nameZhInput?.value.trim() || null;
   if (!name) { alert('Category name is required'); return; }
 
   const time_restricted = timeRestrictedInput?.checked || false;
@@ -813,7 +860,7 @@ async function saveCategoryEdit(categoryId) {
     const res = await fetch(`${API}/menu_categories/${categoryId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, time_restricted, available_from, available_to })
+      body: JSON.stringify({ name, name_zh, time_restricted, available_from, available_to })
     });
 
     if (!res.ok) {
@@ -1381,6 +1428,11 @@ async function openFoodItemPanel(itemId) {
     }
     if (panelPrice) panelPrice.textContent = "$" + (item.price_cents / 100).toFixed(2);
     if (panelDesc) panelDesc.textContent = item.description || 'No description available';
+    // Show Chinese name if present (view mode)
+    const nameZhRow = document.getElementById('food-panel-name-zh-row');
+    const nameZhInput = document.getElementById('food-panel-name-zh-input');
+    if (nameZhRow) nameZhRow.style.display = 'none';
+    if (nameZhInput) nameZhInput.value = item.name_zh || '';
     
     // Populate variants
     if (variantsContainer) {
@@ -1463,6 +1515,11 @@ function toggleFoodItemEdit() {
     nameSpan.style.display = 'none';
     nameInput.style.display = 'block';
     nameInput.value = item.name;
+    // Show Chinese name input in edit mode
+    const nameZhRow = document.getElementById('food-panel-name-zh-row');
+    const nameZhInput = document.getElementById('food-panel-name-zh-input');
+    if (nameZhRow) nameZhRow.style.display = 'block';
+    if (nameZhInput) nameZhInput.value = item.name_zh || '';
     
     priceSpan.style.display = 'none';
     priceInput.style.display = 'inline';
@@ -1574,6 +1631,8 @@ function cancelFoodItemEdit() {
   
   nameSpan.style.display = 'block';
   nameInput.style.display = 'none';
+  const nameZhRow = document.getElementById('food-panel-name-zh-row');
+  if (nameZhRow) nameZhRow.style.display = 'none';
   
   priceSpan.style.display = 'inline';
   priceInput.style.display = 'none';
@@ -1603,8 +1662,10 @@ async function saveFoodItemEdit() {
   const descInput = document.getElementById('food-panel-desc-input');
   const imageInput = document.getElementById('food-panel-image-input');
   const mealComboCheckbox = document.getElementById('food-panel-is-meal-combo');
+  const nameZhInput = document.getElementById('food-panel-name-zh-input');
   
   const newName = nameInput.value.trim();
+  const newNameZh = nameZhInput ? nameZhInput.value.trim() : '';
   const newPrice = parseInt(priceInput.value) || 0;
   const newDesc = descInput.value;
   const isMealCombo = mealComboCheckbox ? mealComboCheckbox.checked : false;
@@ -1617,6 +1678,7 @@ async function saveFoodItemEdit() {
   try {
     let updateData = {
       name: newName,
+      name_zh: newNameZh || null,
       price_cents: newPrice,
       description: newDesc,
       is_meal_combo: isMealCombo,
@@ -1652,6 +1714,7 @@ async function saveFoodItemEdit() {
     const item = MENU_ITEMS.find(function(i) { return i.id == currentEditingItemId; });
     if (item) {
       item.name = newName;
+      item.name_zh = newNameZh || null;
       item.price_cents = newPrice;
       item.description = newDesc;
       item.is_meal_combo = isMealCombo;
@@ -2345,6 +2408,8 @@ function cancelCreateItem() {
   if (panel) panel.classList.remove('active');
   // Clear form
   document.getElementById('new-item-name').value = '';
+  const nameZhEl = document.getElementById('new-item-name-zh');
+  if (nameZhEl) nameZhEl.value = '';
   document.getElementById('new-item-price').value = '';
   document.getElementById('new-item-desc').value = '';
   _newItemCroppedBlob = null;
@@ -2354,12 +2419,14 @@ function cancelCreateItem() {
 
 async function createMenuItem() {
   const nameEl = document.getElementById('new-item-name');
+  const nameZhEl = document.getElementById('new-item-name-zh');
   const priceEl = document.getElementById('new-item-price');
   const descEl = document.getElementById('new-item-desc');
   const categoryEl = document.getElementById('new-item-category');
   const imageEl = document.getElementById('new-item-image');
   
   const name = nameEl.value.trim();
+  const nameZh = nameZhEl ? nameZhEl.value.trim() : '';
   const price = parseInt(priceEl.value) || 0;
   const desc = descEl.value.trim();
   const categoryId = parseInt(categoryEl.value);
@@ -2378,6 +2445,7 @@ async function createMenuItem() {
     // Step 1: Create the menu item
     const itemData = {
       name,
+      name_zh: nameZh || null,
       price_cents: price,
       description: desc,
       category_id: categoryId
@@ -3276,4 +3344,79 @@ async function deleteAddonFromItem(itemId, addonItemId) {
   } catch (err) {
     alert('Error deleting addon: ' + err.message);
   }
+}
+
+// ============= MENU IMPORT =============
+function openMenuImportModal() {
+  const existing = document.getElementById('menu-import-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'menu-import-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:24px;max-width:460px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);">
+      <h3 style="margin:0 0 8px 0;font-size:17px;font-weight:700;">📥 Import Menu from Excel</h3>
+      <p style="margin:0 0 16px 0;font-size:13px;color:#6b7280;">
+        Expected columns (row 1 = header, data from row 2):<br>
+        A: Category (English) &nbsp;·&nbsp; B: Category (Chinese)<br>
+        C: Item Name (Chinese) &nbsp;·&nbsp; D: Item Name (English)<br>
+        E: Image (ignored) &nbsp;·&nbsp; F: Price (dollars, e.g. 28.8)
+      </p>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Select .xlsx file</label>
+        <input type="file" id="menu-import-file" accept=".xlsx,.xls"
+          style="font-size:13px;width:100%;" />
+      </div>
+      <div id="menu-import-result" style="margin-bottom:12px;font-size:13px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="menu-import-confirm-btn"
+          style="flex:1;padding:10px;background:var(--primary-color,#3b49df);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          Import
+        </button>
+        <button onclick="document.getElementById('menu-import-modal').remove()"
+          style="padding:10px 16px;background:#f3f4f6;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+
+  modal.querySelector('#menu-import-confirm-btn').onclick = async () => {
+    const fileInput = document.getElementById('menu-import-file');
+    const resultDiv = document.getElementById('menu-import-result');
+    if (!fileInput.files || !fileInput.files[0]) {
+      resultDiv.innerHTML = '<span style="color:#c33;">Please select a file.</span>';
+      return;
+    }
+    const confirmBtn = modal.querySelector('#menu-import-confirm-btn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Importing…';
+    resultDiv.innerHTML = '';
+    try {
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      const res = await fetch(`${API}/restaurants/${restaurantId}/menu-import`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        resultDiv.innerHTML = `<span style="color:#c33;">Error: ${data.error || 'Import failed'}</span>`;
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Import';
+        return;
+      }
+      resultDiv.innerHTML = `<span style="color:#2d7a2d;">✓ Import complete! Categories created: ${data.created_categories}, Items created: ${data.created_items}, Skipped (duplicate): ${data.skipped_items}</span>`;
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Import';
+      await loadMenuItems();
+    } catch (err) {
+      resultDiv.innerHTML = `<span style="color:#c33;">Error: ${err.message}</span>`;
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Import';
+    }
+  };
 }

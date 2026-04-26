@@ -126,9 +126,11 @@ function setLanguageFromMenu(lang) {
   // Re-render cart to update labels
   updateCartBar();
   
-  // Update menu items if they're visible
-  if (document.getElementById('menu') && document.getElementById('menu').innerHTML) {
-    renderMenuItems(window.menu.items);
+  // Re-render menu with updated language (items + categories + sidebar)
+  if (window.menu) {
+    renderMenu(window.menu);
+    renderCategories(window.menu.categories);
+    updateCartBadges();
   }
 }
 
@@ -317,9 +319,11 @@ function renderCategories(categories) {
   catDiv.innerHTML = "";
 
   categories.forEach(cat => {
+    const lang = localStorage.getItem('language') || 'zh';
+    const catDisplayName = (lang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
     const el = document.createElement("div");
     el.className = "category-item";
-    el.innerHTML = `${cat.name}<span class="cat-badge" id="cat-badge-${cat.id}"></span>`;
+    el.innerHTML = `${catDisplayName}<span class="cat-badge" id="cat-badge-${cat.id}"></span>`;
     el.dataset.categoryId = cat.id;
 
     el.onclick = () => {
@@ -348,10 +352,12 @@ function renderMenu(menu) {
 
   categories.forEach(category => {
     // Category title
+    const lang = localStorage.getItem('language') || 'zh';
+    const catDisplayName = (lang === 'zh' && category.name_zh) ? category.name_zh : category.name;
     const categoryTitle = document.createElement("div");
     categoryTitle.className = "category";
     categoryTitle.id = `category-${category.id}`;
-    categoryTitle.textContent = category.name;
+    categoryTitle.textContent = catDisplayName;
     
     container.appendChild(categoryTitle);
 
@@ -376,18 +382,20 @@ function renderMenu(menu) {
 function renderMenuItem(item) {
   const card = document.createElement("div");
   card.className = "menu-item";
+  const lang = localStorage.getItem('language') || 'zh';
+  const displayName = (lang === 'zh' && item.name_zh) ? item.name_zh : item.name;
 
  card.innerHTML = `
   <span class="cart-badge" id="cart-badge-${item.id}"></span>
   <img 
     src="${item.image_url || '/uploads/website/placeholder.png'}" 
     data-item-id="${item.id}"
-    data-item-name="${item.name}"
+    data-item-name="${displayName}"
     onerror="this.src='/uploads/website/placeholder.png';"
-    alt="${item.name}"
+    alt="${displayName}"
   />
 
-  <div class="menu-item-name">${item.name}</div>
+  <div class="menu-item-name">${displayName}</div>
 
   <div class="menu-item-footer">
     <span class="menu-item-price">
@@ -411,18 +419,20 @@ function renderMenuItem(item) {
 function renderMenuItemWithVariants(item, addons){
     const card = document.createElement("div");
     card.className = "drawer-item";
+    const lang = localStorage.getItem('language') || 'zh';
+    const drawerDisplayName = (lang === 'zh' && item.name_zh) ? item.name_zh : item.name;
 
     card.innerHTML = `
     <img 
       src="${item.image_url || '/uploads/website/placeholder.png'}"
       data-item-id="${item.id}"
-      data-item-name="${item.name}"
+      data-item-name="${drawerDisplayName}"
       onerror="this.src='/uploads/website/placeholder.png';"
-      alt="${item.name}"
+      alt="${drawerDisplayName}"
     />
 
     <div class="menu-item-content">
-      <div class="menu-item-name">${item.name}</div>
+      <div class="menu-item-name">${drawerDisplayName}</div>
       <div class="menu-item-price">
         $${(item.price_cents / 100).toFixed(2)}
       </div>

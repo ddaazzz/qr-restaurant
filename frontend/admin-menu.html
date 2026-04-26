@@ -14,8 +14,15 @@
           <input id="new-item-name" data-i18n="admin.item-name-placeholder" placeholder="e.g., Caesar Salad" />
         </div>
         <div class="form-group">
+          <label>Chinese Name</label>
+          <input id="new-item-name-zh" placeholder="e.g., 凱撒沙律" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
           <label data-i18n="admin.price-cents">Price (cents)</label>
           <input id="new-item-price" type="number" data-i18n="admin.price-placeholder" placeholder="e.g., 1200" />
+        </div>
         </div>
       </div>
       <div class="form-row">
@@ -69,6 +76,10 @@
           <div class="food-item-panel-title-wrap">
             <h2 id="food-panel-name" class="food-item-panel-title"></h2>
             <input id="food-panel-name-input" type="text" class="food-item-panel-name-input" style="display: none;" />
+            <div id="food-panel-name-zh-row" style="display: none; margin-top: 4px;">
+              <input id="food-panel-name-zh-input" type="text" placeholder="Chinese name (e.g., 凱撒沙律)"
+                style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" />
+            </div>
           </div>
           <div class="food-item-panel-actions">
             <button id="food-panel-edit-btn" class="btn-secondary btn-sm" onclick="toggleFoodItemEdit()" data-i18n="admin.edit"><img src="/uploads/website/pencil.png" alt="edit" style="width: 14px; height: 14px; vertical-align: middle;"> Edit</button>

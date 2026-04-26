@@ -305,6 +305,9 @@ async function switchSection(sectionId) {
       }
       reTranslateContent();
       updateSectionHeader('admin.section-menu', 'menu-edit-btn');
+      // Also show the import button for the menu section
+      var importBtn = document.getElementById('menu-import-btn');
+      if (importBtn) importBtn.style.display = 'inline-block';
     } else if (sectionId === "staff") {
       console.log("🔵 Loading STAFF section");
       
