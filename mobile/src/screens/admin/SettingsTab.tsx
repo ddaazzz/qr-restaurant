@@ -148,7 +148,52 @@ interface PaymentTerminal {
   environment?: 'sandbox' | 'production';
 }
 
+interface CrmCustomer {
+  id: number;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  total_visits?: number;
+  total_spent_cents?: number;
+  last_visit_at?: string | null;
+  created_at?: string;
+}
+
+interface CrmOrder {
+  order_id: number;
+  restaurant_order_number?: number | null;
+  status?: string;
+  payment_method?: string | null;
+  created_at: string;
+  order_type?: string | null;
+  table_label?: string | null;
+  pax?: number | null;
+  total_cents?: number;
+}
+
+interface CrmBooking {
+  id: number;
+  guest_name: string;
+  phone?: string | null;
+  pax: number;
+  booking_date: string;
+  booking_time?: string | null;
+  status: string;
+  notes?: string | null;
+  table_label?: string | null;
+}
+
+interface CrmCustomerProfile {
+  customer: CrmCustomer;
+  orders: CrmOrder[];
+  total_transacted_cents: number;
+  past_bookings: CrmBooking[];
+  future_bookings: CrmBooking[];
+}
+
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
+  const CRM_PAGE_SIZE = 30;
   const { t, lang, setLanguage } = useTranslation();
   const { user: currentUser, logout: authLogout } = useAuth();
   const isSuperadmin = currentUser?.role === 'superadmin';
@@ -160,6 +205,19 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
+  const [crmCount, setCrmCount] = useState<number | null>(null);
+  const [crmCustomers, setCrmCustomers] = useState<CrmCustomer[]>([]);
+  const [crmLoading, setCrmLoading] = useState(false);
+  const [crmLoadingMore, setCrmLoadingMore] = useState(false);
+  const [crmImporting, setCrmImporting] = useState(false);
+  const [crmSearchInput, setCrmSearchInput] = useState('');
+  const [crmSearchTerm, setCrmSearchTerm] = useState('');
+  const [crmSortBy, setCrmSortBy] = useState<'last_visit' | 'total_spent' | 'total_orders' | 'created_at'>('last_visit');
+  const [crmOffset, setCrmOffset] = useState(0);
+  const [crmHasMore, setCrmHasMore] = useState(false);
+  const [crmProfileLoading, setCrmProfileLoading] = useState(false);
+  const [selectedCrmProfile, setSelectedCrmProfile] = useState<CrmCustomerProfile | null>(null);
+  const [crmError, setCrmError] = useState<string | null>(null);
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -203,7 +261,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm';
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -502,6 +560,102 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const fetchCrmCount = async () => {
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/count`);
+      setCrmCount(typeof res.data?.total === 'number' ? res.data.total : 0);
+    } catch (err: any) {
+      console.warn('[Settings] Failed to fetch CRM count:', err.message);
+      setCrmCount(0);
+    }
+  };
+
+  const fetchCrmCustomers = async ({
+    offset = 0,
+    append = false,
+    search = crmSearchTerm,
+    sortBy = crmSortBy,
+  }: {
+    offset?: number;
+    append?: boolean;
+    search?: string;
+    sortBy?: 'last_visit' | 'total_spent' | 'total_orders' | 'created_at';
+  } = {}) => {
+    try {
+      setCrmError(null);
+      if (append) {
+        setCrmLoadingMore(true);
+      } else {
+        setCrmLoading(true);
+      }
+
+      const params = new URLSearchParams({
+        limit: String(CRM_PAGE_SIZE),
+        offset: String(offset),
+        sort_by: sortBy,
+      });
+
+      if (search.trim()) {
+        params.set('search', search.trim());
+      }
+
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers?${params.toString()}`);
+      const rows: CrmCustomer[] = Array.isArray(res.data) ? res.data : [];
+
+      setCrmCustomers((prev) => (append ? [...prev, ...rows] : rows));
+      setCrmOffset(offset + rows.length);
+      setCrmHasMore(rows.length >= CRM_PAGE_SIZE);
+
+      if (!search.trim()) {
+        setCrmCount((prev) => (prev === null ? rows.length : prev));
+      }
+    } catch (err: any) {
+      console.error('[Settings] Failed to fetch CRM customers:', err);
+      setCrmError(err.response?.data?.error || 'Failed to load customers');
+      if (!append) {
+        setCrmCustomers([]);
+        setCrmOffset(0);
+        setCrmHasMore(false);
+      }
+    } finally {
+      setCrmLoading(false);
+      setCrmLoadingMore(false);
+    }
+  };
+
+  const openCrmProfile = async (customerId: number) => {
+    try {
+      setCrmProfileLoading(true);
+      setCrmError(null);
+      setSelectedCrmProfile(null);
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
+      setSelectedCrmProfile(res.data);
+    } catch (err: any) {
+      console.error('[Settings] Failed to fetch CRM profile:', err);
+      setCrmError(err.response?.data?.error || 'Failed to load customer profile');
+    } finally {
+      setCrmProfileLoading(false);
+    }
+  };
+
+  const importCrmFromBookings = async () => {
+    try {
+      setCrmImporting(true);
+      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/import-from-bookings`);
+      const inserted = Number(res.data?.inserted || 0);
+      const updated = Number(res.data?.updated || 0);
+      await Promise.all([
+        fetchCrmCount(),
+        fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy }),
+      ]);
+      Alert.alert('Import complete', `${inserted} new customers added, ${updated} updated.`);
+    } catch (err: any) {
+      Alert.alert('Import failed', err.response?.data?.error || 'Please try again.');
+    } finally {
+      setCrmImporting(false);
+    }
+  };
+
   const loadAddonPresetItems = async (presetId: number) => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
@@ -528,7 +682,21 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     fetchPaymentTerminals();
     fetchAddonPresets();
     fetchTerminalApplications();
+    fetchCrmCount();
   }, [restaurantId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCrmSearchTerm(crmSearchInput.trim());
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [crmSearchInput]);
+
+  useEffect(() => {
+    if (settingsPage !== 'crm') return;
+    fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
+  }, [settingsPage, crmSearchTerm, crmSortBy]);
 
   const getPrinterTypeLabel = (type?: string): string => {
     const labels: Record<string, string> = {
@@ -1594,6 +1762,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
+    { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? 'Loading customers...' : `${crmCount} customer${crmCount === 1 ? '' : 's'}` },
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
@@ -1613,6 +1782,253 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       </TouchableOpacity>
       <Text style={styles.subPageTitle}>{title}</Text>
       <View style={{ width: 60 }} />
+    </View>
+  );
+
+  const formatCurrency = (amountCents?: number | null) => {
+    return `$${((amountCents || 0) / 100).toFixed(2)}`;
+  };
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString();
+  };
+
+  const renderCrmCustomerCard = (customer: CrmCustomer) => {
+    const initials = (customer.name || '?').slice(0, 2).toUpperCase();
+    const subtitle = customer.phone || customer.email || 'No contact details';
+
+    return (
+      <TouchableOpacity
+        key={customer.id}
+        style={styles.crmCustomerCard}
+        activeOpacity={0.8}
+        onPress={() => openCrmProfile(customer.id)}
+      >
+        <View style={styles.crmCustomerAvatar}>
+          <Text style={styles.crmCustomerAvatarText}>{initials}</Text>
+        </View>
+        <View style={styles.crmCustomerMeta}>
+          <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
+          <Text style={styles.crmCustomerSubline}>{subtitle}</Text>
+          <Text style={styles.crmCustomerSubline}>
+            {customer.total_visits || 0} visits · Last visit {formatDate(customer.last_visit_at)}
+          </Text>
+        </View>
+        <View style={styles.crmCustomerSpendBlock}>
+          <Text style={styles.crmCustomerSpend}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
+          <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderCrmBookingRow = (booking: CrmBooking, tone: 'future' | 'past') => (
+    <View key={`${tone}-${booking.id}`} style={styles.crmHistoryRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.crmHistoryTitle}>
+          {booking.booking_date} {booking.booking_time ? `· ${booking.booking_time}` : ''}
+        </Text>
+        <Text style={styles.crmHistoryMeta}>
+          {booking.pax} pax{booking.table_label ? ` · ${booking.table_label}` : ''}
+        </Text>
+      </View>
+      <View style={[styles.crmStatusBadge, tone === 'future' ? styles.crmStatusBadgeUpcoming : styles.crmStatusBadgePast]}>
+        <Text style={[styles.crmStatusBadgeText, tone === 'future' ? styles.crmStatusBadgeTextUpcoming : styles.crmStatusBadgeTextPast]}>
+          {booking.status}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderCrmProfile = () => {
+    if (crmProfileLoading) {
+      return (
+        <View style={styles.crmLoadingState}>
+          <ActivityIndicator size="small" color="#4f46e5" />
+          <Text style={styles.emptyText}>Loading customer...</Text>
+        </View>
+      );
+    }
+
+    if (!selectedCrmProfile) {
+      return null;
+    }
+
+    const { customer, orders, future_bookings, past_bookings, total_transacted_cents } = selectedCrmProfile;
+    const initials = (customer.name || '?').slice(0, 2).toUpperCase();
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+        <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => setSelectedCrmProfile(null)}>
+          <Ionicons name="arrow-back" size={16} color="#4f46e5" />
+          <Text style={styles.crmBackToListText}>Back to customers</Text>
+        </TouchableOpacity>
+
+        <View style={styles.crmProfileHero}>
+          <View style={styles.crmProfileHeroAvatar}>
+            <Text style={styles.crmProfileHeroAvatarText}>{initials}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+            {!!customer.phone && <Text style={styles.crmProfileContact}>{customer.phone}</Text>}
+            {!!customer.email && <Text style={styles.crmProfileContact}>{customer.email}</Text>}
+          </View>
+        </View>
+
+        <View style={styles.crmStatsRow}>
+          <View style={styles.crmStatCard}>
+            <Text style={styles.crmStatValue}>{customer.total_visits || 0}</Text>
+            <Text style={styles.crmStatLabel}>Visits</Text>
+          </View>
+          <View style={styles.crmStatCard}>
+            <Text style={styles.crmStatValue}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
+            <Text style={styles.crmStatLabel}>Spent</Text>
+          </View>
+          <View style={styles.crmStatCard}>
+            <Text style={styles.crmStatValue}>{formatCurrency(total_transacted_cents || 0)}</Text>
+            <Text style={styles.crmStatLabel}>Transacted</Text>
+          </View>
+        </View>
+
+        {!!customer.notes && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Notes</Text>
+            <Text style={styles.sectionDescription}>{customer.notes}</Text>
+          </View>
+        )}
+
+        {future_bookings.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
+            {future_bookings.map((booking) => renderCrmBookingRow(booking, 'future'))}
+          </View>
+        )}
+
+        {orders.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recent Orders</Text>
+            {orders.slice(0, 10).map((order) => (
+              <View key={order.order_id} style={styles.crmHistoryRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.crmHistoryTitle}>#{order.restaurant_order_number || order.order_id}</Text>
+                  <Text style={styles.crmHistoryMeta}>
+                    {order.table_label || 'Counter'} · {formatDate(order.created_at)}
+                  </Text>
+                </View>
+                <Text style={styles.crmOrderAmount}>{formatCurrency(order.total_cents || 0)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {past_bookings.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Past Bookings</Text>
+            {past_bookings.slice(0, 8).map((booking) => renderCrmBookingRow(booking, 'past'))}
+          </View>
+        )}
+
+        {orders.length === 0 && future_bookings.length === 0 && past_bookings.length === 0 && (
+          <View style={styles.section}>
+            <Text style={styles.emptyText}>No order or booking history yet.</Text>
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
+  const renderCrmPage = () => (
+    <View style={styles.container}>
+      {renderSubPageHeader('CRM')}
+      {selectedCrmProfile ? (
+        renderCrmProfile()
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.section}>
+            <View style={styles.crmToolbarHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Customers</Text>
+                <Text style={styles.sectionDescription}>
+                  {crmSearchTerm
+                    ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'} for "${crmSearchTerm}"`
+                    : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, crmImporting && { opacity: 0.6 }]}
+                disabled={crmImporting}
+                onPress={importCrmFromBookings}
+              >
+                <Text style={styles.btnText}>{crmImporting ? 'Importing...' : 'Import Bookings'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              value={crmSearchInput}
+              onChangeText={setCrmSearchInput}
+              placeholder="Search name, phone or email"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.crmSortRow}>
+              <Text style={styles.label}>Sort by</Text>
+              <View style={styles.crmPickerWrap}>
+                <Picker
+                  selectedValue={crmSortBy}
+                  onValueChange={(value) => setCrmSortBy(value)}
+                  style={styles.crmPicker}
+                >
+                  <Picker.Item label="Last Visit" value="last_visit" />
+                  <Picker.Item label="Most Spent" value="total_spent" />
+                  <Picker.Item label="Most Orders" value="total_orders" />
+                  <Picker.Item label="Newest" value="created_at" />
+                </Picker>
+              </View>
+            </View>
+
+            {crmLoading ? (
+              <View style={styles.crmLoadingState}>
+                <ActivityIndicator size="small" color="#4f46e5" />
+                <Text style={styles.emptyText}>Loading customers...</Text>
+              </View>
+            ) : crmError ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{crmError}</Text>
+              </View>
+            ) : crmCustomers.length === 0 ? (
+              <Text style={styles.emptyText}>
+                {crmSearchTerm ? 'No customers matched your search.' : 'No customers yet. Import bookings to get started.'}
+              </Text>
+            ) : (
+              <View style={styles.crmListWrap}>
+                {crmCustomers.map((customer) => renderCrmCustomerCard(customer))}
+              </View>
+            )}
+
+            {crmHasMore && !crmLoading && (
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary, styles.crmLoadMoreBtn, crmLoadingMore && { opacity: 0.6 }]}
+                disabled={crmLoadingMore}
+                onPress={() =>
+                  fetchCrmCustomers({
+                    offset: crmOffset,
+                    append: true,
+                    search: crmSearchTerm,
+                    sortBy: crmSortBy,
+                  })
+                }
+              >
+                <Text style={styles.crmLoadMoreText}>{crmLoadingMore ? 'Loading...' : 'Load More'}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 
@@ -2725,6 +3141,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'language': return renderLanguagePage();
       case 'restaurant-info': return renderRestaurantInfoPage();
       case 'printer': return renderPrinterPage();
+      case 'crm': return renderCrmPage();
       case 'payment-terminals': return renderPaymentTerminalsPage();
       case 'qr-settings': return renderQRSettingsPage();
       case 'staff-links': return renderStaffLinksPage();
@@ -3884,6 +4301,204 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     paddingVertical: 16,
+  },
+  crmToolbarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  crmSortRow: {
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  crmPickerWrap: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  crmPicker: {
+    height: 52,
+  },
+  crmListWrap: {
+    marginTop: 4,
+  },
+  crmCustomerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  crmCustomerAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#4f46e5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  crmCustomerAvatarText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  crmCustomerMeta: {
+    flex: 1,
+  },
+  crmCustomerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  crmCustomerSubline: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  crmCustomerSpendBlock: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  crmCustomerSpend: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  crmLoadingState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  crmLoadMoreBtn: {
+    marginTop: 12,
+  },
+  crmLoadMoreText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  crmBackToListBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  crmBackToListText: {
+    color: '#4f46e5',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  crmProfileHero: {
+    backgroundColor: '#4338ca',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  crmProfileHeroAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crmProfileHeroAvatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  crmProfileName: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  crmProfileContact: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    marginTop: 3,
+  },
+  crmStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  crmStatCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  crmStatValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  crmStatLabel: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#6b7280',
+    textTransform: 'uppercase',
+  },
+  crmHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    gap: 10,
+  },
+  crmHistoryTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  crmHistoryMeta: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 3,
+  },
+  crmOrderAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  crmStatusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  crmStatusBadgeUpcoming: {
+    backgroundColor: '#dcfce7',
+  },
+  crmStatusBadgePast: {
+    backgroundColor: '#e5e7eb',
+  },
+  crmStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  crmStatusBadgeTextUpcoming: {
+    color: '#166534',
+  },
+  crmStatusBadgeTextPast: {
+    color: '#4b5563',
   },
   terminalCard: {
     flexDirection: 'row',
