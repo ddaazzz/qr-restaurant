@@ -12,13 +12,21 @@ import {
   Dimensions,
   Share,
   Alert,
+  TextInput,
 } from 'react-native';
 import { apiClient } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const NUM_METRIC_COLS = SCREEN_WIDTH > 600 ? 4 : 2;
+const NUM_METRIC_COLS = SCREEN_WIDTH > 800 ? 5 : SCREEN_WIDTH > 600 ? 4 : 2;
 const METRIC_CARD_WIDTH = Math.floor((SCREEN_WIDTH - 32 - (NUM_METRIC_COLS - 1) * 8) / NUM_METRIC_COLS);
+
+const EXPORT_PERIODS: Record<string, { from: string; to: string; label: string }> = {
+  breakfast: { from: '07:00', to: '10:30', label: 'Breakfast (07:00–10:30)' },
+  lunch:     { from: '11:00', to: '15:00', label: 'Lunch (11:00–15:00)' },
+  tea:       { from: '15:00', to: '17:30', label: 'Tea (15:00–17:30)' },
+  dinner:    { from: '17:30', to: '23:00', label: 'Dinner (17:30–23:00)' },
+};
 
 interface Order {
   id: number;
@@ -38,6 +46,8 @@ interface Order {
   closed_by_staff_name?: string;
   category_names?: string[];
   item_names?: string[];
+  order_type?: string;
+  pax?: number;
 }
 
 interface PaymentByType {
@@ -164,6 +174,16 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
   const [showStaffFilter, setShowStaffFilter] = useState(false);
   const [showTableFilter, setShowTableFilter] = useState(false);
   const [showProductFilter, setShowProductFilter] = useState(false);
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportDateFrom, setExportDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]; });
+  const [exportDateTo, setExportDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [exportPeriod, setExportPeriod] = useState<'all' | 'breakfast' | 'lunch' | 'tea' | 'dinner' | 'custom'>('all');
+  const [exportPeriodFrom, setExportPeriodFrom] = useState('');
+  const [exportPeriodTo, setExportPeriodTo] = useState('');
+  const [exportDiningTypes, setExportDiningTypes] = useState<string[]>(['table', 'now', 'to_go']);
+  const [exportPaxMin, setExportPaxMin] = useState('');
+  const [exportPaxMax, setExportPaxMax] = useState('');
 
   // Date range days mapping
   const dateRangeDays: Record<DateRange, number> = {
@@ -378,8 +398,39 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
     await fetchReports();
   };
 
-  const exportToCSV = async () => {
+  const getExportFilteredOrders = () => {
+    return orders.filter(o => {
+      const d = new Date(o.created_at);
+      const dateStr = d.toISOString().split('T')[0];
+      if (exportDateFrom && dateStr < exportDateFrom) return false;
+      if (exportDateTo && dateStr > exportDateTo) return false;
+      if (exportPeriod !== 'all') {
+        const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        const pFrom = exportPeriod === 'custom' ? exportPeriodFrom : EXPORT_PERIODS[exportPeriod]?.from ?? '';
+        const pTo   = exportPeriod === 'custom' ? exportPeriodTo   : EXPORT_PERIODS[exportPeriod]?.to   ?? '';
+        if (pFrom && hhmm < pFrom) return false;
+        if (pTo   && hhmm > pTo)   return false;
+      }
+      if (exportDiningTypes.length < 3) {
+        const ot = o.order_type || 'table';
+        if (ot === 'counter' || ot === 'table' || ot === 'dine_in') {
+          if (!exportDiningTypes.includes('table')) return false;
+        } else if (ot === 'now' || ot === 'order_now') {
+          if (!exportDiningTypes.includes('now')) return false;
+        } else if (ot === 'to_go') {
+          if (!exportDiningTypes.includes('to_go')) return false;
+        }
+      }
+      const pax = parseInt(String(o.pax || 0), 10) || 0;
+      if (exportPaxMin && pax < parseInt(exportPaxMin)) return false;
+      if (exportPaxMax && pax > parseInt(exportPaxMax)) return false;
+      return true;
+    });
+  };
+
+  const doExportCSV = async () => {
     try {
+      const filtered = getExportFilteredOrders();
       const lines: string[] = [];
       const esc = (v: any) => {
         const s = String(v ?? '');
@@ -387,108 +438,54 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       };
       const row = (...cells: any[]) => lines.push(cells.map(esc).join(','));
 
-      // --- Summary Metrics ---
-      row('Report', `${dateRangeLabels[dateRange]}`);
-      row();
-      row('SUMMARY METRICS');
-      row('Metric', 'Value');
-      row('Total Orders', stats?.total_orders ?? 0);
-      row('Total Revenue', formatPrice(stats?.total_revenue ?? 0));
-      row('Average Bill', formatPrice(stats?.average_bill ?? 0));
-      row('Total Discounts', formatPrice(stats?.total_discount ?? 0));
-      row('Customers / Day', customersPerDay);
-      row('Avg Spend / Customer', formatPrice(avgSpendPerCustomer));
-      row('Avg Daily Net Sales', formatPrice(avgDailyNetSales));
-      row('Avg Daily Customers', avgDailyCustomers);
-      row('Total Bookings', bookingsTotal);
-      row('Confirmed Bookings', bookingsConfirmed);
-      row('Cancelled Bookings', bookingsCancelled);
+      // Header metadata
+      row('Export Date', new Date().toISOString().slice(0, 10));
+      row('Date From', exportDateFrom);
+      row('Date To', exportDateTo);
+      row('Period', exportPeriod === 'all' ? 'All Day' : exportPeriod === 'custom' ? `${exportPeriodFrom}–${exportPeriodTo}` : EXPORT_PERIODS[exportPeriod]?.label ?? exportPeriod);
+      row('Dining Types', exportDiningTypes.join(', '));
+      row('Party Size', `${exportPaxMin || 'Any'} – ${exportPaxMax || 'Any'}`);
+      row('Total Orders', filtered.length);
       row();
 
-      // --- Revenue by Day ---
-      row('REVENUE BY DAY');
-      row('Date', 'Orders', 'Discount', 'Revenue', 'Net Sales');
-      Object.entries(filteredRevenueByDay)
-        .sort(([a], [b]) => b.localeCompare(a))
-        .forEach(([date, data]) => {
-          row(date, data.orders, formatPrice(data.discount), formatPrice(data.revenue), formatPrice(data.revenue - data.discount));
-        });
-      row();
-
-      // --- Payment by Type ---
-      if (paymentByType.length > 0) {
-        row('PAYMENT BY TYPE');
-        row('Method', 'Orders', 'Revenue');
-        paymentByType.forEach(p => {
-          row(p.payment_method, p.order_count, formatPrice(parseInt(String(p.total_revenue_cents || 0), 10)));
-        });
-        row();
-      }
-
-      // --- Top Items ---
-      if (topItems.length > 0) {
-        row('TOP ITEMS');
-        row('Item', 'Qty Sold', 'Revenue');
-        topItems.forEach(item => {
-          row(item.item_name, item.total_qty, formatPrice(item.total_revenue_cents));
-        });
-        row();
-      }
-
-      // --- Sales by Category ---
-      if (salesByCategory.length > 0) {
-        row('SALES BY CATEGORY');
-        row('Category', 'Items Sold', 'Orders', 'Revenue');
-        salesByCategory.forEach(cat => {
-          row(cat.category_name, cat.total_qty, cat.order_count, formatPrice(parseInt(String(cat.total_revenue_cents || 0), 10)));
-        });
-        row();
-      }
-
-      // --- Busiest Tables ---
-      if (topTables.length > 0) {
-        row('BUSIEST TABLES');
-        row('Table', 'Orders', 'Revenue');
-        topTables.forEach(tbl => {
-          row(tbl.table_name, tbl.order_count, formatPrice(tbl.total_revenue_cents));
-        });
-        row();
-      }
-
-      // --- Staff Hours ---
-      if (staffHours.length > 0) {
-        row('STAFF HOURS');
-        row('Staff', 'Role', 'Shifts', 'Total Hours', 'Avg Shift (hrs)');
-        staffHours.forEach(s => {
-          const totalMin = parseFloat(String(s.total_minutes || 0)) || 0;
-          row(s.staff_name, s.role, s.shift_count, (totalMin / 60).toFixed(1), s.shift_count > 0 ? (totalMin / s.shift_count / 60).toFixed(1) : '—');
-        });
-        row();
-      }
-
-      // --- Bookings Trend ---
-      if (bookingTrends.length > 0) {
-        row('BOOKINGS TREND');
-        row('Period', 'Total', 'Confirmed', 'Cancelled', 'Guests');
-        bookingTrends.forEach(e => {
-          row(e.label, e.total, e.confirmed, e.cancelled, e.pax);
-        });
-        row();
-      }
-
-      const csv = lines.join('\n');
-      const filename = `reports-${dateRange}-${new Date().toISOString().slice(0, 10)}.csv`;
-
-      await Share.share({
-        message: csv,
-        title: filename,
+      // Per-order rows
+      row('Order ID', 'Date', 'Time', 'Table', 'Order Type', 'Status', 'Pax', 'Items', 'Discount', 'Revenue', 'Staff', 'Payment');
+      filtered.forEach(o => {
+        const d = new Date(o.created_at);
+        const dateStr = d.toISOString().split('T')[0];
+        const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        const revenue = parseInt(String(o.total_cents || 0), 10) || 0;
+        const discount = parseInt(String(o.discount_cents || 0), 10) || 0;
+        const items = (o.item_names || []).join('; ');
+        row(
+          o.id,
+          dateStr,
+          timeStr,
+          o.table_name || '',
+          o.order_type || 'table',
+          o.status,
+          o.pax ?? '',
+          items,
+          `$${(discount / 100).toFixed(2)}`,
+          `$${(revenue / 100).toFixed(2)}`,
+          o.closed_by_staff_name || '',
+          '',
+        );
       });
+
+      const csv = lines.join('\r\n');
+      const filename = `orders-export-${exportDateFrom}-to-${exportDateTo}.csv`;
+
+      setShowExportModal(false);
+      await Share.share({ message: csv, title: filename });
     } catch (err: any) {
       if (err.message !== 'User did not share') {
         Alert.alert('Export Failed', err.message || 'Could not export report');
       }
     }
   };
+
+  const exportToCSV = () => setShowExportModal(true);
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -634,7 +631,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.exportBtn} onPress={exportToCSV}>
-              <Text style={styles.exportBtnText}>⬇ Export CSV</Text>
+              <Text style={styles.exportBtnText}>Export CSV</Text>
             </TouchableOpacity>
           </View>
 
@@ -644,27 +641,19 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               <Text style={styles.metricLabel}>{t('admin.total-orders') || 'Total Orders'}</Text>
               <Text style={styles.metricValue}>{stats.total_orders}</Text>
             </View>
-            <View style={[styles.metricCard, { borderLeftColor: '#059669' }]}>
+            <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>{t('admin.total-revenue') || 'Total Revenue'}</Text>
               <Text style={styles.metricValue}>{formatPrice(stats.total_revenue)}</Text>
             </View>
-            <View style={[styles.metricCard, { borderLeftColor: '#f59e0b' }]}>
+            <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>{t('admin.avg-bill') || 'Avg Bill'}</Text>
               <Text style={styles.metricValue}>{formatPrice(stats.average_bill)}</Text>
             </View>
-            <View style={[styles.metricCard, { borderLeftColor: '#dc2626' }]}>
+            <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>{t('admin.total-discounts') || 'Total Discounts'}</Text>
               <Text style={[styles.metricValue, { color: '#dc2626' }]}>{formatPrice(stats.total_discount)}</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>{t('admin.customers-per-day') || 'Customers / Day'}</Text>
-              <Text style={styles.metricValue}>{customersPerDay}</Text>
-            </View>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>{t('admin.avg-spend-per-customer') || 'Avg Spend / Customer'}</Text>
-              <Text style={styles.metricValue}>{formatPrice(avgSpendPerCustomer)}</Text>
-            </View>
-            <View style={[styles.metricCard, { borderLeftColor: '#059669' }]}>
               <Text style={styles.metricLabel}>{t('admin.avg-daily-net-sales') || 'Avg Daily Net Sales'}</Text>
               <Text style={[styles.metricValue, { color: '#059669' }]}>{formatPrice(avgDailyNetSales)}</Text>
             </View>
@@ -676,12 +665,12 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               <Text style={styles.metricLabel}>{t('admin.total-bookings') || 'Total Bookings'}</Text>
               <Text style={styles.metricValue}>{bookingsTotal}</Text>
             </View>
-            <View style={[styles.metricCard, { borderLeftColor: '#059669' }]}>
-              <Text style={styles.metricLabel}>{t('admin.bookings-confirmed') || 'Confirmed'}</Text>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>{t('admin.bookings-confirmed') || 'Confirmed Booking'}</Text>
               <Text style={[styles.metricValue, { color: '#059669' }]}>{bookingsConfirmed}</Text>
             </View>
-            <View style={[styles.metricCard, { borderLeftColor: '#dc2626' }]}>
-              <Text style={styles.metricLabel}>{t('admin.bookings-cancelled') || 'Cancelled'}</Text>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>{t('admin.bookings-cancelled') || 'Cancelled Booking'}</Text>
               <Text style={[styles.metricValue, { color: '#dc2626' }]}>{bookingsCancelled}</Text>
             </View>
           </View>
@@ -695,9 +684,10 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                 .slice(0, 5)
                 .map(([date, revenue], idx) => {
                   const colors = ['#667eea', '#e67e22', '#059669', '#8b5cf6', '#06b6d4'];
+                  const c = colors[idx % colors.length];
                   return (
-                    <View key={date} style={[styles.card, { borderLeftColor: colors[idx % colors.length] }]}>
-                      <Text style={[styles.cardRank, { color: colors[idx % colors.length] }]}>#{idx + 1}</Text>
+                    <View key={date} style={[styles.card, { backgroundColor: `${c}11`, borderColor: `${c}33` }]}>
+                      <Text style={[styles.cardRank, { color: c }]}>#{idx + 1}</Text>
                       <Text style={styles.cardDate}>{date}</Text>
                       <Text style={styles.cardRevenue}>{formatPrice(revenue)}</Text>
                       <Text style={styles.cardOrders}>
@@ -749,7 +739,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                     <Text style={[styles.tableCell, { flex: 1.2, fontWeight: '500', color: '#1f2937' }]}>{date}</Text>
                     <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{data.orders}</Text>
                     <Text style={[styles.tableCell, { flex: 0.9, textAlign: 'right', color: '#dc2626' }]}>
-                      {data.discount > 0 ? `-${formatPrice(data.discount)}` : '—'}
+                      {data.discount > 0 ? `-${formatPrice(data.discount)}` : '$0.00'}
                     </Text>
                     <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{formatPrice(data.revenue)}</Text>
                   </View>
@@ -1100,20 +1090,20 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
 
               {/* Summary stats */}
               <View style={styles.metricsGrid}>
-                <View style={[styles.metricCard, { borderLeftColor: '#e67e22' }]}>
+                <View style={styles.metricCard}>
                   <Text style={styles.metricLabel}>{t('admin.bookings-total-pax') || 'Total Guests'}</Text>
                   <Text style={styles.metricValue}>{bookingsTotalPax}</Text>
                 </View>
-                <View style={[styles.metricCard, { borderLeftColor: '#e67e22' }]}>
+                <View style={styles.metricCard}>
                   <Text style={styles.metricLabel}>{t('admin.bookings-avg-pax') || 'Avg Party Size'}</Text>
                   <Text style={styles.metricValue}>{bookingsAvgPax}</Text>
                 </View>
-                <View style={[styles.metricCard, { borderLeftColor: '#059669' }]}>
+                <View style={styles.metricCard}>
                   <Text style={styles.metricLabel}>{t('admin.bookings-completion') || 'Completion Rate'}</Text>
                   <Text style={[styles.metricValue, { color: '#059669' }]}>{bookingsCompletionRate}%</Text>
                 </View>
-                <View style={[styles.metricCard, { borderLeftColor: '#dc2626' }]}>
-                  <Text style={styles.metricLabel}>{t('admin.bookings-cancelled') || 'Cancelled'}</Text>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>{t('admin.bookings-cancelled') || 'Cancelled Booking'}</Text>
                   <Text style={[styles.metricValue, { color: '#dc2626' }]}>{bookingsCancelled}</Text>
                 </View>
               </View>
@@ -1293,6 +1283,98 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
       {renderFilterModal(showStaffFilter, t('admin.filter-by-staff') || 'Filter by Staff', revenueStaffOptions, revenueFilterStaff, setRevenueFilterStaff, () => setShowStaffFilter(false))}
       {renderFilterModal(showTableFilter, t('admin.filter-by-table') || 'Filter by Table', revenueTableOptions, revenueFilterTable, setRevenueFilterTable, () => setShowTableFilter(false))}
       {renderFilterModal(showProductFilter, t('admin.filter-by-product') || 'Filter by Product', revenueProductOptions, revenueFilterProduct, setRevenueFilterProduct, () => setShowProductFilter(false))}
+
+      {/* Export Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showExportModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 }}>
+          <ScrollView style={styles.exportModal} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+              <TouchableOpacity onPress={() => setShowExportModal(false)} style={{ marginRight: 12 }}>
+                <Text style={{ color: '#3b82f6', fontSize: 14 }}>\u2190 Back</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>Export Orders</Text>
+            </View>
+
+            {/* Date Range */}
+            <Text style={styles.exportSectionTitle}>Date Range</Text>
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.exportFieldLabel}>FROM</Text>
+                <TextInput style={styles.exportInput} value={exportDateFrom} onChangeText={setExportDateFrom} placeholder="YYYY-MM-DD" placeholderTextColor="#9ca3af" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.exportFieldLabel}>TO</Text>
+                <TextInput style={styles.exportInput} value={exportDateTo} onChangeText={setExportDateTo} placeholder="YYYY-MM-DD" placeholderTextColor="#9ca3af" />
+              </View>
+            </View>
+
+            {/* Period */}
+            <Text style={styles.exportSectionTitle}>Period</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {([
+                { key: 'all', label: 'All Day' },
+                { key: 'breakfast', label: 'Breakfast (07:00\u201310:30)' },
+                { key: 'lunch', label: 'Lunch (11:00\u201315:00)' },
+                { key: 'tea', label: 'Tea (15:00\u201317:30)' },
+                { key: 'dinner', label: 'Dinner (17:30\u201323:00)' },
+                { key: 'custom', label: 'Custom' },
+              ] as const).map(p => (
+                <TouchableOpacity key={p.key} onPress={() => setExportPeriod(p.key)}
+                  style={[styles.exportChip, exportPeriod === p.key && styles.exportChipActive]}>
+                  <Text style={[styles.exportChipText, exportPeriod === p.key && styles.exportChipTextActive]}>{p.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {exportPeriod === 'custom' && (
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.exportFieldLabel}>FROM TIME</Text>
+                  <TextInput style={styles.exportInput} value={exportPeriodFrom} onChangeText={setExportPeriodFrom} placeholder="HH:MM" placeholderTextColor="#9ca3af" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.exportFieldLabel}>TO TIME</Text>
+                  <TextInput style={styles.exportInput} value={exportPeriodTo} onChangeText={setExportPeriodTo} placeholder="HH:MM" placeholderTextColor="#9ca3af" />
+                </View>
+              </View>
+            )}
+
+            {/* Dining Type */}
+            <Text style={[styles.exportSectionTitle, { marginTop: 8 }]}>
+              Dining Type{'  '}<Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '400' }}>(multi-select)</Text>
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {([{ key: 'table', label: 'Tables' }, { key: 'now', label: 'Order-Now' }, { key: 'to_go', label: 'To-Go' }]).map(dt => {
+                const active = exportDiningTypes.includes(dt.key);
+                return (
+                  <TouchableOpacity key={dt.key}
+                    onPress={() => setExportDiningTypes(prev => prev.includes(dt.key) ? prev.filter(x => x !== dt.key) : [...prev, dt.key])}
+                    style={[styles.exportChip, active && styles.exportChipActive]}>
+                    <Text style={[styles.exportChipText, active && styles.exportChipTextActive]}>{dt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Party Size */}
+            <Text style={styles.exportSectionTitle}>Party Size</Text>
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.exportFieldLabel}>MIN</Text>
+                <TextInput style={styles.exportInput} value={exportPaxMin} onChangeText={setExportPaxMin} placeholder="Any" placeholderTextColor="#9ca3af" keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.exportFieldLabel}>MAX</Text>
+                <TextInput style={styles.exportInput} value={exportPaxMax} onChangeText={setExportPaxMax} placeholder="Any" placeholderTextColor="#9ca3af" keyboardType="numeric" />
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.exportDownloadBtn} onPress={doExportCSV}>
+              <Text style={styles.exportDownloadBtnText}>Download CSV</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -1318,25 +1400,29 @@ const styles = StyleSheet.create({
   metricCard: {
     width: METRIC_CARD_WIDTH,
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: 12,
+    padding: 16,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   metricLabel: {
-    fontSize: 9,
+    fontSize: 11,
     color: '#6b7280',
     fontWeight: '500',
-    marginBottom: 2,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   metricValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2c3e50',
+    textAlign: 'center',
   },
   section: {
     backgroundColor: '#fff',
@@ -1386,35 +1472,34 @@ const styles = StyleSheet.create({
   cardsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
   },
   card: {
-    width: '47%',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    padding: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+    flex: 1,
+    minWidth: 130,
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    alignItems: 'center',
   },
   cardRank: {
-    fontSize: 9,
-    color: '#9ca3af',
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
   },
   cardDate: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#1f2937',
-    marginTop: 2,
+    color: '#374151',
+    marginTop: 4,
   },
   cardRevenue: {
-    fontSize: 13,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#059669',
-    marginTop: 2,
+    marginTop: 4,
   },
   cardOrders: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#6b7280',
     marginTop: 2,
   },
@@ -1570,6 +1655,67 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: '#fff',
+  },
+  // Export modal
+  exportModal: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    maxHeight: '90%',
+  },
+  exportSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  exportFieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  exportInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#1f2937',
+    backgroundColor: '#fff',
+  },
+  exportChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    backgroundColor: 'transparent',
+  },
+  exportChipActive: {
+    backgroundColor: '#3b82f6',
+  },
+  exportChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#3b82f6',
+  },
+  exportChipTextActive: {
+    color: '#fff',
+  },
+  exportDownloadBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  exportDownloadBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   // Top items
   topItemRow: {

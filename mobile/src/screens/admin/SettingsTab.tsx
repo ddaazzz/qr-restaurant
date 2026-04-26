@@ -271,7 +271,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags';
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -332,6 +332,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [menuSettingsLoaded, setMenuSettingsLoaded] = useState(false);
   const [menuColumns, setMenuColumns] = useState<1 | 2>(1);
   const [allowCustomFoodItems, setAllowCustomFoodItems] = useState(false);
+  // Feature flags (module enable/disable)
+  const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
+  const [moduleFlagsLoading, setModuleFlagsLoading] = useState(false);
+  const [moduleFlagsLoaded, setModuleFlagsLoaded] = useState(false);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
   
@@ -1835,6 +1839,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
+    { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
@@ -3185,6 +3190,96 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const loadFeatureFlags = async () => {
+    setModuleFlagsLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
+      const flags = res.data?.feature_flags || {};
+      setModuleFlags(flags);
+      setModuleFlagsLoaded(true);
+    } catch (err: any) {
+      console.warn('[FeatureFlags] Failed to load:', err.message);
+    } finally {
+      setModuleFlagsLoading(false);
+    }
+  };
+
+  const saveModuleFlag = async (key: string, value: boolean) => {
+    setModuleFlags(prev => ({ ...prev, [key]: value }));
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, {
+        feature_flags: { [key]: value },
+      });
+    } catch (err: any) {
+      setModuleFlags(prev => ({ ...prev, [key]: !value }));
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.settings-failed'));
+    }
+  };
+
+  const MODULE_FLAG_DEFS: { key: string; labelKey: string; defaultLabel: string; descKey: string; defaultDesc: string }[] = [
+    { key: 'bookings',             labelKey: 'settings.flag-bookings',          defaultLabel: 'Bookings',         descKey: 'settings.flag-bookings-desc',          defaultDesc: 'Table reservations module' },
+    { key: 'waitlist',             labelKey: 'settings.flag-waitlist',          defaultLabel: 'Waitlist',         descKey: 'settings.flag-waitlist-desc',          defaultDesc: 'Queue / walk-in waitlist' },
+    { key: 'crm',                  labelKey: 'settings.flag-crm',               defaultLabel: 'CRM',              descKey: 'settings.flag-crm-desc',               defaultDesc: 'Customer relationship management' },
+    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons and promotions' },
+    { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
+  ];
+
+  const renderFeatureFlagsPage = () => {
+    if (moduleFlagsLoading) {
+      return (
+        <View style={styles.container}>
+          {renderSubPageHeader(t('settings.feature-flags') || 'Feature Flags')}
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader(t('settings.feature-flags') || 'Feature Flags')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('settings.feature-flags-modules') || 'Modules'}</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+              {t('settings.feature-flags-hint') || 'Disabled modules are hidden from all users of this restaurant.'}
+            </Text>
+
+            {MODULE_FLAG_DEFS.map((def, idx) => {
+              const isOn = moduleFlags[def.key] !== false; // default true (opt-out)
+              return (
+                <View
+                  key={def.key}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingVertical: 12,
+                    borderBottomWidth: idx < MODULE_FLAG_DEFS.length - 1 ? 1 : 0,
+                    borderBottomColor: '#e5e7eb',
+                  }}
+                >
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={styles.label}>{t(def.labelKey) || def.defaultLabel}</Text>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t(def.descKey) || def.defaultDesc}</Text>
+                  </View>
+                  <Switch
+                    value={isOn}
+                    onValueChange={(val) => saveModuleFlag(def.key, val)}
+                    trackColor={{ false: '#d1d5db', true: '#6366f1' }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+              );
+            })}
+          </View>
+
+        </ScrollView>
+      </View>
+    );
+  };
+
   const renderMenuSettingsPage = () => {
     if (menuSettingsLoading) {
       return (
@@ -3268,6 +3363,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'menu-settings':
         if (!menuSettingsLoading && !menuSettingsLoaded) loadMenuSettings();
         return renderMenuSettingsPage();
+      case 'feature-flags':
+        if (!moduleFlagsLoading && !moduleFlagsLoaded) loadFeatureFlags();
+        return renderFeatureFlagsPage();
       case 'users': return <UsersTab onBack={navigateBack} />;
       case 'profile':
         if (!profileData && !profileLoading) loadProfile();
