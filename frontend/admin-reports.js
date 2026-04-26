@@ -1513,7 +1513,7 @@ function updateExportTypeChip(checkbox) {
   }
 }
 
-async function downloadExportCSV() {
+async function downloadExportXLSX() {
   var errEl = document.getElementById('export-error');
   if (errEl) errEl.style.display = 'none';
 
@@ -1545,7 +1545,7 @@ async function downloadExportCSV() {
   if (paxMin) params.set('pax_min', paxMin);
   if (paxMax) params.set('pax_max', paxMax);
 
-  var url = API + '/restaurants/' + restaurantId + '/reports/export?' + params.toString();
+  var url = API + '/restaurants/' + restaurantId + '/reports/export-xlsx?' + params.toString();
 
   try {
     var resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
@@ -1557,7 +1557,7 @@ async function downloadExportCSV() {
     var blob = await resp.blob();
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'orders_export_' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.download = 'sales_report_' + (dateFrom || new Date().toISOString().slice(0, 10)) + '_' + (dateTo || new Date().toISOString().slice(0, 10)) + '.xlsx';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

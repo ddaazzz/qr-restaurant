@@ -3,6 +3,7 @@ import pool from "../config/db";
 import { sendReceipt } from "../services/emailService";
 import { getPrinterQueueInstance } from "./printer.routes";
 import { getPrinterZonesService } from "../services/printerZones";
+import ExcelJS from "exceljs";
 
 const router = Router();
 
@@ -1704,6 +1705,441 @@ router.get("/restaurants/:restaurantId/reports/export", async (req, res) => {
   } catch (err) {
     console.error("[reports/export]", err);
     res.status(500).json({ error: "Export failed" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Payment method display names and canonical keys
+// ---------------------------------------------------------------------------
+const PM_KEYS = ['cash', 'kpay', 'payment-asia', 'other'] as const;
+type PmKey = typeof PM_KEYS[number];
+const PM_LABELS: Record<PmKey, string> = {
+  'cash': 'Cash',
+  'kpay': 'KPay',
+  'payment-asia': 'Payment Asia',
+  'other': 'Other',
+};
+
+function canonicalPM(raw: string | null): PmKey {
+  if (!raw) return 'other';
+  const r = raw.toLowerCase();
+  if (r === 'cash') return 'cash';
+  if (r === 'kpay') return 'kpay';
+  if (r === 'payment-asia' || r === 'paymentasia') return 'payment-asia';
+  return 'other';
+}
+
+// Day-level aggregated data
+interface DayData {
+  subtotalCents: bigint;
+  discountCents: bigint;
+  totalCents:    bigint;
+  orderCount:    number;
+  pax:           number;
+  sessionCount:  number;
+  bookingsConfirmed: number;
+  bookingsCancelled: number;
+  payments: Record<PmKey, { qty: number; amountCents: bigint }>;
+}
+
+function emptyDayData(): DayData {
+  const payments = {} as DayData['payments'];
+  for (const k of PM_KEYS) payments[k] = { qty: 0, amountCents: 0n };
+  return {
+    subtotalCents: 0n, discountCents: 0n, totalCents: 0n,
+    orderCount: 0, pax: 0, sessionCount: 0,
+    bookingsConfirmed: 0, bookingsCancelled: 0,
+    payments,
+  };
+}
+
+/** Produce a sorted list of YYYY-MM-DD strings in [from, to] inclusive */
+function dayRange(from: string, to: string): string[] {
+  const days: string[] = [];
+  const cur = new Date(from + 'T00:00:00Z');
+  const end = new Date(to   + 'T00:00:00Z');
+  while (cur <= end) {
+    days.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return days;
+}
+
+/** Format "YYYY-MM-DD" → "YYYY-MM-DD (Mon)" */
+function fmtDayLabel(d: string): string {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dt = new Date(d + 'T00:00:00Z');
+  return `${d} (${days[dt.getUTCDay()]})`;
+}
+
+function cents2(n: bigint): number { return Number(n) / 100; }
+
+/**
+ * Build one worksheet in competitor style.
+ *  - Row 1: title row
+ *  - Row 2: payment method group headers
+ *  - Row 3: column headers
+ *  - Rows 4+: data rows (one per day)
+ *  - Final row: totals
+ */
+function buildSheet(
+  ws: ExcelJS.Worksheet,
+  title: string,
+  days: string[],
+  dataMap: Map<string, DayData>,
+  scRate: number,
+  includeBookings: boolean,
+) {
+  // ---- Column layout ----
+  // Fixed cols: Date, Gross Sales, Service Charge, Discount, Net Sales, Orders, Customers, Avg Spending
+  // Optionally: Confirmed Bookings, Cancelled Bookings
+  // Then per payment method: Qty, Amount  (Cash, KPay, Payment Asia, Other)
+  // Last: Total Tendered
+
+  const fixedCols = ['Date', 'Gross Sales', 'Service Charge', 'Discount', 'Net Sales', 'Orders', 'Customers', 'Avg. Spending'];
+  const bookingCols = includeBookings ? ['Confirmed Bookings', 'Cancelled Bookings'] : [];
+  const pmStartCol = fixedCols.length + bookingCols.length + 1; // 1-based
+  // 2 cols per payment method + 1 total
+  const totalCols = pmStartCol + PM_KEYS.length * 2; // "Total Tendered" col index (1-based)
+
+  // ---- Row 1: title ----
+  const titleRow = ws.addRow([title]);
+  ws.mergeCells(1, 1, 1, totalCols);
+  titleRow.getCell(1).font = { bold: true, size: 12 };
+  titleRow.getCell(1).alignment = { horizontal: 'center' };
+
+  // ---- Row 2: payment method group headers ----
+  const pmHeaderRow = ws.addRow([]);
+  for (let i = 0; i < PM_KEYS.length; i++) {
+    const colIdx = pmStartCol + i * 2; // 1-based
+    pmHeaderRow.getCell(colIdx).value = PM_LABELS[PM_KEYS[i] as PmKey];
+    pmHeaderRow.getCell(colIdx).font = { bold: true };
+    pmHeaderRow.getCell(colIdx).alignment = { horizontal: 'center' };
+    if (colIdx + 1 <= totalCols - 1) {
+      ws.mergeCells(2, colIdx, 2, colIdx + 1);
+    }
+  }
+
+  // ---- Row 3: column headers ----
+  const headers: string[] = [
+    ...fixedCols,
+    ...bookingCols,
+  ];
+  for (const _k of PM_KEYS) {
+    headers.push('Qty', '$');
+  }
+  headers.push('Total Tendered');
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell(c => {
+    c.font = { bold: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+    c.alignment = { horizontal: 'center' };
+    c.border = { bottom: { style: 'thin' } };
+  });
+
+  // ---- Data rows ----
+  const totals = emptyDayData();
+
+  for (const day of days) {
+    const d = dataMap.get(day) || emptyDayData();
+    const gross = cents2(d.subtotalCents);
+    const sc    = gross * scRate;
+    const discount = cents2(d.discountCents);
+    const net   = cents2(d.totalCents);
+    const avgSpend = d.pax > 0 ? +(net / d.pax).toFixed(2) : 0;
+
+    const rowVals: (string | number)[] = [
+      fmtDayLabel(day),
+      gross, sc, discount, net,
+      d.orderCount, d.pax, avgSpend,
+    ];
+    if (includeBookings) {
+      rowVals.push(d.bookingsConfirmed, d.bookingsCancelled);
+    }
+    for (const k of PM_KEYS) {
+      rowVals.push(d.payments[k].qty, cents2(d.payments[k].amountCents));
+    }
+    rowVals.push(net); // Total Tendered = Net Sales
+
+    const dr = ws.addRow(rowVals);
+    // Shade alternate rows
+    if (days.indexOf(day) % 2 === 1) {
+      dr.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } }; });
+    }
+
+    // Accumulate totals
+    totals.subtotalCents += d.subtotalCents;
+    totals.discountCents += d.discountCents;
+    totals.totalCents    += d.totalCents;
+    totals.orderCount    += d.orderCount;
+    totals.pax           += d.pax;
+    totals.bookingsConfirmed += d.bookingsConfirmed;
+    totals.bookingsCancelled += d.bookingsCancelled;
+    for (const k of PM_KEYS) {
+      totals.payments[k].qty          += d.payments[k].qty;
+      totals.payments[k].amountCents  += d.payments[k].amountCents;
+    }
+  }
+
+  // ---- Totals row ----
+  const tGross   = cents2(totals.subtotalCents);
+  const tSC      = tGross * scRate;
+  const tDisc    = cents2(totals.discountCents);
+  const tNet     = cents2(totals.totalCents);
+  const tAvg     = totals.pax > 0 ? +(tNet / totals.pax).toFixed(2) : 0;
+
+  const totalRowVals: (string | number)[] = [
+    'Total', tGross, tSC, tDisc, tNet, totals.orderCount, totals.pax, tAvg,
+  ];
+  if (includeBookings) {
+    totalRowVals.push(totals.bookingsConfirmed, totals.bookingsCancelled);
+  }
+  for (const k of PM_KEYS) {
+    totalRowVals.push(totals.payments[k].qty, cents2(totals.payments[k].amountCents));
+  }
+  totalRowVals.push(tNet);
+
+  const totRow = ws.addRow(totalRowVals);
+  totRow.eachCell(c => {
+    c.font = { bold: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDD7EE' } };
+    c.border = { top: { style: 'thin' } };
+  });
+
+  // ---- Column widths ----
+  ws.getColumn(1).width = 18;  // Date
+  for (let i = 2; i <= totalCols; i++) {
+    ws.getColumn(i).width = 12;
+  }
+  // Number formatting for numeric cols
+  for (let i = 2; i <= totalCols; i++) {
+    const hdr = headers[i - 1] ?? '';
+    if (hdr !== 'Qty' && hdr !== 'Orders' && hdr !== 'Customers' && !hdr.includes('Bookings')) {
+      ws.getColumn(i).numFmt = '#,##0.00';
+    }
+  }
+}
+
+/**
+ * GET /restaurants/:restaurantId/reports/export-xlsx
+ * Generates a 4-sheet Excel report:
+ *   Sheet 1: Sales Summary (all order types)
+ *   Sheet 2: Dine-in (order_type = 'table')
+ *   Sheet 3: Takeout (order_type IN ('now','to_go'))
+ *   Sheet 4: Staff by Day
+ */
+router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { date_from, date_to } = req.query as Record<string, string>;
+
+    // --- Restaurant info ---
+    const restRes = await pool.query(
+      `SELECT name, timezone, COALESCE(service_charge_percent, 0) AS service_charge_percent
+       FROM restaurants WHERE id = $1`,
+      [restaurantId],
+    );
+    if ((restRes.rowCount ?? 0) === 0) return res.status(404).json({ error: 'Restaurant not found' });
+
+    const rest    = restRes.rows[0];
+    const tz      = rest.timezone || 'UTC';
+    const scRate  = parseFloat(rest.service_charge_percent) / 100;
+    const restName = rest.name || 'Restaurant';
+
+    const fromDate = date_from || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const toDate   = date_to   || new Date().toISOString().slice(0, 10);
+    const title    = `${restName}  ${fromDate} – ${toDate}`;
+
+    // --- Query 1: orders aggregated by (day, order_type, payment_method) ---
+    const ordersRes = await pool.query<{
+      day: string; order_type: string; payment_method: string;
+      order_count: number; subtotal_cents: string;
+      discount_cents: string; total_cents: string;
+    }>(
+      `SELECT
+         (o.created_at AT TIME ZONE $3)::date::text AS day,
+         ts.order_type,
+         COALESCE(o.payment_method, 'other') AS payment_method,
+         COUNT(o.id)::int AS order_count,
+         COALESCE(SUM(it.subtotal), 0)::text AS subtotal_cents,
+         COALESCE(SUM(o.discount_cents), 0)::text AS discount_cents,
+         COALESCE(SUM(o.total_cents), 0)::text AS total_cents
+       FROM orders o
+       JOIN table_sessions ts ON ts.id = o.session_id
+       JOIN LATERAL (
+         SELECT COALESCE(SUM(price_cents * quantity), 0) AS subtotal
+         FROM order_items
+         WHERE order_id = o.id AND removed = false
+       ) it ON true
+       WHERE o.restaurant_id = $1
+         AND o.status IN ('paid', 'completed')
+         AND (o.created_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
+       GROUP BY 1, 2, 3
+       ORDER BY 1, 2, 3`,
+      [restaurantId, fromDate, tz, toDate],
+    );
+
+    // --- Query 2: unique sessions per (day, order_type) for pax ---
+    const sessionsRes = await pool.query<{
+      day: string; order_type: string; pax: number; session_id: string;
+    }>(
+      `SELECT DISTINCT
+         (o.created_at AT TIME ZONE $3)::date::text AS day,
+         ts.order_type,
+         ts.id::text AS session_id,
+         COALESCE(ts.pax, 0)::int AS pax
+       FROM orders o
+       JOIN table_sessions ts ON ts.id = o.session_id
+       WHERE o.restaurant_id = $1
+         AND o.status IN ('paid', 'completed')
+         AND (o.created_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date`,
+      [restaurantId, fromDate, tz, toDate],
+    );
+
+    // --- Query 3: bookings per day ---
+    const bookingsRes = await pool.query<{ day: string; status: string; count: number }>(
+      `SELECT booking_date::text AS day, status, COUNT(*)::int AS count
+       FROM bookings
+       WHERE restaurant_id = $1
+         AND booking_date BETWEEN $2::date AND $3::date
+       GROUP BY 1, 2`,
+      [restaurantId, fromDate, toDate],
+    );
+
+    // --- Query 4: staff by day ---
+    const staffRes = await pool.query<{
+      day: string; staff_name: string; order_count: number; total_cents: string;
+    }>(
+      `SELECT
+         (o.created_at AT TIME ZONE $3)::date::text AS day,
+         COALESCE(u.name, 'Unknown') AS staff_name,
+         COUNT(o.id)::int AS order_count,
+         COALESCE(SUM(o.total_cents), 0)::text AS total_cents
+       FROM orders o
+       LEFT JOIN users u ON u.id = o.staff_id
+       WHERE o.restaurant_id = $1
+         AND o.status IN ('paid', 'completed')
+         AND (o.created_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
+       GROUP BY 1, 2
+       ORDER BY 1, 2`,
+      [restaurantId, fromDate, tz, toDate],
+    );
+
+    // -------------------------------------------------------------------------
+    // Aggregate into maps: allMap, dineMap, takeoutMap
+    // -------------------------------------------------------------------------
+    const allMap     = new Map<string, DayData>();
+    const dineMap    = new Map<string, DayData>();
+    const takeoutMap = new Map<string, DayData>();
+
+    const getOrCreate = (m: Map<string, DayData>, k: string) => {
+      if (!m.has(k)) m.set(k, emptyDayData());
+      return m.get(k)!;
+    };
+
+    for (const r of ordersRes.rows) {
+      const pm = canonicalPM(r.payment_method);
+      const sub   = BigInt(r.subtotal_cents);
+      const disc  = BigInt(r.discount_cents);
+      const tot   = BigInt(r.total_cents);
+      const cnt   = r.order_count;
+
+      const applyTo = (d: DayData) => {
+        d.subtotalCents += sub;
+        d.discountCents += disc;
+        d.totalCents    += tot;
+        d.orderCount    += cnt;
+        d.payments[pm].qty          += cnt;
+        d.payments[pm].amountCents  += tot;
+      };
+
+      applyTo(getOrCreate(allMap,     r.day));
+      if (r.order_type === 'table') {
+        applyTo(getOrCreate(dineMap,  r.day));
+      } else {
+        applyTo(getOrCreate(takeoutMap, r.day));
+      }
+    }
+
+    // Pax aggregation (unique sessions)
+    for (const r of sessionsRes.rows) {
+      const addPax = (m: Map<string, DayData>) => {
+        const d = getOrCreate(m, r.day);
+        d.pax          += r.pax;
+        d.sessionCount += 1;
+      };
+      addPax(allMap);
+      if (r.order_type === 'table') {
+        addPax(dineMap);
+      } else {
+        addPax(takeoutMap);
+      }
+    }
+
+    // Bookings aggregation (into allMap only)
+    for (const r of bookingsRes.rows) {
+      const d = getOrCreate(allMap, r.day);
+      if (r.status === 'confirmed') d.bookingsConfirmed += r.count;
+      else                          d.bookingsCancelled += r.count;
+    }
+
+    // -------------------------------------------------------------------------
+    // Build workbook
+    // -------------------------------------------------------------------------
+    const wb   = new ExcelJS.Workbook();
+    wb.creator  = restName;
+    wb.created  = new Date();
+
+    const days = dayRange(fromDate, toDate);
+
+    buildSheet(wb.addWorksheet('Sales Summary'), title, days, allMap,     scRate, true);
+    buildSheet(wb.addWorksheet('Dine-in'),        title, days, dineMap,    scRate, false);
+    buildSheet(wb.addWorksheet('Takeout'),         title, days, takeoutMap, scRate, false);
+
+    // ---- Sheet 4: Staff by Day ----
+    const staffWs = wb.addWorksheet('Staff by Day');
+    staffWs.addRow(['Staff Sales Report', title]);
+    staffWs.mergeCells(1, 1, 1, 4);
+    staffWs.getRow(1).getCell(1).font = { bold: true, size: 12 };
+
+    const staffHeader = staffWs.addRow(['Date', 'Staff Name', 'Orders', 'Net Revenue']);
+    staffHeader.eachCell(c => {
+      c.font  = { bold: true };
+      c.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+      c.alignment = { horizontal: 'center' };
+      c.border = { bottom: { style: 'thin' } };
+    });
+
+    let staffTotalOrders = 0;
+    let staffTotalCents  = 0n;
+    for (const r of staffRes.rows) {
+      const tc = BigInt(r.total_cents);
+      staffWs.addRow([fmtDayLabel(r.day), r.staff_name, r.order_count, cents2(tc)]);
+      staffTotalOrders += r.order_count;
+      staffTotalCents  += tc;
+    }
+    const staffTotRow = staffWs.addRow(['Total', '', staffTotalOrders, cents2(staffTotalCents)]);
+    staffTotRow.eachCell(c => {
+      c.font = { bold: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDD7EE' } };
+      c.border = { top: { style: 'thin' } };
+    });
+    staffWs.getColumn(1).width = 18;
+    staffWs.getColumn(2).width = 22;
+    staffWs.getColumn(3).width = 10;
+    staffWs.getColumn(4).width = 14;
+    staffWs.getColumn(4).numFmt = '#,##0.00';
+
+    // ---- Stream response ----
+    const filename = `sales_report_${fromDate}_${toDate}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[reports/export-xlsx]', err);
+    if (!res.headersSent) res.status(500).json({ error: 'XLSX export failed' });
   }
 });
 
