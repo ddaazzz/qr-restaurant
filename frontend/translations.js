@@ -1869,6 +1869,25 @@ const translations = {
     'admin.add-new-option': '➕ Add New Option:',
     'admin.option-price-display': 'No charge',
     'admin.option-price-plus': '+${0}',
+
+    // Settings - CRM
+    'admin.crm': 'CRM',
+    'admin.crm-desc': 'Customer relationships',
+
+    // Settings - Menu Settings
+    'admin.menu-settings': 'Menu Settings',
+    'admin.menu-settings-desc': 'Layout and feature options',
+    'admin.menu-settings-admin-portal': 'Admin Portal',
+    'admin.menu-settings-customer-menu': 'Customer Menu',
+    'admin.custom-food-item': 'Custom Food Item',
+    'admin.custom-food-item-desc': 'Allow staff to add free-text custom items to orders',
+    'admin.menu-layout': 'Menu Layout',
+    'admin.single-column': 'Single Column',
+    'admin.two-column': 'Two Columns',
+    'admin.single-column-tip': 'Single column: images display full-width. Optimal size 800 × 600 px (4:3 landscape).',
+    'admin.two-column-tip': 'Two columns: images display as small tiles. Optimal size 600 × 600 px (1:1 square) for crispest result.',
+    'admin.image-tip-title': 'Image tip: ',
+    'admin.image-tip-desc': 'Optimal food image size is 800 × 600 px (4:3 ratio).',
   },
   zh: {
     // Navigation
@@ -4203,6 +4222,25 @@ const translations = {
     'admin.add-new-option': '➕ 新增選項：',
     'admin.option-price-display': '免費',
     'admin.option-price-plus': '+${0}',
+
+    // Settings - CRM (Chinese)
+    'admin.crm': 'CRM',
+    'admin.crm-desc': '客戶關係管理',
+
+    // Settings - Menu Settings (Chinese)
+    'admin.menu-settings': '菜單設定',
+    'admin.menu-settings-desc': '佈局及功能選項',
+    'admin.menu-settings-admin-portal': '後台管理',
+    'admin.menu-settings-customer-menu': '顧客菜單',
+    'admin.custom-food-item': '自訂菜品',
+    'admin.custom-food-item-desc': '允許員工在訂單中新增自訂項目',
+    'admin.menu-layout': '菜單佈局',
+    'admin.single-column': '單列',
+    'admin.two-column': '雙列',
+    'admin.single-column-tip': '單列：圖片以全寬顯示。最佳尺寸 800 × 600 像素（橫向 4:3）。',
+    'admin.two-column-tip': '雙列：圖片以小方格顯示。最佳尺寸 600 × 600 像素（1:1 正方形）效果最清晰。',
+    'admin.image-tip-title': '圖片建議：',
+    'admin.image-tip-desc': '食物圖片最佳尺寸為 800 × 600 像素（4:3 比例）。',
   }
 };
 

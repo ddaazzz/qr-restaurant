@@ -106,8 +106,10 @@ interface Coupon {
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
   min_order_value?: number;
+  minimum_order_value?: number;
   max_uses?: number;
   description?: string;
+  coupon_type?: 'open' | 'closed';
 }
 
 interface Variant {
@@ -190,6 +192,15 @@ interface CrmCustomerProfile {
   total_transacted_cents: number;
   past_bookings: CrmBooking[];
   future_bookings: CrmBooking[];
+  eligible_coupons?: Array<{
+    id: number;
+    code: string;
+    discount_type: 'percentage' | 'fixed';
+    discount_value: number;
+    minimum_order_value?: number;
+    coupon_type?: 'open' | 'closed';
+    valid_until?: string | null;
+  }>;
 }
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
@@ -301,12 +312,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // Modal state: 'printer' | 'bluetooth' | null
   const [activeModal, setActiveModal] = useState<'printer' | 'bluetooth' | null>(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [editingCouponId, setEditingCouponId] = useState<number | null>(null);
   const [showPaymentTerminalModal, setShowPaymentTerminalModal] = useState(false);
   const [editingTerminalId, setEditingTerminalId] = useState<number | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState<any>(null);
   const [showCouponDetailModal, setShowCouponDetailModal] = useState(false);
+  // CRM coupon assignment
+  const [showAssignCouponModal, setShowAssignCouponModal] = useState(false);
+  const [assignCouponCustomerId, setAssignCouponCustomerId] = useState<number | null>(null);
   const [showVariantPresetsModal, setShowVariantPresetsModal] = useState(false);
   const [selectedVariantPreset, setSelectedVariantPreset] = useState<VariantPreset | null>(null);
   const [selectedAddonPreset, setSelectedAddonPreset] = useState<any>(null);
@@ -343,6 +358,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     discount_value: '',
     min_order_value: '',
     description: '',
+    coupon_type: 'open' as 'open' | 'closed',
   });
   const [terminalForm, setTerminalForm] = useState({
     vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'other',
@@ -883,10 +899,34 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Bluetooth device selection is now handled at runtime during printing
 
+  const resetCouponForm = () => {
+    setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open' });
+    setEditingCouponId(null);
+  };
+
   const createCoupon = async () => {
     try {
       if (!couponForm.code || !couponForm.discount_value) {
         Alert.alert(t('settings.validation'), t('settings.fill-required'));
+        return;
+      }
+
+      if (editingCouponId) {
+        // Update existing coupon
+        await apiClient.patch(`/api/coupons/${editingCouponId}`, {
+          code: couponForm.code.toUpperCase(),
+          discount_type: couponForm.discount_type,
+          discount_value: parseFloat(couponForm.discount_value),
+          min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
+          minimum_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
+          description: couponForm.description || null,
+          coupon_type: couponForm.coupon_type,
+          restaurantId,
+        });
+        await fetchCoupons();
+        resetCouponForm();
+        setShowCouponModal(false);
+        Alert.alert(t('common.success'), t('settings.coupon-updated') || 'Coupon updated');
         return;
       }
 
@@ -896,20 +936,52 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         discount_value: parseFloat(couponForm.discount_value),
         min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
         description: couponForm.description || null,
+        coupon_type: couponForm.coupon_type,
       });
 
       await fetchSettings();
-      setCouponForm({
-        code: '',
-        discount_type: 'percentage',
-        discount_value: '',
-        min_order_value: '',
-        description: '',
-      });
+      resetCouponForm();
       setShowCouponModal(false);
       Alert.alert(t('common.success'), t('settings.coupon-created'));
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || t('settings.coupon-failed'));
+    }
+  };
+
+  const openEditCoupon = (coupon: any) => {
+    setCouponForm({
+      code: coupon.code || '',
+      discount_type: coupon.discount_type || 'percentage',
+      discount_value: String(coupon.discount_value || ''),
+      min_order_value: String(coupon.minimum_order_value || coupon.min_order_value || ''),
+      description: coupon.description || '',
+      coupon_type: coupon.coupon_type || 'open',
+    });
+    setEditingCouponId(coupon.id);
+    setShowCouponDetailModal(false);
+    setSelectedCoupon(null);
+    setShowCouponModal(true);
+  };
+
+  const assignCouponToCustomer = async (customerId: number, couponId: number) => {
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/crm/customers/${customerId}/coupons`, { coupon_id: couponId });
+      // Reload customer profile
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
+      setSelectedCrmProfile(res.data);
+      Alert.alert(t('common.success'), t('settings.coupon-assigned') || 'Coupon assigned');
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to assign coupon');
+    }
+  };
+
+  const revokeCouponFromCustomer = async (customerId: number, couponId: number) => {
+    try {
+      await apiClient.delete(`/api/restaurants/${restaurantId}/crm/customers/${customerId}/coupons/${couponId}`);
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
+      setSelectedCrmProfile(res.data);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to revoke coupon');
     }
   };
 
@@ -1839,7 +1911,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       return null;
     }
 
-    const { customer, orders, future_bookings, past_bookings, total_transacted_cents } = selectedCrmProfile;
+    const { customer, orders, future_bookings, past_bookings, total_transacted_cents, eligible_coupons } = selectedCrmProfile;
     const initials = (customer.name || '?').slice(0, 2).toUpperCase();
 
     return (
@@ -1913,7 +1985,52 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
         )}
 
-        {orders.length === 0 && future_bookings.length === 0 && past_bookings.length === 0 && (
+        {/* Eligible Coupons */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('settings.eligible-coupons') || 'Eligible Coupons'}</Text>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
+              onPress={() => { setAssignCouponCustomerId(customer.id); setShowAssignCouponModal(true); }}
+            >
+              <Text style={styles.btnSmallText}>{t('common.assign') || 'Assign'}</Text>
+            </TouchableOpacity>
+          </View>
+          {eligible_coupons && eligible_coupons.length > 0 ? (
+            eligible_coupons.map((coupon) => (
+              <View key={coupon.id} style={[styles.couponCard, { flexDirection: 'row', alignItems: 'center' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.couponCode}>{coupon.code}</Text>
+                  <Text style={styles.couponValue}>
+                    {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`}
+                    {' · '}
+                    <Text style={{ color: coupon.coupon_type === 'closed' ? '#b45309' : '#15803d' }}>
+                      {coupon.coupon_type === 'closed' ? (t('settings.coupon-closed') || 'Closed') : (t('settings.coupon-open') || 'Open')}
+                    </Text>
+                  </Text>
+                </View>
+                {coupon.coupon_type === 'closed' && (
+                  <TouchableOpacity
+                    onPress={() => Alert.alert(
+                      t('settings.revoke-coupon') || 'Revoke Access',
+                      `${t('settings.revoke-coupon-confirm') || 'Remove this customer\'s access to'} ${coupon.code}?`,
+                      [
+                        { text: t('common.cancel'), style: 'cancel' },
+                        { text: t('common.remove') || 'Remove', style: 'destructive', onPress: () => revokeCouponFromCustomer(customer.id, coupon.id) },
+                      ]
+                    )}
+                  >
+                    <Text style={{ color: '#dc2626', fontSize: 12, fontWeight: '600', marginLeft: 8 }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>{t('settings.no-eligible-coupons') || 'No coupons assigned'}</Text>
+          )}
+        </View>
+
+        {orders.length === 0 && future_bookings.length === 0 && past_bookings.length === 0 && !eligible_coupons?.length && (
           <View style={styles.section}>
             <Text style={styles.emptyText}>No order or booking history yet.</Text>
           </View>
@@ -3142,7 +3259,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('settings.create-coupon')}</Text>
+            <Text style={styles.modalTitle}>{editingCouponId ? (t('settings.edit-coupon') || 'Edit Coupon') : t('settings.create-coupon')}</Text>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.coupon-code')}</Text>
@@ -3236,18 +3353,40 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               />
             </View>
 
+            {/* Coupon access type */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{t('settings.coupon-access-type') || 'Access Type'}</Text>
+              <View style={styles.toggleGroup}>
+                <TouchableOpacity
+                  style={[styles.typeBtn, couponForm.coupon_type === 'open' && styles.typeBtnActive]}
+                  onPress={() => setCouponForm({ ...couponForm, coupon_type: 'open' })}
+                >
+                  <Text style={[styles.typeBtnText, couponForm.coupon_type === 'open' && styles.typeBtnTextActive]}>
+                    {t('settings.coupon-open') || 'Open'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeBtn, couponForm.coupon_type === 'closed' && styles.typeBtnActive]}
+                  onPress={() => setCouponForm({ ...couponForm, coupon_type: 'closed' })}
+                >
+                  <Text style={[styles.typeBtnText, couponForm.coupon_type === 'closed' && styles.typeBtnTextActive]}>
+                    {t('settings.coupon-closed') || 'Closed'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                {couponForm.coupon_type === 'open'
+                  ? (t('settings.coupon-open-desc') || 'Anyone with the code can use this coupon')
+                  : (t('settings.coupon-closed-desc') || 'Only customers you assign this coupon to can use it')}
+              </Text>
+            </View>
+
             <View style={styles.formActions}>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={() => {
                   setShowCouponModal(false);
-                  setCouponForm({
-                    code: '',
-                    discount_type: 'percentage',
-                    discount_value: '',
-                    min_order_value: '',
-                    description: '',
-                  });
+                  resetCouponForm();
                 }}
               >
                 <Text style={styles.btnText}>{t('common.cancel')}</Text>
@@ -3256,7 +3395,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createCoupon}
               >
-                <Text style={styles.btnText}>{t('settings.create')}</Text>
+                <Text style={styles.btnText}>{editingCouponId ? (t('common.save') || 'Save') : t('settings.create')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3285,12 +3424,27 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     {selectedCoupon.discount_type === 'percentage' ? `${selectedCoupon.discount_value}% off` : `$${selectedCoupon.discount_value} off`}
                   </Text>
                 </View>
-                {selectedCoupon.min_order_value > 0 && (
+                {(selectedCoupon.minimum_order_value > 0 || selectedCoupon.min_order_value > 0) && (
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>{t('settings.min-order-label')}</Text>
-                    <Text style={{ fontSize: 14, color: '#1f2937' }}>${selectedCoupon.min_order_value}</Text>
+                    <Text style={{ fontSize: 14, color: '#1f2937' }}>${selectedCoupon.minimum_order_value || selectedCoupon.min_order_value}</Text>
                   </View>
                 )}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>{t('settings.coupon-access-type') || 'Access Type'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ backgroundColor: selectedCoupon.coupon_type === 'closed' ? '#fef3c7' : '#dcfce7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: selectedCoupon.coupon_type === 'closed' ? '#b45309' : '#15803d' }}>
+                        {selectedCoupon.coupon_type === 'closed' ? (t('settings.coupon-closed') || 'Closed') : (t('settings.coupon-open') || 'Open')}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>
+                      {selectedCoupon.coupon_type === 'closed'
+                        ? (t('settings.coupon-closed-desc') || 'Assigned customers only')
+                        : (t('settings.coupon-open-desc') || 'Anyone with the code')}
+                    </Text>
+                  </View>
+                </View>
                 {selectedCoupon.description ? (
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>{t('settings.description')}</Text>
@@ -3303,6 +3457,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     onPress={() => { setShowCouponDetailModal(false); setSelectedCoupon(null); }}
                   >
                     <Text style={styles.btnText}>{t('settings.close')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary]}
+                    onPress={() => openEditCoupon(selectedCoupon)}
+                  >
+                    <Text style={styles.btnText}>{t('common.edit') || 'Edit'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.btn, { backgroundColor: '#fee2e2' }]}
@@ -3322,6 +3482,49 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </View>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Assign Coupon to Customer Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAssignCouponModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('settings.assign-coupon') || 'Assign Coupon'}</Text>
+              <TouchableOpacity onPress={() => setShowAssignCouponModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {coupons.filter(c => c.coupon_type === 'closed').length === 0 ? (
+                <Text style={[styles.emptyText, { padding: 16 }]}>
+                  {t('settings.no-closed-coupons') || 'No closed coupons available. Create a closed coupon first.'}
+                </Text>
+              ) : (
+                coupons.filter(c => c.coupon_type === 'closed').map(coupon => (
+                  <TouchableOpacity
+                    key={coupon.id}
+                    style={[styles.couponCard]}
+                    onPress={() => {
+                      if (assignCouponCustomerId) {
+                        assignCouponToCustomer(assignCouponCustomerId, coupon.id);
+                        setShowAssignCouponModal(false);
+                      }
+                    }}
+                  >
+                    <Text style={styles.couponCode}>{coupon.code}</Text>
+                    <Text style={styles.couponValue}>
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% off` : `$${coupon.discount_value} off`}
+                    </Text>
+                    {coupon.description ? <Text style={styles.couponDesc}>{coupon.description}</Text> : null}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { marginTop: 12 }]} onPress={() => setShowAssignCouponModal(false)}>
+              <Text style={styles.btnText}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

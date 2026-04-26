@@ -807,8 +807,21 @@ async function loadMenuSettingsPage() {
     const cols = (settings.ui_config || {}).menu_columns || 1;
     const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
     if (radio) radio.checked = true;
+    updateMenuColumnTip(cols);
   } catch (err) {
     console.error('Failed to load menu settings:', err);
+  }
+}
+
+function updateMenuColumnTip(cols) {
+  const tipEl = document.getElementById('menu-column-tip-text');
+  if (!tipEl) return;
+  if (cols === 2 || cols === '2') {
+    tipEl.setAttribute('data-i18n', 'admin.two-column-tip');
+    tipEl.textContent = t ? t('admin.two-column-tip') : 'Two columns: images display as small tiles. Optimal size 600 × 600 px (1:1 square) for crispest result.';
+  } else {
+    tipEl.setAttribute('data-i18n', 'admin.single-column-tip');
+    tipEl.textContent = t ? t('admin.single-column-tip') : 'Single column: images display full-width. Optimal size 800 × 600 px (4:3 landscape).';
   }
 }
 

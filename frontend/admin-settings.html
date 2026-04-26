@@ -480,18 +480,19 @@
             <label style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 8px;" data-i18n="admin.menu-layout">Menu Layout</label>
             <div style="display: flex; gap: 12px;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1)">
+                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1); updateMenuColumnTip(1)">
                 <span data-i18n="admin.single-column">Single Column</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2)">
+                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2); updateMenuColumnTip(2)">
                 <span data-i18n="admin.two-column">Two Columns</span>
               </label>
             </div>
           </div>
 
-          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #0369a1;">
-            <strong data-i18n="admin.image-tip-title">Image tip:</strong> <span data-i18n="admin.image-tip-desc">Optimal food image size is 800 × 600 px (4:3 ratio).</span>
+          <div id="menu-column-tip" style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #0369a1;">
+            <strong data-i18n="admin.image-tip-title">Image tip:</strong>
+            <span id="menu-column-tip-text" data-i18n="admin.single-column-tip">Single column: images display full-width. Optimal size 800 × 600 px (4:3 landscape).</span>
           </div>
         </div>
 

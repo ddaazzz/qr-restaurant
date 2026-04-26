@@ -133,18 +133,44 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
     const pastBookings   = bookingsRes.rows.filter(b => (b.booking_date as string) < now || b.status === 'completed' || b.status === 'cancelled' || b.status === 'no-show');
     const futureBookings = bookingsRes.rows.filter(b => (b.booking_date as string) >= now && b.status === 'confirmed');
 
-    // 4. Eligible coupons (active, not expired, not exhausted)
-    const couponsRes = await pool.query(
-      `SELECT id, code, discount_type, discount_value, min_order_cents,
-              max_uses, current_uses, valid_from, valid_until, is_active
-       FROM coupons
-       WHERE restaurant_id = $1
-         AND is_active = true
-         AND (valid_until IS NULL OR valid_until >= NOW())
-         AND (max_uses IS NULL OR current_uses < max_uses)
-       ORDER BY created_at DESC`,
-      [restaurantId]
-    );
+    // 4. Eligible coupons:
+    //    - All 'open' coupons (active, not expired, not exhausted)
+    //    - 'closed' coupons explicitly assigned to this customer via customer_coupon_access
+    let couponsRes;
+    try {
+      couponsRes = await pool.query(
+        `SELECT c.id, c.code, c.discount_type, c.discount_value, c.minimum_order_value,
+                c.max_uses, c.current_uses, c.valid_until, c.is_active,
+                COALESCE(c.coupon_type, 'open') AS coupon_type
+         FROM coupons c
+         WHERE c.restaurant_id = $1
+           AND c.is_active = true
+           AND (c.valid_until IS NULL OR c.valid_until >= NOW())
+           AND (c.max_uses IS NULL OR c.current_uses < c.max_uses)
+           AND (
+             COALESCE(c.coupon_type, 'open') = 'open'
+             OR EXISTS (
+               SELECT 1 FROM customer_coupon_access cca
+               WHERE cca.coupon_id = c.id AND cca.customer_id = $2
+             )
+           )
+         ORDER BY c.created_at DESC`,
+        [restaurantId, customerId]
+      );
+    } catch {
+      // Fallback if migration 086 not applied yet — return all active coupons
+      couponsRes = await pool.query(
+        `SELECT id, code, discount_type, discount_value, minimum_order_value,
+                max_uses, current_uses, valid_until, is_active, 'open' AS coupon_type
+         FROM coupons
+         WHERE restaurant_id = $1
+           AND is_active = true
+           AND (valid_until IS NULL OR valid_until >= NOW())
+           AND (max_uses IS NULL OR current_uses < max_uses)
+         ORDER BY created_at DESC`,
+        [restaurantId]
+      );
+    }
 
     res.json({
       customer,

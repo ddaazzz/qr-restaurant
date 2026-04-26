@@ -205,12 +205,6 @@ async function initializeApp() {
     }
   }
 
-  // Show superadmin-only nav button
-  if (IS_SUPERADMIN) {
-    var usersNavBtn = document.getElementById('users-nav-btn');
-    if (usersNavBtn) usersNavBtn.style.display = '';
-  }
-
   // Note: staff.html uses feature-based access control via staff.css (.menu-btn / .menu-btn.visible)
   // Do NOT hide nav buttons here for IS_STAFF — that is handled by staff.js initializeStaffApp().
 

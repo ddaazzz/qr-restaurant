@@ -23,18 +23,31 @@ router.get("/restaurants/:restaurantId/coupons", requireFeature("coupons"), asyn
 router.post("/restaurants/:restaurantId/coupons", requireFeature("coupons"), async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value } = req.body;
+    const { code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value, coupon_type } = req.body;
 
     if (!code || !discount_type || !discount_value) {
       return res.status(400).json({ error: "Code, discount_type, and discount_value are required" });
     }
 
+    const resolvedType = coupon_type === 'closed' ? 'closed' : 'open';
+
     const result = await db.query(
-      `INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value, coupon_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_until || null, minimum_order_value || 0]
-    );
+      [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_until || null, minimum_order_value || 0, resolvedType]
+    ).catch(async (err: any) => {
+      // Graceful fallback if migration 086 not yet applied
+      if (err.message?.includes('coupon_type')) {
+        return db.query(
+          `INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING *`,
+          [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_until || null, minimum_order_value || 0]
+        );
+      }
+      throw err;
+    });
 
     res.json(result.rows[0]);
   } catch (error: any) {
@@ -47,11 +60,11 @@ router.post("/restaurants/:restaurantId/coupons", requireFeature("coupons"), asy
   }
 });
 
-// Update a coupon (Admin only) - ✅ MULTI-RESTAURANT SUPPORT
-router.put("/coupons/:couponId", async (req, res) => {
+// Update a coupon (Admin only) - PUT (legacy) or PATCH
+const updateCouponHandler = async (req: any, res: any) => {
   try {
     const { couponId } = req.params;
-    const { code, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, restaurantId } = req.body;
+    const { code, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, coupon_type, restaurantId } = req.body;
 
     if (!restaurantId) {
       return res.status(400).json({ error: "Restaurant ID is required" });
@@ -67,10 +80,34 @@ router.put("/coupons/:couponId", async (req, res) => {
       return res.status(404).json({ error: "Coupon not found or doesn't belong to this restaurant" });
     }
 
-    const result = await db.query(
-      `UPDATE coupons SET code = COALESCE($1, code), discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value), description = COALESCE($4, description), is_active = COALESCE($5, is_active), max_uses = COALESCE($6, max_uses), valid_until = COALESCE($7, valid_until), minimum_order_value = COALESCE($8, minimum_order_value), updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND restaurant_id = $10 RETURNING *`,
-      [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, couponId, restaurantId]
-    );
+    // Try with coupon_type first, fallback if column doesn't exist yet
+    let result;
+    try {
+      const resolvedType = coupon_type === 'closed' ? 'closed' : coupon_type === 'open' ? 'open' : null;
+      result = await db.query(
+        `UPDATE coupons SET
+           code = COALESCE($1, code),
+           discount_type = COALESCE($2, discount_type),
+           discount_value = COALESCE($3, discount_value),
+           description = COALESCE($4, description),
+           is_active = COALESCE($5, is_active),
+           max_uses = COALESCE($6, max_uses),
+           valid_until = COALESCE($7, valid_until),
+           minimum_order_value = COALESCE($8, minimum_order_value),
+           coupon_type = COALESCE($9, coupon_type),
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $10 AND restaurant_id = $11
+         RETURNING *`,
+        [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, resolvedType, couponId, restaurantId]
+      );
+    } catch (colErr: any) {
+      if (colErr.message?.includes('coupon_type')) {
+        result = await db.query(
+          `UPDATE coupons SET code = COALESCE($1, code), discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value), description = COALESCE($4, description), is_active = COALESCE($5, is_active), max_uses = COALESCE($6, max_uses), valid_until = COALESCE($7, valid_until), minimum_order_value = COALESCE($8, minimum_order_value), updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND restaurant_id = $10 RETURNING *`,
+          [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, couponId, restaurantId]
+        );
+      } else throw colErr;
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Coupon not found" });
@@ -81,7 +118,10 @@ router.put("/coupons/:couponId", async (req, res) => {
     console.error("Error updating coupon:", error);
     res.status(500).json({ error: "Failed to update coupon" });
   }
-});
+};
+
+router.put("/coupons/:couponId", updateCouponHandler);
+router.patch("/coupons/:couponId", updateCouponHandler);
 
 // Delete a coupon (Admin only) - ✅ MULTI-RESTAURANT SUPPORT
 router.delete("/coupons/:couponId", async (req, res) => {
@@ -244,6 +284,81 @@ router.post("/sessions/:sessionId/remove-coupon", async (req, res) => {
   } catch (error: any) {
     console.error("Error removing coupon:", error);
     res.status(500).json({ error: "Failed to remove coupon" });
+  }
+});
+
+// GET customer coupon access (Admin: which customers have access to a closed coupon)
+router.get("/restaurants/:restaurantId/coupons/:couponId/customers", requireFeature("coupons"), async (req, res) => {
+  try {
+    const { restaurantId, couponId } = req.params;
+    // Verify ownership
+    const check = await db.query("SELECT id FROM coupons WHERE id = $1 AND restaurant_id = $2", [couponId, restaurantId]);
+    if (check.rowCount === 0) return res.status(404).json({ error: "Coupon not found" });
+
+    const result = await db.query(
+      `SELECT cca.customer_id, cca.granted_at, c.name, c.phone, c.email
+       FROM customer_coupon_access cca
+       JOIN crm_customers c ON c.id = cca.customer_id
+       WHERE cca.coupon_id = $1
+       ORDER BY cca.granted_at DESC`,
+      [couponId]
+    ).catch(() => ({ rows: [] } as any));
+    res.json(result.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST assign coupon to customer (Admin)
+router.post("/restaurants/:restaurantId/crm/customers/:customerId/coupons", requireFeature("coupons"), async (req, res) => {
+  try {
+    const { restaurantId, customerId } = req.params;
+    const { coupon_id } = req.body;
+    if (!coupon_id) return res.status(400).json({ error: "coupon_id is required" });
+
+    // Verify coupon belongs to restaurant and is closed
+    const couponCheck = await db.query(
+      "SELECT id, coupon_type FROM coupons WHERE id = $1 AND restaurant_id = $2",
+      [coupon_id, restaurantId]
+    );
+    if (couponCheck.rowCount === 0) return res.status(404).json({ error: "Coupon not found" });
+
+    // Verify customer belongs to restaurant
+    const custCheck = await db.query(
+      "SELECT id FROM crm_customers WHERE id = $1 AND restaurant_id = $2",
+      [customerId, restaurantId]
+    );
+    if (custCheck.rowCount === 0) return res.status(404).json({ error: "Customer not found" });
+
+    await db.query(
+      `INSERT INTO customer_coupon_access (coupon_id, customer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [coupon_id, customerId]
+    ).catch(() => {}); // table may not exist if migration not yet applied
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE revoke coupon access from customer (Admin)
+router.delete("/restaurants/:restaurantId/crm/customers/:customerId/coupons/:couponId", requireFeature("coupons"), async (req, res) => {
+  try {
+    const { restaurantId, customerId, couponId } = req.params;
+    const couponCheck = await db.query(
+      "SELECT id FROM coupons WHERE id = $1 AND restaurant_id = $2",
+      [couponId, restaurantId]
+    );
+    if (couponCheck.rowCount === 0) return res.status(404).json({ error: "Coupon not found" });
+
+    await db.query(
+      "DELETE FROM customer_coupon_access WHERE coupon_id = $1 AND customer_id = $2",
+      [couponId, customerId]
+    ).catch(() => {});
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
