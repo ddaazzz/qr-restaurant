@@ -10,11 +10,15 @@ import {
   FlatList,
   Modal,
   Dimensions,
+  Share,
+  Alert,
 } from 'react-native';
 import { apiClient } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const NUM_METRIC_COLS = SCREEN_WIDTH > 600 ? 4 : 2;
+const METRIC_CARD_WIDTH = Math.floor((SCREEN_WIDTH - 32 - (NUM_METRIC_COLS - 1) * 8) / NUM_METRIC_COLS);
 
 interface Order {
   id: number;
@@ -374,6 +378,118 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
     await fetchReports();
   };
 
+  const exportToCSV = async () => {
+    try {
+      const lines: string[] = [];
+      const esc = (v: any) => {
+        const s = String(v ?? '');
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const row = (...cells: any[]) => lines.push(cells.map(esc).join(','));
+
+      // --- Summary Metrics ---
+      row('Report', `${dateRangeLabels[dateRange]}`);
+      row();
+      row('SUMMARY METRICS');
+      row('Metric', 'Value');
+      row('Total Orders', stats?.total_orders ?? 0);
+      row('Total Revenue', formatPrice(stats?.total_revenue ?? 0));
+      row('Average Bill', formatPrice(stats?.average_bill ?? 0));
+      row('Total Discounts', formatPrice(stats?.total_discount ?? 0));
+      row('Customers / Day', customersPerDay);
+      row('Avg Spend / Customer', formatPrice(avgSpendPerCustomer));
+      row('Avg Daily Net Sales', formatPrice(avgDailyNetSales));
+      row('Avg Daily Customers', avgDailyCustomers);
+      row('Total Bookings', bookingsTotal);
+      row('Confirmed Bookings', bookingsConfirmed);
+      row('Cancelled Bookings', bookingsCancelled);
+      row();
+
+      // --- Revenue by Day ---
+      row('REVENUE BY DAY');
+      row('Date', 'Orders', 'Discount', 'Revenue', 'Net Sales');
+      Object.entries(filteredRevenueByDay)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .forEach(([date, data]) => {
+          row(date, data.orders, formatPrice(data.discount), formatPrice(data.revenue), formatPrice(data.revenue - data.discount));
+        });
+      row();
+
+      // --- Payment by Type ---
+      if (paymentByType.length > 0) {
+        row('PAYMENT BY TYPE');
+        row('Method', 'Orders', 'Revenue');
+        paymentByType.forEach(p => {
+          row(p.payment_method, p.order_count, formatPrice(parseInt(String(p.total_revenue_cents || 0), 10)));
+        });
+        row();
+      }
+
+      // --- Top Items ---
+      if (topItems.length > 0) {
+        row('TOP ITEMS');
+        row('Item', 'Qty Sold', 'Revenue');
+        topItems.forEach(item => {
+          row(item.item_name, item.total_qty, formatPrice(item.total_revenue_cents));
+        });
+        row();
+      }
+
+      // --- Sales by Category ---
+      if (salesByCategory.length > 0) {
+        row('SALES BY CATEGORY');
+        row('Category', 'Items Sold', 'Orders', 'Revenue');
+        salesByCategory.forEach(cat => {
+          row(cat.category_name, cat.total_qty, cat.order_count, formatPrice(parseInt(String(cat.total_revenue_cents || 0), 10)));
+        });
+        row();
+      }
+
+      // --- Busiest Tables ---
+      if (topTables.length > 0) {
+        row('BUSIEST TABLES');
+        row('Table', 'Orders', 'Revenue');
+        topTables.forEach(tbl => {
+          row(tbl.table_name, tbl.order_count, formatPrice(tbl.total_revenue_cents));
+        });
+        row();
+      }
+
+      // --- Staff Hours ---
+      if (staffHours.length > 0) {
+        row('STAFF HOURS');
+        row('Staff', 'Role', 'Shifts', 'Total Hours', 'Avg Shift (hrs)');
+        staffHours.forEach(s => {
+          const totalMin = parseFloat(String(s.total_minutes || 0)) || 0;
+          row(s.staff_name, s.role, s.shift_count, (totalMin / 60).toFixed(1), s.shift_count > 0 ? (totalMin / s.shift_count / 60).toFixed(1) : '—');
+        });
+        row();
+      }
+
+      // --- Bookings Trend ---
+      if (bookingTrends.length > 0) {
+        row('BOOKINGS TREND');
+        row('Period', 'Total', 'Confirmed', 'Cancelled', 'Guests');
+        bookingTrends.forEach(e => {
+          row(e.label, e.total, e.confirmed, e.cancelled, e.pax);
+        });
+        row();
+      }
+
+      const csv = lines.join('\n');
+      const filename = `reports-${dateRange}-${new Date().toISOString().slice(0, 10)}.csv`;
+
+      await Share.share({
+        message: csv,
+        title: filename,
+      });
+    } catch (err: any) {
+      if (err.message !== 'User did not share') {
+        Alert.alert('Export Failed', err.message || 'Could not export report');
+      }
+    }
+  };
+
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   // All computed values and useMemo hooks MUST be before any early return (Rules of Hooks)
@@ -507,15 +623,20 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
     >
       {stats && (
         <View style={styles.content}>
-          {/* Date Range Filter */}
-          <TouchableOpacity
-            style={styles.dateRangeBtn}
-            onPress={() => setShowDateRangeModal(true)}
-          >
-            <Text style={styles.dateRangeBtnText}>
-              {dateRangeLabels[dateRange]}
-            </Text>
-          </TouchableOpacity>
+          {/* Header row: date range filter + export */}
+          <View style={styles.reportHeaderRow}>
+            <TouchableOpacity
+              style={styles.dateRangeBtn}
+              onPress={() => setShowDateRangeModal(true)}
+            >
+              <Text style={styles.dateRangeBtnText}>
+                {dateRangeLabels[dateRange]}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.exportBtn} onPress={exportToCSV}>
+              <Text style={styles.exportBtnText}>⬇ Export CSV</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Key Metrics — 11 cards matching webapp */}
           <View style={styles.metricsGrid}>
@@ -1195,11 +1316,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metricCard: {
-    flex: 1,
-    minWidth: '48%',
+    width: METRIC_CARD_WIDTH,
     backgroundColor: '#fff',
     borderRadius: 8,
-    padding: 12,
+    padding: 10,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -1208,13 +1328,13 @@ const styles = StyleSheet.create({
     borderLeftColor: '#3b82f6',
   },
   metricLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#6b7280',
     fontWeight: '500',
     marginBottom: 4,
   },
   metricValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
   },
@@ -1396,17 +1516,34 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   // Date range button
+  reportHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   dateRangeBtn: {
     backgroundColor: '#3b82f6',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
-    marginBottom: 16,
     alignSelf: 'flex-start',
   },
   dateRangeBtnText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  exportBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  exportBtnText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '600',
   },
   filterRow: {

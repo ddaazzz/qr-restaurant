@@ -18,7 +18,6 @@ import {
   Keyboard,
   InputAccessoryView,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
 import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
@@ -2066,18 +2065,21 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             />
 
             <View style={styles.crmSortRow}>
-              <Text style={styles.label}>Sort by</Text>
-              <View style={styles.crmPickerWrap}>
-                <Picker
-                  selectedValue={crmSortBy}
-                  onValueChange={(value) => setCrmSortBy(value)}
-                  style={styles.crmPicker}
-                >
-                  <Picker.Item label="Last Visit" value="last_visit" />
-                  <Picker.Item label="Most Spent" value="total_spent" />
-                  <Picker.Item label="Most Orders" value="total_orders" />
-                  <Picker.Item label="Newest" value="created_at" />
-                </Picker>
+              <Text style={styles.label}>Sort by:</Text>
+              <View style={styles.crmSortChips}>
+                {(['last_visit', 'total_spent', 'total_orders', 'created_at'] as const).map((val) => {
+                  const labels: Record<string, string> = { last_visit: 'Last Visit', total_spent: 'Most Spent', total_orders: 'Most Orders', created_at: 'Newest' };
+                  const active = crmSortBy === val;
+                  return (
+                    <TouchableOpacity
+                      key={val}
+                      onPress={() => setCrmSortBy(val)}
+                      style={[styles.crmSortChip, active && styles.crmSortChipActive]}
+                    >
+                      <Text style={[styles.crmSortChipText, active && styles.crmSortChipTextActive]}>{labels[val]}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
@@ -4482,15 +4484,31 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 12,
   },
-  crmPickerWrap: {
+  crmSortChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  crmSortChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
     borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
   },
-  crmPicker: {
-    height: 52,
+  crmSortChipActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4f46e5',
+  },
+  crmSortChipText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  crmSortChipTextActive: {
+    color: '#fff',
   },
   crmListWrap: {
     marginTop: 4,
