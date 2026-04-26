@@ -122,7 +122,7 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
         const selectedByVariant: Record<number, number[]> = {};
         for (const o of optionsRes.rows) {
           if (!selectedByVariant[o.variant_id]) selectedByVariant[o.variant_id] = [];
-          selectedByVariant[o.variant_id].push(o.id);
+          selectedByVariant[o.variant_id]!.push(o.id);
         }
 
         // Validate each variant
