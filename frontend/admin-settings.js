@@ -806,6 +806,22 @@ async function loadMenuSettingsPage() {
       toggle.checked = flags.allow_custom_food_items === true;
     }
 
+    // Bulk menu import feature (superadmin only toggle)
+    const flags = settings.feature_flags || {};
+    const isImportEnabled = flags.menu_import_enabled === true;
+    const importControl = document.getElementById('menu-import-feature-control');
+    if (importControl) {
+      if (IS_SUPERADMIN) {
+        importControl.innerHTML = `<button id="menu-import-toggle-btn" onclick="toggleMenuImportFeature()"
+          class="${isImportEnabled ? 'btn-secondary' : 'btn-primary'}"
+          style="padding: 8px 16px; font-size: 12px; min-width: 90px;">${isImportEnabled ? 'Disable' : 'Enable'}</button>`;
+      } else {
+        importControl.innerHTML = isImportEnabled
+          ? '<span style="color: #059669; font-size: 13px; font-weight: 600;">✓ Enabled</span>'
+          : '<span style="color: #6b7280; font-size: 13px;">🔒 Paid Feature</span>';
+      }
+    }
+
     // Menu layout columns
     const cols = (settings.ui_config || {}).menu_columns || 1;
     const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
@@ -813,6 +829,36 @@ async function loadMenuSettingsPage() {
     updateMenuColumnTip(cols);
   } catch (err) {
     console.error('Failed to load menu settings:', err);
+  }
+}
+
+async function toggleMenuImportFeature() {
+  const btn = document.getElementById('menu-import-toggle-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  const currentFlags = (typeof ADMIN_SETTINGS_CACHE !== 'undefined' && ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
+  const current = currentFlags.menu_import_enabled === true;
+  const newState = !current;
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: { menu_import_enabled: newState } })
+    });
+    if (!res.ok) throw new Error('Failed to save');
+    if (typeof ADMIN_SETTINGS_CACHE !== 'undefined' && ADMIN_SETTINGS_CACHE) {
+      ADMIN_SETTINGS_CACHE.feature_flags = { ...currentFlags, menu_import_enabled: newState };
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = newState ? 'Disable' : 'Enable';
+      btn.className = newState ? 'btn-secondary' : 'btn-primary';
+    }
+  } catch (err) {
+    console.error('Error toggling menu import feature:', err);
+    alert('Failed to toggle feature');
+    if (btn) { btn.disabled = false; btn.textContent = current ? 'Disable' : 'Enable'; }
   }
 }
 

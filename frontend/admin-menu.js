@@ -917,21 +917,12 @@ function renderMenuItemsGrid() {
 
   const items = MENU_ITEMS.filter(i => Number(i.category_id) === Number(SELECTED_MENU_CATEGORY.id));
 
-  // Add "Add Item" card in edit mode
-  if (IS_EDIT_MODE) {
-    const addCard = document.createElement("div");
-    addCard.className = "menu-item-card add-item-card";
-    const fragment = cloneTemplate('add-item-card-template');
-    if (fragment) addCard.appendChild(fragment);
-    addCard.onclick = () => startCreateItem();
-    grid.appendChild(addCard);
-  }
-
   if (!items.length) {
     if (!IS_EDIT_MODE) {
       grid.innerHTML = `<div class="empty-state"><p>No items in this category</p></div>`;
+      return;
     }
-    return;
+    // In edit mode with no items, fall through to show the add card below
   }
 
   items.forEach((item, index) => {
@@ -953,6 +944,16 @@ function renderMenuItemsGrid() {
       grid.appendChild(cardContent);
     }
   });
+
+  // Add "Add Item" card in edit mode (always at the end, after existing items)
+  if (IS_EDIT_MODE) {
+    const addCard = document.createElement("div");
+    addCard.className = "menu-item-card add-item-card";
+    const fragment = cloneTemplate('add-item-card-template');
+    if (fragment) addCard.appendChild(fragment);
+    addCard.onclick = () => startCreateItem();
+    grid.appendChild(addCard);
+  }
 }
 
 // Add new item via prompt

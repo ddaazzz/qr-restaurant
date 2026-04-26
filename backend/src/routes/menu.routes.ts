@@ -1163,7 +1163,7 @@ router.get("/restaurants/:restaurantId/menu/items", async (req, res) => {
  *   B: Menu Category Chinese
  *   C: Food Item Name Chinese
  *   D: Food Item Name English
- *   E: Food Item Image  (ignored – images are uploaded separately)
+ *   E: Food Item Image URL (optional – if valid http/https URL, auto-uploaded to R2)
  *   F: Price            (numeric, dollars)
  *
  * Creates categories (deduped by English name) and menu items.
@@ -1182,6 +1182,16 @@ router.post(
 
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Check if menu import feature is enabled for this restaurant
+      const settingsCk = await pool.query(
+        `SELECT feature_flags FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+      const featureFlags: Record<string, any> = settingsCk.rows[0]?.feature_flags || {};
+      if (featureFlags.menu_import_enabled !== true) {
+        return res.status(403).json({ error: "Bulk menu import is not enabled for this restaurant. Contact support to enable this paid feature." });
       }
 
       const XLSX = await import("xlsx");
@@ -1277,12 +1287,49 @@ router.post(
           continue;
         }
 
-        await pool.query(
+        const insertResult = await pool.query(
           `INSERT INTO menu_items (category_id, name, name_zh, price_cents, available)
-           VALUES ($1, $2, $3, $4, true)`,
+           VALUES ($1, $2, $3, $4, true)
+           RETURNING id`,
           [categoryId, itemNameEn, itemNameZh, priceCents]
         );
         created.items++;
+
+        // Upload image from column E if it is a valid URL
+        const imageRaw = row[4];
+        if (
+          imageRaw &&
+          typeof imageRaw === "string" &&
+          isR2Configured()
+        ) {
+          const imageUrl = imageRaw.trim();
+          if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+            try {
+              const imgRes = await fetch(imageUrl);
+              if (imgRes.ok) {
+                const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+                const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+                const ext = (contentType.split("/")[1] || "jpg").split(";")[0];
+                const safeName = itemNameEn.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+                const filename = `${safeName}.${ext}`;
+                const r2Url = await uploadToR2(
+                  imgBuffer,
+                  filename,
+                  getR2Folder("menu", String(restaurantId)),
+                  contentType
+                );
+                const newItemId = insertResult.rows[0].id;
+                await pool.query(
+                  "UPDATE menu_items SET image_url = $1 WHERE id = $2",
+                  [r2Url, newItemId]
+                );
+              }
+            } catch (imgErr) {
+              console.warn(`[Menu Import] Image upload failed for "${itemNameEn}":`, imgErr);
+              // Non-fatal – item was already created, continue
+            }
+          }
+        }
       }
 
       res.json({

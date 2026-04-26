@@ -305,9 +305,16 @@ async function switchSection(sectionId) {
       }
       reTranslateContent();
       updateSectionHeader('admin.section-menu', 'menu-edit-btn');
-      // Also show the import button for the menu section
+      // Show the import button only if the feature is enabled or user is superadmin
       var importBtn = document.getElementById('menu-import-btn');
-      if (importBtn) importBtn.style.display = 'inline-block';
+      if (importBtn) {
+        var importFlags = (typeof ADMIN_SETTINGS_CACHE !== 'undefined' && ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
+        if (IS_SUPERADMIN || importFlags.menu_import_enabled === true) {
+          importBtn.style.display = 'inline-block';
+        } else {
+          importBtn.style.display = 'none';
+        }
+      }
     } else if (sectionId === "staff") {
       console.log("🔵 Loading STAFF section");
       
