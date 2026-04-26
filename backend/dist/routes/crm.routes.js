@@ -113,15 +113,39 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", (0, featureFl
         const now = new Date().toISOString().split('T')[0];
         const pastBookings = bookingsRes.rows.filter(b => b.booking_date < now || b.status === 'completed' || b.status === 'cancelled' || b.status === 'no-show');
         const futureBookings = bookingsRes.rows.filter(b => b.booking_date >= now && b.status === 'confirmed');
-        // 4. Eligible coupons (active, not expired, not exhausted)
-        const couponsRes = await db_1.default.query(`SELECT id, code, discount_type, discount_value, min_order_cents,
-              max_uses, current_uses, valid_from, valid_until, is_active
-       FROM coupons
-       WHERE restaurant_id = $1
-         AND is_active = true
-         AND (valid_until IS NULL OR valid_until >= NOW())
-         AND (max_uses IS NULL OR current_uses < max_uses)
-       ORDER BY created_at DESC`, [restaurantId]);
+        // 4. Eligible coupons:
+        //    - All 'open' coupons (active, not expired, not exhausted)
+        //    - 'closed' coupons explicitly assigned to this customer via customer_coupon_access
+        let couponsRes;
+        try {
+            couponsRes = await db_1.default.query(`SELECT c.id, c.code, c.discount_type, c.discount_value, c.minimum_order_value,
+                c.max_uses, c.current_uses, c.valid_until, c.is_active,
+                COALESCE(c.coupon_type, 'open') AS coupon_type
+         FROM coupons c
+         WHERE c.restaurant_id = $1
+           AND c.is_active = true
+           AND (c.valid_until IS NULL OR c.valid_until >= NOW())
+           AND (c.max_uses IS NULL OR c.current_uses < c.max_uses)
+           AND (
+             COALESCE(c.coupon_type, 'open') = 'open'
+             OR EXISTS (
+               SELECT 1 FROM customer_coupon_access cca
+               WHERE cca.coupon_id = c.id AND cca.customer_id = $2
+             )
+           )
+         ORDER BY c.created_at DESC`, [restaurantId, customerId]);
+        }
+        catch {
+            // Fallback if migration 086 not applied yet — return all active coupons
+            couponsRes = await db_1.default.query(`SELECT id, code, discount_type, discount_value, minimum_order_value,
+                max_uses, current_uses, valid_until, is_active, 'open' AS coupon_type
+         FROM coupons
+         WHERE restaurant_id = $1
+           AND is_active = true
+           AND (valid_until IS NULL OR valid_until >= NOW())
+           AND (max_uses IS NULL OR current_uses < max_uses)
+         ORDER BY created_at DESC`, [restaurantId]);
+        }
         res.json({
             customer,
             orders: ordersRes.rows,
@@ -149,6 +173,46 @@ router.post("/restaurants/:restaurantId/crm/customers", (0, featureFlags_1.requi
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`, [restaurantId, name, phone || null, email || null, notes || null]);
         res.status(201).json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+// POST /restaurants/:restaurantId/crm/sync-from-bookings
+// One-time import of booking guests into crm_customers.
+// Safe to call multiple times — skips duplicates.
+router.post("/restaurants/:restaurantId/crm/sync-from-bookings", (0, featureFlags_1.requireFeature)("crm"), async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        // Step 1: Insert guests that aren't already in CRM.
+        // Intentionally avoids referencing bookings.email (column may not exist yet).
+        const insertRes = await db_1.default.query(`WITH booking_guests AS (
+         SELECT
+           restaurant_id,
+           TRIM(guest_name)            AS name,
+           NULLIF(TRIM(phone), '')     AS phone,
+           COUNT(*)::int               AS booking_count
+         FROM bookings
+         WHERE restaurant_id = $1
+           AND guest_name IS NOT NULL AND TRIM(guest_name) <> ''
+         GROUP BY restaurant_id, TRIM(guest_name), NULLIF(TRIM(phone), '')
+       )
+       INSERT INTO crm_customers (restaurant_id, name, phone, total_visits, created_at, updated_at)
+       SELECT bg.restaurant_id, bg.name, bg.phone, bg.booking_count, NOW(), NOW()
+       FROM booking_guests bg
+       WHERE NOT EXISTS (
+         SELECT 1 FROM crm_customers cc
+         WHERE cc.restaurant_id = bg.restaurant_id
+           AND (
+             (bg.phone IS NOT NULL AND cc.phone = bg.phone)
+             OR (bg.phone IS NULL AND cc.name = bg.name AND (cc.phone IS NULL OR cc.phone = ''))
+           )
+       )`, [restaurantId]);
+        const inserted = insertRes.rowCount ?? 0;
+        // Step 2: Count total CRM customers for this restaurant
+        const countRes = await db_1.default.query(`SELECT COUNT(*)::int AS total FROM crm_customers WHERE restaurant_id = $1`, [restaurantId]);
+        res.json({ inserted, total: countRes.rows[0]?.total ?? 0 });
     }
     catch (err) {
         console.error(err);

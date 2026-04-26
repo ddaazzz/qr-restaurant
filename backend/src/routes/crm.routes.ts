@@ -211,6 +211,56 @@ router.post("/restaurants/:restaurantId/crm/customers", requireFeature("crm"), a
   }
 });
 
+// POST /restaurants/:restaurantId/crm/sync-from-bookings
+// One-time import of booking guests into crm_customers.
+// Safe to call multiple times — skips duplicates.
+router.post("/restaurants/:restaurantId/crm/sync-from-bookings", requireFeature("crm"), async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+
+    // Step 1: Insert guests that aren't already in CRM.
+    // Intentionally avoids referencing bookings.email (column may not exist yet).
+    const insertRes = await pool.query(
+      `WITH booking_guests AS (
+         SELECT
+           restaurant_id,
+           TRIM(guest_name)            AS name,
+           NULLIF(TRIM(phone), '')     AS phone,
+           COUNT(*)::int               AS booking_count
+         FROM bookings
+         WHERE restaurant_id = $1
+           AND guest_name IS NOT NULL AND TRIM(guest_name) <> ''
+         GROUP BY restaurant_id, TRIM(guest_name), NULLIF(TRIM(phone), '')
+       )
+       INSERT INTO crm_customers (restaurant_id, name, phone, total_visits, created_at, updated_at)
+       SELECT bg.restaurant_id, bg.name, bg.phone, bg.booking_count, NOW(), NOW()
+       FROM booking_guests bg
+       WHERE NOT EXISTS (
+         SELECT 1 FROM crm_customers cc
+         WHERE cc.restaurant_id = bg.restaurant_id
+           AND (
+             (bg.phone IS NOT NULL AND cc.phone = bg.phone)
+             OR (bg.phone IS NULL AND cc.name = bg.name AND (cc.phone IS NULL OR cc.phone = ''))
+           )
+       )`,
+      [restaurantId]
+    );
+
+    const inserted = insertRes.rowCount ?? 0;
+
+    // Step 2: Count total CRM customers for this restaurant
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM crm_customers WHERE restaurant_id = $1`,
+      [restaurantId]
+    );
+
+    res.json({ inserted, total: countRes.rows[0]?.total ?? 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // PATCH /sessions/:sessionId/customer
 // Update customer_name and customer_phone on a table session
 router.patch("/sessions/:sessionId/customer", async (req, res) => {
