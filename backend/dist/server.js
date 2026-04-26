@@ -16,6 +16,7 @@ const sessionNotifier_1 = require("./services/sessionNotifier");
 const orderNotifier_1 = require("./services/orderNotifier");
 const websocket_1 = require("./services/websocket");
 const kitchenAutoPrintService_1 = require("./services/kitchenAutoPrintService");
+const runMigrations_1 = require("./scripts/runMigrations");
 const PORT = Number(process.env.PORT) || 10000;
 // Get local IP address for local network access
 function getLocalIP() {
@@ -46,6 +47,13 @@ if (fs_1.default.existsSync(certPath) && fs_1.default.existsSync(keyPath)) {
             console.log(`🔒 HTTPS Backend running on https://localhost:${PORT}`);
             console.log(`📱 Secure access: https://${localIP}:${PORT}`);
             console.log(`   ✅ Web Bluetooth API enabled!`);
+            // Run pending database migrations
+            try {
+                await (0, runMigrations_1.runAllMigrations)();
+            }
+            catch (err) {
+                console.warn(`⚠️  Migration runner failed: ${err.message}`);
+            }
             // Initialize WebSocket server
             try {
                 websocket_1.webSocketServer.initialize(server);
@@ -98,6 +106,13 @@ else {
     server = http_1.default.createServer(app_1.default);
     server.listen(PORT, "0.0.0.0", async () => {
         console.log(`🌐 HTTP Backend running on http://localhost:${PORT}`);
+        // Run pending database migrations
+        try {
+            await (0, runMigrations_1.runAllMigrations)();
+        }
+        catch (err) {
+            console.warn(`⚠️  Migration runner failed: ${err.message}`);
+        }
         // Initialize WebSocket server
         try {
             websocket_1.webSocketServer.initialize(server);

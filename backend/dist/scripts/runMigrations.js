@@ -107,12 +107,15 @@ async function runMigration(migration) {
 }
 /**
  * Main migration runner
+ * @param standalone - if true (CLI usage), calls process.exit and pool.end
  */
-async function runAllMigrations() {
+async function runAllMigrations(standalone = false) {
     try {
         console.log('🔄 Starting database migration...\n');
-        console.log(`📊 Database: ${process.env.DATABASE_URL}`);
-        console.log('');
+        if (standalone) {
+            console.log(`📊 Database: ${process.env.DATABASE_URL}`);
+            console.log('');
+        }
         // Initialize migrations table
         await initializeMigrationsTable();
         // Get migrations
@@ -120,7 +123,9 @@ async function runAllMigrations() {
         console.log(`📁 Found ${migrations.length} migration files\n`);
         if (migrations.length === 0) {
             console.log('ℹ️  No migrations to run');
-            process.exit(0);
+            if (standalone)
+                process.exit(0);
+            return;
         }
         // Get already-run migrations
         const ranMigrations = await getRunMigrations();
@@ -129,7 +134,9 @@ async function runAllMigrations() {
         const pendingMigrations = migrations.filter(m => !ranMigrations.includes(m.name));
         if (pendingMigrations.length === 0) {
             console.log('✅ All migrations are up to date!');
-            process.exit(0);
+            if (standalone)
+                process.exit(0);
+            return;
         }
         console.log(`⏳ Running ${pendingMigrations.length} pending migrations...\n`);
         let failureCount = 0;
@@ -142,24 +149,32 @@ async function runAllMigrations() {
         console.log('');
         if (failureCount === 0) {
             console.log('✅ All migrations completed successfully!');
-            process.exit(0);
+            if (standalone)
+                process.exit(0);
         }
         else {
             console.log(`❌ ${failureCount} migration(s) failed`);
             console.log('   Please check the errors above and fix them manually if needed');
-            process.exit(1);
+            if (standalone)
+                process.exit(1);
+            else
+                throw new Error(`${failureCount} migration(s) failed`);
         }
     }
     catch (err) {
         console.error('❌ Fatal error:', err.message);
-        process.exit(1);
+        if (standalone)
+            process.exit(1);
+        else
+            throw err;
     }
     finally {
-        await db_1.default.end();
+        if (standalone)
+            await db_1.default.end();
     }
 }
 // Run migrations if this file is executed directly
 if (require.main === module) {
-    runAllMigrations();
+    runAllMigrations(true);
 }
 //# sourceMappingURL=runMigrations.js.map

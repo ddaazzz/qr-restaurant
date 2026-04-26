@@ -1451,9 +1451,10 @@ router.get("/restaurants/:restaurantId/reports/payment-by-type", async (req, res
     const result = await pool.query(
       `SELECT
         COALESCE(o.payment_method, 'cash') AS payment_method,
-        COUNT(o.id) AS order_count,
-        SUM(o.total_cents) AS total_revenue_cents
+        COUNT(DISTINCT o.id) AS order_count,
+        COALESCE(SUM(oi.price_cents * oi.quantity) FILTER (WHERE oi.removed = false), 0) AS total_revenue_cents
        FROM orders o
+       LEFT JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
        WHERE o.restaurant_id = $1
          AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
        GROUP BY COALESCE(o.payment_method, 'cash')
@@ -1513,6 +1514,14 @@ router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req,
     const { restaurantId } = req.params;
     const { days } = req.query;
     const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    // Check table exists first (migration 083 may not have run yet)
+    const tableCheck = await pool.query(
+      `SELECT to_regclass('public.order_item_status_history') AS t`
+    );
+    if (!tableCheck.rows[0].t) {
+      return res.json({ transitions: [], fastest_items: [] });
+    }
 
     const result = await pool.query(
       `SELECT

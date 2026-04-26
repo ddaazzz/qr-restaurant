@@ -20,7 +20,8 @@ declare function getMigrations(): Migration[];
 declare function getRunMigrations(): Promise<string[]>;
 /**
  * Main migration runner
+ * @param standalone - if true (CLI usage), calls process.exit and pool.end
  */
-declare function runAllMigrations(): Promise<void>;
+declare function runAllMigrations(standalone?: boolean): Promise<void>;
 export { runAllMigrations, getMigrations, getRunMigrations };
 //# sourceMappingURL=runMigrations.d.ts.map
