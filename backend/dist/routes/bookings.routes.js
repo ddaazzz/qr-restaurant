@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = __importDefault(require("../config/db"));
 const featureFlags_1 = require("../middleware/featureFlags");
+const upsertCrmCustomer_1 = require("../utils/upsertCrmCustomer");
 const router = (0, express_1.Router)();
 // GET bookings for a restaurant (optionally filtered by date or table)
 router.get("/restaurants/:restaurantId/bookings", (0, featureFlags_1.requireFeature)("bookings"), async (req, res) => {
@@ -106,9 +107,17 @@ router.post("/restaurants/:restaurantId/bookings", (0, featureFlags_1.requireFea
         const res_data = await db_1.default.query(`INSERT INTO bookings (restaurant_id, table_id, guest_name, pax, booking_date, booking_time, status, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`, [restaurantId, table_id, guest_name, pax, booking_date, booking_time, status, notes]);
+        const createdBooking = res_data.rows[0];
+        // Auto-sync to CRM (fire-and-forget)
+        (0, upsertCrmCustomer_1.upsertCrmCustomer)({
+            restaurantId: restaurantId,
+            name: createdBooking.guest_name,
+            phone: createdBooking.phone,
+            email: createdBooking.email,
+        });
         res.status(201).json({
             success: true,
-            booking: res_data.rows[0]
+            booking: createdBooking
         });
     }
     catch (err) {
@@ -193,9 +202,19 @@ router.patch("/bookings/:bookingId", async (req, res) => {
         if (res_data.rowCount === 0) {
             return res.status(404).json({ error: "Booking not found" });
         }
+        const updatedBooking = res_data.rows[0];
+        // Auto-sync to CRM if guest details changed (fire-and-forget)
+        if (updatedBooking.guest_name) {
+            (0, upsertCrmCustomer_1.upsertCrmCustomer)({
+                restaurantId: updatedBooking.restaurant_id,
+                name: updatedBooking.guest_name,
+                phone: updatedBooking.phone,
+                email: updatedBooking.email,
+            });
+        }
         res.json({
             success: true,
-            booking: res_data.rows[0]
+            booking: updatedBooking
         });
     }
     catch (err) {

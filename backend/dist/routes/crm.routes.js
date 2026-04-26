@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = __importDefault(require("../config/db"));
 const featureFlags_1 = require("../middleware/featureFlags");
+const upsertCrmCustomer_1 = require("../utils/upsertCrmCustomer");
 const router = (0, express_1.Router)();
 // GET /restaurants/:restaurantId/crm/count
 // Quick customer count for settings card preview
@@ -228,11 +229,20 @@ router.patch("/sessions/:sessionId/customer", async (req, res) => {
         const result = await db_1.default.query(`UPDATE table_sessions
        SET customer_name = $1, customer_phone = $2
        WHERE id = $3
-       RETURNING id, customer_name, customer_phone`, [customer_name || null, customer_phone || null, sessionId]);
+       RETURNING id, restaurant_id, customer_name, customer_phone`, [customer_name || null, customer_phone || null, sessionId]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Session not found" });
         }
-        res.json(result.rows[0]);
+        const row = result.rows[0];
+        // Auto-sync to CRM if a name was provided (fire-and-forget)
+        if (row.customer_name) {
+            (0, upsertCrmCustomer_1.upsertCrmCustomer)({
+                restaurantId: row.restaurant_id,
+                name: row.customer_name,
+                phone: row.customer_phone,
+            });
+        }
+        res.json({ id: row.id, customer_name: row.customer_name, customer_phone: row.customer_phone });
     }
     catch (err) {
         console.error(err);

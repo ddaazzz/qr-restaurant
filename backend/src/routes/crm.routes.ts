@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../config/db";
 import { requireFeature } from "../middleware/featureFlags";
+import { upsertCrmCustomer } from "../utils/upsertCrmCustomer";
 
 const router = Router();
 
@@ -272,7 +273,7 @@ router.patch("/sessions/:sessionId/customer", async (req, res) => {
       `UPDATE table_sessions
        SET customer_name = $1, customer_phone = $2
        WHERE id = $3
-       RETURNING id, customer_name, customer_phone`,
+       RETURNING id, restaurant_id, customer_name, customer_phone`,
       [customer_name || null, customer_phone || null, sessionId]
     );
 
@@ -280,7 +281,18 @@ router.patch("/sessions/:sessionId/customer", async (req, res) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+
+    // Auto-sync to CRM if a name was provided (fire-and-forget)
+    if (row.customer_name) {
+      upsertCrmCustomer({
+        restaurantId: row.restaurant_id,
+        name:  row.customer_name,
+        phone: row.customer_phone,
+      });
+    }
+
+    res.json({ id: row.id, customer_name: row.customer_name, customer_phone: row.customer_phone });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

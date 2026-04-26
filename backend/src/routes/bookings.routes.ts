@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../config/db";
 import { requireFeature } from "../middleware/featureFlags";
+import { upsertCrmCustomer } from "../utils/upsertCrmCustomer";
 
 const router = Router();
 
@@ -140,9 +141,19 @@ router.post("/restaurants/:restaurantId/bookings", requireFeature("bookings"), a
       [restaurantId, table_id, guest_name, pax, booking_date, booking_time, status, notes]
     );
 
+    const createdBooking = res_data.rows[0];
+
+    // Auto-sync to CRM (fire-and-forget)
+    upsertCrmCustomer({
+      restaurantId: restaurantId!,
+      name:  createdBooking.guest_name,
+      phone: createdBooking.phone,
+      email: createdBooking.email,
+    });
+
     res.status(201).json({
       success: true,
-      booking: res_data.rows[0]
+      booking: createdBooking
     });
   } catch (err) {
     console.error("Error creating booking:", err);
@@ -243,9 +254,21 @@ router.patch("/bookings/:bookingId", async (req, res) => {
       return res.status(404).json({ error: "Booking not found" });
     }
 
+    const updatedBooking = res_data.rows[0];
+
+    // Auto-sync to CRM if guest details changed (fire-and-forget)
+    if (updatedBooking.guest_name) {
+      upsertCrmCustomer({
+        restaurantId: updatedBooking.restaurant_id,
+        name:  updatedBooking.guest_name,
+        phone: updatedBooking.phone,
+        email: updatedBooking.email,
+      });
+    }
+
     res.json({
       success: true,
-      booking: res_data.rows[0]
+      booking: updatedBooking
     });
   } catch (err) {
     console.error("Error updating booking:", err);
