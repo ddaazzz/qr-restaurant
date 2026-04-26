@@ -915,9 +915,9 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                       <Text style={{ fontSize: 13, color: '#374151' }}>{def.label}</Text>
                       <Switch
                         value={isOn}
-                        onValueChange={(val) =>
-                          selectedRestaurant && saveRestaurantFlag(selectedRestaurant.id, def.key, val)
-                        }
+                        onValueChange={(val) => {
+                          if (selectedRestaurant) saveRestaurantFlag(selectedRestaurant.id, def.key, val);
+                        }}
                         disabled={savingFlag}
                         trackColor={{ false: '#d1d5db', true: '#6366f1' }}
                         thumbColor="#ffffff"
