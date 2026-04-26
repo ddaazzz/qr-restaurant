@@ -83,116 +83,81 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
     // ✅ LOOP STARTS HERE — item is now defined
     for (const item of items) {
       const optionIds: number[] = item.selected_option_ids || [];
+      const isCustomItem = !item.menu_item_id && item.custom_item_name;
 
-      /* ------------------------------
-   VARIANT RULE VALIDATION
------------------------------- */
+      let finalUnitPrice: number;
+      let itemNameSnapshot: string;
 
-// Load variants for this menu item
-const variantsRes = await pool.query(
-  `
-  SELECT id, required, min_select, max_select
-  FROM menu_item_variants
-  WHERE menu_item_id = $1
-  `,
-  [item.menu_item_id]
-);
+      if (isCustomItem) {
+        /* Custom free-text item — no DB lookup needed */
+        finalUnitPrice = item.price_cents || 0;
+        itemNameSnapshot = item.custom_item_name;
+      } else {
+        /* ------------------------------
+           VARIANT RULE VALIDATION
+        ------------------------------ */
 
-const variants = variantsRes.rows;
+        // Load variants for this menu item
+        const variantsRes = await pool.query(
+          `SELECT id, required, min_select, max_select FROM menu_item_variants WHERE menu_item_id = $1`,
+          [item.menu_item_id]
+        );
+        const variants = variantsRes.rows;
 
-// Load selected options → variant mapping
-const optionsRes = optionIds.length
-  ? await pool.query(
-      `
-      SELECT id, variant_id
-      FROM menu_item_variant_options
-      WHERE id = ANY($1::int[])
-      `,
-      [optionIds]
-    )
-  : { rows: [] };
+        // Load selected options → variant mapping
+        const optionsRes = optionIds.length
+          ? await pool.query(
+              `SELECT id, variant_id FROM menu_item_variant_options WHERE id = ANY($1::int[])`,
+              [optionIds]
+            )
+          : { rows: [] };
 
+        // Ensure all selected options belong to this menu item
+        const validVariantIds = new Set(variants.map((v: any) => v.id));
+        for (const o of optionsRes.rows) {
+          if (!validVariantIds.has(o.variant_id)) throw new Error("Invalid variant option selected");
+        }
 
-  // Ensure all selected options belong to this menu item
-const validVariantIds = new Set(variants.map(v => v.id));
+        // Group selected options by variant
+        const selectedByVariant: Record<number, number[]> = {};
+        for (const o of optionsRes.rows) {
+          if (!selectedByVariant[o.variant_id]) selectedByVariant[o.variant_id] = [];
+          selectedByVariant[o.variant_id].push(o.id);
+        }
 
-for (const o of optionsRes.rows) {
-  if (!validVariantIds.has(o.variant_id)) {
-    throw new Error("Invalid variant option selected");
-  }
-}
+        // Validate each variant
+        for (const v of variants) {
+          const selected = selectedByVariant[v.id] || [];
+          const count = selected.length;
+          if (v.required && count === 0) throw new Error(`Required variant "${v.id}" not selected`);
+          if (v.min_select !== null && count < v.min_select) throw new Error(`Must select at least ${v.min_select} option(s)`);
+          if (v.max_select !== null && count > v.max_select) throw new Error(`You can select at most ${v.max_select} option(s)`);
+        }
 
-// Group selected options by variant
-const selectedByVariant: Record<number, number[]> = {};
-
-for (const o of optionsRes.rows) {
-  const variantId = o.variant_id;
-  if (!selectedByVariant[variantId]) {
-    selectedByVariant[variantId] = [];
-  }
-  selectedByVariant[variantId].push(o.id);
-}
-
-// Validate each variant
-for (const v of variants) {
-  const selected = selectedByVariant[v.id] || [];
-  const count = selected.length;
-
-  // REQUIRED
-  if (v.required && count === 0) {
-    throw new Error(`Required variant "${v.id}" not selected`);
-  }
-
-  // MIN
-  if (v.min_select !== null && count < v.min_select) {
-    throw new Error(
-      `Must select at least ${v.min_select} option(s)`
-    );
-  }
-
-  // MAX
-  if (v.max_select !== null && count > v.max_select) {
-    throw new Error(
-      `You can select at most ${v.max_select} option(s)`
-    );
-  }
-}
-
-
-
-      /* ------------------------------
-         Calculate price
-      ------------------------------ */
-      const basePriceRes = await pool.query(
-        `
-        SELECT price_cents FROM menu_items
-        WHERE id = $1 AND available = true
-        `,
-        [item.menu_item_id]
-      );
-
-      if (basePriceRes.rowCount === 0) {
-        throw new Error("Menu item unavailable");
-      }
-
-      const basePrice = Number(basePriceRes.rows[0].price_cents);
-
-      let variantExtra = 0;
-
-      if (optionIds.length > 0) {
-        const variantPriceRes = await pool.query(
-          `
-          SELECT COALESCE(SUM(price_cents), 0) AS extra
-          FROM menu_item_variant_options
-          WHERE id = ANY($1::int[])
-          `,
-          [optionIds]
+        /* ------------------------------
+           Calculate price
+        ------------------------------ */
+        const basePriceRes = await pool.query(
+          `SELECT price_cents, name FROM menu_items WHERE id = $1 AND available = true`,
+          [item.menu_item_id]
         );
 
-        variantExtra = Number(variantPriceRes.rows[0].extra);
-      }
+        if (basePriceRes.rowCount === 0) throw new Error("Menu item unavailable");
 
-      const finalUnitPrice = basePrice + variantExtra;
+        const basePrice = Number(basePriceRes.rows[0].price_cents);
+        itemNameSnapshot = basePriceRes.rows[0].name;
+
+        let variantExtra = 0;
+        if (optionIds.length > 0) {
+          const variantPriceRes = await pool.query(
+            `SELECT COALESCE(SUM(price_cents), 0) AS extra FROM menu_item_variant_options WHERE id = ANY($1::int[])`,
+            [optionIds]
+          );
+          variantExtra = Number(variantPriceRes.rows[0].extra);
+        }
+
+        finalUnitPrice = basePrice + variantExtra;
+      }
 
       /* ------------------------------
          Insert order item
@@ -200,18 +165,20 @@ for (const v of variants) {
       const orderItemRes = await pool.query(
         `
         INSERT INTO order_items
-          (order_id, menu_item_id, quantity, price_cents, status, restaurant_id, notes)
+          (order_id, menu_item_id, quantity, price_cents, status, restaurant_id, notes, custom_item_name, item_name_snapshot)
         VALUES
-          ($1, $2, $3, $4, 'pending', $5, $6)
+          ($1, $2, $3, $4, 'pending', $5, $6, $7, $8)
         RETURNING id
         `,
         [
           orderId,
-          item.menu_item_id,
+          isCustomItem ? null : item.menu_item_id,
           item.quantity,
           finalUnitPrice,
           restaurantId,
-          item.notes || null
+          item.notes || null,
+          isCustomItem ? item.custom_item_name : null,
+          itemNameSnapshot,
         ]
       );
 
@@ -308,14 +275,14 @@ for (const v of variants) {
               oi.menu_item_id,
               oi.quantity, 
               oi.price_cents, 
-              mi.name as item_name,
-              mi.category_id as menu_category_id,
+              COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name) as item_name,
+              COALESCE(mi.category_id, -1) as menu_category_id,
               oi.print_category_id,
               ts.table_name, 
               o.created_at
             FROM order_items oi
             JOIN orders o ON oi.order_id = o.id
-            JOIN menu_items mi ON oi.menu_item_id = mi.id
+            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             LEFT JOIN table_sessions ts ON o.session_id = ts.id
             WHERE oi.order_id = $1 AND o.restaurant_id = $2
             ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
@@ -587,8 +554,8 @@ router.get("/kitchen/items", async (req, res) => {
         oi.is_addon,
         oi.parent_order_item_id,
 
-        mi.name AS item_name,
-        mi.category_id,
+        COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name) AS item_name,
+        COALESCE(mi.category_id, -1) AS category_id,
 
         COALESCE(tu.display_name, 'Unknown Table') AS table_name,
         ts.order_type,
@@ -612,7 +579,7 @@ router.get("/kitchen/items", async (req, res) => {
       JOIN orders o ON oi.order_id = o.id
       JOIN table_sessions ts ON o.session_id = ts.id
       LEFT JOIN table_units tu ON ts.table_unit_id = tu.id
-      JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
       LEFT JOIN menu_categories mc ON mi.category_id = mc.id
 
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
@@ -1086,7 +1053,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         oi.status,
         oi.is_addon,
         oi.parent_order_item_id,
-        mi.name as menu_item_name,
+        COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name) as menu_item_name,
         mi.image_url,
         STRING_AGG(
           DISTINCT vo.id::text,
@@ -1097,12 +1064,12 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
           '; '
         ) as variants
       FROM order_items oi
-      JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
       LEFT JOIN order_item_variants oiv ON oiv.order_item_id = oi.id
       LEFT JOIN menu_item_variant_options vo ON vo.id = oiv.variant_option_id
       LEFT JOIN menu_item_variants v ON v.id = vo.variant_id
       WHERE oi.order_id = $1 AND oi.removed = false
-      GROUP BY oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price_cents, oi.status, oi.is_addon, oi.parent_order_item_id, mi.name, mi.image_url
+      GROUP BY oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price_cents, oi.status, oi.is_addon, oi.parent_order_item_id, oi.custom_item_name, oi.item_name_snapshot, mi.name, mi.image_url
       ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
       `,
       [orderId]
@@ -1309,17 +1276,17 @@ router.get("/restaurants/:restaurantId/reports/top-items", async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-        mi.name AS item_name,
+        COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents
       FROM order_items oi
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
       WHERE o.restaurant_id = $1
         AND oi.removed = false
         AND oi.is_addon = false
         AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
-      GROUP BY mi.name
+      GROUP BY COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name, 'Deleted Item')
       ORDER BY total_qty DESC
       LIMIT 10`,
       [restaurantId, daysBack]
@@ -1379,20 +1346,20 @@ router.get("/restaurants/:restaurantId/reports/sales-by-item", async (req, res) 
 
     const result = await pool.query(
       `SELECT
-        mi.name AS item_name,
-        mc.name AS category_name,
+        COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
+        COALESCE(mc.name, 'Custom') AS category_name,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents,
         COUNT(DISTINCT o.id) AS order_count
       FROM order_items oi
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
       LEFT JOIN menu_categories mc ON mi.category_id = mc.id
       JOIN orders o ON o.id = oi.order_id
       WHERE o.restaurant_id = $1
         AND oi.removed = false
         AND oi.is_addon = false
         AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
-      GROUP BY mi.name, mc.name
+      GROUP BY COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name, 'Deleted Item'), COALESCE(mc.name, 'Custom')
       ORDER BY total_revenue_cents DESC`,
       [restaurantId, daysBack]
     );
@@ -1950,53 +1917,37 @@ router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) =>
     const toDate   = date_to   || new Date().toISOString().slice(0, 10);
     const title    = `${restName}  ${fromDate} – ${toDate}`;
 
-    // --- Query 1: orders aggregated by (day, order_type, payment_method) ---
-    const ordersRes = await pool.query<{
+    // --- Query 1: sessions aggregated by (day, order_type, payment_method) ---
+    // discount and total live on table_sessions, not on individual orders
+    const sessionsRes = await pool.query<{
       day: string; order_type: string; payment_method: string;
-      order_count: number; subtotal_cents: string;
-      discount_cents: string; total_cents: string;
+      session_count: number; total_pax: number;
+      subtotal_cents: string; discount_cents: string;
     }>(
       `SELECT
-         (o.created_at AT TIME ZONE $3)::date::text AS day,
-         ts.order_type,
-         COALESCE(o.payment_method, 'other') AS payment_method,
-         COUNT(o.id)::int AS order_count,
-         COALESCE(SUM(it.subtotal), 0)::text AS subtotal_cents,
-         COALESCE(SUM(o.discount_cents), 0)::text AS discount_cents,
-         COALESCE(SUM(o.total_cents), 0)::text AS total_cents
-       FROM orders o
-       JOIN table_sessions ts ON ts.id = o.session_id
+         (ts.started_at AT TIME ZONE $3)::date::text AS day,
+         COALESCE(ts.order_type, 'table') AS order_type,
+         COALESCE(ts.payment_method, 'other') AS payment_method,
+         COUNT(ts.id)::int AS session_count,
+         COALESCE(SUM(ts.pax), 0)::int AS total_pax,
+         COALESCE(SUM(sess_sub.subtotal), 0)::text AS subtotal_cents,
+         COALESCE(SUM(ts.discount_applied), 0)::text AS discount_cents
+       FROM table_sessions ts
        JOIN LATERAL (
-         SELECT COALESCE(SUM(price_cents * quantity), 0) AS subtotal
-         FROM order_items
-         WHERE order_id = o.id AND removed = false
-       ) it ON true
-       WHERE o.restaurant_id = $1
-         AND o.status IN ('paid', 'completed')
-         AND (o.created_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
+         SELECT COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS subtotal
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
+         WHERE o.session_id = ts.id
+       ) sess_sub ON true
+       WHERE ts.restaurant_id = $1
+         AND ts.ended_at IS NOT NULL
+         AND (ts.started_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
        GROUP BY 1, 2, 3
        ORDER BY 1, 2, 3`,
       [restaurantId, fromDate, tz, toDate],
     );
 
-    // --- Query 2: unique sessions per (day, order_type) for pax ---
-    const sessionsRes = await pool.query<{
-      day: string; order_type: string; pax: number; session_id: string;
-    }>(
-      `SELECT DISTINCT
-         (o.created_at AT TIME ZONE $3)::date::text AS day,
-         ts.order_type,
-         ts.id::text AS session_id,
-         COALESCE(ts.pax, 0)::int AS pax
-       FROM orders o
-       JOIN table_sessions ts ON ts.id = o.session_id
-       WHERE o.restaurant_id = $1
-         AND o.status IN ('paid', 'completed')
-         AND (o.created_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date`,
-      [restaurantId, fromDate, tz, toDate],
-    );
-
-    // --- Query 3: bookings per day ---
+    // --- Query 2: bookings per day ---
     const bookingsRes = await pool.query<{ day: string; status: string; count: number }>(
       `SELECT booking_date::text AS day, status, COUNT(*)::int AS count
        FROM bookings
@@ -2006,20 +1957,28 @@ router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) =>
       [restaurantId, fromDate, toDate],
     );
 
-    // --- Query 4: staff by day ---
+    // --- Query 3: staff by day (closer staff on session) ---
     const staffRes = await pool.query<{
-      day: string; staff_name: string; order_count: number; total_cents: string;
+      day: string; staff_name: string; session_count: number;
+      subtotal_cents: string; discount_cents: string;
     }>(
       `SELECT
-         (o.created_at AT TIME ZONE $3)::date::text AS day,
+         (ts.started_at AT TIME ZONE $3)::date::text AS day,
          COALESCE(u.name, 'Unknown') AS staff_name,
-         COUNT(o.id)::int AS order_count,
-         COALESCE(SUM(o.total_cents), 0)::text AS total_cents
-       FROM orders o
-       LEFT JOIN users u ON u.id = o.staff_id
-       WHERE o.restaurant_id = $1
-         AND o.status IN ('paid', 'completed')
-         AND (o.created_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
+         COUNT(ts.id)::int AS session_count,
+         COALESCE(SUM(sess_sub.subtotal), 0)::text AS subtotal_cents,
+         COALESCE(SUM(ts.discount_applied), 0)::text AS discount_cents
+       FROM table_sessions ts
+       LEFT JOIN users u ON u.id = ts.closed_by_staff_id
+       JOIN LATERAL (
+         SELECT COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS subtotal
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
+         WHERE o.session_id = ts.id
+       ) sess_sub ON true
+       WHERE ts.restaurant_id = $1
+         AND ts.ended_at IS NOT NULL
+         AND (ts.started_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
        GROUP BY 1, 2
        ORDER BY 1, 2`,
       [restaurantId, fromDate, tz, toDate],
@@ -2037,42 +1996,31 @@ router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) =>
       return m.get(k)!;
     };
 
-    for (const r of ordersRes.rows) {
-      const pm = canonicalPM(r.payment_method);
-      const sub   = BigInt(r.subtotal_cents);
-      const disc  = BigInt(r.discount_cents);
-      const tot   = BigInt(r.total_cents);
-      const cnt   = r.order_count;
+    for (const r of sessionsRes.rows) {
+      const pm   = canonicalPM(r.payment_method);
+      const sub  = BigInt(r.subtotal_cents);
+      const disc = BigInt(r.discount_cents);
+      const sc   = BigInt(Math.round(Number(sub) * scRate));
+      const net  = sub + sc - disc;
+      const cnt  = r.session_count;
+      const pax  = r.total_pax;
 
       const applyTo = (d: DayData) => {
         d.subtotalCents += sub;
         d.discountCents += disc;
-        d.totalCents    += tot;
+        d.totalCents    += net;
         d.orderCount    += cnt;
-        d.payments[pm].qty          += cnt;
-        d.payments[pm].amountCents  += tot;
+        d.pax           += pax;
+        d.sessionCount  += cnt;
+        d.payments[pm].qty         += cnt;
+        d.payments[pm].amountCents += net;
       };
 
-      applyTo(getOrCreate(allMap,     r.day));
+      applyTo(getOrCreate(allMap, r.day));
       if (r.order_type === 'table') {
-        applyTo(getOrCreate(dineMap,  r.day));
+        applyTo(getOrCreate(dineMap, r.day));
       } else {
         applyTo(getOrCreate(takeoutMap, r.day));
-      }
-    }
-
-    // Pax aggregation (unique sessions)
-    for (const r of sessionsRes.rows) {
-      const addPax = (m: Map<string, DayData>) => {
-        const d = getOrCreate(m, r.day);
-        d.pax          += r.pax;
-        d.sessionCount += 1;
-      };
-      addPax(allMap);
-      if (r.order_type === 'table') {
-        addPax(dineMap);
-      } else {
-        addPax(takeoutMap);
       }
     }
 
@@ -2102,7 +2050,7 @@ router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) =>
     staffWs.mergeCells(1, 1, 1, 4);
     staffWs.getRow(1).getCell(1).font = { bold: true, size: 12 };
 
-    const staffHeader = staffWs.addRow(['Date', 'Staff Name', 'Orders', 'Net Revenue']);
+    const staffHeader = staffWs.addRow(['Date', 'Staff Name', 'Sessions', 'Net Revenue']);
     staffHeader.eachCell(c => {
       c.font  = { bold: true };
       c.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
@@ -2113,10 +2061,13 @@ router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) =>
     let staffTotalOrders = 0;
     let staffTotalCents  = 0n;
     for (const r of staffRes.rows) {
-      const tc = BigInt(r.total_cents);
-      staffWs.addRow([fmtDayLabel(r.day), r.staff_name, r.order_count, cents2(tc)]);
-      staffTotalOrders += r.order_count;
-      staffTotalCents  += tc;
+      const sub  = BigInt(r.subtotal_cents);
+      const disc = BigInt(r.discount_cents);
+      const sc   = BigInt(Math.round(Number(sub) * scRate));
+      const net  = sub + sc - disc;
+      staffWs.addRow([fmtDayLabel(r.day), r.staff_name, r.session_count, cents2(net)]);
+      staffTotalOrders += r.session_count;
+      staffTotalCents  += net;
     }
     const staffTotRow = staffWs.addRow(['Total', '', staffTotalOrders, cents2(staffTotalCents)]);
     staffTotRow.eachCell(c => {
