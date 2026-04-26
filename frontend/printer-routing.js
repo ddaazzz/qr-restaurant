@@ -14,6 +14,11 @@
 const printQueues = new Map(); // deviceId -> { isProcessing: bool, queue: [] }
 const PRINT_QUEUE_TIMEOUT = 5000; // 5 seconds timeout between prints
 
+function tr(key, fallback = '') {
+  if (typeof t === 'function') return t(key);
+  return fallback || key;
+}
+
 /**
  * Queue a print job and wait for it to complete
  */
@@ -446,7 +451,7 @@ async function printQRViaAPI(restaurantId, sessionId, tableId, tableName, qrToke
       // Browser printing - open print dialog
       console.log('[PrintRouter] Received HTML, opening print dialog');
       handleBrowserPrint(result.html);
-      alert('✅ Print dialog opened. Please select a printer and confirm.');
+      alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
       return result;
     } else if (result.bluetoothPayload) {
       // Bluetooth printing via Web Bluetooth API
@@ -462,7 +467,7 @@ async function printQRViaAPI(restaurantId, sessionId, tableId, tableName, qrToke
     } else if (result.jobId) {
       // Queued for printing
       console.log('[PrintRouter] QR code queued with job ID:', result.jobId);
-      alert('✅ QR code queued for printing');
+      alert(tr('admin.printer-queued-qr', '✅ QR code queued for printing'));
       return result;
     }
     
@@ -474,9 +479,9 @@ async function printQRViaAPI(restaurantId, sessionId, tableId, tableName, qrToke
     // Friendly error messages
     let userMessage = err.message;
     if (err.message && err.message.includes('No QR printer configured')) {
-      userMessage = '⚠️ QR printer not configured.\n\nPlease set up a printer in Settings first.';
+      userMessage = tr('admin.printer-qr-not-configured', '⚠️ QR printer not configured.\n\nPlease set up a printer in Settings first.');
     } else if (err.message && err.message.includes('not paired')) {
-      userMessage = '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in QR printer settings.';
+      userMessage = tr('admin.printer-bt-not-paired', '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in QR printer settings.');
     }
     
     alert('❌ ' + userMessage);
@@ -513,7 +518,7 @@ async function printOrderViaAPI(restaurantId, orderId, priority = 0) {
       // Browser printing
       console.log('[PrintRouter] Received HTML, opening print dialog');
       handleBrowserPrint(result.html);
-      alert('✅ Print dialog opened. Please select a printer and confirm.');
+      alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
       return result;
     } else if (result.bluetoothPayload) {
       // Bluetooth printing via Web Bluetooth API
@@ -529,7 +534,7 @@ async function printOrderViaAPI(restaurantId, orderId, priority = 0) {
     } else if (result.jobId) {
       // Queued for printing
       console.log('[PrintRouter] Order queued with job ID:', result.jobId);
-      alert('✅ Order queued for printing');
+      alert(tr('admin.printer-queued-order', '✅ Order queued for printing'));
       return result;
     }
 
@@ -541,11 +546,11 @@ async function printOrderViaAPI(restaurantId, orderId, priority = 0) {
     // Friendly error messages
     let userMessage = err.message;
     if (err.message && err.message.includes('No printer configured')) {
-      userMessage = '⚠️ Order printer not configured.\n\nPlease set up a printer in Settings first.';
+      userMessage = tr('admin.printer-order-not-configured', '⚠️ Order printer not configured.\n\nPlease set up a printer in Settings first.');
     } else if (err.message && err.message.includes('not paired')) {
-      userMessage = '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in order printer settings.';
+      userMessage = tr('admin.printer-bt-not-paired', '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in order printer settings.');
     } else if (err.message && err.message.includes('device not configured')) {
-      userMessage = '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.';
+      userMessage = tr('admin.printer-bt-device-not-configured', '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.');
     }
     
     alert('❌ ' + userMessage);
@@ -583,7 +588,7 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
       // Browser printing
       console.log('[PrintRouter] Received HTML, opening print dialog');
       handleBrowserPrint(result.html);
-      alert('✅ Print dialog opened. Please select a printer and confirm.');
+      alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
       return result;
     } else if (result.bluetoothPayload) {
       // Bluetooth printing via Web Bluetooth API
@@ -599,7 +604,7 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
     } else if (result.jobId) {
       // Queued for printing
       console.log('[PrintRouter] Bill queued with job ID:', result.jobId);
-      alert('✅ Bill queued for printing');
+      alert(tr('admin.printer-queued-bill', '✅ Bill queued for printing'));
       return result;
     }
 
@@ -611,11 +616,11 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
     // Friendly error messages
     let userMessage = err.message;
     if (err.message && err.message.includes('No printer configured')) {
-      userMessage = '⚠️ Bill printer not configured.\n\nPlease set up a printer in Settings first.';
+      userMessage = tr('admin.printer-bill-not-configured', '⚠️ Bill printer not configured.\n\nPlease set up a printer in Settings first.');
     } else if (err.message && err.message.includes('not paired')) {
-      userMessage = '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in bill printer settings.';
+      userMessage = tr('admin.printer-bt-not-paired', '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in bill printer settings.');
     } else if (err.message && err.message.includes('device not configured')) {
-      userMessage = '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.';
+      userMessage = tr('admin.printer-bt-device-not-configured', '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.');
     }
     
     alert('❌ ' + userMessage);

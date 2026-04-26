@@ -209,7 +209,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [crmCustomers, setCrmCustomers] = useState<CrmCustomer[]>([]);
   const [crmLoading, setCrmLoading] = useState(false);
   const [crmLoadingMore, setCrmLoadingMore] = useState(false);
-  const [crmImporting, setCrmImporting] = useState(false);
   const [crmSearchInput, setCrmSearchInput] = useState('');
   const [crmSearchTerm, setCrmSearchTerm] = useState('');
   const [crmSortBy, setCrmSortBy] = useState<'last_visit' | 'total_spent' | 'total_orders' | 'created_at'>('last_visit');
@@ -638,23 +637,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
-  const importCrmFromBookings = async () => {
-    try {
-      setCrmImporting(true);
-      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/import-from-bookings`);
-      const inserted = Number(res.data?.inserted || 0);
-      const updated = Number(res.data?.updated || 0);
-      await Promise.all([
-        fetchCrmCount(),
-        fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy }),
-      ]);
-      Alert.alert('Import complete', `${inserted} new customers added, ${updated} updated.`);
-    } catch (err: any) {
-      Alert.alert('Import failed', err.response?.data?.error || 'Please try again.');
-    } finally {
-      setCrmImporting(false);
-    }
-  };
 
   const loadAddonPresetItems = async (presetId: number) => {
     try {
@@ -1948,22 +1930,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
-            <View style={styles.crmToolbarHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Customers</Text>
-                <Text style={styles.sectionDescription}>
-                  {crmSearchTerm
-                    ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'} for "${crmSearchTerm}"`
-                    : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, crmImporting && { opacity: 0.6 }]}
-                disabled={crmImporting}
-                onPress={importCrmFromBookings}
-              >
-                <Text style={styles.btnText}>{crmImporting ? 'Importing...' : 'Import Bookings'}</Text>
-              </TouchableOpacity>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Customers</Text>
+              <Text style={styles.label}>
+                {crmSearchTerm
+                  ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
+                  : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
+              </Text>
             </View>
 
             <TextInput
@@ -4301,13 +4274,6 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     paddingVertical: 16,
-  },
-  crmToolbarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 12,
   },
   crmSortRow: {
     marginTop: 12,

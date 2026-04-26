@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
-  <title>Kitchen Dashboard | Chuio</title>
+  <title data-i18n="kitchen.page-title">Kitchen Dashboard | Chuio</title>
   <link rel="stylesheet" href="kitchen.css" />
   <link rel="stylesheet" href="/language-switcher.css" />
   
@@ -63,17 +63,17 @@
   <div id="kitchen-app" class="kitchen-app">
     <div class="kitchen-header">
       <div class="kitchen-header-left">
-        <h1 data-i18n="kitchen.title">Kitchen Queue</h1>
-        <span class="live-indicator">● Live</span>
+        <h1 data-i18n="kitchen.kitchen-queue">Kitchen Queue</h1>
+        <span class="live-indicator" data-i18n="kitchen.live">● Live</span>
       </div>
       <div class="kitchen-header-right">
-        <button id="clock-btn" class="btn-secondary" onclick="toggleKitchenClockInOut()" style="display: none; margin-right: 8px;">⏱ Clock In</button>
+        <button id="clock-btn" class="btn-secondary" onclick="toggleKitchenClockInOut()" style="display: none; margin-right: 8px;" data-i18n="admin.clock-in">⏱ Clock In</button>
         <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
-          common.menu
+          <span data-i18n="common.menu">Menu</span>
         </button>
         <div id="admin-dropdown" class="admin-dropdown hidden">
           <div class="dropdown-item lang-selector-dropdown">
-            <label style="display: block; padding: 10px 15px; font-weight: 500; border-bottom: 1px solid #ddd;">Language</label>
+            <label style="display: block; padding: 10px 15px; font-weight: 500; border-bottom: 1px solid #ddd;" data-i18n="admin.language">Language</label>
             <button id="lang-en" class="lang-btn" onclick="setLanguage('en'); toggleAdminDropdown()">English</button>
             <button id="lang-zh" class="lang-btn" onclick="setLanguage('zh'); toggleAdminDropdown()">中文</button>
           </div>

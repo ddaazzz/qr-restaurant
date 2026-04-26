@@ -222,7 +222,7 @@ async function submitPin() {
     initializeStaffApp();
   } catch (err) {
     console.error(err);
-    errorEl.textContent = "Connection error";
+    errorEl.textContent = t('admin.connection-error');
     errorEl.style.display = "block";
   }
 }
@@ -497,10 +497,10 @@ async function toggleClockInOut() {
     }
     const newState = !window.staffCurrentlyClockedIn;
     updateClockBtn(newState);
-    alert(newState ? "Clocked in successfully." : "Clocked out successfully.");
+    alert(newState ? t('admin.clock-in-success') : t('admin.clock-out-success'));
   } catch (err) {
     console.error(err);
-    alert("Connection error");
+    alert(t('admin.connection-error'));
   }
 }
 
@@ -511,11 +511,11 @@ function showClockInPrompt() {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:340px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.25);">
       <p style="font-size:20px;margin:0 0 8px;">⏱</p>
-      <h3 style="margin:0 0 10px;font-size:18px;">You haven't clocked in yet</h3>
-      <p style="color:#666;font-size:14px;margin:0 0 20px;">Would you like to clock in now?</p>
+      <h3 style="margin:0 0 10px;font-size:18px;">${t('admin.clock-in-prompt-title')}</h3>
+      <p style="color:#666;font-size:14px;margin:0 0 20px;">${t('admin.clock-in-prompt-body')}</p>
       <div style="display:flex;gap:12px;justify-content:center;">
-        <button onclick="clockInFromPrompt()" style="flex:1;padding:10px 16px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;">✅ Clock In</button>
-        <button onclick="dismissClockInPrompt()" style="flex:1;padding:10px 16px;background:#f3f4f6;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;">Skip</button>
+        <button onclick="clockInFromPrompt()" style="flex:1;padding:10px 16px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;">${t('admin.clock-in')}</button>
+        <button onclick="dismissClockInPrompt()" style="flex:1;padding:10px 16px;background:#f3f4f6;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;">${t('admin.skip')}</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);

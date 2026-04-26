@@ -2544,23 +2544,3 @@ function crmBuildProfile(d) {
   return html;
 }
 
-async function crmImportFromBookings() {
-  var btn = document.getElementById('crm-import-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
-  try {
-    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/import-from-bookings', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
-    });
-    if (!res.ok) throw new Error('Failed');
-    var data = await res.json();
-    alert('Import complete: ' + data.inserted + ' new, ' + data.updated + ' updated.');
-    await loadCrmPage();
-    loadCrmCountPreview();
-  } catch (err) {
-    console.error('[CRM import]', err);
-    alert('Import failed. Please try again.');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Import from Bookings'; }
-  }
-}
