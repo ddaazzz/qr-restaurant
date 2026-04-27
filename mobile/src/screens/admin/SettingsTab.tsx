@@ -170,6 +170,7 @@ interface CrmOrder {
   order_type?: string | null;
   table_label?: string | null;
   pax?: number | null;
+  discount_applied?: number | null;
   total_cents?: number;
 }
 
@@ -1981,8 +1982,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
-            {!!customer.phone && <Text style={styles.crmProfileContact}>{customer.phone}</Text>}
-            {!!customer.email && <Text style={styles.crmProfileContact}>{customer.email}</Text>}
+            {!!customer.phone && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Text style={[styles.crmProfileContact, { color: '#9ca3af', fontSize: 11 }]}>📞</Text>
+                <Text style={styles.crmProfileContact}>{customer.phone}</Text>
+              </View>
+            )}
+            {!!customer.email && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Text style={[styles.crmProfileContact, { color: '#9ca3af', fontSize: 11 }]}>✉️</Text>
+                <Text style={styles.crmProfileContact}>{customer.email}</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -1998,6 +2009,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.crmStatCard}>
             <Text style={styles.crmStatValue}>{formatCurrency(total_transacted_cents || 0)}</Text>
             <Text style={styles.crmStatLabel}>Transacted</Text>
+          </View>
+          <View style={styles.crmStatCard}>
+            <Text style={styles.crmStatValue} numberOfLines={1} adjustsFontSizeToFit>{customer.last_visit_at ? formatDate(customer.last_visit_at) : '—'}</Text>
+            <Text style={styles.crmStatLabel}>Last Visit</Text>
           </View>
         </View>
 
@@ -2017,18 +2032,39 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
         {orders.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Orders</Text>
-            {orders.slice(0, 10).map((order) => (
-              <View key={order.order_id} style={styles.crmHistoryRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.crmHistoryTitle}>#{order.restaurant_order_number || order.order_id}</Text>
-                  <Text style={styles.crmHistoryMeta}>
-                    {order.table_label || 'Counter'} · {formatDate(order.created_at)}
-                  </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={styles.sectionTitle}>Recent Orders</Text>
+              {eligible_coupons && eligible_coupons.length > 0 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, flex: 1, justifyContent: 'flex-end' }}>
+                  {eligible_coupons.slice(0, 3).map((coupon) => (
+                    <View key={coupon.id} style={{ backgroundColor: '#eff6ff', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, color: '#3b82f6', fontWeight: '600' }}>
+                        {coupon.code}: {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-                <Text style={styles.crmOrderAmount}>{formatCurrency(order.total_cents || 0)}</Text>
-              </View>
-            ))}
+              )}
+            </View>
+            {orders.slice(0, 10).map((order) => {
+              const disc = order.discount_applied || 0;
+              return (
+                <View key={order.order_id} style={styles.crmHistoryRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.crmHistoryTitle}>#{order.restaurant_order_number || order.order_id}</Text>
+                    <Text style={styles.crmHistoryMeta}>
+                      {order.table_label || 'Counter'} · {formatDate(order.created_at)}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.crmOrderAmount}>{formatCurrency(order.total_cents || 0)}</Text>
+                    {disc > 0 && (
+                      <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '500' }}>−{formatCurrency(disc)}</Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 

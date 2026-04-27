@@ -95,6 +95,7 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
          ts.order_type,
          COALESCE(t.name, 'Counter') AS table_label,
          ts.pax,
+         COALESCE(ts.discount_applied, 0) AS discount_applied,
          (
            SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
            FROM order_items oi2

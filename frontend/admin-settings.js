@@ -1871,6 +1871,9 @@ function clearPaymentTerminalForm() {
   document.getElementById('new-terminal-merchant-token').value = '';
   document.getElementById('new-terminal-secret-code').value = '';
   document.getElementById('new-terminal-gateway-env').value = 'sandbox';
+  document.getElementById('new-terminal-pa-ip').value = '';
+  document.getElementById('new-terminal-pa-port').value = '18080';
+  document.getElementById('new-terminal-pa-endpoint').value = '/v2/pos/sign';
   document.getElementById('terminal-error').style.display = 'none';
   document.getElementById('terminal-success').style.display = 'none';
   document.getElementById('terminal-test-result').style.display = 'none';
@@ -1918,6 +1921,9 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').value = terminal.merchant_token || terminal.app_id || '';
       document.getElementById('new-terminal-secret-code').value = terminal.secret_code || terminal.app_secret || '';
       document.getElementById('new-terminal-gateway-env').value = terminal.payment_gateway_env || 'sandbox';
+      document.getElementById('new-terminal-pa-ip').value = terminal.terminal_ip || '';
+      document.getElementById('new-terminal-pa-port').value = terminal.terminal_port || '18080';
+      document.getElementById('new-terminal-pa-endpoint').value = terminal.endpoint_path || '/v2/pos/sign';
     } else {
       // Load KPay fields
       document.getElementById('new-terminal-app-id').value = terminal.app_id || '';
@@ -1980,6 +1986,9 @@ async function savePaymentTerminal() {
     const merchantToken = document.getElementById('new-terminal-merchant-token').value.trim();
     const secretCode = document.getElementById('new-terminal-secret-code').value.trim();
     const env = document.getElementById('new-terminal-gateway-env').value;
+    const paIp = document.getElementById('new-terminal-pa-ip').value.trim();
+    const paPort = document.getElementById('new-terminal-pa-port').value.trim();
+    const paEndpoint = document.getElementById('new-terminal-pa-endpoint').value.trim();
     
     if (!merchantToken || !secretCode) {
       showError('terminal-error', 'Merchant Token and Secret Code are required for Payment Asia');
@@ -1988,9 +1997,14 @@ async function savePaymentTerminal() {
     
     payload = {
       vendor_name: vendor,
-      app_id: merchantToken, // Merchant Token stored in app_id
-      app_secret: secretCode, // Secret Code stored in app_secret
-      payment_gateway_env: env
+      app_id: merchantToken,
+      app_secret: secretCode,
+      merchant_token: merchantToken,
+      secret_code: secretCode,
+      payment_gateway_env: env,
+      terminal_ip: paIp || null,
+      terminal_port: paPort ? parseInt(paPort) : null,
+      endpoint_path: paEndpoint || '/v2/pos/sign'
     };
   } else {
     // KPay validation
@@ -2568,13 +2582,15 @@ function crmBuildProfile(d) {
         '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">' + initials + '</div>' +
         '<div>' +
           '<div style="font-size:18px;font-weight:700;">' + (c.name || '—') + '</div>' +
-          '<div style="font-size:12px;opacity:0.85;">' + (c.phone || '') + (c.phone && c.email ? '  ·  ' : '') + (c.email || '') + '</div>' +
+          (c.phone ? '<div style="font-size:12px;opacity:0.9;margin-top:3px;">📞 ' + c.phone + '</div>' : '') +
+          (c.email ? '<div style="font-size:12px;opacity:0.9;margin-top:2px;">✉️ ' + c.email + '</div>' : '') +
         '</div>' +
       '</div>' +
       '<div style="display:flex;">' +
         crmStatBox('Visits', c.total_visits || 0) +
         crmStatBox('Spent (est.)', spent) +
         crmStatBox('Transacted', totalTransacted) +
+        crmStatBox('Last Visit', c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString() : '—') +
       '</div>' +
       (c.notes ? '<div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f0f0f0;">📝 ' + c.notes + '</div>' : '') +
     '</div>';
@@ -2592,18 +2608,31 @@ function crmBuildProfile(d) {
   // Recent orders
   if (orders.length > 0) {
     html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Recent Orders</h4>';
+    // Eligible coupon badges above table
+    var eligibleCoupons = d.eligible_coupons || [];
+    if (eligibleCoupons.length > 0) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+      eligibleCoupons.slice(0, 5).forEach(function(coupon) {
+        var discLabel = coupon.discount_type === 'percentage' ? coupon.discount_value + '% off' : '$' + coupon.discount_value + ' off';
+        html += '<span style="background:#eff6ff;color:#3b82f6;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;">' + coupon.code + ': ' + discLabel + '</span>';
+      });
+      html += '</div>';
+    }
     html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
       '<thead><tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">' +
         '<th style="padding:8px;text-align:left;color:#6b7280;">#</th>' +
         '<th style="padding:8px;text-align:left;color:#6b7280;">Table</th>' +
+        '<th style="padding:8px;text-align:right;color:#6b7280;">Discount</th>' +
         '<th style="padding:8px;text-align:right;color:#6b7280;">Total</th>' +
         '<th style="padding:8px;text-align:right;color:#6b7280;">Date</th>' +
       '</tr></thead><tbody>';
     orders.slice(0, 10).forEach(function(o) {
       var total = parseInt(o.total_cents, 10) || 0;
+      var disc  = parseInt(o.discount_applied, 10) || 0;
       html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
-        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.id) + '</td>' +
+        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.order_id) + '</td>' +
         '<td style="padding:8px;">' + (o.table_label || '—') + '</td>' +
+        '<td style="padding:8px;text-align:right;color:' + (disc > 0 ? '#dc2626' : '#9ca3af') + ';">' + (disc > 0 ? '−$' + (disc / 100).toFixed(2) : '—') + '</td>' +
         '<td style="padding:8px;text-align:right;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</td>' +
         '<td style="padding:8px;text-align:right;color:#6b7280;">' + new Date(o.created_at).toLocaleDateString() + '</td>' +
         '</tr>';
