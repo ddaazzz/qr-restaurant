@@ -119,10 +119,26 @@ interface Coupon {
   is_active: boolean;
 }
 
+interface ServiceRequest {
+  id: number;
+  restaurant_id: number;
+  table_session_id: number;
+  table_unit_id?: number;
+  request_type: string;
+  label: string;
+  status: string;
+  created_at: string;
+  table_name: string;
+  session_id: number;
+}
+
 interface Order {
   order_id?: number;
   id?: number;
   restaurant_order_number?: number;
+  order_status?: string;
+  order_payment_method?: string;
+  order_reference?: string;
   items: Array<{
     name?: string;
     item_name?: string;
@@ -166,6 +182,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [restaurantName, setRestaurantName] = useState<string>('');
+  const [restaurantLanguage, setRestaurantLanguage] = useState<string>('en');
   const [qrMode, setQrMode] = useState<string>('regenerate');
 
   // View state
@@ -174,6 +191,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [sessionOrders, setSessionOrders] = useState<Order[]>([]);
   const [sessionBill, setSessionBill] = useState<Bill | null>(null);
+  const [pendingServiceRequests, setPendingServiceRequests] = useState<ServiceRequest[]>([]);
 
   // Modal states
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -393,6 +411,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       } catch (e) {
         console.warn('Could not load service charge settings');
       }
+
+      // Load pending service requests (gracefully — feature may not be enabled)
+      try {
+        const srRes = await apiClient.get(`/api/restaurants/${restaurantId}/service-requests?status=pending`);
+        if (srRes.data && Array.isArray(srRes.data)) {
+          setPendingServiceRequests(srRes.data);
+        }
+      } catch (e) {
+        // Feature not enabled or error — silently ignore
+      }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
       setError(err.message || 'Failed to load tables');
@@ -460,6 +488,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         const res = await apiClient.get(`/api/restaurants/${restaurantId}`);
         if (res.data?.name) {
           setRestaurantName(res.data.name);
+        }
+        if (res.data?.language_preference) {
+          setRestaurantLanguage(res.data.language_preference);
         }
       } catch (err: any) {
         console.warn('[TablesTab] Could not load restaurant name:', err.message);
@@ -538,6 +569,17 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     } catch {
       return '--';
     }
+  };
+
+  const getOrderPaidBadge = (order: Order): { label: string; bg: string; fg: string } | null => {
+    const isPaid = order.order_status === 'completed' || order.order_status === 'paid';
+    if (!isPaid) return null;
+
+    if (order.order_payment_method === 'payment-asia') {
+      return { label: 'PA Paid', bg: '#f59e0b', fg: '#ffffff' };
+    }
+
+    return { label: 'Paid', bg: '#10b981', fg: '#ffffff' };
   };
 
   const getReservationTimeInfo = (table: Table) => {
@@ -626,6 +668,17 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       }
     } catch (err) {
       console.error('Error clearing call staff:', err);
+    }
+  };
+
+  const acknowledgeServiceRequest = async (requestId: number) => {
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/service-requests/${requestId}`, {
+        status: 'acknowledged',
+      });
+      setPendingServiceRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch (err) {
+      console.error('Error acknowledging service request:', err);
     }
   };
 
@@ -853,6 +906,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               startTime: startTimeStr,
               qrCode: `${getQrBaseUrl()}/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
+              language: restaurantLanguage,
             };
 
             await thermalPrinterService.sendToBluetooth(
@@ -1414,6 +1468,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               startTime: startTimeStr,
               qrCode: `${getQrBaseUrl()}/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
+              language: restaurantLanguage,
             };
             
             await thermalPrinterService.sendToBluetooth(
@@ -1737,6 +1792,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               total: sessionBill.total_cents,
               timestamp: new Date().toLocaleTimeString(),
               restaurantName: 'Restaurant',
+              language: restaurantLanguage,
             };
 
             console.log('[PrintBill] Sending thermal print data to:', device.id);
@@ -2007,6 +2063,18 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
             </View>
           )}
+          {pendingServiceRequests
+            .filter(r => r.table_session_id === selectedSession.id)
+            .map(sr => (
+              <TouchableOpacity
+                key={sr.id}
+                style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                onPress={() => acknowledgeServiceRequest(sr.id)}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 {sr.label}</Text>
+                <Text style={{ color: '#e9d5ff', fontSize: 12 }}>Tap to acknowledge</Text>
+              </TouchableOpacity>
+            ))}
           <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
           {sessionOrders.length === 0 ? (
             <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
@@ -2015,7 +2083,18 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               console.log(`[OrderRender] Order ${idx}:`, order);
               return (
                 <View key={idx} style={styles.orderCard}>
-                  <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
+                  <View style={styles.orderHeader}>
+                    <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
+                    {(() => {
+                      const badge = getOrderPaidBadge(order);
+                      if (!badge) return null;
+                      return (
+                        <View style={[styles.orderPaidBadge, { backgroundColor: badge.bg }]}> 
+                          <Text style={[styles.orderPaidBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
@@ -2762,6 +2841,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                                     <Text style={styles.sessionBadgeBillText}>BILL</Text>
                                   </View>
                                 )}
+                                {pendingServiceRequests.some(r => r.table_session_id === session.id) && (
+                                  <View style={{ backgroundColor: '#7c3aed', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, marginLeft: 4 }}>
+                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>REQ</Text>
+                                  </View>
+                                )}
                               </View>
                             ))}
                           </View>
@@ -3026,13 +3110,36 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
               </View>
             )}
+            {pendingServiceRequests
+              .filter(r => r.table_session_id === selectedSession.id)
+              .map(sr => (
+                <TouchableOpacity
+                  key={sr.id}
+                  style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                  onPress={() => acknowledgeServiceRequest(sr.id)}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 {sr.label}</Text>
+                  <Text style={{ color: '#e9d5ff', fontSize: 12 }}>Tap to acknowledge</Text>
+                </TouchableOpacity>
+              ))}
             <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
             {sessionOrders.length === 0 ? (
               <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
             ) : (
               sessionOrders.map((order, idx) => (
                 <View key={idx} style={styles.orderCard}>
-                  <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
+                  <View style={styles.orderHeader}>
+                    <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
+                    {(() => {
+                      const badge = getOrderPaidBadge(order);
+                      if (!badge) return null;
+                      return (
+                        <View style={[styles.orderPaidBadge, { backgroundColor: badge.bg }]}> 
+                          <Text style={[styles.orderPaidBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
@@ -4033,6 +4140,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     color: '#1f2937',
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  orderPaidBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  orderPaidBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   orderItem: {
     flexDirection: 'row',
