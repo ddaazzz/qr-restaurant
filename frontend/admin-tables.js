@@ -864,6 +864,10 @@ async function loadTablesCategoryTable() {
         started_at: r.started_at,
         bill_closure_requested: r.bill_closure_requested,
         call_staff_requested: r.call_staff_requested,
+        payment_received: r.payment_received === true,
+        payment_received_at: r.payment_received_at || null,
+        payment_method_online: r.payment_method_online || null,
+        merchant_reference: r.merchant_reference || null,
         booking_guest_name: r.booking_guest_name || null
       });
     }
@@ -1066,7 +1070,7 @@ async function renderSessionsList(table) {
       <div class="session-list-item" style="padding: 12px; background: ${sessionColor}15; border: 2px solid ${sessionColor}; border-radius: 6px; margin-bottom: 8px; cursor: pointer;" onclick="selectSessionToView(${session.id})">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong>${t('admin.session-label').replace('{0}', session.id)}${session.booking_guest_name ? ` – ${session.booking_guest_name}` : ''}</strong>
+            <strong>${t('admin.session-label').replace('{0}', session.restaurant_session_number || session.id)}${session.booking_guest_name ? ` – ${session.booking_guest_name}` : ''}</strong>
             <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">${session.pax} pax • ${t('admin.dining')} ${duration}</div>
           </div>
           <div style="text-align: right; font-size: 14px; font-weight: 600; color: ${sessionColor};">
@@ -1083,7 +1087,7 @@ async function renderSessionsList(table) {
     <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
     <h2 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 900; color: var(--text-dark);">${table.name}</h2>
     <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-light);">
-      ○ ${usedSeats}/${table.seat_count} seats occupied
+      ${t('admin.seats-occupied').replace('{0}', usedSeats).replace('{1}', table.seat_count)}
     </p>
 
     <div style="margin-bottom: 16px;">
@@ -1529,12 +1533,12 @@ function renderStartSessionPrompt(table) {
     <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
     <h3>${table.name}</h3>
     <div class="table-card-info">
-      <p><strong>${usedSeats}/${table.seat_count} seats occupied</strong></p>
-      <p>${remaining} seats available</p>
+      <p><strong>${t('admin.seats-occupied').replace('{0}', usedSeats).replace('{1}', table.seat_count)}</strong></p>
+      <p>${t('admin.seats-available').replace('{0}', remaining)}</p>
     </div>
     <div class="session-actions" style="margin-top: 16px;">
       <button class="btn-primary" onclick="startNewSessionModal(${table.id})">
-        ➕ Start New Session
+        ${t('admin.start-new-session')}
       </button>
     </div>
   `;
@@ -1587,6 +1591,15 @@ async function renderSessionOrder(session) {
   // ADD THE ACTIVE CLASS TO SHOW THE PANEL
   panel.classList.add("active");
 
+  const paidViaPaymentAsia = session.payment_received === true && session.payment_method_online === 'payment-asia';
+  const closeBillButtonHtml = paidViaPaymentAsia
+    ? `<button id="session-close-bill-btn" data-session-id="${session.id}" style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #9ca3af; color: white; font-weight: 600; cursor: not-allowed;" disabled>
+          Paid Online
+        </button>`
+    : `<button id="session-close-bill-btn" data-session-id="${session.id}" style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #1f2937; color: white; font-weight: 600; cursor: pointer;" onclick="closeBillModal(${session.id})">
+          ${ADMIN_SETTINGS_CACHE?.order_pay_enabled ? 'Close Bill (Manual)' : 'Close Bill'}
+        </button>`;
+
   // Header with session info and gear dropdown
   panel.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -1626,9 +1639,8 @@ async function renderSessionOrder(session) {
         <button style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: white; color: #333; font-weight: 600; cursor: pointer;" onclick="printBill(${session.id})">
           ${t('admin.print-bill')}
         </button>
-        <button id="session-close-bill-btn" data-session-id="${session.id}" style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #1f2937; color: white; font-weight: 600; cursor: pointer;" onclick="closeBillModal(${session.id})">
-          ${ADMIN_SETTINGS_CACHE?.order_pay_enabled ? 'Close Bill (Manual)' : 'Close Bill'}
-        </button>
+        ${closeBillButtonHtml}
+        ${paidViaPaymentAsia ? `<button style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #dc2626; color: white; font-weight: 600; cursor: pointer;" onclick="endTableSession(${session.id})">End Order</button>` : ''}
       </div>
     </div>
   `;
@@ -1652,6 +1664,16 @@ async function loadAndRenderOrders(sessionId) {
     
     const data = await res.json();
     const orders = data.items || [];
+
+    const closeBillBtn = document.getElementById('session-close-bill-btn');
+    const paidViaPaymentAsia = orders.some(order => order.order_status === 'completed' && order.order_payment_method === 'payment-asia');
+    if (closeBillBtn && paidViaPaymentAsia) {
+      closeBillBtn.disabled = true;
+      closeBillBtn.textContent = 'Paid Online';
+      closeBillBtn.style.background = '#9ca3af';
+      closeBillBtn.style.cursor = 'not-allowed';
+      closeBillBtn.removeAttribute('onclick');
+    }
 
     const container = document.getElementById("session-orders");
     const totalEl = document.getElementById("session-total");
@@ -2216,21 +2238,25 @@ async function clearCallStaff(sessionId) {
   }
 }
 
-async function closeBillModal(sessionId) {
+async function closeBillModal(sessionId, splitContext = null) {
+  // splitContext = { splitCount, splitIndex, portionCents, serviceChargeCents } when continuing a split
   const session = findSessionById(sessionId);
   if (!session) return alert("Session not found");
+
+  if (session.payment_received === true && session.payment_method_online === 'payment-asia') {
+    alert('This session is already paid online via Payment Asia. Use End Order instead.');
+    return;
+  }
 
   const table = TABLES.find(t =>
     t.sessions.some(s => s.id === sessionId)
   );
   if (!table) return;
 
-  // Ensure settings are loaded to get service charge fee
   if (!serviceChargeFee || serviceChargeFee === 0) {
     await loadAdminSettings();
   }
 
-  // Get orders to calculate total
   const res = await fetch(`${API}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`);
   if (!res.ok) return alert("Failed to load orders");
 
@@ -2239,137 +2265,396 @@ async function closeBillModal(sessionId) {
 
   let totalCents = 0;
   orders.forEach(order => {
-    order.items.forEach(i => {
-      totalCents += i.quantity * i.unit_price_cents;
-    });
+    order.items.forEach(i => { totalCents += i.quantity * i.unit_price_cents; });
   });
 
   const serviceChargePercent = serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 0);
   const serviceCharge = Math.round(totalCents * serviceChargePercent / 100);
   const grandTotal = totalCents + serviceCharge;
 
-  // Load coupons for discount selection
   const couponsRes = await fetch(`${API}/restaurants/${restaurantId}/coupons`);
-  const coupons = couponsRes.ok ? await couponsRes.json() : [];
+  const coupons = couponsRes.ok ? (await couponsRes.json()).filter(c => c.is_active !== false) : [];
 
-  // Ensure KPay terminal state is current before rendering the payment options
   await loadActiveKPayTerminal();
 
-  // Create close bill modal with payment method, discount, and reason
+  const pax = session.pax || 1;
+
+  // --- Build modal ---
   const closeBillWindow = document.createElement("div");
   closeBillWindow.className = "modal-overlay";
-  const billTitle = t('admin.close-bill-title').replace('{0}', table.name);
-  closeBillWindow.innerHTML = `
-    <div class="modal-content" style="width: 400px;">
-      <h3>${billTitle}</h3>
-      
-      <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
-        <p style="margin: 0 0 8px 0; color: #666;">${t('admin.bill-summary')}</p>
-        <p style="margin: 0 0 5px 0; font-size: 14px;">
-          ${t('admin.subtotal-amount')} $${(totalCents / 100).toFixed(2)}
-        </p>
-        <p style="margin: 0; font-size: 14px;">
-          ${t('admin.service-charge-label')} (${serviceChargePercent}%): $${(serviceCharge / 100).toFixed(2)}
-        </p>
-        <p style="margin: 8px 0 0 0; font-size: 16px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 8px;">
-          ${t('admin.total-amount')} $${(grandTotal / 100).toFixed(2)}
-        </p>
+  closeBillWindow.id = 'close-bill-overlay';
+
+  // Split context from previous calls or initialise fresh
+  const activeSplitCount = splitContext ? splitContext.splitCount : null;
+  const activeSplitIndex = splitContext ? splitContext.splitIndex : 1;
+  const portionCents = splitContext ? splitContext.portionCents : grandTotal;
+  const portionServiceCharge = splitContext ? splitContext.serviceChargeCents : serviceCharge;
+
+  const billTitle = splitContext
+    ? `${t('admin.close-bill-title').replace('{0}', table.name)} — Bill ${activeSplitIndex} of ${activeSplitCount}`
+    : t('admin.close-bill-title').replace('{0}', table.name);
+
+  // Helper: build payment method button set
+  const pmButtons = [
+    { value: 'cash', label: '💵 Cash' },
+    { value: 'card', label: '💳 Card' },
+    ...(window._kpayTerminal ? [{ value: 'kpay', label: '📟 KPay' }] : []),
+  ].map(pm => `
+    <button type="button"
+      class="cb-btn-option ${pm.value === 'cash' ? 'cb-btn-active' : ''}"
+      data-group="payment-method"
+      data-value="${pm.value}"
+      onclick="cbSelectOption(this,'payment-method','${pm.value}')">
+      ${pm.label}
+    </button>`).join('');
+
+  // Helper: build discount buttons
+  const discountButtons = [
+    `<button type="button"
+      class="cb-btn-option cb-btn-active"
+      data-group="discount"
+      data-value=""
+      data-type=""
+      data-amount="0"
+      onclick="cbSelectOption(this,'discount','')">
+      ${t('admin.discount-none')}
+    </button>`,
+    ...coupons.map(c => {
+      const label = `${c.code} ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}`;
+      const amount = c.discount_type === 'percentage' ? Math.round(portionCents * c.discount_value / 100) : c.discount_value;
+      return `<button type="button"
+        class="cb-btn-option"
+        data-group="discount"
+        data-value="${c.id}"
+        data-type="${c.discount_type}"
+        data-amount="${amount}"
+        onclick="cbSelectOption(this,'discount','${c.id}')">
+        🎟 ${label}
+      </button>`;
+    })
+  ].join('');
+
+  // Helper: build split buttons (only shown when no splitContext yet)
+  const splitSection = splitContext ? `` : `
+    <div style="margin-bottom:18px;">
+      <div style="font-weight:600;margin-bottom:8px;">✂ Split Bill</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;" id="split-btn-group">
+        <button type="button" class="cb-btn-option cb-btn-active" data-group="split" data-value="0"
+          onclick="cbSelectSplit(this,0,${grandTotal},${pax})">None</button>
+        <button type="button" class="cb-btn-option" data-group="split" data-value="2"
+          onclick="cbSelectSplit(this,2,${grandTotal},${pax})">÷ 2</button>
+        <button type="button" class="cb-btn-option" data-group="split" data-value="3"
+          onclick="cbSelectSplit(this,3,${grandTotal},${pax})">÷ 3</button>
+        <button type="button" class="cb-btn-option" data-group="split" data-value="pax"
+          onclick="cbSelectSplit(this,'pax',${grandTotal},${pax})">Per Head (${pax})</button>
+        <button type="button" class="cb-btn-option" data-group="split" data-value="custom"
+          onclick="cbSelectSplit(this,'custom',${grandTotal},${pax})">Custom…</button>
       </div>
-
-      <label style="display: block; margin-bottom: 15px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.payment-method')}</span>
-        <select id="payment-method" onchange="onPaymentMethodChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="cash">${t('admin.payment-cash')}</option>
-          <option value="card">${t('admin.payment-card')}</option>
-          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
-        </select>
-      </label>
-
-      <!-- KPay notice (shown when kpay selected) -->
-      <div id="kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:15px; font-size:13px; color:#1d4ed8;">
-        Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.<br>
-        Confirm to initiate — the terminal will prompt the customer.
-      </div>
-
-      <label style="display: block; margin-bottom: 15px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.discount-section')}</span>
-        <select id="discount-coupon" onchange="updateBillTotal(${grandTotal})" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">${t('admin.discount-none')}</option>
-          ${coupons.map(c => `<option value="${c.id}" data-type="${c.discount_type}" data-value="${c.discount_value}">${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}</option>`).join('')}
-        </select>
-      </label>
-
-      <label style="display: block; margin-bottom: 15px;">
-        <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.bill-close-reason')}</span>
-        <textarea id="close-reason" placeholder="${t('admin.bill-close-reason-placeholder')}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; height: 60px;"></textarea>
-      </label>
-
-      <div class="modal-button-group">
-        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
-        <button onclick="submitCloseBill(${sessionId}, ${grandTotal}, ${serviceCharge})" class="modal-btn-primary">${t('admin.close-bill-confirm')}</button>
+      <div id="split-preview-bar" style="display:none;margin-top:10px;padding:10px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;font-size:13px;color:#065f46;"></div>
+      <div id="split-custom-input-wrap" style="display:none;margin-top:8px;">
+        <input type="number" id="split-custom-input" min="2" max="50" value="2"
+          style="width:80px;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:15px;"
+          oninput="cbUpdateCustomSplit(${grandTotal})">
+        <span style="margin-left:8px;color:#555;font-size:13px;">ways</span>
       </div>
     </div>
   `;
 
+  closeBillWindow.innerHTML = `
+    <div class="modal-content" style="width:440px;max-width:96vw;max-height:92vh;overflow-y:auto;">
+      <h3 style="margin-bottom:16px;">${billTitle}</h3>
+
+      <!-- Bill Summary -->
+      <div id="cb-summary" style="margin-bottom:18px;padding:14px;background:#f5f5f5;border-radius:8px;">
+        <p style="margin:0 0 6px 0;color:#666;font-size:13px;">${t('admin.bill-summary')}</p>
+        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;">
+          <span>${t('admin.subtotal-amount')}</span><span>$${(totalCents/100).toFixed(2)}</span>
+        </div>
+        ${serviceChargePercent > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;">
+          <span>${t('admin.service-charge-label')} (${serviceChargePercent}%)</span><span>$${(serviceCharge/100).toFixed(2)}</span>
+        </div>` : ''}
+        <div id="cb-discount-row" style="display:none;flex;justify-content:space-between;font-size:14px;margin-bottom:4px;color:#dc2626;">
+          <span>Discount</span><span id="cb-discount-display">-$0.00</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;border-top:1px solid #ddd;padding-top:8px;margin-top:6px;">
+          <span>${t('admin.total-amount')}</span>
+          <span id="cb-total-display">$${(portionCents/100).toFixed(2)}</span>
+        </div>
+      </div>
+
+      ${splitSection}
+
+      <!-- Payment Method -->
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:600;margin-bottom:8px;">${t('admin.payment-method')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;" id="payment-method-btn-group">
+          ${pmButtons}
+        </div>
+        <input type="hidden" id="payment-method" value="cash">
+        <!-- KPay notice -->
+        <div id="kpay-notice" style="display:none;margin-top:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;font-size:13px;color:#1d4ed8;">
+          Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.<br>
+          Confirm to initiate — the terminal will prompt the customer.
+        </div>
+      </div>
+
+      <!-- Discount -->
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:600;margin-bottom:8px;">${t('admin.discount-section')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;" id="discount-btn-group">
+          ${discountButtons}
+        </div>
+        <input type="hidden" id="discount-coupon" value="" data-type="" data-amount="0">
+      </div>
+
+      <!-- Reason -->
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:600;margin-bottom:6px;">${t('admin.bill-close-reason')}</div>
+        <textarea id="close-reason" placeholder="${t('admin.bill-close-reason-placeholder')}"
+          style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:inherit;resize:vertical;height:56px;box-sizing:border-box;"></textarea>
+      </div>
+
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button id="cb-submit-btn"
+          onclick="submitCloseBill(${sessionId}, ${grandTotal}, ${serviceCharge}, ${JSON.stringify(splitContext)})"
+          class="modal-btn-primary">
+          ${splitContext ? `Close Bill ${activeSplitIndex} of ${activeSplitCount}` : t('admin.close-bill-confirm')}
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Store state on the overlay element
+  closeBillWindow._cbState = {
+    sessionId,
+    grandTotal,
+    serviceCharge,
+    splitCount: activeSplitCount,
+    splitIndex: activeSplitIndex,
+    portionCents,
+  };
+
   document.body.appendChild(closeBillWindow);
 }
 
-function onPaymentMethodChange() {
-  const method = document.getElementById('payment-method')?.value;
-  const notice = document.getElementById('kpay-notice');
-  if (notice) notice.style.display = method === 'kpay' ? 'block' : 'none';
+/** Toggle a button in a cb-btn-option group */
+function cbSelectOption(btn, group, value) {
+  // Deactivate all in same group
+  btn.closest('.modal-content').querySelectorAll(`[data-group="${group}"]`).forEach(b => b.classList.remove('cb-btn-active'));
+  btn.classList.add('cb-btn-active');
+
+  if (group === 'payment-method') {
+    const hiddenInput = document.getElementById('payment-method');
+    if (hiddenInput) hiddenInput.value = value;
+    const notice = document.getElementById('kpay-notice');
+    if (notice) notice.style.display = value === 'kpay' ? 'block' : 'none';
+  }
+
+  if (group === 'discount') {
+    const hiddenInput = document.getElementById('discount-coupon');
+    if (hiddenInput) {
+      hiddenInput.value = value;
+      hiddenInput.setAttribute('data-type', btn.getAttribute('data-type') || '');
+      hiddenInput.setAttribute('data-amount', btn.getAttribute('data-amount') || '0');
+    }
+    // Update total display
+    const overlay = document.getElementById('close-bill-overlay');
+    const state = overlay?._cbState;
+    if (state) {
+      const discount = Number(btn.getAttribute('data-amount') || 0);
+      const currentPortion = state.portionCents;
+      const afterDiscount = currentPortion - discount;
+      const totalEl = document.getElementById('cb-total-display');
+      if (totalEl) totalEl.textContent = `$${(afterDiscount / 100).toFixed(2)}`;
+      const discountRow = document.getElementById('cb-discount-row');
+      const discountDisplay = document.getElementById('cb-discount-display');
+      if (discountRow && discountDisplay) {
+        discountRow.style.display = discount > 0 ? 'flex' : 'none';
+        discountDisplay.textContent = `-$${(discount / 100).toFixed(2)}`;
+      }
+    }
+  }
 }
 
-async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
+/** Handle split selection from buttons */
+function cbSelectSplit(btn, value, grandTotal, pax) {
+  btn.closest('[id="split-btn-group"]').querySelectorAll('[data-group="split"]').forEach(b => b.classList.remove('cb-btn-active'));
+  btn.classList.add('cb-btn-active');
+
+  const customWrap = document.getElementById('split-custom-input-wrap');
+  const previewBar = document.getElementById('split-preview-bar');
+
+  if (value === 'custom') {
+    if (customWrap) customWrap.style.display = 'block';
+    cbUpdateCustomSplit(grandTotal);
+    return;
+  }
+
+  if (customWrap) customWrap.style.display = 'none';
+
+  let n = 0;
+  if (value === 'pax') n = pax;
+  else n = Number(value);
+
+  if (n < 2) {
+    // None - no split
+    if (previewBar) previewBar.style.display = 'none';
+    const overlay = document.getElementById('close-bill-overlay');
+    if (overlay) overlay._cbState.splitCount = null;
+    const totalEl = document.getElementById('cb-total-display');
+    if (totalEl) totalEl.textContent = `$${(grandTotal / 100).toFixed(2)}`;
+    return;
+  }
+
+  const perPortion = Math.ceil(grandTotal / n);
+  if (previewBar) {
+    previewBar.style.display = 'block';
+    previewBar.textContent = `÷ ${n} people = $${(perPortion / 100).toFixed(2)} each`;
+  }
+  const overlay = document.getElementById('close-bill-overlay');
+  if (overlay) overlay._cbState.splitCount = n;
+  // Update total display to reflect first portion
+  const totalEl = document.getElementById('cb-total-display');
+  if (totalEl) totalEl.textContent = `$${(perPortion / 100).toFixed(2)} (1 of ${n})`;
+}
+
+function cbUpdateCustomSplit(grandTotal) {
+  const input = document.getElementById('split-custom-input');
+  const n = Math.max(2, parseInt(input ? input.value : '2', 10) || 2);
+  const perPortion = Math.ceil(grandTotal / n);
+  const previewBar = document.getElementById('split-preview-bar');
+  if (previewBar) {
+    previewBar.style.display = 'block';
+    previewBar.textContent = `÷ ${n} people = $${(perPortion / 100).toFixed(2)} each`;
+  }
+  const overlay = document.getElementById('close-bill-overlay');
+  if (overlay) overlay._cbState.splitCount = n;
+  const totalEl = document.getElementById('cb-total-display');
+  if (totalEl) totalEl.textContent = `$${(perPortion / 100).toFixed(2)} (1 of ${n})`;
+}
+
+// Legacy no-op (kept for any inline calls referencing onPaymentMethodChange)
+function onPaymentMethodChange() {}
+
+async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0, splitContext = null) {
   const paymentEl = document.getElementById("payment-method");
   const paymentMethod = paymentEl ? paymentEl.value : "cash";
-  const couponSelect = document.getElementById("discount-coupon");
-  const selectedCouponOption = couponSelect && couponSelect.options ? couponSelect.options[couponSelect.selectedIndex] : null;
+  const couponEl = document.getElementById("discount-coupon");
+  const discountAmount = couponEl ? Number(couponEl.getAttribute('data-amount') || 0) : 0;
   const reasonEl = document.getElementById("close-reason");
   const reason = reasonEl ? reasonEl.value : "";
 
-  let discountApplied = 0;
-  if (selectedCouponOption && selectedCouponOption.value) {
-    const couponType = selectedCouponOption.getAttribute("data-type");
-    const couponValue = Number(selectedCouponOption.getAttribute("data-value"));
-    if (couponType === "percentage") {
-      discountApplied = Math.round(grandTotal * couponValue / 100);
-    } else {
-      discountApplied = couponValue;
-    }
+  // Resolve split state
+  const overlay = document.getElementById('close-bill-overlay');
+  const state = overlay?._cbState || {};
+  const splitCount = state.splitCount || (splitContext ? splitContext.splitCount : null);
+  const splitIndex = splitContext ? splitContext.splitIndex : 1;
+
+  // Compute portion amount
+  let portionTotal;
+  if (splitContext) {
+    portionTotal = splitContext.portionCents;
+  } else if (splitCount && splitCount >= 2) {
+    portionTotal = Math.ceil(grandTotal / splitCount);
+  } else {
+    portionTotal = grandTotal;
   }
+  const finalAmount = portionTotal - discountAmount;
 
-  const finalAmount = grandTotal - discountApplied;
-
-  // ── KPay path: initiate terminal payment first ──────────────────────────
+  // ── KPay path ──────────────────────────────────────────────────────────
   if (paymentMethod === 'kpay') {
     if (!window._kpayTerminal) {
       return alert('❌ No active KPay terminal configured. Please set one up in Settings.');
     }
-    // Remove the close-bill modal before showing KPay overlay
-    const overlay = document.querySelector(".modal-overlay");
-    if (overlay) overlay.remove();
-
+    document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
     await startKPayPayment({
       sessionId,
       finalAmount,
-      discountApplied,
-      serviceChargeAmount,
+      discountApplied: discountAmount,
+      serviceChargeAmount: splitContext ? splitContext.serviceChargeCents : serviceChargeAmount,
       reason,
       terminalId: window._kpayTerminal.id,
+      splitContext: splitCount && splitCount >= 2 ? { splitCount, splitIndex } : null,
     });
     return;
   }
 
-  // ── Cash / Card path (original flow) ──────────────────────────────────
-  await _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason });
+  // ── Split path ─────────────────────────────────────────────────────────
+  if (splitCount && splitCount >= 2) {
+    document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
+
+    // Init split on first portion
+    if (splitIndex === 1) {
+      const initRes = await fetch(`${API}/sessions/${sessionId}/split-bill/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ split_count: splitCount, restaurantId }),
+      });
+      if (!initRes.ok) {
+        const err = await initRes.json();
+        alert(`❌ Failed to init split: ${err.error || err.message}`);
+        return;
+      }
+    }
+
+    // Record this split payment
+    const portionServiceCharge = Math.ceil(serviceChargeAmount / splitCount);
+    const payRes = await fetch(`${API}/sessions/${sessionId}/split-bill/pay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        split_index: splitIndex,
+        split_count: splitCount,
+        amount_cents: finalAmount,
+        payment_method: paymentMethod,
+        discount_applied: discountAmount,
+        service_charge: portionServiceCharge,
+        notes: reason,
+        restaurantId,
+      }),
+    });
+
+    if (!payRes.ok) {
+      const err = await payRes.json();
+      alert(`❌ Failed to record payment: ${err.error || err.message}`);
+      return;
+    }
+
+    const payData = await payRes.json();
+    showToast(`Bill ${splitIndex}/${splitCount} closed · ${paymentMethod.toUpperCase()} · HKD ${(finalAmount / 100).toFixed(2)}`, 'success');
+
+    if (payData.session_closed) {
+      // All done — refresh view
+      await loadTablesCategoryTable();
+      if (typeof loadOrdersHistoryLeftPanel === 'function') await loadOrdersHistoryLeftPanel();
+      closeSessionPanel();
+    } else {
+      // Auto-open next split modal
+      const nextIndex = splitIndex + 1;
+      const nextPortion = splitIndex === splitCount - 1
+        ? grandTotal - Math.ceil(grandTotal / splitCount) * (splitCount - 1) // last portion gets remainder
+        : Math.ceil(grandTotal / splitCount);
+      const nextPortionServiceCharge = Math.ceil(serviceChargeAmount / splitCount);
+      await closeBillModal(sessionId, {
+        splitCount,
+        splitIndex: nextIndex,
+        portionCents: Math.max(nextPortion, 0),
+        serviceChargeCents: nextPortionServiceCharge,
+      });
+    }
+    return;
+  }
+
+  // ── Normal (no-split) cash/card path ───────────────────────────────────
+  await _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied: discountAmount, serviceChargeAmount, reason });
 }
 
 /**
  * Shows the KPay payment-waiting overlay, initiates the sale, polls for result.
  * On success calls _doCloseBill with payment_method='kpay' and kpay_reference_id.
  */
-async function startKPayPayment({ sessionId, finalAmount, discountApplied, serviceChargeAmount, reason, terminalId }) {
+async function startKPayPayment({ sessionId, finalAmount, discountApplied, serviceChargeAmount, reason, terminalId, splitContext = null }) {
   const restaurantId = localStorage.getItem('restaurantId');
   const amountInCents = String(finalAmount).padStart(12, '0');
 
