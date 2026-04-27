@@ -1907,7 +1907,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const renderCrmCustomerCard = (customer: CrmCustomer) => {
     const initials = (customer.name || '?').slice(0, 2).toUpperCase();
-    const subtitle = customer.phone || customer.email || 'No contact details';
 
     return (
       <TouchableOpacity
@@ -1921,7 +1920,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
         <View style={styles.crmCustomerMeta}>
           <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
-          <Text style={styles.crmCustomerSubline}>{subtitle}</Text>
+          {!!(customer.phone || customer.email) ? (
+            <View style={{ marginTop: 2 }}>
+              {!!customer.phone && (
+                <Text style={styles.crmCustomerSubline}>📞 {customer.phone}</Text>
+              )}
+              {!!customer.email && (
+                <Text style={styles.crmCustomerSubline}>✉️ {customer.email}</Text>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.crmCustomerSubline}>No contact details</Text>
+          )}
           <Text style={styles.crmCustomerSubline}>
             {customer.total_visits || 0} visits · Last visit {formatDate(customer.last_visit_at)}
           </Text>

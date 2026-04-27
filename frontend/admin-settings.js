@@ -2522,7 +2522,9 @@ function crmBuildRow(c) {
     '<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">' + initials + '</div>' +
     '<div style="flex:1;margin-left:12px;min-width:0;">' +
       '<div style="font-weight:600;font-size:13px;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.name || '—') + '</div>' +
-      '<div style="font-size:11px;color:#6b7280;">' + (c.phone || c.email || '') + '</div>' +
+      (c.phone ? '<div style="font-size:11px;color:#6b7280;">📞 ' + c.phone + '</div>' : '') +
+      (c.email ? '<div style="font-size:11px;color:#6b7280;">✉️ ' + c.email + '</div>' : '') +
+      (!c.phone && !c.email ? '<div style="font-size:11px;color:#d1d5db;">No contact details</div>' : '') +
     '</div>' +
     '<div style="text-align:right;flex-shrink:0;">' +
       '<div style="font-size:12px;color:#059669;font-weight:600;">' + spent + '</div>' +
