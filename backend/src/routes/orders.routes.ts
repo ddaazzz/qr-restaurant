@@ -413,7 +413,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.quantity,
         oi.price_cents AS unit_price_cents,
 
-        COALESCE(mi.name, 'Deleted Item') AS item_name,
+        COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
         COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
 
         COALESCE(
@@ -446,6 +446,8 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.is_addon,
         oi.quantity,
         oi.price_cents,
+        oi.custom_item_name,
+        oi.item_name_snapshot,
         mi.name,
         ts.restaurant_id,
         mc.restaurant_id

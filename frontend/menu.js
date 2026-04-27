@@ -31,6 +31,7 @@ let showItemStatusToDiners = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
+let serviceRequestItems = []; // loaded from API on startOrdering
 
 async function fetchAndApplyPaymentSettings() {
   try {
@@ -297,6 +298,12 @@ async function startOrdering() {
   );
 
   window.menu = await menuRes.json();
+
+  // Load service request items (non-blocking)
+  fetch(`${API_BASE}/restaurants/${restaurantId}/service-request-items`)
+    .then(r => r.ok ? r.json() : [])
+    .then(items => { serviceRequestItems = Array.isArray(items) ? items.filter(i => i.is_active !== false) : []; })
+    .catch(() => { serviceRequestItems = []; });
 
   renderMenu(window.menu);
   renderCategories(window.menu.categories);
@@ -1284,6 +1291,18 @@ function renderOrdersDrawer(orders, tableName) {
       })()}
       <button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>
     </div>
+    ${serviceRequestItems.length > 0 ? `
+    <div style="padding: 12px 0 4px; border-top: 1px solid #e5e7eb; margin-top: 4px;">
+      <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">${t('menu.service-requests') || 'Requests'}</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        ${serviceRequestItems.map(sr => {
+          const lang = localStorage.getItem('language') || 'zh';
+          const label = (lang === 'zh' && sr.label_zh) ? sr.label_zh : sr.label_en;
+          const color = sr.color || '#4f46e5';
+          return `<button id="sr-btn-${sr.id}" onclick="submitServiceRequest(${sr.id})" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid ${color};background:#fff;color:${color};font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s;"><span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0;"></span>${label}</button>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
     </div>
   `;
 
@@ -1664,6 +1683,39 @@ async function callStaff() {
     }
   } catch (e) {
     console.error('Error calling staff:', e);
+  }
+}
+
+async function submitServiceRequest(itemId) {
+  if (!sessionId || !restaurantId) return;
+  const item = serviceRequestItems.find(i => i.id === itemId);
+  if (!item) return;
+  const btn = document.getElementById(`sr-btn-${itemId}`);
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  const lang = localStorage.getItem('language') || 'zh';
+  const label = (lang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_session_id: sessionId, request_type: item.request_type, label })
+    });
+    if (res.ok) {
+      if (btn) {
+        const color = item.color || '#4f46e5';
+        btn.style.background = color;
+        btn.style.color = '#fff';
+        btn.style.opacity = '1';
+        setTimeout(() => {
+          if (btn) { btn.style.background = '#fff'; btn.style.color = color; btn.disabled = false; btn.style.opacity = '1'; }
+        }, 3000);
+      }
+    } else {
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    }
+  } catch (e) {
+    console.error('Error submitting service request:', e);
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   }
 }
 
