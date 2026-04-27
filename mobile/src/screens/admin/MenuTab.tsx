@@ -52,6 +52,7 @@ interface Variant {
 interface MenuItem {
   id: number;
   name: string;
+  name_zh?: string;
   description?: string;
   price_cents: number;
   category_id: number;
@@ -64,6 +65,7 @@ interface MenuItem {
 interface MenuCategory {
   id: number;
   name: string;
+  name_zh?: string;
 }
 
 interface SRItem {
@@ -108,6 +110,7 @@ const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
   onDragGrant, onDragMove, onDragRelease, onDragTerminate,
   onSelect, onEdit, onDelete, t,
 }: DraggableMenuCategoryProps) {
+  const { lang } = useTranslation();
   const animY = useRef(new Animated.Value(0)).current;
   const onDragGrantRef = useRef(onDragGrant);
   const onDragMoveRef = useRef(onDragMove);
@@ -174,7 +177,7 @@ const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
           ]}
         >
           <Text style={{ fontSize: 14, fontWeight: '600', color: isSelected ? '#fff' : '#374151' }} numberOfLines={1}>
-            {category.name}
+            {lang === 'zh' && category.name_zh ? category.name_zh : category.name}
           </Text>
         </TouchableOpacity>
         {/* Edit / Delete */}
@@ -296,6 +299,7 @@ const GridDragCard = React.memo(function GridDragCard({
   onPress, onToggleAvailability,
   onDragGrant, onDragMove, onDragRelease, onDragTerminate, onMeasureHeight,
 }: GridDragCardProps) {
+  const { lang } = useTranslation();
   const animX = useRef(new Animated.Value(0)).current;
   const animY = useRef(new Animated.Value(0)).current;
   const onDragGrantRef = useRef(onDragGrant);
@@ -370,7 +374,7 @@ const GridDragCard = React.memo(function GridDragCard({
       <TouchableOpacity style={styles.itemCard} onPress={() => onPress(item)}>
         <Image source={{ uri: imageUri }} style={styles.itemImage} onError={() => {}} />
         <View style={styles.itemContent}>
-          <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.itemName} numberOfLines={2}>{lang === 'zh' && item.name_zh ? item.name_zh : item.name}</Text>
           <View style={styles.itemMeta}>
             <Text style={styles.itemPrice}>{formatPrice(item.price_cents)}</Text>
             <View style={[styles.availabilityBadge, { backgroundColor: item.available ? '#d1f0d1' : '#fdd' }]}>
@@ -515,7 +519,7 @@ function DraggableMenuItemGrid({
 
 export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuery?: string }>(
   ({ restaurantId, searchQuery }, ref) => {
-    const { t } = useTranslation();
+    const { t, lang } = useTranslation();
     // ==================== STATE MANAGEMENT ====================
     
     // Data
@@ -658,7 +662,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         
         const allItems = Array.isArray(itemsRes.data) ? itemsRes.data : [];
         const allCategories: MenuCategory[] = Array.isArray(categoriesRes.data)
-          ? categoriesRes.data.map((c: any) => ({ id: c.id, name: c.name }))
+          ? categoriesRes.data.map((c: any) => ({ id: c.id, name: c.name, name_zh: c.name_zh }))
           : [];
         
         setItems(allItems);
@@ -1548,102 +1552,13 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
-                    {cat.name}
+                    {lang === 'zh' && cat.name_zh ? cat.name_zh : cat.name}
                   </Text>
                 </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                style={[styles.categoryBtn, showServiceRequestsSection && styles.categoryBtnActive]}
-                onPress={() => {
-                  setShowServiceRequestsSection(prev => {
-                    if (!prev) loadSRItems();
-                    return !prev;
-                  });
-                  setSelectedCategory(null);
-                }}
-              >
-                <Text style={[styles.categoryBtnText, showServiceRequestsSection && styles.categoryBtnTextActive]}>
-                  🛎️ Service
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </View>
 
         {/* Items area: edit mode = draggable grid with handles; normal = grid */}
         <View style={styles.itemsGridWrapper}>
-          {showServiceRequestsSection ? (
-            /* Service Requests section */
-            <ScrollView
-              contentContainerStyle={{ padding: 12 }}
-              refreshControl={<RefreshControl refreshing={loadingSRItems} onRefresh={loadSRItems} />}
-            >
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, { marginBottom: 12, alignSelf: 'flex-start' }]}
-                onPress={() => {
-                  setEditingSRItem(null);
-                  setSRItemLabelEn('');
-                  setSRItemLabelZh('');
-                  setSRItemRequestType('');
-                  setSRItemColor('#4f46e5');
-                  setSRItemIsActive(true);
-                  setShowSRItemModal(true);
-                }}
-              >
-                <Text style={styles.btnText}>+ Add Service Request Item</Text>
-              </TouchableOpacity>
-              {loadingSRItems ? (
-                <ActivityIndicator color="#3b82f6" style={{ marginTop: 24 }} />
-              ) : srItems.length === 0 ? (
-                <Text style={styles.emptyText}>No service request items yet.</Text>
-              ) : (
-                srItems.map(item => (
-                  <View key={item.id} style={{ flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
-                    <TouchableOpacity onPress={() => uploadSRItemImageHandler(item.id)} style={{ width: 72, height: 72, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }}>
-                      {getFullImageUrl(item.image_url) ? (
-                        <Image source={{ uri: getFullImageUrl(item.image_url)! }} style={{ width: 72, height: 72 }} />
-                      ) : (
-                        <Text style={{ fontSize: 10, color: '#9ca3af', textAlign: 'center' }}>{uploadingSRItemImageId === item.id ? '...' : '📷\nAdd Image'}</Text>
-                      )}
-                    </TouchableOpacity>
-                    <View style={{ flex: 1, padding: 10 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color || '#4f46e5' }} />
-                        <Text style={{ fontWeight: '700', fontSize: 13, flex: 1 }} numberOfLines={1}>{item.label_en}</Text>
-                        <View style={{ backgroundColor: item.is_active ? '#d1fae5' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                          <Text style={{ fontSize: 10, color: item.is_active ? '#065f46' : '#991b1b', fontWeight: '600' }}>{item.is_active ? 'Active' : 'Off'}</Text>
-                        </View>
-                      </View>
-                      {item.label_zh ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.label_zh}</Text> : null}
-                      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Type: {item.request_type}</Text>
-                    </View>
-                    <View style={{ justifyContent: 'center', gap: 6, paddingHorizontal: 8 }}>
-                      <TouchableOpacity
-                        style={{ backgroundColor: '#dbeafe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
-                        onPress={() => {
-                          setEditingSRItem(item);
-                          setSRItemLabelEn(item.label_en);
-                          setSRItemLabelZh(item.label_zh || '');
-                          setSRItemRequestType(item.request_type);
-                          setSRItemColor(item.color || '#4f46e5');
-                          setSRItemIsActive(item.is_active);
-                          setShowSRItemModal(true);
-                        }}
-                      >
-                        <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={{ backgroundColor: '#fee2e2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
-                        onPress={() => deleteSRItem(item.id)}
-                      >
-                        <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-          ) : selectedCategory && showAvailabilityToggles ? (
+          {selectedCategory && showAvailabilityToggles ? (
             /* Edit mode: same grid layout but cards have ☰ drag handles */
             <ScrollView
               scrollEnabled={menuScrollEnabled}
@@ -1720,7 +1635,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       />
                     )}
                     <View style={styles.itemContent}>
-                      <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+                      <Text style={styles.itemName} numberOfLines={2}>{lang === 'zh' && item.name_zh ? item.name_zh : item.name}</Text>
                       <View style={styles.itemMeta}>
                         <Text style={styles.itemPrice}>{formatPrice(item.price_cents)}</Text>
                         {showAvailabilityToggles && (
@@ -1772,7 +1687,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
               <TouchableOpacity onPress={() => { setEditingItemInlineId(null); setShowInlineVariantForm(false); setShowDetailPanel(false); loadMenuData(); }}>
                 <Text style={styles.detailCloseBtn}>✕</Text>
               </TouchableOpacity>
-              <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? t('menu.edit-item') : selectedItem.name}</Text>
+              <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? t('menu.edit-item') : (lang === 'zh' && selectedItem.name_zh ? selectedItem.name_zh : selectedItem.name)}</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {editingItemInlineId !== selectedItem.id && (
                   <TouchableOpacity

@@ -1174,6 +1174,7 @@ router.get("/restaurants/:restaurantId/reports/top-items", async (req, res) => {
     const result = await pool.query(
       `SELECT
         COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
+        MIN(mi.name_zh) AS item_name_zh,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents
       FROM order_items oi
@@ -1244,7 +1245,9 @@ router.get("/restaurants/:restaurantId/reports/sales-by-item", async (req, res) 
     const result = await pool.query(
       `SELECT
         COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
+        MIN(mi.name_zh) AS item_name_zh,
         COALESCE(mc.name, 'Custom') AS category_name,
+        MIN(mc.name_zh) AS category_name_zh,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents,
         COUNT(DISTINCT o.id) AS order_count
@@ -1280,6 +1283,7 @@ router.get("/restaurants/:restaurantId/reports/sales-by-category", async (req, r
     const result = await pool.query(
       `SELECT
         COALESCE(mc.name, 'Uncategorized') AS category_name,
+        MIN(mc.name_zh) AS category_name_zh,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents,
         COUNT(DISTINCT o.id) AS order_count,

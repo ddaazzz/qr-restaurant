@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 interface MenuItem {
   id: number;
   name: string;
+  name_zh?: string;
   description?: string;
   price_cents: number;
   category_id: number;
@@ -54,6 +55,7 @@ interface VariantOption {
 interface Category {
   id: number;
   name: string;
+  name_zh?: string;
 }
 
 interface CartItem extends MenuItem {
@@ -61,6 +63,8 @@ interface CartItem extends MenuItem {
   variants?: SelectedVariant[];
   notes?: string;
   addons?: SelectedAddon[];
+  is_custom?: boolean;
+  custom_item_name?: string;
 }
 
 interface SelectedVariant {
@@ -201,7 +205,7 @@ interface OrdersTabProps {
 
 const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<OrdersTabRef>) => {
   const { restaurantId, selectedTableOnInit } = props;
-    const { t } = useTranslation();
+    const { t, lang } = useTranslation();
     const { showToast } = useToast();
     // Menu state
     const [categories, setCategories] = useState<Category[]>([]);
@@ -230,6 +234,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [orderType, setOrderType] = useState<'table' | 'pay-now' | 'to-go' | null>(null);
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
     const [tables, setTables] = useState<any[]>([]);
+
+    // Custom item feature
+    const [allowCustomItems, setAllowCustomItems] = useState(false);
+    const [customItemDefaultLabel, setCustomItemDefaultLabel] = useState('Custom Item');
+    const [showCustomItemModal, setShowCustomItemModal] = useState(false);
+    const [customItemName, setCustomItemName] = useState('');
+    const [customItemPrice, setCustomItemPrice] = useState('');
     
     // Table picker state
     const [showTablePicker, setShowTablePicker] = useState(false);
@@ -392,6 +403,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       loadMenu();
       loadTables();
       loadKpayTerminal();
+      // Load restaurant settings for feature flags
+      apiClient.get(`/api/restaurants/${restaurantId}/settings`).then((res: any) => {
+        const ff = res.data?.feature_flags || {};
+        const ui = res.data?.ui_config || {};
+        setAllowCustomItems(ff.allow_custom_food_items === true);
+        setCustomItemDefaultLabel(ui.custom_item_label || 'Custom Item');
+      }).catch(() => {/* non-blocking */});
     }, [restaurantId]);
 
     // Load history when showing history view
@@ -746,13 +764,26 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const doSubmitOrder = async (toGoCustomerName?: string) => {
       try {
         // Prepare items for API submission
-        const items = cart.map(cartItem => ({
-          menu_item_id: cartItem.id,
-          quantity: cartItem.quantity,
-          notes: cartItem.notes || null,
-          selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
-          addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
-        }));
+        const items = cart.map(cartItem => {
+          if (cartItem.is_custom) {
+            return {
+              menu_item_id: null,
+              custom_item_name: cartItem.custom_item_name || cartItem.name,
+              price_cents: cartItem.price_cents,
+              quantity: cartItem.quantity,
+              notes: cartItem.notes || null,
+              selected_option_ids: [],
+              addons: [],
+            };
+          }
+          return {
+            menu_item_id: cartItem.id,
+            quantity: cartItem.quantity,
+            notes: cartItem.notes || null,
+            selected_option_ids: (cartItem.variants || []).map(v => v.optionId),
+            addons: (cartItem.addons || []).map(a => ({ addon_id: a.addon_id, quantity: a.quantity })),
+          };
+        });
 
         console.log('[OrderSubmit] Submitting order:', {
           orderType,
@@ -1171,7 +1202,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const filteredMenuItems = menuItems.filter(item => {
       if (selectedCategory && item.category_id !== selectedCategory) return false;
       if (props.searchQuery && props.searchQuery.trim()) {
-        return item.name.toLowerCase().includes(props.searchQuery.trim().toLowerCase());
+        const q = props.searchQuery.trim().toLowerCase();
+        return item.name.toLowerCase().includes(q) || (item.name_zh ? item.name_zh.toLowerCase().includes(q) : false);
       }
       return true;
     });
@@ -1440,7 +1472,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 13, color: '#1f2937' }}>{item.menu_item_name || item.name}</Text>
+                      <Text style={{ fontSize: 13, color: '#1f2937' }}>{lang === 'zh' && (item.menu_item_name_zh || item.name_zh) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name)}</Text>
                       {item.status && (() => {
                         const statusMap: Record<string, { label: string; bg: string; fg: string }> = {
                           pending: { label: t('orders.pending'), bg: '#fef3c7', fg: '#92400e' },
@@ -2029,7 +2061,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   {/* Items summary */}
                   {items.length > 0 && (
                     <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }} numberOfLines={2}>
-                      {items.map((i: any) => `${i.menu_item_name || i.name} ×${i.quantity}`).join(', ')}
+                      {items.map((i: any) => `${lang === 'zh' && (i.menu_item_name_zh || i.name_zh) ? (i.menu_item_name_zh || i.name_zh) : (i.menu_item_name || i.name)} ×${i.quantity}`).join(', ')}
                     </Text>
                   )}
                 </View>
@@ -2087,7 +2119,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <Image source={{ uri: getFullImageUrl(selectedItem.image_url)! }} style={styles.variantSlideImage} />
           ) : null}
           <View style={styles.variantSlideHeader}>
-            <Text style={styles.variantSlideTitle}>{selectedItem.name}</Text>
+            <Text style={styles.variantSlideTitle}>{lang === 'zh' && selectedItem.name_zh ? selectedItem.name_zh : selectedItem.name}</Text>
             <View style={styles.variantSlidePrice}>
               <Text style={styles.variantSlidePriceLabel}>{t('orders.price-label') || 'Price:'}</Text>
               <Text style={styles.variantSlidePriceValue}>{formatPrice(selectedItem.price_cents || 0)}</Text>
@@ -2308,7 +2340,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 <View key={idx} style={styles.cartItemRow}>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={styles.cartItemPreviewText} numberOfLines={1}>{item.name} x{item.quantity}</Text>
+                      <Text style={styles.cartItemPreviewText} numberOfLines={1}>{(lang === 'zh' && item.name_zh ? item.name_zh : item.name)} x{item.quantity}</Text>
                       <Text style={styles.cartItemPriceText}>{formatPrice(item.price_cents * item.quantity)}</Text>
                     </View>
                     {item.variants && item.variants.length > 0 && (
@@ -2498,6 +2530,64 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </Modal>
+
+        {/* Custom Item Modal */}
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={showCustomItemModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowCustomItemModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 360, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 16 }}>Custom Item</Text>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>Item Name</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
+                value={customItemName}
+                onChangeText={setCustomItemName}
+                placeholder="Item name"
+              />
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>Price ($)</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                keyboardType="decimal-pad"
+                value={customItemPrice}
+                onChangeText={setCustomItemPrice}
+                placeholder="0.00"
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => setShowCustomItemModal(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => {
+                    const nameTrimmed = customItemName.trim();
+                    const priceCents = Math.round(parseFloat(customItemPrice || '0') * 100);
+                    if (!nameTrimmed) { Alert.alert('Error', 'Item name is required'); return; }
+                    if (isNaN(priceCents) || priceCents < 0) { Alert.alert('Error', 'Invalid price'); return; }
+                    handleAddToCart({
+                      id: -1,
+                      name: nameTrimmed,
+                      price_cents: priceCents,
+                      category_id: -1,
+                      is_custom: true,
+                      custom_item_name: nameTrimmed,
+                    } as any, []);
+                    setShowCustomItemModal(false);
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>Add to Cart</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </>
     );
 
@@ -2510,7 +2600,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               <TouchableOpacity onPress={() => setPhoneView('menu')}>
                 <Ionicons name="arrow-back" size={22} color="#2C3E50" />
               </TouchableOpacity>
-              <Text style={styles.phoneSubpageTitle}>{selectedItem.name}</Text>
+              <Text style={styles.phoneSubpageTitle}>{lang === 'zh' && selectedItem.name_zh ? selectedItem.name_zh : selectedItem.name}</Text>
             </View>
             <View style={{ flex: 1 }}>
               {variantContent}
@@ -2554,10 +2644,19 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               <FlatList
                 key={`menu-${selectedCategory}-${menuNumColumns}`}
                 data={(() => {
-                  const remainder = filteredMenuItems.length % menuNumColumns;
-                  if (remainder === 0) return filteredMenuItems;
+                  // When the Custom pseudo-category is selected, show only the custom card
+                  if (selectedCategory === -1 && allowCustomItems) {
+                    const customItem = { id: -1, name: customItemDefaultLabel, price_cents: 0, category_id: -1, is_custom: true } as any;
+                    const remainder = 1 % menuNumColumns;
+                    if (remainder === 0) return [customItem];
+                    const spacers = Array.from({ length: menuNumColumns - remainder }, (_, i) => ({ id: `spacer-${i}`, isSpacer: true }));
+                    return [customItem, ...spacers];
+                  }
+                  const baseItems = filteredMenuItems;
+                  const remainder = baseItems.length % menuNumColumns;
+                  if (remainder === 0) return baseItems;
                   const spacers = Array.from({ length: menuNumColumns - remainder }, (_, i) => ({ id: `spacer-${i}`, isSpacer: true }));
-                  return [...filteredMenuItems, ...spacers];
+                  return [...baseItems, ...spacers];
                 })()}
                 keyExtractor={(item: any) => item.id.toString()}
                 numColumns={menuNumColumns}
@@ -2565,6 +2664,30 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 renderItem={({ item }: any) => {
                 if (item.isSpacer) {
                   return <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]} />;
+                }
+                if (item.is_custom) {
+                  return (
+                    <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]}>
+                      <TouchableOpacity
+                        style={[styles.menuItem, { backgroundColor: '#f0f9ff', borderWidth: 2, borderColor: '#3b82f6', borderStyle: 'dashed' }]}
+                        onPress={() => {
+                          setCustomItemName(customItemDefaultLabel);
+                          setCustomItemPrice('');
+                          setShowCustomItemModal(true);
+                        }}
+                      >
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                          <Ionicons name="add-circle-outline" size={36} color="#3b82f6" />
+                        </View>
+                        <View style={styles.menuItemInfo}>
+                          <Text style={[styles.menuItemName, { color: '#3b82f6' }]} numberOfLines={2}>{lang === 'zh' && item.name_zh ? item.name_zh : item.name}</Text>
+                          <View style={styles.menuItemFooter}>
+                            <Text style={[styles.menuItemPrice, { color: '#6b7280' }]}>Set price</Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
                 }
                 return (
                 <View style={[styles.menuItemContainer, { width: menuItemWidthPct, maxWidth: menuItemWidthPct }]}>
@@ -2585,7 +2708,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       />
                     )}
                     <View style={styles.menuItemInfo}>
-                      <Text style={styles.menuItemName} numberOfLines={2}>{item.name}</Text>
+                      <Text style={styles.menuItemName} numberOfLines={2}>{lang === 'zh' && item.name_zh ? item.name_zh : item.name}</Text>
                       <View style={styles.menuItemFooter}>
                         <Text style={styles.menuItemPrice}>{formatPrice(item.price_cents)}</Text>
                       </View>
@@ -2618,10 +2741,29 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       styles.categoryBtnText,
                       selectedCategory === cat.id && styles.categoryBtnTextActive
                     ]}>
-                      {cat.name}
+                      {lang === 'zh' && cat.name_zh ? cat.name_zh : cat.name}
                     </Text>
                   </TouchableOpacity>
                 ))}
+                {allowCustomItems && (
+                  <TouchableOpacity
+                    key="custom-category"
+                    style={[
+                      styles.categoryBtn,
+                      selectedCategory === -1 && styles.categoryBtnActive,
+                      selectedCategory !== -1 && { borderColor: '#3b82f6', borderWidth: 1 }
+                    ]}
+                    onPress={() => setSelectedCategory(-1)}
+                  >
+                    <Text style={[
+                      styles.categoryBtnText,
+                      selectedCategory === -1 && styles.categoryBtnTextActive,
+                      selectedCategory !== -1 && { color: '#3b82f6' }
+                    ]}>
+                      + {customItemDefaultLabel}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </ScrollView>
             </View>
 

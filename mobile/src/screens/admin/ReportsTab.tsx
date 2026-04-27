@@ -93,6 +93,7 @@ interface BookingEntry {
 
 interface TopItem {
   item_name: string;
+  item_name_zh?: string;
   total_qty: number;
   total_revenue_cents: number;
 }
@@ -105,6 +106,7 @@ interface TopTable {
 
 interface SalesByCategory {
   category_name: string;
+  category_name_zh?: string;
   total_qty: number;
   order_count: number;
   total_revenue_cents: number;
@@ -112,7 +114,9 @@ interface SalesByCategory {
 
 interface SalesByItem {
   item_name: string;
+  item_name_zh?: string;
   category_name: string;
+  category_name_zh?: string;
   total_qty: number;
   order_count: number;
   total_revenue_cents: number;
@@ -145,7 +149,7 @@ interface DailyTrend {
 type DateRange = 'today' | '7days' | '30days' | 'all';
 
 export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [topItems, setTopItems] = useState<TopItem[]>([]);
@@ -433,7 +437,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
     try {
       setShowExportModal(false);
       const response = await apiClient.get(
-        `/api/restaurants/${restaurantId}/reports/export-xlsx?date_from=${exportDateFrom}&date_to=${exportDateTo}`,
+        `/api/restaurants/${restaurantId}/reports/export-xlsx?date_from=${exportDateFrom}&date_to=${exportDateTo}&lang=${lang}`,
         { responseType: 'arraybuffer' },
       );
 
@@ -962,7 +966,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                         const pct = totalRev > 0 ? ((rev / totalRev) * 100).toFixed(1) : '0.0';
                         return (
                           <View key={cat.category_name || idx} style={styles.tableRow}>
-                            <Text style={[styles.tableCell, { flex: 1.2, fontWeight: '500', color: '#1f2937' }]}>{cat.category_name || 'Uncategorized'}</Text>
+                            <Text style={[styles.tableCell, { flex: 1.2, fontWeight: '500', color: '#1f2937' }]}>{(lang === 'zh' && cat.category_name_zh ? cat.category_name_zh : cat.category_name) || 'Uncategorized'}</Text>
                             <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{parseInt(String(cat.total_qty || 0), 10) || 0}</Text>
                             <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#6b7280' }]}>{parseInt(String(cat.order_count || 0), 10) || 0}</Text>
                             <Text style={[styles.tableCell, { flex: 0.9, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{formatPrice(rev)}</Text>
@@ -988,7 +992,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                         return (
                           <View key={idx} style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors[idx % colors.length], marginRight: 4 }} />
-                            <Text style={{ fontSize: 11, color: '#374151' }}>{cat.category_name}</Text>
+                            <Text style={{ fontSize: 11, color: '#374151' }}>{lang === 'zh' && cat.category_name_zh ? cat.category_name_zh : cat.category_name}</Text>
                           </View>
                         );
                       })}
@@ -1015,8 +1019,8 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                   return (
                     <View key={item.item_name || idx} style={styles.tableRow}>
                       <View style={{ flex: 1.4 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937' }}>{item.item_name || 'Unknown'}</Text>
-                        {item.category_name ? <Text style={{ fontSize: 11, color: '#6b7280' }}>{item.category_name}</Text> : null}
+                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937' }}>{(lang === 'zh' && item.item_name_zh ? item.item_name_zh : item.item_name) || 'Unknown'}</Text>
+                        {item.category_name ? <Text style={{ fontSize: 11, color: '#6b7280' }}>{lang === 'zh' && item.category_name_zh ? item.category_name_zh : item.category_name}</Text> : null}
                       </View>
                       <Text style={[styles.tableCell, { flex: 0.7, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{item.total_qty}</Text>
                       <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#6b7280' }]}>{parseInt(String(item.order_count || 0), 10) || 0}</Text>
