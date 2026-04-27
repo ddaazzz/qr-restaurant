@@ -1182,6 +1182,31 @@ body.edit-mode .table-edit-controls {
 }
 
 /* ============== CLOSE BILL MODAL STYLES ============== */
+
+/* Button-option groups in close bill modal */
+.cb-btn-option {
+  padding: 9px 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.cb-btn-option:hover {
+  border-color: var(--primary-color);
+  background: #f0f4ff;
+}
+.cb-btn-option.cb-btn-active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+  font-weight: 700;
+}
+
 .close-bill-modal {
   min-width: 400px;
   max-width: 500px;

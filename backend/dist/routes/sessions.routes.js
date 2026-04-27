@@ -183,6 +183,11 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
         ts.bill_closure_requested,
         ts.call_staff_requested,
 
+        COALESCE(pay.payment_received, false) AS payment_received,
+        CASE WHEN pay.payment_received_at IS NULL THEN NULL ELSE to_char(pay.payment_received_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS payment_received_at,
+        pay.payment_method_online,
+        pay.merchant_reference,
+
         o.id            AS order_id,
         o.restaurant_order_number,
 
@@ -197,6 +202,15 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
       LEFT JOIN orders o
         ON o.session_id = ts.id
        AND o.status <> 'completed'
+      LEFT JOIN LATERAL (
+        SELECT
+          BOOL_OR(oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_received,
+          MAX(oo.updated_at) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_received_at,
+          MAX(oo.payment_method) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_method_online,
+          MAX(oo.chuio_order_reference) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS merchant_reference
+        FROM orders oo
+        WHERE oo.session_id = ts.id
+      ) pay ON TRUE
       LEFT JOIN bookings b
         ON b.session_id = ts.id
 
@@ -583,6 +597,20 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
             return res.status(404).json({ error: "Session not found" });
         }
         const session = sessionRes.rows[0];
+        // Guard: if this session was already paid online via Payment Asia,
+        // staff should end session directly instead of running close-bill again.
+        const paidOnlineRes = await client.query(`SELECT 1
+       FROM orders
+       WHERE session_id = $1
+         AND status = 'completed'
+         AND payment_method = 'payment-asia'
+       LIMIT 1`, [sessionId]);
+        if ((paidOnlineRes.rowCount ?? 0) > 0) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({
+                error: "Session already paid via Payment Asia. Use End Order to close the session.",
+            });
+        }
         // Get orders and calculate total
         const ordersRes = await client.query(`SELECT o.id, oi.id as item_id, oi.quantity, oi.price_cents
        FROM orders o
@@ -685,24 +713,30 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
             order = { id: orderRes.rows[0].id };
             // Insert order items
             for (const item of items) {
-                const menuRes = await client.query('SELECT price_cents FROM menu_items WHERE id = $1', [item.menu_item_id]);
-                if (menuRes.rows.length === 0) {
-                    throw new Error(`Menu item ${item.menu_item_id} not found`);
+                let price;
+                let nameSnapshot;
+                if (!item.menu_item_id && item.custom_item_name) {
+                    // Custom item — no DB lookup
+                    price = item.price_cents || 0;
+                    nameSnapshot = item.custom_item_name;
                 }
-                const price = menuRes.rows[0].price_cents;
+                else {
+                    const menuRes = await client.query('SELECT price_cents, name FROM menu_items WHERE id = $1', [item.menu_item_id]);
+                    if (menuRes.rows.length === 0)
+                        throw new Error(`Menu item ${item.menu_item_id} not found`);
+                    price = menuRes.rows[0].price_cents;
+                    nameSnapshot = menuRes.rows[0].name;
+                }
                 const orderItemRes = await client.query(`
-          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status)
-          VALUES ($1, $2, $3, $4, 'pending')
+          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status, custom_item_name, item_name_snapshot)
+          VALUES ($1, $2, $3, $4, 'pending', $5, $6)
           RETURNING id
-          `, [order.id, item.menu_item_id, item.quantity || 1, price]);
+          `, [order.id, item.menu_item_id || null, item.quantity || 1, price, item.custom_item_name || null, nameSnapshot]);
                 const orderItemId = orderItemRes.rows[0].id;
                 // Add variant selections if provided
                 if (item.selected_option_ids && item.selected_option_ids.length > 0) {
                     for (const optionId of item.selected_option_ids) {
-                        await client.query(`
-              INSERT INTO order_item_variants (order_item_id, variant_option_id)
-              VALUES ($1, $2)
-              `, [orderItemId, optionId]);
+                        await client.query(`INSERT INTO order_item_variants (order_item_id, variant_option_id) VALUES ($1, $2)`, [orderItemId, optionId]);
                     }
                 }
             }
@@ -752,24 +786,29 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
             order = { id: orderRes.rows[0].id, restaurant_order_number: orderRes.rows[0].restaurant_order_number };
             // Insert order items
             for (const item of items) {
-                const menuRes = await client.query('SELECT price_cents FROM menu_items WHERE id = $1', [item.menu_item_id]);
-                if (menuRes.rows.length === 0) {
-                    throw new Error(`Menu item ${item.menu_item_id} not found`);
+                let price;
+                let nameSnapshot;
+                if (!item.menu_item_id && item.custom_item_name) {
+                    price = item.price_cents || 0;
+                    nameSnapshot = item.custom_item_name;
                 }
-                const price = menuRes.rows[0].price_cents;
+                else {
+                    const menuRes = await client.query('SELECT price_cents, name FROM menu_items WHERE id = $1', [item.menu_item_id]);
+                    if (menuRes.rows.length === 0)
+                        throw new Error(`Menu item ${item.menu_item_id} not found`);
+                    price = menuRes.rows[0].price_cents;
+                    nameSnapshot = menuRes.rows[0].name;
+                }
                 const orderItemRes = await client.query(`
-          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status)
-          VALUES ($1, $2, $3, $4, 'pending')
+          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status, custom_item_name, item_name_snapshot)
+          VALUES ($1, $2, $3, $4, 'pending', $5, $6)
           RETURNING id
-          `, [order.id, item.menu_item_id, item.quantity || 1, price]);
+          `, [order.id, item.menu_item_id || null, item.quantity || 1, price, item.custom_item_name || null, nameSnapshot]);
                 const orderItemId = orderItemRes.rows[0].id;
                 // Add variant selections if provided
                 if (item.selected_option_ids && item.selected_option_ids.length > 0) {
                     for (const optionId of item.selected_option_ids) {
-                        await client.query(`
-              INSERT INTO order_item_variants (order_item_id, variant_option_id)
-              VALUES ($1, $2)
-              `, [orderItemId, optionId]);
+                        await client.query(`INSERT INTO order_item_variants (order_item_id, variant_option_id) VALUES ($1, $2)`, [orderItemId, optionId]);
                     }
                 }
             }

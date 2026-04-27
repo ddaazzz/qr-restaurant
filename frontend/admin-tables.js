@@ -1665,6 +1665,16 @@ async function loadAndRenderOrders(sessionId) {
     const data = await res.json();
     const orders = data.items || [];
 
+    // Also load split payments if any
+    let splitPayments = [];
+    try {
+      const splitRes = await fetch(`${API}/sessions/${sessionId}/split-bill?restaurantId=${restaurantId}`);
+      if (splitRes.ok) {
+        const splitData = await splitRes.json();
+        splitPayments = splitData.payments || [];
+      }
+    } catch (_) {}
+
     const closeBillBtn = document.getElementById('session-close-bill-btn');
     const paidViaPaymentAsia = orders.some(order => order.order_status === 'completed' && order.order_payment_method === 'payment-asia');
     if (closeBillBtn && paidViaPaymentAsia) {
@@ -1687,7 +1697,7 @@ async function loadAndRenderOrders(sessionId) {
     let totalCents = 0;
 
     // Build order HTML + compute subtotal
-    container.innerHTML = orders.map(order => {
+    let ordersHtml = orders.map(order => {
       const isCompleted = order.order_status === 'completed';
       const isPAPayment = order.order_payment_method === 'payment-asia';
       const payBadge = isCompleted
@@ -1724,6 +1734,21 @@ async function loadAndRenderOrders(sessionId) {
         ${itemsHtml}
       </div>`;
     }).join("");
+
+    // Show split payment records if any
+    const splitHtml = splitPayments.length > 0
+      ? `<div style="margin-top:12px;padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+          <div style="font-weight:600;font-size:13px;color:#15803d;margin-bottom:8px;">✂ Split Bill Payments</div>
+          ${splitPayments.map(sp => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #dcfce7;font-size:13px;">
+              <span style="color:#166534;">Bill ${sp.split_index}/${sp.split_count} · ${sp.payment_method.toUpperCase()}</span>
+              <span style="font-weight:700;color:#166534;">$${(sp.amount_cents / 100).toFixed(2)}</span>
+            </div>
+          `).join('')}
+        </div>`
+      : '';
+
+    container.innerHTML = ordersHtml + splitHtml;
 
     // Service charge
     const serviceChargePercent = serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 0);
@@ -2707,7 +2732,7 @@ async function startKPayPayment({ sessionId, finalAmount, discountApplied, servi
   document.body.appendChild(overlay);
 
   // Store context for abort / poll callbacks
-  overlay._ctx = { sessionId, finalAmount, discountApplied, serviceChargeAmount, reason, terminalId, restaurantId };
+  overlay._ctx = { sessionId, finalAmount, discountApplied, serviceChargeAmount, reason, terminalId, restaurantId, splitContext };
   overlay._pollTimer = null;
   overlay._outTradeNo = null;
 
@@ -2779,15 +2804,69 @@ async function startKPayPayment({ sessionId, finalAmount, discountApplied, servi
           kpayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
           document.getElementById('kpay-abort-btn').style.display = 'none';
           const ctx = overlay._ctx;
-          await _doCloseBill({
-            sessionId: ctx.sessionId,
-            paymentMethod: 'kpay',
-            finalAmount: ctx.finalAmount,
-            discountApplied: ctx.discountApplied,
-            serviceChargeAmount: ctx.serviceChargeAmount,
-            reason: ctx.reason,
-            kpay_reference_id: overlay._outTradeNo,
-          });
+
+          if (ctx.splitContext && ctx.splitContext.splitCount >= 2) {
+            // Split bill KPay path
+            const { splitCount, splitIndex } = ctx.splitContext;
+            if (splitIndex === 1) {
+              await fetch(`${API}/sessions/${ctx.sessionId}/split-bill/init`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ split_count: splitCount, restaurantId }),
+              });
+            }
+            const payData = await (await fetch(`${API}/sessions/${ctx.sessionId}/split-bill/pay`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                split_index: splitIndex,
+                split_count: splitCount,
+                amount_cents: ctx.finalAmount,
+                payment_method: 'kpay',
+                discount_applied: ctx.discountApplied,
+                service_charge: ctx.serviceChargeAmount,
+                notes: ctx.reason,
+                kpay_reference_id: overlay._outTradeNo,
+                restaurantId,
+              }),
+            })).json();
+
+            kpayLog('> ✅ Split payment recorded.', '#51cf66');
+
+            if (payData.session_closed) {
+              await loadTablesCategoryTable();
+              if (typeof loadOrdersHistoryLeftPanel === 'function') await loadOrdersHistoryLeftPanel();
+              closeSessionPanel();
+            } else {
+              // Show done button so staff can proceed to next split
+              const doneBtn = document.getElementById('kpay-done-btn');
+              if (doneBtn) {
+                doneBtn.style.display = 'block';
+                doneBtn.textContent = `Next: Bill ${splitIndex + 1}/${splitCount}`;
+                const portionCents = Math.ceil(ctx.totalCents / splitCount);
+                doneBtn.onclick = () => {
+                  document.getElementById('kpay-payment-overlay')?.remove();
+                  closeBillModal(ctx.sessionId, {
+                    splitCount,
+                    splitIndex: splitIndex + 1,
+                    portionCents,
+                    serviceChargeCents: Math.ceil(ctx.serviceChargeAmount / splitCount),
+                  });
+                };
+              }
+            }
+          } else {
+            // Normal (non-split) KPay path
+            await _doCloseBill({
+              sessionId: ctx.sessionId,
+              paymentMethod: 'kpay',
+              finalAmount: ctx.finalAmount,
+              discountApplied: ctx.discountApplied,
+              serviceChargeAmount: ctx.serviceChargeAmount,
+              reason: ctx.reason,
+              kpay_reference_id: overlay._outTradeNo,
+            });
+          }
           kpayLog('> ✅ Bill closed.', '#51cf66');
 
           // Auto-print KPay receipt if enabled

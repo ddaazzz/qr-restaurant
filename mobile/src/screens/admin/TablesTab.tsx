@@ -644,6 +644,19 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       );
       console.log('[LoadBill] Bill data:', billRes.data);
       setSessionBill(billRes.data);
+
+      try {
+        const splitRes = await apiClient.get(
+          `/api/sessions/${sessionId}/split-bill?restaurantId=${restaurantId}`
+        );
+        if (splitRes.data?.split_count) {
+          setSessionSplitPayments(splitRes.data);
+        } else {
+          setSessionSplitPayments(null);
+        }
+      } catch {
+        setSessionSplitPayments(null);
+      }
     } catch (err) {
       console.error('Error loading session orders:', err);
       Alert.alert('Error Loading Orders', 'Failed to load order details');
@@ -1084,20 +1097,85 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
     const discountCents = getDiscountCents();
     const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
-    const finalAmount = grandTotal - discountCents;
+    const serviceChargeCents = sessionBill?.service_charge_cents || 0;
+
+    // Determine effective split count
+    const effectiveSplit = activeSplitContext
+      ? activeSplitContext.splitCount
+      : closeBillSplitCount;
+
+    const portionCents = activeSplitContext
+      ? activeSplitContext.portionCents
+      : (effectiveSplit >= 2 ? Math.round((grandTotal - discountCents) / effectiveSplit) : (grandTotal - discountCents));
+
+    const splitIndex = activeSplitContext ? activeSplitContext.splitIndex : 1;
 
     try {
-      await apiClient.post(
-        `/api/sessions/${selectedSession.id}/close-bill`,
-        {
-          restaurantId: parseInt(restaurantId),
-          payment_method: paymentMethod,
-          amount_paid: finalAmount,
-          discount_applied: discountCents,
-          service_charge: sessionBill?.service_charge_cents || 0,
-          notes: closeReason,
+      if (effectiveSplit >= 2) {
+        // Split bill path
+        if (splitIndex === 1) {
+          // First portion: init split
+          await apiClient.post(`/api/sessions/${selectedSession.id}/split-bill/init`, {
+            restaurantId: parseInt(restaurantId),
+            split_count: effectiveSplit,
+          });
         }
-      );
+        // Record this portion's payment
+        const payRes = await apiClient.post(`/api/sessions/${selectedSession.id}/split-bill/pay`, {
+          restaurantId: parseInt(restaurantId),
+          split_index: splitIndex,
+          split_count: effectiveSplit,
+          amount_cents: portionCents,
+          payment_method: paymentMethod,
+          discount_applied: splitIndex === 1 ? discountCents : 0,
+          service_charge: splitIndex === 1 ? serviceChargeCents : 0,
+          notes: closeReason,
+        });
+
+        const bills_remaining = payRes.data?.bills_remaining ?? (effectiveSplit - splitIndex);
+
+        if (bills_remaining > 0) {
+          // Prepare for next portion
+          const nextIndex = splitIndex + 1;
+          const paidSoFar = portionCents * splitIndex;
+          const remaining = (grandTotal - discountCents) - paidSoFar;
+          const nextPortion = Math.round(remaining / (effectiveSplit - splitIndex));
+
+          // Reset and reopen modal for next portion
+          setActiveSplitContext({
+            splitCount: effectiveSplit,
+            splitIndex: nextIndex,
+            portionCents: nextPortion,
+            serviceChargeCents: 0,
+          });
+          setPaymentMethod('cash');
+          setCloseReason('');
+          setCloseBillSplitCount(effectiveSplit);
+          // Keep modal open for next portion
+          Alert.alert(
+            `Bill ${splitIndex} of ${effectiveSplit} Paid`,
+            `Now collecting payment ${nextIndex} of ${effectiveSplit}: $${(nextPortion / 100).toFixed(2)}`,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
+        // All portions paid — session is now closed
+        setActiveSplitContext(null);
+      } else {
+        // Normal (no split) path
+        await apiClient.post(
+          `/api/sessions/${selectedSession.id}/close-bill`,
+          {
+            restaurantId: parseInt(restaurantId),
+            payment_method: paymentMethod,
+            amount_paid: grandTotal - discountCents,
+            discount_applied: discountCents,
+            service_charge: serviceChargeCents,
+            notes: closeReason,
+          }
+        );
+      }
 
       // Check if bill auto-print is enabled
       try {
@@ -1107,7 +1185,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
         if (printerRes.data?.bill_auto_print === true) {
           console.log('[CloseBill] Bill auto-print enabled, printing bill...');
-          // Auto-print the bill with the handleBillPrint logic
           await printBill(true);
         }
       } catch (autoError) {
@@ -1119,7 +1196,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       setDiscountAmount('0');
       setCloseReason('');
       setSelectedCouponId(null);
-      setCoupons([]);      await loadTableData();
+      setCoupons([]);
+      setCloseBillSplitCount(0);
+      setActiveSplitContext(null);
+      await loadTableData();
       setCurrentView('grid');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
@@ -1800,6 +1880,18 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splitCount, setSplitCount] = useState(2);
   const [splitBillData, setSplitBillData] = useState<any>(null);
+  // Active split context when chaining split bill payments
+  const [activeSplitContext, setActiveSplitContext] = useState<{
+    splitCount: number;
+    splitIndex: number;
+    portionCents: number;
+    serviceChargeCents: number;
+  } | null>(null);
+  // Split count selection within close bill modal (0 = no split)
+  const [closeBillSplitCount, setCloseBillSplitCount] = useState(0);
+  const [closeBillCustomSplit, setCloseBillCustomSplit] = useState('');
+  // Split payments history for the session
+  const [sessionSplitPayments, setSessionSplitPayments] = useState<any>(null);
 
   const splitBill = async () => {
     if (!selectedSession) return;
@@ -2026,6 +2118,24 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
             </View>
           </View>
+
+          {/* Split Bill Payments */}
+          {sessionSplitPayments && sessionSplitPayments.split_count >= 2 && (
+            <View style={{ backgroundColor: '#f0f9ff', borderRadius: 8, padding: 12, marginTop: 8, borderWidth: 1, borderColor: '#bae6fd' }}>
+              <Text style={{ fontWeight: '700', fontSize: 14, color: '#0369a1', marginBottom: 8 }}>✂ Split Bill Payments ({sessionSplitPayments.split_bills_paid}/{sessionSplitPayments.split_count})</Text>
+              {(sessionSplitPayments.payments || []).map((p: any, idx: number) => (
+                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: idx < sessionSplitPayments.payments.length - 1 ? 1 : 0, borderBottomColor: '#e0f2fe' }}>
+                  <Text style={{ color: '#0c4a6e', fontSize: 13 }}>Payment {p.split_index} of {p.split_count} • {p.payment_method}</Text>
+                  <Text style={{ color: '#059669', fontWeight: '600', fontSize: 13 }}>${((p.amount_cents || 0) / 100).toFixed(2)}</Text>
+                </View>
+              ))}
+              {sessionSplitPayments.split_bills_paid < sessionSplitPayments.split_count && (
+                <Text style={{ color: '#f59e0b', fontSize: 12, fontStyle: 'italic', marginTop: 4 }}>
+                  {sessionSplitPayments.split_count - sessionSplitPayments.split_bills_paid} payment(s) remaining
+                </Text>
+              )}
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.actions}>
@@ -2055,7 +2165,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('admin.close-bill')}</Text>
+              <Text style={styles.modalTitle}>
+                {activeSplitContext
+                  ? `Payment ${activeSplitContext.splitIndex} of ${activeSplitContext.splitCount}`
+                  : t('admin.close-bill')}
+              </Text>
 
               {/* Bill Summary */}
               {sessionBill && (
@@ -2077,9 +2191,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                     </View>
                   )}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                    <Text style={{ fontWeight: '700', fontSize: 16 }}>
+                      {activeSplitContext ? `This Portion` : 'Total'}
+                    </Text>
                     <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
-                      ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
+                      {activeSplitContext
+                        ? `$${(activeSplitContext.portionCents / 100).toFixed(2)}`
+                        : `$${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}`}
                     </Text>
                   </View>
                 </View>
@@ -2152,6 +2270,69 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 </View>
               )}
 
+              {/* Split Bill Section (hidden when in chained split) */}
+              {!activeSplitContext && (
+                <>
+                  <Text style={styles.label}>✂ Split Bill</Text>
+                  <View style={styles.selectGroup}>
+                    {[
+                      { label: 'None', value: 0 },
+                      { label: '÷2', value: 2 },
+                      { label: '÷3', value: 3 },
+                      { label: `Per Head (${selectedSession?.pax || '?'})`, value: selectedSession?.pax || 0 },
+                      { label: 'Custom…', value: -1 },
+                    ].map((opt) => (
+                      <TouchableOpacity
+                        key={opt.value}
+                        style={[
+                          styles.selectOption,
+                          closeBillSplitCount === opt.value && styles.selectOptionActive,
+                          opt.value === -1 && closeBillSplitCount > 3 && (closeBillSplitCount !== (selectedSession?.pax || 0)) && styles.selectOptionActive,
+                        ]}
+                        onPress={() => {
+                          if (opt.value === -1) {
+                            setCloseBillCustomSplit('');
+                          } else {
+                            setCloseBillSplitCount(opt.value);
+                            setCloseBillCustomSplit('');
+                          }
+                        }}
+                      >
+                        <Text style={[
+                          styles.selectOptionText,
+                          (closeBillSplitCount === opt.value || (opt.value === -1 && closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && styles.selectOptionTextActive,
+                        ]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {/* Custom split input */}
+                  {(closeBillCustomSplit !== '' || (closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && (
+                    <TextInput
+                      style={[styles.input, { marginTop: 6 }]}
+                      keyboardType="number-pad"
+                      inputAccessoryViewID="numpadDone"
+                      value={closeBillCustomSplit}
+                      onChangeText={(v) => {
+                        setCloseBillCustomSplit(v);
+                        const n = parseInt(v);
+                        if (n >= 2) setCloseBillSplitCount(n);
+                      }}
+                      placeholder="Number of splits"
+                    />
+                  )}
+                  {/* Split preview */}
+                  {closeBillSplitCount >= 2 && sessionBill && (
+                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                      <Text style={{ color: '#059669', fontWeight: '700', textAlign: 'center' }}>
+                        Each pays: ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / closeBillSplitCount / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+
               <Text style={styles.label}>{t('admin.notes')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
@@ -2164,7 +2345,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
-                  onPress={() => setShowCloseBillModal(false)}
+                  onPress={() => {
+                    setShowCloseBillModal(false);
+                    setActiveSplitContext(null);
+                    setCloseBillSplitCount(0);
+                    setCloseBillCustomSplit('');
+                  }}
                 >
                   <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
@@ -3061,6 +3247,24 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
               </View>
             </View>
+
+            {/* Split Bill Payments */}
+            {sessionSplitPayments && sessionSplitPayments.split_count >= 2 && (
+              <View style={{ backgroundColor: '#f0f9ff', borderRadius: 8, padding: 12, marginTop: 8, borderWidth: 1, borderColor: '#bae6fd' }}>
+                <Text style={{ fontWeight: '700', fontSize: 14, color: '#0369a1', marginBottom: 8 }}>✂ Split Bill Payments ({sessionSplitPayments.split_bills_paid}/{sessionSplitPayments.split_count})</Text>
+                {(sessionSplitPayments.payments || []).map((p: any, idx: number) => (
+                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: idx < sessionSplitPayments.payments.length - 1 ? 1 : 0, borderBottomColor: '#e0f2fe' }}>
+                    <Text style={{ color: '#0c4a6e', fontSize: 13 }}>Payment {p.split_index} of {p.split_count} • {p.payment_method}</Text>
+                    <Text style={{ color: '#059669', fontWeight: '600', fontSize: 13 }}>${((p.amount_cents || 0) / 100).toFixed(2)}</Text>
+                  </View>
+                ))}
+                {sessionSplitPayments.split_bills_paid < sessionSplitPayments.split_count && (
+                  <Text style={{ color: '#f59e0b', fontSize: 12, fontStyle: 'italic', marginTop: 4 }}>
+                    {sessionSplitPayments.split_count - sessionSplitPayments.split_bills_paid} payment(s) remaining
+                  </Text>
+                )}
+              </View>
+            )}
           </ScrollView>
           <View style={styles.actions}>
             <TouchableOpacity
@@ -3082,7 +3286,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>{t('admin.close-bill')}</Text>
+                <Text style={styles.modalTitle}>
+                  {activeSplitContext
+                    ? `Payment ${activeSplitContext.splitIndex} of ${activeSplitContext.splitCount}`
+                    : t('admin.close-bill')}
+                </Text>
                 {sessionBill && (
                   <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -3102,9 +3310,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                       </View>
                     )}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                      <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                      <Text style={{ fontWeight: '700', fontSize: 16 }}>
+                        {activeSplitContext ? `This Portion` : 'Total'}
+                      </Text>
                       <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
-                        ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
+                        {activeSplitContext
+                          ? `$${(activeSplitContext.portionCents / 100).toFixed(2)}`
+                          : `$${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}`}
                       </Text>
                     </View>
                   </View>
@@ -3139,10 +3351,75 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                     </ScrollView>
                   </View>
                 )}
+                {/* Split Bill Section */}
+                {!activeSplitContext && (
+                  <>
+                    <Text style={styles.label}>✂ Split Bill</Text>
+                    <View style={styles.selectGroup}>
+                      {[
+                        { label: 'None', value: 0 },
+                        { label: '÷2', value: 2 },
+                        { label: '÷3', value: 3 },
+                        { label: `Per Head (${selectedSession?.pax || '?'})`, value: selectedSession?.pax || 0 },
+                        { label: 'Custom…', value: -1 },
+                      ].map((opt) => (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[
+                            styles.selectOption,
+                            closeBillSplitCount === opt.value && styles.selectOptionActive,
+                            opt.value === -1 && closeBillSplitCount > 3 && (closeBillSplitCount !== (selectedSession?.pax || 0)) && styles.selectOptionActive,
+                          ]}
+                          onPress={() => {
+                            if (opt.value === -1) {
+                              setCloseBillCustomSplit('');
+                            } else {
+                              setCloseBillSplitCount(opt.value);
+                              setCloseBillCustomSplit('');
+                            }
+                          }}
+                        >
+                          <Text style={[
+                            styles.selectOptionText,
+                            (closeBillSplitCount === opt.value || (opt.value === -1 && closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && styles.selectOptionTextActive,
+                          ]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {(closeBillCustomSplit !== '' || (closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && (
+                      <TextInput
+                        style={[styles.input, { marginTop: 6 }]}
+                        keyboardType="number-pad"
+                        inputAccessoryViewID="numpadDone"
+                        value={closeBillCustomSplit}
+                        onChangeText={(v) => {
+                          setCloseBillCustomSplit(v);
+                          const n = parseInt(v);
+                          if (n >= 2) setCloseBillSplitCount(n);
+                        }}
+                        placeholder="Number of splits"
+                      />
+                    )}
+                    {closeBillSplitCount >= 2 && sessionBill && (
+                      <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                        <Text style={{ color: '#059669', fontWeight: '700', textAlign: 'center' }}>
+                          Each pays: ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / closeBillSplitCount / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
                 <Text style={styles.label}>{t('admin.notes')}</Text>
                 <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder="Optional notes" />
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowCloseBillModal(false)}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => {
+                    setShowCloseBillModal(false);
+                    setActiveSplitContext(null);
+                    setCloseBillSplitCount(0);
+                    setCloseBillCustomSplit('');
+                  }}>
                     <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={closeBill}>
