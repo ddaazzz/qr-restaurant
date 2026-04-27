@@ -662,7 +662,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         restaurantId,
         call_staff_requested: false,
       });
-      await loadTables();
+      await loadTableData();
       if (selectedSession?.id === sessionId) {
         setSelectedSession(prev => prev ? { ...prev, call_staff_requested: false } : prev);
       }
@@ -1508,13 +1508,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   };
 
   const printBillWithPrinterSelection = () => {
-    if (!selectedSession || !sessionBill) {
-      Alert.alert('Error', 'No bill data available');
-      return;
-    }
-    console.log('[PrintBill] Opening printer selection for bill');
-    setCurrentPrintJob('bill');
-    setShowPrinterModal(true);
+    printBill(false);
     setShowSessionGearMenu(false);
   };
 
@@ -1626,44 +1620,21 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
   const printBill = async (autoPrint: boolean = false) => {
     console.log('[PrintBill] Starting printBill, autoPrint=', autoPrint);
-    console.log('[PrintBill] selectedSession:', selectedSession);
-    console.log('[PrintBill] sessionBill:', sessionBill);
-    
+
     if (!selectedSession || !sessionBill) {
-      console.log('[PrintBill] Missing session or bill data, returning');
-      if (!autoPrint) {
-        Alert.alert('Error', 'No bill data available. Please open a table order first.');
-      }
+      if (!autoPrint) Alert.alert('Error', 'No bill data available. Please open a table order first.');
       return;
     }
 
     try {
-      console.log('[PrintBill] Fetching printer settings...');
-      // Check if printer is configured
-      const printerRes = await apiClient.get(
-        `/api/restaurants/${restaurantId}/printer-settings`
-      );
-      console.log('[PrintBill] Printer settings response:', printerRes.data);
+      // Use printerSettingsService which correctly converts the array API response
+      const settings = await printerSettingsService.getPrinterSettings(restaurantId, false);
+      const billPrinterType = settings.bill_printer_type;
+      console.log('[PrintBill] Bill printer type:', billPrinterType);
 
-      if (!printerRes.data || !printerRes.data.printer_type) {
+      if (!billPrinterType || billPrinterType === 'none') {
         if (!autoPrint) {
-          Alert.alert(
-            'No Printer Configured',
-            'Please configure a printer in Settings to enable printing. Would you like to set up a printer now?',
-            [
-              {
-                text: 'Cancel',
-                style: 'cancel',
-              },
-              {
-                text: 'Configure Printer',
-                onPress: () => {
-                  console.log('[PrintBill] User wants to configure printer');
-                },
-                style: 'default',
-              },
-            ]
-          );
+          Alert.alert('No Bill Printer', 'Please configure a bill printer in Settings → Printer Settings.');
         }
         return;
       }
@@ -1700,147 +1671,52 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         priority: 5,
       };
 
-      console.log('[PrintBill] Sending print request with payload:', billPayload);
-
-      // Send to backend for printing
-      const printRes = await apiClient.post(
-        `/api/restaurants/${restaurantId}/print-bill`,
-        billPayload
-      );
-
+      console.log('[PrintBill] Sending print request to backend...');
+      const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-bill`, billPayload);
       console.log('[PrintBill] Print response:', printRes.data);
 
-      if (printRes.data && printRes.data.success) {
-        // Handle browser printing - open native print dialog
-        if (printRes.data.html && !printRes.data.bluetoothDevice) {
-          console.log('[PrintBill] Opening native print dialog for browser printing');
-          try {
-            await Print.printAsync({
-              html: printRes.data.html,
-            });
-            if (!autoPrint) {
-              Alert.alert('Print Dialog Opened', `Bill for ${selectedTable?.name} ready to print`);
-            }
-          } catch (printErr: any) {
-            console.error('[PrintBill] Print dialog error:', printErr);
-            if (!autoPrint) {
-              Alert.alert('Print Error', 'Failed to open print dialog: ' + printErr.message);
-            }
-          }
-        } 
-        // Handle Bluetooth printing
-        else if (printRes.data.bluetoothDevice) {
-          console.log('[PrintBill] Initiating Bluetooth printing to:', printRes.data.bluetoothDevice);
-          console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
-          
-          if (!autoPrint) {
-            Alert.alert('Printing...', 'Sending receipt to Bluetooth printer...');
-          }
-          
-          try {
-            const device = printRes.data.bluetoothDevice;
-            
-            // Import BleManager for Bluetooth printing
-            let BleManager: any = null;
-            try {
-              const ble = require('react-native-ble-plx');
-              BleManager = ble.BleManager;
-            } catch (e) {
-              throw new Error('Bluetooth not available on this device');
-            }
+      if (printRes.data?.bluetoothPayload) {
+        // Bluetooth: backend returns ESC/POS payload, client sends to device
+        const { bluetoothDeviceId, bluetoothDeviceName } = printRes.data.bluetoothPayload.printerConfig;
+        console.log('[PrintBill] Sending to Bluetooth device:', bluetoothDeviceName, bluetoothDeviceId);
 
-            if (!BleManager) {
-              throw new Error('BleManager not available');
-            }
+        const { BleManager } = require('react-native-ble-plx');
+        const manager = new BleManager();
 
-            const manager = new BleManager();
-            
-            // Wait for BLE to be ready
-            await new Promise<void>((resolve) => {
-              let attempts = 0;
-              const checkState = async () => {
-                try {
-                  const state = await manager.state();
-                  if (state === 'PoweredOn') {
-                    resolve();
-                  } else if (++attempts < 10) {
-                    setTimeout(checkState, 200);
-                  } else {
-                    resolve();
-                  }
-                } catch (e) {
-                  if (++attempts < 10) setTimeout(checkState, 200);
-                  else resolve();
-                }
-              };
-              checkState();
-            });
+        const receiptData = {
+          orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
+          tableNumber: selectedTable?.name || 'Receipt',
+          items: sessionBill.items.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price_cents,
+          })),
+          subtotal: sessionBill.subtotal_cents,
+          serviceCharge: sessionBill.service_charge_cents || 0,
+          total: sessionBill.total_cents,
+          timestamp: new Date().toLocaleTimeString(),
+          restaurantName: restaurantName || 'Restaurant',
+          language: restaurantLanguage,
+        };
 
-            console.log('[PrintBill] BLE ready, preparing thermal print data');
-            
-            // Prepare receipt data for thermal printer
-            const receiptData = {
-              orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
-              tableNumber: selectedTable?.name || 'Receipt',
-              items: sessionBill.items.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price_cents,
-              })),
-              subtotal: sessionBill.subtotal_cents,
-              serviceCharge: sessionBill.service_charge_cents || 0,
-              total: sessionBill.total_cents,
-              timestamp: new Date().toLocaleTimeString(),
-              restaurantName: 'Restaurant',
-              language: restaurantLanguage,
-            };
-
-            console.log('[PrintBill] Sending thermal print data to:', device.id);
-            
-            // Send to thermal printer using ESC/POS commands
-            // Use 30 second timeout for authentication and printing
-            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData, 30000);
-            
-            console.log('[PrintBill] Bluetooth printing completed successfully');
-            if (!autoPrint) {
-              Alert.alert('Printed', `Bill sent to printer "${device.name}"`);
-            }
-          } catch (bluetoothErr: any) {
-            console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
-            if (!autoPrint) {
-              Alert.alert(
-                'Print Issue',
-                `Could not connect to printer. Make sure it's powered on and nearby.\n\nError: ${bluetoothErr.message}`
-              );
-            }
-          }
-        } 
-        else {
-          // Printer type is thermal/network - sent to printer queue
-          if (!autoPrint) {
-            Alert.alert(
-              'Print Sent',
-              `Bill for ${selectedTable?.name} sent to printer successfully`
-            );
-          }
-        }
-        setShowSessionGearMenu(false);
+        await thermalPrinterService.sendToBluetooth(manager, bluetoothDeviceId, receiptData, 30000);
+        console.log('[PrintBill] Bluetooth printing completed successfully');
+        if (!autoPrint) Alert.alert('Printed', `Bill sent to Bluetooth printer`);
+      } else if (printRes.data?.html) {
+        // Browser / PDF print dialog
+        await Print.printAsync({ html: printRes.data.html });
+      } else if (printRes.data?.success) {
+        // Network/thermal printer queued
+        if (!autoPrint) Alert.alert('Print Sent', `Bill for ${selectedTable?.name} sent to printer`);
       } else {
-        Alert.alert(
-          'Printer Error',
-          printRes.data?.error || 'Failed to send to printer'
-        );
+        if (!autoPrint) Alert.alert('Printer Error', printRes.data?.error || 'Failed to send to printer');
       }
+
+      setShowSessionGearMenu(false);
     } catch (err: any) {
-      console.log('[PrintBill] Error caught:', err);
-      console.log('[PrintBill] Error message:', err.message);
-      console.log('[PrintBill] Error response:', err.response?.data);
-      
+      console.error('[PrintBill] Error:', err.message || err);
       if (!autoPrint) {
-        Alert.alert(
-          'Error',
-          err.response?.data?.error || err.message || 'Failed to print bill'
-        );
+        Alert.alert('Error', err.response?.data?.error || err.message || 'Failed to print bill');
       }
     }
   };
