@@ -806,6 +806,12 @@ async function loadMenuSettingsPage() {
       toggle.checked = flags.allow_custom_food_items === true;
     }
 
+    // Custom item label (ui_config)
+    const labelInput = document.getElementById('custom-item-label-input');
+    if (labelInput) {
+      labelInput.value = (settings.ui_config || {}).custom_item_label || '';
+    }
+
     // Bulk menu import feature (superadmin only toggle)
     const flags = settings.feature_flags || {};
     const isImportEnabled = flags.menu_import_enabled === true;
@@ -886,6 +892,25 @@ async function saveCustomFoodItemSetting(enabled) {
     console.error('Error saving custom food item setting:', err);
     alert('Failed to save setting');
   }
+}
+
+let _customItemLabelTimer = null;
+function scheduleCustomItemLabelSave() {
+  if (_customItemLabelTimer) clearTimeout(_customItemLabelTimer);
+  _customItemLabelTimer = setTimeout(async () => {
+    const input = document.getElementById('custom-item-label-input');
+    if (!input) return;
+    try {
+      const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ui_config: { custom_item_label: input.value.trim() || null } })
+      });
+      if (!res.ok) throw new Error('Failed to save label');
+    } catch (err) {
+      console.error('Error saving custom item label:', err);
+    }
+  }, 600);
 }
 
 async function saveMenuLayoutSetting(columns) {

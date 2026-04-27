@@ -271,7 +271,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests';
+
+  interface SRItem {
+    id: number;
+    request_type: string;
+    label_en: string;
+    label_zh?: string;
+    is_active: boolean;
+    sort_order: number;
+    color?: string;
+    image_url?: string;
+  }
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -332,10 +343,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [menuSettingsLoaded, setMenuSettingsLoaded] = useState(false);
   const [menuColumns, setMenuColumns] = useState<1 | 2>(1);
   const [allowCustomFoodItems, setAllowCustomFoodItems] = useState(false);
+  const [customItemLabel, setCustomItemLabel] = useState('');
   // Feature flags (module enable/disable)
   const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
   const [moduleFlagsLoading, setModuleFlagsLoading] = useState(false);
   const [moduleFlagsLoaded, setModuleFlagsLoaded] = useState(false);
+
+  // Service requests configuration
+  const [srItems, setSrItems] = useState<SRItem[]>([]);
+  const [srLoading, setSrLoading] = useState(false);
+  const [srLoaded, setSrLoaded] = useState(false);
+  const [showSrModal, setShowSrModal] = useState(false);
+  const [editingSrItem, setEditingSrItem] = useState<SRItem | null>(null);
+  const [srLabelEn, setSrLabelEn] = useState('');
+  const [srLabelZh, setSrLabelZh] = useState('');
+  const [srRequestType, setSrRequestType] = useState('');
+  const [srColor, setSrColor] = useState('#4f46e5');
+  const [srIsActive, setSrIsActive] = useState(true);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
   
@@ -1840,6 +1864,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
     { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
+    { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: 'Service Requests', description: 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
@@ -2939,6 +2964,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         name: data.name || '',
         email: data.email || '',
         password: '',
+        confirmPassword: '',
         pin: data.pin || '',
       });
     } catch (err: any) {
@@ -3174,6 +3200,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const uiConf = s.ui_config || {};
       setAllowCustomFoodItems(flags.allow_custom_food_items === true);
       setMenuColumns((uiConf.menu_columns === 2 ? 2 : 1) as 1 | 2);
+      setCustomItemLabel(uiConf.custom_item_label || '');
       setMenuSettingsLoaded(true);
     } catch (err: any) {
       console.warn('[MenuSettings] Failed to load:', err.message);
@@ -3223,6 +3250,192 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons and promotions' },
     { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
   ];
+
+  // ==================== SERVICE REQUESTS CRUD ====================
+
+  const loadSrItems = async () => {
+    setSrLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`);
+      setSrItems(Array.isArray(res.data) ? res.data : []);
+      setSrLoaded(true);
+    } catch {
+      Alert.alert(t('common.error'), 'Failed to load service request items');
+    } finally {
+      setSrLoading(false);
+    }
+  };
+
+  const createSrItem = async () => {
+    if (!srRequestType.trim() || !srLabelEn.trim()) {
+      Alert.alert(t('common.error'), 'Request type and English label are required');
+      return;
+    }
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
+        request_type: srRequestType.trim(),
+        label_en: srLabelEn.trim(),
+        label_zh: srLabelZh.trim() || null,
+        color: srColor,
+        is_active: srIsActive,
+      });
+      setShowSrModal(false);
+      await loadSrItems();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err?.message || 'Failed to create item');
+    }
+  };
+
+  const saveSrItem = async () => {
+    if (!editingSrItem) return;
+    if (!srLabelEn.trim()) {
+      Alert.alert(t('common.error'), 'English label is required');
+      return;
+    }
+    try {
+      await apiClient.patch(
+        `/api/restaurants/${restaurantId}/service-request-items/${editingSrItem.id}`,
+        { label_en: srLabelEn.trim(), label_zh: srLabelZh.trim() || null, color: srColor, is_active: srIsActive }
+      );
+      setShowSrModal(false);
+      setEditingSrItem(null);
+      await loadSrItems();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err?.message || 'Failed to save item');
+    }
+  };
+
+  const deleteSrItem = (itemId: number) => {
+    Alert.alert('Delete Item', 'Delete this service request item?', [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${itemId}`);
+            await loadSrItems();
+          } catch {
+            Alert.alert(t('common.error'), 'Failed to delete item');
+          }
+        },
+      },
+    ]);
+  };
+
+  const renderServiceRequestsPage = () => (
+    <View style={styles.container}>
+      {renderSubPageHeader('Service Requests')}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+        <TouchableOpacity
+          style={[styles.btn, styles.btnPrimary, { marginBottom: 12, alignSelf: 'flex-start' }]}
+          onPress={() => {
+            setEditingSrItem(null);
+            setSrLabelEn('');
+            setSrLabelZh('');
+            setSrRequestType('');
+            setSrColor('#4f46e5');
+            setSrIsActive(true);
+            setShowSrModal(true);
+          }}
+        >
+          <Text style={styles.btnText}>+ Add Service Request Item</Text>
+        </TouchableOpacity>
+        {srLoading ? (
+          <ActivityIndicator color="#3b82f6" style={{ marginTop: 24 }} />
+        ) : srItems.length === 0 ? (
+          <Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 24 }}>No service request items yet.</Text>
+        ) : (
+          srItems.map(item => (
+            <View key={item.id} style={{ flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
+              <View style={{ flex: 1, padding: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color || '#4f46e5' }} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, flex: 1 }} numberOfLines={1}>{item.label_en}</Text>
+                  <View style={{ backgroundColor: item.is_active ? '#d1fae5' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 10, color: item.is_active ? '#065f46' : '#991b1b', fontWeight: '600' }}>{item.is_active ? 'Active' : 'Off'}</Text>
+                  </View>
+                </View>
+                {item.label_zh ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.label_zh}</Text> : null}
+                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Type: {item.request_type}</Text>
+              </View>
+              <View style={{ justifyContent: 'center', gap: 6, paddingHorizontal: 8 }}>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#dbeafe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                  onPress={() => {
+                    setEditingSrItem(item);
+                    setSrLabelEn(item.label_en);
+                    setSrLabelZh(item.label_zh || '');
+                    setSrRequestType(item.request_type);
+                    setSrColor(item.color || '#4f46e5');
+                    setSrIsActive(item.is_active);
+                    setShowSrModal(true);
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#fee2e2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                  onPress={() => deleteSrItem(item.id)}
+                >
+                  <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      {/* SR Item Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSrModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{editingSrItem ? 'Edit Service Request Item' : 'New Service Request Item'}</Text>
+
+            {!editingSrItem && (
+              <>
+                <Text style={styles.label}>Request Type (unique key)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={srRequestType}
+                  onChangeText={setSrRequestType}
+                  placeholder="e.g. napkins, water"
+                  autoCapitalize="none"
+                />
+              </>
+            )}
+
+            <Text style={styles.label}>English Label</Text>
+            <TextInput style={styles.input} value={srLabelEn} onChangeText={setSrLabelEn} placeholder="e.g. Extra Napkins" />
+
+            <Text style={styles.label}>Chinese Label (optional)</Text>
+            <TextInput style={styles.input} value={srLabelZh} onChangeText={setSrLabelZh} placeholder="e.g. 额外纸巾" />
+
+            <Text style={styles.label}>Color (hex)</Text>
+            <TextInput style={styles.input} value={srColor} onChangeText={setSrColor} placeholder="#4f46e5" autoCapitalize="none" />
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}
+              onPress={() => setSrIsActive(prev => !prev)}
+            >
+              <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: '#3b82f6', backgroundColor: srIsActive ? '#3b82f6' : '#fff', justifyContent: 'center', alignItems: 'center' }}>
+                {srIsActive && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+              </View>
+              <Text style={{ fontSize: 14, color: '#374151' }}>Active</Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { setShowSrModal(false); setEditingSrItem(null); }}>
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={editingSrItem ? saveSrItem : createSrItem}>
+                <Text style={styles.btnText}>{editingSrItem ? 'Save' : 'Create'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
 
   const renderFeatureFlagsPage = () => {
     if (moduleFlagsLoading) {
@@ -3313,6 +3526,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 }}
               />
             </View>
+            <View style={{ paddingVertical: 12, opacity: allowCustomFoodItems ? 1 : 0.45 }}>
+              <Text style={styles.label}>Default Item Label</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Name shown on the custom item card (staff can change it per order)</Text>
+              <TextInput
+                style={styles.input}
+                value={customItemLabel}
+                onChangeText={setCustomItemLabel}
+                placeholder="Custom Item"
+                editable={allowCustomFoodItems}
+                onBlur={() => allowCustomFoodItems && saveMenuSettings({ ui_config: { custom_item_label: customItemLabel.trim() || null } })}
+              />
+            </View>
           </View>
 
           {/* Customer Menu section */}
@@ -3366,6 +3591,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'feature-flags':
         if (!moduleFlagsLoading && !moduleFlagsLoaded) loadFeatureFlags();
         return renderFeatureFlagsPage();
+      case 'service-requests':
+        if (!srLoading && !srLoaded) loadSrItems();
+        return renderServiceRequestsPage();
       case 'users': return <UsersTab onBack={navigateBack} />;
       case 'profile':
         if (!profileData && !profileLoading) loadProfile();
@@ -5018,6 +5246,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#6b7280',
     fontWeight: '300',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
   },
   modalFooter: {
     flexDirection: 'row',
