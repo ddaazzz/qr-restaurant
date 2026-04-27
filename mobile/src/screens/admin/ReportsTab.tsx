@@ -10,10 +10,11 @@ import {
   FlatList,
   Modal,
   Dimensions,
-  Share,
   Alert,
   TextInput,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { apiClient } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 
@@ -428,60 +429,41 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
     });
   };
 
-  const doExportCSV = async () => {
+  const doExportXLSX = async () => {
     try {
-      const filtered = getExportFilteredOrders();
-      const lines: string[] = [];
-      const esc = (v: any) => {
-        const s = String(v ?? '');
-        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-      };
-      const row = (...cells: any[]) => lines.push(cells.map(esc).join(','));
+      setShowExportModal(false);
+      const response = await apiClient.get(
+        `/api/restaurants/${restaurantId}/reports/export-xlsx?date_from=${exportDateFrom}&date_to=${exportDateTo}`,
+        { responseType: 'arraybuffer' },
+      );
 
-      // Header metadata
-      row('Export Date', new Date().toISOString().slice(0, 10));
-      row('Date From', exportDateFrom);
-      row('Date To', exportDateTo);
-      row('Period', exportPeriod === 'all' ? 'All Day' : exportPeriod === 'custom' ? `${exportPeriodFrom}–${exportPeriodTo}` : EXPORT_PERIODS[exportPeriod]?.label ?? exportPeriod);
-      row('Dining Types', exportDiningTypes.join(', '));
-      row('Party Size', `${exportPaxMin || 'Any'} – ${exportPaxMax || 'Any'}`);
-      row('Total Orders', filtered.length);
-      row();
+      // Convert ArrayBuffer to base64
+      const bytes = new Uint8Array(response.data as ArrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
 
-      // Per-order rows
-      row('Order ID', 'Date', 'Time', 'Table', 'Order Type', 'Status', 'Pax', 'Items', 'Discount', 'Revenue', 'Staff', 'Payment');
-      filtered.forEach(o => {
-        const d = new Date(o.created_at);
-        const dateStr = d.toISOString().split('T')[0];
-        const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        const revenue = parseInt(String(o.total_cents || 0), 10) || 0;
-        const discount = parseInt(String(o.discount_cents || 0), 10) || 0;
-        const items = (o.item_names || []).join('; ');
-        row(
-          o.id,
-          dateStr,
-          timeStr,
-          o.table_name || '',
-          o.order_type || 'table',
-          o.status,
-          o.pax ?? '',
-          items,
-          `$${(discount / 100).toFixed(2)}`,
-          `$${(revenue / 100).toFixed(2)}`,
-          o.closed_by_staff_name || '',
-          '',
-        );
+      // Write to cache directory
+      const filename = `sales-report-${exportDateFrom}-to-${exportDateTo}.xlsx`;
+      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
       });
 
-      const csv = lines.join('\r\n');
-      const filename = `orders-export-${exportDateFrom}-to-${exportDateTo}.csv`;
-
-      setShowExportModal(false);
-      await Share.share({ message: csv, title: filename });
-    } catch (err: any) {
-      if (err.message !== 'User did not share') {
-        Alert.alert('Export Failed', err.message || 'Could not export report');
+      // Share the file
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: 'Export Sales Report',
+          UTI: 'com.microsoft.excel.xlsx',
+        });
+      } else {
+        Alert.alert('Export Ready', `Report saved to: ${filename}`);
       }
+    } catch (err: any) {
+      Alert.alert('Export Failed', err.message || 'Could not export XLSX report');
     }
   };
 
@@ -631,7 +613,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.exportBtn} onPress={exportToCSV}>
-              <Text style={styles.exportBtnText}>Export CSV</Text>
+              <Text style={styles.exportBtnText}>Export XLSX</Text>
             </TouchableOpacity>
           </View>
 
@@ -1369,8 +1351,8 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.exportDownloadBtn} onPress={doExportCSV}>
-              <Text style={styles.exportDownloadBtnText}>Download CSV</Text>
+            <TouchableOpacity style={styles.exportDownloadBtn} onPress={doExportXLSX}>
+              <Text style={styles.exportDownloadBtnText}>Download XLSX</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

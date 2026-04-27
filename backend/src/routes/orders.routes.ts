@@ -1,8 +1,7 @@
 import { Router } from "express";
 import pool from "../config/db";
 import { sendReceipt } from "../services/emailService";
-import { getPrinterQueueInstance } from "./printer.routes";
-import { getPrinterZonesService } from "../services/printerZones";
+import { queueKitchenPrintJobs, shouldSendOrderToKitchen } from "../services/kitchenDispatch";
 import ExcelJS from "exceljs";
 
 const router = Router();
@@ -254,125 +253,14 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
       }
     }
 
-    // ✅ AUTO-PRINT: Check if kitchen auto-print is enabled
+    // In Payment Asia Order & Pay mode, keep the normal diner flow but defer kitchen dispatch until payment succeeds.
     try {
-      const restaurantConfigRes = await pool.query(
-        `SELECT kitchen_auto_print, printer_type FROM restaurant_printer_settings WHERE restaurant_id = $1`,
-        [restaurantId]
-      );
+      const shouldDispatchToKitchen = await shouldSendOrderToKitchen(orderId, restaurantId);
 
-      if ((restaurantConfigRes.rowCount ?? 0) > 0) {
-        const config = restaurantConfigRes.rows[0];
-
-        if (config.kitchen_auto_print && config.printer_type && config.printer_type !== 'none') {
-          // Fetch order details for printing (including addons)
-          const orderDetailsRes = await pool.query(
-            `
-            SELECT 
-              oi.id,
-              oi.parent_order_item_id,
-              oi.is_addon,
-              oi.menu_item_id,
-              oi.quantity, 
-              oi.price_cents, 
-              COALESCE(oi.custom_item_name, oi.item_name_snapshot, mi.name) as item_name,
-              COALESCE(mi.category_id, -1) as menu_category_id,
-              oi.print_category_id,
-              ts.table_name, 
-              o.created_at
-            FROM order_items oi
-            JOIN orders o ON oi.order_id = o.id
-            LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
-            LEFT JOIN table_sessions ts ON o.session_id = ts.id
-            WHERE oi.order_id = $1 AND o.restaurant_id = $2
-            ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC
-            `,
-            [orderId, restaurantId]
-          );
-
-          if ((orderDetailsRes.rowCount ?? 0) > 0) {
-            const allItems = orderDetailsRes.rows;
-            const tableNumber = allItems[0].table_name || "To-Go";
-            const zonesService = getPrinterZonesService(pool);
-            const queue = getPrinterQueueInstance();
-
-            // Check if multi-zone printing is configured
-            const zones = await zonesService.getZonesByRestaurant(restaurantId);
-
-            if (zones.length > 1) {
-              // Multi-zone: Group items by zone
-              // Main items go to their category's zone
-              // Addon items go to their print_category zone (which is the addon item's category)
-              const itemsByZone: { [zoneId: number]: typeof allItems } = {};
-
-              for (const item of allItems) {
-                // Determine which category to use for zone assignment
-                let zoneCategory = item.menu_category_id;
-                if (item.is_addon && item.print_category_id) {
-                  zoneCategory = item.print_category_id;
-                }
-
-                const zone = await zonesService.getZoneByCategoryId(restaurantId, zoneCategory);
-                const zoneId = zone?.id || (await zonesService.getDefaultZone(restaurantId))?.id || 0;
-
-                if (!itemsByZone[zoneId]) {
-                  itemsByZone[zoneId] = [];
-                }
-                itemsByZone[zoneId].push(item);
-              }
-
-              // Queue print job for each zone
-              for (const [zoneIdStr, zoneItems] of Object.entries(itemsByZone)) {
-                const zoneId = parseInt(zoneIdStr);
-                const printPayload = {
-                  orderNumber: String(orderId),
-                  tableNumber,
-                  items: zoneItems.map((i) => ({
-                    name: i.item_name,
-                    quantity: i.quantity,
-                    isAddon: i.is_addon
-                  })),
-                  timestamp: new Date(zoneItems[0].created_at).toLocaleTimeString(),
-                  restaurantName: '',
-                  type: 'kitchen' as const,
-                };
-
-                await queue.addJob(restaurantId, printPayload, {
-                  orderId: String(orderId),
-                  printerZoneId: zoneId,
-                  priority: 10, // Highest priority for auto-print
-                  maxRetries: 3,
-                }).catch(err => {
-                  console.warn('[Orders] Failed to auto-print order to zone:', err.message);
-                });
-              }
-            } else {
-              // Single zone or no zones: Print all items to default
-              const printPayload = {
-                orderNumber: String(orderId),
-                tableNumber,
-                items: allItems.map((i) => ({
-                  name: i.item_name,
-                  quantity: i.quantity,
-                  isAddon: i.is_addon
-                })),
-                timestamp: new Date(allItems[0].created_at).toLocaleTimeString(),
-                restaurantName: '',
-                type: 'kitchen' as const,
-              };
-
-              const zone = await zonesService.getDefaultZone(restaurantId);
-              await queue.addJob(restaurantId, printPayload, {
-                orderId: String(orderId),
-                ...(zone?.id !== undefined ? { printerZoneId: zone.id } : {}),
-                priority: 10, // Highest priority for auto-print
-                maxRetries: 3,
-              }).catch(err => {
-                console.warn('[Orders] Failed to auto-print order:', err.message);
-              });
-            }
-          }
-        }
+      if (shouldDispatchToKitchen) {
+        await queueKitchenPrintJobs(orderId, restaurantId);
+      } else {
+        console.log(`[Orders] Deferring kitchen dispatch for unpaid Payment Asia order ${orderId}`);
       }
     } catch (autoPrintErr: any) {
       console.warn('[Orders] Auto-print error (non-blocking):', autoPrintErr.message);
@@ -580,6 +468,7 @@ router.get("/kitchen/items", async (req, res) => {
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       JOIN table_sessions ts ON o.session_id = ts.id
+      JOIN restaurants r ON ts.restaurant_id = r.id
       LEFT JOIN table_units tu ON ts.table_unit_id = tu.id
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
       LEFT JOIN menu_categories mc ON mi.category_id = mc.id
@@ -590,6 +479,12 @@ router.get("/kitchen/items", async (req, res) => {
 
       WHERE oi.status != 'served'
       AND ts.restaurant_id = $1
+      AND (
+        r.active_payment_vendor <> 'payment-asia'
+        OR r.active_payment_terminal_id IS NULL
+        OR COALESCE(r.payment_asia_order_pay_enabled, true) = false
+        OR (o.payment_method = 'payment-asia' AND o.status = 'completed')
+      )
 
       GROUP BY
         oi.id,
@@ -1680,21 +1575,41 @@ router.get("/restaurants/:restaurantId/reports/export", async (req, res) => {
 // ---------------------------------------------------------------------------
 // Payment method display names and canonical keys
 // ---------------------------------------------------------------------------
-const PM_KEYS = ['cash', 'kpay', 'payment-asia', 'other'] as const;
+const PM_KEYS = ['cash', 'visa', 'mastercard', 'unionpay', 'octopus', 'payme', 'fps', 'wechat', 'alipay', 'kpay', 'card', 'online', 'other'] as const;
 type PmKey = typeof PM_KEYS[number];
 const PM_LABELS: Record<PmKey, string> = {
-  'cash': 'Cash',
-  'kpay': 'KPay',
-  'payment-asia': 'Payment Asia',
-  'other': 'Other',
+  'cash':       'Cash',
+  'visa':       'Visa',
+  'mastercard': 'Mastercard',
+  'unionpay':   'UnionPay',
+  'octopus':    'Octopus',
+  'payme':      'PayMe',
+  'fps':        'FPS',
+  'wechat':     'WeChat Pay',
+  'alipay':     'Alipay',
+  'kpay':       'KPay',
+  'card':       'Card',
+  'online':     'Online',
+  'other':      'Other',
 };
 
 function canonicalPM(raw: string | null): PmKey {
   if (!raw) return 'other';
-  const r = raw.toLowerCase();
+  const r = raw.toLowerCase().replace(/[\s\-_]/g, '');
   if (r === 'cash') return 'cash';
+  if (r === 'visa') return 'visa';
+  if (r === 'master' || r === 'mastercard') return 'mastercard';
+  if (r === 'unionpay' || r === 'cup') return 'unionpay';
+  if (r === 'octopus') return 'octopus';
+  if (r === 'payme') return 'payme';
+  if (r === 'fps') return 'fps';
+  if (r === 'wechatpay' || r === 'wechat' || r === 'wxpay') return 'wechat';
+  if (r === 'alipay') return 'alipay';
+  if (r === 'creditcard' || r === 'credit') return 'card';
   if (r === 'kpay') return 'kpay';
-  if (r === 'payment-asia' || r === 'paymentasia') return 'payment-asia';
+  if (r === 'card' || r === 'debit' || r === 'debitcard') return 'card';
+  if (r === 'online') return 'online';
+  if (r === 'paymentasia' || r === 'payasia') return 'online';
   return 'other';
 }
 
@@ -1926,24 +1841,58 @@ router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) =>
       session_count: number; total_pax: number;
       subtotal_cents: string; discount_cents: string;
     }>(
-      `SELECT
-         (ts.started_at AT TIME ZONE $3)::date::text AS day,
-         COALESCE(ts.order_type, 'table') AS order_type,
-         COALESCE(ts.payment_method, 'other') AS payment_method,
-         COUNT(ts.id)::int AS session_count,
-         COALESCE(SUM(ts.pax), 0)::int AS total_pax,
+      `WITH session_pm AS (
+         SELECT
+           ts.id,
+           ts.started_at,
+           ts.order_type,
+           ts.discount_applied,
+           ts.pax,
+           COALESCE(
+             -- KPay: specific card network from aid_label
+             CASE WHEN ts.payment_method = 'kpay' THEN (
+               SELECT kt.aid_label
+               FROM kpay_transactions kt
+               JOIN orders o2 ON o2.id = kt.order_id
+               WHERE o2.session_id = ts.id
+                 AND kt.aid_label IS NOT NULL AND kt.aid_label <> ''
+               LIMIT 1
+             ) ELSE NULL END,
+             -- Payment Asia: network on session
+             (SELECT pat.network FROM payment_asia_transactions pat
+              WHERE pat.session_id = ts.id AND pat.network IS NOT NULL AND pat.network <> ''
+              LIMIT 1),
+             -- Payment Asia: network via order link
+             (SELECT pat2.network FROM payment_asia_transactions pat2
+              JOIN orders o3 ON o3.id = pat2.order_id
+              WHERE o3.session_id = ts.id AND pat2.network IS NOT NULL AND pat2.network <> ''
+              LIMIT 1),
+             -- chuio_payments vendor-level method
+             (SELECT cp.payment_method FROM chuio_payments cp
+              WHERE cp.session_id = ts.id AND cp.payment_method IS NOT NULL AND cp.payment_method <> ''
+              LIMIT 1),
+             COALESCE(ts.payment_method, 'other')
+           ) AS enriched_pm
+         FROM table_sessions ts
+         WHERE ts.restaurant_id = $1
+           AND ts.ended_at IS NOT NULL
+           AND (ts.started_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
+       )
+       SELECT
+         (spm.started_at AT TIME ZONE $3)::date::text AS day,
+         COALESCE(spm.order_type, 'table') AS order_type,
+         spm.enriched_pm AS payment_method,
+         COUNT(spm.id)::int AS session_count,
+         COALESCE(SUM(spm.pax), 0)::int AS total_pax,
          COALESCE(SUM(sess_sub.subtotal), 0)::text AS subtotal_cents,
-         COALESCE(SUM(ts.discount_applied), 0)::text AS discount_cents
-       FROM table_sessions ts
+         COALESCE(SUM(spm.discount_applied), 0)::text AS discount_cents
+       FROM session_pm spm
        JOIN LATERAL (
          SELECT COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS subtotal
          FROM orders o
          JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
-         WHERE o.session_id = ts.id
+         WHERE o.session_id = spm.id
        ) sess_sub ON true
-       WHERE ts.restaurant_id = $1
-         AND ts.ended_at IS NOT NULL
-         AND (ts.started_at AT TIME ZONE $3)::date BETWEEN $2::date AND $4::date
        GROUP BY 1, 2, 3
        ORDER BY 1, 2, 3`,
       [restaurantId, fromDate, tz, toDate],
@@ -1959,19 +1908,28 @@ router.get("/restaurants/:restaurantId/reports/export-xlsx", async (req, res) =>
       [restaurantId, fromDate, toDate],
     );
 
-    // --- Query 3: staff by day (closer staff on session) ---
+    // --- Query 3: staff by day (closer staff on session, falling back to most active placer) ---
     const staffRes = await pool.query<{
       day: string; staff_name: string; session_count: number;
       subtotal_cents: string; discount_cents: string;
     }>(
       `SELECT
          (ts.started_at AT TIME ZONE $3)::date::text AS day,
-         COALESCE(u.name, 'Unknown') AS staff_name,
+         COALESCE(closer.name, placer.name, 'Unknown') AS staff_name,
          COUNT(ts.id)::int AS session_count,
          COALESCE(SUM(sess_sub.subtotal), 0)::text AS subtotal_cents,
          COALESCE(SUM(ts.discount_applied), 0)::text AS discount_cents
        FROM table_sessions ts
-       LEFT JOIN users u ON u.id = ts.closed_by_staff_id
+       LEFT JOIN users closer ON closer.id = ts.closed_by_staff_id
+       LEFT JOIN LATERAL (
+         SELECT u2.name
+         FROM orders o2
+         JOIN users u2 ON u2.id = o2.placed_by_user_id
+         WHERE o2.session_id = ts.id AND o2.placed_by_user_id IS NOT NULL
+         GROUP BY u2.id, u2.name
+         ORDER BY COUNT(*) DESC
+         LIMIT 1
+       ) placer ON true
        JOIN LATERAL (
          SELECT COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS subtotal
          FROM orders o
