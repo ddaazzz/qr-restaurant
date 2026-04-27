@@ -87,6 +87,15 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
   try {
     // If type is specified, update/insert single printer
     if (type) {
+      // Normalize type to match DB CHECK constraint: 'QR', 'Bill', 'Kitchen', 'KPAY'
+      const typeNormalizeMap: Record<string, string> = {
+        QR: 'QR', qr: 'QR',
+        BILL: 'Bill', bill: 'Bill', Bill: 'Bill',
+        KITCHEN: 'Kitchen', kitchen: 'Kitchen', Kitchen: 'Kitchen',
+        KPAY: 'KPAY', kpay: 'KPAY',
+      };
+      const normalizedType = typeNormalizeMap[type] || type;
+
       // Always include 'enabled: true' in settings to satisfy check_settings_enabled constraint.
       // PostgreSQL evaluates CHECK constraints against the proposed INSERT row (EXCLUDED) even
       // when ON CONFLICT DO UPDATE fires, so the INSERT VALUES must satisfy the constraint too.
@@ -105,7 +114,7 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
            settings = printers.settings || $9::jsonb,
            updated_at = now()
          RETURNING *`,
-        [restaurantId, type, printer_type, printer_host, printer_port || 9100, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settingsWithEnabled)]
+        [restaurantId, normalizedType, printer_type, printer_host, printer_port || 9100, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settingsWithEnabled)]
       );
 
       return res.json(result.rows[0]);
@@ -199,7 +208,7 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
     // Get restaurant info and order details
     const [restaurantResult, orderResult, kitchenPrinterResult] = await Promise.all([
       pool.query(
-        `SELECT name FROM restaurants WHERE id = $1`,
+        `SELECT name, language_preference FROM restaurants WHERE id = $1`,
         [restaurantId]
       ),
       pool.query(
@@ -351,10 +360,11 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
   try {
     // Get restaurant name
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const languagePreference = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].language_preference : 'en';
 
     // Get QR text customization from database
     let textAboveQR = qrTextAbove || 'Scan to Order';
@@ -383,7 +393,8 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
       startedTime: new Date().toLocaleString(),
       printerPaperWidth: 80,
       qrTextAbove: textAboveQR,
-      qrTextBelow: textBelowQR
+      qrTextBelow: textBelowQR,
+      language: languagePreference || 'en'
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -426,10 +437,11 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
   try {
     // Get restaurant name
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const languagePreference = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].language_preference : 'en';
 
     // Get QR text customization from database
     let textAboveQR = 'Scan to Order';
@@ -458,7 +470,8 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
       startedTime: new Date().toLocaleString(),
       printerPaperWidth: 80,
       qrTextAbove: textAboveQR,
-      qrTextBelow: textBelowQR
+      qrTextBelow: textBelowQR,
+      language: languagePreference || 'en'
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -492,12 +505,13 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
   try {
     // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name, address, phone FROM restaurants WHERE id = $1`,
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const languagePreference = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].language_preference : 'en';
 
     // Get bill format settings from database
     let billHeaderText = headerText;
@@ -535,7 +549,8 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
       timestamp: new Date().toLocaleString(),
       printerPaperWidth: 80,
       billHeaderText: billHeaderText,
-      billFooterText: billFooterText
+      billFooterText: billFooterText,
+      language: languagePreference || 'en'
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -587,12 +602,13 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
   try {
     // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name, address, phone FROM restaurants WHERE id = $1`,
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const languagePreference = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].language_preference : 'en';
 
     // Get bill format settings
     let billHeaderText = 'Thank You';
@@ -630,7 +646,8 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
       timestamp: new Date().toLocaleString(),
       printerPaperWidth: 80,
       billHeaderText: billHeaderText,
-      billFooterText: billFooterText
+      billFooterText: billFooterText,
+      language: languagePreference || 'en'
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -673,14 +690,16 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
 
     let printerConfig = printerResult.rows[0];
     let restaurantName = '';
+    let languagePreference = 'en';
 
     // Get restaurant name
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (((restaurantResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantResult.rows[0].name;
+      languagePreference = restaurantResult.rows[0].language_preference || 'en';
     }
 
     // If not found in printers table, try old schema on restaurants table (fallback)
@@ -827,7 +846,8 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
         printerPaperWidth: 80, // Standard 80mm paper width
         // Pass customizable text from database settings
         qrTextAbove: textAboveQR,
-        qrTextBelow: textBelowQR
+        qrTextBelow: textBelowQR,
+        language: languagePreference || 'en'
       };
       
       const escposCommands = generateESCPOS(receiptData);
@@ -916,16 +936,18 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
     let restaurantName = '';
     let restaurantAddress = '';
     let restaurantPhone = '';
+    let languagePreference = 'en';
 
     // Get restaurant info (name, address, phone)
     const restaurantMetaResult = await pool.query(
-      `SELECT name, address, phone FROM restaurants WHERE id = $1`,
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (((restaurantMetaResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantMetaResult.rows[0].name;
       restaurantAddress = restaurantMetaResult.rows[0].address || '';
       restaurantPhone = restaurantMetaResult.rows[0].phone || '';
+      languagePreference = restaurantMetaResult.rows[0].language_preference || 'en';
     }
 
     // If not found in printers table, try old schema on restaurants table (fallback)
@@ -1038,7 +1060,8 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         printerPaperWidth: 80,
         // Bill-specific customization
         billHeaderText: billHeaderText,
-        billFooterText: billFooterText
+        billFooterText: billFooterText,
+        language: languagePreference || 'en'
       };
       
       const escposCommands = generateESCPOS(receiptData);
@@ -1229,7 +1252,7 @@ router.post("/restaurants/:restaurantId/preview-kpay-receipt", async (req: Reque
 
   try {
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'Restaurant';
@@ -1269,7 +1292,7 @@ router.post("/restaurants/:restaurantId/test-print-kpay-receipt", async (req: Re
 
   try {
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'Restaurant';
@@ -1316,7 +1339,7 @@ router.post("/restaurants/:restaurantId/print-kpay-receipt", async (req: Request
   try {
     // Get restaurant name
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'Restaurant';

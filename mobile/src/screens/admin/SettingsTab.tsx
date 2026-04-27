@@ -783,14 +783,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       const prefix = editingPrinterType; // 'qr', 'bill', 'kitchen', or 'kpay'
 
+      // Map prefix to DB type value (must match CHECK constraint: 'QR', 'Bill', 'Kitchen', 'KPAY')
+      const typeMap: Record<string, string> = { qr: 'QR', bill: 'Bill', kitchen: 'Kitchen', kpay: 'KPAY' };
+      const dbType = typeMap[prefix] || prefix.toUpperCase();
+
+      // Bluetooth device may be stored under prefixed key (set by selectBluetoothDevice)
+      // or under the unprefixed key (loaded from DB for editing)
+      const btDeviceId = (printerFormData as any)[`${prefix}_bluetooth_device_id`] ?? printerFormData.bluetooth_device_id;
+      const btDeviceName = (printerFormData as any)[`${prefix}_bluetooth_device_name`] ?? printerFormData.bluetooth_device_name;
+
       // Build payload matching webapp format (individual record with type field)
       const payload: any = {
-        type: prefix.toUpperCase(),
+        type: dbType,
         printer_type: printerFormData.printer_type,
         printer_host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : null,
         printer_port: printerFormData.printer_type === 'network' ? parseInt((printerFormData.printer_port as any)?.toString() || '9100') : null,
-        bluetooth_device_id: printerFormData.printer_type === 'bluetooth' ? printerFormData.bluetooth_device_id : null,
-        bluetooth_device_name: printerFormData.printer_type === 'bluetooth' ? printerFormData.bluetooth_device_name : null,
+        bluetooth_device_id: printerFormData.printer_type === 'bluetooth' ? btDeviceId : null,
+        bluetooth_device_name: printerFormData.printer_type === 'bluetooth' ? btDeviceName : null,
       };
 
       // Auto-print and paper width go into settings JSONB
