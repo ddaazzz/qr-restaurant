@@ -517,9 +517,8 @@ function DraggableMenuItemGrid({
 
 // ==================== COMPONENT ====================
 
-interface MenuTabProps { restaurantId: string; searchQuery?: string }
-export const MenuTab = forwardRef<MenuTabRef, MenuTabProps>(
-  ({ restaurantId, searchQuery }, ref) => {
+export const MenuTab = forwardRef(
+  ({ restaurantId, searchQuery }: { restaurantId: string; searchQuery?: string }, ref: React.Ref<MenuTabRef>) => {
     const { t, lang } = useTranslation();
     // ==================== STATE MANAGEMENT ====================
     
