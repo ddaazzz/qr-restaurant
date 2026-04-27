@@ -1,5 +1,6 @@
 import { orderNotifier } from './orderNotifier';
 import pool from '../config/db';
+import { hasKitchenPrintJob, shouldSendOrderToKitchen } from './kitchenDispatch';
 
 /**
  * Kitchen Auto-Print Service
@@ -26,7 +27,7 @@ export class KitchenAutoPrintService {
       orderNotifier.on('new-order', async (event: any) => {
         try {
           console.log('[KitchenAutoPrint] 📦 New order received:', event);
-          await this.handleNewOrder(event);
+          await this.handleKitchenDispatch(event);
         } catch (err) {
           console.error('[KitchenAutoPrint] Error handling new order:', err);
         }
@@ -36,8 +37,9 @@ export class KitchenAutoPrintService {
       orderNotifier.on('order-status-changed', async (event: any) => {
         try {
           console.log('[KitchenAutoPrint] Order status changed:', event);
-          // Could reprint or take action on status change
-          // For now, only auto-print on new orders
+          if (event.newStatus === 'completed') {
+            await this.handleKitchenDispatch(event);
+          }
         } catch (err) {
           console.error('[KitchenAutoPrint] Error handling status change:', err);
         }
@@ -168,6 +170,22 @@ export class KitchenAutoPrintService {
   stop() {
     this.initialized = false;
     console.log('[KitchenAutoPrint] Service stopped');
+  }
+
+  private async handleKitchenDispatch(event: any) {
+    const { orderId, restaurantId } = event;
+
+    if (!(await shouldSendOrderToKitchen(Number(orderId), Number(restaurantId)))) {
+      console.log(`[KitchenAutoPrint] Deferring kitchen print for unpaid Payment Asia order #${orderId}`);
+      return;
+    }
+
+    if (await hasKitchenPrintJob(Number(orderId), Number(restaurantId))) {
+      console.log(`[KitchenAutoPrint] Print queue already has kitchen job for order #${orderId}, skipping direct auto-print`);
+      return;
+    }
+
+    await this.handleNewOrder(event);
   }
 }
 
