@@ -1590,24 +1590,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       );
       console.log('[PrintBill] Printer settings response:', printerRes.data);
 
-      if (!printerRes.data || !printerRes.data.printer_type) {
+      // API returns an array of printer rows — find the Bill printer
+      const printerRows = Array.isArray(printerRes.data) ? printerRes.data : [];
+      const billPrinter = printerRows.find((p: any) => p.type === 'Bill');
+      const billPrinterType = billPrinter?.printer_type;
+
+      if (!billPrinterType || billPrinterType === 'none') {
         if (!autoPrint) {
           Alert.alert(
-            'No Printer Configured',
-            'Please configure a printer in Settings to enable printing. Would you like to set up a printer now?',
-            [
-              {
-                text: 'Cancel',
-                style: 'cancel',
-              },
-              {
-                text: 'Configure Printer',
-                onPress: () => {
-                  console.log('[PrintBill] User wants to configure printer');
-                },
-                style: 'default',
-              },
-            ]
+            'No Bill Printer Configured',
+            'Please configure a bill printer in Settings → Printer Settings.'
           );
         }
         return;
