@@ -752,7 +752,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
- = async (presetId: number) => {
+  const loadAddonPresetItems = async (presetId: number) => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
       setAddonPresetItems(Array.isArray(res.data) ? res.data : []);
