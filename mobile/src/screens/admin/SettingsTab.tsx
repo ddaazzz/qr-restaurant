@@ -574,9 +574,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       const prefix = editingPrinterType; // 'qr', 'bill', 'kitchen', or 'kpay'
 
+      // Map to DB-expected type casing: QR, Bill, Kitchen, KPAY
+      const typeMap: Record<string, string> = { qr: 'QR', bill: 'Bill', kitchen: 'Kitchen', kpay: 'KPAY' };
+
       // Build payload matching webapp format (individual record with type field)
       const payload: any = {
-        type: prefix.toUpperCase(),
+        type: typeMap[prefix] || prefix.toUpperCase(),
         printer_type: printerFormData.printer_type,
         printer_host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : null,
         printer_port: printerFormData.printer_type === 'network' ? (printerFormData.printer_port || null) : null,

@@ -602,9 +602,14 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
       }
       return result;
     } else if (result.jobId) {
-      // Queued for printing
-      console.log('[PrintRouter] Bill queued with job ID:', result.jobId);
-      alert(tr('admin.printer-queued-bill', '✅ Bill queued for printing'));
+      // Queued / sent to network printer
+      console.log('[PrintRouter] Bill sent with job ID:', result.jobId);
+      alert(tr('admin.printer-queued-bill', '✅ Bill sent to printer'));
+      return result;
+    } else if (result.success) {
+      // Direct success (e.g. network print confirmed by backend)
+      console.log('[PrintRouter] Bill printed successfully');
+      alert(tr('admin.printer-print-success', '✅ Bill printed successfully'));
       return result;
     }
 
