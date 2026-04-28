@@ -480,6 +480,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.quantity,
         oi.price_cents,
         mi.name,
+        mi.name_zh,
         ts.restaurant_id,
         mc.restaurant_id
 
