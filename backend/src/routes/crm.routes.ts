@@ -93,9 +93,11 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
          o.payment_method,
          o.created_at,
          ts.order_type,
+         ts.id AS session_id,
          COALESCE(t.name, 'Counter') AS table_label,
          ts.pax,
          COALESCE(ts.discount_applied, 0) AS discount_applied,
+         (SELECT b2.id FROM bookings b2 WHERE b2.session_id = ts.id LIMIT 1) AS linked_booking_id,
          (
            SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
            FROM order_items oi2
@@ -115,11 +117,27 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
       [restaurantId, customerId, customer.phone || '', customer.name]
     );
 
-    // 3. Bookings matched by phone or name
+    // 3. Auto-mark no-show: confirmed bookings in the past with no session started
+    await pool.query(
+      `UPDATE bookings SET status = 'no-show', updated_at = NOW()
+       WHERE restaurant_id = $1
+         AND status = 'confirmed'
+         AND session_id IS NULL
+         AND booking_date < CURRENT_DATE`,
+      [restaurantId]
+    );
+
+    // 4. Bookings matched by phone or name (include all statuses for full history)
     const bookingsRes = await pool.query(
       `SELECT b.id, b.guest_name, b.phone, b.pax, b.booking_date, b.booking_time,
-              b.status, b.notes, b.created_at,
-              COALESCE(t.name, '') AS table_label
+              b.status, b.notes, b.created_at, b.session_id,
+              COALESCE(t.name, '') AS table_label,
+              (
+                SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
+                FROM orders o2
+                JOIN order_items oi2 ON oi2.order_id = o2.id AND oi2.removed = false
+                WHERE b.session_id IS NOT NULL AND o2.session_id = b.session_id
+              ) AS session_total_cents
        FROM bookings b
        LEFT JOIN tables t ON t.id = b.table_id
        WHERE b.restaurant_id = $1
@@ -135,7 +153,7 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
     const pastBookings   = bookingsRes.rows.filter(b => (b.booking_date as string) < now || b.status === 'completed' || b.status === 'cancelled' || b.status === 'no-show');
     const futureBookings = bookingsRes.rows.filter(b => (b.booking_date as string) >= now && b.status === 'confirmed');
 
-    // 4. Eligible coupons:
+    // 5. Eligible coupons:
     //    - All 'open' coupons (active, not expired, not exhausted)
     //    - 'closed' coupons explicitly assigned to this customer via customer_coupon_access
     let couponsRes;

@@ -2562,6 +2562,56 @@ function crmBackToList() {
   document.getElementById('crm-list-view').style.display   = 'block';
 }
 
+async function crmShowOrderDetail(orderId) {
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/orders/' + orderId, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Failed');
+    var o = await res.json();
+
+    var itemsHtml = (o.items || []).map(function(item) {
+      var variants = item.variants ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">' + item.variants + '</div>' : '';
+      var addons = (item.addons || []).map(function(a) {
+        return '<div style="display:flex;justify-content:space-between;padding-left:12px;font-size:11px;color:#6b7280;margin-top:2px;">' +
+          '<span>+ ' + a.menu_item_name + '</span><span>$' + (a.item_total_cents / 100).toFixed(2) + '</span></div>';
+      }).join('');
+      return '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+          '<span style="font-size:13px;font-weight:600;color:#111827;">' + (item.quantity > 1 ? item.quantity + '× ' : '') + (item.menu_item_name || '—') + '</span>' +
+          '<span style="font-size:13px;color:#059669;font-weight:600;">$' + ((item.item_total_cents || 0) / 100).toFixed(2) + '</span>' +
+        '</div>' + variants + addons + '</div>';
+    }).join('');
+
+    var totalCents = parseInt(o.total_cents) || 0;
+    var modal = document.createElement('div');
+    modal.id = 'crm-order-detail-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
+    modal.innerHTML =
+      '<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:80vh;overflow:auto;padding:0;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e5e7eb;">' +
+          '<strong style="font-size:16px;color:#111827;">Order #' + (o.restaurant_order_number || o.id) + '</strong>' +
+          '<button onclick="document.getElementById(\'crm-order-detail-modal\').remove()" style="background:none;border:none;font-size:20px;color:#6b7280;cursor:pointer;">✕</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;padding:12px 20px;font-size:12px;color:#6b7280;border-bottom:1px solid #f3f4f6;">' +
+          '<span>📅 ' + new Date(o.created_at).toLocaleDateString() + '</span>' +
+          (o.table_name ? '<span>🪑 ' + o.table_name + '</span>' : '') +
+          (o.order_type ? '<span>📦 ' + o.order_type + '</span>' : '') +
+          '<span>💳 ' + (o.payment_method_label || o.payment_method_online || '—') + '</span>' +
+        '</div>' +
+        '<div style="padding:4px 20px 16px;">' + (itemsHtml || '<p style="color:#999;text-align:center;padding:16px;">No items</p>') + '</div>' +
+        '<div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;">' +
+          '<strong style="font-size:14px;color:#111827;">Total</strong>' +
+          '<strong style="font-size:14px;color:#059669;">$' + (totalCents / 100).toFixed(2) + '</strong>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  } catch (err) {
+    alert('Could not load order details.');
+  }
+}
+
 function crmStatBox(label, value) {
   return '<div style="flex:1;text-align:center;padding:12px 8px;border-right:1px solid #e5e7eb;">' +
     '<div style="font-size:14px;font-weight:700;color:#1f2937;">' + value + '</div>' +
@@ -2584,8 +2634,8 @@ function crmBuildProfile(d) {
         '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">' + initials + '</div>' +
         '<div>' +
           '<div style="font-size:18px;font-weight:700;">' + (c.name || '—') + '</div>' +
-          (c.phone ? '<div style="font-size:12px;opacity:0.9;margin-top:3px;">📞 ' + c.phone + '</div>' : '') +
-          (c.email ? '<div style="font-size:12px;opacity:0.9;margin-top:2px;">✉️ ' + c.email + '</div>' : '') +
+          '<div style="font-size:12px;opacity:0.9;margin-top:3px;">📞 ' + (c.phone || '—') + '</div>' +
+          '<div style="font-size:12px;opacity:0.9;margin-top:2px;">✉️ ' + (c.email || '—') + '</div>' +
         '</div>' +
       '</div>' +
       '<div style="display:flex;">' +
@@ -2602,60 +2652,96 @@ function crmBuildProfile(d) {
     html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Upcoming Bookings</h4>';
     futureBk.forEach(function(b) {
       html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:4px;">' +
-        '<strong>' + b.booking_date + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' pax' +
+        '<strong>' + new Date(b.booking_date).toLocaleDateString() + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' pax' +
         (b.table_label ? '  ·  Table ' + b.table_label : '') + '</div>';
     });
   }
 
-  // Recent orders
-  if (orders.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Recent Orders</h4>';
-    // Eligible coupon badges above table
-    var eligibleCoupons = d.eligible_coupons || [];
-    if (eligibleCoupons.length > 0) {
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
-      eligibleCoupons.slice(0, 5).forEach(function(coupon) {
-        var discLabel = coupon.discount_type === 'percentage' ? coupon.discount_value + '% off' : '$' + coupon.discount_value + ' off';
-        html += '<span style="background:#eff6ff;color:#3b82f6;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;">' + coupon.code + ': ' + discLabel + '</span>';
-      });
-      html += '</div>';
+  // Build unified history timeline
+  var orderBySessionId = {};
+  orders.forEach(function(o) { if (o.session_id) orderBySessionId[o.session_id] = o; });
+
+  var timeline = [];
+  var usedSessionIds = {};
+
+  pastBk.forEach(function(b) {
+    var linkedOrder = b.session_id ? orderBySessionId[b.session_id] : null;
+    timeline.push({ date: b.booking_date, booking: b, order: linkedOrder });
+    if (linkedOrder && linkedOrder.session_id) usedSessionIds[linkedOrder.session_id] = true;
+  });
+
+  orders.forEach(function(o) {
+    if (!o.session_id || !usedSessionIds[o.session_id]) {
+      var dateStr = o.created_at ? o.created_at.substring(0, 10) : '';
+      timeline.push({ date: dateStr, order: o });
     }
-    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
-      '<thead><tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">' +
-        '<th style="padding:8px;text-align:left;color:#6b7280;">#</th>' +
-        '<th style="padding:8px;text-align:left;color:#6b7280;">Table</th>' +
-        '<th style="padding:8px;text-align:right;color:#6b7280;">Discount</th>' +
-        '<th style="padding:8px;text-align:right;color:#6b7280;">Total</th>' +
-        '<th style="padding:8px;text-align:right;color:#6b7280;">Date</th>' +
-      '</tr></thead><tbody>';
-    orders.slice(0, 10).forEach(function(o) {
-      var total = parseInt(o.total_cents, 10) || 0;
-      var disc  = parseInt(o.discount_applied, 10) || 0;
-      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
-        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.order_id) + '</td>' +
-        '<td style="padding:8px;">' + (o.table_label || '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:' + (disc > 0 ? '#dc2626' : '#9ca3af') + ';">' + (disc > 0 ? '−$' + (disc / 100).toFixed(2) : '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#6b7280;">' + new Date(o.created_at).toLocaleDateString() + '</td>' +
-        '</tr>';
+  });
+
+  timeline.sort(function(a, b) { return b.date.localeCompare(a.date); });
+
+  if (timeline.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">History</h4>';
+    html += '<div style="display:flex;flex-direction:column;gap:0;">';
+
+    var bkStatusStyle = function(status) {
+      if (status === 'confirmed')  return 'background:#dcfce7;color:#16a34a;';
+      if (status === 'completed')  return 'background:#ede9fe;color:#7c3aed;';
+      if (status === 'cancelled')  return 'background:#fee2e2;color:#dc2626;';
+      if (status === 'no-show')    return 'background:#fef3c7;color:#d97706;';
+      return 'background:#f3f4f6;color:#6b7280;';
+    };
+
+    timeline.slice(0, 20).forEach(function(item) {
+      var bk = item.booking;
+      var o  = item.order;
+      html += '<div style="padding:10px 0;border-bottom:1px solid #f3f4f6;">';
+
+      if (bk) {
+        html +=
+          '<div style="display:flex;align-items:center;gap:10px;font-size:12px;">' +
+            '<span>📅 <strong>' + new Date(bk.booking_date).toLocaleDateString() + '</strong>' + (bk.booking_time ? ' · ' + bk.booking_time : '') + '</span>' +
+            '<span style="color:#6b7280;">' + bk.pax + ' pax' + (bk.table_label ? ' · ' + bk.table_label : '') + '</span>' +
+            '<span style="margin-left:auto;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;' + bkStatusStyle(bk.status) + '">' + bk.status + '</span>' +
+          '</div>';
+      }
+
+      if (o) {
+        var total = parseInt(o.total_cents, 10) || 0;
+        var disc  = parseInt(o.discount_applied, 10) || 0;
+        var dateStr = bk ? '' : ' · ' + new Date(o.created_at).toLocaleDateString();
+        html +=
+          '<div onclick="crmShowOrderDetail(' + o.order_id + ')" style="display:flex;align-items:center;gap:10px;font-size:12px;background:#f8fafc;border-radius:6px;padding:8px;margin-top:' + (bk ? '4' : '0') + 'px;cursor:pointer;">' +
+            '<span>🧾 <strong style="color:#4f46e5;">#' + (o.restaurant_order_number || o.order_id) + '</strong>' +
+            ' · ' + (o.table_label || 'Counter') + dateStr + '</span>' +
+            '<span style="margin-left:auto;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</span>' +
+            (disc > 0 ? '<span style="color:#dc2626;">−$' + (disc / 100).toFixed(2) + '</span>' : '') +
+            '<span style="color:#9ca3af;">›</span>' +
+          '</div>';
+      }
+
+      if (bk && !o) {
+        html += '<div style="font-size:11px;color:#9ca3af;margin-top:4px;">No order recorded for this visit</div>';
+      }
+
+      html += '</div>';
     });
-    html += '</tbody></table>';
+
+    html += '</div>';
   }
 
-  // Past bookings
-  if (pastBk.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Past Bookings</h4>';
-    pastBk.slice(0, 8).forEach(function(b) {
-      var badgeColor = b.status === 'confirmed' ? '#059669' : b.status === 'cancelled' ? '#e74c3c' : '#6b7280';
-      html += '<div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:6px 0;border-bottom:1px solid #f5f5f5;">' +
-        '<span>' + b.booking_date + '</span>' +
-        '<span style="color:#6b7280;">' + b.pax + ' pax</span>' +
-        '<span style="padding:2px 8px;border-radius:12px;background:' + badgeColor + '20;color:' + badgeColor + ';font-size:11px;font-weight:600;">' + b.status + '</span>' +
-        '</div>';
+  // Eligible coupons
+  var eligibleCoupons = d.eligible_coupons || [];
+  if (eligibleCoupons.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Eligible Coupons</h4>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+    eligibleCoupons.forEach(function(coupon) {
+      var discLabel = coupon.discount_type === 'percentage' ? coupon.discount_value + '% off' : '$' + coupon.discount_value + ' off';
+      html += '<span style="background:#eff6ff;color:#3b82f6;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;">' + coupon.code + ': ' + discLabel + '</span>';
     });
+    html += '</div>';
   }
 
-  if (orders.length === 0 && pastBk.length === 0 && futureBk.length === 0) {
+  if (timeline.length === 0 && futureBk.length === 0 && eligibleCoupons.length === 0) {
     html += '<p style="color:#999;font-size:13px;padding:16px 0;text-align:center;">No order or booking history yet.</p>';
   }
 
