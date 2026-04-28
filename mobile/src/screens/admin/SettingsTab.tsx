@@ -2034,68 +2034,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     timeline.sort((a, b) => b.date.localeCompare(a.date));
 
     return (
-      <>
-        {/* Order Detail Modal */}
-        <Modal
-          visible={!!crmOrderDetail || crmOrderDetailLoading}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setCrmOrderDetail(null)}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>
-                  {crmOrderDetail ? `Order #${crmOrderDetail.restaurant_order_number || crmOrderDetail.id}` : 'Loading…'}
-                </Text>
-                <TouchableOpacity onPress={() => setCrmOrderDetail(null)}>
-                  <Ionicons name="close" size={22} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
-              {crmOrderDetailLoading ? (
-                <View style={{ padding: 32, alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color="#4f46e5" />
-                </View>
-              ) : crmOrderDetail ? (
-                <ScrollView contentContainerStyle={{ padding: 16 }}>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280' }}>📅 {formatDate(crmOrderDetail.created_at)}</Text>
-                    {crmOrderDetail.table_name ? <Text style={{ fontSize: 12, color: '#6b7280' }}>🪑 {crmOrderDetail.table_name}</Text> : null}
-                    {crmOrderDetail.order_type ? <Text style={{ fontSize: 12, color: '#6b7280' }}>📦 {crmOrderDetail.order_type}</Text> : null}
-                    <Text style={{ fontSize: 12, color: '#6b7280' }}>💳 {crmOrderDetail.payment_method_label || crmOrderDetail.payment_method_online || '—'}</Text>
-                  </View>
-                  {(crmOrderDetail.items || []).map((item: any) => (
-                    <View key={item.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#111827', flex: 1, marginRight: 8 }}>
-                          {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.menu_item_name || '—'}
-                        </Text>
-                        <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>
-                          {formatCurrency(item.item_total_cents)}
-                        </Text>
-                      </View>
-                      {item.variants ? <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{item.variants}</Text> : null}
-                      {(item.addons || []).map((addon: any) => (
-                        <View key={addon.order_item_id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 12, marginTop: 2 }}>
-                          <Text style={{ fontSize: 11, color: '#6b7280' }}>+ {addon.menu_item_name}</Text>
-                          <Text style={{ fontSize: 11, color: '#6b7280' }}>{formatCurrency(addon.item_total_cents)}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ))}
-                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Total</Text>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669' }}>{formatCurrency(crmOrderDetail.total_cents)}</Text>
-                    </View>
-                  </View>
-                </ScrollView>
-              ) : null}
-            </View>
-          </View>
-        </Modal>
-
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => setSelectedCrmProfile(null)}>
             <Ionicons name="arrow-back" size={16} color="#4f46e5" />
             <Text style={styles.crmBackToListText}>Back to customers</Text>
@@ -2265,7 +2204,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
           )}
         </ScrollView>
-      </>
     );
   };
 
@@ -3792,6 +3730,67 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 300] }) }] }]}>
         {renderCurrentPage()}
       </Animated.View>
+
+      {/* CRM Order Detail Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={!!crmOrderDetail || crmOrderDetailLoading}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>
+                {crmOrderDetail ? `Order #${crmOrderDetail.restaurant_order_number || crmOrderDetail.id}` : 'Loading…'}
+              </Text>
+              <TouchableOpacity onPress={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}>
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            {crmOrderDetailLoading ? (
+              <View style={{ padding: 32, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="#4f46e5" />
+              </View>
+            ) : crmOrderDetail ? (
+              <ScrollView contentContainerStyle={{ padding: 16 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>📅 {formatDate(crmOrderDetail.created_at)}</Text>
+                  {crmOrderDetail.table_name ? <Text style={{ fontSize: 12, color: '#6b7280' }}>🪑 {crmOrderDetail.table_name}</Text> : null}
+                  {crmOrderDetail.order_type ? <Text style={{ fontSize: 12, color: '#6b7280' }}>📦 {crmOrderDetail.order_type}</Text> : null}
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>💳 {crmOrderDetail.payment_method_label || crmOrderDetail.payment_method_online || '—'}</Text>
+                </View>
+                {(crmOrderDetail.items || []).map((item: any) => (
+                  <View key={item.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#111827', flex: 1, marginRight: 8 }}>
+                        {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.menu_item_name || '—'}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>
+                        {formatCurrency(item.item_total_cents)}
+                      </Text>
+                    </View>
+                    {item.variants ? <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{item.variants}</Text> : null}
+                    {(item.addons || []).map((addon: any) => (
+                      <View key={addon.order_item_id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 12, marginTop: 2 }}>
+                        <Text style={{ fontSize: 11, color: '#6b7280' }}>+ {addon.menu_item_name}</Text>
+                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{formatCurrency(addon.item_total_cents)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Total</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669' }}>{formatCurrency(crmOrderDetail.total_cents)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
 
       {/* Coupon Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
