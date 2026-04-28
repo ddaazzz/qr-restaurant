@@ -1574,7 +1574,35 @@ router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req,
       [restaurantId, daysBack]
     );
 
-    res.json({ transitions: result.rows, fastest_items: itemResult.rows });
+    // Per-item prep time: from 'preparing' to 'served' (full cook-to-table duration)
+    const prepTimeResult = await pool.query(
+      `SELECT
+        mi.name AS item_name,
+        ROUND(AVG(EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) / 60)::numeric, 1) AS avg_minutes,
+        ROUND(MIN(EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) / 60)::numeric, 1) AS min_minutes,
+        ROUND(MAX(EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) / 60)::numeric, 1) AS max_minutes,
+        COUNT(*) AS sample_count
+       FROM order_item_status_history hp
+       JOIN (
+         SELECT order_item_id, MIN(changed_at) AS first_served
+         FROM order_item_status_history
+         WHERE to_status = 'served'
+         GROUP BY order_item_id
+       ) hs ON hs.order_item_id = hp.order_item_id
+            AND hs.first_served > hp.changed_at
+       JOIN order_items oi ON oi.id = hp.order_item_id
+       JOIN menu_items mi ON mi.id = oi.menu_item_id
+       WHERE hp.restaurant_id = $1
+         AND hp.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
+         AND hp.to_status = 'preparing'
+         AND EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) > 0
+       GROUP BY mi.name
+       ORDER BY avg_minutes ASC
+       LIMIT 20`,
+      [restaurantId, daysBack]
+    );
+
+    res.json({ transitions: result.rows, fastest_items: itemResult.rows, prep_time_by_item: prepTimeResult.rows });
   } catch (err) {
     console.error("[order-status-timing]", err);
     res.status(500).json({ error: "Failed to load status timing report" });

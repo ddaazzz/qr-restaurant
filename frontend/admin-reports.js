@@ -1041,9 +1041,10 @@ async function loadOrderStatusTiming() {
 
     var transitions = data.transitions || [];
     var fastest = data.fastest_items || [];
+    var prepByItem = data.prep_time_by_item || [];
 
-    if (transitions.length === 0 && fastest.length === 0) {
-      container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.no-timing-data">No timing data yet — data appears once staff change item status (preparing → ready).</p>';
+    if (transitions.length === 0 && fastest.length === 0 && prepByItem.length === 0) {
+      container.innerHTML = '<p style="color:#999;text-align:center;padding:16px;" data-i18n="admin.no-timing-data">No timing data yet — data appears once staff change item status (preparing → served).</p>';
       return;
     }
 
@@ -1077,7 +1078,7 @@ async function loadOrderStatusTiming() {
 
     if (fastest.length > 0) {
       html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:8px 0;" data-i18n="admin.fastest-dishes">Fastest Dishes (preparing → ready)</h4>' +
-        '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+        '<table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:16px;">' +
         '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
         '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-item">Item</th>' +
         '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-avg-time">Avg (min)</th>' +
@@ -1090,6 +1091,33 @@ async function loadOrderStatusTiming() {
           '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' + f.item_name + '</td>' +
           '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">' + f.avg_minutes + '</td>' +
           '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + f.sample_count + '</td>' +
+          '</tr>';
+      }
+      html += '</tbody></table>';
+    }
+
+    if (prepByItem.length > 0) {
+      html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:8px 0;" data-i18n="admin.prep-time-by-item">Prep Time by Item (preparing → served)</h4>' +
+        '<p style="font-size:11px;color:#9ca3af;margin:0 0 8px;" data-i18n="admin.prep-time-by-item-desc">Time from kitchen start (preparing) to delivery (served) per dish</p>' +
+        '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+        '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
+        '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-item">Item</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-avg-time">Avg (min)</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-min-time">Min</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-max-time">Max</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-samples">Samples</th>' +
+        '</tr></thead><tbody>';
+
+      for (var k = 0; k < prepByItem.length; k++) {
+        var p = prepByItem[k];
+        // Colour the avg: green ≤5 min, amber ≤15, red >15
+        var avgColor = p.avg_minutes <= 5 ? '#059669' : p.avg_minutes <= 15 ? '#d97706' : '#dc2626';
+        html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+          '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' + p.item_name + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;font-weight:700;color:' + avgColor + ';">' + p.avg_minutes + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + p.min_minutes + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + p.max_minutes + '</td>' +
+          '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + p.sample_count + '</td>' +
           '</tr>';
       }
       html += '</tbody></table>';
@@ -1513,7 +1541,7 @@ function updateExportTypeChip(checkbox) {
   }
 }
 
-async function downloadExportXLSX() {
+async function downloadExportCSV() {
   var errEl = document.getElementById('export-error');
   if (errEl) errEl.style.display = 'none';
 
@@ -1545,7 +1573,7 @@ async function downloadExportXLSX() {
   if (paxMin) params.set('pax_min', paxMin);
   if (paxMax) params.set('pax_max', paxMax);
 
-  var url = API + '/restaurants/' + restaurantId + '/reports/export-xlsx?' + params.toString();
+  var url = API + '/restaurants/' + restaurantId + '/reports/export?' + params.toString();
 
   try {
     var resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
@@ -1557,7 +1585,7 @@ async function downloadExportXLSX() {
     var blob = await resp.blob();
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'sales_report_' + (dateFrom || new Date().toISOString().slice(0, 10)) + '_' + (dateTo || new Date().toISOString().slice(0, 10)) + '.xlsx';
+    a.download = 'orders_export_' + new Date().toISOString().slice(0, 10) + '.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

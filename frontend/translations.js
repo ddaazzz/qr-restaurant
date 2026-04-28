@@ -1737,6 +1737,19 @@ const translations = {
     'admin.col-period': 'Period',
     'admin.col-avg-bill': 'Avg Bill',
 
+    // Status Timing & Prep Time Report
+    'admin.report-status-timing': 'Dish Preparation Speed',
+    'admin.no-timing-data': 'No timing data yet — data appears once staff update item status (preparing → served).',
+    'admin.col-transition': 'Transition',
+    'admin.col-count': 'Count',
+    'admin.col-avg-time': 'Avg (min)',
+    'admin.col-min-time': 'Min',
+    'admin.col-max-time': 'Max',
+    'admin.col-samples': 'Samples',
+    'admin.fastest-dishes': 'Fastest Dishes (preparing → ready)',
+    'admin.prep-time-by-item': 'Prep Time by Item (preparing → served)',
+    'admin.prep-time-by-item-desc': 'Time from kitchen start (preparing) to delivery (served) per dish',
+
     // Header Buttons (5 keys)
     'admin.header-edit': 'Edit',
     'admin.header-reports': '∿ Reports',
@@ -4079,6 +4092,19 @@ const translations = {
     'admin.col-revenue': '收益',
     'admin.col-period': '期間',
     'admin.col-avg-bill': '平均帳單',
+
+    // Status Timing & Prep Time Report (Chinese)
+    'admin.report-status-timing': '菜品准備速度',
+    'admin.no-timing-data': '暫無計時數據 — 工作人員更新項目狀態（準備中 → 已上菜）後即可顯示。',
+    'admin.col-transition': '轉態',
+    'admin.col-count': '數量',
+    'admin.col-avg-time': '平均（分鐘）',
+    'admin.col-min-time': '最少',
+    'admin.col-max-time': '最多',
+    'admin.col-samples': '樣本數',
+    'admin.fastest-dishes': '最快菜品（準備中 → 已就緒）',
+    'admin.prep-time-by-item': '按菜品准備時間（準備中 → 已上菜）',
+    'admin.prep-time-by-item-desc': '每道菜從開始点餐（準備中）到送達餐桌（已上菜）的時間',
 
     // Header Buttons (Chinese)
     'admin.header-edit': '編輯',
