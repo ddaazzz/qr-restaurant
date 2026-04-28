@@ -951,7 +951,12 @@ function setBillFontSize(size) {
   document.getElementById('bill-font-large')?.classList.remove('active');
   document.getElementById(`bill-font-${size}`)?.classList.add('active');
 
-  updateBillPreview(billHeaderText, billFooterText, size);
+  // Update preview zoom to reflect font size visually
+  const zoomMap = { small: 0.85, medium: 1.0, large: 1.2 };
+  const previewContainer = document.getElementById('bill-preview-container');
+  if (previewContainer) previewContainer.style.zoom = zoomMap[size] ?? 1.0;
+
+  updateBillPreview();
 }
 
 /**

@@ -60,7 +60,11 @@ async function queuePrintJob(deviceId, printFn) {
  */
 async function sendViaPrintBridge(networkPrint) {
   const BRIDGE_URL = 'https://localhost:3001/print-escpos';
-  const { host, port, escposBase64 } = networkPrint;
+  const { host, port, escposBase64 } = networkPrint || {};
+  if (!host || !port || !escposBase64) {
+    console.warn('[PrintBridge] Skipping — networkPrint missing required fields (host/port/escposBase64)');
+    return false;
+  }
   try {
     console.log(`[PrintBridge] Trying local print bridge for ${host}:${port}…`);
     const resp = await fetch(BRIDGE_URL, {

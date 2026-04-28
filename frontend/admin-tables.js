@@ -2692,6 +2692,12 @@ async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApp
 
   await loadTablesCategoryTable();
   if (typeof loadOrdersHistoryLeftPanel === 'function') await loadOrdersHistoryLeftPanel();
+
+  // Auto-print bill if enabled
+  if (window.currentPrinterSettings?.bill_auto_print) {
+    await printBill(sessionId, true);
+  }
+
   closeSessionPanel();
 }
 
