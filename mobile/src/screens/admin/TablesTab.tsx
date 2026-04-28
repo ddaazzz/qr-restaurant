@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { Buffer } from 'buffer';
 import {
   View,
   Text,
@@ -55,7 +56,7 @@ function sendEscPosToNetworkPrinter(host: string, port: number, data: Uint8Array
     };
     const timer = setTimeout(() => done(new Error(`Printer connection timed out (${host}:${port})`)), timeoutMs);
     const client = TcpSocket.createConnection({ host, port, tls: false }, () => {
-      client.write(Buffer.from(data), undefined, (err: any) => {
+      client.write(data, undefined, (err: any) => {
         clearTimeout(timer);
         if (err) return done(new Error(`Write error: ${err.message}`));
         client.end();
