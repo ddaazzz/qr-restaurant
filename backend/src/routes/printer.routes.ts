@@ -932,9 +932,13 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
         return res.json({ success: true, jobId: `qr-${tableId}-${Date.now()}`, message: `QR printed to ${host}:${port}` });
       } catch (tcpErr: any) {
         console.log('[PrintQR] Backend TCP failed (expected on cloud):', tcpErr.message);
+        // Build an HTML fallback so the browser can still print
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://${QR_DOMAIN}/${qrToken}`)}`;
+        const htmlFallback = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:'Courier New',monospace;text-align:center;padding:12px}@media print{body{margin:0}}</style></head><body><h2>${restaurantName}</h2><p>Table: ${tableName}</p><img src="${qrImageUrl}" style="width:200px;height:200px" alt="QR"/><p>Scan to Order</p></body></html>`;
         return res.json({
           success: true,
           networkPrint: { host, port, escposBase64 },
+          html: htmlFallback,
           message: `Send ESC/POS data directly to ${host}:${port}`,
         });
       }
@@ -1054,12 +1058,14 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
       // Extract bill format settings
       let billHeaderText = 'Thank You';
       let billFooterText = 'Follow us on social media';
+      let billFontSize: 'small' | 'medium' | 'large' = 'medium';
       if (printerConfig.settings) {
         const s = typeof printerConfig.settings === 'string'
           ? JSON.parse(printerConfig.settings)
           : printerConfig.settings;
         if (s.bill_header_text) billHeaderText = s.bill_header_text;
         if (s.bill_footer_text) billFooterText = s.bill_footer_text;
+        if (s.bill_font_size === 'small' || s.bill_font_size === 'large') billFontSize = s.bill_font_size;
       }
 
       const networkReceiptData: ReceiptData = {
@@ -1078,6 +1084,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         printerPaperWidth: 80,
         billHeaderText,
         billFooterText,
+        billFontSize,
       };
 
       const escpos = generateESCPOS(networkReceiptData);
@@ -1102,6 +1109,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
             port,
             escposBase64,
           },
+          html: generateReceiptHTML(payload),
           message: `Send ESC/POS data directly to ${host}:${port}`,
         });
       }
@@ -1118,9 +1126,10 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
       
       console.log('[PrintBill] Sending to Bluetooth printer:', printerConfig.bluetooth_device_name);
       
-      // Get bill format settings (header and footer text) from printer settings
+      // Get bill format settings (header, footer, font size) from printer settings
       let billHeaderText = 'Thank You';
       let billFooterText = 'Follow us on social media';
+      let billFontSizeBt: 'small' | 'medium' | 'large' = 'medium';
       
       if (printerConfig.settings) {
         const settings = typeof printerConfig.settings === 'string' 
@@ -1129,6 +1138,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         
         if (settings.bill_header_text) billHeaderText = settings.bill_header_text;
         if (settings.bill_footer_text) billFooterText = settings.bill_footer_text;
+        if (settings.bill_font_size === 'small' || settings.bill_font_size === 'large') billFontSizeBt = settings.bill_font_size;
       }
       
       // Generate ESC/POS commands using thermalPrinterService
@@ -1146,9 +1156,9 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         total: billData.total,
         timestamp: new Date().toLocaleString(),
         printerPaperWidth: 80,
-        // Bill-specific customization
-        billHeaderText: billHeaderText,
-        billFooterText: billFooterText
+        billHeaderText,
+        billFooterText,
+        billFontSize: billFontSizeBt,
       };
       
       const escposCommands = generateESCPOS(receiptData);
