@@ -17,6 +17,7 @@ import {
   Animated,
   Keyboard,
   InputAccessoryView,
+  Linking,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
@@ -28,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
+import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
 
 interface RestaurantSettings {
@@ -131,7 +133,7 @@ interface VariantPreset {
 
 interface PaymentTerminal {
   id: number;
-  vendor_name: 'kpay' | 'payment-asia' | 'other';
+  vendor_name: 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'other';
   is_active: boolean;
   app_id: string;
   terminal_ip?: string;
@@ -142,10 +144,11 @@ interface PaymentTerminal {
   last_error_message?: string;
   created_at?: string;
   updated_at?: string;
-  // Payment Asia fields
+  // Payment Asia (Online) fields
   merchant_token?: string;
   secret_code?: string;
   environment?: 'sandbox' | 'production';
+  payment_gateway_env?: 'sandbox' | 'production';
 }
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
@@ -288,7 +291,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     description: '',
   });
   const [terminalForm, setTerminalForm] = useState({
-    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'other',
+    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'other',
     app_id: '',
     app_secret: '',
     terminal_ip: '192.168.50.210',
@@ -297,6 +300,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     merchant_token: '',
     secret_code: '',
     environment: 'sandbox' as 'sandbox' | 'production',
+    // PA Offline fields
+    pa_offline_ip: '',
+    pa_offline_port: '8080',
+    pa_offline_api_key: '',
   });
   const [testingTerminal, setTestingTerminal] = useState(false);
   const [terminalTestResult, setTerminalTestResult] = useState<any>(null);
@@ -807,10 +814,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         return;
       }
 
+      const vendor = terminalForm.vendor_name;
+
       // Validation differs by vendor
-      if (terminalForm.vendor_name === 'payment-asia') {
+      if (vendor === 'payment-asia') {
         if (!terminalForm.merchant_token || !terminalForm.secret_code) {
           Alert.alert(t('settings.pa-validation'), t('settings.pa-validation-msg'));
+          return;
+        }
+      } else if (vendor === 'payment-asia-offline') {
+        if (!terminalForm.pa_offline_ip || !terminalForm.pa_offline_port || !terminalForm.pa_offline_api_key) {
+          Alert.alert(t('settings.validation'), 'Terminal IP, Port, and API Key are required for PA Offline');
           return;
         }
       } else {
@@ -820,28 +834,29 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         }
       }
 
-      const payload: any = {
-        vendor_name: terminalForm.vendor_name,
-        app_id: terminalForm.app_id,
-        app_secret: terminalForm.app_secret,
-      };
+      let payload: any = { vendor_name: vendor };
 
-      if (terminalForm.vendor_name === 'payment-asia') {
+      if (vendor === 'payment-asia') {
         payload.merchant_token = terminalForm.merchant_token;
         payload.secret_code = terminalForm.secret_code;
-        payload.environment = terminalForm.environment;
+        payload.payment_gateway_env = terminalForm.environment; // fix: was 'environment'
+      } else if (vendor === 'payment-asia-offline') {
+        payload.terminal_ip = terminalForm.pa_offline_ip;
+        payload.terminal_port = parseInt(terminalForm.pa_offline_port);
+        payload.app_secret = terminalForm.pa_offline_api_key;
+        payload.app_id = terminalForm.pa_offline_api_key;
       } else {
+        payload.app_id = terminalForm.app_id;
+        payload.app_secret = terminalForm.app_secret;
         payload.terminal_ip = terminalForm.terminal_ip;
         payload.terminal_port = parseInt(terminalForm.terminal_port);
         payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
       }
 
       if (editingTerminalId) {
-        // Update existing terminal
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-updated'));
       } else {
-        // Create new terminal
         await apiClient.post(`/api/restaurants/${restaurantId}/payment-terminals`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-created'));
       }
@@ -861,23 +876,67 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         return;
       }
 
+      const vendor = terminalForm.vendor_name;
+
+      // PA Online: open payment-test.html in Safari — the browser handles form submission
+      if (vendor === 'payment-asia') {
+        const baseUrl = apiClient.getCurrentBaseUrl();
+        const testUrl = `${baseUrl}/payment-test.html?terminalId=${editingTerminalId}&restaurantId=${restaurantId}`;
+        try {
+          await Linking.openURL(testUrl);
+          setTerminalTestResult({
+            success: true,
+            message: 'Sandbox payment test opened in browser. Complete the payment to verify.',
+          });
+        } catch {
+          Alert.alert(t('common.error'), 'Could not open browser. Please open: ' + testUrl);
+        }
+        return;
+      }
+
+      // PA Offline: ping the terminal directly over LAN
+      if (vendor === 'payment-asia-offline') {
+        const ip = terminalForm.pa_offline_ip;
+        const port = parseInt(terminalForm.pa_offline_port);
+        const apiKey = terminalForm.pa_offline_api_key;
+        if (!ip || !port || !apiKey) {
+          Alert.alert(t('common.error'), 'Save terminal first before testing');
+          return;
+        }
+        setTestingTerminal(true);
+        try {
+          const pingResult = await paTerminalPing({ terminalIp: ip, terminalPort: port, apiKey });
+          if (pingResult.success) {
+            // Also try sign (key exchange)
+            const signResult = await paTerminalSign({ terminalIp: ip, terminalPort: port, apiKey });
+            const msg = signResult.success
+              ? `✅ Connected to PA terminal at ${ip}:${port}. Sign handshake OK.`
+              : `✅ Ping OK, but sign step failed: ${signResult.message}`;
+            setTerminalTestResult({ success: signResult.success || pingResult.success, message: msg });
+          } else {
+            setTerminalTestResult({ success: false, message: `❌ Cannot reach terminal at ${ip}:${port}. Check IP, port and network.` });
+          }
+        } catch (err: any) {
+          setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
+        } finally {
+          setTestingTerminal(false);
+        }
+        return;
+      }
+
+      // KPay / other: call backend test endpoint
       setTestingTerminal(true);
       const response = await apiClient.post(
         `/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}/test`
       );
-
       setTerminalTestResult(response.data);
-      
       if (response.data.success) {
         Alert.alert(
           t('settings.connection-success'),
-          t('settings.connected-to', { '0': terminalForm.vendor_name.toUpperCase(), '1': `${terminalForm.terminal_ip}:${terminalForm.terminal_port}` })
+          `Connected to ${terminalForm.terminal_ip}:${terminalForm.terminal_port}`
         );
       } else {
-        Alert.alert(
-          t('settings.connection-failed'),
-          response.data.error || response.data.message
-        );
+        Alert.alert(t('settings.connection-failed'), response.data.error || response.data.message);
       }
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || t('settings.test-failed'));
@@ -916,7 +975,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       endpoint_path: terminal.endpoint_path || '/v2/pos/sign',
       merchant_token: terminal.merchant_token || '',
       secret_code: '',
-      environment: terminal.environment || 'sandbox',
+      environment: terminal.payment_gateway_env || terminal.environment || 'sandbox',
+      // PA Offline fields
+      pa_offline_ip: terminal.vendor_name === 'payment-asia-offline' ? (terminal.terminal_ip || '') : '',
+      pa_offline_port: terminal.vendor_name === 'payment-asia-offline' ? (terminal.terminal_port?.toString() || '8080') : '8080',
+      pa_offline_api_key: '',
     });
     setTerminalTestResult(null);
     setShowPaymentTerminalModal(true);
@@ -934,6 +997,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       merchant_token: '',
       secret_code: '',
       environment: 'sandbox',
+      pa_offline_ip: '',
+      pa_offline_port: '8080',
+      pa_offline_api_key: '',
     });
     setTerminalTestResult(null);
   };
@@ -2954,7 +3020,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
               <View>
-                {(['kpay', 'payment-asia', 'other'] as const).map((vendor) => (
+                              {(['kpay', 'payment-asia', 'payment-asia-offline', 'other'] as const).map((vendor) => (
                   <TouchableOpacity
                     key={vendor}
                     style={{ paddingVertical: 8 }}
@@ -2977,7 +3043,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         )}
                       </View>
                       <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
-                        {vendor === 'kpay' ? 'KPay' : vendor === 'payment-asia' ? 'Payment Asia' : t('settings.other')}
+                        {vendor === 'kpay' ? 'KPay'
+                          : vendor === 'payment-asia' ? 'Payment Asia (Online · Cloud Gateway)'
+                          : vendor === 'payment-asia-offline' ? 'Payment Asia (Offline · Physical Terminal)'
+                          : t('settings.other')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -2991,13 +3060,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
                 <Text style={{ fontSize: 14, color: '#6b7280', paddingVertical: 8 }}>
-                  {terminalForm.vendor_name === 'kpay' ? 'KPay' : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia' : 'Other'}
+                  {terminalForm.vendor_name === 'kpay' ? 'KPay'
+                    : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia (Online)'
+                    : terminalForm.vendor_name === 'payment-asia-offline' ? 'Payment Asia (Offline)'
+                    : 'Other'}
                 </Text>
               </View>
             )}
 
-            {/* App ID - superadmin only */}
-            {isSuperadmin && (
+            {/* App ID - superadmin only, KPay/other only */}
+            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-offline' && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-id')}</Text>
               <TextInput
@@ -3009,8 +3081,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
             )}
 
-            {/* App Secret - superadmin only */}
-            {isSuperadmin && (
+            {/* App Secret - superadmin only, KPay/other only */}
+            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-offline' && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-secret')}</Text>
               <TextInput
@@ -3108,6 +3180,52 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       </TouchableOpacity>
                     ))}
                   </View>
+                </View>
+              </>
+            )}
+
+            {/* Payment Asia (Offline) fields - superadmin only */}
+            {terminalForm.vendor_name === 'payment-asia-offline' && isSuperadmin && (
+              <>
+                <View style={[styles.formGroup, { backgroundColor: '#fffbeb', borderRadius: 6, padding: 10, borderWidth: 1, borderColor: '#fcd34d' }]}>
+                  <Text style={{ fontSize: 12, color: '#92400e' }}>
+                    ⚠️ PA Offline terminals communicate directly over your local network (LAN). The iOS app pings the terminal IP directly.
+                  </Text>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Terminal IP Address</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.pa_offline_ip}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_ip: text })}
+                    placeholder="e.g., 192.168.1.100"
+                    autoCapitalize="none"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Terminal Port</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.pa_offline_port}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_port: text })}
+                    placeholder="e.g., 8080"
+                    keyboardType="number-pad"
+                    inputAccessoryViewID="numpadDone"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>API Key</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.pa_offline_api_key}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_api_key: text })}
+                    placeholder="Enter API Key"
+                    secureTextEntry
+                  />
                 </View>
               </>
             )}

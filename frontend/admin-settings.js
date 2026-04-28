@@ -1731,7 +1731,9 @@ function renderPaymentTerminalsList() {
     let html = '<div style="flex: 1;">';
     html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
     
-    const vendorDisplay = terminal.vendor_name === 'payment-asia' ? 'Payment Asia' : terminal.vendor_name.toUpperCase();
+    const vendorDisplay = terminal.vendor_name === 'payment-asia' ? 'Payment Asia (Online)'
+      : terminal.vendor_name === 'payment-asia-offline' ? 'Payment Asia (Offline)'
+      : terminal.vendor_name.toUpperCase();
     html += '<span style="font-weight: bold; font-size: 14px;">' + vendorDisplay + '</span>';
     
     if (terminal.is_active) {
@@ -1743,6 +1745,9 @@ function renderPaymentTerminalsList() {
     if (terminal.vendor_name === 'payment-asia') {
       html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">Token: ' + (terminal.merchant_token || terminal.app_id || '').substring(0, 20) + '...</div>';
       html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">Environment: ' + (terminal.payment_gateway_env || 'sandbox') + '</div>';
+    } else if (terminal.vendor_name === 'payment-asia-offline') {
+      html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">IP: ' + (terminal.terminal_ip || '') + ':' + (terminal.terminal_port || '') + '</div>';
+      html += '<div style="font-size: 12px; color: #e97316; margin-bottom: 4px;">⚠️ LAN only — test from iOS app</div>';
     } else {
       html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: ' + (terminal.app_id || '') + '</div>';
       if (terminal.terminal_ip && terminal.terminal_port) {
@@ -1800,6 +1805,9 @@ function clearPaymentTerminalForm() {
   document.getElementById('new-terminal-merchant-token').value = '';
   document.getElementById('new-terminal-secret-code').value = '';
   document.getElementById('new-terminal-gateway-env').value = 'sandbox';
+  document.getElementById('new-terminal-pa-offline-ip').value = '';
+  document.getElementById('new-terminal-pa-offline-port').value = '8080';
+  document.getElementById('new-terminal-pa-offline-api-key').value = '';
   document.getElementById('terminal-error').style.display = 'none';
   document.getElementById('terminal-success').style.display = 'none';
   document.getElementById('terminal-test-result').style.display = 'none';
@@ -1811,19 +1819,28 @@ function updatePaymentTerminalFields() {
   const vendor = document.getElementById('new-terminal-vendor').value;
   const kpayFields = document.getElementById('kpay-fields');
   const paymentAsiaFields = document.getElementById('payment-asia-fields');
+  const paOfflineFields = document.getElementById('payment-asia-offline-fields');
   const kpayBtn = document.getElementById('kpay-test-btn');
   const paymentAsiaBtn = document.getElementById('payment-asia-test-btn');
+  const paOfflineBtn = document.getElementById('payment-asia-offline-test-btn');
   
+  // Hide all field groups first
+  kpayFields.style.display = 'none';
+  paymentAsiaFields.style.display = 'none';
+  paOfflineFields.style.display = 'none';
+  kpayBtn.style.display = 'none';
+  paymentAsiaBtn.style.display = 'none';
+  paOfflineBtn.style.display = 'none';
+
   if (vendor === 'payment-asia') {
-    kpayFields.style.display = 'none';
     paymentAsiaFields.style.display = 'block';
-    kpayBtn.style.display = 'none';
     paymentAsiaBtn.style.display = 'block';
+  } else if (vendor === 'payment-asia-offline') {
+    paOfflineFields.style.display = 'block';
+    paOfflineBtn.style.display = 'block';
   } else {
     kpayFields.style.display = 'block';
-    paymentAsiaFields.style.display = 'none';
     kpayBtn.style.display = 'block';
-    paymentAsiaBtn.style.display = 'none';
   }
 }
 
@@ -1847,6 +1864,11 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').value = terminal.merchant_token || terminal.app_id || '';
       document.getElementById('new-terminal-secret-code').value = terminal.secret_code || terminal.app_secret || '';
       document.getElementById('new-terminal-gateway-env').value = terminal.payment_gateway_env || 'sandbox';
+    } else if (terminal.vendor_name === 'payment-asia-offline') {
+      // Load PA Offline fields
+      document.getElementById('new-terminal-pa-offline-ip').value = terminal.terminal_ip || '';
+      document.getElementById('new-terminal-pa-offline-port').value = terminal.terminal_port || '8080';
+      document.getElementById('new-terminal-pa-offline-api-key').value = terminal.app_secret || '';
     } else {
       // Load KPay fields
       document.getElementById('new-terminal-app-id').value = terminal.app_id || '';
@@ -1864,6 +1886,7 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').disabled = true;
       document.getElementById('new-terminal-secret-code').disabled = true;
       document.getElementById('new-terminal-gateway-env').disabled = true;
+      document.getElementById('new-terminal-pa-offline-api-key').disabled = true;
     } else {
       document.getElementById('new-terminal-vendor').disabled = false;
       document.getElementById('new-terminal-app-id').disabled = false;
@@ -1871,6 +1894,7 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').disabled = false;
       document.getElementById('new-terminal-secret-code').disabled = false;
       document.getElementById('new-terminal-gateway-env').disabled = false;
+      document.getElementById('new-terminal-pa-offline-api-key').disabled = false;
     }
 
     document.getElementById('payment-terminal-form-view').style.display = 'block';
@@ -1920,6 +1944,24 @@ async function savePaymentTerminal() {
       merchant_token: merchantToken,
       secret_code: secretCode,
       payment_gateway_env: env
+    };
+  } else if (vendor === 'payment-asia-offline') {
+    // PA Offline validation
+    const paOfflineIp = document.getElementById('new-terminal-pa-offline-ip').value.trim();
+    const paOfflinePort = document.getElementById('new-terminal-pa-offline-port').value.trim();
+    const paOfflineApiKey = document.getElementById('new-terminal-pa-offline-api-key').value.trim();
+
+    if (!paOfflineIp || !paOfflinePort || !paOfflineApiKey) {
+      showError('terminal-error', 'Terminal IP, Port, and API Key are required for PA Offline');
+      return;
+    }
+
+    payload = {
+      vendor_name: vendor,
+      terminal_ip: paOfflineIp,
+      terminal_port: parseInt(paOfflinePort),
+      app_secret: paOfflineApiKey,
+      app_id: paOfflineApiKey,
     };
   } else {
     // KPay validation
@@ -2147,6 +2189,26 @@ async function testPaymentAsia() {
       event.target.textContent = 'Test Payment';
     }
   }
+}
+
+function testPaymentAsiaOffline() {
+  const resultDiv = document.getElementById('terminal-test-result');
+  resultDiv.style.background = '#fffbeb';
+  resultDiv.style.borderLeft = '4px solid #f59e0b';
+  resultDiv.style.color = '#92400e';
+  resultDiv.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="font-size: 20px;">📱</div>
+      <div>
+        <strong>Use the iOS app to test PA Offline terminals</strong>
+        <div style="font-size: 13px; margin-top: 4px; opacity: 0.9;">
+          PA Offline terminals communicate directly over your local network (LAN).<br>
+          The cloud server cannot reach private LAN IPs — open the iOS app, go to Settings → Payment Terminals, and tap <strong>Test</strong>.
+        </div>
+      </div>
+    </div>
+  `;
+  resultDiv.style.display = 'block';
 }
 
 async function activatePaymentTerminal(terminalId) {

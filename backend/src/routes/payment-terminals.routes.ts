@@ -107,7 +107,7 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
             merchant_token, secret_code, payment_gateway_env } = req.body;
 
     // Validate vendor name
-    const validVendors = ['kpay', 'payment-asia', 'other'];
+    const validVendors = ['kpay', 'payment-asia', 'payment-asia-offline', 'other'];
     if (!vendor_name || !validVendors.includes(vendor_name)) {
       return res.status(400).json({
         error: `Missing or invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
@@ -143,6 +143,24 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
         [restaurantId, vendor_name, paToken, paSecret, paToken, paSecret,
          payment_gateway_env || 'sandbox', terminal_ip || null, terminal_port || null,
          endpoint_path || null, metadata || {}]
+      );
+    } else if (vendor_name === 'payment-asia-offline') {
+      // PA Offline terminal: uses physical POS device over LAN
+      // Credentials: terminal_ip, terminal_port, app_secret (= API key printed on terminal)
+      const apiKey = app_secret || app_id;
+      if (!terminal_ip || !terminal_port || !apiKey) {
+        return res.status(400).json({
+          error: 'Missing required fields for PA Offline: terminal_ip, terminal_port, api_key',
+        });
+      }
+      result = await pool.query(
+        `INSERT INTO payment_terminals
+         (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path,
+                   metadata, created_at, updated_at`,
+        [restaurantId, vendor_name, apiKey, apiKey, terminal_ip, terminal_port,
+         endpoint_path || '/api/sign', metadata || {}]
       );
     } else {
       // KPay / other: require connection fields
@@ -468,7 +486,7 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
         paymentAsiaService.initialize({
           merchantToken: pa.merchant_token,
           secretCode: pa.secret_code,
-          environment: pa.payment_gateway_env || 'sandbox',
+          environment: 'sandbox', // Test always uses sandbox regardless of terminal config
         });
 
         const network = req.body.network ? String(req.body.network) : undefined;
@@ -481,6 +499,16 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
         console.error('[PaymentTerminal] Payment Asia test error:', paErr);
         return res.status(500).json({ success: false, error: paErr.message || 'Payment Asia test failed' });
       }
+    }
+
+    // Payment Asia Offline: cannot test from backend (terminal is on private LAN)
+    if (terminal.vendor_name === 'payment-asia-offline') {
+      return res.json({
+        success: false,
+        requiresDirectTest: true,
+        message: 'PA Offline terminals communicate directly over LAN. Use the iOS app to test connectivity.',
+        vendor: 'payment-asia-offline',
+      });
     }
 
     // For other vendors

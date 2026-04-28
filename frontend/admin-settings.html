@@ -75,12 +75,6 @@
       <p id="crm-count-preview" data-i18n="admin.crm-desc">Customer relationships</p>
     </div>
 
-    <!-- Service Requests Card -->
-    <div class="settings-card" id="service-requests-settings-card" onclick="showSettingsPage('service-requests')">
-      <h3 data-i18n="admin.service-requests">Service Requests</h3>
-      <p data-i18n="admin.service-requests-desc">Configure customer service request types</p>
-    </div>
-
     <!-- Users & Restaurants Card -->
     <div class="settings-card admin-only" onclick="showSettingsPage('users-restaurants'); loadUsersManagement();">
       <h3 data-i18n="admin.users-restaurants">Users & Restaurants</h3>
@@ -476,24 +470,6 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
-
-          <div id="custom-item-label-row" style="padding: 12px 0; border-bottom: 1px solid var(--border-color);">
-            <label for="custom-item-label-input" style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 4px;">Default Item Label</label>
-            <div style="font-size: 12px; color: var(--text-light); margin-bottom: 8px;">Name shown on the custom item card (staff can change it per order)</div>
-            <input type="text" id="custom-item-label-input" placeholder="Custom Item"
-              style="width: 100%; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; box-sizing: border-box;"
-              oninput="scheduleCustomItemLabelSave()" />
-          </div>
-
-          <div class="settings-row" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
-            <div>
-              <div style="font-size: 14px; font-weight: 500;">Bulk Menu Import</div>
-              <div style="font-size: 12px; color: var(--text-light);">Allow importing menu items via Excel spreadsheet (paid feature)</div>
-            </div>
-            <div id="menu-import-feature-control" style="flex-shrink: 0; margin-left: 12px;">
-              <!-- Populated by JS based on role and current setting -->
-            </div>
-          </div>
         </div>
 
         <!-- Section: Customer Menu -->
@@ -504,19 +480,18 @@
             <label style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 8px;" data-i18n="admin.menu-layout">Menu Layout</label>
             <div style="display: flex; gap: 12px;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1); updateMenuColumnTip(1)">
+                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1)">
                 <span data-i18n="admin.single-column">Single Column</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2); updateMenuColumnTip(2)">
+                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2)">
                 <span data-i18n="admin.two-column">Two Columns</span>
               </label>
             </div>
           </div>
 
-          <div id="menu-column-tip" style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #0369a1;">
-            <strong data-i18n="admin.image-tip-title">Image tip:</strong>
-            <span id="menu-column-tip-text" data-i18n="admin.single-column-tip">Single column: images display full-width. Optimal size 800 × 600 px (4:3 landscape).</span>
+          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #0369a1;">
+            <strong data-i18n="admin.image-tip-title">Image tip:</strong> <span data-i18n="admin.image-tip-desc">Optimal food image size is 800 × 600 px (4:3 ratio).</span>
           </div>
         </div>
 
@@ -613,7 +588,8 @@
             <label style="display: block; margin-bottom: 8px; font-weight: 600;" data-i18n="admin.vendor-label">Vendor</label>
             <select id="new-terminal-vendor" onchange="updatePaymentTerminalFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
               <option value="kpay" data-i18n="admin.vendor-kpay">KPay (POS Terminal)</option>
-              <option value="payment-asia" data-i18n="admin.vendor-pa">Payment Asia (Cloud Gateway)</option>
+              <option value="payment-asia" data-i18n="admin.vendor-pa">Payment Asia (Online · Cloud Gateway)</option>
+              <option value="payment-asia-offline" data-i18n="admin.vendor-pa-offline">Payment Asia (Offline · Physical Terminal)</option>
               <option value="other" data-i18n="admin.vendor-other">Other Vendor</option>
             </select>
           </div>
@@ -673,12 +649,37 @@
 
           </div>
 
+          <!-- PAYMENT ASIA OFFLINE FIELDS (hidden by default) -->
+          <div id="payment-asia-offline-fields" style="display: none;">
+            <div class="form-row two-col">
+              <div class="form-group">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Terminal IP</label>
+                <input id="new-terminal-pa-offline-ip" type="text" placeholder="e.g., 192.168.1.100" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              </div>
+              <div class="form-group">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Terminal Port</label>
+                <input id="new-terminal-pa-offline-port" type="text" placeholder="e.g., 8080" value="8080" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600;">API Key</label>
+              <input id="new-terminal-pa-offline-api-key" type="password" placeholder="Enter API Key shown on terminal display" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" />
+              <small style="color: #666; display: block; margin-top: 4px;">Enable API mode on terminal: Settings → API → Enable. The terminal will display the API Key.</small>
+            </div>
+            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 12px; color: #92400e;">
+              ⚠️ <strong>LAN only:</strong> This terminal communicates directly from the iOS app over your local network. Test connectivity from the iOS app.
+            </div>
+          </div>
+
           <div style="display: flex; gap: 8px; margin-top: 20px;">
             <!-- KPay Test Button - shown only when KPay is selected -->
             <button id="kpay-test-btn" onclick="testPaymentTerminal()" class="btn-secondary" style="flex: 1; padding: 10px;" data-i18n="admin.test-connection">Test Connection</button>
             
-            <!-- Payment Asia Test Button - shown only when Payment Asia is selected -->
-            <button id="payment-asia-test-btn" onclick="testPaymentAsia()" class="btn-secondary" style="flex: 1; padding: 10px; display: none;" data-i18n="admin.test-payment">Test Payment (Opens New Tab)</button>
+            <!-- Payment Asia Test Button - shown only when Payment Asia (Online) is selected -->
+            <button id="payment-asia-test-btn" onclick="testPaymentAsia()" class="btn-secondary" style="flex: 1; padding: 10px; display: none;" data-i18n="admin.test-payment">Test Payment (Sandbox)</button>
+
+            <!-- Payment Asia Offline Test Button -->
+            <button id="payment-asia-offline-test-btn" onclick="testPaymentAsiaOffline()" class="btn-secondary" style="flex: 1; padding: 10px; display: none;">🔌 Test from iOS App</button>
             
             <button onclick="savePaymentTerminal()" class="btn-primary" style="flex: 1; padding: 10px;" data-i18n="admin.save-terminal">Save Terminal</button>
           </div>
@@ -834,7 +835,7 @@
     <div class="settings-page-header">
       <button class="btn-back" onclick="hideSettingsPage('crm')">&#8592; Back</button>
       <h3 data-i18n="admin.crm">CRM</h3>
-      <div style="width:60px;"></div>
+      <button id="crm-import-btn" onclick="crmImportFromBookings()" class="btn-secondary" style="padding:6px 14px;font-size:12px;" data-i18n="admin.crm-import-bookings">Import from Bookings</button>
     </div>
     <div class="settings-page-content">
 
@@ -864,64 +865,6 @@
         <div id="crm-profile-content"></div>
       </div>
 
-    </div>
-  </div>
-</div>
-
-<!-- Service Requests Settings Page -->
-<div id="page-service-requests" class="settings-page hidden">
-  <div class="settings-page-inner">
-    <div class="settings-page-header">
-      <button class="btn-back" onclick="hideSettingsPage('service-requests')">&#8592; Back</button>
-      <h3 data-i18n="admin.service-requests">Service Requests</h3>
-      <div style="width:60px;"></div>
-    </div>
-    <div class="settings-page-content">
-      <p style="color:#6b7280;font-size:13px;margin-bottom:16px;" data-i18n="admin.service-requests-help">Configure the types of requests customers can make from the table (e.g. tea refill, extra napkins).</p>
-
-      <div style="margin-bottom:16px;">
-        <button onclick="showAddServiceRequestItemForm()" style="padding:9px 18px;background:#4a90e2;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" data-i18n="admin.add-service-request-item">+ Add Item</button>
-      </div>
-
-      <!-- Add/Edit form (hidden by default) -->
-      <div id="sr-item-form" style="display:none;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:16px;">
-        <h4 style="margin:0 0 12px 0;font-size:14px;font-weight:700;" id="sr-item-form-title">Add Item</h4>
-        <input type="hidden" id="sr-item-id" value="" />
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Type Key *</label>
-            <input id="sr-item-type" type="text" placeholder="e.g. tea_refill" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
-          </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Color</label>
-            <input id="sr-item-color" type="color" value="#4f46e5" style="width:100%;height:36px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;" />
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Label (EN) *</label>
-            <input id="sr-item-label-en" type="text" placeholder="Tea Refill" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
-          </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Label (ZH)</label>
-            <input id="sr-item-label-zh" type="text" placeholder="加茶" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
-          </div>
-        </div>
-        <div style="margin-bottom:12px;">
-          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Sort Order</label>
-          <input id="sr-item-sort" type="number" value="0" min="0" style="width:120px;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />
-        </div>
-        <div id="sr-item-form-error" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px;"></div>
-        <div style="display:flex;gap:8px;">
-          <button onclick="saveServiceRequestItem()" style="padding:8px 18px;background:#059669;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" data-i18n="admin.save">Save</button>
-          <button onclick="cancelServiceRequestItemForm()" style="padding:8px 14px;background:transparent;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px;" data-i18n="admin.cancel">Cancel</button>
-        </div>
-      </div>
-
-      <!-- Items list -->
-      <div id="sr-items-list">
-        <p style="color:#999;text-align:center;padding:24px;" data-i18n="admin.loading">Loading...</p>
-      </div>
     </div>
   </div>
 </div>
