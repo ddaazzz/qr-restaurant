@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 /**
- * QR Restaurant — Local Print Bridge v4.0
+ * QR Restaurant — Local Print Bridge v5.0
  * =========================================
- * Listens on https://localhost:3001 and forwards ESC/POS bytes to a printer.
+ * Two servers run simultaneously:
  *
- * Print routing (automatic):
- *   1. Tries TCP to the network printer (host:port from request)
- *   2. If TCP fails, falls back to direct USB (libusb) for Epson TM-T88IV
+ *   1. HTTPS on localhost:3001  — webapp print bridge (POST /print-escpos)
+ *   2. Raw TCP on 0.0.0.0:9100 — network printer emulator for iOS/iPad on LAN
+ *      The iPad connects to <Mac's LAN IP>:9100 and sends raw ESC/POS bytes,
+ *      exactly like a real Epson network printer. Data is forwarded to the USB
+ *      printer via libusb (bypasses broken CUPS on macOS Sonoma).
  *
  * Usage:
  *   node print-bridge.js
  *
- * First-time browser trust:
+ * First-time browser trust (for webapp):
  *   Open https://localhost:3001 and click through the security warning once.
+ *
+ * For iOS/iPad:
+ *   Set printer host = <this Mac's LAN IP>, port = 9100 in the app settings.
  *
  * Requires: npm install usb  (already done)
  */
@@ -31,9 +36,21 @@ let usbLib = null;
 try { usbLib = require('usb'); } catch (_) { /* usb package not installed */ }
 
 const PORT      = parseInt(process.env.BRIDGE_PORT || '3001', 10);
+const TCP_PORT  = parseInt(process.env.PRINTER_TCP_PORT || '9100', 10);
 const CERT_DIR  = path.join(os.homedir(), '.qr-bridge');
 const CERT_FILE = path.join(CERT_DIR, 'cert.pem');
 const KEY_FILE  = path.join(CERT_DIR, 'key.pem');
+
+// Get the Mac's primary LAN IP (first non-loopback IPv4)
+function getLanIP() {
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+    }
+  }
+  return '127.0.0.1';
+}
 
 // ── Certificate ───────────────────────────────────────────────────────────────
 
@@ -244,32 +261,82 @@ try {
   process.exit(1);
 }
 
+// ── 1. HTTPS server (webapp bridge, localhost only) ───────────────────────────
 const server = https.createServer(tlsOptions, handleRequest);
 
 server.listen(PORT, '127.0.0.1', () => {
-  const usbPrinters = listUsbPrinters();
-  console.log('');
-  console.log('╔══════════════════════════════════════════════════════════╗');
-  console.log('║  QR Restaurant — Print Bridge v3.0 (HTTPS + USB)        ║');
-  console.log(`║  https://localhost:${PORT}                                   ║`);
-  console.log('╠══════════════════════════════════════════════════════════╣');
-  console.log(`║  USB printers: ${(usbPrinters.join(', ') || 'none').slice(0,42).padEnd(42)}║`);
-  console.log('╠══════════════════════════════════════════════════════════╣');
-  console.log('║  Trust cert: open https://localhost:3001 in your browser ║');
-  console.log(`║  macOS auto-trust:                                       ║`);
-  console.log('║    sudo security add-trusted-cert -d -r trustRoot \\     ║');
-  console.log('║      -k /Library/Keychains/System.keychain \\            ║');
-  console.log(`║      ~/.qr-bridge/cert.pem                               ║`);
-  console.log('╚══════════════════════════════════════════════════════════╝');
-  console.log('');
-  console.log(`[${ts()}] Ready — waiting for print jobs…`);
+  // Startup banner printed after both servers start (see TCP server callback below)
 });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`\n❌ Port ${PORT} already in use. Try: BRIDGE_PORT=3002 node print-bridge.js\n`);
   } else {
-    console.error('\n❌ Server error:', err.message);
+    console.error('\n❌ HTTPS server error:', err.message);
+  }
+  process.exit(1);
+});
+
+// ── 2. Raw TCP server (network printer emulator, LAN-accessible) ──────────────
+// Accepts ESC/POS bytes on port 9100 — same protocol as a real Epson LAN printer.
+// iPad/iOS app connects here using the Mac's LAN IP as the "printer host".
+const tcpServer = net.createServer((socket) => {
+  const remote = `${socket.remoteAddress}:${socket.remotePort}`;
+  console.log(`[${ts()}] TCP connection from ${remote}`);
+
+  const chunks = [];
+  socket.on('data', (chunk) => { chunks.push(chunk); });
+
+  socket.on('end', async () => {
+    const data = Buffer.concat(chunks);
+    if (data.length === 0) {
+      console.log(`[${ts()}] TCP: empty payload from ${remote}, ignoring`);
+      return;
+    }
+    console.log(`[${ts()}] TCP: ${data.length}B received from ${remote} — forwarding to USB…`);
+    try {
+      await sendToUsbDirect(data);
+      console.log(`[${ts()}] ✓ TCP→USB: ${data.length}B printed`);
+    } catch (err) {
+      console.error(`[${ts()}] ✗ TCP→USB error: ${err.message}`);
+    }
+  });
+
+  socket.on('error', (err) => {
+    console.error(`[${ts()}] TCP socket error (${remote}): ${err.message}`);
+  });
+});
+
+tcpServer.listen(TCP_PORT, '0.0.0.0', () => {
+  const lanIP     = getLanIP();
+  const usbPrinters = listUsbPrinters();
+  const printerStr  = (usbPrinters.join(', ') || 'none').slice(0, 38).padEnd(38);
+  const ipStr       = `${lanIP}:${TCP_PORT}`.padEnd(38);
+
+  console.log('');
+  console.log('╔══════════════════════════════════════════════════════════╗');
+  console.log('║  QR Restaurant — Print Bridge v5.0                      ║');
+  console.log('╠══════════════════════════════════════════════════════════╣');
+  console.log(`║  Webapp  (HTTPS) → https://localhost:${PORT}               ║`);
+  console.log(`║  iPad/iOS (TCP)  → ${ipStr}║`);
+  console.log('╠══════════════════════════════════════════════════════════╣');
+  console.log(`║  USB printer: ${printerStr.slice(0,43).padEnd(43)}║`);
+  console.log('╠══════════════════════════════════════════════════════════╣');
+  console.log('║  iOS/iPad setup:                                         ║');
+  console.log(`║    Printer Host = ${lanIP.padEnd(39)}║`);
+  console.log(`║    Printer Port = ${String(TCP_PORT).padEnd(39)}║`);
+  console.log('╠══════════════════════════════════════════════════════════╣');
+  console.log('║  Trust cert (webapp): open https://localhost:3001        ║');
+  console.log('╚══════════════════════════════════════════════════════════╝');
+  console.log('');
+  console.log(`[${ts()}] Ready — waiting for print jobs…`);
+});
+
+tcpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ TCP port ${TCP_PORT} already in use. Try: PRINTER_TCP_PORT=9101 node print-bridge.js\n`);
+  } else {
+    console.error('\n❌ TCP server error:', err.message);
   }
   process.exit(1);
 });
