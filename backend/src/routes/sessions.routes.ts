@@ -275,7 +275,7 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
       LEFT JOIN LATERAL (
         SELECT
           BOOL_OR(oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_received,
-          MAX(oo.updated_at) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_received_at,
+          MAX(oo.created_at) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_received_at,
           MAX(oo.payment_method) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_method_online,
           MAX(oo.chuio_order_reference) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS merchant_reference
         FROM orders oo
