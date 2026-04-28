@@ -45,26 +45,37 @@ import { Ionicons } from '@expo/vector-icons';
  * The mobile device is on the same LAN as the printer so this works even when
  * the backend is deployed in the cloud.
  */
-function sendEscPosToNetworkPrinter(host: string, port: number, data: Uint8Array, timeoutMs = 8000): Promise<void> {
+function sendEscPosToNetworkPrinter(host: string, port: number, data: Uint8Array, timeoutMs = 15000): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const done = (err?: Error) => {
       if (settled) return;
       settled = true;
-      try { client.destroy(); } catch (_) {}
       err ? reject(err) : resolve();
     };
-    const timer = setTimeout(() => done(new Error(`Printer connection timed out (${host}:${port})`)), timeoutMs);
+    // Timeout: destroy the socket so server sees connection drop
+    const timer = setTimeout(() => {
+      try { client.destroy(); } catch (_) {}
+      done(new Error(`Printer connection timed out (${host}:${port})\n\nCheck: Settings → Privacy & Security → Local Network → enable this app`));
+    }, timeoutMs);
     const client = TcpSocket.createConnection({ host, port }, () => {
       client.write(data, undefined, (err: any) => {
-        clearTimeout(timer);
-        if (err) return done(new Error(`Write error: ${err.message}`));
+        if (err) {
+          clearTimeout(timer);
+          try { client.destroy(); } catch (_) {}
+          return done(new Error(`Write error: ${err.message}`));
+        }
+        // Send FIN (half-close) so server's 'end' event fires and it processes the data
         client.end();
-        done();
       });
     });
-    client.on('error', (err: any) => { clearTimeout(timer); done(new Error(err.message || String(err))); });
-    client.on('close', () => { clearTimeout(timer); if (!settled) done(); });
+    client.on('error', (err: any) => {
+      clearTimeout(timer);
+      try { client.destroy(); } catch (_) {}
+      done(new Error(err.message || String(err)));
+    });
+    // Resolve only after clean close — ensures server has received all data
+    client.on('close', () => { clearTimeout(timer); done(); });
   });
 }
 
