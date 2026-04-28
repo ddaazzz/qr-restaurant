@@ -892,30 +892,47 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
     }
 
     // For thermal/network printers, queue the job
-    const jobData = {
-      type: 'qr' as const,
-      tableNumber: tableName,
-      qrToken: qrToken,
-      qrDataUrl: `https://${QR_DOMAIN}/${qrToken}`,
-      restaurantName: restaurantName,
-      printerConfig: {
-        type: printerConfig.printer_type,
-        host: printerConfig.printer_host,
-        port: printerConfig.printer_port,
-      },
-    };
+    // For thermal/network printers: generate ESC/POS and return to client for direct sending
+    {
+      const host = printerConfig.printer_host;
+      const port = printerConfig.printer_port || 9100;
 
-    const queue = getPrinterQueueInstance();
-    if (queue) {
-      const job = await queue.addJob(parseInt(restaurantId), jobData, {
-        jobType: 'qr',
-        ...(parseInt(sessionId) ? { sessionId: parseInt(sessionId) } : {}),
-        priority,
-      });
-      console.log('[PrintQR] Queued job:', job.id);
-      return res.json({ success: true, jobId: job.id, message: 'QR code queued for printing' });
-    } else {
-      return res.status(500).json({ error: "Print queue not available" });
+      // Build ESC/POS QR receipt
+      let textAboveQR = 'Scan to Order';
+      let textBelowQR = 'Let us know how we did!';
+      const settingsResult2 = await pool.query(
+        `SELECT COALESCE((settings->>'qr_text_above'),'') as text_above, COALESCE((settings->>'qr_text_below'),'') as text_below FROM printers WHERE restaurant_id = $1 AND type = $2`,
+        [restaurantId, 'QR']
+      );
+      if ((settingsResult2.rowCount ?? 0) > 0) {
+        if (settingsResult2.rows[0].text_above) textAboveQR = settingsResult2.rows[0].text_above;
+        if (settingsResult2.rows[0].text_below) textBelowQR = settingsResult2.rows[0].text_below;
+      }
+
+      const qrReceiptData: ReceiptData = {
+        restaurantName,
+        tableName,
+        qrToken,
+        qrTextAbove: textAboveQR,
+        qrTextBelow: textBelowQR,
+        printerPaperWidth: 80,
+      };
+      const escpos = generateESCPOS(qrReceiptData);
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+
+      // Try direct TCP (works when backend is on the same LAN)
+      try {
+        await sendToNetworkPrinter(host, port, Buffer.from(escpos));
+        console.log('[PrintQR] Direct TCP print successful');
+        return res.json({ success: true, jobId: `qr-${tableId}-${Date.now()}`, message: `QR printed to ${host}:${port}` });
+      } catch (tcpErr: any) {
+        console.log('[PrintQR] Backend TCP failed (expected on cloud):', tcpErr.message);
+        return res.json({
+          success: true,
+          networkPrint: { host, port, escposBase64 },
+          message: `Send ESC/POS data directly to ${host}:${port}`,
+        });
+      }
     }
   } catch (err: any) {
     console.error('[PrintQR] Error:', err.message || err);
@@ -1021,11 +1038,13 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
       });
     }
 
-    // For thermal/network printers, generate ESC/POS and send via TCP
+    // For thermal/network printers, generate ESC/POS and return to client for direct printing.
+    // The backend may be on a cloud server that cannot reach the local network printer —
+    // returning the raw bytes lets the iOS/Android app (on the same LAN) send them directly.
     if (printerConfig.printer_type === "thermal" || printerConfig.printer_type === "network") {
       const host = printerConfig.printer_host;
       const port = printerConfig.printer_port || 9100;
-      console.log('[PrintBill] Sending to network printer:', host, port);
+      console.log('[PrintBill] Network printer config:', host, port);
 
       // Extract bill format settings
       let billHeaderText = 'Thank You';
@@ -1056,21 +1075,29 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         billFooterText,
       };
 
+      const escpos = generateESCPOS(networkReceiptData);
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+
+      // Attempt direct TCP print first (works when backend is on the same LAN as printer)
       try {
-        const escpos = generateESCPOS(networkReceiptData);
         await sendToNetworkPrinter(host, port, Buffer.from(escpos));
-        console.log('[PrintBill] Network print successful');
+        console.log('[PrintBill] Direct TCP print successful');
         return res.json({
           success: true,
           jobId: `bill-${sessionId}-${Date.now()}`,
           message: `Bill printed to ${host}:${port}`,
         });
       } catch (tcpErr: any) {
-        console.error('[PrintBill] Network print failed, returning HTML fallback:', tcpErr.message);
+        // Backend cannot reach printer (cloud deployment) — send bytes back to client
+        console.log('[PrintBill] Backend TCP failed (expected on cloud):', tcpErr.message);
         return res.json({
           success: true,
-          html: generateReceiptHTML(payload),
-          message: `Network printer unreachable (${tcpErr.message}), HTML fallback provided`,
+          networkPrint: {
+            host,
+            port,
+            escposBase64,
+          },
+          message: `Send ESC/POS data directly to ${host}:${port}`,
         });
       }
     }

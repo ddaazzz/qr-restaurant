@@ -601,19 +601,12 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
         }
       }
       return result;
+    } else if (result.networkPrint) {
+      // Network printer: browser cannot open raw TCP sockets — inform user
+      console.warn('[PrintRouter] Network printer requires direct TCP — not supported in browser.');
+      alert(tr('admin.printer-network-browser-unsupported', `⚠️ Network printing is not supported from the browser.\n\nUse the mobile app to print to ${result.networkPrint.host}:${result.networkPrint.port}, or set the bill printer type to "Browser" for web-based printing.`));
+      return result;
     } else if (result.jobId) {
-      // Queued / sent to network printer
-      console.log('[PrintRouter] Bill sent with job ID:', result.jobId);
-      alert(tr('admin.printer-queued-bill', '✅ Bill sent to printer'));
-      return result;
-    } else if (result.success) {
-      // Direct success (e.g. network print confirmed by backend)
-      console.log('[PrintRouter] Bill printed successfully');
-      alert(tr('admin.printer-print-success', '✅ Bill printed successfully'));
-      return result;
-    }
-
-    console.warn('[PrintRouter] Unexpected response format:', result);
     return result;
   } catch (err) {
     console.error('[PrintRouter] Bill print error:', err);

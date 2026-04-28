@@ -1,4 +1,5 @@
 PODS:
+  - CocoaAsyncSocket (7.6.5)
   - EXApplication (7.0.8):
     - ExpoModulesCore
   - EXConstants (18.0.13):
@@ -1390,6 +1391,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-tcp-socket (6.4.1):
+    - CocoaAsyncSocket
+    - React-Core
   - react-native-webview (13.15.0):
     - hermes-engine
     - RCTRequired
@@ -1937,6 +1941,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - react-native-ble-plx (from `../node_modules/react-native-ble-plx`)
+  - react-native-tcp-socket (from `../node_modules/react-native-tcp-socket`)
   - react-native-webview (from `../node_modules/react-native-webview`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -1977,6 +1982,7 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - CocoaAsyncSocket
     - MultiplatformBleAdapter
     - ZXingObjC
 
@@ -2092,6 +2098,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-ble-plx:
     :path: "../node_modules/react-native-ble-plx"
+  react-native-tcp-socket:
+    :path: "../node_modules/react-native-tcp-socket"
   react-native-webview:
     :path: "../node_modules/react-native-webview"
   React-NativeModulesApple:
@@ -2168,6 +2176,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  CocoaAsyncSocket: 065fd1e645c7abab64f7a6a2007a48038fdc6a99
   EXApplication: 1e98d4b1dccdf30627f92917f4b2c5a53c330e5f
   EXConstants: fce59a631a06c4151602843667f7cfe35f81e271
   EXImageLoader: 189e3476581efe3ad4d1d3fb4735b7179eb26f05
@@ -2224,6 +2233,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 9050ee10c19f4f7fca8963d0211b2854d624973e
   React-microtasksnativemodule: f775db9e991c6f3b8ccbc02bfcde22770f96e23b
   react-native-ble-plx: 33232d5b55f5d5393f5f41bf7a30a1eb75280a37
+  react-native-tcp-socket: 7c7e53a07f122ecf00fb3626684bc0ca82c4f044
   react-native-webview: b29007f4723bca10872028067b07abacfa1cb35a
   React-NativeModulesApple: 8969913947d5b576de4ed371a939455a8daf28aa
   React-oscompat: ce47230ed20185e91de62d8c6d139ae61763d09c

@@ -34,9 +34,38 @@ const getQrBaseUrl = () => {
   }
   return 'https://chuio.io';
 };
+import TcpSocket from 'react-native-tcp-socket';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import { Ionicons } from '@expo/vector-icons';
+
+/**
+ * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.
+ * The mobile device is on the same LAN as the printer so this works even when
+ * the backend is deployed in the cloud.
+ */
+function sendEscPosToNetworkPrinter(host: string, port: number, data: Uint8Array, timeoutMs = 8000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      try { client.destroy(); } catch (_) {}
+      err ? reject(err) : resolve();
+    };
+    const timer = setTimeout(() => done(new Error(`Printer connection timed out (${host}:${port})`)), timeoutMs);
+    const client = TcpSocket.createConnection({ host, port, tls: false }, () => {
+      client.write(Buffer.from(data), undefined, (err: any) => {
+        clearTimeout(timer);
+        if (err) return done(new Error(`Write error: ${err.message}`));
+        client.end();
+        done();
+      });
+    });
+    client.on('error', (err: any) => { clearTimeout(timer); done(new Error(err.message || String(err))); });
+    client.on('close', () => { clearTimeout(timer); if (!settled) done(); });
+  });
+}
 
 interface TableCategory {
   id: number;
@@ -872,8 +901,17 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           } catch (err: any) {
             console.error('[AutoPrintQR] Bluetooth send error:', err);
           }
+        } else if (printRes.data?.networkPrint) {
+          const { host, port, escposBase64 } = printRes.data.networkPrint;
+          try {
+            const escposBytes = new Uint8Array(Buffer.from(escposBase64, 'base64'));
+            await sendEscPosToNetworkPrinter(host, port, escposBytes);
+            console.log('[AutoPrintQR] ✓ QR sent directly to network printer');
+          } catch (netErr: any) {
+            console.error('[AutoPrintQR] Direct network print failed:', netErr.message);
+          }
         } else if (printRes.data?.success) {
-          console.log('[AutoPrintQR] ✓ QR queued for network printer');
+          console.log('[AutoPrintQR] ✓ QR sent to printer');
         } else if (printRes.data?.html) {
           await Print.printAsync({ html: printRes.data.html });
           console.log('[AutoPrintQR] ✓ QR sent to browser print');
@@ -1435,8 +1473,21 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             Alert.alert('Error', err.message || 'Failed to send to Bluetooth printer');
             setShowQRModal(true);
           }
+        } else if (printRes.data?.networkPrint) {
+          // Direct network print from device
+          const { host, port, escposBase64 } = printRes.data.networkPrint;
+          console.log('[PrintQR] Sending ESC/POS directly to network printer:', host, port);
+          try {
+            const escposBytes = new Uint8Array(Buffer.from(escposBase64, 'base64'));
+            await sendEscPosToNetworkPrinter(host, port, escposBytes);
+            Alert.alert('Printed', `QR code sent to printer at ${host}`);
+          } catch (netErr: any) {
+            console.error('[PrintQR] Direct network print failed:', netErr.message);
+            Alert.alert('Printer Unreachable', `Could not connect to printer at ${host}:${port}.\n\nError: ${netErr.message}`);
+            setShowQRModal(true);
+          }
         } else if (printRes.data?.success) {
-          Alert.alert('Queued', 'QR code queued for network printer');
+          Alert.alert('Printed', 'QR code sent to printer');
         } else if (printRes.data?.html) {
           // Backend returned HTML for browser printing
           await Print.printAsync({ html: printRes.data.html });
@@ -1648,8 +1699,26 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       console.log('[PrintBill] Print response:', printRes.data);
 
       if (printRes.data && printRes.data.success) {
+        // Handle direct network printing from device (cloud backend can't reach local printer)
+        if (printRes.data.networkPrint) {
+          const { host, port, escposBase64 } = printRes.data.networkPrint;
+          console.log('[PrintBill] Sending ESC/POS directly to network printer:', host, port);
+          try {
+            const escposBytes = new Uint8Array(Buffer.from(escposBase64, 'base64'));
+            await sendEscPosToNetworkPrinter(host, port, escposBytes);
+            console.log('[PrintBill] Network print sent successfully');
+            if (!autoPrint) {
+              Alert.alert('Printed', `Bill sent to printer at ${host}`);
+            }
+          } catch (netErr: any) {
+            console.error('[PrintBill] Direct network print failed:', netErr.message);
+            if (!autoPrint) {
+              Alert.alert('Printer Unreachable', `Could not connect to printer at ${host}:${port}.\n\nMake sure the printer is powered on and connected to the same network.\n\nError: ${netErr.message}`);
+            }
+          }
+        }
         // Handle browser printing - open native print dialog
-        if (printRes.data.html && !printRes.data.bluetoothDevice) {
+        else if (printRes.data.html && !printRes.data.bluetoothDevice) {
           console.log('[PrintBill] Opening native print dialog for browser printing');
           try {
             await Print.printAsync({
