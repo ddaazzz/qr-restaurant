@@ -18,6 +18,7 @@ import {
   Keyboard,
   InputAccessoryView,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
 import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
@@ -105,10 +106,8 @@ interface Coupon {
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
   min_order_value?: number;
-  minimum_order_value?: number;
   max_uses?: number;
   description?: string;
-  coupon_type?: 'open' | 'closed';
 }
 
 interface Variant {
@@ -149,66 +148,7 @@ interface PaymentTerminal {
   environment?: 'sandbox' | 'production';
 }
 
-interface CrmCustomer {
-  id: number;
-  name: string;
-  phone?: string | null;
-  email?: string | null;
-  notes?: string | null;
-  total_visits?: number;
-  total_spent_cents?: number;
-  last_visit_at?: string | null;
-  created_at?: string;
-}
-
-interface CrmOrder {
-  order_id: number;
-  restaurant_order_number?: number | null;
-  status?: string;
-  payment_method?: string | null;
-  created_at: string;
-  order_type?: string | null;
-  session_id?: number | null;
-  linked_booking_id?: number | null;
-  table_label?: string | null;
-  pax?: number | null;
-  discount_applied?: number | null;
-  total_cents?: number;
-}
-
-interface CrmBooking {
-  id: number;
-  guest_name: string;
-  phone?: string | null;
-  pax: number;
-  booking_date: string;
-  booking_time?: string | null;
-  status: string;
-  notes?: string | null;
-  table_label?: string | null;
-  session_id?: number | null;
-  session_total_cents?: number | null;
-}
-
-interface CrmCustomerProfile {
-  customer: CrmCustomer;
-  orders: CrmOrder[];
-  total_transacted_cents: number;
-  past_bookings: CrmBooking[];
-  future_bookings: CrmBooking[];
-  eligible_coupons?: Array<{
-    id: number;
-    code: string;
-    discount_type: 'percentage' | 'fixed';
-    discount_value: number;
-    minimum_order_value?: number;
-    coupon_type?: 'open' | 'closed';
-    valid_until?: string | null;
-  }>;
-}
-
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
-  const CRM_PAGE_SIZE = 30;
   const { t, lang, setLanguage } = useTranslation();
   const { user: currentUser, logout: authLogout } = useAuth();
   const isSuperadmin = currentUser?.role === 'superadmin';
@@ -220,21 +160,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
-  const [crmCount, setCrmCount] = useState<number | null>(null);
-  const [crmCustomers, setCrmCustomers] = useState<CrmCustomer[]>([]);
-  const [crmLoading, setCrmLoading] = useState(false);
-  const [crmLoadingMore, setCrmLoadingMore] = useState(false);
-  const [crmSearchInput, setCrmSearchInput] = useState('');
-  const [crmSearchTerm, setCrmSearchTerm] = useState('');
-  const [crmSortBy, setCrmSortBy] = useState<'last_visit' | 'total_spent' | 'total_orders' | 'created_at'>('last_visit');
-  const [crmOffset, setCrmOffset] = useState(0);
-  const [crmHasMore, setCrmHasMore] = useState(false);
-  const [crmProfileLoading, setCrmProfileLoading] = useState(false);
-  const [selectedCrmProfile, setSelectedCrmProfile] = useState<CrmCustomerProfile | null>(null);
-  const [crmError, setCrmError] = useState<string | null>(null);
-  const [crmOrderDetail, setCrmOrderDetail] = useState<any | null>(null);
-  const [crmOrderDetailLoading, setCrmOrderDetailLoading] = useState(false);
-  const [crmSyncing, setCrmSyncing] = useState(false);
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -278,18 +203,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests';
-
-  interface SRItem {
-    id: number;
-    request_type: string;
-    label_en: string;
-    label_zh?: string;
-    is_active: boolean;
-    sort_order: number;
-    color?: string;
-    image_url?: string;
-  }
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings';
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -330,16 +244,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // Modal state: 'printer' | 'bluetooth' | null
   const [activeModal, setActiveModal] = useState<'printer' | 'bluetooth' | null>(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
-  const [editingCouponId, setEditingCouponId] = useState<number | null>(null);
   const [showPaymentTerminalModal, setShowPaymentTerminalModal] = useState(false);
   const [editingTerminalId, setEditingTerminalId] = useState<number | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState<any>(null);
   const [showCouponDetailModal, setShowCouponDetailModal] = useState(false);
-  // CRM coupon assignment
-  const [showAssignCouponModal, setShowAssignCouponModal] = useState(false);
-  const [assignCouponCustomerId, setAssignCouponCustomerId] = useState<number | null>(null);
   const [showVariantPresetsModal, setShowVariantPresetsModal] = useState(false);
   const [selectedVariantPreset, setSelectedVariantPreset] = useState<VariantPreset | null>(null);
   const [selectedAddonPreset, setSelectedAddonPreset] = useState<any>(null);
@@ -350,23 +260,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [menuSettingsLoaded, setMenuSettingsLoaded] = useState(false);
   const [menuColumns, setMenuColumns] = useState<1 | 2>(1);
   const [allowCustomFoodItems, setAllowCustomFoodItems] = useState(false);
-  const [customItemLabel, setCustomItemLabel] = useState('');
-  // Feature flags (module enable/disable)
-  const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
-  const [moduleFlagsLoading, setModuleFlagsLoading] = useState(false);
-  const [moduleFlagsLoaded, setModuleFlagsLoaded] = useState(false);
-
-  // Service requests configuration
-  const [srItems, setSrItems] = useState<SRItem[]>([]);
-  const [srLoading, setSrLoading] = useState(false);
-  const [srLoaded, setSrLoaded] = useState(false);
-  const [showSrModal, setShowSrModal] = useState(false);
-  const [editingSrItem, setEditingSrItem] = useState<SRItem | null>(null);
-  const [srLabelEn, setSrLabelEn] = useState('');
-  const [srLabelZh, setSrLabelZh] = useState('');
-  const [srRequestType, setSrRequestType] = useState('');
-  const [srColor, setSrColor] = useState('#4f46e5');
-  const [srIsActive, setSrIsActive] = useState(true);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
   
@@ -393,7 +286,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     discount_value: '',
     min_order_value: '',
     description: '',
-    coupon_type: 'open' as 'open' | 'closed',
   });
   const [terminalForm, setTerminalForm] = useState({
     vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'other',
@@ -610,114 +502,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
-  const syncCrmFromBookings = async () => {
-    try {
-      setCrmSyncing(true);
-      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/sync-from-bookings`);
-      const { inserted, total } = res.data;
-      setCrmCount(total);
-      Alert.alert('Sync Complete', `Imported ${inserted} new customer${inserted === 1 ? '' : 's'} from bookings. Total: ${total}.`);
-      fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
-    } catch (err: any) {
-      Alert.alert('Sync Failed', err.response?.data?.error || 'Failed to sync customers from bookings');
-    } finally {
-      setCrmSyncing(false);
-    }
-  };
-
-  const fetchCrmCount = async () => {
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/count`);
-      setCrmCount(typeof res.data?.total === 'number' ? res.data.total : 0);
-    } catch (err: any) {
-      console.warn('[Settings] Failed to fetch CRM count:', err.message);
-      setCrmCount(0);
-    }
-  };
-
-  const fetchCrmCustomers = async ({
-    offset = 0,
-    append = false,
-    search = crmSearchTerm,
-    sortBy = crmSortBy,
-  }: {
-    offset?: number;
-    append?: boolean;
-    search?: string;
-    sortBy?: 'last_visit' | 'total_spent' | 'total_orders' | 'created_at';
-  } = {}) => {
-    try {
-      setCrmError(null);
-      if (append) {
-        setCrmLoadingMore(true);
-      } else {
-        setCrmLoading(true);
-      }
-
-      const params = new URLSearchParams({
-        limit: String(CRM_PAGE_SIZE),
-        offset: String(offset),
-        sort_by: sortBy,
-      });
-
-      if (search.trim()) {
-        params.set('search', search.trim());
-      }
-
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers?${params.toString()}`);
-      const rows: CrmCustomer[] = Array.isArray(res.data) ? res.data : [];
-
-      setCrmCustomers((prev) => (append ? [...prev, ...rows] : rows));
-      setCrmOffset(offset + rows.length);
-      setCrmHasMore(rows.length >= CRM_PAGE_SIZE);
-
-      if (!search.trim()) {
-        setCrmCount((prev) => (prev === null ? rows.length : prev));
-      }
-    } catch (err: any) {
-      console.error('[Settings] Failed to fetch CRM customers:', err);
-      setCrmError(err.response?.data?.error || 'Failed to load customers');
-      if (!append) {
-        setCrmCustomers([]);
-        setCrmOffset(0);
-        setCrmHasMore(false);
-      }
-    } finally {
-      setCrmLoading(false);
-      setCrmLoadingMore(false);
-    }
-  };
-
-  const openCrmProfile = async (customerId: number) => {
-    try {
-      setCrmProfileLoading(true);
-      setCrmError(null);
-      setSelectedCrmProfile(null);
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
-      setSelectedCrmProfile(res.data);
-    } catch (err: any) {
-      console.error('[Settings] Failed to fetch CRM profile:', err);
-      setCrmError(err.response?.data?.error || 'Failed to load customer profile');
-    } finally {
-      setCrmProfileLoading(false);
-    }
-  };
-
-  const openCrmOrderDetail = async (orderId: number) => {
-    setCrmOrderDetailLoading(true);
-    setCrmOrderDetail(null);
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/orders/${orderId}`);
-      setCrmOrderDetail(res.data);
-    } catch (err) {
-      console.error('[CRM] Failed to load order detail:', err);
-      Alert.alert('Error', 'Could not load order details.');
-    } finally {
-      setCrmOrderDetailLoading(false);
-    }
-  };
-
-
   const loadAddonPresetItems = async (presetId: number) => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
@@ -744,21 +528,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     fetchPaymentTerminals();
     fetchAddonPresets();
     fetchTerminalApplications();
-    fetchCrmCount();
   }, [restaurantId]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setCrmSearchTerm(crmSearchInput.trim());
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [crmSearchInput]);
-
-  useEffect(() => {
-    if (settingsPage !== 'crm') return;
-    fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
-  }, [settingsPage, crmSearchTerm, crmSortBy]);
 
   const getPrinterTypeLabel = (type?: string): string => {
     const labels: Record<string, string> = {
@@ -804,23 +574,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       const prefix = editingPrinterType; // 'qr', 'bill', 'kitchen', or 'kpay'
 
-      // Map prefix to DB type value (must match CHECK constraint: 'QR', 'Bill', 'Kitchen', 'KPAY')
-      const typeMap: Record<string, string> = { qr: 'QR', bill: 'Bill', kitchen: 'Kitchen', kpay: 'KPAY' };
-      const dbType = typeMap[prefix] || prefix.toUpperCase();
-
-      // Bluetooth device may be stored under prefixed key (set by selectBluetoothDevice)
-      // or under the unprefixed key (loaded from DB for editing)
-      const btDeviceId = (printerFormData as any)[`${prefix}_bluetooth_device_id`] ?? printerFormData.bluetooth_device_id;
-      const btDeviceName = (printerFormData as any)[`${prefix}_bluetooth_device_name`] ?? printerFormData.bluetooth_device_name;
-
       // Build payload matching webapp format (individual record with type field)
       const payload: any = {
-        type: dbType,
+        type: prefix.toUpperCase(),
         printer_type: printerFormData.printer_type,
         printer_host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : null,
-        printer_port: printerFormData.printer_type === 'network' ? parseInt((printerFormData.printer_port as any)?.toString() || '9100') : null,
-        bluetooth_device_id: printerFormData.printer_type === 'bluetooth' ? btDeviceId : null,
-        bluetooth_device_name: printerFormData.printer_type === 'bluetooth' ? btDeviceName : null,
+        printer_port: printerFormData.printer_type === 'network' ? (printerFormData.printer_port || null) : null,
+        bluetooth_device_id: printerFormData.printer_type === 'bluetooth' ? printerFormData.bluetooth_device_id : null,
+        bluetooth_device_name: printerFormData.printer_type === 'bluetooth' ? printerFormData.bluetooth_device_name : null,
       };
 
       // Auto-print and paper width go into settings JSONB
@@ -972,34 +733,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Bluetooth device selection is now handled at runtime during printing
 
-  const resetCouponForm = () => {
-    setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open' });
-    setEditingCouponId(null);
-  };
-
   const createCoupon = async () => {
     try {
       if (!couponForm.code || !couponForm.discount_value) {
         Alert.alert(t('settings.validation'), t('settings.fill-required'));
-        return;
-      }
-
-      if (editingCouponId) {
-        // Update existing coupon
-        await apiClient.patch(`/api/coupons/${editingCouponId}`, {
-          code: couponForm.code.toUpperCase(),
-          discount_type: couponForm.discount_type,
-          discount_value: parseFloat(couponForm.discount_value),
-          min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
-          minimum_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
-          description: couponForm.description || null,
-          coupon_type: couponForm.coupon_type,
-          restaurantId,
-        });
-        await fetchCoupons();
-        resetCouponForm();
-        setShowCouponModal(false);
-        Alert.alert(t('common.success'), t('settings.coupon-updated') || 'Coupon updated');
         return;
       }
 
@@ -1009,52 +746,20 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         discount_value: parseFloat(couponForm.discount_value),
         min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
         description: couponForm.description || null,
-        coupon_type: couponForm.coupon_type,
       });
 
       await fetchSettings();
-      resetCouponForm();
+      setCouponForm({
+        code: '',
+        discount_type: 'percentage',
+        discount_value: '',
+        min_order_value: '',
+        description: '',
+      });
       setShowCouponModal(false);
       Alert.alert(t('common.success'), t('settings.coupon-created'));
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || t('settings.coupon-failed'));
-    }
-  };
-
-  const openEditCoupon = (coupon: any) => {
-    setCouponForm({
-      code: coupon.code || '',
-      discount_type: coupon.discount_type || 'percentage',
-      discount_value: String(coupon.discount_value || ''),
-      min_order_value: String(coupon.minimum_order_value || coupon.min_order_value || ''),
-      description: coupon.description || '',
-      coupon_type: coupon.coupon_type || 'open',
-    });
-    setEditingCouponId(coupon.id);
-    setShowCouponDetailModal(false);
-    setSelectedCoupon(null);
-    setShowCouponModal(true);
-  };
-
-  const assignCouponToCustomer = async (customerId: number, couponId: number) => {
-    try {
-      await apiClient.post(`/api/restaurants/${restaurantId}/crm/customers/${customerId}/coupons`, { coupon_id: couponId });
-      // Reload customer profile
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
-      setSelectedCrmProfile(res.data);
-      Alert.alert(t('common.success'), t('settings.coupon-assigned') || 'Coupon assigned');
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to assign coupon');
-    }
-  };
-
-  const revokeCouponFromCustomer = async (customerId: number, couponId: number) => {
-    try {
-      await apiClient.delete(`/api/restaurants/${restaurantId}/crm/customers/${customerId}/coupons/${couponId}`);
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
-      setSelectedCrmProfile(res.data);
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to revoke coupon');
     }
   };
 
@@ -1447,11 +1152,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <Text style={styles.label}>{t('settings.port')}</Text>
                   <TextInput
                     style={styles.input}
-                    value={printerFormData?.printer_port?.toString() || '9100'}
+                    value={printerFormData?.printer_port?.toString() || ''}
                     onChangeText={(text) => {
-                      setPrinterFormData({ ...printerFormData, printer_port: parseInt(text) || 9100 } as PrinterSettings);
+                      const parsed = parseInt(text);
+                      setPrinterFormData({ ...printerFormData, printer_port: isNaN(parsed) ? undefined : parsed } as PrinterSettings);
                     }}
-                    placeholder="9100"
+                    placeholder="9100 (optional)"
                     keyboardType="number-pad"
                     inputAccessoryViewID="numpadDone"
                   />
@@ -1889,12 +1595,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
-    { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? 'Loading customers...' : `${crmCount} customer${crmCount === 1 ? '' : 's'}` },
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
-    { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
-    { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: 'Service Requests', description: 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
@@ -1911,394 +1614,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       </TouchableOpacity>
       <Text style={styles.subPageTitle}>{title}</Text>
       <View style={{ width: 60 }} />
-    </View>
-  );
-
-  const formatCurrency = (amountCents?: number | null) => {
-    return `$${((amountCents || 0) / 100).toFixed(2)}`;
-  };
-
-  const formatDate = (value?: string | null) => {
-    if (!value) return '—';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '—';
-    return date.toLocaleDateString();
-  };
-
-  const renderCrmCustomerCard = (customer: CrmCustomer) => {
-    const initials = (customer.name || '?').slice(0, 2).toUpperCase();
-
-    return (
-      <TouchableOpacity
-        key={customer.id}
-        style={styles.crmCustomerCard}
-        activeOpacity={0.8}
-        onPress={() => openCrmProfile(customer.id)}
-      >
-        <View style={styles.crmCustomerAvatar}>
-          <Text style={styles.crmCustomerAvatarText}>{initials}</Text>
-        </View>
-        <View style={styles.crmCustomerMeta}>
-          <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
-          {!!(customer.phone || customer.email) ? (
-            <View style={{ marginTop: 2 }}>
-              {!!customer.phone && (
-                <Text style={styles.crmCustomerSubline}>📞 {customer.phone}</Text>
-              )}
-              {!!customer.email && (
-                <Text style={styles.crmCustomerSubline}>✉️ {customer.email}</Text>
-              )}
-            </View>
-          ) : (
-            <Text style={styles.crmCustomerSubline}>No contact details</Text>
-          )}
-          <Text style={styles.crmCustomerSubline}>
-            {customer.total_visits || 0} visits · Last visit {formatDate(customer.last_visit_at)}
-          </Text>
-        </View>
-        <View style={styles.crmCustomerSpendBlock}>
-          <Text style={styles.crmCustomerSpend}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
-          <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  const bookingStatusColor = (status: string) => {
-    if (status === 'confirmed') return { bg: '#dcfce7', text: '#16a34a' };
-    if (status === 'completed') return { bg: '#ede9fe', text: '#7c3aed' };
-    if (status === 'cancelled') return { bg: '#fee2e2', text: '#dc2626' };
-    if (status === 'no-show')   return { bg: '#fef3c7', text: '#d97706' };
-    return { bg: '#f3f4f6', text: '#6b7280' };
-  };
-
-  const renderCrmBookingRow = (booking: CrmBooking, tone: 'future' | 'past') => {
-    const colors = bookingStatusColor(booking.status);
-    return (
-      <View key={`${tone}-${booking.id}`} style={styles.crmHistoryRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.crmHistoryTitle}>
-            {formatDate(booking.booking_date)}{booking.booking_time ? ` · ${booking.booking_time}` : ''}
-          </Text>
-          <Text style={styles.crmHistoryMeta}>
-            {booking.pax} pax{booking.table_label ? ` · ${booking.table_label}` : ''}
-          </Text>
-        </View>
-        <View style={[styles.crmStatusBadge, { backgroundColor: colors.bg }]}>
-          <Text style={[styles.crmStatusBadgeText, { color: colors.text }]}>{booking.status}</Text>
-        </View>
-      </View>
-    );
-  };
-
-  const renderCrmProfile = () => {
-    if (crmProfileLoading) {
-      return (
-        <View style={styles.crmLoadingState}>
-          <ActivityIndicator size="small" color="#4f46e5" />
-          <Text style={styles.emptyText}>Loading customer...</Text>
-        </View>
-      );
-    }
-
-    if (!selectedCrmProfile) {
-      return null;
-    }
-
-    const { customer, orders, future_bookings, past_bookings, total_transacted_cents, eligible_coupons } = selectedCrmProfile;
-    const initials = (customer.name || '?').slice(0, 2).toUpperCase();
-
-    // Build unified timeline: merge past bookings + orders chronologically
-    const orderBySessionId = new Map<number, CrmOrder>();
-    orders.forEach(o => { if (o.session_id) orderBySessionId.set(o.session_id, o); });
-
-    type TLItem = { date: string; booking?: CrmBooking; order?: CrmOrder };
-    const timeline: TLItem[] = [];
-    const usedSessionIds = new Set<number>();
-
-    // Each past booking (with linked order if booking started a session)
-    past_bookings.forEach(b => {
-      const linkedOrder = b.session_id ? orderBySessionId.get(b.session_id) : undefined;
-      timeline.push({ date: b.booking_date, booking: b, order: linkedOrder });
-      if (linkedOrder?.session_id) usedSessionIds.add(linkedOrder.session_id);
-    });
-
-    // Standalone orders (not linked to any booking in past_bookings)
-    orders.forEach(o => {
-      if (!o.session_id || !usedSessionIds.has(o.session_id)) {
-        const dateStr = o.created_at ? o.created_at.substring(0, 10) : '';
-        timeline.push({ date: dateStr, order: o });
-      }
-    });
-
-    timeline.sort((a, b) => b.date.localeCompare(a.date));
-
-    return (
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-          <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => setSelectedCrmProfile(null)}>
-            <Ionicons name="arrow-back" size={16} color="#4f46e5" />
-            <Text style={styles.crmBackToListText}>Back to customers</Text>
-          </TouchableOpacity>
-
-          <View style={styles.crmProfileHero}>
-            <View style={styles.crmProfileHeroAvatar}>
-              <Text style={styles.crmProfileHeroAvatarText}>{initials}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                <Text style={{ color: '#9ca3af', fontSize: 11 }}>📞</Text>
-                <Text style={styles.crmProfileContact}>{customer.phone || '—'}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <Text style={{ color: '#9ca3af', fontSize: 11 }}>✉️</Text>
-                <Text style={styles.crmProfileContact}>{customer.email || '—'}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.crmStatsRow}>
-            <View style={styles.crmStatCard}>
-              <Text style={styles.crmStatValue}>{customer.total_visits || 0}</Text>
-              <Text style={styles.crmStatLabel}>Visits</Text>
-            </View>
-            <View style={styles.crmStatCard}>
-              <Text style={styles.crmStatValue}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
-              <Text style={styles.crmStatLabel}>Spent</Text>
-            </View>
-            <View style={styles.crmStatCard}>
-              <Text style={styles.crmStatValue}>{formatCurrency(total_transacted_cents || 0)}</Text>
-              <Text style={styles.crmStatLabel}>Transacted</Text>
-            </View>
-            <View style={styles.crmStatCard}>
-              <Text style={styles.crmStatValue} numberOfLines={1} adjustsFontSizeToFit>{customer.last_visit_at ? formatDate(customer.last_visit_at) : '—'}</Text>
-              <Text style={styles.crmStatLabel}>Last Visit</Text>
-            </View>
-          </View>
-
-          {!!customer.notes && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Notes</Text>
-              <Text style={styles.sectionDescription}>{customer.notes}</Text>
-            </View>
-          )}
-
-          {future_bookings.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
-              {future_bookings.map((booking) => renderCrmBookingRow(booking, 'future'))}
-            </View>
-          )}
-
-          {/* Unified history timeline */}
-          {timeline.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>History</Text>
-              {timeline.map((item, idx) => {
-                const { booking, order } = item;
-                const colors = booking ? bookingStatusColor(booking.status) : null;
-                const hasOrder = !!order;
-                return (
-                  <View key={idx} style={[styles.crmHistoryRow, { flexDirection: 'column', alignItems: 'stretch', paddingVertical: 10 }]}>
-                    {/* Booking row */}
-                    {booking && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: hasOrder ? 6 : 0 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.crmHistoryTitle}>
-                            📅 {formatDate(booking.booking_date)}{booking.booking_time ? ` · ${booking.booking_time}` : ''}
-                          </Text>
-                          <Text style={styles.crmHistoryMeta}>
-                            {booking.pax} pax{booking.table_label ? ` · ${booking.table_label}` : ''}
-                          </Text>
-                        </View>
-                        {colors && (
-                          <View style={[styles.crmStatusBadge, { backgroundColor: colors.bg }]}>
-                            <Text style={[styles.crmStatusBadgeText, { color: colors.text }]}>{booking.status}</Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-                    {/* Order row (linked or standalone) */}
-                    {order && (
-                      <TouchableOpacity
-                        onPress={() => openCrmOrderDetail(order.order_id)}
-                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 6, padding: 8, marginTop: booking ? 2 : 0 }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#4f46e5' }}>
-                            🧾 Order #{order.restaurant_order_number || order.order_id}
-                          </Text>
-                          <Text style={styles.crmHistoryMeta}>
-                            {order.table_label || 'Counter'}{!booking ? ` · ${formatDate(order.created_at)}` : ''}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.crmOrderAmount}>{formatCurrency(order.total_cents || 0)}</Text>
-                          {(order.discount_applied || 0) > 0 && (
-                            <Text style={{ fontSize: 11, color: '#dc2626' }}>−{formatCurrency(order.discount_applied)}</Text>
-                          )}
-                        </View>
-                        <Ionicons name="chevron-forward" size={14} color="#9ca3af" style={{ marginLeft: 4 }} />
-                      </TouchableOpacity>
-                    )}
-                    {/* Booking only (no order) and not upcoming */}
-                    {booking && !order && booking.status !== 'confirmed' && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 6, padding: 8, marginTop: 2 }}>
-                        <Text style={{ fontSize: 11, color: '#9ca3af' }}>No order recorded for this visit</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Eligible Coupons */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('settings.eligible-coupons') || 'Eligible Coupons'}</Text>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
-                onPress={() => { setAssignCouponCustomerId(customer.id); setShowAssignCouponModal(true); }}
-              >
-                <Text style={styles.btnSmallText}>{t('common.assign') || 'Assign'}</Text>
-              </TouchableOpacity>
-            </View>
-            {eligible_coupons && eligible_coupons.length > 0 ? (
-              eligible_coupons.map((coupon) => (
-                <View key={coupon.id} style={[styles.couponCard, { flexDirection: 'row', alignItems: 'center' }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.couponCode}>{coupon.code}</Text>
-                    <Text style={styles.couponValue}>
-                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`}
-                      {' · '}
-                      <Text style={{ color: coupon.coupon_type === 'closed' ? '#b45309' : '#15803d' }}>
-                        {coupon.coupon_type === 'closed' ? (t('settings.coupon-closed') || 'Closed') : (t('settings.coupon-open') || 'Open')}
-                      </Text>
-                    </Text>
-                  </View>
-                  {coupon.coupon_type === 'closed' && (
-                    <TouchableOpacity
-                      onPress={() => Alert.alert(
-                        t('settings.revoke-coupon') || 'Revoke Access',
-                        `${t('settings.revoke-coupon-confirm') || 'Remove this customer\'s access to'} ${coupon.code}?`,
-                        [
-                          { text: t('common.cancel'), style: 'cancel' },
-                          { text: t('common.remove') || 'Remove', style: 'destructive', onPress: () => revokeCouponFromCustomer(customer.id, coupon.id) },
-                        ]
-                      )}
-                    >
-                      <Text style={{ color: '#dc2626', fontSize: 12, fontWeight: '600', marginLeft: 8 }}>✕</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>{t('settings.no-eligible-coupons') || 'No coupons assigned'}</Text>
-            )}
-          </View>
-
-          {timeline.length === 0 && future_bookings.length === 0 && !eligible_coupons?.length && (
-            <View style={styles.section}>
-              <Text style={styles.emptyText}>No order or booking history yet.</Text>
-            </View>
-          )}
-        </ScrollView>
-    );
-  };
-
-  const renderCrmPage = () => (
-    <View style={styles.container}>
-      {renderSubPageHeader('CRM')}
-      {selectedCrmProfile ? (
-        renderCrmProfile()
-      ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Customers</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.label}>
-                  {crmSearchTerm
-                    ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
-                    : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary, { paddingVertical: 4, paddingHorizontal: 10, opacity: crmSyncing ? 0.6 : 1 }]}
-                  disabled={crmSyncing}
-                  onPress={syncCrmFromBookings}
-                >
-                  <Text style={[styles.crmLoadMoreText, { fontSize: 11 }]}>{crmSyncing ? 'Syncing...' : 'Sync Bookings'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TextInput
-              style={styles.input}
-              value={crmSearchInput}
-              onChangeText={setCrmSearchInput}
-              placeholder="Search name, phone or email"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <View style={styles.crmSortRow}>
-              <Text style={styles.label}>Sort by:</Text>
-              <View style={styles.crmSortChips}>
-                {(['last_visit', 'total_spent', 'total_orders', 'created_at'] as const).map((val) => {
-                  const labels: Record<string, string> = { last_visit: 'Last Visit', total_spent: 'Most Spent', total_orders: 'Most Orders', created_at: 'Newest' };
-                  const active = crmSortBy === val;
-                  return (
-                    <TouchableOpacity
-                      key={val}
-                      onPress={() => setCrmSortBy(val)}
-                      style={[styles.crmSortChip, active && styles.crmSortChipActive]}
-                    >
-                      <Text style={[styles.crmSortChipText, active && styles.crmSortChipTextActive]}>{labels[val]}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {crmLoading ? (
-              <View style={styles.crmLoadingState}>
-                <ActivityIndicator size="small" color="#4f46e5" />
-                <Text style={styles.emptyText}>Loading customers...</Text>
-              </View>
-            ) : crmError ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{crmError}</Text>
-              </View>
-            ) : crmCustomers.length === 0 ? (
-              <Text style={styles.emptyText}>
-                {crmSearchTerm ? 'No customers matched your search.' : 'No customers yet. Import bookings to get started.'}
-              </Text>
-            ) : (
-              <View style={styles.crmListWrap}>
-                {crmCustomers.map((customer) => renderCrmCustomerCard(customer))}
-              </View>
-            )}
-
-            {crmHasMore && !crmLoading && (
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSecondary, styles.crmLoadMoreBtn, crmLoadingMore && { opacity: 0.6 }]}
-                disabled={crmLoadingMore}
-                onPress={() =>
-                  fetchCrmCustomers({
-                    offset: crmOffset,
-                    append: true,
-                    search: crmSearchTerm,
-                    sortBy: crmSortBy,
-                  })
-                }
-              >
-                <Text style={styles.crmLoadMoreText}>{crmLoadingMore ? 'Loading...' : 'Load More'}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </ScrollView>
-      )}
     </View>
   );
 
@@ -3087,7 +2402,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         name: data.name || '',
         email: data.email || '',
         password: '',
-        confirmPassword: '',
         pin: data.pin || '',
       });
     } catch (err: any) {
@@ -3323,7 +2637,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const uiConf = s.ui_config || {};
       setAllowCustomFoodItems(flags.allow_custom_food_items === true);
       setMenuColumns((uiConf.menu_columns === 2 ? 2 : 1) as 1 | 2);
-      setCustomItemLabel(uiConf.custom_item_label || '');
       setMenuSettingsLoaded(true);
     } catch (err: any) {
       console.warn('[MenuSettings] Failed to load:', err.message);
@@ -3338,282 +2651,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || t('settings.settings-failed'));
     }
-  };
-
-  const loadFeatureFlags = async () => {
-    setModuleFlagsLoading(true);
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
-      const flags = res.data?.feature_flags || {};
-      setModuleFlags(flags);
-      setModuleFlagsLoaded(true);
-    } catch (err: any) {
-      console.warn('[FeatureFlags] Failed to load:', err.message);
-    } finally {
-      setModuleFlagsLoading(false);
-    }
-  };
-
-  const saveModuleFlag = async (key: string, value: boolean) => {
-    setModuleFlags(prev => ({ ...prev, [key]: value }));
-    try {
-      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, {
-        feature_flags: { [key]: value },
-      });
-    } catch (err: any) {
-      setModuleFlags(prev => ({ ...prev, [key]: !value }));
-      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.settings-failed'));
-    }
-  };
-
-  const MODULE_FLAG_DEFS: { key: string; labelKey: string; defaultLabel: string; descKey: string; defaultDesc: string }[] = [
-    { key: 'bookings',             labelKey: 'settings.flag-bookings',          defaultLabel: 'Bookings',         descKey: 'settings.flag-bookings-desc',          defaultDesc: 'Table reservations module' },
-    { key: 'waitlist',             labelKey: 'settings.flag-waitlist',          defaultLabel: 'Waitlist',         descKey: 'settings.flag-waitlist-desc',          defaultDesc: 'Queue / walk-in waitlist' },
-    { key: 'crm',                  labelKey: 'settings.flag-crm',               defaultLabel: 'CRM',              descKey: 'settings.flag-crm-desc',               defaultDesc: 'Customer relationship management' },
-    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons and promotions' },
-    { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
-  ];
-
-  // ==================== SERVICE REQUESTS CRUD ====================
-
-  const loadSrItems = async () => {
-    setSrLoading(true);
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`);
-      setSrItems(Array.isArray(res.data) ? res.data : []);
-      setSrLoaded(true);
-    } catch {
-      Alert.alert(t('common.error'), 'Failed to load service request items');
-    } finally {
-      setSrLoading(false);
-    }
-  };
-
-  const createSrItem = async () => {
-    if (!srRequestType.trim() || !srLabelEn.trim()) {
-      Alert.alert(t('common.error'), 'Request type and English label are required');
-      return;
-    }
-    try {
-      await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
-        request_type: srRequestType.trim(),
-        label_en: srLabelEn.trim(),
-        label_zh: srLabelZh.trim() || null,
-        color: srColor,
-        is_active: srIsActive,
-      });
-      setShowSrModal(false);
-      await loadSrItems();
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err?.message || 'Failed to create item');
-    }
-  };
-
-  const saveSrItem = async () => {
-    if (!editingSrItem) return;
-    if (!srLabelEn.trim()) {
-      Alert.alert(t('common.error'), 'English label is required');
-      return;
-    }
-    try {
-      await apiClient.patch(
-        `/api/restaurants/${restaurantId}/service-request-items/${editingSrItem.id}`,
-        { label_en: srLabelEn.trim(), label_zh: srLabelZh.trim() || null, color: srColor, is_active: srIsActive }
-      );
-      setShowSrModal(false);
-      setEditingSrItem(null);
-      await loadSrItems();
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err?.message || 'Failed to save item');
-    }
-  };
-
-  const deleteSrItem = (itemId: number) => {
-    Alert.alert('Delete Item', 'Delete this service request item?', [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          try {
-            await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${itemId}`);
-            await loadSrItems();
-          } catch {
-            Alert.alert(t('common.error'), 'Failed to delete item');
-          }
-        },
-      },
-    ]);
-  };
-
-  const renderServiceRequestsPage = () => (
-    <View style={styles.container}>
-      {renderSubPageHeader('Service Requests')}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
-        <TouchableOpacity
-          style={[styles.btn, styles.btnPrimary, { marginBottom: 12, alignSelf: 'flex-start' }]}
-          onPress={() => {
-            setEditingSrItem(null);
-            setSrLabelEn('');
-            setSrLabelZh('');
-            setSrRequestType('');
-            setSrColor('#4f46e5');
-            setSrIsActive(true);
-            setShowSrModal(true);
-          }}
-        >
-          <Text style={styles.btnText}>+ Add Service Request Item</Text>
-        </TouchableOpacity>
-        {srLoading ? (
-          <ActivityIndicator color="#3b82f6" style={{ marginTop: 24 }} />
-        ) : srItems.length === 0 ? (
-          <Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 24 }}>No service request items yet.</Text>
-        ) : (
-          srItems.map(item => (
-            <View key={item.id} style={{ flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
-              <View style={{ flex: 1, padding: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color || '#4f46e5' }} />
-                  <Text style={{ fontWeight: '700', fontSize: 13, flex: 1 }} numberOfLines={1}>{item.label_en}</Text>
-                  <View style={{ backgroundColor: item.is_active ? '#d1fae5' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 10, color: item.is_active ? '#065f46' : '#991b1b', fontWeight: '600' }}>{item.is_active ? 'Active' : 'Off'}</Text>
-                  </View>
-                </View>
-                {item.label_zh ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.label_zh}</Text> : null}
-                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Type: {item.request_type}</Text>
-              </View>
-              <View style={{ justifyContent: 'center', gap: 6, paddingHorizontal: 8 }}>
-                <TouchableOpacity
-                  style={{ backgroundColor: '#dbeafe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
-                  onPress={() => {
-                    setEditingSrItem(item);
-                    setSrLabelEn(item.label_en);
-                    setSrLabelZh(item.label_zh || '');
-                    setSrRequestType(item.request_type);
-                    setSrColor(item.color || '#4f46e5');
-                    setSrIsActive(item.is_active);
-                    setShowSrModal(true);
-                  }}
-                >
-                  <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ backgroundColor: '#fee2e2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
-                  onPress={() => deleteSrItem(item.id)}
-                >
-                  <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
-
-      {/* SR Item Modal */}
-      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSrModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingSrItem ? 'Edit Service Request Item' : 'New Service Request Item'}</Text>
-
-            {!editingSrItem && (
-              <>
-                <Text style={styles.label}>Request Type (unique key)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={srRequestType}
-                  onChangeText={setSrRequestType}
-                  placeholder="e.g. napkins, water"
-                  autoCapitalize="none"
-                />
-              </>
-            )}
-
-            <Text style={styles.label}>English Label</Text>
-            <TextInput style={styles.input} value={srLabelEn} onChangeText={setSrLabelEn} placeholder="e.g. Extra Napkins" />
-
-            <Text style={styles.label}>Chinese Label (optional)</Text>
-            <TextInput style={styles.input} value={srLabelZh} onChangeText={setSrLabelZh} placeholder="e.g. 额外纸巾" />
-
-            <Text style={styles.label}>Color (hex)</Text>
-            <TextInput style={styles.input} value={srColor} onChangeText={setSrColor} placeholder="#4f46e5" autoCapitalize="none" />
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}
-              onPress={() => setSrIsActive(prev => !prev)}
-            >
-              <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: '#3b82f6', backgroundColor: srIsActive ? '#3b82f6' : '#fff', justifyContent: 'center', alignItems: 'center' }}>
-                {srIsActive && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
-              </View>
-              <Text style={{ fontSize: 14, color: '#374151' }}>Active</Text>
-            </TouchableOpacity>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { setShowSrModal(false); setEditingSrItem(null); }}>
-                <Text style={styles.btnText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={editingSrItem ? saveSrItem : createSrItem}>
-                <Text style={styles.btnText}>{editingSrItem ? 'Save' : 'Create'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-
-  const renderFeatureFlagsPage = () => {
-    if (moduleFlagsLoading) {
-      return (
-        <View style={styles.container}>
-          {renderSubPageHeader(t('settings.feature-flags') || 'Feature Flags')}
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#3b82f6" />
-          </View>
-        </View>
-      );
-    }
-    return (
-      <View style={styles.container}>
-        {renderSubPageHeader(t('settings.feature-flags') || 'Feature Flags')}
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('settings.feature-flags-modules') || 'Modules'}</Text>
-            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
-              {t('settings.feature-flags-hint') || 'Disabled modules are hidden from all users of this restaurant.'}
-            </Text>
-
-            {MODULE_FLAG_DEFS.map((def, idx) => {
-              const isOn = moduleFlags[def.key] !== false; // default true (opt-out)
-              return (
-                <View
-                  key={def.key}
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    paddingVertical: 12,
-                    borderBottomWidth: idx < MODULE_FLAG_DEFS.length - 1 ? 1 : 0,
-                    borderBottomColor: '#e5e7eb',
-                  }}
-                >
-                  <View style={{ flex: 1, marginRight: 12 }}>
-                    <Text style={styles.label}>{t(def.labelKey) || def.defaultLabel}</Text>
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t(def.descKey) || def.defaultDesc}</Text>
-                  </View>
-                  <Switch
-                    value={isOn}
-                    onValueChange={(val) => saveModuleFlag(def.key, val)}
-                    trackColor={{ false: '#d1d5db', true: '#6366f1' }}
-                    thumbColor="#ffffff"
-                  />
-                </View>
-              );
-            })}
-          </View>
-
-        </ScrollView>
-      </View>
-    );
   };
 
   const renderMenuSettingsPage = () => {
@@ -3647,18 +2684,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   setAllowCustomFoodItems(val);
                   saveMenuSettings({ feature_flags: { allow_custom_food_items: val } });
                 }}
-              />
-            </View>
-            <View style={{ paddingVertical: 12, opacity: allowCustomFoodItems ? 1 : 0.45 }}>
-              <Text style={styles.label}>Default Item Label</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Name shown on the custom item card (staff can change it per order)</Text>
-              <TextInput
-                style={styles.input}
-                value={customItemLabel}
-                onChangeText={setCustomItemLabel}
-                placeholder="Custom Item"
-                editable={allowCustomFoodItems}
-                onBlur={() => allowCustomFoodItems && saveMenuSettings({ ui_config: { custom_item_label: customItemLabel.trim() || null } })}
               />
             </View>
           </View>
@@ -3701,7 +2726,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'language': return renderLanguagePage();
       case 'restaurant-info': return renderRestaurantInfoPage();
       case 'printer': return renderPrinterPage();
-      case 'crm': return renderCrmPage();
       case 'payment-terminals': return renderPaymentTerminalsPage();
       case 'qr-settings': return renderQRSettingsPage();
       case 'staff-links': return renderStaffLinksPage();
@@ -3711,12 +2735,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'menu-settings':
         if (!menuSettingsLoading && !menuSettingsLoaded) loadMenuSettings();
         return renderMenuSettingsPage();
-      case 'feature-flags':
-        if (!moduleFlagsLoading && !moduleFlagsLoaded) loadFeatureFlags();
-        return renderFeatureFlagsPage();
-      case 'service-requests':
-        if (!srLoading && !srLoaded) loadSrItems();
-        return renderServiceRequestsPage();
       case 'users': return <UsersTab onBack={navigateBack} />;
       case 'profile':
         if (!profileData && !profileLoading) loadProfile();
@@ -3731,72 +2749,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         {renderCurrentPage()}
       </Animated.View>
 
-      {/* CRM Order Detail Modal */}
-      <Modal
-        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-        visible={!!crmOrderDetail || crmOrderDetailLoading}
-        animationType="slide"
-        transparent
-        onRequestClose={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>
-                {crmOrderDetail ? `Order #${crmOrderDetail.restaurant_order_number || crmOrderDetail.id}` : 'Loading…'}
-              </Text>
-              <TouchableOpacity onPress={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}>
-                <Ionicons name="close" size={22} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            {crmOrderDetailLoading ? (
-              <View style={{ padding: 32, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="#4f46e5" />
-              </View>
-            ) : crmOrderDetail ? (
-              <ScrollView contentContainerStyle={{ padding: 16 }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>📅 {formatDate(crmOrderDetail.created_at)}</Text>
-                  {crmOrderDetail.table_name ? <Text style={{ fontSize: 12, color: '#6b7280' }}>🪑 {crmOrderDetail.table_name}</Text> : null}
-                  {crmOrderDetail.order_type ? <Text style={{ fontSize: 12, color: '#6b7280' }}>📦 {crmOrderDetail.order_type}</Text> : null}
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>💳 {crmOrderDetail.payment_method_label || crmOrderDetail.payment_method_online || '—'}</Text>
-                </View>
-                {(crmOrderDetail.items || []).map((item: any) => (
-                  <View key={item.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#111827', flex: 1, marginRight: 8 }}>
-                        {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.menu_item_name || '—'}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>
-                        {formatCurrency(item.item_total_cents)}
-                      </Text>
-                    </View>
-                    {item.variants ? <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{item.variants}</Text> : null}
-                    {(item.addons || []).map((addon: any) => (
-                      <View key={addon.order_item_id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 12, marginTop: 2 }}>
-                        <Text style={{ fontSize: 11, color: '#6b7280' }}>+ {addon.menu_item_name}</Text>
-                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{formatCurrency(addon.item_total_cents)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ))}
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Total</Text>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669' }}>{formatCurrency(crmOrderDetail.total_cents)}</Text>
-                  </View>
-                </View>
-              </ScrollView>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
-
       {/* Coupon Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingCouponId ? (t('settings.edit-coupon') || 'Edit Coupon') : t('settings.create-coupon')}</Text>
+            <Text style={styles.modalTitle}>{t('settings.create-coupon')}</Text>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.coupon-code')}</Text>
@@ -3890,40 +2847,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               />
             </View>
 
-            {/* Coupon access type */}
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>{t('settings.coupon-access-type') || 'Access Type'}</Text>
-              <View style={styles.toggleGroup}>
-                <TouchableOpacity
-                  style={[styles.typeBtn, couponForm.coupon_type === 'open' && styles.typeBtnActive]}
-                  onPress={() => setCouponForm({ ...couponForm, coupon_type: 'open' })}
-                >
-                  <Text style={[styles.typeBtnText, couponForm.coupon_type === 'open' && styles.typeBtnTextActive]}>
-                    {t('settings.coupon-open') || 'Open'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.typeBtn, couponForm.coupon_type === 'closed' && styles.typeBtnActive]}
-                  onPress={() => setCouponForm({ ...couponForm, coupon_type: 'closed' })}
-                >
-                  <Text style={[styles.typeBtnText, couponForm.coupon_type === 'closed' && styles.typeBtnTextActive]}>
-                    {t('settings.coupon-closed') || 'Closed'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-                {couponForm.coupon_type === 'open'
-                  ? (t('settings.coupon-open-desc') || 'Anyone with the code can use this coupon')
-                  : (t('settings.coupon-closed-desc') || 'Only customers you assign this coupon to can use it')}
-              </Text>
-            </View>
-
             <View style={styles.formActions}>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={() => {
                   setShowCouponModal(false);
-                  resetCouponForm();
+                  setCouponForm({
+                    code: '',
+                    discount_type: 'percentage',
+                    discount_value: '',
+                    min_order_value: '',
+                    description: '',
+                  });
                 }}
               >
                 <Text style={styles.btnText}>{t('common.cancel')}</Text>
@@ -3932,7 +2867,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createCoupon}
               >
-                <Text style={styles.btnText}>{editingCouponId ? (t('common.save') || 'Save') : t('settings.create')}</Text>
+                <Text style={styles.btnText}>{t('settings.create')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3961,27 +2896,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     {selectedCoupon.discount_type === 'percentage' ? `${selectedCoupon.discount_value}% off` : `$${selectedCoupon.discount_value} off`}
                   </Text>
                 </View>
-                {(selectedCoupon.minimum_order_value > 0 || selectedCoupon.min_order_value > 0) && (
+                {selectedCoupon.min_order_value > 0 && (
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>{t('settings.min-order-label')}</Text>
-                    <Text style={{ fontSize: 14, color: '#1f2937' }}>${selectedCoupon.minimum_order_value || selectedCoupon.min_order_value}</Text>
+                    <Text style={{ fontSize: 14, color: '#1f2937' }}>${selectedCoupon.min_order_value}</Text>
                   </View>
                 )}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>{t('settings.coupon-access-type') || 'Access Type'}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ backgroundColor: selectedCoupon.coupon_type === 'closed' ? '#fef3c7' : '#dcfce7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: selectedCoupon.coupon_type === 'closed' ? '#b45309' : '#15803d' }}>
-                        {selectedCoupon.coupon_type === 'closed' ? (t('settings.coupon-closed') || 'Closed') : (t('settings.coupon-open') || 'Open')}
-                      </Text>
-                    </View>
-                    <Text style={{ fontSize: 11, color: '#6b7280' }}>
-                      {selectedCoupon.coupon_type === 'closed'
-                        ? (t('settings.coupon-closed-desc') || 'Assigned customers only')
-                        : (t('settings.coupon-open-desc') || 'Anyone with the code')}
-                    </Text>
-                  </View>
-                </View>
                 {selectedCoupon.description ? (
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>{t('settings.description')}</Text>
@@ -3994,12 +2914,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     onPress={() => { setShowCouponDetailModal(false); setSelectedCoupon(null); }}
                   >
                     <Text style={styles.btnText}>{t('settings.close')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.btn, styles.btnPrimary]}
-                    onPress={() => openEditCoupon(selectedCoupon)}
-                  >
-                    <Text style={styles.btnText}>{t('common.edit') || 'Edit'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.btn, { backgroundColor: '#fee2e2' }]}
@@ -4019,49 +2933,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </View>
               </View>
             )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Assign Coupon to Customer Modal */}
-      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAssignCouponModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('settings.assign-coupon') || 'Assign Coupon'}</Text>
-              <TouchableOpacity onPress={() => setShowAssignCouponModal(false)}>
-                <Text style={styles.closeButton}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {coupons.filter(c => c.coupon_type === 'closed').length === 0 ? (
-                <Text style={[styles.emptyText, { padding: 16 }]}>
-                  {t('settings.no-closed-coupons') || 'No closed coupons available. Create a closed coupon first.'}
-                </Text>
-              ) : (
-                coupons.filter(c => c.coupon_type === 'closed').map(coupon => (
-                  <TouchableOpacity
-                    key={coupon.id}
-                    style={[styles.couponCard]}
-                    onPress={() => {
-                      if (assignCouponCustomerId) {
-                        assignCouponToCustomer(assignCouponCustomerId, coupon.id);
-                        setShowAssignCouponModal(false);
-                      }
-                    }}
-                  >
-                    <Text style={styles.couponCode}>{coupon.code}</Text>
-                    <Text style={styles.couponValue}>
-                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% off` : `$${coupon.discount_value} off`}
-                    </Text>
-                    {coupon.description ? <Text style={styles.couponDesc}>{coupon.description}</Text> : null}
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
-            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { marginTop: 12 }]} onPress={() => setShowAssignCouponModal(false)}>
-              <Text style={styles.btnText}>{t('common.cancel')}</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -5015,213 +3886,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 16,
   },
-  crmSortRow: {
-    marginTop: 12,
-    marginBottom: 12,
-  },
-  crmSortChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  crmSortChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  crmSortChipActive: {
-    backgroundColor: '#4f46e5',
-    borderColor: '#4f46e5',
-  },
-  crmSortChipText: {
-    fontSize: 12,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  crmSortChipTextActive: {
-    color: '#fff',
-  },
-  crmListWrap: {
-    marginTop: 4,
-  },
-  crmCustomerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  crmCustomerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#4f46e5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  crmCustomerAvatarText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  crmCustomerMeta: {
-    flex: 1,
-  },
-  crmCustomerName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  crmCustomerSubline: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  crmCustomerSpendBlock: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  crmCustomerSpend: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  crmLoadingState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    gap: 8,
-  },
-  crmLoadMoreBtn: {
-    marginTop: 12,
-  },
-  crmLoadMoreText: {
-    color: '#374151',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  crmBackToListBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  crmBackToListText: {
-    color: '#4f46e5',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  crmProfileHero: {
-    backgroundColor: '#4338ca',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  crmProfileHeroAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  crmProfileHeroAvatarText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  crmProfileName: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  crmProfileContact: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 13,
-    marginTop: 3,
-  },
-  crmStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  crmStatCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  crmStatValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  crmStatLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    color: '#6b7280',
-    textTransform: 'uppercase',
-  },
-  crmHistoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-    gap: 10,
-  },
-  crmHistoryTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  crmHistoryMeta: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 3,
-  },
-  crmOrderAmount: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  crmStatusBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  crmStatusBadgeUpcoming: {
-    backgroundColor: '#dcfce7',
-  },
-  crmStatusBadgePast: {
-    backgroundColor: '#e5e7eb',
-  },
-  crmStatusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  crmStatusBadgeTextUpcoming: {
-    color: '#166534',
-  },
-  crmStatusBadgeTextPast: {
-    color: '#4b5563',
-  },
   terminalCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -5430,11 +4094,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#6b7280',
     fontWeight: '300',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
   },
   modalFooter: {
     flexDirection: 'row',

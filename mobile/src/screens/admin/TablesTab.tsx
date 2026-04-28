@@ -1459,14 +1459,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   };
 
   const printBillWithPrinterSelection = () => {
-    if (!selectedSession || !sessionBill) {
-      Alert.alert('Error', 'No bill data available');
-      return;
-    }
-    console.log('[PrintBill] Opening printer selection for bill');
-    setCurrentPrintJob('bill');
-    setShowPrinterModal(true);
     setShowSessionGearMenu(false);
+    printBill(false);
   };
 
 
