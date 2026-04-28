@@ -1557,6 +1557,8 @@ export const MenuTab = forwardRef(
                 </TouchableOpacity>
               ))}
             </ScrollView>
+          )}
+        </View>
 
         {/* Items area: edit mode = draggable grid with handles; normal = grid */}
         <View style={styles.itemsGridWrapper}>
