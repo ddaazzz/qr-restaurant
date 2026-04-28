@@ -1455,9 +1455,10 @@ router.get("/restaurants/:restaurantId/reports/payment-by-type", async (req, res
     const result = await pool.query(
       `SELECT
         COALESCE(o.payment_method, 'cash') AS payment_method,
-        COUNT(o.id) AS order_count,
-        SUM(o.total_cents) AS total_revenue_cents
+        COUNT(DISTINCT o.id) AS order_count,
+        COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS total_revenue_cents
        FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
        WHERE o.restaurant_id = $1
          AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
        GROUP BY COALESCE(o.payment_method, 'cash')
@@ -1520,8 +1521,8 @@ router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req,
 
     const result = await pool.query(
       `SELECT
-        from_status,
-        to_status,
+        h1.from_status,
+        h1.to_status,
         COUNT(*) AS transition_count,
         ROUND(AVG(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS avg_minutes,
         ROUND(MIN(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS min_minutes,
@@ -1538,8 +1539,8 @@ router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req,
        WHERE h1.restaurant_id = $1
          AND h1.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
          AND EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) > 0
-       GROUP BY from_status, to_status
-       ORDER BY from_status, to_status`,
+       GROUP BY h1.from_status, h1.to_status
+       ORDER BY h1.from_status, h1.to_status`,
       [restaurantId, daysBack]
     );
 
