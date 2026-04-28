@@ -2199,5 +2199,18 @@
   "admin.crm-sort-newest": "Newest",
   "admin.service-requests": "Service Requests",
   "admin.service-requests-desc": "Configure request types and labels",
-  "admin.service-requests-help": "Configure the types of requests customers can make from the table."
+  "admin.service-requests-help": "Configure the types of requests customers can make from the table.",
+  "settings.feature-flags": "Feature Flags",
+  "settings.feature-flags-modules": "Modules",
+  "settings.feature-flags-hint": "Disabled modules are hidden from all users of this restaurant.",
+  "settings.flag-bookings": "Bookings",
+  "settings.flag-bookings-desc": "Table reservations module",
+  "settings.flag-waitlist": "Waitlist",
+  "settings.flag-waitlist-desc": "Queue / walk-in waitlist",
+  "settings.flag-crm": "CRM",
+  "settings.flag-crm-desc": "Customer relationship management",
+  "settings.flag-coupons": "Coupons",
+  "settings.flag-coupons-desc": "Discount coupons and promotions",
+  "settings.flag-service-requests": "Service Requests",
+  "settings.flag-service-requests-desc": "Customer call-waiter / bill requests"
 }

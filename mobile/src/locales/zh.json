@@ -2339,5 +2339,18 @@
   "admin.crm-sort-newest": "最新",
   "admin.service-requests": "服務請求",
   "admin.service-requests-desc": "設定請求類型與標籤",
-  "admin.service-requests-help": "設定顧客可在餐桌提出的請求類型。"
+  "admin.service-requests-help": "設定顧客可在餐桌提出的請求類型。",
+  "settings.feature-flags": "功能旗標",
+  "settings.feature-flags-modules": "模組",
+  "settings.feature-flags-hint": "停用的模組對此餐廳所有用戶隱藏。",
+  "settings.flag-bookings": "預訂",
+  "settings.flag-bookings-desc": "桌位預訂模組",
+  "settings.flag-waitlist": "候位名單",
+  "settings.flag-waitlist-desc": "排隊 / 候位名單",
+  "settings.flag-crm": "CRM",
+  "settings.flag-crm-desc": "客戶關係管理",
+  "settings.flag-coupons": "優惠券",
+  "settings.flag-coupons-desc": "折扣優惠券與促銷",
+  "settings.flag-service-requests": "服務請求",
+  "settings.flag-service-requests-desc": "顧客呼叫服務員 / 結帳請求"
 }
