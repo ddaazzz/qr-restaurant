@@ -53,6 +53,10 @@ interface Session {
   order_id?: number;
   restaurant_order_number?: number;
   restaurant_session_number?: number;
+  payment_received?: boolean;
+  payment_received_at?: string;
+  payment_method_online?: string;
+  merchant_reference?: string;
 }
 
 interface Booking {
@@ -119,26 +123,12 @@ interface Coupon {
   is_active: boolean;
 }
 
-interface ServiceRequest {
-  id: number;
-  restaurant_id: number;
-  table_session_id: number;
-  table_unit_id?: number;
-  request_type: string;
-  label: string;
-  status: string;
-  created_at: string;
-  table_name: string;
-  session_id: number;
-}
-
 interface Order {
   order_id?: number;
   id?: number;
   restaurant_order_number?: number;
   order_status?: string;
   order_payment_method?: string;
-  order_reference?: string;
   items: Array<{
     name?: string;
     item_name?: string;
@@ -182,7 +172,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [restaurantName, setRestaurantName] = useState<string>('');
-  const [restaurantLanguage, setRestaurantLanguage] = useState<string>('en');
   const [qrMode, setQrMode] = useState<string>('regenerate');
 
   // View state
@@ -191,7 +180,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [sessionOrders, setSessionOrders] = useState<Order[]>([]);
   const [sessionBill, setSessionBill] = useState<Bill | null>(null);
-  const [pendingServiceRequests, setPendingServiceRequests] = useState<ServiceRequest[]>([]);
 
   // Modal states
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -411,16 +399,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       } catch (e) {
         console.warn('Could not load service charge settings');
       }
-
-      // Load pending service requests (gracefully — feature may not be enabled)
-      try {
-        const srRes = await apiClient.get(`/api/restaurants/${restaurantId}/service-requests?status=pending`);
-        if (srRes.data && Array.isArray(srRes.data)) {
-          setPendingServiceRequests(srRes.data);
-        }
-      } catch (e) {
-        // Feature not enabled or error — silently ignore
-      }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
       setError(err.message || 'Failed to load tables');
@@ -488,9 +466,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         const res = await apiClient.get(`/api/restaurants/${restaurantId}`);
         if (res.data?.name) {
           setRestaurantName(res.data.name);
-        }
-        if (res.data?.language_preference) {
-          setRestaurantLanguage(res.data.language_preference);
         }
       } catch (err: any) {
         console.warn('[TablesTab] Could not load restaurant name:', err.message);
@@ -571,17 +546,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     }
   };
 
-  const getOrderPaidBadge = (order: Order): { label: string; bg: string; fg: string } | null => {
-    const isPaid = order.order_status === 'completed' || order.order_status === 'paid';
-    if (!isPaid) return null;
-
-    if (order.order_payment_method === 'payment-asia') {
-      return { label: 'PA Paid', bg: '#f59e0b', fg: '#ffffff' };
-    }
-
-    return { label: 'Paid', bg: '#10b981', fg: '#ffffff' };
-  };
-
   const getReservationTimeInfo = (table: Table) => {
     if (!table.reserved || !table.booking_time) return null;
     const now = new Date();
@@ -644,19 +608,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       );
       console.log('[LoadBill] Bill data:', billRes.data);
       setSessionBill(billRes.data);
-
-      try {
-        const splitRes = await apiClient.get(
-          `/api/sessions/${sessionId}/split-bill?restaurantId=${restaurantId}`
-        );
-        if (splitRes.data?.split_count) {
-          setSessionSplitPayments(splitRes.data);
-        } else {
-          setSessionSplitPayments(null);
-        }
-      } catch {
-        setSessionSplitPayments(null);
-      }
     } catch (err) {
       console.error('Error loading session orders:', err);
       Alert.alert('Error Loading Orders', 'Failed to load order details');
@@ -675,23 +626,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         restaurantId,
         call_staff_requested: false,
       });
-      await loadTableData();
+      await loadTables();
       if (selectedSession?.id === sessionId) {
         setSelectedSession(prev => prev ? { ...prev, call_staff_requested: false } : prev);
       }
     } catch (err) {
       console.error('Error clearing call staff:', err);
-    }
-  };
-
-  const acknowledgeServiceRequest = async (requestId: number) => {
-    try {
-      await apiClient.patch(`/api/restaurants/${restaurantId}/service-requests/${requestId}`, {
-        status: 'acknowledged',
-      });
-      setPendingServiceRequests(prev => prev.filter(r => r.id !== requestId));
-    } catch (err) {
-      console.error('Error acknowledging service request:', err);
     }
   };
 
@@ -919,7 +859,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               startTime: startTimeStr,
               qrCode: `${getQrBaseUrl()}/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
-              language: restaurantLanguage,
             };
 
             await thermalPrinterService.sendToBluetooth(
@@ -1097,85 +1036,20 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
     const discountCents = getDiscountCents();
     const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
-    const serviceChargeCents = sessionBill?.service_charge_cents || 0;
-
-    // Determine effective split count
-    const effectiveSplit = activeSplitContext
-      ? activeSplitContext.splitCount
-      : closeBillSplitCount;
-
-    const portionCents = activeSplitContext
-      ? activeSplitContext.portionCents
-      : (effectiveSplit >= 2 ? Math.round((grandTotal - discountCents) / effectiveSplit) : (grandTotal - discountCents));
-
-    const splitIndex = activeSplitContext ? activeSplitContext.splitIndex : 1;
+    const finalAmount = grandTotal - discountCents;
 
     try {
-      if (effectiveSplit >= 2) {
-        // Split bill path
-        if (splitIndex === 1) {
-          // First portion: init split
-          await apiClient.post(`/api/sessions/${selectedSession.id}/split-bill/init`, {
-            restaurantId: parseInt(restaurantId),
-            split_count: effectiveSplit,
-          });
-        }
-        // Record this portion's payment
-        const payRes = await apiClient.post(`/api/sessions/${selectedSession.id}/split-bill/pay`, {
+      await apiClient.post(
+        `/api/sessions/${selectedSession.id}/close-bill`,
+        {
           restaurantId: parseInt(restaurantId),
-          split_index: splitIndex,
-          split_count: effectiveSplit,
-          amount_cents: portionCents,
           payment_method: paymentMethod,
-          discount_applied: splitIndex === 1 ? discountCents : 0,
-          service_charge: splitIndex === 1 ? serviceChargeCents : 0,
+          amount_paid: finalAmount,
+          discount_applied: discountCents,
+          service_charge: sessionBill?.service_charge_cents || 0,
           notes: closeReason,
-        });
-
-        const bills_remaining = payRes.data?.bills_remaining ?? (effectiveSplit - splitIndex);
-
-        if (bills_remaining > 0) {
-          // Prepare for next portion
-          const nextIndex = splitIndex + 1;
-          const paidSoFar = portionCents * splitIndex;
-          const remaining = (grandTotal - discountCents) - paidSoFar;
-          const nextPortion = Math.round(remaining / (effectiveSplit - splitIndex));
-
-          // Reset and reopen modal for next portion
-          setActiveSplitContext({
-            splitCount: effectiveSplit,
-            splitIndex: nextIndex,
-            portionCents: nextPortion,
-            serviceChargeCents: 0,
-          });
-          setPaymentMethod('cash');
-          setCloseReason('');
-          setCloseBillSplitCount(effectiveSplit);
-          // Keep modal open for next portion
-          Alert.alert(
-            `Bill ${splitIndex} of ${effectiveSplit} Paid`,
-            `Now collecting payment ${nextIndex} of ${effectiveSplit}: $${(nextPortion / 100).toFixed(2)}`,
-            [{ text: 'OK' }]
-          );
-          return;
         }
-
-        // All portions paid — session is now closed
-        setActiveSplitContext(null);
-      } else {
-        // Normal (no split) path
-        await apiClient.post(
-          `/api/sessions/${selectedSession.id}/close-bill`,
-          {
-            restaurantId: parseInt(restaurantId),
-            payment_method: paymentMethod,
-            amount_paid: grandTotal - discountCents,
-            discount_applied: discountCents,
-            service_charge: serviceChargeCents,
-            notes: closeReason,
-          }
-        );
-      }
+      );
 
       // Check if bill auto-print is enabled
       try {
@@ -1185,6 +1059,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
         if (printerRes.data?.bill_auto_print === true) {
           console.log('[CloseBill] Bill auto-print enabled, printing bill...');
+          // Auto-print the bill with the handleBillPrint logic
           await printBill(true);
         }
       } catch (autoError) {
@@ -1196,10 +1071,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       setDiscountAmount('0');
       setCloseReason('');
       setSelectedCouponId(null);
-      setCoupons([]);
-      setCloseBillSplitCount(0);
-      setActiveSplitContext(null);
-      await loadTableData();
+      setCoupons([]);      await loadTableData();
       setCurrentView('grid');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
@@ -1548,7 +1420,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               startTime: startTimeStr,
               qrCode: `${getQrBaseUrl()}/${qrToken}`,
               printerPaperWidth: printerSettings?.printer_paper_width || 80,
-              language: restaurantLanguage,
             };
             
             await thermalPrinterService.sendToBluetooth(
@@ -1588,7 +1459,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   };
 
   const printBillWithPrinterSelection = () => {
-    printBill(false);
+    if (!selectedSession || !sessionBill) {
+      Alert.alert('Error', 'No bill data available');
+      return;
+    }
+    console.log('[PrintBill] Opening printer selection for bill');
+    setCurrentPrintJob('bill');
+    setShowPrinterModal(true);
     setShowSessionGearMenu(false);
   };
 
@@ -1700,21 +1577,44 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
   const printBill = async (autoPrint: boolean = false) => {
     console.log('[PrintBill] Starting printBill, autoPrint=', autoPrint);
-
+    console.log('[PrintBill] selectedSession:', selectedSession);
+    console.log('[PrintBill] sessionBill:', sessionBill);
+    
     if (!selectedSession || !sessionBill) {
-      if (!autoPrint) Alert.alert('Error', 'No bill data available. Please open a table order first.');
+      console.log('[PrintBill] Missing session or bill data, returning');
+      if (!autoPrint) {
+        Alert.alert('Error', 'No bill data available. Please open a table order first.');
+      }
       return;
     }
 
     try {
-      // Use printerSettingsService which correctly converts the array API response
-      const settings = await printerSettingsService.getPrinterSettings(restaurantId, false);
-      const billPrinterType = settings.bill_printer_type;
-      console.log('[PrintBill] Bill printer type:', billPrinterType);
+      console.log('[PrintBill] Fetching printer settings...');
+      // Check if printer is configured
+      const printerRes = await apiClient.get(
+        `/api/restaurants/${restaurantId}/printer-settings`
+      );
+      console.log('[PrintBill] Printer settings response:', printerRes.data);
 
-      if (!billPrinterType || billPrinterType === 'none') {
+      if (!printerRes.data || !printerRes.data.printer_type) {
         if (!autoPrint) {
-          Alert.alert('No Bill Printer', 'Please configure a bill printer in Settings → Printer Settings.');
+          Alert.alert(
+            'No Printer Configured',
+            'Please configure a printer in Settings to enable printing. Would you like to set up a printer now?',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+              },
+              {
+                text: 'Configure Printer',
+                onPress: () => {
+                  console.log('[PrintBill] User wants to configure printer');
+                },
+                style: 'default',
+              },
+            ]
+          );
         }
         return;
       }
@@ -1751,52 +1651,146 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         priority: 5,
       };
 
-      console.log('[PrintBill] Sending print request to backend...');
-      const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-bill`, billPayload);
+      console.log('[PrintBill] Sending print request with payload:', billPayload);
+
+      // Send to backend for printing
+      const printRes = await apiClient.post(
+        `/api/restaurants/${restaurantId}/print-bill`,
+        billPayload
+      );
+
       console.log('[PrintBill] Print response:', printRes.data);
 
-      if (printRes.data?.bluetoothPayload) {
-        // Bluetooth: backend returns ESC/POS payload, client sends to device
-        const { bluetoothDeviceId, bluetoothDeviceName } = printRes.data.bluetoothPayload.printerConfig;
-        console.log('[PrintBill] Sending to Bluetooth device:', bluetoothDeviceName, bluetoothDeviceId);
+      if (printRes.data && printRes.data.success) {
+        // Handle browser printing - open native print dialog
+        if (printRes.data.html && !printRes.data.bluetoothDevice) {
+          console.log('[PrintBill] Opening native print dialog for browser printing');
+          try {
+            await Print.printAsync({
+              html: printRes.data.html,
+            });
+            if (!autoPrint) {
+              Alert.alert('Print Dialog Opened', `Bill for ${selectedTable?.name} ready to print`);
+            }
+          } catch (printErr: any) {
+            console.error('[PrintBill] Print dialog error:', printErr);
+            if (!autoPrint) {
+              Alert.alert('Print Error', 'Failed to open print dialog: ' + printErr.message);
+            }
+          }
+        } 
+        // Handle Bluetooth printing
+        else if (printRes.data.bluetoothDevice) {
+          console.log('[PrintBill] Initiating Bluetooth printing to:', printRes.data.bluetoothDevice);
+          console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
+          
+          if (!autoPrint) {
+            Alert.alert('Printing...', 'Sending receipt to Bluetooth printer...');
+          }
+          
+          try {
+            const device = printRes.data.bluetoothDevice;
+            
+            // Import BleManager for Bluetooth printing
+            let BleManager: any = null;
+            try {
+              const ble = require('react-native-ble-plx');
+              BleManager = ble.BleManager;
+            } catch (e) {
+              throw new Error('Bluetooth not available on this device');
+            }
 
-        const { BleManager } = require('react-native-ble-plx');
-        const manager = new BleManager();
+            if (!BleManager) {
+              throw new Error('BleManager not available');
+            }
 
-        const receiptData = {
-          orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
-          tableNumber: selectedTable?.name || 'Receipt',
-          items: sessionBill.items.map((item: any) => ({
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price_cents,
-          })),
-          subtotal: sessionBill.subtotal_cents,
-          serviceCharge: sessionBill.service_charge_cents || 0,
-          total: sessionBill.total_cents,
-          timestamp: new Date().toLocaleTimeString(),
-          restaurantName: restaurantName || 'Restaurant',
-          language: restaurantLanguage,
-        };
+            const manager = new BleManager();
+            
+            // Wait for BLE to be ready
+            await new Promise<void>((resolve) => {
+              let attempts = 0;
+              const checkState = async () => {
+                try {
+                  const state = await manager.state();
+                  if (state === 'PoweredOn') {
+                    resolve();
+                  } else if (++attempts < 10) {
+                    setTimeout(checkState, 200);
+                  } else {
+                    resolve();
+                  }
+                } catch (e) {
+                  if (++attempts < 10) setTimeout(checkState, 200);
+                  else resolve();
+                }
+              };
+              checkState();
+            });
 
-        await thermalPrinterService.sendToBluetooth(manager, bluetoothDeviceId, receiptData, 30000);
-        console.log('[PrintBill] Bluetooth printing completed successfully');
-        if (!autoPrint) Alert.alert('Printed', `Bill sent to Bluetooth printer`);
-      } else if (printRes.data?.html) {
-        // Browser / PDF print dialog
-        await Print.printAsync({ html: printRes.data.html });
-      } else if (printRes.data?.success) {
-        // Network/thermal printer queued
-        if (!autoPrint) Alert.alert('Print Sent', `Bill for ${selectedTable?.name} sent to printer`);
+            console.log('[PrintBill] BLE ready, preparing thermal print data');
+            
+            // Prepare receipt data for thermal printer
+            const receiptData = {
+              orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
+              tableNumber: selectedTable?.name || 'Receipt',
+              items: sessionBill.items.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price_cents,
+              })),
+              subtotal: sessionBill.subtotal_cents,
+              serviceCharge: sessionBill.service_charge_cents || 0,
+              total: sessionBill.total_cents,
+              timestamp: new Date().toLocaleTimeString(),
+              restaurantName: 'Restaurant',
+            };
+
+            console.log('[PrintBill] Sending thermal print data to:', device.id);
+            
+            // Send to thermal printer using ESC/POS commands
+            // Use 30 second timeout for authentication and printing
+            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData, 30000);
+            
+            console.log('[PrintBill] Bluetooth printing completed successfully');
+            if (!autoPrint) {
+              Alert.alert('Printed', `Bill sent to printer "${device.name}"`);
+            }
+          } catch (bluetoothErr: any) {
+            console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
+            if (!autoPrint) {
+              Alert.alert(
+                'Print Issue',
+                `Could not connect to printer. Make sure it's powered on and nearby.\n\nError: ${bluetoothErr.message}`
+              );
+            }
+          }
+        } 
+        else {
+          // Printer type is thermal/network - sent to printer queue
+          if (!autoPrint) {
+            Alert.alert(
+              'Print Sent',
+              `Bill for ${selectedTable?.name} sent to printer successfully`
+            );
+          }
+        }
+        setShowSessionGearMenu(false);
       } else {
-        if (!autoPrint) Alert.alert('Printer Error', printRes.data?.error || 'Failed to send to printer');
+        Alert.alert(
+          'Printer Error',
+          printRes.data?.error || 'Failed to send to printer'
+        );
       }
-
-      setShowSessionGearMenu(false);
     } catch (err: any) {
-      console.error('[PrintBill] Error:', err.message || err);
+      console.log('[PrintBill] Error caught:', err);
+      console.log('[PrintBill] Error message:', err.message);
+      console.log('[PrintBill] Error response:', err.response?.data);
+      
       if (!autoPrint) {
-        Alert.alert('Error', err.response?.data?.error || err.message || 'Failed to print bill');
+        Alert.alert(
+          'Error',
+          err.response?.data?.error || err.message || 'Failed to print bill'
+        );
       }
     }
   };
@@ -1880,18 +1874,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splitCount, setSplitCount] = useState(2);
   const [splitBillData, setSplitBillData] = useState<any>(null);
-  // Active split context when chaining split bill payments
-  const [activeSplitContext, setActiveSplitContext] = useState<{
-    splitCount: number;
-    splitIndex: number;
-    portionCents: number;
-    serviceChargeCents: number;
-  } | null>(null);
-  // Split count selection within close bill modal (0 = no split)
-  const [closeBillSplitCount, setCloseBillSplitCount] = useState(0);
-  const [closeBillCustomSplit, setCloseBillCustomSplit] = useState('');
-  // Split payments history for the session
-  const [sessionSplitPayments, setSessionSplitPayments] = useState<any>(null);
 
   const splitBill = async () => {
     if (!selectedSession) return;
@@ -1920,6 +1902,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
   const isTablet = (Platform as any).isPad;
   const totals = calculateTotal();
+  const paidViaPaymentAsiaOnline =
+    (selectedSession?.payment_received === true) ||
+    sessionOrders.some(
+      (o) => o.order_payment_method === 'payment-asia' && o.order_status === 'completed'
+    );
   const screenWidth = Dimensions.get('window').width;
   const sidebarWidth = 130;
   const contentWidth = isTablet ? screenWidth - sidebarWidth - 24 : screenWidth - 24; // iPhone sidebar is overlay
@@ -2031,18 +2018,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
             </View>
           )}
-          {pendingServiceRequests
-            .filter(r => r.table_session_id === selectedSession.id)
-            .map(sr => (
-              <TouchableOpacity
-                key={sr.id}
-                style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-                onPress={() => acknowledgeServiceRequest(sr.id)}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 {sr.label}</Text>
-                <Text style={{ color: '#e9d5ff', fontSize: 12 }}>Tap to acknowledge</Text>
-              </TouchableOpacity>
-            ))}
+          {selectedSession.payment_received && (
+            <View style={styles.paymentReceivedBanner}>
+              <Text style={styles.paymentReceivedTitle}>✅ Payment Received</Text>
+              <Text style={styles.paymentReceivedSub}>Via: {selectedSession.payment_method_online?.toUpperCase() || 'N/A'}</Text>
+              <Text style={styles.paymentReceivedSub}>Ref: {selectedSession.merchant_reference || '—'}</Text>
+            </View>
+          )}
           <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
           {sessionOrders.length === 0 ? (
             <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
@@ -2051,17 +2033,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               console.log(`[OrderRender] Order ${idx}:`, order);
               return (
                 <View key={idx} style={styles.orderCard}>
-                  <View style={styles.orderHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                     <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                    {(() => {
-                      const badge = getOrderPaidBadge(order);
-                      if (!badge) return null;
-                      return (
-                        <View style={[styles.orderPaidBadge, { backgroundColor: badge.bg }]}> 
-                          <Text style={[styles.orderPaidBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+                    {order.order_status === 'completed' ? (
+                      order.order_payment_method === 'payment-asia' ? (
+                        <View style={{ marginLeft: 8, backgroundColor: '#f59e0b', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>PA Paid</Text>
                         </View>
-                      );
-                    })()}
+                      ) : (
+                        <View style={{ marginLeft: 8, backgroundColor: '#10b981', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Paid</Text>
+                        </View>
+                      )
+                    ) : (
+                      <View style={{ marginLeft: 8, backgroundColor: '#6b7280', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Not Paid</Text>
+                      </View>
+                    )}
                   </View>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, itemIdx) => (
@@ -2118,41 +2106,35 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
             </View>
           </View>
-
-          {/* Split Bill Payments */}
-          {sessionSplitPayments && sessionSplitPayments.split_count >= 2 && (
-            <View style={{ backgroundColor: '#f0f9ff', borderRadius: 8, padding: 12, marginTop: 8, borderWidth: 1, borderColor: '#bae6fd' }}>
-              <Text style={{ fontWeight: '700', fontSize: 14, color: '#0369a1', marginBottom: 8 }}>✂ Split Bill Payments ({sessionSplitPayments.split_bills_paid}/{sessionSplitPayments.split_count})</Text>
-              {(sessionSplitPayments.payments || []).map((p: any, idx: number) => (
-                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: idx < sessionSplitPayments.payments.length - 1 ? 1 : 0, borderBottomColor: '#e0f2fe' }}>
-                  <Text style={{ color: '#0c4a6e', fontSize: 13 }}>Payment {p.split_index} of {p.split_count} • {p.payment_method}</Text>
-                  <Text style={{ color: '#059669', fontWeight: '600', fontSize: 13 }}>${((p.amount_cents || 0) / 100).toFixed(2)}</Text>
-                </View>
-              ))}
-              {sessionSplitPayments.split_bills_paid < sessionSplitPayments.split_count && (
-                <Text style={{ color: '#f59e0b', fontSize: 12, fontStyle: 'italic', marginTop: 4 }}>
-                  {sessionSplitPayments.split_count - sessionSplitPayments.split_bills_paid} payment(s) remaining
-                </Text>
-              )}
-            </View>
-          )}
         </ScrollView>
 
         <View style={styles.actions}>
           <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary]}
-            onPress={async () => {
-              setShowCloseBillModal(true);
-              try {
-                const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
-                setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
-              } catch (e) {
-                setCoupons([]);
-              }
-            }}
+            style={[styles.btn, styles.btnOutline]}
+            onPress={printBillWithPrinterSelection}
           >
-            <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+            <Text style={[styles.btnText, { color: '#1f2937' }]}>Print Bill</Text>
           </TouchableOpacity>
+          {paidViaPaymentAsiaOnline ? (
+            <View style={[styles.btn, styles.btnDisabled]}>
+              <Text style={[styles.btnText, { color: '#6b7280' }]}>Paid Online</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary]}
+              onPress={async () => {
+                setShowCloseBillModal(true);
+                try {
+                  const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
+                  setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
+                } catch (e) {
+                  setCoupons([]);
+                }
+              }}
+            >
+              <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
             onPress={() => endSession(selectedSession.id)}
@@ -2165,11 +2147,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                {activeSplitContext
-                  ? `Payment ${activeSplitContext.splitIndex} of ${activeSplitContext.splitCount}`
-                  : t('admin.close-bill')}
-              </Text>
+              <Text style={styles.modalTitle}>{t('admin.close-bill')}</Text>
 
               {/* Bill Summary */}
               {sessionBill && (
@@ -2191,13 +2169,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                     </View>
                   )}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16 }}>
-                      {activeSplitContext ? `This Portion` : 'Total'}
-                    </Text>
+                    <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
                     <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
-                      {activeSplitContext
-                        ? `$${(activeSplitContext.portionCents / 100).toFixed(2)}`
-                        : `$${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}`}
+                      ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -2270,69 +2244,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 </View>
               )}
 
-              {/* Split Bill Section (hidden when in chained split) */}
-              {!activeSplitContext && (
-                <>
-                  <Text style={styles.label}>✂ Split Bill</Text>
-                  <View style={styles.selectGroup}>
-                    {[
-                      { label: 'None', value: 0 },
-                      { label: '÷2', value: 2 },
-                      { label: '÷3', value: 3 },
-                      { label: `Per Head (${selectedSession?.pax || '?'})`, value: selectedSession?.pax || 0 },
-                      { label: 'Custom…', value: -1 },
-                    ].map((opt) => (
-                      <TouchableOpacity
-                        key={opt.value}
-                        style={[
-                          styles.selectOption,
-                          closeBillSplitCount === opt.value && styles.selectOptionActive,
-                          opt.value === -1 && closeBillSplitCount > 3 && (closeBillSplitCount !== (selectedSession?.pax || 0)) && styles.selectOptionActive,
-                        ]}
-                        onPress={() => {
-                          if (opt.value === -1) {
-                            setCloseBillCustomSplit('');
-                          } else {
-                            setCloseBillSplitCount(opt.value);
-                            setCloseBillCustomSplit('');
-                          }
-                        }}
-                      >
-                        <Text style={[
-                          styles.selectOptionText,
-                          (closeBillSplitCount === opt.value || (opt.value === -1 && closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && styles.selectOptionTextActive,
-                        ]}>
-                          {opt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {/* Custom split input */}
-                  {(closeBillCustomSplit !== '' || (closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && (
-                    <TextInput
-                      style={[styles.input, { marginTop: 6 }]}
-                      keyboardType="number-pad"
-                      inputAccessoryViewID="numpadDone"
-                      value={closeBillCustomSplit}
-                      onChangeText={(v) => {
-                        setCloseBillCustomSplit(v);
-                        const n = parseInt(v);
-                        if (n >= 2) setCloseBillSplitCount(n);
-                      }}
-                      placeholder="Number of splits"
-                    />
-                  )}
-                  {/* Split preview */}
-                  {closeBillSplitCount >= 2 && sessionBill && (
-                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#bbf7d0' }}>
-                      <Text style={{ color: '#059669', fontWeight: '700', textAlign: 'center' }}>
-                        Each pays: ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / closeBillSplitCount / 100).toFixed(2)}
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
-
               <Text style={styles.label}>{t('admin.notes')}</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
@@ -2345,12 +2256,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
-                  onPress={() => {
-                    setShowCloseBillModal(false);
-                    setActiveSplitContext(null);
-                    setCloseBillSplitCount(0);
-                    setCloseBillCustomSplit('');
-                  }}
+                  onPress={() => setShowCloseBillModal(false)}
                 >
                   <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
@@ -2903,11 +2809,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                                     <Text style={styles.sessionBadgeBillText}>BILL</Text>
                                   </View>
                                 )}
-                                {pendingServiceRequests.some(r => r.table_session_id === session.id) && (
-                                  <View style={{ backgroundColor: '#7c3aed', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, marginLeft: 4 }}>
-                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>REQ</Text>
-                                  </View>
-                                )}
                               </View>
                             ))}
                           </View>
@@ -3172,35 +3073,36 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
               </View>
             )}
-            {pendingServiceRequests
-              .filter(r => r.table_session_id === selectedSession.id)
-              .map(sr => (
-                <TouchableOpacity
-                  key={sr.id}
-                  style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-                  onPress={() => acknowledgeServiceRequest(sr.id)}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 {sr.label}</Text>
-                  <Text style={{ color: '#e9d5ff', fontSize: 12 }}>Tap to acknowledge</Text>
-                </TouchableOpacity>
-              ))}
+            {selectedSession.payment_received && (
+              <View style={styles.paymentReceivedBanner}>
+                <Text style={styles.paymentReceivedTitle}>✅ Payment Received</Text>
+                <Text style={styles.paymentReceivedSub}>Via: {selectedSession.payment_method_online?.toUpperCase() || 'N/A'}</Text>
+                <Text style={styles.paymentReceivedSub}>Ref: {selectedSession.merchant_reference || '—'}</Text>
+              </View>
+            )}
             <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
             {sessionOrders.length === 0 ? (
               <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
             ) : (
               sessionOrders.map((order, idx) => (
                 <View key={idx} style={styles.orderCard}>
-                  <View style={styles.orderHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                     <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                    {(() => {
-                      const badge = getOrderPaidBadge(order);
-                      if (!badge) return null;
-                      return (
-                        <View style={[styles.orderPaidBadge, { backgroundColor: badge.bg }]}> 
-                          <Text style={[styles.orderPaidBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+                    {order.order_status === 'completed' ? (
+                      order.order_payment_method === 'payment-asia' ? (
+                        <View style={{ marginLeft: 8, backgroundColor: '#f59e0b', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>PA Paid</Text>
                         </View>
-                      );
-                    })()}
+                      ) : (
+                        <View style={{ marginLeft: 8, backgroundColor: '#10b981', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Paid</Text>
+                        </View>
+                      )
+                    ) : (
+                      <View style={{ marginLeft: 8, backgroundColor: '#6b7280', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Not Paid</Text>
+                      </View>
+                    )}
                   </View>
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, itemIdx) => (
@@ -3247,38 +3149,32 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
               </View>
             </View>
-
-            {/* Split Bill Payments */}
-            {sessionSplitPayments && sessionSplitPayments.split_count >= 2 && (
-              <View style={{ backgroundColor: '#f0f9ff', borderRadius: 8, padding: 12, marginTop: 8, borderWidth: 1, borderColor: '#bae6fd' }}>
-                <Text style={{ fontWeight: '700', fontSize: 14, color: '#0369a1', marginBottom: 8 }}>✂ Split Bill Payments ({sessionSplitPayments.split_bills_paid}/{sessionSplitPayments.split_count})</Text>
-                {(sessionSplitPayments.payments || []).map((p: any, idx: number) => (
-                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: idx < sessionSplitPayments.payments.length - 1 ? 1 : 0, borderBottomColor: '#e0f2fe' }}>
-                    <Text style={{ color: '#0c4a6e', fontSize: 13 }}>Payment {p.split_index} of {p.split_count} • {p.payment_method}</Text>
-                    <Text style={{ color: '#059669', fontWeight: '600', fontSize: 13 }}>${((p.amount_cents || 0) / 100).toFixed(2)}</Text>
-                  </View>
-                ))}
-                {sessionSplitPayments.split_bills_paid < sessionSplitPayments.split_count && (
-                  <Text style={{ color: '#f59e0b', fontSize: 12, fontStyle: 'italic', marginTop: 4 }}>
-                    {sessionSplitPayments.split_count - sessionSplitPayments.split_bills_paid} payment(s) remaining
-                  </Text>
-                )}
-              </View>
-            )}
           </ScrollView>
           <View style={styles.actions}>
             <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary]}
-              onPress={async () => {
-                setShowCloseBillModal(true);
-                try {
-                  const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
-                  setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
-                } catch (e) { setCoupons([]); }
-              }}
+              style={[styles.btn, styles.btnOutline]}
+              onPress={printBillWithPrinterSelection}
             >
-              <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+              <Text style={[styles.btnText, { color: '#1f2937' }]}>Print Bill</Text>
             </TouchableOpacity>
+            {paidViaPaymentAsiaOnline ? (
+              <View style={[styles.btn, styles.btnDisabled]}>
+                <Text style={[styles.btnText, { color: '#6b7280' }]}>Paid Online</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={async () => {
+                  setShowCloseBillModal(true);
+                  try {
+                    const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
+                    setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
+                  } catch (e) { setCoupons([]); }
+                }}
+              >
+                <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => endSession(selectedSession.id)}>
               <Text style={styles.btnText}>End Order</Text>
             </TouchableOpacity>
@@ -3286,11 +3182,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>
-                  {activeSplitContext
-                    ? `Payment ${activeSplitContext.splitIndex} of ${activeSplitContext.splitCount}`
-                    : t('admin.close-bill')}
-                </Text>
+                <Text style={styles.modalTitle}>{t('admin.close-bill')}</Text>
                 {sessionBill && (
                   <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -3310,13 +3202,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                       </View>
                     )}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                      <Text style={{ fontWeight: '700', fontSize: 16 }}>
-                        {activeSplitContext ? `This Portion` : 'Total'}
-                      </Text>
+                      <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
                       <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
-                        {activeSplitContext
-                          ? `$${(activeSplitContext.portionCents / 100).toFixed(2)}`
-                          : `$${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}`}
+                        ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -3351,75 +3239,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                     </ScrollView>
                   </View>
                 )}
-                {/* Split Bill Section */}
-                {!activeSplitContext && (
-                  <>
-                    <Text style={styles.label}>✂ Split Bill</Text>
-                    <View style={styles.selectGroup}>
-                      {[
-                        { label: 'None', value: 0 },
-                        { label: '÷2', value: 2 },
-                        { label: '÷3', value: 3 },
-                        { label: `Per Head (${selectedSession?.pax || '?'})`, value: selectedSession?.pax || 0 },
-                        { label: 'Custom…', value: -1 },
-                      ].map((opt) => (
-                        <TouchableOpacity
-                          key={opt.value}
-                          style={[
-                            styles.selectOption,
-                            closeBillSplitCount === opt.value && styles.selectOptionActive,
-                            opt.value === -1 && closeBillSplitCount > 3 && (closeBillSplitCount !== (selectedSession?.pax || 0)) && styles.selectOptionActive,
-                          ]}
-                          onPress={() => {
-                            if (opt.value === -1) {
-                              setCloseBillCustomSplit('');
-                            } else {
-                              setCloseBillSplitCount(opt.value);
-                              setCloseBillCustomSplit('');
-                            }
-                          }}
-                        >
-                          <Text style={[
-                            styles.selectOptionText,
-                            (closeBillSplitCount === opt.value || (opt.value === -1 && closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && styles.selectOptionTextActive,
-                          ]}>
-                            {opt.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    {(closeBillCustomSplit !== '' || (closeBillSplitCount > 3 && closeBillSplitCount !== (selectedSession?.pax || 0))) && (
-                      <TextInput
-                        style={[styles.input, { marginTop: 6 }]}
-                        keyboardType="number-pad"
-                        inputAccessoryViewID="numpadDone"
-                        value={closeBillCustomSplit}
-                        onChangeText={(v) => {
-                          setCloseBillCustomSplit(v);
-                          const n = parseInt(v);
-                          if (n >= 2) setCloseBillSplitCount(n);
-                        }}
-                        placeholder="Number of splits"
-                      />
-                    )}
-                    {closeBillSplitCount >= 2 && sessionBill && (
-                      <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#bbf7d0' }}>
-                        <Text style={{ color: '#059669', fontWeight: '700', textAlign: 'center' }}>
-                          Each pays: ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / closeBillSplitCount / 100).toFixed(2)}
-                        </Text>
-                      </View>
-                    )}
-                  </>
-                )}
                 <Text style={styles.label}>{t('admin.notes')}</Text>
                 <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder="Optional notes" />
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => {
-                    setShowCloseBillModal(false);
-                    setActiveSplitContext(null);
-                    setCloseBillSplitCount(0);
-                    setCloseBillCustomSplit('');
-                  }}>
+                  <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowCloseBillModal(false)}>
                     <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={closeBill}>
@@ -4294,21 +4117,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: '#1f2937',
   },
-  orderHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  orderPaidBadge: {
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  orderPaidBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
   orderItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -4404,9 +4212,36 @@ const styles = StyleSheet.create({
   btnSecondary: {
     backgroundColor: '#e5e7eb',
   },
+  btnOutline: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  btnDisabled: {
+    backgroundColor: '#e5e7eb',
+    opacity: 0.6,
+  },
   btnText: {
     fontWeight: '600',
     fontSize: 13,
+  },
+  paymentReceivedBanner: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#4caf50',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  paymentReceivedTitle: {
+    color: '#2e7d32',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  paymentReceivedSub: {
+    color: '#555',
+    fontSize: 12,
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,
