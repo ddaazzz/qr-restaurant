@@ -65,7 +65,7 @@ router.post(
       }
 
       // Apply defaults for optional customer fields
-      const customer_phone = req.body.customer_phone || '';
+      const customer_phone = req.body.customer_phone || '00000000';  // PA requires non-empty
       const customer_ip = req.body.customer_ip || req.ip || '127.0.0.1';
       const customer_address = req.body.customer_address || 'N/A';
       const customer_state = req.body.customer_state || 'HK';
