@@ -31,7 +31,6 @@ let showItemStatusToDiners = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
-let serviceRequestItems = []; // loaded from API on startOrdering
 
 async function fetchAndApplyPaymentSettings() {
   try {
@@ -62,6 +61,7 @@ function applyThemeColor(hex) {
 
 // cart, variants — unchanged
 let cart = { items: [], total: 0 };
+let menuColumns = 1; // 1 or 2, read from ui_config.menu_columns on scan
 const variantSelections = {};
 
 // Addon state for drawer
@@ -127,11 +127,9 @@ function setLanguageFromMenu(lang) {
   // Re-render cart to update labels
   updateCartBar();
   
-  // Re-render menu with updated language (items + categories + sidebar)
-  if (window.menu) {
-    renderMenu(window.menu);
-    renderCategories(window.menu.categories);
-    updateCartBadges();
+  // Update menu items if they're visible
+  if (document.getElementById('menu') && document.getElementById('menu').innerHTML) {
+    renderMenuItems(window.menu.items);
   }
 }
 
@@ -154,6 +152,9 @@ async function initLanding() {
   // Apply restaurant theme color
   if (session.theme_color) applyThemeColor(session.theme_color);
   
+  // Apply menu column layout from ui_config
+  menuColumns = (session.ui_config?.menu_columns === 2) ? 2 : 1;
+
   // Apply restaurant language preference if available
   if (session.language_preference) {
     localStorage.setItem('restaurantLanguage', session.language_preference);
@@ -299,12 +300,6 @@ async function startOrdering() {
 
   window.menu = await menuRes.json();
 
-  // Load service request items (non-blocking)
-  fetch(`${API_BASE}/restaurants/${restaurantId}/service-request-items`)
-    .then(r => r.ok ? r.json() : [])
-    .then(items => { serviceRequestItems = Array.isArray(items) ? items.filter(i => i.is_active !== false) : []; })
-    .catch(() => { serviceRequestItems = []; });
-
   renderMenu(window.menu);
   renderCategories(window.menu.categories);
 
@@ -326,11 +321,9 @@ function renderCategories(categories) {
   catDiv.innerHTML = "";
 
   categories.forEach(cat => {
-    const lang = localStorage.getItem('language') || 'zh';
-    const catDisplayName = (lang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
     const el = document.createElement("div");
     el.className = "category-item";
-    el.innerHTML = `${catDisplayName}<span class="cat-badge" id="cat-badge-${cat.id}"></span>`;
+    el.innerHTML = `${cat.name}<span class="cat-badge" id="cat-badge-${cat.id}"></span>`;
     el.dataset.categoryId = cat.id;
 
     el.onclick = () => {
@@ -359,18 +352,16 @@ function renderMenu(menu) {
 
   categories.forEach(category => {
     // Category title
-    const lang = localStorage.getItem('language') || 'zh';
-    const catDisplayName = (lang === 'zh' && category.name_zh) ? category.name_zh : category.name;
     const categoryTitle = document.createElement("div");
     categoryTitle.className = "category";
     categoryTitle.id = `category-${category.id}`;
-    categoryTitle.textContent = catDisplayName;
+    categoryTitle.textContent = category.name;
     
     container.appendChild(categoryTitle);
 
     // Grid for items
     const grid = document.createElement("div");
-    grid.className = "menu-grid";
+    grid.className = menuColumns === 2 ? "menu-grid two-columns" : "menu-grid single-column";
 
     const categoryItems = items.filter(
       item => item.category_id === category.id && (item.available !== false)
@@ -389,20 +380,18 @@ function renderMenu(menu) {
 function renderMenuItem(item) {
   const card = document.createElement("div");
   card.className = "menu-item";
-  const lang = localStorage.getItem('language') || 'zh';
-  const displayName = (lang === 'zh' && item.name_zh) ? item.name_zh : item.name;
 
  card.innerHTML = `
   <span class="cart-badge" id="cart-badge-${item.id}"></span>
   <img 
     src="${item.image_url || '/uploads/website/placeholder.png'}" 
     data-item-id="${item.id}"
-    data-item-name="${displayName}"
+    data-item-name="${item.name}"
     onerror="this.src='/uploads/website/placeholder.png';"
-    alt="${displayName}"
+    alt="${item.name}"
   />
 
-  <div class="menu-item-name">${displayName}</div>
+  <div class="menu-item-name">${item.name}</div>
 
   <div class="menu-item-footer">
     <span class="menu-item-price">
@@ -426,20 +415,18 @@ function renderMenuItem(item) {
 function renderMenuItemWithVariants(item, addons){
     const card = document.createElement("div");
     card.className = "drawer-item";
-    const lang = localStorage.getItem('language') || 'zh';
-    const drawerDisplayName = (lang === 'zh' && item.name_zh) ? item.name_zh : item.name;
 
     card.innerHTML = `
     <img 
       src="${item.image_url || '/uploads/website/placeholder.png'}"
       data-item-id="${item.id}"
-      data-item-name="${drawerDisplayName}"
+      data-item-name="${item.name}"
       onerror="this.src='/uploads/website/placeholder.png';"
-      alt="${drawerDisplayName}"
+      alt="${item.name}"
     />
 
     <div class="menu-item-content">
-      <div class="menu-item-name">${drawerDisplayName}</div>
+      <div class="menu-item-name">${item.name}</div>
       <div class="menu-item-price">
         $${(item.price_cents / 100).toFixed(2)}
       </div>
@@ -857,7 +844,6 @@ function addToCart(item) {
     const cartItem = {
       menuItemId: item.id,
       name: item.name,
-      name_zh: item.name_zh || null,
       image_url: item.image_url || null,
       quantity: 1,
       basePriceCents: item.price_cents,
@@ -1291,18 +1277,6 @@ function renderOrdersDrawer(orders, tableName) {
       })()}
       <button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>
     </div>
-    ${serviceRequestItems.length > 0 ? `
-    <div style="padding: 12px 0 4px; border-top: 1px solid #e5e7eb; margin-top: 4px;">
-      <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">${t('menu.service-requests') || 'Requests'}</div>
-      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-        ${serviceRequestItems.map(sr => {
-          const lang = localStorage.getItem('language') || 'zh';
-          const label = (lang === 'zh' && sr.label_zh) ? sr.label_zh : sr.label_en;
-          const color = sr.color || '#4f46e5';
-          return `<button id="sr-btn-${sr.id}" onclick="submitServiceRequest(${sr.id})" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid ${color};background:#fff;color:${color};font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s;"><span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0;"></span>${label}</button>`;
-        }).join('')}
-      </div>
-    </div>` : ''}
     </div>
   `;
 
@@ -1338,7 +1312,7 @@ function renderCartDrawer() {
           ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${item.name}" loading="lazy">` : ''}
           <div class="cart-item-details">
             <div class="cart-item-header">
-              <strong>${(localStorage.getItem('language') === 'zh' && item.name_zh) ? item.name_zh : item.name}</strong>
+              <strong>${item.name}</strong>
               <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
             </div>
             ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}
@@ -1683,39 +1657,6 @@ async function callStaff() {
     }
   } catch (e) {
     console.error('Error calling staff:', e);
-  }
-}
-
-async function submitServiceRequest(itemId) {
-  if (!sessionId || !restaurantId) return;
-  const item = serviceRequestItems.find(i => i.id === itemId);
-  if (!item) return;
-  const btn = document.getElementById(`sr-btn-${itemId}`);
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-  const lang = localStorage.getItem('language') || 'zh';
-  const label = (lang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
-  try {
-    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-requests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table_session_id: sessionId, request_type: item.request_type, label })
-    });
-    if (res.ok) {
-      if (btn) {
-        const color = item.color || '#4f46e5';
-        btn.style.background = color;
-        btn.style.color = '#fff';
-        btn.style.opacity = '1';
-        setTimeout(() => {
-          if (btn) { btn.style.background = '#fff'; btn.style.color = color; btn.disabled = false; btn.style.opacity = '1'; }
-        }, 3000);
-      }
-    } else {
-      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
-    }
-  } catch (e) {
-    console.error('Error submitting service request:', e);
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   }
 }
 

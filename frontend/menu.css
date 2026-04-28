@@ -433,6 +433,11 @@ body {
   grid-template-columns: repeat(2, 1fr);
 }
 
+/* Single-column layout — overrides all media queries */
+.menu-grid.single-column {
+  grid-template-columns: 1fr !important;
+}
+
 .menu-item {
   position: relative;
   background: var(--bg-white);
