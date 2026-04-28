@@ -340,18 +340,20 @@ function renderPrinterConfigCard(type, container) {
                   type === 'bill' ? 'saveBillPrinterConfiguration' :
                   type === 'kpay' ? 'saveKPayPrinterConfiguration' : 'saveKitchenPrinterConfiguration';
 
-  const autoLabels = { 'qr': t('admin.printer-auto-qr') || 'Auto-Print QR Codes', 'bill': t('admin.printer-auto-bill') || 'Auto-Print Bills' };
   const testFns = { 'qr': 'testPrintQRCode', 'bill': 'testPrintBillCode' };
-  const autoId = type === 'qr' ? 'qr-auto-print' : 'bill-auto-print';
-  const autoPrint = settings[`${prefix}auto_print`] || false;
+
+  // Only QR printer has auto-print toggle; bill auto-print was removed in favour of manual print button
+  const qrAutoPrint = type === 'qr' ? (settings.qr_auto_print || false) : false;
+  const autoSection = type === 'qr' ? `
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+          <input id="qr-auto-print" type="checkbox" ${qrAutoPrint ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;" />
+          <label for="qr-auto-print" style="cursor: pointer; font-weight: 500; color: var(--text-dark, #1f2937); margin: 0;">${t('admin.printer-auto-qr') || 'Auto-Print QR Codes'}</label>
+        </div>` : '';
 
   html += `
       </div>
       <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 20px; margin-top: 10px;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-          <input id="${autoId}" type="checkbox" ${autoPrint ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;" />
-          <label for="${autoId}" style="cursor: pointer; font-weight: 500; color: var(--text-dark, #1f2937); margin: 0;">${autoLabels[type] || ''}</label>
-        </div>
+        ${autoSection}
         <div style="display: flex; gap: 12px;">
           <button onclick="${saveFn}()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;">${t('admin.printer-save-' + type) || 'Save ' + (labels[type] || type)}</button>
           <button onclick="${testFns[type] || 'testPrintQRCode'}()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;">${t('admin.printer-test-print') || 'Test Print'}</button>
@@ -795,13 +797,11 @@ function loadBillFormatUI() {
     const billFontSize = window.currentPrinterSettings?.bill_font_size || 'medium';
     const billHeaderText = window.currentPrinterSettings?.bill_header_text || 'Thank You';
     const billFooterText = window.currentPrinterSettings?.bill_footer_text || 'Follow us on social media';
-    const billAutoPrint = window.currentPrinterSettings?.bill_auto_print || false;
 
-    console.log('[admin-printer.js] Bill format UI - fontSize:', billFontSize, 'header:', billHeaderText, 'footer:', billFooterText, 'autoPrint:', billAutoPrint);
+    console.log('[admin-printer.js] Bill format UI - fontSize:', billFontSize, 'header:', billHeaderText, 'footer:', billFooterText);
 
     const headerInput = document.getElementById('bill-header-text');
     const footerInput = document.getElementById('bill-footer-text');
-    const autoPrintCheckbox = document.getElementById('bill-auto-print');
     
     if (headerInput) {
       headerInput.value = billHeaderText;
@@ -810,10 +810,6 @@ function loadBillFormatUI() {
     if (footerInput) {
       footerInput.value = billFooterText;
       console.log('[admin-printer.js] Set footer input value');
-    }
-    if (autoPrintCheckbox) {
-      autoPrintCheckbox.checked = billAutoPrint;
-      console.log('[admin-printer.js] Set auto-print checkbox:', billAutoPrint);
     }
 
     // Set active button for font size
@@ -848,7 +844,6 @@ async function saveBillFormat() {
     const billFontSize = getCurrentBillFontSize();
     const billHeaderText = document.getElementById('bill-header-text').value || 'Thank You';
     const billFooterText = document.getElementById('bill-footer-text').value || 'Follow us on social media';
-    const billAutoPrint = document.getElementById('bill-auto-print').checked || false;
     const billBluetoothDevice = window.selectedBluetoothDevices ? window.selectedBluetoothDevices.bill : null;
 
     // Get printer type from the config card dropdown
@@ -864,8 +859,7 @@ async function saveBillFormat() {
       settings: {
         font_size: billFontSize,
         header_text: billHeaderText,
-        footer_text: billFooterText,
-        auto_print: billAutoPrint
+        footer_text: billFooterText
       }
     };
 
@@ -982,7 +976,6 @@ async function saveBillFormat() {
     const billFontSize = getCurrentBillFontSize();
     const billHeaderText = document.getElementById('bill-header-text').value || 'Thank You';
     const billFooterText = document.getElementById('bill-footer-text').value || 'Follow us on social media';
-    const billAutoPrint = document.getElementById('bill-auto-print').checked || false;
     const billBluetoothDevice = window.selectedBluetoothDevices ? window.selectedBluetoothDevices.bill : null;
 
     // Get printer type from the config card dropdown
@@ -998,8 +991,7 @@ async function saveBillFormat() {
       settings: {
         font_size: billFontSize,
         header_text: billHeaderText,
-        footer_text: billFooterText,
-        auto_print: billAutoPrint
+        footer_text: billFooterText
       }
     };
 

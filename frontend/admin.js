@@ -792,6 +792,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   await initializeApp();
 
+  // Preload printer settings so printer-conditional UI (print bill buttons, etc.) works
+  // without requiring the user to visit the printer settings page first
+  if (typeof loadPrinterSettings === 'function') {
+    loadPrinterSettings().catch(err => console.warn('[Admin Init] Failed to preload printer settings:', err));
+  }
+
   // ========== STEP 3: Initialize WebSocket for real-time auto-print ==========
   if (typeof autoPrintClient !== 'undefined' && restaurantId) {
     try {

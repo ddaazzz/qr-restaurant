@@ -1357,9 +1357,18 @@ async function submitStartSession(tableId) {
       handleTableClick(table);
     }
 
-    // Note: Auto-print is now handled by WebSocket (session-notifier)
-    // This allows printing from any tab/page, not just when user is on tables tab
-    // So we don't need to call printQR here
+    // Auto-print QR if enabled and qr_mode is 'regenerate' (new QR per session)
+    const qrMode = ADMIN_SETTINGS_CACHE?.qr_mode || 'regenerate';
+    if (qrMode !== 'static_seat') {
+      try {
+        const qrAutoPrint = window.currentPrinterSettings?.qr_auto_print;
+        if (qrAutoPrint) {
+          await printQR(newSessionId, true, { tableId: tableId, sessionId: newSessionId });
+        }
+      } catch (autoErr) {
+        console.warn('[QR AutoPrint] Non-critical error during auto-print:', autoErr.message);
+      }
+    }
   } catch (err) {
     alert("Error starting session: " + err.message);
   }
@@ -1623,9 +1632,10 @@ async function renderSessionOrder(session) {
         ${t('admin.total-label')} —
       </div>
       <div style="display: flex; gap: 8px;">
+        ${(window.currentPrinterSettings?.bill_printer_type && window.currentPrinterSettings.bill_printer_type !== 'none') ? `
         <button style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: white; color: #333; font-weight: 600; cursor: pointer;" onclick="printBill(${session.id})">
           ${t('admin.print-bill')}
-        </button>
+        </button>` : ''}
         <button id="session-close-bill-btn" data-session-id="${session.id}" style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #1f2937; color: white; font-weight: 600; cursor: pointer;" onclick="closeBillModal(${session.id})">
           ${ADMIN_SETTINGS_CACHE?.order_pay_enabled ? 'Close Bill (Manual)' : 'Close Bill'}
         </button>
@@ -2692,11 +2702,6 @@ async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApp
 
   await loadTablesCategoryTable();
   if (typeof loadOrdersHistoryLeftPanel === 'function') await loadOrdersHistoryLeftPanel();
-
-  // Auto-print bill if enabled
-  if (window.currentPrinterSettings?.bill_auto_print) {
-    await printBill(sessionId, true);
-  }
 
   closeSessionPanel();
 }
