@@ -128,20 +128,25 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
       // when ON CONFLICT DO UPDATE fires, so the INSERT VALUES must satisfy the constraint too.
       const settingsWithEnabled = settings ? { enabled: true, ...settings } : { enabled: true };
 
+      // Only default port to 9100 for network printers; otherwise store null
+      const resolvedPort = (printer_type === 'network' || printer_type === 'thermal')
+        ? (printer_port || 9100)
+        : null;
+
       const result = await pool.query(
         `INSERT INTO printers (restaurant_id, type, printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, menu_category_id, settings)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
          ON CONFLICT (restaurant_id, type) DO UPDATE SET
            printer_type = COALESCE(EXCLUDED.printer_type, printers.printer_type),
            printer_host = EXCLUDED.printer_host,
-           printer_port = COALESCE(EXCLUDED.printer_port, printers.printer_port, 9100),
+           printer_port = EXCLUDED.printer_port,
            bluetooth_device_id = EXCLUDED.bluetooth_device_id,
            bluetooth_device_name = EXCLUDED.bluetooth_device_name,
            menu_category_id = COALESCE(EXCLUDED.menu_category_id, printers.menu_category_id),
            settings = printers.settings || $9::jsonb,
            updated_at = now()
          RETURNING *`,
-        [restaurantId, normalizedType, printer_type, printer_host, printer_port || 9100, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settingsWithEnabled)]
+        [restaurantId, normalizedType, printer_type, printer_host, resolvedPort, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settingsWithEnabled)]
       );
 
       return res.json(result.rows[0]);
