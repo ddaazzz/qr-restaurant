@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * QR Restaurant — Local Print Bridge v3.0
+ * QR Restaurant — Local Print Bridge v4.0
  * =========================================
  * Listens on https://localhost:3001 and forwards ESC/POS bytes to a printer.
  *
  * Print routing (automatic):
  *   1. Tries TCP to the network printer (host:port from request)
- *   2. If TCP fails, falls back to first USB/CUPS printer on this machine
+ *   2. If TCP fails, falls back to direct USB (libusb) for Epson TM-T88IV
  *
  * Usage:
  *   node print-bridge.js
@@ -14,7 +14,7 @@
  * First-time browser trust:
  *   Open https://localhost:3001 and click through the security warning once.
  *
- * No npm install needed — Node.js built-ins only.
+ * Requires: npm install usb  (already done)
  */
 
 'use strict';
@@ -24,7 +24,11 @@ const net     = require('net');
 const path    = require('path');
 const fs      = require('fs');
 const os      = require('os');
-const { spawnSync, execSync, spawn } = require('child_process');
+const { spawnSync } = require('child_process');
+
+// USB direct printing (bypasses CUPS which is broken on macOS Sonoma for raw USB printers)
+let usbLib = null;
+try { usbLib = require('usb'); } catch (_) { /* usb package not installed */ }
 
 const PORT      = parseInt(process.env.BRIDGE_PORT || '3001', 10);
 const CERT_DIR  = path.join(os.homedir(), '.qr-bridge');
@@ -76,24 +80,66 @@ function sendToTcp(host, port, dataBuffer, timeoutMs = 8000) {
   });
 }
 
-// ── USB / CUPS helper ─────────────────────────────────────────────────────────
+// ── Direct USB helper (libusb) ────────────────────────────────────────────────
+
+// Known Epson POS printer USB IDs
+const EPSON_USB_PRINTERS = [
+  { vendorId: 0x04b8, productId: 0x0202, name: 'Epson TM-T88IV (UB-U02III)' },
+  { vendorId: 0x04b8, productId: 0x0005, name: 'Epson TM-T88V' },
+  { vendorId: 0x04b8, productId: 0x0e28, name: 'Epson TM-T88VI' },
+];
 
 function listUsbPrinters() {
-  try {
-    const out = execSync('lpstat -p 2>/dev/null', { timeout: 5000 }).toString();
-    return out.split('\n').map(l => { const m = l.match(/^printer\s+(\S+)/); return m ? m[1] : null; }).filter(Boolean);
-  } catch (_) { return []; }
+  if (!usbLib) return [];
+  const found = [];
+  for (const def of EPSON_USB_PRINTERS) {
+    const dev = usbLib.findByIds(def.vendorId, def.productId);
+    if (dev) found.push(def.name);
+  }
+  return found;
 }
 
-function sendToUsb(printerName, dataBuffer) {
+function sendToUsbDirect(dataBuffer) {
   return new Promise((resolve, reject) => {
-    const lp = spawn('lp', ['-d', printerName, '-o', 'raw', '-']);
-    let errOut = '';
-    lp.stderr.on('data', (d) => { errOut += d.toString(); });
-    lp.on('close', (code) => { code === 0 ? resolve() : reject(new Error(`lp exited ${code}: ${errOut.trim()}`)); });
-    lp.on('error', reject);
-    lp.stdin.write(dataBuffer);
-    lp.stdin.end();
+    if (!usbLib) return reject(new Error('usb package not available'));
+
+    let device = null;
+    for (const def of EPSON_USB_PRINTERS) {
+      device = usbLib.findByIds(def.vendorId, def.productId);
+      if (device) break;
+    }
+    if (!device) return reject(new Error('No supported USB printer found'));
+
+    try {
+      device.open();
+    } catch (e) {
+      return reject(new Error(`Cannot open USB device: ${e.message}`));
+    }
+
+    let iface;
+    try {
+      iface = device.interface(0);
+      // On macOS, detachKernelDriver may throw if no kernel driver — that's fine
+      try { iface.detachKernelDriver(); } catch (_) {}
+      iface.claim();
+    } catch (e) {
+      try { device.close(); } catch (_) {}
+      return reject(new Error(`Cannot claim USB interface: ${e.message}`));
+    }
+
+    const outEndpoint = iface.endpoints.find(ep => ep.direction === 'out' && ep.transferType === 2 /* BULK */);
+    if (!outEndpoint) {
+      try { iface.release(true, () => device.close()); } catch (_) {}
+      return reject(new Error('No bulk-out endpoint found on USB printer'));
+    }
+
+    outEndpoint.transfer(dataBuffer, (err) => {
+      iface.release(true, () => {
+        try { device.close(); } catch (_) {}
+        if (err) reject(new Error(`USB transfer error: ${err.message}`));
+        else resolve();
+      });
+    });
   });
 }
 
@@ -158,25 +204,24 @@ function handleRequest(req, res) {
         console.warn(`[${ts()}] ⚠ TCP failed (${host}:${port}): ${tcpErr.message} — trying USB…`);
       }
 
-      // 2. USB/CUPS fallback
+      // 2. USB direct fallback
       const usbPrinters = listUsbPrinters();
       if (usbPrinters.length === 0) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           success: false,
-          error: `TCP to ${host}:${port} failed and no USB printers configured. ` +
-                 `Connect printer via USB and add it in System Settings → Printers & Scanners.`,
+          error: `TCP to ${host}:${port} failed and no USB printer found. ` +
+                 `Connect Epson printer via USB cable.`,
         }));
         console.error(`[${ts()}] ✗ No USB printers found. TCP to ${host}:${port} also failed.`);
         return;
       }
 
       try {
-        const printerName = usbPrinters[0];
-        await sendToUsb(printerName, data);
+        await sendToUsbDirect(data);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, method: 'usb', printer: printerName }));
-        console.log(`[${ts()}] ✓ USB: ${data.length}B → CUPS:${printerName}`);
+        res.end(JSON.stringify({ success: true, method: 'usb', printer: usbPrinters[0] }));
+        console.log(`[${ts()}] ✓ USB: ${data.length}B → ${usbPrinters[0]}`);
       } catch (usbErr) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, error: usbErr.message }));
