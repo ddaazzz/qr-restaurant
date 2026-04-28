@@ -1555,6 +1555,8 @@ export const MenuTab = forwardRef(
                     {lang === 'zh' && cat.name_zh ? cat.name_zh : cat.name}
                   </Text>
                 </TouchableOpacity>
+              ))}
+            </ScrollView>
 
         {/* Items area: edit mode = draggable grid with handles; normal = grid */}
         <View style={styles.itemsGridWrapper}>
