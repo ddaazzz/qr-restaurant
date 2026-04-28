@@ -37,7 +37,7 @@ router.post("/auth/login", async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET || "devsecret",
-      { expiresIn: "8h" }
+      { expiresIn: "30d" }
     );
 
     // For superadmin, fetch all restaurants
@@ -426,7 +426,7 @@ router.post("/auth/staff-login", async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET || "devsecret",
-      { expiresIn: "8h" }
+      { expiresIn: "30d" }
     );
 
     // ✅ LOG HERE (canonical action)
@@ -477,7 +477,7 @@ router.post("/auth/kitchen-login", async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET || "devsecret",
-      { expiresIn: "8h" }
+      { expiresIn: "30d" }
     );
 
     // ✅ LOG HERE (canonical action)
@@ -834,7 +834,7 @@ router.post("/auth/register", async (req, res) => {
       const token = jwt.sign(
         { id: userId, role: "admin" },
         process.env.JWT_SECRET || "devsecret",
-        { expiresIn: "8h" }
+        { expiresIn: "30d" }
       );
 
       res.status(201).json({
@@ -990,7 +990,7 @@ router.post("/auth/register-email", async (req, res) => {
       const token = jwt.sign(
         { id: userId, role: "admin" },
         process.env.JWT_SECRET || "devsecret",
-        { expiresIn: "8h" }
+        { expiresIn: "30d" }
       );
 
       res.status(201).json({
@@ -1156,7 +1156,7 @@ router.post("/auth/google-login", async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET || "devsecret",
-      { expiresIn: "8h" }
+      { expiresIn: "30d" }
     );
 
     res.json({

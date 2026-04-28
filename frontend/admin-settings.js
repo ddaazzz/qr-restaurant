@@ -227,9 +227,6 @@ async function showSettingsPage(pageName) {
       case 'crm':
         await loadCrmPage();
         break;
-      case 'service-requests':
-        await loadServiceRequestItems();
-        break;
     }
   }
 }
@@ -806,77 +803,12 @@ async function loadMenuSettingsPage() {
       toggle.checked = flags.allow_custom_food_items === true;
     }
 
-    // Custom item label (ui_config)
-    const labelInput = document.getElementById('custom-item-label-input');
-    if (labelInput) {
-      labelInput.value = (settings.ui_config || {}).custom_item_label || '';
-    }
-
-    // Bulk menu import feature (superadmin only toggle)
-    const flags = settings.feature_flags || {};
-    const isImportEnabled = flags.menu_import_enabled === true;
-    const importControl = document.getElementById('menu-import-feature-control');
-    if (importControl) {
-      if (IS_SUPERADMIN) {
-        importControl.innerHTML = `<button id="menu-import-toggle-btn" onclick="toggleMenuImportFeature()"
-          class="${isImportEnabled ? 'btn-secondary' : 'btn-primary'}"
-          style="padding: 8px 16px; font-size: 12px; min-width: 90px;">${isImportEnabled ? 'Disable' : 'Enable'}</button>`;
-      } else {
-        importControl.innerHTML = isImportEnabled
-          ? '<span style="color: #059669; font-size: 13px; font-weight: 600;">✓ Enabled</span>'
-          : '<span style="color: #6b7280; font-size: 13px;">🔒 Paid Feature</span>';
-      }
-    }
-
     // Menu layout columns
     const cols = (settings.ui_config || {}).menu_columns || 1;
     const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
     if (radio) radio.checked = true;
-    updateMenuColumnTip(cols);
   } catch (err) {
     console.error('Failed to load menu settings:', err);
-  }
-}
-
-async function toggleMenuImportFeature() {
-  const btn = document.getElementById('menu-import-toggle-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-
-  const currentFlags = (typeof ADMIN_SETTINGS_CACHE !== 'undefined' && ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
-  const current = currentFlags.menu_import_enabled === true;
-  const newState = !current;
-
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feature_flags: { menu_import_enabled: newState } })
-    });
-    if (!res.ok) throw new Error('Failed to save');
-    if (typeof ADMIN_SETTINGS_CACHE !== 'undefined' && ADMIN_SETTINGS_CACHE) {
-      ADMIN_SETTINGS_CACHE.feature_flags = { ...currentFlags, menu_import_enabled: newState };
-    }
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = newState ? 'Disable' : 'Enable';
-      btn.className = newState ? 'btn-secondary' : 'btn-primary';
-    }
-  } catch (err) {
-    console.error('Error toggling menu import feature:', err);
-    alert('Failed to toggle feature');
-    if (btn) { btn.disabled = false; btn.textContent = current ? 'Disable' : 'Enable'; }
-  }
-}
-
-function updateMenuColumnTip(cols) {
-  const tipEl = document.getElementById('menu-column-tip-text');
-  if (!tipEl) return;
-  if (cols === 2 || cols === '2') {
-    tipEl.setAttribute('data-i18n', 'admin.two-column-tip');
-    tipEl.textContent = t ? t('admin.two-column-tip') : 'Two columns: images display as small tiles. Optimal size 600 × 600 px (1:1 square) for crispest result.';
-  } else {
-    tipEl.setAttribute('data-i18n', 'admin.single-column-tip');
-    tipEl.textContent = t ? t('admin.single-column-tip') : 'Single column: images display full-width. Optimal size 800 × 600 px (4:3 landscape).';
   }
 }
 
@@ -890,27 +822,8 @@ async function saveCustomFoodItemSetting(enabled) {
     if (!res.ok) throw new Error('Failed to save setting');
   } catch (err) {
     console.error('Error saving custom food item setting:', err);
-    alert('Failed to save setting');
+    alert(adminSettingsT('admin.menu-settings-save-failed', 'Failed to save setting'));
   }
-}
-
-let _customItemLabelTimer = null;
-function scheduleCustomItemLabelSave() {
-  if (_customItemLabelTimer) clearTimeout(_customItemLabelTimer);
-  _customItemLabelTimer = setTimeout(async () => {
-    const input = document.getElementById('custom-item-label-input');
-    if (!input) return;
-    try {
-      const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ui_config: { custom_item_label: input.value.trim() || null } })
-      });
-      if (!res.ok) throw new Error('Failed to save label');
-    } catch (err) {
-      console.error('Error saving custom item label:', err);
-    }
-  }, 600);
 }
 
 async function saveMenuLayoutSetting(columns) {
@@ -923,7 +836,7 @@ async function saveMenuLayoutSetting(columns) {
     if (!res.ok) throw new Error('Failed to save setting');
   } catch (err) {
     console.error('Error saving menu layout setting:', err);
-    alert('Failed to save setting');
+    alert(adminSettingsT('admin.menu-settings-save-failed', 'Failed to save setting'));
   }
 }
 
@@ -1751,6 +1664,22 @@ async function loadPaymentTerminals() {
     });
     if (res.ok) {
       PAYMENT_TERMINALS_CACHE = await res.json();
+    } else if (res.status === 401 || res.status === 403) {
+      PAYMENT_TERMINALS_CACHE = [];
+      // Auth failure — show error, not paid-service gate
+      const paidNotice = document.getElementById('terminal-paid-notice');
+      const mainContent = document.getElementById('terminal-main-content');
+      const addBtn = document.getElementById('terminal-add-btn');
+      if (paidNotice) paidNotice.style.display = 'none';
+      if (mainContent) mainContent.style.display = '';
+      if (addBtn) addBtn.style.display = 'none';
+      const errorDiv = document.getElementById('terminal-error');
+      if (errorDiv) {
+        errorDiv.textContent = 'Session expired — please refresh the page or log in again.';
+        errorDiv.style.display = 'block';
+      }
+      await loadOrderPayStatus();
+      return;
     } else {
       PAYMENT_TERMINALS_CACHE = [];
     }
@@ -1871,9 +1800,6 @@ function clearPaymentTerminalForm() {
   document.getElementById('new-terminal-merchant-token').value = '';
   document.getElementById('new-terminal-secret-code').value = '';
   document.getElementById('new-terminal-gateway-env').value = 'sandbox';
-  document.getElementById('new-terminal-pa-ip').value = '';
-  document.getElementById('new-terminal-pa-port').value = '18080';
-  document.getElementById('new-terminal-pa-endpoint').value = '/v2/pos/sign';
   document.getElementById('terminal-error').style.display = 'none';
   document.getElementById('terminal-success').style.display = 'none';
   document.getElementById('terminal-test-result').style.display = 'none';
@@ -1921,9 +1847,6 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').value = terminal.merchant_token || terminal.app_id || '';
       document.getElementById('new-terminal-secret-code').value = terminal.secret_code || terminal.app_secret || '';
       document.getElementById('new-terminal-gateway-env').value = terminal.payment_gateway_env || 'sandbox';
-      document.getElementById('new-terminal-pa-ip').value = terminal.terminal_ip || '';
-      document.getElementById('new-terminal-pa-port').value = terminal.terminal_port || '18080';
-      document.getElementById('new-terminal-pa-endpoint').value = terminal.endpoint_path || '/v2/pos/sign';
     } else {
       // Load KPay fields
       document.getElementById('new-terminal-app-id').value = terminal.app_id || '';
@@ -1986,9 +1909,6 @@ async function savePaymentTerminal() {
     const merchantToken = document.getElementById('new-terminal-merchant-token').value.trim();
     const secretCode = document.getElementById('new-terminal-secret-code').value.trim();
     const env = document.getElementById('new-terminal-gateway-env').value;
-    const paIp = document.getElementById('new-terminal-pa-ip').value.trim();
-    const paPort = document.getElementById('new-terminal-pa-port').value.trim();
-    const paEndpoint = document.getElementById('new-terminal-pa-endpoint').value.trim();
     
     if (!merchantToken || !secretCode) {
       showError('terminal-error', 'Merchant Token and Secret Code are required for Payment Asia');
@@ -1997,14 +1917,9 @@ async function savePaymentTerminal() {
     
     payload = {
       vendor_name: vendor,
-      app_id: merchantToken,
-      app_secret: secretCode,
       merchant_token: merchantToken,
       secret_code: secretCode,
-      payment_gateway_env: env,
-      terminal_ip: paIp || null,
-      terminal_port: paPort ? parseInt(paPort) : null,
-      endpoint_path: paEndpoint || '/v2/pos/sign'
+      payment_gateway_env: env
     };
   } else {
     // KPay validation
@@ -2427,6 +2342,38 @@ var CRM_OFFSET = 0;
 var CRM_LIMIT  = 30;
 var CRM_SEARCH_TIMER = null;
 
+function adminSettingsT(key, fallback) {
+  try {
+    var translated = typeof t === 'function' ? t(key) : null;
+    return translated && translated !== key ? translated : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function formatTemplate(template, values) {
+  return values.reduce(function(result, value, index) {
+    return result.replace(new RegExp('\\{' + index + '\\}', 'g'), String(value));
+  }, template);
+}
+
+function crmCustomerCountText(count, showPlus) {
+  var countText = String(count) + (showPlus ? '+' : '');
+  var template = adminSettingsT(
+    count === 1 ? 'admin.crm-count-single' : 'admin.crm-count-multiple',
+    count === 1 ? '{0} customer' : '{0} customers'
+  );
+  return formatTemplate(template, [countText]);
+}
+
+function crmVisitSummary(visits, lastVisit) {
+  var template = adminSettingsT(
+    visits === 1 ? 'admin.crm-visits-summary-single' : 'admin.crm-visits-summary-multiple',
+    visits === 1 ? '{0} visit · {1}' : '{0} visits · {1}'
+  );
+  return formatTemplate(template, [visits || 0, lastVisit]);
+}
+
 async function loadCrmCountPreview() {
   try {
     var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/count', {
@@ -2436,7 +2383,7 @@ async function loadCrmCountPreview() {
     var data = await res.json();
     var el = document.getElementById('crm-count-preview');
     if (el) {
-      el.textContent = (data.total === 1 ? '1 customer' : (data.total || 0) + ' customers');
+      el.textContent = crmCustomerCountText(data.total || 0, false);
       el.removeAttribute('data-i18n');
     }
   } catch (e) { /* silent */ }
@@ -2449,7 +2396,7 @@ async function loadCrmPage() {
   var loadMoreEl = document.getElementById('crm-load-more-wrapper');
   if (!listEl) return;
 
-  listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading...</p>';
+  listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">' + adminSettingsT('admin.loading', 'Loading...') + '</p>';
   if (loadMoreEl) loadMoreEl.style.display = 'none';
 
   var search = (document.getElementById('crm-search-input') || {}).value || '';
@@ -2462,10 +2409,10 @@ async function loadCrmPage() {
     if (!res.ok) throw new Error('Failed');
     var data = await res.json();
 
-    if (countEl) countEl.textContent = data.length === 0 ? '0 customers' : data.length + (data.length === CRM_LIMIT ? '+' : '') + ' customer' + (data.length !== 1 ? 's' : '');
+    if (countEl) countEl.textContent = crmCustomerCountText(data.length, data.length === CRM_LIMIT);
 
     if (data.length === 0) {
-      listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">No customers found. Import from bookings to get started.</p>';
+      listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">' + adminSettingsT('admin.crm-no-customers', 'No customers found. Import from bookings to get started.') + '</p>';
       return;
     }
 
@@ -2477,7 +2424,7 @@ async function loadCrmPage() {
     reTranslateContent();
   } catch (err) {
     console.error('[CRM]', err);
-    listEl.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">Failed to load customers.</p>';
+    listEl.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">' + adminSettingsT('admin.crm-load-failed', 'Failed to load customers.') + '</p>';
   }
 }
 
@@ -2517,18 +2464,17 @@ function crmBuildRow(c) {
   var initials  = (c.name || '?').slice(0, 2).toUpperCase();
   var lastVisit = c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString() : '—';
   var spent     = c.total_spent_cents > 0 ? '$' + (c.total_spent_cents / 100).toFixed(2) : '—';
+  var contactLine = c.phone || c.email || adminSettingsT('admin.crm-no-contact', 'No contact details');
 
   div.innerHTML =
     '<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">' + initials + '</div>' +
     '<div style="flex:1;margin-left:12px;min-width:0;">' +
       '<div style="font-weight:600;font-size:13px;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.name || '—') + '</div>' +
-      (c.phone ? '<div style="font-size:11px;color:#6b7280;">📞 ' + c.phone + '</div>' : '') +
-      (c.email ? '<div style="font-size:11px;color:#6b7280;">✉️ ' + c.email + '</div>' : '') +
-      (!c.phone && !c.email ? '<div style="font-size:11px;color:#d1d5db;">No contact details</div>' : '') +
+      '<div style="font-size:11px;color:#6b7280;">' + contactLine + '</div>' +
     '</div>' +
     '<div style="text-align:right;flex-shrink:0;">' +
       '<div style="font-size:12px;color:#059669;font-weight:600;">' + spent + '</div>' +
-      '<div style="font-size:11px;color:#6b7280;">' + (c.total_visits || 0) + ' visits &middot; ' + lastVisit + '</div>' +
+      '<div style="font-size:11px;color:#6b7280;">' + crmVisitSummary(c.total_visits || 0, lastVisit) + '</div>' +
     '</div>';
 
   return div;
@@ -2542,7 +2488,7 @@ async function crmOpenProfile(customerId) {
 
   listView.style.display   = 'none';
   profileView.style.display = 'block';
-  profileContent.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading...</p>';
+  profileContent.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">' + adminSettingsT('admin.loading', 'Loading...') + '</p>';
 
   try {
     var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/customers/' + customerId, {
@@ -2553,63 +2499,13 @@ async function crmOpenProfile(customerId) {
     profileContent.innerHTML = crmBuildProfile(d);
     reTranslateContent();
   } catch (err) {
-    profileContent.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">Failed to load customer.</p>';
+    profileContent.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">' + adminSettingsT('admin.crm-load-customer-failed', 'Failed to load customer.') + '</p>';
   }
 }
 
 function crmBackToList() {
   document.getElementById('crm-profile-view').style.display = 'none';
   document.getElementById('crm-list-view').style.display   = 'block';
-}
-
-async function crmShowOrderDetail(orderId) {
-  try {
-    var res = await fetch(API + '/restaurants/' + restaurantId + '/orders/' + orderId, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    if (!res.ok) throw new Error('Failed');
-    var o = await res.json();
-
-    var itemsHtml = (o.items || []).map(function(item) {
-      var variants = item.variants ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">' + item.variants + '</div>' : '';
-      var addons = (item.addons || []).map(function(a) {
-        return '<div style="display:flex;justify-content:space-between;padding-left:12px;font-size:11px;color:#6b7280;margin-top:2px;">' +
-          '<span>+ ' + a.menu_item_name + '</span><span>$' + (a.item_total_cents / 100).toFixed(2) + '</span></div>';
-      }).join('');
-      return '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
-          '<span style="font-size:13px;font-weight:600;color:#111827;">' + (item.quantity > 1 ? item.quantity + '× ' : '') + (item.menu_item_name || '—') + '</span>' +
-          '<span style="font-size:13px;color:#059669;font-weight:600;">$' + ((item.item_total_cents || 0) / 100).toFixed(2) + '</span>' +
-        '</div>' + variants + addons + '</div>';
-    }).join('');
-
-    var totalCents = parseInt(o.total_cents) || 0;
-    var modal = document.createElement('div');
-    modal.id = 'crm-order-detail-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
-    modal.innerHTML =
-      '<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:80vh;overflow:auto;padding:0;">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e5e7eb;">' +
-          '<strong style="font-size:16px;color:#111827;">Order #' + (o.restaurant_order_number || o.id) + '</strong>' +
-          '<button onclick="document.getElementById(\'crm-order-detail-modal\').remove()" style="background:none;border:none;font-size:20px;color:#6b7280;cursor:pointer;">✕</button>' +
-        '</div>' +
-        '<div style="display:flex;gap:12px;flex-wrap:wrap;padding:12px 20px;font-size:12px;color:#6b7280;border-bottom:1px solid #f3f4f6;">' +
-          '<span>📅 ' + new Date(o.created_at).toLocaleDateString() + '</span>' +
-          (o.table_name ? '<span>🪑 ' + o.table_name + '</span>' : '') +
-          (o.order_type ? '<span>📦 ' + o.order_type + '</span>' : '') +
-          '<span>💳 ' + (o.payment_method_label || o.payment_method_online || '—') + '</span>' +
-        '</div>' +
-        '<div style="padding:4px 20px 16px;">' + (itemsHtml || '<p style="color:#999;text-align:center;padding:16px;">No items</p>') + '</div>' +
-        '<div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;">' +
-          '<strong style="font-size:14px;color:#111827;">Total</strong>' +
-          '<strong style="font-size:14px;color:#059669;">$' + (totalCents / 100).toFixed(2) + '</strong>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(modal);
-    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-  } catch (err) {
-    alert('Could not load order details.');
-  }
 }
 
 function crmStatBox(label, value) {
@@ -2634,262 +2530,86 @@ function crmBuildProfile(d) {
         '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">' + initials + '</div>' +
         '<div>' +
           '<div style="font-size:18px;font-weight:700;">' + (c.name || '—') + '</div>' +
-          '<div style="font-size:12px;opacity:0.9;margin-top:3px;">📞 ' + (c.phone || '—') + '</div>' +
-          '<div style="font-size:12px;opacity:0.9;margin-top:2px;">✉️ ' + (c.email || '—') + '</div>' +
+          '<div style="font-size:12px;opacity:0.85;">' + (c.phone || '') + (c.phone && c.email ? '  ·  ' : '') + (c.email || '') + '</div>' +
         '</div>' +
       '</div>' +
       '<div style="display:flex;">' +
-        crmStatBox('Visits', c.total_visits || 0) +
-        crmStatBox('Spent (est.)', spent) +
-        crmStatBox('Transacted', totalTransacted) +
-        crmStatBox('Last Visit', c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString() : '—') +
+        crmStatBox(adminSettingsT('admin.crm-stat-visits', 'Visits'), c.total_visits || 0) +
+        crmStatBox(adminSettingsT('admin.crm-stat-spent-est', 'Spent (est.)'), spent) +
+        crmStatBox(adminSettingsT('admin.crm-stat-transacted', 'Transacted'), totalTransacted) +
       '</div>' +
       (c.notes ? '<div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f0f0f0;">📝 ' + c.notes + '</div>' : '') +
     '</div>';
 
   // Upcoming bookings
   if (futureBk.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Upcoming Bookings</h4>';
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-upcoming-bookings', 'Upcoming Bookings') + '</h4>';
     futureBk.forEach(function(b) {
       html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:4px;">' +
-        '<strong>' + new Date(b.booking_date).toLocaleDateString() + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' pax' +
-        (b.table_label ? '  ·  Table ' + b.table_label : '') + '</div>';
+        '<strong>' + b.booking_date + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
+        (b.table_label ? '  ·  ' + adminSettingsT('admin.crm-table', 'Table') + ' ' + b.table_label : '') + '</div>';
     });
   }
 
-  // Build unified history timeline
-  var orderBySessionId = {};
-  orders.forEach(function(o) { if (o.session_id) orderBySessionId[o.session_id] = o; });
-
-  var timeline = [];
-  var usedSessionIds = {};
-
-  pastBk.forEach(function(b) {
-    var linkedOrder = b.session_id ? orderBySessionId[b.session_id] : null;
-    timeline.push({ date: b.booking_date, booking: b, order: linkedOrder });
-    if (linkedOrder && linkedOrder.session_id) usedSessionIds[linkedOrder.session_id] = true;
-  });
-
-  orders.forEach(function(o) {
-    if (!o.session_id || !usedSessionIds[o.session_id]) {
-      var dateStr = o.created_at ? o.created_at.substring(0, 10) : '';
-      timeline.push({ date: dateStr, order: o });
-    }
-  });
-
-  timeline.sort(function(a, b) { return b.date.localeCompare(a.date); });
-
-  if (timeline.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">History</h4>';
-    html += '<div style="display:flex;flex-direction:column;gap:0;">';
-
-    var bkStatusStyle = function(status) {
-      if (status === 'confirmed')  return 'background:#dcfce7;color:#16a34a;';
-      if (status === 'completed')  return 'background:#ede9fe;color:#7c3aed;';
-      if (status === 'cancelled')  return 'background:#fee2e2;color:#dc2626;';
-      if (status === 'no-show')    return 'background:#fef3c7;color:#d97706;';
-      return 'background:#f3f4f6;color:#6b7280;';
-    };
-
-    timeline.slice(0, 20).forEach(function(item) {
-      var bk = item.booking;
-      var o  = item.order;
-      html += '<div style="padding:10px 0;border-bottom:1px solid #f3f4f6;">';
-
-      if (bk) {
-        html +=
-          '<div style="display:flex;align-items:center;gap:10px;font-size:12px;">' +
-            '<span>📅 <strong>' + new Date(bk.booking_date).toLocaleDateString() + '</strong>' + (bk.booking_time ? ' · ' + bk.booking_time : '') + '</span>' +
-            '<span style="color:#6b7280;">' + bk.pax + ' pax' + (bk.table_label ? ' · ' + bk.table_label : '') + '</span>' +
-            '<span style="margin-left:auto;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;' + bkStatusStyle(bk.status) + '">' + bk.status + '</span>' +
-          '</div>';
-      }
-
-      if (o) {
-        var total = parseInt(o.total_cents, 10) || 0;
-        var disc  = parseInt(o.discount_applied, 10) || 0;
-        var dateStr = bk ? '' : ' · ' + new Date(o.created_at).toLocaleDateString();
-        html +=
-          '<div onclick="crmShowOrderDetail(' + o.order_id + ')" style="display:flex;align-items:center;gap:10px;font-size:12px;background:#f8fafc;border-radius:6px;padding:8px;margin-top:' + (bk ? '4' : '0') + 'px;cursor:pointer;">' +
-            '<span>🧾 <strong style="color:#4f46e5;">#' + (o.restaurant_order_number || o.order_id) + '</strong>' +
-            ' · ' + (o.table_label || 'Counter') + dateStr + '</span>' +
-            '<span style="margin-left:auto;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</span>' +
-            (disc > 0 ? '<span style="color:#dc2626;">−$' + (disc / 100).toFixed(2) + '</span>' : '') +
-            '<span style="color:#9ca3af;">›</span>' +
-          '</div>';
-      }
-
-      if (bk && !o) {
-        html += '<div style="font-size:11px;color:#9ca3af;margin-top:4px;">No order recorded for this visit</div>';
-      }
-
-      html += '</div>';
+  // Recent orders
+  if (orders.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-recent-orders', 'Recent Orders') + '</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+      '<thead><tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">' +
+        '<th style="padding:8px;text-align:left;color:#6b7280;">#</th>' +
+        '<th style="padding:8px;text-align:left;color:#6b7280;">' + adminSettingsT('admin.crm-table', 'Table') + '</th>' +
+        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-total', 'Total') + '</th>' +
+        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-date', 'Date') + '</th>' +
+      '</tr></thead><tbody>';
+    orders.slice(0, 10).forEach(function(o) {
+      var total = parseInt(o.total_cents, 10) || 0;
+      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.id) + '</td>' +
+        '<td style="padding:8px;">' + (o.table_label || '—') + '</td>' +
+        '<td style="padding:8px;text-align:right;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</td>' +
+        '<td style="padding:8px;text-align:right;color:#6b7280;">' + new Date(o.created_at).toLocaleDateString() + '</td>' +
+        '</tr>';
     });
-
-    html += '</div>';
+    html += '</tbody></table>';
   }
 
-  // Eligible coupons
-  var eligibleCoupons = d.eligible_coupons || [];
-  if (eligibleCoupons.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">Eligible Coupons</h4>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
-    eligibleCoupons.forEach(function(coupon) {
-      var discLabel = coupon.discount_type === 'percentage' ? coupon.discount_value + '% off' : '$' + coupon.discount_value + ' off';
-      html += '<span style="background:#eff6ff;color:#3b82f6;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;">' + coupon.code + ': ' + discLabel + '</span>';
+  // Past bookings
+  if (pastBk.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-past-bookings', 'Past Bookings') + '</h4>';
+    pastBk.slice(0, 8).forEach(function(b) {
+      var badgeColor = b.status === 'confirmed' ? '#059669' : b.status === 'cancelled' ? '#e74c3c' : '#6b7280';
+      html += '<div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:6px 0;border-bottom:1px solid #f5f5f5;">' +
+        '<span>' + b.booking_date + '</span>' +
+        '<span style="color:#6b7280;">' + b.pax + ' pax</span>' +
+        '<span style="padding:2px 8px;border-radius:12px;background:' + badgeColor + '20;color:' + badgeColor + ';font-size:11px;font-weight:600;">' + b.status + '</span>' +
+        '</div>';
     });
-    html += '</div>';
   }
 
-  if (timeline.length === 0 && futureBk.length === 0 && eligibleCoupons.length === 0) {
-    html += '<p style="color:#999;font-size:13px;padding:16px 0;text-align:center;">No order or booking history yet.</p>';
+  if (orders.length === 0 && pastBk.length === 0 && futureBk.length === 0) {
+    html += '<p style="color:#999;font-size:13px;padding:16px 0;text-align:center;">' + adminSettingsT('admin.crm-no-history', 'No order or booking history yet.') + '</p>';
   }
 
   return html;
 }
 
-// ============= SERVICE REQUESTS SETTINGS =============
-
-var srEditingId = null;
-
-async function loadServiceRequestItems() {
-  var container = document.getElementById('sr-items-list');
-  if (!container) return;
-  container.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">Loading...</p>';
+async function crmImportFromBookings() {
+  var btn = document.getElementById('crm-import-btn');
+  if (btn) { btn.disabled = true; btn.textContent = adminSettingsT('admin.crm-importing', 'Importing…'); }
   try {
-    var resp = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/all', {
-      headers: { 'Authorization': 'Bearer ' + token }
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/import-from-bookings', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
     });
-    if (!resp.ok) throw new Error('Failed to load');
-    var items = await resp.json();
-    renderServiceRequestItems(items);
-  } catch (e) {
-    container.innerHTML = '<p style="color:#dc2626;text-align:center;padding:16px;">Failed to load service request items.</p>';
-  }
-}
-
-function renderServiceRequestItems(items) {
-  var container = document.getElementById('sr-items-list');
-  if (!container) return;
-  if (!items || items.length === 0) {
-    container.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">No service request types yet. Add one above.</p>';
-    return;
-  }
-  var html = '<div style="display:flex;flex-direction:column;gap:0;">';
-  items.forEach(function(item) {
-    var color = item.color || '#4f46e5';
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f1f5f9;">' +
-      '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span>' +
-      '<div style="flex:1;min-width:0;">' +
-        '<div style="font-size:14px;font-weight:600;color:#1e293b;">' + (item.label_en || '') + (item.label_zh ? ' / ' + item.label_zh : '') + '</div>' +
-        '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (item.request_type || '') + ' · order: ' + (item.sort_order ?? 0) + '</div>' +
-      '</div>' +
-      '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:#6b7280;">' +
-        '<input type="checkbox" ' + (item.is_active ? 'checked' : '') + ' onchange="toggleServiceRequestItem(' + item.id + ', this.checked)" style="cursor:pointer;" />' +
-        'Active' +
-      '</label>' +
-      '<button onclick="editServiceRequestItem(' + JSON.stringify(item).replace(/'/g, "\\'") + ')" style="padding:4px 10px;border:1px solid #4a90e2;color:#4a90e2;background:white;border-radius:5px;cursor:pointer;font-size:12px;">Edit</button>' +
-      '<button onclick="deleteServiceRequestItem(' + item.id + ')" style="padding:4px 10px;border:1px solid #dc2626;color:#dc2626;background:white;border-radius:5px;cursor:pointer;font-size:12px;">Delete</button>' +
-      '</div>';
-  });
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-function showAddServiceRequestItemForm() {
-  srEditingId = null;
-  document.getElementById('sr-item-form-title').textContent = 'Add Item';
-  document.getElementById('sr-item-id').value = '';
-  document.getElementById('sr-item-type').value = '';
-  document.getElementById('sr-item-label-en').value = '';
-  document.getElementById('sr-item-label-zh').value = '';
-  document.getElementById('sr-item-color').value = '#4f46e5';
-  document.getElementById('sr-item-sort').value = '0';
-  if (document.getElementById('sr-item-form-error')) document.getElementById('sr-item-form-error').style.display = 'none';
-  document.getElementById('sr-item-form').style.display = 'block';
-}
-
-function editServiceRequestItem(item) {
-  srEditingId = item.id;
-  document.getElementById('sr-item-form-title').textContent = 'Edit Item';
-  document.getElementById('sr-item-id').value = item.id;
-  document.getElementById('sr-item-type').value = item.request_type || '';
-  document.getElementById('sr-item-label-en').value = item.label_en || '';
-  document.getElementById('sr-item-label-zh').value = item.label_zh || '';
-  document.getElementById('sr-item-color').value = item.color || '#4f46e5';
-  document.getElementById('sr-item-sort').value = item.sort_order ?? 0;
-  if (document.getElementById('sr-item-form-error')) document.getElementById('sr-item-form-error').style.display = 'none';
-  document.getElementById('sr-item-form').style.display = 'block';
-}
-
-function cancelServiceRequestItemForm() {
-  document.getElementById('sr-item-form').style.display = 'none';
-  srEditingId = null;
-}
-
-async function saveServiceRequestItem() {
-  var errEl = document.getElementById('sr-item-form-error');
-  var request_type = document.getElementById('sr-item-type').value.trim();
-  var label_en = document.getElementById('sr-item-label-en').value.trim();
-  var label_zh = document.getElementById('sr-item-label-zh').value.trim();
-  var color = document.getElementById('sr-item-color').value;
-  var sort_order = parseInt(document.getElementById('sr-item-sort').value) || 0;
-
-  if (!request_type || !label_en) {
-    if (errEl) { errEl.textContent = 'Type key and English label are required.'; errEl.style.display = 'block'; }
-    return;
-  }
-
-  var body = { request_type, label_en, label_zh: label_zh || null, color, sort_order };
-  var url, method;
-  if (srEditingId) {
-    url = API + '/restaurants/' + restaurantId + '/service-request-items/' + srEditingId;
-    method = 'PATCH';
-  } else {
-    url = API + '/restaurants/' + restaurantId + '/service-request-items';
-    method = 'POST';
-  }
-
-  try {
-    var resp = await fetch(url, {
-      method: method,
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify(body)
-    });
-    if (!resp.ok) {
-      var err = await resp.json().catch(function() { return {}; });
-      throw new Error(err.error || 'Save failed');
-    }
-    cancelServiceRequestItemForm();
-    await loadServiceRequestItems();
-  } catch (e) {
-    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
-  }
-}
-
-async function toggleServiceRequestItem(id, isActive) {
-  try {
-    await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/' + id, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ is_active: isActive })
-    });
-  } catch (e) {
-    console.error('Failed to toggle service request item', e);
-    await loadServiceRequestItems();
-  }
-}
-
-async function deleteServiceRequestItem(id) {
-  if (!confirm('Delete this service request type?')) return;
-  try {
-    var resp = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/' + id, {
-      method: 'DELETE',
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (!resp.ok) throw new Error('Delete failed');
-    await loadServiceRequestItems();
-  } catch (e) {
-    alert('Failed to delete: ' + e.message);
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+    alert(formatTemplate(adminSettingsT('admin.crm-import-complete', 'Import complete: {0} new, {1} updated.'), [data.inserted || 0, data.updated || 0]));
+    await loadCrmPage();
+    loadCrmCountPreview();
+  } catch (err) {
+    console.error('[CRM import]', err);
+    alert(adminSettingsT('admin.crm-import-failed', 'Import failed. Please try again.'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = adminSettingsT('admin.crm-import-bookings', 'Import from Bookings'); }
   }
 }
