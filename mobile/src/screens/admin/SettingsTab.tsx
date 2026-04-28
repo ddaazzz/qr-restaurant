@@ -45,6 +45,7 @@ interface RestaurantSettings {
   qr_mode?: 'regenerate' | 'static_table' | 'static_seat';
   booking_time_allowance_mins?: number;
   show_item_status_to_diners?: boolean;
+  feature_flags?: Record<string, any>;
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
@@ -238,6 +239,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [crmOrderDetail, setCrmOrderDetail] = useState<any | null>(null);
   const [crmOrderDetailLoading, setCrmOrderDetailLoading] = useState(false);
   const [crmSyncing, setCrmSyncing] = useState(false);
+  const [showCrmEditModal, setShowCrmEditModal] = useState(false);
+  const [crmEditName, setCrmEditName] = useState('');
+  const [crmEditPhone, setCrmEditPhone] = useState('');
+  const [crmEditEmail, setCrmEditEmail] = useState('');
+  const [crmEditSaving, setCrmEditSaving] = useState(false);
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -724,8 +730,29 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const saveCrmCustomerEdit = async () => {
+    if (!selectedCrmProfile || !crmEditName.trim()) {
+      Alert.alert(t('common.error'), t('admin.crm-name-required') || 'Name is required');
+      return;
+    }
+    setCrmEditSaving(true);
+    try {
+      await apiClient.patch(
+        `/api/restaurants/${restaurantId}/crm/customers/${selectedCrmProfile.customer.id}`,
+        { name: crmEditName.trim(), phone: crmEditPhone.trim() || null, email: crmEditEmail.trim() || null }
+      );
+      // Refresh profile in-place
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${selectedCrmProfile.customer.id}`);
+      setSelectedCrmProfile(res.data);
+      setShowCrmEditModal(false);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || t('admin.crm-save-failed') || 'Failed to save');
+    } finally {
+      setCrmEditSaving(false);
+    }
+  };
 
-  const loadAddonPresetItems = async (presetId: number) => {
+ = async (presetId: number) => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
       setAddonPresetItems(Array.isArray(res.data) ? res.data : []);
@@ -2105,7 +2132,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => setSelectedCrmProfile(null)}>
             <Ionicons name="arrow-back" size={16} color="#4f46e5" />
-            <Text style={styles.crmBackToListText}>Back to customers</Text>
+            <Text style={styles.crmBackToListText}>{t('admin.crm-back-to-list') || 'Back to customers'}</Text>
           </TouchableOpacity>
 
           <View style={styles.crmProfileHero}>
@@ -2113,7 +2140,20 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <Text style={styles.crmProfileHeroAvatarText}>{initials}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCrmEditName(customer.name || '');
+                    setCrmEditPhone(customer.phone || '');
+                    setCrmEditEmail(customer.email || '');
+                    setShowCrmEditModal(true);
+                  }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: 6, marginLeft: 8 }}
+                >
+                  <Ionicons name="pencil" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <Text style={{ color: '#9ca3af', fontSize: 11 }}>📞</Text>
                 <Text style={styles.crmProfileContact}>{customer.phone || '—'}</Text>
@@ -2128,32 +2168,32 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.crmStatsRow}>
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue}>{customer.total_visits || 0}</Text>
-              <Text style={styles.crmStatLabel}>Visits</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-visits') || 'Visits'}</Text>
             </View>
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
-              <Text style={styles.crmStatLabel}>Spent</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-spent') || 'Spent'}</Text>
             </View>
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue}>{formatCurrency(total_transacted_cents || 0)}</Text>
-              <Text style={styles.crmStatLabel}>Transacted</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-transacted') || 'Transacted'}</Text>
             </View>
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue} numberOfLines={1} adjustsFontSizeToFit>{customer.last_visit_at ? formatDate(customer.last_visit_at) : '—'}</Text>
-              <Text style={styles.crmStatLabel}>Last Visit</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-last-visit') || 'Last Visit'}</Text>
             </View>
           </View>
 
           {!!customer.notes && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Notes</Text>
+              <Text style={styles.sectionTitle}>{t('admin.crm-notes') || 'Notes'}</Text>
               <Text style={styles.sectionDescription}>{customer.notes}</Text>
             </View>
           )}
 
           {future_bookings.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
+              <Text style={styles.sectionTitle}>{t('admin.crm-upcoming-bookings') || 'Upcoming Bookings'}</Text>
               {future_bookings.map((booking) => renderCrmBookingRow(booking, 'future'))}
             </View>
           )}
@@ -2161,7 +2201,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {/* Unified history timeline */}
           {timeline.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>History</Text>
+              <Text style={styles.sectionTitle}>{t('admin.crm-history') || 'History'}</Text>
               {timeline.map((item, idx) => {
                 const { booking, order } = item;
                 const colors = booking ? bookingStatusColor(booking.status) : null;
@@ -2275,103 +2315,250 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     );
   };
 
-  const renderCrmPage = () => (
-    <View style={styles.container}>
-      {renderSubPageHeader('CRM')}
-      {selectedCrmProfile ? (
-        renderCrmProfile()
-      ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Customers</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.label}>
-                  {crmSearchTerm
-                    ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
-                    : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
+  const renderCrmOrderDetailContent = () => {
+    if (crmOrderDetailLoading) {
+      return (
+        <View style={{ padding: 32, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color="#4f46e5" />
+        </View>
+      );
+    }
+    if (!crmOrderDetail) return null;
+    const o = crmOrderDetail;
+    const subtotal = (o.items || []).reduce((sum: number, i: any) => {
+      const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
+      const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || (a.unit_price_cents || 0) * a.quantity), 0);
+      return sum + itemTotal + addonsTotal;
+    }, 0);
+    const serviceChargeAmt = (o.total_cents || 0) - subtotal;
+
+    // Status badge
+    const statusColors: Record<string, { bg: string; fg: string }> = {
+      completed: { bg: '#d1fae5', fg: '#065f46' },
+      cancelled: { bg: '#fee2e2', fg: '#991b1b' },
+      pending:   { bg: '#fef3c7', fg: '#92400e' },
+    };
+    const sc = statusColors[o.status] || { bg: '#dbeafe', fg: '#1e40af' };
+
+    return (
+      <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {/* Header row with status */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
+            Order #{o.restaurant_order_number || o.id}
+          </Text>
+          <View style={{ backgroundColor: sc.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: sc.fg }}>{(o.status || '').toUpperCase()}</Text>
+          </View>
+        </View>
+
+        {/* Order info rows */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Type</Text>
+          <Text style={{ fontSize: 13, color: '#1f2937' }}>
+            {o.order_type || 'Table'}{o.table_name ? ` — ${o.table_name}` : ''}
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Date</Text>
+          <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(o.created_at)}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Items</Text>
+          <Text style={{ fontSize: 13, color: '#1f2937' }}>
+            {(o.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0)} items
+          </Text>
+        </View>
+
+        {/* Items section */}
+        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginVertical: 12, paddingTop: 12 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Items</Text>
+          {(o.items || []).map((item: any, idx: number) => (
+            <View key={idx} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, color: '#1f2937' }}>
+                    {item.menu_item_name || item.name || '—'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af' }}>×{item.quantity}</Text>
+                  {item.variants ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.variants}</Text> : null}
+                  {(item.addons || []).map((addon: any, ai: number) => (
+                    <Text key={ai} style={{ fontSize: 11, color: '#6366f1', marginTop: 1 }}>
+                      + {addon.menu_item_name} ×{addon.quantity}
+                    </Text>
+                  ))}
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
+                  {formatCurrency(item.item_total_cents || (item.price_cents || 0) * (item.quantity || 1))}
                 </Text>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary, { paddingVertical: 4, paddingHorizontal: 10, opacity: crmSyncing ? 0.6 : 1 }]}
-                  disabled={crmSyncing}
-                  onPress={syncCrmFromBookings}
-                >
-                  <Text style={[styles.crmLoadMoreText, { fontSize: 11 }]}>{crmSyncing ? 'Syncing...' : 'Sync Bookings'}</Text>
-                </TouchableOpacity>
               </View>
             </View>
+          ))}
+        </View>
 
-            <TextInput
-              style={styles.input}
-              value={crmSearchInput}
-              onChangeText={setCrmSearchInput}
-              placeholder="Search name, phone or email"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <View style={styles.crmSortRow}>
-              <Text style={styles.label}>Sort by:</Text>
-              <View style={styles.crmSortChips}>
-                {(['last_visit', 'total_spent', 'total_orders', 'created_at'] as const).map((val) => {
-                  const labels: Record<string, string> = { last_visit: 'Last Visit', total_spent: 'Most Spent', total_orders: 'Most Orders', created_at: 'Newest' };
-                  const active = crmSortBy === val;
-                  return (
-                    <TouchableOpacity
-                      key={val}
-                      onPress={() => setCrmSortBy(val)}
-                      style={[styles.crmSortChip, active && styles.crmSortChipActive]}
-                    >
-                      <Text style={[styles.crmSortChipText, active && styles.crmSortChipTextActive]}>{labels[val]}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+        {/* Order Summary */}
+        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 12 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Summary</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>Subtotal</Text>
+            <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatCurrency(subtotal)}</Text>
+          </View>
+          {serviceChargeAmt > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={{ fontSize: 13, color: '#6b7280' }}>Service Charge</Text>
+              <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatCurrency(serviceChargeAmt)}</Text>
             </View>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>Grand Total</Text>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatCurrency(o.total_cents || 0)}</Text>
+          </View>
+        </View>
 
-            {crmLoading ? (
-              <View style={styles.crmLoadingState}>
-                <ActivityIndicator size="small" color="#4f46e5" />
-                <Text style={styles.emptyText}>Loading customers...</Text>
-              </View>
-            ) : crmError ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{crmError}</Text>
-              </View>
-            ) : crmCustomers.length === 0 ? (
-              <Text style={styles.emptyText}>
-                {crmSearchTerm ? 'No customers matched your search.' : 'No customers yet. Import bookings to get started.'}
-              </Text>
+        {/* Payment Information */}
+        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Information</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Status</Text>
+            <Text style={{ fontSize: 13, color: '#374151', fontWeight: '500' }}>
+              {o.payment_received ? 'paid' : (o.payment_status || 'unpaid')}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Method</Text>
+            <Text style={{ fontSize: 13, color: '#374151' }}>
+              {o.payment_method_label || o.payment_method || o.payment_method_online || '—'}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  };
+
+  const renderCrmPage = () => {
+    const isTablet = (Platform as any).isPad;
+    const showOrderPanel = isTablet && (!!crmOrderDetail || crmOrderDetailLoading);
+
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader('CRM')}
+        <View style={{ flex: 1, flexDirection: showOrderPanel ? 'row' : 'column' }}>
+          {/* Left: profile or customers list */}
+          <View style={{ flex: 1 }}>
+            {selectedCrmProfile ? (
+              renderCrmProfile()
             ) : (
-              <View style={styles.crmListWrap}>
-                {crmCustomers.map((customer) => renderCrmCustomerCard(customer))}
-              </View>
-            )}
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>{t('admin.crm-customers') || 'Customers'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={styles.label}>
+                        {crmSearchTerm
+                          ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
+                          : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.btn, styles.btnSecondary, { paddingVertical: 4, paddingHorizontal: 10, opacity: crmSyncing ? 0.6 : 1 }]}
+                        disabled={crmSyncing}
+                        onPress={syncCrmFromBookings}
+                      >
+                        <Text style={[styles.crmLoadMoreText, { fontSize: 11 }]}>{crmSyncing ? 'Syncing...' : t('admin.crm-import-bookings') || 'Sync Bookings'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
-            {crmHasMore && !crmLoading && (
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSecondary, styles.crmLoadMoreBtn, crmLoadingMore && { opacity: 0.6 }]}
-                disabled={crmLoadingMore}
-                onPress={() =>
-                  fetchCrmCustomers({
-                    offset: crmOffset,
-                    append: true,
-                    search: crmSearchTerm,
-                    sortBy: crmSortBy,
-                  })
-                }
-              >
-                <Text style={styles.crmLoadMoreText}>{crmLoadingMore ? 'Loading...' : 'Load More'}</Text>
-              </TouchableOpacity>
+                  <TextInput
+                    style={styles.input}
+                    value={crmSearchInput}
+                    onChangeText={setCrmSearchInput}
+                    placeholder={t('admin.crm-search-placeholder') || 'Search name, phone or email'}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+
+                  <View style={styles.crmSortRow}>
+                    <Text style={styles.label}>Sort by:</Text>
+                    <View style={styles.crmSortChips}>
+                      {(['last_visit', 'total_spent', 'total_orders', 'created_at'] as const).map((val) => {
+                        const labels: Record<string, string> = {
+                          last_visit:   t('admin.crm-sort-last-visit')  || 'Last Visit',
+                          total_spent:  t('admin.crm-sort-spent')       || 'Most Spent',
+                          total_orders: t('admin.crm-sort-orders')      || 'Most Orders',
+                          created_at:   t('admin.crm-sort-newest')      || 'Newest',
+                        };
+                        const active = crmSortBy === val;
+                        return (
+                          <TouchableOpacity
+                            key={val}
+                            onPress={() => setCrmSortBy(val)}
+                            style={[styles.crmSortChip, active && styles.crmSortChipActive]}
+                          >
+                            <Text style={[styles.crmSortChipText, active && styles.crmSortChipTextActive]}>{labels[val]}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {crmLoading ? (
+                    <View style={styles.crmLoadingState}>
+                      <ActivityIndicator size="small" color="#4f46e5" />
+                      <Text style={styles.emptyText}>{t('admin.crm-loading') || 'Loading customers...'}</Text>
+                    </View>
+                  ) : crmError ? (
+                    <View style={styles.errorContainer}>
+                      <Text style={styles.errorText}>{crmError}</Text>
+                    </View>
+                  ) : crmCustomers.length === 0 ? (
+                    <Text style={styles.emptyText}>
+                      {crmSearchTerm ? t('admin.crm-no-results') || 'No customers matched your search.' : t('admin.crm-empty') || 'No customers yet. Import bookings to get started.'}
+                    </Text>
+                  ) : (
+                    <View style={styles.crmListWrap}>
+                      {crmCustomers.map((customer) => renderCrmCustomerCard(customer))}
+                    </View>
+                  )}
+
+                  {crmHasMore && !crmLoading && (
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnSecondary, styles.crmLoadMoreBtn, crmLoadingMore && { opacity: 0.6 }]}
+                      disabled={crmLoadingMore}
+                      onPress={() =>
+                        fetchCrmCustomers({
+                          offset: crmOffset,
+                          append: true,
+                          search: crmSearchTerm,
+                          sortBy: crmSortBy,
+                        })
+                      }
+                    >
+                      <Text style={styles.crmLoadMoreText}>{crmLoadingMore ? t('common.loading') || 'Loading...' : t('admin.crm-load-more') || 'Load More'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </ScrollView>
             )}
           </View>
-        </ScrollView>
-      )}
-    </View>
-  );
 
-  // Language selection page
-  const renderLanguagePage = () => (
+          {/* Right panel: order detail (iPad side panel) */}
+          {showOrderPanel && (
+            <View style={{ width: 340, backgroundColor: '#fff', borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>
+                  {crmOrderDetail ? `Order #${crmOrderDetail.restaurant_order_number || crmOrderDetail.id}` : 'Loading…'}
+                </Text>
+                <TouchableOpacity onPress={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}>
+                  <Ionicons name="close" size={20} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              {renderCrmOrderDetailContent()}
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
     <View style={styles.container}>
       {renderSubPageHeader(t('admin.language') || 'Language')}
       <View style={{ padding: 16 }}>
@@ -2873,7 +3060,24 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.show_item_status_to_diners ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
                 </TouchableOpacity>
               </View>
-              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.item-status-desc')}</Text>
+              <View style={[styles.settingItem, { marginTop: 12 }]}>
+                <Text style={styles.label}>{t('settings.email-receipt-enabled')}</Text>
+                <TouchableOpacity
+                  style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.feature_flags?.email_receipt_enabled ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                  onPress={async () => {
+                    const newVal = !settings.feature_flags?.email_receipt_enabled;
+                    try {
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { feature_flags: { email_receipt_enabled: newVal } });
+                      setSettings({ ...settings, feature_flags: { ...(settings.feature_flags || {}), email_receipt_enabled: newVal } });
+                    } catch (err) {
+                      Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
+                    }
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.feature_flags?.email_receipt_enabled ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.email-receipt-desc')}</Text>
             </>
           )}
         </View>
@@ -3799,10 +4003,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         {renderCurrentPage()}
       </Animated.View>
 
-      {/* CRM Order Detail Modal */}
+      {/* CRM Order Detail Modal (phone only — iPad uses side panel) */}
       <Modal
         supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-        visible={!!crmOrderDetail || crmOrderDetailLoading}
+        visible={!(Platform as any).isPad && (!!crmOrderDetail || crmOrderDetailLoading)}
         animationType="slide"
         transparent
         onRequestClose={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}
@@ -3817,45 +4021,66 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 <Ionicons name="close" size={22} color="#6b7280" />
               </TouchableOpacity>
             </View>
-            {crmOrderDetailLoading ? (
-              <View style={{ padding: 32, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="#4f46e5" />
-              </View>
-            ) : crmOrderDetail ? (
-              <ScrollView contentContainerStyle={{ padding: 16 }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>📅 {formatDate(crmOrderDetail.created_at)}</Text>
-                  {crmOrderDetail.table_name ? <Text style={{ fontSize: 12, color: '#6b7280' }}>🪑 {crmOrderDetail.table_name}</Text> : null}
-                  {crmOrderDetail.order_type ? <Text style={{ fontSize: 12, color: '#6b7280' }}>📦 {crmOrderDetail.order_type}</Text> : null}
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>💳 {crmOrderDetail.payment_method_label || crmOrderDetail.payment_method_online || '—'}</Text>
-                </View>
-                {(crmOrderDetail.items || []).map((item: any) => (
-                  <View key={item.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#111827', flex: 1, marginRight: 8 }}>
-                        {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.menu_item_name || '—'}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>
-                        {formatCurrency(item.item_total_cents)}
-                      </Text>
-                    </View>
-                    {item.variants ? <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{item.variants}</Text> : null}
-                    {(item.addons || []).map((addon: any) => (
-                      <View key={addon.order_item_id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 12, marginTop: 2 }}>
-                        <Text style={{ fontSize: 11, color: '#6b7280' }}>+ {addon.menu_item_name}</Text>
-                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{formatCurrency(addon.item_total_cents)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ))}
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Total</Text>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669' }}>{formatCurrency(crmOrderDetail.total_cents)}</Text>
-                  </View>
-                </View>
-              </ScrollView>
-            ) : null}
+            {renderCrmOrderDetailContent()}
+          </View>
+        </View>
+      </Modal>
+
+      {/* CRM Customer Edit Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showCrmEditModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowCrmEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('admin.crm-edit-customer') || 'Edit Customer'}</Text>
+
+            <Text style={styles.label}>{t('admin.crm-name') || 'Name'} *</Text>
+            <TextInput
+              style={styles.input}
+              value={crmEditName}
+              onChangeText={setCrmEditName}
+              placeholder="Customer name"
+              autoCapitalize="words"
+            />
+
+            <Text style={styles.label}>{t('admin.crm-phone') || 'Phone'}</Text>
+            <TextInput
+              style={styles.input}
+              value={crmEditPhone}
+              onChangeText={setCrmEditPhone}
+              placeholder="+852 xxxx xxxx"
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.label}>{t('admin.crm-email') || 'Email'}</Text>
+            <TextInput
+              style={styles.input}
+              value={crmEditEmail}
+              onChangeText={setCrmEditEmail}
+              placeholder="email@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => setShowCrmEditModal(false)}
+              >
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, crmEditSaving && { opacity: 0.6 }]}
+                disabled={crmEditSaving}
+                onPress={saveCrmCustomerEdit}
+              >
+                <Text style={styles.btnText}>{crmEditSaving ? (t('common.saving') || 'Saving...') : t('common.save')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

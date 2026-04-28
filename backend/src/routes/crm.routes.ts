@@ -1,7 +1,6 @@
 import { Router } from "express";
 import pool from "../config/db";
 import { requireFeature } from "../middleware/featureFlags";
-import { upsertCrmCustomer } from "../utils/upsertCrmCustomer";
 
 const router = Router();
 
@@ -18,6 +17,112 @@ router.get("/restaurants/:restaurantId/crm/count", requireFeature("crm"), async 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /restaurants/:restaurantId/crm/import-from-bookings
+// Import historical booking guests as CRM customers (upsert by phone, fallback name+restaurantId)
+router.post("/restaurants/:restaurantId/crm/import-from-bookings", requireFeature("crm"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { restaurantId } = req.params;
+    await client.query("BEGIN");
+
+    // Pull all distinct booking guests with name/phone/email
+    const bookingsRes = await client.query(
+      `SELECT
+         TRIM(guest_name) AS name,
+         TRIM(phone)      AS phone,
+         TRIM(email)      AS email,
+         MAX(created_at)  AS last_booking_at,
+         COUNT(*)::int    AS booking_count
+       FROM bookings
+       WHERE restaurant_id = $1
+         AND guest_name IS NOT NULL AND TRIM(guest_name) <> ''
+       GROUP BY TRIM(guest_name), TRIM(phone), TRIM(email)
+       ORDER BY last_booking_at DESC`,
+      [restaurantId]
+    );
+
+    let inserted = 0;
+    let updated  = 0;
+
+    for (const row of bookingsRes.rows) {
+      // Determine if a customer already exists (match by phone first, then by name)
+      let existing: any = null;
+      if (row.phone) {
+        const r = await client.query(
+          `SELECT id FROM crm_customers WHERE restaurant_id = $1 AND phone = $2 LIMIT 1`,
+          [restaurantId, row.phone]
+        );
+        if (r.rowCount && r.rowCount > 0) existing = r.rows[0];
+      }
+      if (!existing) {
+        const r = await client.query(
+          `SELECT id FROM crm_customers WHERE restaurant_id = $1 AND name = $2 AND (phone IS NULL OR phone = '') LIMIT 1`,
+          [restaurantId, row.name]
+        );
+        if (r.rowCount && r.rowCount > 0) existing = r.rows[0];
+      }
+
+      if (existing) {
+        // Update missing fields only (don't overwrite data already there)
+        await client.query(
+          `UPDATE crm_customers
+           SET phone = COALESCE(NULLIF(phone, ''), $2),
+               email = COALESCE(NULLIF(email, ''), $3),
+               updated_at = NOW()
+           WHERE id = $1`,
+          [existing.id, row.phone || null, row.email || null]
+        );
+        updated++;
+      } else {
+        await client.query(
+          `INSERT INTO crm_customers (restaurant_id, name, phone, email, total_visits, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+          [restaurantId, row.name, row.phone || null, row.email || null, row.booking_count]
+        );
+        inserted++;
+      }
+    }
+
+    // Refresh total_visits and total_spent_cents from orders linked by phone or name
+    await client.query(
+      `UPDATE crm_customers c
+       SET
+         total_visits = sub.visit_count,
+         total_spent_cents = sub.spent_cents,
+         last_visit_at = sub.last_visit
+       FROM (
+         SELECT
+           cc.id AS customer_id,
+           COUNT(DISTINCT o.id)::int AS visit_count,
+           COALESCE(SUM(oi.price_cents * oi.quantity) FILTER (WHERE oi.removed = false), 0) AS spent_cents,
+           MAX(o.created_at) AS last_visit
+         FROM crm_customers cc
+         JOIN table_sessions ts ON ts.restaurant_id = cc.restaurant_id
+           AND (
+             (ts.customer_phone IS NOT NULL AND ts.customer_phone <> '' AND ts.customer_phone = cc.phone)
+             OR (ts.customer_name  IS NOT NULL AND ts.customer_name  = cc.name)
+           )
+         JOIN orders o ON o.session_id = ts.id AND o.restaurant_id = cc.restaurant_id
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+         WHERE cc.restaurant_id = $1
+         GROUP BY cc.id
+       ) sub
+       WHERE c.id = sub.customer_id`,
+      [restaurantId]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({ inserted, updated, total: inserted + updated });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[crm import-from-bookings]", err);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    client.release();
   }
 });
 
@@ -93,11 +198,8 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
          o.payment_method,
          o.created_at,
          ts.order_type,
-         ts.id AS session_id,
-         COALESCE(t.name, 'Counter') AS table_label,
+         COALESCE(t.name, ts.table_name, 'Counter') AS table_label,
          ts.pax,
-         COALESCE(ts.discount_applied, 0) AS discount_applied,
-         (SELECT b2.id FROM bookings b2 WHERE b2.session_id = ts.id LIMIT 1) AS linked_booking_id,
          (
            SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
            FROM order_items oi2
@@ -117,27 +219,11 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
       [restaurantId, customerId, customer.phone || '', customer.name]
     );
 
-    // 3. Auto-mark no-show: confirmed bookings in the past with no session started
-    await pool.query(
-      `UPDATE bookings SET status = 'no-show', updated_at = NOW()
-       WHERE restaurant_id = $1
-         AND status = 'confirmed'
-         AND session_id IS NULL
-         AND booking_date < CURRENT_DATE`,
-      [restaurantId]
-    );
-
-    // 4. Bookings matched by phone or name (include all statuses for full history)
+    // 3. Bookings matched by phone or name
     const bookingsRes = await pool.query(
       `SELECT b.id, b.guest_name, b.phone, b.pax, b.booking_date, b.booking_time,
-              b.status, b.notes, b.created_at, b.session_id,
-              COALESCE(t.name, '') AS table_label,
-              (
-                SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
-                FROM orders o2
-                JOIN order_items oi2 ON oi2.order_id = o2.id AND oi2.removed = false
-                WHERE b.session_id IS NOT NULL AND o2.session_id = b.session_id
-              ) AS session_total_cents
+              b.status, b.notes, b.created_at,
+              COALESCE(t.name, '') AS table_label
        FROM bookings b
        LEFT JOIN tables t ON t.id = b.table_id
        WHERE b.restaurant_id = $1
@@ -153,44 +239,18 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
     const pastBookings   = bookingsRes.rows.filter(b => (b.booking_date as string) < now || b.status === 'completed' || b.status === 'cancelled' || b.status === 'no-show');
     const futureBookings = bookingsRes.rows.filter(b => (b.booking_date as string) >= now && b.status === 'confirmed');
 
-    // 5. Eligible coupons:
-    //    - All 'open' coupons (active, not expired, not exhausted)
-    //    - 'closed' coupons explicitly assigned to this customer via customer_coupon_access
-    let couponsRes;
-    try {
-      couponsRes = await pool.query(
-        `SELECT c.id, c.code, c.discount_type, c.discount_value, c.minimum_order_value,
-                c.max_uses, c.current_uses, c.valid_until, c.is_active,
-                COALESCE(c.coupon_type, 'open') AS coupon_type
-         FROM coupons c
-         WHERE c.restaurant_id = $1
-           AND c.is_active = true
-           AND (c.valid_until IS NULL OR c.valid_until >= NOW())
-           AND (c.max_uses IS NULL OR c.current_uses < c.max_uses)
-           AND (
-             COALESCE(c.coupon_type, 'open') = 'open'
-             OR EXISTS (
-               SELECT 1 FROM customer_coupon_access cca
-               WHERE cca.coupon_id = c.id AND cca.customer_id = $2
-             )
-           )
-         ORDER BY c.created_at DESC`,
-        [restaurantId, customerId]
-      );
-    } catch {
-      // Fallback if migration 086 not applied yet — return all active coupons
-      couponsRes = await pool.query(
-        `SELECT id, code, discount_type, discount_value, minimum_order_value,
-                max_uses, current_uses, valid_until, is_active, 'open' AS coupon_type
-         FROM coupons
-         WHERE restaurant_id = $1
-           AND is_active = true
-           AND (valid_until IS NULL OR valid_until >= NOW())
-           AND (max_uses IS NULL OR current_uses < max_uses)
-         ORDER BY created_at DESC`,
-        [restaurantId]
-      );
-    }
+    // 4. Eligible coupons (active, not expired, not exhausted)
+    const couponsRes = await pool.query(
+      `SELECT id, code, discount_type, discount_value, min_order_cents,
+              max_uses, current_uses, valid_from, valid_until, is_active
+       FROM coupons
+       WHERE restaurant_id = $1
+         AND is_active = true
+         AND (valid_until IS NULL OR valid_until >= NOW())
+         AND (max_uses IS NULL OR current_uses < max_uses)
+       ORDER BY created_at DESC`,
+      [restaurantId]
+    );
 
     res.json({
       customer,
@@ -200,6 +260,39 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
       future_bookings: futureBookings,
       eligible_coupons: couponsRes.rows,
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /restaurants/:restaurantId/crm/customers/:customerId
+// Update a CRM customer's name, phone, and/or email
+router.patch("/restaurants/:restaurantId/crm/customers/:customerId", requireFeature("crm"), async (req, res) => {
+  try {
+    const { restaurantId, customerId } = req.params;
+    const { name, phone, email } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+
+    const result = await pool.query(
+      `UPDATE crm_customers
+       SET name = $1,
+           phone = $2,
+           email = $3,
+           updated_at = NOW()
+       WHERE id = $4 AND restaurant_id = $5
+       RETURNING id, name, phone, email, notes, total_visits, total_spent_cents, last_visit_at, created_at`,
+      [name.trim(), phone?.trim() || null, email?.trim() || null, customerId, restaurantId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Customer not found" });
+    }
+
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -231,87 +324,85 @@ router.post("/restaurants/:restaurantId/crm/customers", requireFeature("crm"), a
   }
 });
 
-// POST /restaurants/:restaurantId/crm/sync-from-bookings
-// One-time import of booking guests into crm_customers.
-// Safe to call multiple times — skips duplicates.
-router.post("/restaurants/:restaurantId/crm/sync-from-bookings", requireFeature("crm"), async (req, res) => {
-  try {
-    const { restaurantId } = req.params;
-
-    // Step 1: Insert guests that aren't already in CRM.
-    // Intentionally avoids referencing bookings.email (column may not exist yet).
-    const insertRes = await pool.query(
-      `WITH booking_guests AS (
-         SELECT
-           restaurant_id,
-           TRIM(guest_name)            AS name,
-           NULLIF(TRIM(phone), '')     AS phone,
-           COUNT(*)::int               AS booking_count
-         FROM bookings
-         WHERE restaurant_id = $1
-           AND guest_name IS NOT NULL AND TRIM(guest_name) <> ''
-         GROUP BY restaurant_id, TRIM(guest_name), NULLIF(TRIM(phone), '')
-       )
-       INSERT INTO crm_customers (restaurant_id, name, phone, total_visits, created_at, updated_at)
-       SELECT bg.restaurant_id, bg.name, bg.phone, bg.booking_count, NOW(), NOW()
-       FROM booking_guests bg
-       WHERE NOT EXISTS (
-         SELECT 1 FROM crm_customers cc
-         WHERE cc.restaurant_id = bg.restaurant_id
-           AND (
-             (bg.phone IS NOT NULL AND cc.phone = bg.phone)
-             OR (bg.phone IS NULL AND cc.name = bg.name AND (cc.phone IS NULL OR cc.phone = ''))
-           )
-       )`,
-      [restaurantId]
-    );
-
-    const inserted = insertRes.rowCount ?? 0;
-
-    // Step 2: Count total CRM customers for this restaurant
-    const countRes = await pool.query(
-      `SELECT COUNT(*)::int AS total FROM crm_customers WHERE restaurant_id = $1`,
-      [restaurantId]
-    );
-
-    res.json({ inserted, total: countRes.rows[0]?.total ?? 0 });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 // PATCH /sessions/:sessionId/customer
-// Update customer_name and customer_phone on a table session
+// Update customer_name, customer_phone, and customer_email on a table session
+// Also upserts customer to CRM when a name is provided
 router.patch("/sessions/:sessionId/customer", async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { customer_name, customer_phone } = req.body;
+    const { customer_name, customer_phone, customer_email } = req.body;
 
     const result = await pool.query(
       `UPDATE table_sessions
-       SET customer_name = $1, customer_phone = $2
-       WHERE id = $3
-       RETURNING id, restaurant_id, customer_name, customer_phone`,
-      [customer_name || null, customer_phone || null, sessionId]
-    );
+       SET customer_name = $1, customer_phone = $2, customer_email = $3
+       WHERE id = $4
+       RETURNING id, customer_name, customer_phone, customer_email, restaurant_id`,
+      [customer_name || null, customer_phone || null, customer_email || null, sessionId]
+    ).catch(async (err: any) => {
+      // Fallback if customer_email column doesn't exist yet (migration pending)
+      if (err.message?.includes('customer_email')) {
+        return pool.query(
+          `UPDATE table_sessions
+           SET customer_name = $1, customer_phone = $2
+           WHERE id = $3
+           RETURNING id, customer_name, customer_phone, restaurant_id`,
+          [customer_name || null, customer_phone || null, sessionId]
+        );
+      }
+      throw err;
+    });
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    const row = result.rows[0];
+    const session = result.rows[0];
 
-    // Auto-sync to CRM if a name was provided (fire-and-forget)
-    if (row.customer_name) {
-      upsertCrmCustomer({
-        restaurantId: row.restaurant_id,
-        name:  row.customer_name,
-        phone: row.customer_phone,
-      });
+    // Upsert to CRM if a name is provided
+    if (customer_name && session.restaurant_id) {
+      try {
+        let crmId: number | null = null;
+
+        // Try to find existing customer by phone, then email
+        if (customer_phone) {
+          const existing = await pool.query(
+            `SELECT id FROM crm_customers WHERE restaurant_id = $1 AND phone = $2 LIMIT 1`,
+            [session.restaurant_id, customer_phone]
+          );
+          if (existing.rows.length > 0) crmId = existing.rows[0].id;
+        }
+        if (!crmId && customer_email) {
+          const existing = await pool.query(
+            `SELECT id FROM crm_customers WHERE restaurant_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1`,
+            [session.restaurant_id, customer_email]
+          );
+          if (existing.rows.length > 0) crmId = existing.rows[0].id;
+        }
+
+        if (crmId) {
+          await pool.query(
+            `UPDATE crm_customers
+             SET name = $2,
+                 phone = COALESCE(NULLIF($3, ''), phone),
+                 email = COALESCE(NULLIF($4, ''), email),
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [crmId, customer_name, customer_phone || null, customer_email || null]
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO crm_customers (restaurant_id, name, phone, email, total_visits, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 1, NOW(), NOW())
+             ON CONFLICT DO NOTHING`,
+            [session.restaurant_id, customer_name, customer_phone || null, customer_email || null]
+          );
+        }
+      } catch (crmErr) {
+        console.warn("[CRM] Non-fatal: failed to upsert customer:", crmErr);
+      }
     }
 
-    res.json({ id: row.id, customer_name: row.customer_name, customer_phone: row.customer_phone });
+    res.json(session);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
