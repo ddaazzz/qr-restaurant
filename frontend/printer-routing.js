@@ -59,7 +59,7 @@ async function queuePrintJob(deviceId, printFn) {
  * Returns true if printing succeeded, false if the bridge is not running.
  */
 async function sendViaPrintBridge(networkPrint) {
-  const BRIDGE_URL = 'http://localhost:3001/print-escpos';
+  const BRIDGE_URL = 'https://localhost:3001/print-escpos';
   const { host, port, escposBase64 } = networkPrint;
   try {
     console.log(`[PrintBridge] Trying local print bridge for ${host}:${port}…`);
@@ -76,15 +76,19 @@ async function sendViaPrintBridge(networkPrint) {
     console.log('[PrintBridge] ✓ Printed via local bridge');
     return true;
   } catch (err) {
-    if (err.name === 'TypeError' || err.name === 'AbortError' || err.message.includes('fetch')) {
-      // Bridge not running — show setup instructions
+    if (err.name === 'TypeError' || err.name === 'AbortError' || err.message.includes('fetch') || err.message.includes('Load failed')) {
+      // Bridge not running, or HTTPS certificate not yet trusted
       console.warn('[PrintBridge] Bridge not reachable:', err.message);
       alert(
         tr('admin.printer-bridge-not-running',
-          `⚠️ The local print bridge is not running.\n\n` +
-          `To print from the browser, start the bridge on this computer:\n\n` +
+          `⚠️ Cannot reach the local print bridge.\n\n` +
+          `If the bridge is NOT running, start it:\n` +
           `  node print-bridge.js\n\n` +
-          `(find print-bridge.js in the project root)\n\n` +
+          `If it IS running but you still see this message, you need to\n` +
+          `trust its HTTPS certificate once in your browser:\n` +
+          `  1. Open https://localhost:3001 in this browser\n` +
+          `  2. Click through the security warning to trust it\n` +
+          `  3. Return here and try printing again\n\n` +
           `Alternatively, use the mobile app to print to ${host}:${port}.`
         )
       );
