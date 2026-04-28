@@ -45,10 +45,10 @@ interface RestaurantSettings {
   qr_mode?: 'regenerate' | 'static_table' | 'static_seat';
   booking_time_allowance_mins?: number;
   show_item_status_to_diners?: boolean;
-  feature_flags?: Record<string, any>;
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
+  feature_flags?: Record<string, any>;
 }
 
 interface PrinterSettings {
@@ -3060,6 +3060,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.show_item_status_to_diners ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
                 </TouchableOpacity>
               </View>
+              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.item-status-desc')}</Text>
               <View style={[styles.settingItem, { marginTop: 12 }]}>
                 <Text style={styles.label}>{t('settings.email-receipt-enabled')}</Text>
                 <TouchableOpacity

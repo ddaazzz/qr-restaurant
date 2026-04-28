@@ -85,6 +85,7 @@ interface Order {
   table_name?: string;
   customer_name?: string;
   customer_phone?: string;
+  customer_email?: string;
   // Payment fields from backend
   payment_status?: string;
   payment_received?: boolean;
@@ -274,9 +275,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [editingCustomer, setEditingCustomer] = useState(false);
     const [editCustomerName, setEditCustomerName] = useState('');
     const [editCustomerPhone, setEditCustomerPhone] = useState('');
+    const [editCustomerEmail, setEditCustomerEmail] = useState('');
     const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
     const [customerSearchQuery, setCustomerSearchQuery] = useState('');
     const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Email receipt state
+    const [emailReceiptEnabled, setEmailReceiptEnabled] = useState(false);
+    const [showEmailReceiptModal, setShowEmailReceiptModal] = useState(false);
+    const [emailReceiptAddress, setEmailReceiptAddress] = useState('');
+    const [emailReceiptSending, setEmailReceiptSending] = useState(false);
+    const [emailReceiptSessionId, setEmailReceiptSessionId] = useState<number | null>(null);
 
     // History filter tab state
     const [historyFilter, setHistoryFilter] = useState<'all' | 'table' | 'pay-now' | 'to-go'>('all');
@@ -394,6 +403,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       loadMenu();
       loadTables();
       loadKpayTerminal();
+      // Load email receipt setting
+      apiClient.get(`/api/restaurants/${restaurantId}/settings`)
+        .then(res => setEmailReceiptEnabled(!!res.data?.feature_flags?.email_receipt_enabled))
+        .catch(() => {});
     }, [restaurantId]);
 
     // Load history when showing history view
@@ -439,6 +452,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const selectCrmCustomer = (customer: any) => {
       setEditCustomerName(customer.name || '');
       setEditCustomerPhone(customer.phone || '');
+      setEditCustomerEmail(customer.email || '');
       setCustomerSearchResults([]);
       setCustomerSearchQuery('');
     };
@@ -449,19 +463,44 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         await apiClient.patch(`/api/sessions/${selectedHistoryOrder.session_id}/customer`, {
           customer_name: editCustomerName,
           customer_phone: editCustomerPhone,
+          customer_email: editCustomerEmail,
         });
         // Update local state
         if (selectedHistoryOrder) {
-          const updated = { ...selectedHistoryOrder, customer_name: editCustomerName, customer_phone: editCustomerPhone };
+          const updated = { ...selectedHistoryOrder, customer_name: editCustomerName, customer_phone: editCustomerPhone, customer_email: editCustomerEmail };
           setSelectedHistoryOrder(updated);
-          // Update in orders list too
-          setOrders((prev: Order[]) => prev.map((o: Order) => o.id === updated.id ? { ...o, customer_name: editCustomerName, customer_phone: editCustomerPhone } : o));
+          setOrders((prev: Order[]) => prev.map((o: Order) => o.id === updated.id ? { ...o, customer_name: editCustomerName, customer_phone: editCustomerPhone, customer_email: editCustomerEmail } : o));
         }
         setEditingCustomer(false);
         showToast(t('orders.customer-saved'), 'success');
       } catch (err) {
         showToast(t('orders.customer-save-failed'), 'error');
       }
+    };
+
+    const sendEmailReceipt = async (email: string, sessionId?: number) => {
+      const sid = sessionId || selectedHistoryOrder?.session_id;
+      if (!sid || !email) return;
+      setEmailReceiptSending(true);
+      try {
+        await apiClient.post(`/api/sessions/${sid}/receipts/send-email`, {
+          restaurantId: parseInt(restaurantId),
+          customerEmail: email,
+        });
+        showToast(t('orders.receipt-sent'), 'success');
+        setShowEmailReceiptModal(false);
+        setEmailReceiptAddress('');
+      } catch (err: any) {
+        showToast(t('orders.receipt-send-failed'), 'error');
+      } finally {
+        setEmailReceiptSending(false);
+      }
+    };
+
+    const openEmailReceiptModal = (sessionId: number, prefilledEmail?: string) => {
+      setEmailReceiptSessionId(sessionId);
+      setEmailReceiptAddress(prefilledEmail || '');
+      setShowEmailReceiptModal(true);
     };
 
     // Load live transaction details for the selected order
@@ -850,6 +889,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         );
         setShowPaymentModal(false);
         showToast(t('orders.payment-confirmed'), 'success');
+        if (emailReceiptEnabled && paymentModalSessionId) {
+          openEmailReceiptModal(paymentModalSessionId, selectedHistoryOrder?.customer_email || '');
+        }
         await loadOrdersAndSessions();
       } catch (err: any) {
         Alert.alert(t('orders.error'), err.response?.data?.error || t('orders.payment-failed'));
@@ -940,6 +982,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 setShowPaymentModal(false);
                 setKpayLogs([]);
                 showToast(t('orders.payment-confirmed'), 'success');
+                if (emailReceiptEnabled && paymentModalSessionId) {
+                  openEmailReceiptModal(paymentModalSessionId, selectedHistoryOrder?.customer_email || '');
+                }
                 loadOrdersAndSessions();
               }, 2000);
               return;
@@ -1195,6 +1240,54 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       });
     };
 
+    // ============= EMAIL RECEIPT MODAL =============
+    const emailReceiptModal = (
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showEmailReceiptModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => { if (!emailReceiptSending) { setShowEmailReceiptModal(false); } }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '85%', maxWidth: 400, padding: 20 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#1f2937', marginBottom: 6 }}>📧 {t('orders.email-receipt-title')}</Text>
+            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>{t('orders.email-receipt-prompt')}</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 16, backgroundColor: '#f9fafb' }}
+              value={emailReceiptAddress}
+              onChangeText={setEmailReceiptAddress}
+              placeholder="customer@email.com"
+              placeholderTextColor="#9ca3af"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!emailReceiptSending}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={() => { setShowEmailReceiptModal(false); setEmailReceiptAddress(''); }}
+                disabled={emailReceiptSending}
+              >
+                <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.no-thanks')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: emailReceiptSending ? '#93c5fd' : '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={() => sendEmailReceipt(emailReceiptAddress, emailReceiptSessionId || undefined)}
+                disabled={emailReceiptSending || !emailReceiptAddress.trim()}
+              >
+                {emailReceiptSending
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.send-receipt-btn')}</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+
     // ============= PAYMENT MODAL (shared between history and menu views) =============
     const paymentModal = (
         <Modal
@@ -1365,8 +1458,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 placeholder={t('orders.customer-name-placeholder')}
                 placeholderTextColor="#9ca3af"
               />
-              {customerSearchResults.length > 0 && (
-                <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 6, maxHeight: 120, marginBottom: 4 }}>
+              {(customerSearchResults.length > 0 || (customerSearchQuery.trim().length >= 1)) && (
+                <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 6, maxHeight: 150, marginBottom: 4 }}>
                   <ScrollView nestedScrollEnabled>
                     {customerSearchResults.map((c: any) => (
                       <TouchableOpacity
@@ -1375,19 +1468,42 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         onPress={() => selectCrmCustomer(c)}
                       >
                         <Text style={{ fontSize: 13, color: '#1f2937', fontWeight: '500' }}>{c.name}</Text>
-                        {c.phone ? <Text style={{ fontSize: 11, color: '#6b7280' }}>{c.phone}</Text> : null}
+                        <Text style={{ fontSize: 11, color: '#6b7280' }}>
+                          {[c.phone, c.email].filter(Boolean).join(' · ') || ''}
+                        </Text>
                       </TouchableOpacity>
                     ))}
+                    {customerSearchQuery.trim().length >= 1 && (
+                      <TouchableOpacity
+                        style={{ padding: 8, borderTopWidth: customerSearchResults.length > 0 ? 1 : 0, borderTopColor: '#e5e7eb', backgroundColor: '#f0fdf4' }}
+                        onPress={() => {
+                          // "Create new" just keeps the typed name, clears search results
+                          setCustomerSearchResults([]);
+                          setCustomerSearchQuery('');
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, color: '#166534', fontWeight: '600' }}>{t('orders.create-new-customer')}</Text>
+                      </TouchableOpacity>
+                    )}
                   </ScrollView>
                 </View>
               )}
               <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, padding: 8, fontSize: 13, marginBottom: 8, backgroundColor: '#fff' }}
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, padding: 8, fontSize: 13, marginBottom: 4, backgroundColor: '#fff' }}
                 value={editCustomerPhone}
                 onChangeText={setEditCustomerPhone}
                 placeholder={t('orders.customer-phone-placeholder')}
                 placeholderTextColor="#9ca3af"
                 keyboardType="phone-pad"
+              />
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, padding: 8, fontSize: 13, marginBottom: 8, backgroundColor: '#fff' }}
+                value={editCustomerEmail}
+                onChangeText={setEditCustomerEmail}
+                placeholder={t('orders.customer-email-placeholder')}
+                placeholderTextColor="#9ca3af"
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 <TouchableOpacity
@@ -1409,6 +1525,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               onPress={() => {
                 setEditCustomerName(selectedHistoryOrder.customer_name || '');
                 setEditCustomerPhone(selectedHistoryOrder.customer_phone || '');
+                setEditCustomerEmail(selectedHistoryOrder.customer_email || '');
                 setEditingCustomer(true);
                 setCustomerSearchResults([]);
               }}
@@ -1867,6 +1984,19 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             }
             return null;
           })()}
+
+          {/* Email Receipt Button — for paid orders when feature is enabled */}
+          {emailReceiptEnabled && !isOrderUnpaid(selectedHistoryOrder) && selectedHistoryOrder.session_id && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#eff6ff', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#bfdbfe', marginTop: 12 }}
+              onPress={() => openEmailReceiptModal(
+                selectedHistoryOrder.session_id!,
+                selectedHistoryOrder.customer_email || ''
+              )}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#1d4ed8' }}>📧 {t('orders.email-receipt-btn')}</Text>
+            </TouchableOpacity>
+          )}
         </>
       );
     };
@@ -1891,6 +2021,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               </ScrollView>
             </View>
             {paymentModal}
+            {emailReceiptModal}
           </>
         );
       }
@@ -2072,6 +2203,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           )}
         </View>
         {paymentModal}
+        {emailReceiptModal}
         </>
       );
     }
@@ -2520,6 +2652,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
           {paymentModal}
+          {emailReceiptModal}
           {tablePickerModal}
         </>
       );
@@ -2541,6 +2674,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
           {paymentModal}
+          {emailReceiptModal}
           {tablePickerModal}
         </>
       );
@@ -2765,6 +2899,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
         {/* Order Now Payment Modal */}
         {paymentModal}
+        {emailReceiptModal}
 
         {/* Customer Name Modal for To-Go orders */}
         <Modal
