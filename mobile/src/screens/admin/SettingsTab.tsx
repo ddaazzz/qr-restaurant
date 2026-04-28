@@ -4400,7 +4400,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         )}
                       </View>
                       <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
-                        {vendor === 'kpay' ? 'KPay'
+                        {vendor === 'kpay' ? 'KPay (Offline · Physical Terminal)'
                           : vendor === 'payment-asia' ? 'Payment Asia (Online · Cloud Gateway)'
                           : vendor === 'payment-asia-offline' ? 'Payment Asia (Offline · Physical Terminal)'
                           : t('settings.other')}
@@ -4417,7 +4417,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
                 <Text style={{ fontSize: 14, color: '#6b7280', paddingVertical: 8 }}>
-                  {terminalForm.vendor_name === 'kpay' ? 'KPay'
+                  {terminalForm.vendor_name === 'kpay' ? 'KPay (Offline · Physical Terminal)'
                     : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia (Online)'
                     : terminalForm.vendor_name === 'payment-asia-offline' ? 'Payment Asia (Offline)'
                     : 'Other'}

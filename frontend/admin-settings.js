@@ -1733,6 +1733,7 @@ function renderPaymentTerminalsList() {
     
     const vendorDisplay = terminal.vendor_name === 'payment-asia' ? 'Payment Asia (Online)'
       : terminal.vendor_name === 'payment-asia-offline' ? 'Payment Asia (Offline)'
+      : terminal.vendor_name === 'kpay' ? 'KPay (Offline)'
       : terminal.vendor_name.toUpperCase();
     html += '<span style="font-weight: bold; font-size: 14px;">' + vendorDisplay + '</span>';
     
