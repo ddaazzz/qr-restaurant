@@ -52,6 +52,51 @@ async function queuePrintJob(deviceId, printFn) {
 }
 
 /**
+ * Try to send ESC/POS data to the local print bridge (print-bridge.js).
+ * The bridge is a tiny Node.js HTTP server running on the restaurant's
+ * computer at localhost:3001 that forwards bytes over TCP to the printer.
+ *
+ * Returns true if printing succeeded, false if the bridge is not running.
+ */
+async function sendViaPrintBridge(networkPrint) {
+  const BRIDGE_URL = 'http://localhost:3001/print-escpos';
+  const { host, port, escposBase64 } = networkPrint;
+  try {
+    console.log(`[PrintBridge] Trying local print bridge for ${host}:${port}…`);
+    const resp = await fetch(BRIDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host, port, escposBase64 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.error || `Bridge returned HTTP ${resp.status}`);
+    }
+    console.log('[PrintBridge] ✓ Printed via local bridge');
+    return true;
+  } catch (err) {
+    if (err.name === 'TypeError' || err.name === 'AbortError' || err.message.includes('fetch')) {
+      // Bridge not running — show setup instructions
+      console.warn('[PrintBridge] Bridge not reachable:', err.message);
+      alert(
+        tr('admin.printer-bridge-not-running',
+          `⚠️ The local print bridge is not running.\n\n` +
+          `To print from the browser, start the bridge on this computer:\n\n` +
+          `  node print-bridge.js\n\n` +
+          `(find print-bridge.js in the project root)\n\n` +
+          `Alternatively, use the mobile app to print to ${host}:${port}.`
+        )
+      );
+    } else {
+      console.error('[PrintBridge] Print error:', err.message);
+      alert(`❌ Print bridge error: ${err.message}`);
+    }
+    return false;
+  }
+}
+
+/**
  * Append text to ESC/POS commands
  */
 function appendText(commands, text) {
@@ -469,6 +514,16 @@ async function printQRViaAPI(restaurantId, sessionId, tableId, tableName, qrToke
       console.log('[PrintRouter] QR code queued with job ID:', result.jobId);
       alert(tr('admin.printer-queued-qr', '✅ QR code queued for printing'));
       return result;
+    } else if (result.networkPrint) {
+      // Network printer: try local print bridge first, fall back to instructions.
+      if (result.html) {
+        console.log('[PrintRouter] Network printer — using HTML fallback for browser print');
+        handleBrowserPrint(result.html);
+        alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
+      } else {
+        await sendViaPrintBridge(result.networkPrint);
+      }
+      return result;
     }
     
     console.warn('[PrintRouter] Unexpected response format:', result);
@@ -602,9 +657,15 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
       }
       return result;
     } else if (result.networkPrint) {
-      // Network printer: browser cannot open raw TCP sockets — inform user
-      console.warn('[PrintRouter] Network printer requires direct TCP — not supported in browser.');
-      alert(tr('admin.printer-network-browser-unsupported', `⚠️ Network printing is not supported from the browser.\n\nUse the mobile app to print to ${result.networkPrint.host}:${result.networkPrint.port}, or set the bill printer type to "Browser" for web-based printing.`));
+      // Network printer: try local print bridge first, fall back to instructions.
+      if (result.html) {
+        // Backend provided an HTML fallback — use it directly
+        console.log('[PrintRouter] Network printer — using HTML fallback for browser print');
+        handleBrowserPrint(result.html);
+        alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
+      } else {
+        await sendViaPrintBridge(result.networkPrint);
+      }
       return result;
     } else if (result.jobId) {
       console.log('[PrintRouter] Bill sent with job ID:', result.jobId);
