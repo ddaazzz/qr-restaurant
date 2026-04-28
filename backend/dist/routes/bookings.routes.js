@@ -13,6 +13,12 @@ router.get("/restaurants/:restaurantId/bookings", (0, featureFlags_1.requireFeat
     const restaurantId = parseInt(req.params.restaurantId, 10);
     const { date, table_id } = req.query;
     try {
+        // Auto-mark no-show: confirmed bookings in the past with no session started
+        await db_1.default.query(`UPDATE bookings SET status = 'no-show', updated_at = NOW()
+       WHERE restaurant_id = $1
+         AND status = 'confirmed'
+         AND session_id IS NULL
+         AND booking_date < CURRENT_DATE`, [restaurantId]);
         // booking_date is a DATE column — no timezone conversion needed
         let query = `
       SELECT 

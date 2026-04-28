@@ -19,6 +19,7 @@ export declare class KitchenAutoPrintService {
      * Stop the service
      */
     stop(): void;
+    private handleKitchenDispatch;
 }
 export declare const kitchenAutoPrintService: KitchenAutoPrintService;
 //# sourceMappingURL=kitchenAutoPrintService.d.ts.map

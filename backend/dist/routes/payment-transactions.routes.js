@@ -46,6 +46,7 @@ const db_1 = __importDefault(require("../config/db"));
 const paymentAsiaService_1 = require("../services/paymentAsiaService");
 const paymentAsiaTransactionRepository_1 = __importDefault(require("../services/paymentAsiaTransactionRepository"));
 const paymentStatusMapper = __importStar(require("../services/paymentStatusMapper"));
+const kitchenDispatch_1 = require("../services/kitchenDispatch");
 const websocket_1 = require("../services/websocket");
 const router = (0, express_1.Router)();
 // In-memory store for test payment webhook notifications
@@ -362,6 +363,12 @@ router.post('/restaurants/:restaurantId/webhook/payment-asia', async (req, res) 
             await db_1.default.query(`UPDATE orders
          SET status = 'completed', payment_method = 'payment-asia', chuio_order_reference = $1
          WHERE id = $2 AND restaurant_id = $3`, [merchantRef, payment.order_id, restaurantId]);
+            try {
+                await (0, kitchenDispatch_1.queueKitchenPrintJobs)(Number(payment.order_id), Number(restaurantId));
+            }
+            catch (dispatchErr) {
+                console.warn('[PaymentWebhook] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+            }
         }
         else if (paymentStatus === 'failed') {
             // Reset payment_method so the customer can retry from the menu
@@ -498,6 +505,12 @@ async function handlePaymentReturn(req, res) {
             await db_1.default.query(`UPDATE orders
          SET status = 'completed', payment_method = 'payment-asia', chuio_order_reference = $1
          WHERE id = $2::int AND restaurant_id = $3::int`, [merchantRef, orderId, restaurantId]);
+            try {
+                await (0, kitchenDispatch_1.queueKitchenPrintJobs)(Number(orderId), Number(restaurantId));
+            }
+            catch (dispatchErr) {
+                console.warn('[PaymentReturn] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+            }
             console.log('[PaymentReturn] Order marked as paid:', orderId);
         }
         else if (paymentStatus === 'failed') {
@@ -609,6 +622,12 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
                     if (resolvedStatus === 'completed') {
                         await db_1.default.query(`UPDATE orders SET status = 'completed', payment_method = 'payment-asia'
                WHERE id = $1 AND restaurant_id = $2`, [orderId, restaurantId]);
+                        try {
+                            await (0, kitchenDispatch_1.queueKitchenPrintJobs)(Number(orderId), Number(restaurantId));
+                        }
+                        catch (dispatchErr) {
+                            console.warn('[PaymentStatus] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+                        }
                     }
                     else if (resolvedStatus === 'failed') {
                         await db_1.default.query(`UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL

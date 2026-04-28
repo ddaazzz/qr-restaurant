@@ -1,12 +1,47 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const db_1 = __importDefault(require("../config/db"));
 const upload_1 = require("../config/upload");
 const storage_1 = require("../config/storage");
+const memoryUpload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
 const router = (0, express_1.Router)();
 //QR Landing Info
 router.get("/qr/:token/landing", async (req, res) => {
@@ -59,7 +94,7 @@ router.get("/restaurants/:restaurantId/menu_categories", async (req, res) => {
             return res.status(400).json({ error: "Invalid restaurant ID" });
         }
         const result = await db_1.default.query(`
-        SELECT id, name, sort_order,
+        SELECT id, name, name_zh, sort_order,
                COALESCE(time_restricted, FALSE) AS time_restricted,
                TO_CHAR(available_from, 'HH24:MI') AS available_from,
                TO_CHAR(available_to,   'HH24:MI') AS available_to
@@ -78,17 +113,17 @@ router.get("/restaurants/:restaurantId/menu_categories", async (req, res) => {
 router.post("/restaurants/:restaurantId/menu_categories", async (req, res) => {
     try {
         const restaurantId = Number(req.params.restaurantId);
-        const { name } = req.body;
+        const { name, name_zh } = req.body;
         if (!restaurantId || !name) {
             return res.status(400).json({
                 error: "restaurantId and name required"
             });
         }
         const result = await db_1.default.query(`
-        INSERT INTO menu_categories (restaurant_id, name)
-        VALUES ($1, $2)
+        INSERT INTO menu_categories (restaurant_id, name, name_zh)
+        VALUES ($1, $2, $3)
         RETURNING *
-        `, [restaurantId, name.trim()]);
+        `, [restaurantId, name.trim(), name_zh?.trim() || null]);
         res.status(201).json(result.rows[0]);
     }
     catch (err) {
@@ -100,13 +135,17 @@ router.post("/restaurants/:restaurantId/menu_categories", async (req, res) => {
 router.patch("/menu_categories/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, time_restricted, available_from, available_to } = req.body;
+        const { name, name_zh, time_restricted, available_from, available_to } = req.body;
         const updates = [];
         const values = [];
         let p = 1;
         if (name !== undefined) {
             updates.push(`name = $${p++}`);
             values.push(name.trim());
+        }
+        if (name_zh !== undefined) {
+            updates.push(`name_zh = $${p++}`);
+            values.push(name_zh?.trim() || null);
         }
         if (time_restricted !== undefined) {
             updates.push(`time_restricted = $${p++}`);
@@ -125,7 +164,7 @@ router.patch("/menu_categories/:id", async (req, res) => {
         }
         values.push(id);
         const result = await db_1.default.query(`UPDATE menu_categories SET ${updates.join(", ")} WHERE id = $${p}
-       RETURNING id, name, sort_order,
+       RETURNING id, name, name_zh, sort_order,
                  COALESCE(time_restricted, FALSE) AS time_restricted,
                  TO_CHAR(available_from, 'HH24:MI') AS available_from,
                  TO_CHAR(available_to,   'HH24:MI') AS available_to`, values);
@@ -222,8 +261,10 @@ router.get("/restaurants/:restaurantId/menu", async (req, res) => {
         });
     }
     try {
-        const categoriesResult = await db_1.default.query("SELECT * FROM menu_categories WHERE restaurant_id=$1 ORDER BY sort_order", [restaurantId]);
-        const itemsResult = await db_1.default.query(`SELECT mi.*, mc.name AS category_name
+        const categoriesResult = await db_1.default.query("SELECT id, name, name_zh, sort_order, time_restricted, available_from, available_to FROM menu_categories WHERE restaurant_id=$1 ORDER BY sort_order", [restaurantId]);
+        const itemsResult = await db_1.default.query(`SELECT mi.id, mi.name, mi.name_zh, mi.price_cents, mi.description, mi.available, mi.image_url,
+                    mi.category_id, mi.is_meal_combo, mi.sort_order,
+                    mc.name AS category_name, mc.name_zh AS category_name_zh
              FROM menu_items mi
              JOIN menu_categories mc ON mi.category_id=mc.id
              WHERE mi.available=true AND mc.restaurant_id=$1
@@ -290,13 +331,15 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       SELECT
       mi.id,
       mi.name,
+      mi.name_zh,
       mi.description,
       mi.price_cents,
       mi.available,
       mi.image_url,
       mi.category_id,
       mi.is_meal_combo,
-      mc.name AS category_name
+      mc.name AS category_name,
+      mc.name_zh AS category_name_zh
       FROM menu_items mi
       JOIN menu_categories mc ON mc.id = mi.category_id
       WHERE mc.restaurant_id = $1
@@ -408,7 +451,7 @@ router.patch("/menu-item-variant-options/:id/availability", async (req, res) => 
 router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { category_id, name, price_cents, description, is_meal_combo } = req.body;
+        const { category_id, name, name_zh, price_cents, description, is_meal_combo } = req.body;
         if (!category_id || !name || price_cents == null) {
             return res.status(400).json({ error: "Missing required fields" });
         }
@@ -419,12 +462,13 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
         }
         const result = await db_1.default.query(`
       INSERT INTO menu_items
-        (category_id, name, price_cents, description, available, is_meal_combo)
-      VALUES ($1, $2, $3, $4, true, $5)
+        (category_id, name, name_zh, price_cents, description, available, is_meal_combo)
+      VALUES ($1, $2, $3, $4, $5, true, $6)
       RETURNING *
       `, [
             category_id,
             name.trim(),
+            name_zh?.trim() || null,
             price_cents,
             description || null,
             is_meal_combo || false
@@ -443,7 +487,7 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
 router.patch("/menu-items/:itemId", async (req, res) => {
     try {
         const { itemId } = req.params;
-        const { name, price_cents, description, category_id, is_meal_combo, available, restaurantId } = req.body;
+        const { name, name_zh, price_cents, description, category_id, is_meal_combo, available, restaurantId } = req.body;
         if (!restaurantId) {
             return res.status(400).json({ error: "Restaurant ID is required" });
         }
@@ -465,15 +509,17 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       UPDATE menu_items
       SET
         name = COALESCE($1, name),
-        price_cents = COALESCE($2, price_cents),
-        description = COALESCE($3, description),
-        category_id = COALESCE($4, category_id),
-        is_meal_combo = COALESCE($5, is_meal_combo),
-        available = COALESCE($6, available)
-      WHERE id = $7
+        name_zh = COALESCE($2, name_zh),
+        price_cents = COALESCE($3, price_cents),
+        description = COALESCE($4, description),
+        category_id = COALESCE($5, category_id),
+        is_meal_combo = COALESCE($6, is_meal_combo),
+        available = COALESCE($7, available)
+      WHERE id = $8
       RETURNING *
       `, [
             name?.trim() ?? null,
+            name_zh?.trim() ?? null,
             price_cents ?? null,
             description ?? null,
             category_id ?? null,
@@ -850,6 +896,149 @@ router.get("/restaurants/:restaurantId/menu/items", async (req, res) => {
     catch (err) {
         console.error(err);
         res.status(500).json({ error: "Server error" });
+    }
+});
+/**
+ * POST /api/restaurants/:restaurantId/menu-import
+ * Import menu from Excel (.xlsx). Columns expected (row 0 = header):
+ *   A: Menu Category English
+ *   B: Menu Category Chinese
+ *   C: Food Item Name Chinese
+ *   D: Food Item Name English
+ *   E: Food Item Image URL (optional – if valid http/https URL, auto-uploaded to R2)
+ *   F: Price            (numeric, dollars)
+ *
+ * Creates categories (deduped by English name) and menu items.
+ * All items are created as available=true. Existing categories with the same
+ * name are reused; existing items (same name + category) are skipped.
+ */
+router.post("/restaurants/:restaurantId/menu-import", memoryUpload.single("file"), async (req, res) => {
+    try {
+        const restaurantId = Number(req.params.restaurantId);
+        if (!restaurantId || Number.isNaN(restaurantId)) {
+            return res.status(400).json({ error: "Invalid restaurant ID" });
+        }
+        if (!req.file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
+        // Check if menu import feature is enabled for this restaurant
+        const settingsCk = await db_1.default.query(`SELECT feature_flags FROM restaurants WHERE id = $1`, [restaurantId]);
+        const featureFlags = settingsCk.rows[0]?.feature_flags || {};
+        if (featureFlags.menu_import_enabled !== true) {
+            return res.status(403).json({ error: "Bulk menu import is not enabled for this restaurant. Contact support to enable this paid feature." });
+        }
+        const XLSX = await Promise.resolve().then(() => __importStar(require("xlsx")));
+        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+            return res.status(400).json({ error: "Empty workbook" });
+        }
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+            header: 1,
+            defval: null,
+        });
+        // Skip header row
+        const dataRows = rows.slice(1).filter((r) => r[0] || r[3] // must have category or English name
+        );
+        if (dataRows.length === 0) {
+            return res.status(400).json({ error: "No data rows found in file" });
+        }
+        // Load existing categories for this restaurant
+        const existingCats = await db_1.default.query("SELECT id, name FROM menu_categories WHERE restaurant_id = $1", [restaurantId]);
+        const catMap = {};
+        for (const row of existingCats.rows) {
+            catMap[row.name.trim().toLowerCase()] = row.id;
+        }
+        const created = { categories: 0, items: 0, skipped: 0 };
+        for (const row of dataRows) {
+            const catNameEn = (row[0] ?? "").toString().trim();
+            const catNameZh = (row[1] ?? "").toString().trim() || null;
+            const itemNameZh = (row[2] ?? "").toString().trim() || null;
+            const itemNameEn = (row[3] ?? "").toString().trim();
+            const priceRaw = row[5];
+            const priceCents = priceRaw != null ? Math.round(Number(priceRaw) * 100) : 0;
+            if (!catNameEn && !itemNameEn)
+                continue;
+            // Resolve or create category
+            const catKey = catNameEn.toLowerCase();
+            let categoryId = catMap[catKey];
+            if (!categoryId) {
+                const catRes = await db_1.default.query(`INSERT INTO menu_categories (restaurant_id, name, name_zh)
+             VALUES ($1, $2, $3)
+             ON CONFLICT DO NOTHING
+             RETURNING id`, [restaurantId, catNameEn, catNameZh]);
+                if (catRes.rows.length > 0) {
+                    categoryId = catRes.rows[0].id;
+                    catMap[catKey] = categoryId;
+                    created.categories++;
+                }
+                else {
+                    // Rare race condition – re-fetch
+                    const refetch = await db_1.default.query("SELECT id FROM menu_categories WHERE restaurant_id=$1 AND lower(name)=$2", [restaurantId, catKey]);
+                    if (refetch.rows.length === 0)
+                        continue;
+                    categoryId = refetch.rows[0].id;
+                    catMap[catKey] = categoryId;
+                }
+            }
+            else {
+                // Update name_zh if provided and not yet set
+                if (catNameZh) {
+                    await db_1.default.query(`UPDATE menu_categories SET name_zh = COALESCE(name_zh, $1) WHERE id = $2`, [catNameZh, categoryId]);
+                }
+            }
+            if (!itemNameEn) {
+                created.skipped++;
+                continue;
+            }
+            // Check if item already exists (by English name + category)
+            const existing = await db_1.default.query("SELECT id FROM menu_items WHERE category_id=$1 AND lower(name)=$2", [categoryId, itemNameEn.toLowerCase()]);
+            if (existing.rows.length > 0) {
+                created.skipped++;
+                continue;
+            }
+            const insertResult = await db_1.default.query(`INSERT INTO menu_items (category_id, name, name_zh, price_cents, available)
+           VALUES ($1, $2, $3, $4, true)
+           RETURNING id`, [categoryId, itemNameEn, itemNameZh, priceCents]);
+            created.items++;
+            // Upload image from column E if it is a valid URL
+            const imageRaw = row[4];
+            if (imageRaw &&
+                typeof imageRaw === "string" &&
+                (0, storage_1.isR2Configured)()) {
+                const imageUrl = imageRaw.trim();
+                if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+                    try {
+                        const imgRes = await fetch(imageUrl);
+                        if (imgRes.ok) {
+                            const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+                            const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+                            const ext = (contentType.split("/")[1] || "jpg").split(";")[0];
+                            const safeName = itemNameEn.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+                            const filename = `${safeName}.${ext}`;
+                            const r2Url = await (0, storage_1.uploadToR2)(imgBuffer, filename, (0, storage_1.getR2Folder)("menu", String(restaurantId)), contentType);
+                            const newItemId = insertResult.rows[0].id;
+                            await db_1.default.query("UPDATE menu_items SET image_url = $1 WHERE id = $2", [r2Url, newItemId]);
+                        }
+                    }
+                    catch (imgErr) {
+                        console.warn(`[Menu Import] Image upload failed for "${itemNameEn}":`, imgErr);
+                        // Non-fatal – item was already created, continue
+                    }
+                }
+            }
+        }
+        res.json({
+            ok: true,
+            created_categories: created.categories,
+            created_items: created.items,
+            skipped_items: created.skipped,
+        });
+    }
+    catch (err) {
+        console.error("MENU IMPORT ERROR:", err);
+        res.status(500).json({ error: "Failed to import menu" });
     }
 });
 exports.default = router;

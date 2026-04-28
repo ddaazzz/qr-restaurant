@@ -43,9 +43,9 @@ router.get('/restaurants/:restaurantId/payment-terminals', async (req, res) => {
         return res.status(403).json({ error: 'Admin access required' });
     try {
         const { restaurantId } = req.params;
-        const result = await db_1.default.query(`SELECT id, vendor_name, is_active, app_id, terminal_ip, terminal_port, 
+        const result = await db_1.default.query(`SELECT id, vendor_name, is_active, app_id, terminal_ip, terminal_port,
               endpoint_path, metadata, last_tested_at, last_error_message,
-              created_at, updated_at
+              created_at, updated_at, payment_gateway_env, merchant_token
        FROM payment_terminals
        WHERE restaurant_id = $1
        ORDER BY created_at DESC`, [restaurantId]);
@@ -66,9 +66,10 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
         return res.status(403).json({ error: 'Admin access required' });
     try {
         const { restaurantId, terminalId } = req.params;
-        const result = await db_1.default.query(`SELECT id, vendor_name, is_active, app_id, app_secret, terminal_ip, 
-              terminal_port, endpoint_path, metadata, last_tested_at, 
-              last_error_message, created_at, updated_at
+        const result = await db_1.default.query(`SELECT id, vendor_name, is_active, app_id, app_secret, terminal_ip,
+              terminal_port, endpoint_path, metadata, last_tested_at,
+              last_error_message, created_at, updated_at,
+              merchant_token, secret_code, payment_gateway_env
        FROM payment_terminals
        WHERE id = $1 AND restaurant_id = $2`, [terminalId, restaurantId]);
         if (result.rowCount === 0) {
@@ -78,6 +79,7 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
         // Non-superadmins should not see secrets
         if (user.role !== 'superadmin') {
             terminal.app_secret = terminal.app_secret ? '••••••••' : '';
+            terminal.secret_code = terminal.secret_code ? '••••••••' : '';
         }
         res.json(terminal);
     }
@@ -97,18 +99,12 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
         return res.status(403).json({ error: 'Superadmin access required' });
     try {
         const { restaurantId } = req.params;
-        const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata } = req.body;
-        // Validate required fields
-        if (!vendor_name || !app_id || !app_secret || !terminal_ip || !terminal_port) {
-            return res.status(400).json({
-                error: 'Missing required fields: vendor_name, app_id, app_secret, terminal_ip, terminal_port',
-            });
-        }
+        const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, merchant_token, secret_code, payment_gateway_env } = req.body;
         // Validate vendor name
-        const validVendors = ['kpay', 'other'];
-        if (!validVendors.includes(vendor_name)) {
+        const validVendors = ['kpay', 'payment-asia', 'other'];
+        if (!vendor_name || !validVendors.includes(vendor_name)) {
             return res.status(400).json({
-                error: `Invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
+                error: `Missing or invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
             });
         }
         // Check for duplicate vendor configuration
@@ -118,11 +114,35 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
                 error: `Payment terminal for vendor '${vendor_name}' already exists for this restaurant`,
             });
         }
-        const result = await db_1.default.query(`INSERT INTO payment_terminals 
-       (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path, 
-                 metadata, created_at, updated_at`, [restaurantId, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path || '/v2/pos/sign', metadata || {}]);
+        let result;
+        if (vendor_name === 'payment-asia') {
+            const paToken = merchant_token || app_id;
+            const paSecret = secret_code || app_secret;
+            if (!paToken || !paSecret) {
+                return res.status(400).json({ error: 'merchant_token and secret_code are required for Payment Asia' });
+            }
+            result = await db_1.default.query(`INSERT INTO payment_terminals
+         (restaurant_id, vendor_name, app_id, app_secret, merchant_token, secret_code,
+          payment_gateway_env, terminal_ip, terminal_port, endpoint_path, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, vendor_name, is_active, app_id, merchant_token, payment_gateway_env,
+                   terminal_ip, terminal_port, endpoint_path, metadata, created_at, updated_at`, [restaurantId, vendor_name, paToken, paSecret, paToken, paSecret,
+                payment_gateway_env || 'sandbox', terminal_ip || null, terminal_port || null,
+                endpoint_path || null, metadata || {}]);
+        }
+        else {
+            // KPay / other: require connection fields
+            if (!app_id || !app_secret || !terminal_ip || !terminal_port) {
+                return res.status(400).json({
+                    error: 'Missing required fields: app_id, app_secret, terminal_ip, terminal_port',
+                });
+            }
+            result = await db_1.default.query(`INSERT INTO payment_terminals
+         (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path,
+                   metadata, created_at, updated_at`, [restaurantId, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path || '/v2/pos/sign', metadata || {}]);
+        }
         res.status(201).json(result.rows[0]);
     }
     catch (err) {
@@ -149,7 +169,7 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
     }
     try {
         const { restaurantId, terminalId } = req.params;
-        const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active } = req.body;
+        const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active, merchant_token, secret_code, payment_gateway_env } = req.body;
         // Build dynamic UPDATE query
         const updates = [];
         const values = [];
@@ -158,9 +178,29 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
             updates.push(`app_id = $${paramCount++}`);
             values.push(app_id);
         }
+        if (merchant_token !== undefined) {
+            updates.push(`merchant_token = $${paramCount++}`);
+            values.push(merchant_token);
+            if (app_id === undefined) {
+                updates.push(`app_id = $${paramCount++}`);
+                values.push(merchant_token);
+            }
+        }
         if (app_secret !== undefined) {
             updates.push(`app_secret = $${paramCount++}`);
             values.push(app_secret);
+        }
+        if (secret_code !== undefined) {
+            updates.push(`secret_code = $${paramCount++}`);
+            values.push(secret_code);
+            if (app_secret === undefined) {
+                updates.push(`app_secret = $${paramCount++}`);
+                values.push(secret_code);
+            }
+        }
+        if (payment_gateway_env !== undefined) {
+            updates.push(`payment_gateway_env = $${paramCount++}`);
+            values.push(payment_gateway_env);
         }
         if (terminal_ip !== undefined) {
             updates.push(`terminal_ip = $${paramCount++}`);

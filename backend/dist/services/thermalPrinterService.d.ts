@@ -33,6 +33,7 @@ export interface ReceiptData {
     qrTextBelow?: string;
     billHeaderText?: string;
     billFooterText?: string;
+    language?: string;
 }
 /**
  * Generate ESC/POS thermal printer commands

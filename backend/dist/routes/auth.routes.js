@@ -30,7 +30,7 @@ router.post("/auth/login", async (req, res) => {
             return res.status(401).json({ error: "Invalid credentials" });
         }
         // Create JWT token
-        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "8h" });
+        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "30d" });
         // For superadmin, fetch all restaurants
         let restaurants = [];
         let defaultRestaurantId = user.restaurant_id;
@@ -314,7 +314,7 @@ router.post("/auth/staff-login", async (req, res) => {
         if (!user) {
             return res.status(401).json({ error: "Invalid PIN" });
         }
-        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "8h" });
+        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "30d" });
         // ✅ LOG HERE (canonical action)
         await (0, logStaffActivity_1.logStaffActivity)({
             restaurantId,
@@ -349,7 +349,7 @@ router.post("/auth/kitchen-login", async (req, res) => {
         if (!user) {
             return res.status(401).json({ error: "Invalid PIN" });
         }
-        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "8h" });
+        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "30d" });
         // ✅ LOG HERE (canonical action)
         await (0, logStaffActivity_1.logStaffActivity)({
             restaurantId,
@@ -584,7 +584,7 @@ router.post("/auth/register", async (req, res) => {
             await client.query("COMMIT");
             client.release();
             // Generate JWT
-            const token = jsonwebtoken_1.default.sign({ id: userId, role: "admin" }, process.env.JWT_SECRET || "devsecret", { expiresIn: "8h" });
+            const token = jsonwebtoken_1.default.sign({ id: userId, role: "admin" }, process.env.JWT_SECRET || "devsecret", { expiresIn: "30d" });
             res.status(201).json({
                 token,
                 role: "admin",
@@ -693,7 +693,7 @@ router.post("/auth/register-email", async (req, res) => {
             await client.query("COMMIT");
             client.release();
             // Generate JWT
-            const token = jsonwebtoken_1.default.sign({ id: userId, role: "admin" }, process.env.JWT_SECRET || "devsecret", { expiresIn: "8h" });
+            const token = jsonwebtoken_1.default.sign({ id: userId, role: "admin" }, process.env.JWT_SECRET || "devsecret", { expiresIn: "30d" });
             res.status(201).json({
                 token,
                 role: "admin",
@@ -811,7 +811,7 @@ router.post("/auth/google-login", async (req, res) => {
         const restaurantResult = await db_1.default.query("SELECT name, api_base_url FROM restaurants WHERE id = $1", [user.restaurant_id]);
         const restaurantName = restaurantResult.rows[0]?.name || "";
         const apiBaseUrl = restaurantResult.rows[0]?.api_base_url || null;
-        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "8h" });
+        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || "devsecret", { expiresIn: "30d" });
         res.json({
             token,
             role: user.role,
