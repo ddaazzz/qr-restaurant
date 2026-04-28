@@ -253,11 +253,6 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
         ts.bill_closure_requested,
         ts.call_staff_requested,
 
-        COALESCE(pay.payment_received, false) AS payment_received,
-        CASE WHEN pay.payment_received_at IS NULL THEN NULL ELSE to_char(pay.payment_received_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS payment_received_at,
-        pay.payment_method_online,
-        pay.merchant_reference,
-
         o.id            AS order_id,
         o.restaurant_order_number,
 
@@ -272,15 +267,6 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
       LEFT JOIN orders o
         ON o.session_id = ts.id
        AND o.status <> 'completed'
-      LEFT JOIN LATERAL (
-        SELECT
-          BOOL_OR(oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_received,
-          MAX(oo.created_at) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_received_at,
-          MAX(oo.payment_method) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS payment_method_online,
-          MAX(oo.chuio_order_reference) FILTER (WHERE oo.status = 'completed' AND oo.payment_method = 'payment-asia') AS merchant_reference
-        FROM orders oo
-        WHERE oo.session_id = ts.id
-      ) pay ON TRUE
       LEFT JOIN bookings b
         ON b.session_id = ts.id
 
@@ -486,29 +472,13 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
     const service_charge_cents = Math.round(subtotal_cents * serviceChargePercent / 100);
     const total_cents = subtotal_cents + service_charge_cents;
 
-    // Include split bill state if present
-    const splitRes = await pool.query(
-      `SELECT split_count, split_bills_paid FROM table_sessions WHERE id = $1`,
-      [sessionId]
-    );
-    const splitState = splitRes.rows[0];
-
-    const splitPaymentsRes = await pool.query(
-      `SELECT split_index, split_count, amount_cents, payment_method, closed_at FROM split_bill_payments WHERE session_id = $1 ORDER BY split_index ASC`,
-      [sessionId]
-    );
-
     res.json({
       restaurant,
       session,
       items: mainItems,
       subtotal_cents,
       service_charge_cents,
-      total_cents,
-      grand_total_cents: total_cents,
-      split_count: splitState?.split_count || null,
-      split_bills_paid: splitState?.split_bills_paid || 0,
-      split_payments: splitPaymentsRes.rows,
+      total_cents
     });
   } catch (err) {
     console.error("Print bill failed", err);
@@ -518,6 +488,66 @@ router.get("/sessions/:sessionId/bill", async (req, res) => {
 
 // NOTE: GET /sessions/:sessionId/orders is handled by orders.routes.ts (mounted first in app.ts).
 // The duplicate handler was removed from here to avoid confusion.
+
+/**
+ * PATCH /table-sessions/:sessionId/move-table
+ * Move an active session to a different (empty) table.
+ * Body: { new_table_id: number }
+ */
+router.patch("/table-sessions/:sessionId/move-table", async (req, res) => {
+  const sessionId = Number(req.params.sessionId);
+  const { new_table_id } = req.body;
+
+  if (!sessionId || isNaN(sessionId)) return res.status(400).json({ error: "Invalid session ID" });
+  if (!new_table_id) return res.status(400).json({ error: "new_table_id is required" });
+
+  try {
+    // Look up session and derive restaurant_id from its current table
+    const sessionRes = await pool.query(
+      `SELECT ts.id, ts.ended_at, t.restaurant_id
+       FROM table_sessions ts
+       JOIN tables t ON t.id = ts.table_id
+       WHERE ts.id = $1`,
+      [sessionId]
+    );
+
+    if (sessionRes.rowCount === 0) return res.status(404).json({ error: "Session not found" });
+
+    const session = sessionRes.rows[0];
+    if (session.ended_at) return res.status(400).json({ error: "Session has already ended" });
+
+    const restaurantId = session.restaurant_id;
+
+    // Verify target table belongs to the same restaurant
+    const targetRes = await pool.query(
+      `SELECT id FROM tables WHERE id = $1 AND restaurant_id = $2`,
+      [new_table_id, restaurantId]
+    );
+    if (targetRes.rowCount === 0) {
+      return res.status(404).json({ error: "Target table not found" });
+    }
+
+    // Verify target table has no active sessions
+    const occupiedRes = await pool.query(
+      `SELECT id FROM table_sessions WHERE table_id = $1 AND ended_at IS NULL`,
+      [new_table_id]
+    );
+    if ((occupiedRes.rowCount ?? 0) > 0) {
+      return res.status(409).json({ error: "Target table already has an active session" });
+    }
+
+    // Move the session to the new table
+    const result = await pool.query(
+      `UPDATE table_sessions SET table_id = $1 WHERE id = $2 RETURNING id, table_id`,
+      [new_table_id, sessionId]
+    );
+
+    res.json({ success: true, session: result.rows[0] });
+  } catch (err) {
+    console.error("[move-table]", err);
+    res.status(500).json({ error: "Failed to move table" });
+  }
+});
 
 /**
  * END session (staff only)
@@ -790,24 +820,6 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     }
     const session = sessionRes.rows[0];
 
-    // Guard: if this session was already paid online via Payment Asia,
-    // staff should end session directly instead of running close-bill again.
-    const paidOnlineRes = await client.query(
-      `SELECT 1
-       FROM orders
-       WHERE session_id = $1
-         AND status = 'completed'
-         AND payment_method = 'payment-asia'
-       LIMIT 1`,
-      [sessionId]
-    );
-    if ((paidOnlineRes.rowCount ?? 0) > 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Session already paid via Payment Asia. Use End Order to close the session.",
-      });
-    }
-
     // Get orders and calculate total
     const ordersRes = await client.query(
       `SELECT o.id, oi.id as item_id, oi.quantity, oi.price_cents
@@ -912,239 +924,6 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
 });
 
 // =====================================================
-// SPLIT BILL ENDPOINTS
-// =====================================================
-
-/**
- * POST /sessions/:sessionId/split-bill/init
- * Initialise a split bill on the session (stores split_count, resets split_bills_paid).
- * Body: { split_count: number, restaurantId }
- * Returns the per-portion amount.
- */
-router.post("/sessions/:sessionId/split-bill/init", async (req, res) => {
-  const { sessionId } = req.params;
-  const { split_count, restaurantId } = req.body;
-
-  if (!restaurantId) return res.status(400).json({ error: "Restaurant ID required" });
-  if (!split_count || split_count < 2) return res.status(400).json({ error: "split_count must be >= 2" });
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    // Verify session belongs to restaurant
-    const sessionRes = await client.query(
-      `SELECT id FROM table_sessions WHERE id = $1 AND restaurant_id = $2`,
-      [sessionId, restaurantId]
-    );
-    if (sessionRes.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Session not found" });
-    }
-
-    // Get bill total
-    const ordersRes = await client.query(
-      `SELECT oi.quantity, oi.price_cents
-       FROM orders o
-       LEFT JOIN order_items oi ON oi.order_id = o.id
-       WHERE o.session_id = $1 AND o.status <> 'cancelled'
-         AND (oi.removed IS FALSE OR oi.removed IS NULL)`,
-      [sessionId]
-    );
-
-    let subtotal = 0;
-    ordersRes.rows.forEach(item => {
-      if (item.quantity && item.price_cents) subtotal += item.quantity * item.price_cents;
-    });
-
-    // Reset split state on session
-    await client.query(
-      `UPDATE table_sessions SET split_count = $1, split_bills_paid = 0 WHERE id = $2`,
-      [split_count, sessionId]
-    );
-
-    // Remove any previous split payments (in case user re-initiates)
-    await client.query(
-      `DELETE FROM split_bill_payments WHERE session_id = $1`,
-      [sessionId]
-    );
-
-    await client.query("COMMIT");
-
-    res.json({
-      success: true,
-      session_id: sessionId,
-      split_count,
-      subtotal_cents: subtotal,
-    });
-  } catch (err) {
-    try { await client.query("ROLLBACK"); } catch {}
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[SplitInit] ❌`, msg);
-    res.status(500).json({ error: "Failed to init split", details: msg });
-  } finally {
-    client.release();
-  }
-});
-
-/**
- * POST /sessions/:sessionId/split-bill/pay
- * Record one split portion payment.
- * Body: { split_index, split_count, amount_cents, payment_method, discount_applied, service_charge, notes, kpay_reference_id, restaurantId }
- * Returns { success, bills_paid, bills_remaining, session_closed }
- * When all splits paid, the session is automatically closed.
- */
-router.post("/sessions/:sessionId/split-bill/pay", async (req, res) => {
-  const { sessionId } = req.params;
-  const {
-    split_index,
-    split_count,
-    amount_cents,
-    payment_method = 'cash',
-    discount_applied = 0,
-    service_charge = 0,
-    notes = '',
-    kpay_reference_id = null,
-    staff_id = null,
-    restaurantId,
-  } = req.body;
-
-  if (!restaurantId) return res.status(400).json({ error: "Restaurant ID required" });
-  if (!split_index || !split_count) return res.status(400).json({ error: "split_index and split_count required" });
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    // Verify session
-    const sessionRes = await client.query(
-      `SELECT id, table_id, split_count, split_bills_paid FROM table_sessions WHERE id = $1 AND restaurant_id = $2`,
-      [sessionId, restaurantId]
-    );
-    if (sessionRes.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Session not found" });
-    }
-    const session = sessionRes.rows[0];
-
-    // Prevent double-paying same split index
-    const existingRes = await client.query(
-      `SELECT id FROM split_bill_payments WHERE session_id = $1 AND split_index = $2`,
-      [sessionId, split_index]
-    );
-    if ((existingRes.rowCount ?? 0) > 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ error: `Split portion ${split_index} already paid` });
-    }
-
-    // Record the split payment
-    await client.query(
-      `INSERT INTO split_bill_payments
-         (session_id, restaurant_id, split_index, split_count, amount_cents, payment_method, discount_applied, service_charge, notes, kpay_reference_id, closed_by_staff_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [sessionId, restaurantId, split_index, split_count, amount_cents, payment_method, discount_applied, service_charge, notes, kpay_reference_id, staff_id]
-    );
-
-    // Increment paid count
-    const newPaidCount = (session.split_bills_paid || 0) + 1;
-    await client.query(
-      `UPDATE table_sessions SET split_bills_paid = $1 WHERE id = $2`,
-      [newPaidCount, sessionId]
-    );
-
-    let sessionClosed = false;
-    if (newPaidCount >= split_count) {
-      // All splits paid — close the session properly
-      const totalPaid = await client.query(
-        `SELECT COALESCE(SUM(amount_cents),0) AS total FROM split_bill_payments WHERE session_id = $1`,
-        [sessionId]
-      );
-      const totalAmountPaid = Number(totalPaid.rows[0].total) + amount_cents; // already inserted above so sum includes this row
-
-      await client.query(
-        `UPDATE table_sessions SET
-           ended_at = NOW() AT TIME ZONE 'UTC',
-           payment_method = $1,
-           amount_paid = $2,
-           discount_applied = $3,
-           notes = $4
-         WHERE id = $5`,
-        [payment_method, totalAmountPaid, discount_applied, notes, sessionId]
-      );
-
-      await client.query(
-        `UPDATE orders SET payment_method = $1, status = 'completed', payment_status = 'paid'
-         WHERE session_id = $2`,
-        [payment_method, sessionId]
-      );
-
-      if (session.table_id) {
-        await client.query(`UPDATE tables SET available = true WHERE id = $1`, [session.table_id]);
-      }
-
-      await client.query(
-        `UPDATE bookings SET status = 'completed' WHERE session_id = $1 AND status = 'confirmed'`,
-        [sessionId]
-      );
-
-      sessionClosed = true;
-    }
-
-    await client.query("COMMIT");
-
-    res.json({
-      success: true,
-      session_id: sessionId,
-      bills_paid: newPaidCount,
-      bills_remaining: split_count - newPaidCount,
-      session_closed: sessionClosed,
-    });
-
-    console.log(`[SplitPay] ✅ Split ${split_index}/${split_count} paid for session ${sessionId}. Closed: ${sessionClosed}`);
-  } catch (err) {
-    try { await client.query("ROLLBACK"); } catch {}
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[SplitPay] ❌`, msg);
-    res.status(500).json({ error: "Failed to record split payment", details: msg });
-  } finally {
-    client.release();
-  }
-});
-
-/**
- * GET /sessions/:sessionId/split-bill
- * Get current split bill state + individual payments.
- */
-router.get("/sessions/:sessionId/split-bill", async (req, res) => {
-  const { sessionId } = req.params;
-  const { restaurantId } = req.query as { restaurantId?: string };
-  if (!restaurantId) return res.status(400).json({ error: "restaurantId required" });
-
-  try {
-    const sessionRes = await pool.query(
-      `SELECT split_count, split_bills_paid FROM table_sessions WHERE id = $1 AND restaurant_id = $2`,
-      [sessionId, restaurantId]
-    );
-    if (sessionRes.rowCount === 0) return res.status(404).json({ error: "Session not found" });
-    const session = sessionRes.rows[0];
-
-    const paymentsRes = await pool.query(
-      `SELECT * FROM split_bill_payments WHERE session_id = $1 ORDER BY split_index ASC`,
-      [sessionId]
-    );
-
-    res.json({
-      split_count: session.split_count,
-      split_bills_paid: session.split_bills_paid,
-      payments: paymentsRes.rows,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: "Failed to load split bill", details: msg });
-  }
-});
-
-// =====================================================
 // COUNTER/TO-GO ORDERS (NEW ENDPOINTS)
 // =====================================================
 
@@ -1186,30 +965,24 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
 
       // Insert order items
       for (const item of items) {
-        let price: number;
-        let nameSnapshot: string;
+        const menuRes = await client.query(
+          'SELECT price_cents FROM menu_items WHERE id = $1',
+          [item.menu_item_id]
+        );
 
-        if (!item.menu_item_id && item.custom_item_name) {
-          // Custom item — no DB lookup
-          price = item.price_cents || 0;
-          nameSnapshot = item.custom_item_name;
-        } else {
-          const menuRes = await client.query(
-            'SELECT price_cents, name FROM menu_items WHERE id = $1',
-            [item.menu_item_id]
-          );
-          if (menuRes.rows.length === 0) throw new Error(`Menu item ${item.menu_item_id} not found`);
-          price = menuRes.rows[0].price_cents;
-          nameSnapshot = menuRes.rows[0].name;
+        if (menuRes.rows.length === 0) {
+          throw new Error(`Menu item ${item.menu_item_id} not found`);
         }
+
+        const price = menuRes.rows[0].price_cents;
 
         const orderItemRes = await client.query(
           `
-          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status, custom_item_name, item_name_snapshot)
-          VALUES ($1, $2, $3, $4, 'pending', $5, $6)
+          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status)
+          VALUES ($1, $2, $3, $4, 'pending')
           RETURNING id
           `,
-          [order.id, item.menu_item_id || null, item.quantity || 1, price, item.custom_item_name || null, nameSnapshot]
+          [order.id, item.menu_item_id, item.quantity || 1, price]
         );
 
         const orderItemId = orderItemRes.rows[0].id;
@@ -1218,7 +991,10 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
         if (item.selected_option_ids && item.selected_option_ids.length > 0) {
           for (const optionId of item.selected_option_ids) {
             await client.query(
-              `INSERT INTO order_item_variants (order_item_id, variant_option_id) VALUES ($1, $2)`,
+              `
+              INSERT INTO order_item_variants (order_item_id, variant_option_id)
+              VALUES ($1, $2)
+              `,
               [orderItemId, optionId]
             );
           }
@@ -1292,29 +1068,24 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
 
       // Insert order items
       for (const item of items) {
-        let price: number;
-        let nameSnapshot: string;
+        const menuRes = await client.query(
+          'SELECT price_cents FROM menu_items WHERE id = $1',
+          [item.menu_item_id]
+        );
 
-        if (!item.menu_item_id && item.custom_item_name) {
-          price = item.price_cents || 0;
-          nameSnapshot = item.custom_item_name;
-        } else {
-          const menuRes = await client.query(
-            'SELECT price_cents, name FROM menu_items WHERE id = $1',
-            [item.menu_item_id]
-          );
-          if (menuRes.rows.length === 0) throw new Error(`Menu item ${item.menu_item_id} not found`);
-          price = menuRes.rows[0].price_cents;
-          nameSnapshot = menuRes.rows[0].name;
+        if (menuRes.rows.length === 0) {
+          throw new Error(`Menu item ${item.menu_item_id} not found`);
         }
+
+        const price = menuRes.rows[0].price_cents;
 
         const orderItemRes = await client.query(
           `
-          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status, custom_item_name, item_name_snapshot)
-          VALUES ($1, $2, $3, $4, 'pending', $5, $6)
+          INSERT INTO order_items (order_id, menu_item_id, quantity, price_cents, status)
+          VALUES ($1, $2, $3, $4, 'pending')
           RETURNING id
           `,
-          [order.id, item.menu_item_id || null, item.quantity || 1, price, item.custom_item_name || null, nameSnapshot]
+          [order.id, item.menu_item_id, item.quantity || 1, price]
         );
 
         const orderItemId = orderItemRes.rows[0].id;
@@ -1323,7 +1094,10 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
         if (item.selected_option_ids && item.selected_option_ids.length > 0) {
           for (const optionId of item.selected_option_ids) {
             await client.query(
-              `INSERT INTO order_item_variants (order_item_id, variant_option_id) VALUES ($1, $2)`,
+              `
+              INSERT INTO order_item_variants (order_item_id, variant_option_id)
+              VALUES ($1, $2)
+              `,
               [orderItemId, optionId]
             );
           }
@@ -1342,6 +1116,201 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
   }
 });
 
+// =====================================================
+// SPLIT BILL
+// =====================================================
 
+/**
+ * POST /sessions/:sessionId/split-bill/init
+ * Initialises a split bill: creates N split_bill_payments records.
+ * Calling again replaces any previous split for this session.
+ */
+router.post("/sessions/:sessionId/split-bill/init", async (req, res) => {
+  const sessionId = Number(req.params.sessionId);
+  const { split_count } = req.body;
+
+  if (!sessionId || !split_count || split_count < 2 || split_count > 50) {
+    return res.status(400).json({ error: "split_count must be between 2 and 50" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const sessionRes = await client.query(
+      `SELECT ts.id, ts.restaurant_id FROM table_sessions ts WHERE ts.id = $1 AND ts.ended_at IS NULL`,
+      [sessionId]
+    );
+    if (sessionRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Session not found or already closed" });
+    }
+    const { restaurant_id } = sessionRes.rows[0];
+
+    // Calculate total from current orders
+    const billRes = await client.query(
+      `SELECT
+         COALESCE(SUM(oi.quantity * oi.price_cents), 0) AS subtotal_cents,
+         r.service_charge_percent
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       JOIN restaurants r ON r.id = $2
+       WHERE o.session_id = $1 AND o.status <> 'cancelled'
+       GROUP BY r.service_charge_percent`,
+      [sessionId, restaurant_id]
+    );
+
+    let subtotal_cents = 0;
+    let service_charge_percent = 0;
+    if (billRes.rowCount! > 0) {
+      subtotal_cents = Number(billRes.rows[0].subtotal_cents);
+      service_charge_percent = Number(billRes.rows[0].service_charge_percent || 0);
+    }
+    const service_charge_cents = Math.round(subtotal_cents * service_charge_percent / 100);
+    const total_cents = subtotal_cents + service_charge_cents;
+
+    // Remove any previous split for this session
+    await client.query(`DELETE FROM split_bill_payments WHERE session_id = $1`, [sessionId]);
+
+    // Create one record per split portion
+    const perPerson = Math.floor(total_cents / split_count);
+    const remainder = total_cents - perPerson * split_count;
+
+    const splits: any[] = [];
+    for (let i = 1; i <= split_count; i++) {
+      const amount = perPerson + (i === split_count ? remainder : 0);
+      const r = await client.query(
+        `INSERT INTO split_bill_payments
+           (session_id, restaurant_id, split_index, split_count, amount_cents, service_charge)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [sessionId, restaurant_id, i, split_count, amount, service_charge_cents]
+      );
+      splits.push(r.rows[0]);
+    }
+
+    // Record split metadata on the session
+    await client.query(
+      `UPDATE table_sessions SET split_count = $1, split_bills_paid = 0 WHERE id = $2`,
+      [split_count, sessionId]
+    );
+
+    await client.query("COMMIT");
+    res.json({ splits, total_cents, split_count });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[SplitBill Init]", err);
+    res.status(500).json({ error: "Failed to initialise split bill" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * GET /sessions/:sessionId/split-bill
+ * Returns current split_bill_payments for the session.
+ */
+router.get("/sessions/:sessionId/split-bill", async (req, res) => {
+  const sessionId = Number(req.params.sessionId);
+  if (!sessionId) return res.status(400).json({ error: "Invalid session id" });
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM split_bill_payments WHERE session_id = $1 ORDER BY split_index ASC`,
+      [sessionId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[SplitBill Get]", err);
+    res.status(500).json({ error: "Failed to load split bill" });
+  }
+});
+
+/**
+ * POST /sessions/:sessionId/split-bill/:splitIndex/pay
+ * Marks one split portion as paid. Closes session when all portions are paid.
+ */
+router.post("/sessions/:sessionId/split-bill/:splitIndex/pay", async (req, res) => {
+  const sessionId = Number(req.params.sessionId);
+  const splitIndex = Number(req.params.splitIndex);
+  const { payment_method = "cash", notes = "", closed_by_staff_id } = req.body;
+
+  if (!sessionId || !splitIndex) {
+    return res.status(400).json({ error: "Invalid params" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const splitRes = await client.query(
+      `SELECT * FROM split_bill_payments WHERE session_id = $1 AND split_index = $2`,
+      [sessionId, splitIndex]
+    );
+    if (splitRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Split payment not found" });
+    }
+    const split = splitRes.rows[0];
+    if (split.closed_at) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "This split portion has already been paid" });
+    }
+
+    // Mark portion paid
+    await client.query(
+      `UPDATE split_bill_payments
+       SET payment_method = $1, notes = $2, closed_at = NOW() AT TIME ZONE 'UTC', closed_by_staff_id = $3
+       WHERE id = $4`,
+      [payment_method, notes || null, closed_by_staff_id || null, split.id]
+    );
+
+    // Increment paid count on session
+    await client.query(
+      `UPDATE table_sessions SET split_bills_paid = COALESCE(split_bills_paid, 0) + 1 WHERE id = $1`,
+      [sessionId]
+    );
+
+    // Check if all portions are now paid
+    const countRes = await client.query(
+      `SELECT split_count, split_bills_paid FROM table_sessions WHERE id = $1`,
+      [sessionId]
+    );
+    const { split_count, split_bills_paid } = countRes.rows[0];
+    const nowPaid = Number(split_bills_paid) + 1; // +1 because DB update ran above
+
+    let sessionClosed = false;
+    if (nowPaid >= Number(split_count)) {
+      // All paid — close the session
+      const totalRes = await client.query(
+        `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM split_bill_payments WHERE session_id = $1`,
+        [sessionId]
+      );
+      const amountPaid = Number(totalRes.rows[0].total);
+      await client.query(
+        `UPDATE table_sessions
+         SET ended_at = NOW() AT TIME ZONE 'UTC', payment_method = $1, amount_paid = $2
+         WHERE id = $3`,
+        [payment_method, amountPaid, sessionId]
+      );
+      await client.query(
+        `UPDATE orders
+         SET status = 'completed', payment_method = $1, payment_status = 'paid'
+         WHERE session_id = $2 AND status <> 'cancelled'`,
+        [payment_method, sessionId]
+      );
+      sessionClosed = true;
+    }
+
+    await client.query("COMMIT");
+    res.json({ success: true, sessionClosed });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[SplitBill Pay]", err);
+    res.status(500).json({ error: "Failed to process split payment" });
+  } finally {
+    client.release();
+  }
+});
 
 export default router;

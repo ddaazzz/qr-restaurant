@@ -649,6 +649,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       );
       console.log('[LoadBill] Bill data:', billRes.data);
       setSessionBill(billRes.data);
+
+      // Load split portions if any
+      try {
+        const splitRes = await apiClient.get(`/api/sessions/${sessionId}/split-bill`);
+        setSplitPortions(Array.isArray(splitRes.data) ? splitRes.data : []);
+      } catch {
+        setSplitPortions([]);
+      }
     } catch (err) {
       console.error('Error loading session orders:', err);
       Alert.alert('Error Loading Orders', 'Failed to load order details');
@@ -1164,7 +1172,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     try {
       await apiClient.patch(
         `/api/table-sessions/${selectedSession.id}`,
-        { pax: parseInt(newPaxValue) }
+        { pax: parseInt(newPaxValue), restaurantId: parseInt(restaurantId) }
       );
       setShowChangePaxModal(false);
       setNewPaxValue('');
@@ -1941,6 +1949,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splitCount, setSplitCount] = useState(2);
   const [splitBillData, setSplitBillData] = useState<any>(null);
+  const [splitPortions, setSplitPortions] = useState<any[]>([]);
+  const [showSplitPayModal, setShowSplitPayModal] = useState(false);
+  const [activeSplitPortion, setActiveSplitPortion] = useState<any>(null);
+  const [splitPayMethod, setSplitPayMethod] = useState('cash');
+  const [splitPayLoading, setSplitPayLoading] = useState(false);
 
   const splitBill = async () => {
     if (!selectedSession) return;
@@ -1952,6 +1965,49 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       setShowSplitModal(true);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to load bill for splitting');
+    }
+  };
+
+  const confirmSplit = async () => {
+    if (!selectedSession) return;
+    try {
+      await apiClient.post(`/api/sessions/${selectedSession.id}/split-bill/init`, { split_count: splitCount });
+      setShowSplitModal(false);
+      // Reload orders + split portions
+      await loadSessionOrders(selectedSession.id);
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to create split bill');
+    }
+  };
+
+  const openSplitPayModal = (portion: any) => {
+    setActiveSplitPortion(portion);
+    setSplitPayMethod('cash');
+    setShowSplitPayModal(true);
+  };
+
+  const confirmSplitPay = async () => {
+    if (!activeSplitPortion || !selectedSession) return;
+    setSplitPayLoading(true);
+    try {
+      const res = await apiClient.post(
+        `/api/sessions/${selectedSession.id}/split-bill/${activeSplitPortion.split_index}/pay`,
+        { payment_method: splitPayMethod }
+      );
+      setShowSplitPayModal(false);
+      if (res.data.sessionClosed) {
+        await loadTables();
+        setCurrentView('tableList');
+        setSelectedSession(null);
+        setSessionOrders([]);
+        setSplitPortions([]);
+      } else {
+        await loadSessionOrders(selectedSession.id);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to process payment');
+    } finally {
+      setSplitPayLoading(false);
     }
   };
 
@@ -2173,6 +2229,47 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
             </View>
           </View>
+
+          {/* Split Bill Portions */}
+          {splitPortions.length > 0 && (
+            <View style={{ marginHorizontal: 16, marginBottom: 16, borderTopWidth: 2, borderTopColor: '#3b82f6', paddingTop: 12 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1d4ed8', marginBottom: 10 }}>
+                Split Bill — {splitPortions.length} ways
+              </Text>
+              {splitPortions.map((portion) => (
+                <View
+                  key={portion.split_index}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    backgroundColor: portion.closed_at ? '#f0fdf4' : '#f8fafc',
+                    borderRadius: 8, padding: 12, marginBottom: 8,
+                    borderWidth: 1, borderColor: portion.closed_at ? '#bbf7d0' : '#e2e8f0',
+                  }}
+                >
+                  <View>
+                    <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
+                      Portion {portion.split_index}
+                    </Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
+                      ${(portion.amount_cents / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                  {portion.closed_at ? (
+                    <View style={{ backgroundColor: '#10b981', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Paid ✓</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                      onPress={() => openSplitPayModal(portion)}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Pay</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.actions}>
@@ -3216,6 +3313,47 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
               </View>
             </View>
+
+            {/* Split Bill Portions (tablet) */}
+            {splitPortions.length > 0 && (
+              <View style={{ marginHorizontal: 16, marginBottom: 16, borderTopWidth: 2, borderTopColor: '#3b82f6', paddingTop: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1d4ed8', marginBottom: 10 }}>
+                  Split Bill — {splitPortions.length} ways
+                </Text>
+                {splitPortions.map((portion) => (
+                  <View
+                    key={portion.split_index}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      backgroundColor: portion.closed_at ? '#f0fdf4' : '#f8fafc',
+                      borderRadius: 8, padding: 12, marginBottom: 8,
+                      borderWidth: 1, borderColor: portion.closed_at ? '#bbf7d0' : '#e2e8f0',
+                    }}
+                  >
+                    <View>
+                      <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
+                        Portion {portion.split_index}
+                      </Text>
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
+                        ${(portion.amount_cents / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                    {portion.closed_at ? (
+                      <View style={{ backgroundColor: '#10b981', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Paid ✓</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                        onPress={() => openSplitPayModal(portion)}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Pay</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </ScrollView>
           <View style={styles.actions}>
             <TouchableOpacity
@@ -3712,12 +3850,65 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               </>
             )}
 
-            <TouchableOpacity
-              style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
-              onPress={() => setShowSplitModal(false)}
-            >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Close</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                onPress={() => setShowSplitModal(false)}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: '#3b82f6', borderRadius: 8 }}
+                onPress={confirmSplit}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Confirm Split</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Split Pay Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSplitPayModal} transparent animationType="fade" onRequestClose={() => setShowSplitPayModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
+              Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+            </Text>
+            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
+              <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
+              <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#059669' }}>
+                ${((activeSplitPortion?.amount_cents || 0) / 100).toFixed(2)}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              {['cash', 'card'].map(m => (
+                <TouchableOpacity
+                  key={m}
+                  style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m ? '#eff6ff' : '#fff' }}
+                  onPress={() => setSplitPayMethod(m)}
+                >
+                  <Text style={{ fontWeight: '600', color: splitPayMethod === m ? '#3b82f6' : '#374151' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                onPress={() => setShowSplitPayModal(false)}
+                disabled={splitPayLoading}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: splitPayLoading ? '#93c5fd' : '#3b82f6', borderRadius: 8 }}
+                onPress={confirmSplitPay}
+                disabled={splitPayLoading}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>{splitPayLoading ? 'Processing…' : 'Confirm Payment'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
