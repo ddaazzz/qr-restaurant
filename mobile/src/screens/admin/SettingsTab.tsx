@@ -2559,6 +2559,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       </View>
     );
   };
+
+  // Language selection page
+  const renderLanguagePage = () => (
     <View style={styles.container}>
       {renderSubPageHeader(t('admin.language') || 'Language')}
       <View style={{ padding: 16 }}>
