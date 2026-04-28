@@ -1296,9 +1296,35 @@ async function loadOrderStatus() {
     }
 
     const data = await res.json();
-    renderOrdersDrawer(data.items || [], tableName);
+    const orders = data.items || [];
+    renderOrdersDrawer(orders, tableName);
+
+    // If there's a pending PA order, fire a background payment-status check.
+    // The endpoint queries PA directly and updates the DB; the next poll will pick up the result.
+    const pendingPA = orders.find(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
+    if (pendingPA) {
+      fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${pendingPA.order_id}/payment-status`)
+        .catch(() => {}); // fire-and-forget; errors silently ignored
+    }
   } catch (error) {
     console.error("❌ Error loading orders:", error);
+  }
+}
+
+async function cancelPAPayment(orderId) {
+  if (!orderId) return;
+  try {
+    const res = await fetch(
+      `${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/cancel-payment`,
+      { method: 'POST' }
+    );
+    if (res.ok) {
+      loadOrderStatus();
+    } else {
+      alert('Could not cancel payment. Please ask staff for assistance.');
+    }
+  } catch (e) {
+    alert('Network error — please try again.');
   }
 }
 
@@ -1443,7 +1469,9 @@ function renderOrdersDrawer(orders, tableName) {
         }
         if (hasPendingPAOrder) {
           // PA initiated but webhook not yet confirmed — prevent double-pay
-          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>`;
+          const pendingPAOrder = orders.find(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
+          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>
+            <button class="btn-secondary" style="font-size:12px;margin-top:6px;" onclick="cancelPAPayment(${pendingPAOrder?.order_id})">✕ Cancel and try again</button>`;
         }
         if (orderPayEnabled) {
           // Order & Pay mode but no unpaid order yet — nothing to pay

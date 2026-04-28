@@ -9,6 +9,7 @@ import pool from '../config/db';
 import { paymentAsiaService } from '../services/paymentAsiaService';
 import paymentAsiaTransactionRepository from '../services/paymentAsiaTransactionRepository';
 import * as paymentStatusMapper from '../services/paymentStatusMapper';
+import { queueKitchenPrintJobs } from '../services/kitchenDispatch';
 import { webSocketServer } from '../services/websocket';
 
 const router = Router();
@@ -417,6 +418,12 @@ router.post('/restaurants/:restaurantId/webhook/payment-asia', async (req, res) 
          WHERE id = $2 AND restaurant_id = $3`,
         [merchantRef, payment.order_id, restaurantId]
       );
+
+      try {
+        await queueKitchenPrintJobs(Number(payment.order_id), Number(restaurantId));
+      } catch (dispatchErr) {
+        console.warn('[PaymentWebhook] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+      }
     } else if (paymentStatus === 'failed') {
       // Reset payment_method so the customer can retry from the menu
       console.log('[PaymentAsia Webhook] Payment failed — resetting order payment_method for retry:', payment.order_id);
@@ -573,6 +580,13 @@ async function handlePaymentReturn(req: any, res: any) {
          WHERE id = $2::int AND restaurant_id = $3::int`,
         [merchantRef, orderId, restaurantId]
       );
+
+      try {
+        await queueKitchenPrintJobs(Number(orderId), Number(restaurantId));
+      } catch (dispatchErr) {
+        console.warn('[PaymentReturn] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+      }
+
       console.log('[PaymentReturn] Order marked as paid:', orderId);
     } else if (paymentStatus === 'failed') {
       // Reset payment_method so the customer can retry with any payment method
@@ -595,36 +609,38 @@ async function handlePaymentReturn(req: any, res: any) {
       console.log('[PaymentReturn] PA payment still processing — order payment_method reset for retry:', orderId);
     }
 
-      // Write to unified chuio_payments ledger
-      try {
-        const paNetworkRes2 = await pool.query(
-          `SELECT network, amount_cents, session_id, payment_gateway_env FROM payment_asia_transactions
-           WHERE merchant_reference = $1 LIMIT 1`,
-          [merchantRef]
-        );
-        const paRec2 = paNetworkRes2.rows[0];
-        const _paNetLabels2: Record<string,string> = { Alipay:'Alipay', Wechat:'WeChat Pay', CreditCard:'Credit Card', Octopus:'Octopus', Fps:'FPS', CUP:'UnionPay' };
-        const paMeth2 = paRec2?.network ? (_paNetLabels2[paRec2.network] || paRec2.network) : 'Online';
-        const paAmt2 = paRec2?.amount_cents || 0;
-        const paEnv2 = paRec2?.payment_gateway_env || 'sandbox';
-        const paSess2 = paRec2?.session_id || null;
-        await pool.query(
-          `INSERT INTO chuio_payments
-             (restaurant_id, order_id, session_id, payment_vendor, payment_method,
-              payment_gateway_env, order_reference, vendor_reference,
-              amount_cents, currency_code, total_cents, status, completed_at, extra_data)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'HKD',$9,'completed',NOW(),$10)
-           ON CONFLICT DO NOTHING`,
-          [
-            restaurantId, orderId, paSess2,
-            'payment-asia', paMeth2, paEnv2,
-            merchantRef, requestRef || null,
-            paAmt2,
-            JSON.stringify({ request_reference: requestRef }),
-          ]
-        );
-      } catch (ledgerErr2) {
-        console.warn('[PaymentReturn] chuio_payments write failed:', ledgerErr2 instanceof Error ? ledgerErr2.message : ledgerErr2);
+      // Write to unified chuio_payments ledger — only on successful completion
+      if (paymentStatus === 'completed') {
+        try {
+          const paNetworkRes2 = await pool.query(
+            `SELECT network, amount_cents, session_id, payment_gateway_env FROM payment_asia_transactions
+             WHERE merchant_reference = $1 LIMIT 1`,
+            [merchantRef]
+          );
+          const paRec2 = paNetworkRes2.rows[0];
+          const _paNetLabels2: Record<string,string> = { Alipay:'Alipay', Wechat:'WeChat Pay', CreditCard:'Credit Card', Octopus:'Octopus', Fps:'FPS', CUP:'UnionPay' };
+          const paMeth2 = paRec2?.network ? (_paNetLabels2[paRec2.network] || paRec2.network) : 'Online';
+          const paAmt2 = paRec2?.amount_cents || 0;
+          const paEnv2 = paRec2?.payment_gateway_env || 'sandbox';
+          const paSess2 = paRec2?.session_id || null;
+          await pool.query(
+            `INSERT INTO chuio_payments
+               (restaurant_id, order_id, session_id, payment_vendor, payment_method,
+                payment_gateway_env, order_reference, vendor_reference,
+                amount_cents, currency_code, total_cents, status, completed_at, extra_data)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'HKD',$9,'completed',NOW(),$10)
+             ON CONFLICT DO NOTHING`,
+            [
+              restaurantId, orderId, paSess2,
+              'payment-asia', paMeth2, paEnv2,
+              merchantRef, requestRef || null,
+              paAmt2,
+              JSON.stringify({ request_reference: requestRef }),
+            ]
+          );
+        } catch (ledgerErr2) {
+          console.warn('[PaymentReturn] chuio_payments write failed:', ledgerErr2 instanceof Error ? ledgerErr2.message : ledgerErr2);
+        }
       }
 
     // Redirect customer back to their menu session with payment result, or fallback to callback page
@@ -711,6 +727,12 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
                WHERE id = $1 AND restaurant_id = $2`,
               [orderId, restaurantId]
             );
+
+            try {
+              await queueKitchenPrintJobs(Number(orderId), Number(restaurantId));
+            } catch (dispatchErr) {
+              console.warn('[PaymentStatus] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+            }
           } else if (resolvedStatus === 'failed') {
             await pool.query(
               `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL
