@@ -51,6 +51,8 @@
     </div>
 
     <div style="padding: 20px; width: 100%; box-sizing: border-box;">
+    <div id="printer-config-card" style="margin-bottom: 24px;"></div>
+
     <!-- QR Code Format Section (Only for QR Type) -->
     <div id="qr-format-section" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 30px; display: none;">
       <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-qr-format">📋 QR Code Format</h3>
@@ -81,7 +83,7 @@
         <!-- Preview -->
         <div>
           <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-preview">📄 Preview</label>
-            
+          <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
             <div style="text-align: left; margin: 8px 0; font-size: 11px;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                 <span style="font-weight: bold; min-width: 60px;">Table:</span>
@@ -96,29 +98,20 @@
                 <span>2026-03-18 8:30 PM</span>
               </div>
             </div>
-            
+
             <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-            
-            <p id="qr-preview-above" style="font-weight: bold; font-size: 12px; margin: 8px 0 8px 0; color: #1f2937;">Scan to Order</p>
-            
+
+            <p id="qr-preview-above" style="font-weight: bold; font-size: 12px; margin: 8px 0; color: #1f2937;">Scan to Order</p>
+
             <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-            
+
             <div id="qr-preview-box" style="width: 100px; height: 100px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; margin: 12px auto; display: flex; align-items: center; justify-content: center; font-size: 10px;">
               <p style="color: #999; margin: 0;">QR Code</p>
             </div>
-            
+
             <p id="qr-preview-below" style="margin: 8px 0 4px 0; font-size: 10px; color: #6b7280;">Let us know how we did!</p>
           </div>
         </div>
-      </div>
-
-      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px; display: flex; gap: 12px;">
-        <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
-          <input id="qr-auto-print" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;" />
-          <label for="qr-auto-print" style="cursor: pointer; font-weight: 500; color: #1f2937; margin: 0;" data-i18n="admin.printer-auto-qr">Auto-Print QR Codes</label>
-        </div>
-        <button onclick="saveQRCodeFormat()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-save-format">✓ Save Format</button>
-        <button onclick="testPrintQRCode()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-test-print">🧪 Test Print</button>
       </div>
     </div>
 
@@ -153,10 +146,13 @@
         <!-- Bill Preview -->
         <div>
           <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-preview">📄 Preview</label>
+          <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; font-family: monospace; font-size: 11px; line-height: 1.6;">
+            <div style="border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; text-align: center;">
+              <p style="margin: 0 0 2px 0; font-weight: bold; font-size: 13px; color: #1f2937;">Restaurant Name</p>
               <p style="margin: 0 0 2px 0; font-size: 10px; color: #6b7280;">123 Main Street</p>
               <p style="margin: 0; font-size: 10px; color: #6b7280;">+1 (555) 123-4567</p>
             </div>
-            
+
             <div style="text-align: left; margin: 8px 0; font-size: 11px;">
               <div style="display: flex; justify-content: space-between; margin: 4px 0;">
                 <span>Table:</span>
@@ -171,9 +167,9 @@
                 <span>8:30 PM</span>
               </div>
             </div>
-            
+
             <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-            
+
             <div style="text-align: left; margin: 8px 0;">
               <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
                 <span>Pad Thai x2</span>
@@ -184,7 +180,7 @@
                 <span>260</span>
               </div>
             </div>
-            
+
             <div style="border-bottom: 1px dashed #000; margin: 8px 0; padding-bottom: 8px;">
               <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
                 <span>Subtotal:</span>
@@ -195,22 +191,13 @@
                 <span id="bill-preview-total">500</span>
               </div>
             </div>
-            
-            <div style="margin-top: 8px;">
+
+            <div style="margin-top: 8px; text-align: center;">
               <p id="bill-header-preview" style="margin: 0 0 4px 0; font-weight: 600; color: #1f2937;">Thank You</p>
               <p id="bill-footer-preview" style="margin: 0; font-size: 10px; color: #6b7280;">Follow us on social media</p>
             </div>
           </div>
         </div>
-      </div>
-
-      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 20px; display: flex; gap: 12px;">
-        <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
-          <input id="bill-auto-print" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;" />
-          <label for="bill-auto-print" style="cursor: pointer; font-weight: 500; color: #1f2937; margin: 0;" data-i18n="admin.printer-auto-bill">Auto-Print Bills</label>
-        </div>
-        <button onclick="saveBillFormat()" class="btn-primary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-save-format">✓ Save Format</button>
-        <button onclick="testPrintBillCode()" class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;" data-i18n="admin.printer-test-print">🧪 Test Print</button>
       </div>
     </div>
 
@@ -333,7 +320,6 @@
       </div>
     </div>
 
-    <div id="printer-config-card"></div>
     </div>
   </div>
 </div>
