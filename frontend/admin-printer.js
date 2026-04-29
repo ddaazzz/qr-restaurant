@@ -1576,6 +1576,10 @@ async function saveKitchenPrinterConfiguration() {
 
     console.log('[admin-printer.js] Saving kitchen printers:', printersToSave);
 
+    // Read auto-print toggle from UI
+    const autoPrintEl = document.getElementById('kitchen-auto-print');
+    const autoPrint = autoPrintEl ? autoPrintEl.checked : false;
+
     // Store the array of kitchen printers in the settings JSON field
     // Kitchen type in printers table stores: { printers: [...], auto_print: ... }
     const payload = {
@@ -1583,7 +1587,7 @@ async function saveKitchenPrinterConfiguration() {
       printer_type: 'none',  // Multi-printer config indicated by presence of printers array in settings
       settings: {
         printers: printersToSave,
-        auto_print: false
+        auto_print: autoPrint
       }
     };
 
@@ -1610,6 +1614,7 @@ async function saveKitchenPrinterConfiguration() {
     
     if (result.settings) {
       window.currentPrinterSettings.kitchen_printers = result.settings.printers || [];
+      window.currentPrinterSettings.kitchen_auto_print = result.settings.auto_print || false;
       console.log('[admin-printer.js] Updated kitchen_printers:', window.currentPrinterSettings.kitchen_printers);
     }
     

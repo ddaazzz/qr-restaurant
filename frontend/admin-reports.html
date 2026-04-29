@@ -37,6 +37,14 @@
       <div class="metric-value" id="metric-total-discounts" style="color: #dc2626;">$0.00</div>
     </div>
     <div class="metric-card">
+      <div class="metric-label" data-i18n="admin.customers-per-day">Customers / Day</div>
+      <div class="metric-value" id="metric-customers-per-day">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label" data-i18n="admin.avg-spend-per-customer">Avg Spend / Customer</div>
+      <div class="metric-value" id="metric-avg-spend-customer">$0.00</div>
+    </div>
+    <div class="metric-card">
       <div class="metric-label" data-i18n="admin.avg-daily-net-sales">Avg Daily Net Sales</div>
       <div class="metric-value" id="metric-avg-daily-net" style="color: #059669;">$0.00</div>
     </div>
@@ -414,8 +422,8 @@
         </div>
       </div>
 
-      <button onclick="downloadExportXLSX()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;">
-        ⬇ Download XLSX
+      <button onclick="downloadExportCSV()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;">
+        ⬇ Download CSV
       </button>
       <div id="export-error" style="display:none;margin-top:10px;color:#dc2626;font-size:13px;text-align:center;"></div>
     </div>

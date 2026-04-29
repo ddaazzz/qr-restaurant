@@ -615,3 +615,188 @@ body {
   color: var(--bg-white);
 }
 
+/* ============== KITCHEN SWITCHER OVERLAY ============== */
+.kitchen-switcher {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+}
+
+.kitchen-switcher-box {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 28px 32px;
+  width: min(92vw, 700px);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+
+.kitchen-switcher-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.kitchen-switcher-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 4px;
+}
+
+.kitchen-switcher-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.kitchen-switcher-header-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.switcher-lang-row {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.switcher-action-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Shared switcher grid (used by both staff + kitchen) */
+.switcher-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 540px) {
+  .switcher-staff-grid { grid-template-columns: repeat(2, 1fr); }
+  .kitchen-switcher-box { padding: 20px 16px; }
+}
+
+@media (min-width: 541px) and (max-width: 720px) {
+  .switcher-staff-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.switcher-staff-card {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.switcher-staff-card:not(.current-user):hover {
+  border-color: var(--primary-color);
+  background: #eef4ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.12);
+}
+
+.switcher-staff-card.current-user {
+  border-color: #2c3e50;
+  background: #f0f4f8;
+  cursor: default;
+}
+
+.switcher-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 auto 8px;
+}
+
+.switcher-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcher-card-status {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.switcher-card-status.clocked-in {
+  color: #059669;
+}
+
+.switcher-active-badge {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 10px;
+  background: #2c3e50;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* PIN view within kitchen switcher */
+#kitchen-switcher-pin-view {
+  max-width: 360px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.switcher-pin-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  justify-content: center;
+}
+
+.switcher-pin-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.switcher-avatar-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.switcher-pin-name-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+

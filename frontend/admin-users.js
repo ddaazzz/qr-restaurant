@@ -502,62 +502,6 @@ async function openRestaurantDetail(restId) {
   bodyHtml += '<div class="detail-row"><span class="detail-label">Users</span><span class="detail-value">' + (rest.user_count || 0) + '</span></div>';
   bodyHtml += '</div></div>';
 
-  // --- Deployment & Customization Section (Superadmin only) ---
-  if (IS_SUPERADMIN) {
-    bodyHtml += '<div class="detail-section">';
-    bodyHtml += '<h4 class="detail-section-title">Deployment & Customization</h4>';
-
-    // Customization toggle
-    var isCustom = rest.is_customized;
-    bodyHtml += '<div class="deploy-toggle-row">';
-    bodyHtml += '  <div>';
-    bodyHtml += '    <div class="deploy-toggle-label">Custom Deployment</div>';
-    bodyHtml += '    <div class="deploy-toggle-desc">' + (isCustom ? 'This restaurant has its own forked codebase and deployment.' : 'Uses the shared platform (main branch). Toggle to create a custom fork.') + '</div>';
-    bodyHtml += '  </div>';
-    bodyHtml += '  <label class="toggle-switch">';
-    bodyHtml += '    <input type="checkbox" id="customization-toggle-' + rest.id + '" ' + (isCustom ? 'checked' : '') + ' onchange="toggleCustomization(' + rest.id + ', this.checked)">';
-    bodyHtml += '    <span class="toggle-slider"></span>';
-    bodyHtml += '  </label>';
-    bodyHtml += '</div>';
-
-    // Deployment details (always shown, editable)
-    bodyHtml += '<div id="deploy-details-' + rest.id + '" class="deploy-details">';
-
-    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">App Version (pinned)</label>';
-    bodyHtml += '  <input type="text" id="deploy-version-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.app_version || '') + '" placeholder="e.g. 1.1.1">';
-    bodyHtml += '</div>';
-
-    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">Git Branch</label>';
-    bodyHtml += '  <input type="text" id="deploy-branch-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.custom_branch || '') + '" placeholder="e.g. restaurant/sushi-palace">';
-    bodyHtml += '</div>';
-
-    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">Render Service ID</label>';
-    bodyHtml += '  <input type="text" id="deploy-render-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.render_service_id || '') + '" placeholder="e.g. srv-xxxxxxxxxx">';
-    bodyHtml += '</div>';
-
-    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <label class="detail-label">API Base URL</label>';
-    bodyHtml += '  <input type="text" id="deploy-url-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.api_base_url || '') + '" placeholder="e.g. https://sushi-palace.chuio.io">';
-    bodyHtml += '</div>';
-
-    bodyHtml += '<button class="btn-primary" onclick="saveDeploymentSettings(' + rest.id + ')" style="width: 100%; margin-top: 6px;">💾 Save Deployment Settings</button>';
-    bodyHtml += '</div>';
-    bodyHtml += '</div>';
-
-    // --- Database Info Section ---
-    bodyHtml += '<div class="detail-section">';
-    bodyHtml += '<h4 class="detail-section-title">Database (Render)</h4>';
-    bodyHtml += '<div class="detail-grid">';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">DB Host</span><span class="detail-value" style="font-size: 11px; word-break: break-all;">dpg-d5neo34mrvns73fmt0sg-a.singapore-postgres.render.com</span></div>';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">Region</span><span class="detail-value">Singapore</span></div>';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">Engine</span><span class="detail-value">PostgreSQL</span></div>';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">Note</span><span class="detail-value" style="font-size: 11px;">All restaurants share the same database. Data is isolated by restaurant_id.</span></div>';
-    bodyHtml += '</div></div>';
-  }
-
   // --- Premium Features (Feature Flags) ---
   if (IS_SUPERADMIN) {
     bodyHtml += '<div class="detail-section">';

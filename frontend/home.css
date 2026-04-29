@@ -775,6 +775,7 @@ body {
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
   margin-bottom: 8px;
+  align-items: stretch;
 }
 
 .payment-card {
@@ -785,36 +786,56 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 0;
+  height: 100%;
 }
 
 .payment-card-logos {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: 140px;
+  display: grid;
+  grid-auto-rows: 56px;
+  gap: 14px;
+  height: 220px;
   width: 100%;
+  align-content: start;
 }
 
-.payment-card-logos img {
-  max-height: 44px;
-  max-width: 160px;
+.payment-logo-slot {
+  width: 100%;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.payment-logo-slot img {
+  width: 170px;
+  height: 48px;
   object-fit: contain;
   object-position: left center;
+}
+
+.payment-logo--alipay {
+  transform: scale(1.35);
+  transform-origin: left center;
 }
 
 .payment-card-logos-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  min-height: 140px;
+  gap: 14px 16px;
+  height: 220px;
   align-items: center;
 }
 
-.payment-card-logos-grid img {
-  max-height: 44px;
-  max-width: 120px;
+.payment-card-logos-grid .payment-logo-slot {
+  justify-content: center;
+}
+
+.payment-card-logos-grid .payment-logo-slot img {
+  width: 132px;
+  height: 44px;
   object-fit: contain;
+  object-position: center;
 }
 
 .payment-card-divider {
@@ -842,6 +863,23 @@ body {
   font-size: 13px;
   color: rgba(0, 0, 0, 0.45);
   font-style: italic;
+  min-height: 1.4em;
+}
+
+.payment-card-note-empty {
+  visibility: hidden;
+}
+
+.service-packs-wrap {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  display: block;
+}
+
+.service-packs-table {
+  width: 100%;
+  min-width: 100%;
 }
 
 @media (max-width: 900px) {
@@ -850,8 +888,15 @@ body {
     max-width: 400px;
     margin: 0 auto 8px;
   }
-  .payment-card-logos { min-height: auto; }
-  .payment-card-logos-grid { min-height: auto; }
+  .payment-card-logos { height: auto; }
+  .payment-card-logos-grid { height: auto; }
+  .payment-logo-slot img {
+    width: 160px;
+    height: 48px;
+  }
+  .payment-logo--alipay {
+    transform: scale(1.2);
+  }
 }
 
 .service-packs-heading {

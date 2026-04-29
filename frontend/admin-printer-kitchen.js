@@ -61,7 +61,13 @@ async function loadKitchenFormatUI() {
     // Now render with categories available
     renderKitchenPrintersList();
     updateAddPrinterButton();
-    
+
+    // Restore auto-print toggle
+    const autoPrintCheckbox = document.getElementById('kitchen-auto-print');
+    if (autoPrintCheckbox) {
+      autoPrintCheckbox.checked = !!(window.currentPrinterSettings?.kitchen_auto_print || (window.currentPrinterSettings?.kitchen_settings?.auto_print));
+    }
+
     console.log('[admin-printer-kitchen.js] Kitchen UI fully loaded');
   } catch (err) {
     console.error('[admin-printer-kitchen.js] Error loading kitchen format UI:', err);

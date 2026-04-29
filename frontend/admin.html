@@ -48,7 +48,6 @@
         <div class="header-right">
           <button id="table-edit-btn" class="btn-primary" onclick="toggleTableEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
           <button id="menu-edit-btn" class="btn-primary" onclick="toggleMenuEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
-          <button id="menu-import-btn" class="btn-secondary" onclick="openMenuImportModal()" style="display: none;">📥 Import</button>
           <button id="staff-edit-btn" class="btn-primary" onclick="toggleStaffEditMode('staff')" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
           <button id="reports-btn" class="btn-primary" style="display: none;"><img src="/uploads/website/report.png" alt="reports" class="btn-icon"> <span data-i18n="admin.header-reports">Reports</span></button>
           <button id="edit-settings-header" class="btn-primary" onclick="enterEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
@@ -96,6 +95,10 @@
           <button class="menu-btn" data-section="settings" onclick="switchSection('settings')" id="settings-nav-btn">
             <img src="/uploads/website/settings.png" alt="settings" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.settings">More</span>
+          </button>
+          <button class="menu-btn superadmin-only" data-section="users" onclick="switchSection('users')" id="users-nav-btn" style="display: none;">
+            <span class="icon" style="font-size: 18px;">👥</span>
+            <span class="menu-text">Users</span>
           </button>
         </div>
         

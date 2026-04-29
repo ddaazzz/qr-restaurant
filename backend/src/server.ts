@@ -14,7 +14,6 @@ import { sessionNotifier } from "./services/sessionNotifier";
 import { orderNotifier } from "./services/orderNotifier";
 import { webSocketServer } from "./services/websocket";
 import { kitchenAutoPrintService } from "./services/kitchenAutoPrintService";
-import { runAllMigrations } from "./scripts/runMigrations";
 
 const PORT = Number(process.env.PORT) || 10000;
 
@@ -53,13 +52,6 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       console.log(`🔒 HTTPS Backend running on https://localhost:${PORT}`);
       console.log(`📱 Secure access: https://${localIP}:${PORT}`);
       console.log(`   ✅ Web Bluetooth API enabled!`);
-
-      // Run pending database migrations
-      try {
-        await runAllMigrations();
-      } catch (err: any) {
-        console.warn(`⚠️  Migration runner failed: ${err.message}`);
-      }
 
       // Initialize WebSocket server
       try {
@@ -111,13 +103,6 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
 
   server.listen(PORT, "0.0.0.0", async () => {
     console.log(`🌐 HTTP Backend running on http://localhost:${PORT}`);
-
-    // Run pending database migrations
-    try {
-      await runAllMigrations();
-    } catch (err: any) {
-      console.warn(`⚠️  Migration runner failed: ${err.message}`);
-    }
 
     // Initialize WebSocket server
     try {

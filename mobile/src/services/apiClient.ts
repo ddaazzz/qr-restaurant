@@ -599,6 +599,24 @@ class APIClient {
     }
   }
 
+  async getRestaurantSettings(restaurantId: number): Promise<any> {
+    try {
+      const response = await this.client.get(`/api/restaurants/${restaurantId}/settings`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async patchRestaurantSettings(restaurantId: number, data: Record<string, any>): Promise<any> {
+    try {
+      const response = await this.client.patch(`/api/restaurants/${restaurantId}/settings`, data);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   async createRestaurant(data: {
     name: string; address?: string; phone?: string;
     timezone?: string; service_charge_percent?: number; language_preference?: string;

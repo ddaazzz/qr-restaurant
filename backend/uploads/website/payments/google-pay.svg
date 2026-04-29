@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 34" width="80" height="34">
+  <rect width="80" height="34" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.5"/>
+  <text x="40" y="23" text-anchor="middle" font-family="'Google Sans', Roboto, Arial, sans-serif" font-size="14" font-weight="500">
+    <tspan fill="#4285F4">G</tspan><tspan fill="#EA4335">o</tspan><tspan fill="#FBBC05">o</tspan><tspan fill="#4285F4">g</tspan><tspan fill="#34A853">l</tspan><tspan fill="#EA4335">e</tspan><tspan fill="#5F6368" font-weight="400"> Pay</tspan>
+  </text>
+</svg>

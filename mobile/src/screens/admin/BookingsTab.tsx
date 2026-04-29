@@ -1,4 +1,4 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -110,6 +110,11 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
   const [sessionData, setSessionData] = useState<BookingSession | null>(null);
   const [sessionOrders, setSessionOrders] = useState<BookingSessionOrder[]>([]);
   const [loadingSession, setLoadingSession] = useState(false);
+
+  // CRM customer search state
+  const [crmSearchResults, setCrmSearchResults] = useState<Array<{ id: number; name: string; phone: string; email: string }>>([]);
+  const [showCrmDropdown, setShowCrmDropdown] = useState(false);
+  const crmSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -296,7 +301,19 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
           </Text>
           {hasBookings && (
             <>
-              <Text style={styles.calendarDayDot}>●</Text>
+              <View style={styles.calendarDotRow}>
+                {bookingsForDay.slice(0, 4).map((b, idx) => (
+                  <View
+                    key={idx}
+                    style={[styles.calendarStatusDot, { backgroundColor: getStatusColor(b.status) }]}
+                  />
+                ))}
+                {bookingsForDay.length > 4 && (
+                  <Text style={[styles.calendarMoreText, isSelected && { color: 'rgba(255,255,255,0.8)' }]}>
+                    +{bookingsForDay.length - 4}
+                  </Text>
+                )}
+              </View>
               {isTabletDevice && (
                 <Text style={[styles.calendarDayBookingsText, isSelected && { color: 'rgba(255,255,255,0.8)' }]}>
                   {t('bookings.booking-count').replace('{0}', String(bookingsForDay.length))}
@@ -352,6 +369,37 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
     setShowBookingModal(false);
     setEditingBookingId(null);
     setFormError(null);
+    setShowCrmDropdown(false);
+    setCrmSearchResults([]);
+    if (crmSearchTimer.current) clearTimeout(crmSearchTimer.current);
+  };
+
+  const searchCrmCustomers = (text: string) => {
+    if (crmSearchTimer.current) clearTimeout(crmSearchTimer.current);
+    if (!text || text.trim().length < 2) {
+      setCrmSearchResults([]);
+      setShowCrmDropdown(false);
+      return;
+    }
+    crmSearchTimer.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.get(
+          `/api/restaurants/${restaurantId}/crm/customers?search=${encodeURIComponent(text.trim())}&limit=8`
+        );
+        const results = Array.isArray(response.data) ? response.data : [];
+        setCrmSearchResults(results);
+        setShowCrmDropdown(true);
+      } catch {
+        setCrmSearchResults([]);
+        setShowCrmDropdown(false);
+      }
+    }, 300);
+  };
+
+  const selectCrmCustomer = (customer: { id: number; name: string; phone: string; email: string }) => {
+    setFormData((prev) => ({ ...prev, guest_name: customer.name, phone: customer.phone || '', email: customer.email || '' }));
+    setShowCrmDropdown(false);
+    setCrmSearchResults([]);
   };
 
   const saveBooking = async () => {
@@ -446,7 +494,9 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
     switch (status) {
       case 'confirmed':
       case 'reserved':
-        return '#fbbf24';
+        return '#16a34a';
+      case 'pending':
+        return '#f97316';
       case 'in-session':
         return '#22c55e';
       case 'completed':
@@ -880,14 +930,44 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.guest-name-label')}</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder={t('bookings.guest-name-placeholder')}
-                    value={formData.guest_name}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, guest_name: text })
-                    }
-                  />
+                  <View style={{ position: 'relative' }}>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder={t('bookings.guest-name-placeholder')}
+                      value={formData.guest_name}
+                      onChangeText={(text) => {
+                        setFormData({ ...formData, guest_name: text });
+                        searchCrmCustomers(text);
+                      }}
+                    />
+                    {showCrmDropdown && (
+                      <View style={styles.crmDropdown}>
+                        {crmSearchResults.map((customer) => (
+                          <TouchableOpacity
+                            key={customer.id}
+                            style={styles.crmDropdownItem}
+                            onPress={() => selectCrmCustomer(customer)}
+                          >
+                            <Text style={styles.crmDropdownName}>{customer.name}</Text>
+                            {(customer.phone || customer.email) ? (
+                              <Text style={styles.crmDropdownSub}>
+                                {[customer.phone, customer.email].filter(Boolean).join(' · ')}
+                              </Text>
+                            ) : null}
+                          </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                          style={[styles.crmDropdownItem, styles.crmDropdownNewItem]}
+                          onPress={() => {
+                            setShowCrmDropdown(false);
+                            setCrmSearchResults([]);
+                          }}
+                        >
+                          <Text style={styles.crmDropdownNewText}>+ {t('bookings.create-new-customer') || 'Create new customer'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
                 </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.phone-label')}</Text>
@@ -1283,6 +1363,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#f59e0b',
   },
+  calendarDotRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 2,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  calendarStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  calendarMoreText: {
+    fontSize: 9,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
   calendarDayBookingsText: {
     fontSize: 10,
     color: '#f59e0b',
@@ -1607,5 +1705,46 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f3f4f6',
     borderLeftWidth: 3,
     borderLeftColor: '#d1d5db',
+  },
+  crmDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 6,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  crmDropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  crmDropdownName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  crmDropdownSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  crmDropdownNewItem: {
+    backgroundColor: '#f0f9ff',
+  },
+  crmDropdownNewText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3b82f6',
   },
 });

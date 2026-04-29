@@ -485,6 +485,12 @@ body {
   height: 120px;
 }
 
+/* Single-column image matches 1536×1024 (3:2) aspect ratio */
+.menu-grid.single-column .menu-item img {
+  height: auto;
+  aspect-ratio: 3 / 2;
+}
+
 .menu-item-name {
   padding: 8px;
   text-align: center;
@@ -1397,6 +1403,11 @@ body {
     height: 100px;
   }
 
+  .menu-grid.single-column .menu-item img {
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+
   .menu-item-name {
     font-size: 12px;
     padding: 6px;
@@ -1494,6 +1505,11 @@ body {
 
   .menu-item img {
     height: 90px;
+  }
+
+  .menu-grid.single-column .menu-item img {
+    height: auto;
+    aspect-ratio: 3 / 2;
   }
 
   .menu-item {
@@ -1806,6 +1822,11 @@ body {
   /* Increase image height */
   .menu-item img {
     height: 140px;
+  }
+
+  .menu-grid.single-column .menu-item img {
+    height: auto;
+    aspect-ratio: 3 / 2;
   }
 
   /* Better text sizing and spacing */

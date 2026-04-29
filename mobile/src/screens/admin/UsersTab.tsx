@@ -11,7 +11,6 @@ import {
   Modal,
   FlatList,
   RefreshControl,
-  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
@@ -95,9 +94,8 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantApplications, setRestaurantApplications] = useState<any[]>([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
-  const [restaurantFlags, setRestaurantFlags] = useState<Record<string, boolean>>({});
-  const [restaurantUiConfig, setRestaurantUiConfig] = useState<Record<string, any>>({});
-  const [savingFlag, setSavingFlag] = useState(false);
+  const [restaurantFeatureFlags, setRestaurantFeatureFlags] = useState<Record<string, boolean>>({});
+  const [loadingFlags, setLoadingFlags] = useState(false);
 
   const fetchData = useCallback(async () => {
     setFetchError(null);
@@ -138,7 +136,6 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
       name: '',
       email: '',
       password: '',
-      confirmPassword: '',
       role: 'staff',
       pin: '',
       restaurant_id: currentUser?.restaurantId || '',
@@ -153,7 +150,6 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
       name: u.name || '',
       email: u.email || '',
       password: '',
-      confirmPassword: '',
       role: u.role,
       pin: u.pin || '',
       restaurant_id: u.restaurant_id ? String(u.restaurant_id) : '',
@@ -313,48 +309,34 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
 
   const openRestaurantDetail = async (r: Restaurant) => {
     setSelectedRestaurant(r);
-    setRestaurantFlags({});
-    setRestaurantUiConfig({});
+    setRestaurantFeatureFlags({});
     setLoadingApplications(true);
+    setLoadingFlags(true);
     try {
-      const [apps, settingsRes] = await Promise.all([
+      const [apps, settings] = await Promise.all([
         apiClient.getTerminalApplications(r.id),
-        apiClient.get(`/api/restaurants/${r.id}/settings`).catch(() => ({ data: {} })),
+        apiClient.getRestaurantSettings(r.id),
       ]);
       setRestaurantApplications(apps);
-      setRestaurantFlags(settingsRes.data?.feature_flags || {});
-      setRestaurantUiConfig(settingsRes.data?.ui_config || {});
+      setRestaurantFeatureFlags(settings.feature_flags || {});
     } catch (err: any) {
       console.warn('Failed to load restaurant detail:', err.message);
       setRestaurantApplications([]);
     } finally {
       setLoadingApplications(false);
+      setLoadingFlags(false);
     }
   };
 
-  const saveRestaurantFlag = async (restId: number, key: string, value: boolean) => {
-    setRestaurantFlags(prev => ({ ...prev, [key]: value }));
-    setSavingFlag(true);
+  const toggleRestaurantFlag = async (flagKey: string, value: boolean) => {
+    if (!selectedRestaurant) return;
+    const optimistic = { ...restaurantFeatureFlags, [flagKey]: value };
+    setRestaurantFeatureFlags(optimistic);
     try {
-      await apiClient.patch(`/api/restaurants/${restId}/settings`, {
-        feature_flags: { [key]: value },
-      });
+      await apiClient.patchRestaurantSettings(selectedRestaurant.id, { feature_flags: { [flagKey]: value } });
     } catch (err: any) {
-      setRestaurantFlags(prev => ({ ...prev, [key]: !value }));
-      Alert.alert('Error', err.response?.data?.error || 'Failed to save flag');
-    } finally {
-      setSavingFlag(false);
-    }
-  };
-
-  const saveRestaurantUiConfig = async (restId: number, key: string, value: any) => {
-    setRestaurantUiConfig(prev => ({ ...prev, [key]: value }));
-    try {
-      await apiClient.patch(`/api/restaurants/${restId}/settings`, {
-        ui_config: { [key]: value },
-      });
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to save setting');
+      Alert.alert('Error', 'Failed to update feature flag');
+      setRestaurantFeatureFlags({ ...optimistic, [flagKey]: !value });
     }
   };
 
@@ -851,7 +833,7 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
           <View style={[s.modalContent, { maxWidth: 600, width: '90%', maxHeight: '80%', borderRadius: 16 }]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{selectedRestaurant?.name || 'Restaurant Details'}</Text>
-              <TouchableOpacity onPress={() => { setSelectedRestaurant(null); setRestaurantApplications([]); }}>
+              <TouchableOpacity onPress={() => { setSelectedRestaurant(null); setRestaurantApplications([]); setRestaurantFeatureFlags({}); }}>
                 <Text style={s.closeBtn}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -890,72 +872,41 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                 </View>
               </View>
 
-              {/* Feature Flags */}
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 12 }}>Feature Flags</Text>
-                {([
-                  { key: 'bookings',              label: 'Bookings Module' },
-                  { key: 'waitlist',              label: 'Waitlist' },
-                  { key: 'crm',                   label: 'CRM' },
-                  { key: 'coupons',               label: 'Coupons' },
-                  { key: 'service_requests',      label: 'Service Requests' },
-                  { key: 'allow_custom_food_items', label: 'Custom Food Items' },
-                ] as { key: string; label: string }[]).map((def, idx, arr) => {
-                  const isOn = restaurantFlags[def.key] !== false;
-                  return (
-                    <View
-                      key={def.key}
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        paddingVertical: 10,
-                        borderBottomWidth: idx < arr.length - 1 ? 1 : 0,
-                        borderBottomColor: '#f3f4f6',
-                      }}
-                    >
-                      <Text style={{ fontSize: 13, color: '#374151' }}>{def.label}</Text>
-                      <Switch
-                        value={isOn}
-                        onValueChange={(val) => {
-                          if (selectedRestaurant) saveRestaurantFlag(selectedRestaurant.id, def.key, val);
-                        }}
-                        disabled={savingFlag}
-                        trackColor={{ false: '#d1d5db', true: '#6366f1' }}
-                        thumbColor="#ffffff"
-                      />
-                    </View>
-                  );
-                })}
-
-                {/* Customer Menu Columns */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10 }}>
-                  <Text style={{ fontSize: 13, color: '#374151' }}>Customer Menu Columns</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {([1, 2] as const).map((n) => {
-                      const active = (restaurantUiConfig.menu_columns || 1) === n;
+              {/* Premium Features (Feature Flags) — superadmin only */}
+              {isSuperadmin && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>Premium Features</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Disabled modules are hidden from all users of this restaurant.</Text>
+                  {loadingFlags ? (
+                    <ActivityIndicator size="small" color="#4f46e5" style={{ paddingVertical: 12 }} />
+                  ) : (
+                    [
+                      { key: 'bookings',          label: 'Bookings',          desc: 'Table reservations module' },
+                      { key: 'waitlist',           label: 'Waitlist',          desc: 'Queue / walk-in waitlist' },
+                      { key: 'crm',                label: 'CRM',               desc: 'Customer relationship management' },
+                      { key: 'coupons',            label: 'Coupons',           desc: 'Discount coupons and promotions' },
+                      { key: 'service_requests',   label: 'Service Requests',  desc: 'Customer call-waiter / bill requests' },
+                      { key: 'custom_menu_items',  label: 'Custom Food Items', desc: 'Staff can add free-text items to orders' },
+                    ].map((fd, idx, arr) => {
+                      const isOn = restaurantFeatureFlags[fd.key] !== false;
                       return (
-                        <TouchableOpacity
-                          key={n}
-                          onPress={() => selectedRestaurant && saveRestaurantUiConfig(selectedRestaurant.id, 'menu_columns', n)}
-                          style={{
-                            paddingHorizontal: 14,
-                            paddingVertical: 6,
-                            borderRadius: 6,
-                            borderWidth: 1,
-                            borderColor: active ? '#6366f1' : '#d1d5db',
-                            backgroundColor: active ? '#eef2ff' : '#fff',
-                          }}
-                        >
-                          <Text style={{ fontSize: 13, color: active ? '#4f46e5' : '#6b7280', fontWeight: active ? '600' : '400' }}>
-                            {n}
-                          </Text>
-                        </TouchableOpacity>
+                        <View key={fd.key} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: idx < arr.length - 1 ? 1 : 0, borderBottomColor: '#f3f4f6' }}>
+                          <View style={{ flex: 1, marginRight: 12 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#111827' }}>{fd.label}</Text>
+                            <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{fd.desc}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => toggleRestaurantFlag(fd.key, !isOn)}
+                            style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: isOn ? '#4f46e5' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                          >
+                            <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', alignSelf: isOn ? 'flex-end' : 'flex-start' }} />
+                          </TouchableOpacity>
+                        </View>
                       );
-                    })}
-                  </View>
+                    })
+                  )}
                 </View>
-              </View>
+              )}
 
               {/* Payment Terminal Applications */}
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 10 }}>Payment Terminal Applications</Text>

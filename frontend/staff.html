@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="Chuio Staff Portal">
-  <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
+  <link rel="icon" type="image/x-icon" href="/uploads/chuio/favicon%20(1).ico">
   <title>Staff Portal | Chuio</title>
 
   <!-- QR code library (generate QRs) -->
@@ -49,20 +49,9 @@
           <button id="header-new-booking-btn" class="btn-primary" onclick="openNewBookingModal()" style="display: none;" data-i18n="admin.new-booking">+ New Booking</button>
           <button id="scan-qr-btn" class="btn-secondary" onclick="openScanQRModal()" style="display: none;"><img src="/uploads/website/qrcode.png" alt="scan" class="btn-icon"> <span data-i18n="admin.scan-qr">Scan Table</span></button>
           <button id="clock-btn" class="btn-secondary" onclick="toggleClockInOut()" style="display: none;">⏱ Clock In</button>
-          <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
-            <img src="/uploads/website/user.png" alt="staff" class="btn-icon"> <span data-i18n="admin.header-staff">Staff</span>
-            <span class="dropdown-arrow">▼</span>
+          <button id="admin-menu-btn" class="admin-menu-btn" onclick="openStaffSwitcher()">
+            <img src="/uploads/website/user.png" alt="exit" class="btn-icon"> <span data-i18n="admin.header-exit">Exit</span>
           </button>
-          <div id="admin-dropdown" class="admin-dropdown hidden">
-            <div style="padding: 10px 15px; border-bottom: 1px solid #ddd;">
-              <div style="font-weight: 500; margin-bottom: 8px; font-size: 13px; color: #666;">Language</div>
-              <div style="display: flex; gap: 8px;">
-                <button id="lang-en" class="lang-btn" onclick="setLanguage('en'); toggleAdminDropdown()">English</button>
-                <button id="lang-zh" class="lang-btn" onclick="setLanguage('zh'); toggleAdminDropdown()">中文</button>
-              </div>
-            </div>
-            <button class="dropdown-item" onclick="staffLogout()" data-i18n="admin.header-logout">🚪 Logout</button>
-          </div>
         </div>
       </header>
 
@@ -149,7 +138,7 @@
   <div id="login-screen" class="login-screen">
     <div class="login-container">
       <div class="login-header">
-        <img src="/uploads/chuio/V2/App%20Icon%20B%26W.png" alt="Chuio Logo" />
+        <img src="/uploads/chuio/chuio_logo.png" alt="Chuio Logo" />
         <h1 data-i18n="staff.title">👨‍💼 Staff Dashboard</h1>
         <p data-i18n="staff.enter-pin">Enter PIN to continue</p>
       </div>
@@ -205,6 +194,60 @@
   </div>
 
   <!-- ================= SCRIPTS ================= -->
+  <!-- ================= STAFF SWITCHER OVERLAY ================= -->
+  <div id="staff-switcher" class="staff-switcher" style="display:none">
+    <div class="staff-switcher-box">
+      <div class="staff-switcher-header">
+        <div>
+          <h2 class="staff-switcher-title" data-i18n="admin.switcher-who">Who's working?</h2>
+          <p class="staff-switcher-subtitle"><span data-i18n="admin.switcher-active">Active</span>: <strong id="switcher-logged-in-name"></strong></p>
+        </div>
+        <div class="staff-switcher-header-right">
+          <div class="switcher-lang-row">
+            <button id="lang-en" class="lang-btn" onclick="setLanguage('en')">EN</button>
+            <button id="lang-zh" class="lang-btn" onclick="setLanguage('zh')">中文</button>
+          </div>
+          <div class="switcher-action-row">
+            <button class="btn-secondary" onclick="closeStaffSwitcher()">← Back</button>
+            <button class="btn-danger" onclick="staffLogout()" data-i18n="admin.header-logout">🚪 Logout</button>
+          </div>
+        </div>
+      </div>
+      <!-- Grid view -->
+      <div id="switcher-grid-view">
+        <div id="switcher-staff-grid" class="switcher-staff-grid"></div>
+      </div>
+      <!-- PIN view -->
+      <div id="switcher-pin-view" style="display:none">
+        <div class="switcher-pin-header">
+          <button class="btn-secondary" onclick="backToSwitcherGrid()">← Back</button>
+          <div class="switcher-pin-who">
+            <div id="switcher-pin-avatar" class="switcher-avatar-lg"></div>
+            <div id="switcher-pin-name" class="switcher-pin-name-label"></div>
+          </div>
+        </div>
+        <div class="pin-dots" id="switcher-pin-dots">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="keypad">
+          <button onclick="switcherPressKey(1)">1</button>
+          <button onclick="switcherPressKey(2)">2</button>
+          <button onclick="switcherPressKey(3)">3</button>
+          <button onclick="switcherPressKey(4)">4</button>
+          <button onclick="switcherPressKey(5)">5</button>
+          <button onclick="switcherPressKey(6)">6</button>
+          <button onclick="switcherPressKey(7)">7</button>
+          <button onclick="switcherPressKey(8)">8</button>
+          <button onclick="switcherPressKey(9)">9</button>
+          <button class="clear" onclick="switcherClearPin()">⌫</button>
+          <button onclick="switcherPressKey(0)">0</button>
+          <button class="enter" onclick="switcherSubmitPin()">⏎</button>
+        </div>
+        <div id="switcher-error" class="error-message" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="/translations.js"></script>
   <script src="/timezone-utils.js"></script>
   <script src="/printer-routing.js"></script>

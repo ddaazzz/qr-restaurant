@@ -254,9 +254,37 @@ async function loadPrinterSettings(restaurantId) {
  */
 async function autoPrintKitchenOrder(order, restaurantId, restaurantName) {
   try {
-    const settings = await loadPrinterSettings(restaurantId);
+    const settingsResponse = await loadPrinterSettings(restaurantId);
 
-    if (!settings || !settings.kitchen_auto_print) {
+    // loadPrinterSettings returns the raw API response which is an array of printer rows
+    // e.g. [{ type: 'QR', ... }, { type: 'Kitchen', settings: { auto_print: true, printers: [...] } }]
+    let kitchenSettings = null;
+    if (Array.isArray(settingsResponse)) {
+      const kitchenRow = settingsResponse.find(p => p.type === 'Kitchen');
+      if (kitchenRow) {
+        kitchenSettings = {
+          auto_print: kitchenRow.settings?.auto_print,
+          printer_type: kitchenRow.printer_type,
+          printer_host: kitchenRow.printer_host,
+          printer_port: kitchenRow.printer_port,
+          bluetooth_device_id: kitchenRow.bluetooth_device_id,
+          bluetooth_device_name: kitchenRow.bluetooth_device_name,
+          printers: kitchenRow.settings?.printers || [],
+        };
+      }
+    } else if (settingsResponse && typeof settingsResponse === 'object') {
+      // Legacy flat format fallback
+      kitchenSettings = {
+        auto_print: settingsResponse.kitchen_auto_print,
+        printer_type: settingsResponse.kitchen_printer_type,
+        printer_host: settingsResponse.kitchen_printer_host,
+        printer_port: settingsResponse.kitchen_printer_port,
+        bluetooth_device_id: settingsResponse.kitchen_bluetooth_device_id,
+        bluetooth_device_name: settingsResponse.kitchen_bluetooth_device_name,
+      };
+    }
+
+    if (!kitchenSettings || !kitchenSettings.auto_print) {
       console.log("ℹ️ Auto-print not enabled or settings unavailable");
       return;
     }
@@ -264,11 +292,11 @@ async function autoPrintKitchenOrder(order, restaurantId, restaurantName) {
     if (order.items.some((item) => item.status === "pending")) {
       console.log(`🖨️ Auto-printing order #${order.orderId}`);
 
-      if (settings.printer_type === "browser" || !settings.printer_type) {
+      if (kitchenSettings.printer_type === "browser" || !kitchenSettings.printer_type || kitchenSettings.printer_type === 'none') {
         // Browser print
         printKitchenOrder(order, restaurantName);
       } else {
-        // Send to thermal printer
+        // Send to thermal printer (server handles multi-printer routing)
         await sendPrintJobToServer(order.orderId, restaurantId, "kitchen");
       }
     }

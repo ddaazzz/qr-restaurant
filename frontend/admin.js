@@ -305,16 +305,6 @@ async function switchSection(sectionId) {
       }
       reTranslateContent();
       updateSectionHeader('admin.section-menu', 'menu-edit-btn');
-      // Show the import button only if the feature is enabled or user is superadmin
-      var importBtn = document.getElementById('menu-import-btn');
-      if (importBtn) {
-        var importFlags = (typeof ADMIN_SETTINGS_CACHE !== 'undefined' && ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
-        if (IS_SUPERADMIN || importFlags.menu_import_enabled === true) {
-          importBtn.style.display = 'inline-block';
-        } else {
-          importBtn.style.display = 'none';
-        }
-      }
     } else if (sectionId === "staff") {
       console.log("🔵 Loading STAFF section");
       
@@ -424,13 +414,6 @@ async function switchSection(sectionId) {
           try {
             var settingsResponse = await fetch('/admin-settings.html');
             settingsSection.innerHTML = await settingsResponse.text();
-            // Re-apply admin-visible class to newly loaded admin-only elements
-            var settingsAdminEls = settingsSection.querySelectorAll(".admin-only");
-            for (var i = 0; i < settingsAdminEls.length; i++) {
-              if (IS_ADMIN || IS_SUPERADMIN) {
-                settingsAdminEls[i].classList.add("admin-visible");
-              }
-            }
             reTranslateContent();
           } catch (err) {
             console.error("Error loading settings HTML:", err);
@@ -446,20 +429,6 @@ async function switchSection(sectionId) {
         console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
       }
       updateSectionHeader('admin.section-settings', 'edit-settings-header');
-    } else if (sectionId === "users") {
-      // Superadmin only - Users & Restaurants management
-      if (!IS_SUPERADMIN) {
-        console.warn("❌ User does not have access to users management (superadmin only)");
-        return;
-      }
-      
-      if (typeof loadUsersManagement === 'function') {
-        await loadUsersManagement();
-      } else {
-        console.warn('[admin.js] loadUsersManagement not yet loaded');
-      }
-      reTranslateContent();
-      updateSectionHeader('admin.users-restaurants', null);
     }
 
     IS_EDIT_MODE = false;
@@ -473,8 +442,6 @@ async function switchSection(sectionId) {
   var sidebar = document.getElementById("sidebar");
   if (sidebar && window.innerWidth < 768) {
     sidebar.classList.add("collapsed");
-    var overlay = document.getElementById("sidebar-overlay");
-    if (overlay) overlay.classList.remove("active");
   }
 }
 
@@ -489,11 +456,6 @@ function toggleSidebar() {
   var sidebar = document.querySelector(".sidebar");
   if (sidebar) {
     sidebar.classList.toggle("collapsed");
-    // Toggle overlay backdrop on mobile
-    var overlay = document.getElementById("sidebar-overlay");
-    if (overlay) {
-      overlay.classList.toggle("active", !sidebar.classList.contains("collapsed"));
-    }
   }
 }
 
@@ -580,19 +542,6 @@ async function loadApp() {
       restaurantTimezone = settings.timezone || 'UTC';
       localStorage.setItem('restaurantTimezone', restaurantTimezone);
       console.log('✅ Restaurant timezone loaded:', restaurantTimezone);
-
-      // Hide sidebar tabs based on feature flags
-      var ff = settings.feature_flags || {};
-      var tabFlagMap = {
-        bookings: 'bookings-nav-btn',
-        staff_timekeeping: 'staff-nav-btn',
-      };
-      Object.keys(tabFlagMap).forEach(function(flag) {
-        if (ff[flag] === false) {
-          var btn = document.getElementById(tabFlagMap[flag]);
-          if (btn) btn.style.display = 'none';
-        }
-      });
     }
     
     // Load only tables on page load
@@ -769,12 +718,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ========== STEP 2: NOW show app container after language is set ==========
   document.getElementById("app-container").style.display = "";
   
-  // On desktop, expand sidebar by default; on mobile, keep collapsed
-  var sidebar = document.getElementById("sidebar");
-  if (sidebar && window.innerWidth >= 768) {
-    sidebar.classList.remove("collapsed");
-  }
-
   // Hide loading splash screen
   const loadingSplash = document.getElementById("loading-splash");
   if (loadingSplash) {
@@ -791,12 +734,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     initializeSuperadmin();
   }
   await initializeApp();
-
-  // Preload printer settings so printer-conditional UI (print bill buttons, etc.) works
-  // without requiring the user to visit the printer settings page first
-  if (typeof loadPrinterSettings === 'function') {
-    loadPrinterSettings().catch(err => console.warn('[Admin Init] Failed to preload printer settings:', err));
-  }
 
   // ========== STEP 3: Initialize WebSocket for real-time auto-print ==========
   if (typeof autoPrintClient !== 'undefined' && restaurantId) {

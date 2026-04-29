@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Modal, ScrollView, TextInput, Alert, Platform, Dimensions, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { apiClient } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 
@@ -12,6 +13,7 @@ interface StaffMember {
   access_rights?: string[] | number[];
   hourly_rate_cents?: number;
   currently_clocked_in?: boolean;
+  avatar_url?: string;
   stats?: {
     total_shifts: number;
     total_hours: number;
@@ -54,7 +56,9 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
     accessRights: [] as (string | number)[],
     email: '',
     password: '',
+    avatarUrl: '',
   });
+  const [avatarLocalUri, setAvatarLocalUri] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
@@ -128,7 +132,9 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
       accessRights: [],
       email: '',
       password: '',
+      avatarUrl: '',
     });
+    setAvatarLocalUri(null);
     setFormError(null);
     setFormSuccess(null);
     setEditingStaffId(null);
@@ -145,7 +151,9 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
         accessRights: staffMember.access_rights || [],
         email: staffMember.email || '',
         password: '',
+        avatarUrl: staffMember.avatar_url || '',
       });
+      setAvatarLocalUri(null);
     } else {
       resetForm();
     }
@@ -177,19 +185,19 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
     const { role, hourlyRate, accessRights } = formData;
 
     if (!name) {
-      setFormError('Name is required');
+      setFormError(t('admin.name-required'));
       return;
     }
     if (!pin) {
-      setFormError('PIN is required');
+      setFormError(t('admin.pin-required'));
       return;
     }
     if (pin.length !== 6 || isNaN(Number(pin))) {
-      setFormError('PIN must be exactly 6 digits');
+      setFormError(t('admin.pin-must-6-digits'));
       return;
     }
     if (hourlyRate && isNaN(Number(hourlyRate))) {
-      setFormError('Hourly rate must be a valid number');
+      setFormError(t('admin.hourly-rate-invalid'));
       return;
     }
 
@@ -215,10 +223,33 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
 
       if (editingStaffId) {
         await apiClient.patch(`/api/restaurants/${restaurantId}/staff/${editingStaffId}`, payload);
-        setFormSuccess('Staff member updated successfully');
+        // Upload avatar if a new one was picked
+        if (avatarLocalUri) {
+          const formDataUpload = new FormData();
+          const fileName = avatarLocalUri.split('/').pop() || 'avatar.jpg';
+          const match = /\.([\w]+)$/.exec(fileName);
+          const type = match ? `image/${match[1]}` : 'image/jpeg';
+          (formDataUpload as any).append('image', { uri: avatarLocalUri, name: fileName, type });
+          await apiClient.post(`/api/restaurants/${restaurantId}/staff/${editingStaffId}/avatar`, formDataUpload, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        }
+        setFormSuccess(t('admin.staff-updated'));
       } else {
-        await apiClient.post(`/api/restaurants/${restaurantId}/staff`, payload);
-        setFormSuccess('Staff member created successfully');
+        const created = await apiClient.post(`/api/restaurants/${restaurantId}/staff`, payload);
+        // Upload avatar for new staff if picked
+        if (avatarLocalUri && (created.data as any)?.staff?.id) {
+          const newId = (created.data as any).staff.id;
+          const formDataUpload = new FormData();
+          const fileName = avatarLocalUri.split('/').pop() || 'avatar.jpg';
+          const match = /\.([\w]+)$/.exec(fileName);
+          const type = match ? `image/${match[1]}` : 'image/jpeg';
+          (formDataUpload as any).append('image', { uri: avatarLocalUri, name: fileName, type });
+          await apiClient.post(`/api/restaurants/${restaurantId}/staff/${newId}/avatar`, formDataUpload, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        }
+        setFormSuccess(t('admin.staff-created'));
       }
 
       setTimeout(() => {
@@ -226,15 +257,15 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
         fetchStaff();
       }, 1000);
     } catch (err: any) {
-      setFormError(err.message || 'Failed to save staff');
+      setFormError(err.message || t('admin.save-staff-failed'));
     }
   };
 
   const handleDeleteStaff = async (staffId: number) => {
-    Alert.alert('Delete Staff', 'Are you sure you want to delete this staff member?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('admin.delete-staff-title'), t('admin.delete-staff-confirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         onPress: async () => {
           try {
             await apiClient.delete(`/api/restaurants/${restaurantId}/staff/${staffId}`);
@@ -242,7 +273,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
             setShowDetailModal(false);
             setSelectedStaff(null);
           } catch (err: any) {
-            Alert.alert('Error', err.message || 'Failed to delete staff');
+            Alert.alert(t('common.error'), err.message || t('common.failed'));
           }
         },
         style: 'destructive',
@@ -256,7 +287,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
       setSelectedStaff(response.data as StaffMember);
       setShowDetailModal(true);
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to load staff details');
+      Alert.alert(t('common.error'), t('admin.load-staff-failed'));
     }
   };
 
@@ -264,12 +295,15 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
     try {
       const endpoint = action === 'in' ? 'clock-in' : 'clock-out';
       await apiClient.post(`/api/restaurants/${restaurantId}/staff/${staffId}/${endpoint}`, {});
+      // Refresh detail modal data
       if (selectedStaff) {
         const updated = await apiClient.get(`/api/restaurants/${restaurantId}/staff/${staffId}`);
         setSelectedStaff(updated.data as StaffMember);
       }
+      // Refresh the staff card list so clock status updates immediately
+      fetchStaff();
     } catch (err: any) {
-      Alert.alert('Error', err.message || `Failed to clock ${action}`);
+      Alert.alert(t('common.error'), err.message || `Failed to clock ${action}`);
     }
   };
 
@@ -283,16 +317,30 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
   };
 
   const getAccessLabel = (right: string | number) => {
-    if (typeof right === 'string') return right.charAt(0).toUpperCase() + right.slice(1);
+    if (typeof right === 'string') return t(`admin.access-${right}`) || right.charAt(0).toUpperCase() + right.slice(1);
     const accessMap: { [key: number]: string } = {
-      1: 'Orders',
-      2: 'Tables',
-      3: 'Menu',
-      4: 'Staff',
-      5: 'Settings',
-      6: 'Bookings',
+      1: t('admin.access-orders'),
+      2: t('admin.access-tables'),
+      3: t('admin.access-menu'),
+      4: t('admin.access-staff'),
+      5: t('admin.access-settings'),
+      6: t('admin.access-bookings'),
     };
     return accessMap[right] || `Feature ${right}`;
+  };
+
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      setAvatarLocalUri(result.assets[0].uri);
+    }
   };
 
   if (loading) {
@@ -305,12 +353,12 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
 
   // Tab access options for staff role
   const tabAccessOptions = [
-    { id: 'orders', label: 'Orders' },
-    { id: 'tables', label: 'Tables' },
-    { id: 'menu', label: 'Menu' },
-    { id: 'staff', label: 'Staff' },
-    { id: 'settings', label: 'Settings' },
-    { id: 'bookings', label: 'Bookings' },
+    { id: 'orders', label: t('admin.access-orders') },
+    { id: 'tables', label: t('admin.access-tables') },
+    { id: 'menu', label: t('admin.access-menu') },
+    { id: 'staff', label: t('admin.access-staff') },
+    { id: 'settings', label: t('admin.access-settings') },
+    { id: 'bookings', label: t('admin.access-bookings') },
   ];
 
   const filteredStaff = searchQuery && searchQuery.trim()
@@ -344,7 +392,9 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
           const accessDisplay =
             s.access_rights && s.access_rights.length > 0
               ? s.access_rights.map(r => getAccessLabel(r)).join(', ')
-              : 'No access';
+              : t('admin.no-access');
+
+          const initials = s.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
           return (
             <View style={styles.staffCardContainer}>
@@ -352,10 +402,17 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                 style={styles.staffCard}
                 onPress={() => !editMode && openDetailModal(s)}
               >
+                <View style={styles.staffCardAvatar}>
+                  {s.avatar_url ? (
+                    <Image source={{ uri: s.avatar_url }} style={styles.staffAvatarImage} />
+                  ) : (
+                    <Text style={styles.staffAvatarInitials}>{initials}</Text>
+                  )}
+                </View>
                 <Text style={styles.staffCardName}>{s.name}</Text>
                 <View style={[styles.staffCardRole, { backgroundColor: getRoleColor(s.role) + '30' }]}>
                   <Text style={[styles.staffCardRoleText, { color: getRoleColor(s.role) }]}>
-                    {s.role === 'kitchen' ? 'Kitchen' : 'Staff'}
+                    {s.role === 'kitchen' ? t('admin.kitchen') : t('admin.staff')}
                   </Text>
                 </View>
                 {s.pin && (
@@ -365,7 +422,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                 <View style={styles.staffClockStatus}>
                   <View style={[styles.staffClockDot, { backgroundColor: s.currently_clocked_in ? '#10b981' : '#9ca3af' }]} />
                   <Text style={[styles.staffClockText, { color: s.currently_clocked_in ? '#10b981' : '#9ca3af' }]}>
-                    {s.currently_clocked_in ? 'Clocked In' : 'Clocked Out'}
+                    {s.currently_clocked_in ? t('admin.clocked-in') : t('admin.clocked-out')}
                   </Text>
                 </View>
                 {editMode && (
@@ -374,13 +431,13 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                       style={[styles.cardActionBtn, styles.editCardBtn]}
                       onPress={() => openForm(s)}
                     >
-                      <Text style={styles.cardActionBtnText}>Edit</Text>
+                      <Text style={styles.cardActionBtnText}>{t('common.edit')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.cardActionBtn, styles.deleteCardBtn]}
                       onPress={() => handleDeleteStaff(s.id)}
                     >
-                      <Text style={styles.cardActionBtnText}>Del</Text>
+                      <Text style={styles.cardActionBtnText}>{t('common.delete')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -408,7 +465,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
         <View style={styles.formOverlay}>
           <View style={styles.formContent}>
             <View style={styles.formHeader}>
-              <Text style={styles.formTitle}>{editingStaffId ? 'Edit Staff' : 'Create New Staff'}</Text>
+              <Text style={styles.formTitle}>{editingStaffId ? t('admin.edit-staff') : t('admin.create-staff')}</Text>
               <TouchableOpacity onPress={closeForm}>
                 <Text style={styles.formCloseBtn}>✕</Text>
               </TouchableOpacity>
@@ -418,10 +475,28 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
             {formSuccess && <Text style={styles.formSuccess}>{formSuccess}</Text>}
 
             <ScrollView style={styles.formBody}>
+              {/* Avatar picker */}
+              <View style={styles.formAvatarRow}>
+                <TouchableOpacity onPress={pickAvatar} style={styles.formAvatarBtn}>
+                  {avatarLocalUri ? (
+                    <Image source={{ uri: avatarLocalUri }} style={styles.formAvatarImage} />
+                  ) : formData.avatarUrl ? (
+                    <Image source={{ uri: formData.avatarUrl }} style={styles.formAvatarImage} />
+                  ) : (
+                    <View style={styles.formAvatarPlaceholder}>
+                      <Text style={styles.formAvatarPlaceholderIcon}>📷</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.formAvatarHint}>
+                  {avatarLocalUri || formData.avatarUrl ? t('admin.change-photo') : t('admin.add-photo')}
+                </Text>
+              </View>
+
               {/* Name + PIN row */}
               <View style={styles.formRow}>
                 <View style={styles.formGroupHalf}>
-                  <Text style={styles.formLabel}>Staff Name</Text>
+                  <Text style={styles.formLabel}>{t('admin.staff-name-label')}</Text>
                   <TextInput
                     style={styles.formInput}
                     placeholder="e.g., John Smith"
@@ -483,10 +558,10 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
               {/* Email & Password (optional - for web login) */}
               <View style={styles.formRow}>
                 <View style={styles.formGroupHalf}>
-                  <Text style={styles.formLabel}>Email (optional)</Text>
+                  <Text style={styles.formLabel}>{t('admin.email-optional')}</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder="For web login"
+                    placeholder={t('admin.email-for-web-login')}
                     value={formData.email}
                     onChangeText={(text) => setFormData({ ...formData, email: text })}
                     keyboardType="email-address"
@@ -494,10 +569,10 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                   />
                 </View>
                 <View style={styles.formGroupHalf}>
-                  <Text style={styles.formLabel}>Password (optional)</Text>
+                  <Text style={styles.formLabel}>{t('admin.password-optional')}</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder={editingStaffId ? "Leave blank to keep" : "For web login"}
+                    placeholder={editingStaffId ? t('admin.password-leave-blank') : t('admin.email-for-web-login')}
                     value={formData.password}
                     onChangeText={(text) => setFormData({ ...formData, password: text })}
                     secureTextEntry
@@ -589,13 +664,26 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
             <ScrollView style={styles.modalBody}>
               {selectedStaff && (
                 <>
+                  {/* Avatar + role badge */}
+                  <View style={styles.detailAvatarRow}>
+                    <View style={styles.detailAvatarCircle}>
+                      {selectedStaff.avatar_url ? (
+                        <Image source={{ uri: selectedStaff.avatar_url }} style={styles.detailAvatarImage} />
+                      ) : (
+                        <Text style={styles.detailAvatarInitials}>
+                          {selectedStaff.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
                   {/* Staff Info */}
                   <View style={styles.infoSection}>
                     <View style={styles.infoGrid}>
                       <View style={styles.infoGridItem}>
                         <Text style={styles.infoLabel}>{t('admin.role')}</Text>
                         <Text style={styles.infoValue}>
-                          {selectedStaff.role === 'kitchen' ? `${t('admin.kitchen')}` : `${t('admin.staff')}`}
+                          {selectedStaff.role === 'kitchen' ? t('admin.kitchen') : t('admin.staff')}
                         </Text>
                       </View>
                       <View style={styles.infoGridItem}>
@@ -607,7 +695,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                         <Text style={styles.infoValue}>
                           {selectedStaff.hourly_rate_cents
                             ? `$${(selectedStaff.hourly_rate_cents / 100).toFixed(2)}/hr`
-                            : 'Not set'}
+                            : t('admin.not-set')}
                         </Text>
                       </View>
                       <View style={styles.infoGridItem}>
@@ -622,7 +710,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                       <Text style={styles.infoValue}>
                         {selectedStaff.access_rights && selectedStaff.access_rights.length > 0
                           ? selectedStaff.access_rights.map(r => getAccessLabel(r)).join(', ')
-                          : 'No access'}
+                          : t('admin.no-access')}
                       </Text>
                     </View>
                   </View>
@@ -682,7 +770,7 @@ export const StaffTab = forwardRef<StaffTabRef, { restaurantId: string; searchQu
                         const timeInStr = clockIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         const timeOutStr = clockOut
                           ? clockOut.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : 'Still working';
+                          : t('admin.still-working');
 
                         return (
                           <View key={idx} style={styles.timekeepingRow}>
@@ -785,6 +873,27 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginBottom: 10,
     textAlign: 'center',
+  },
+  staffCardAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#e5e7eb',
+    alignSelf: 'center',
+    marginBottom: 8,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  staffAvatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  staffAvatarInitials: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#6b7280',
   },
   staffCardRole: {
     paddingVertical: 6,
@@ -934,6 +1043,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 16,
+  },
+  formAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  formAvatarBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    overflow: 'hidden',
+  },
+  formAvatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  formAvatarPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  formAvatarPlaceholderIcon: {
+    fontSize: 28,
+  },
+  formAvatarHint: {
+    fontSize: 13,
+    color: '#3b82f6',
+    fontWeight: '600',
   },
   formGroup: {
     marginBottom: 16,
@@ -1100,6 +1248,29 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     marginBottom: 15,
+  },
+  detailAvatarRow: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  detailAvatarCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailAvatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  detailAvatarInitials: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#6b7280',
   },
   infoGrid: {
     flexDirection: 'row',

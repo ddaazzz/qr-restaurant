@@ -131,7 +131,7 @@ export const LoginScreen = () => {
       }
 
       if (!rid) {
-        Alert.alert(t('login.invalid-qr-title'), t('login.invalid-qr-message'));
+        Alert.alert('Invalid QR Code', 'Could not extract restaurant ID from QR code');
         setScanned(false);
         return;
       }
@@ -141,7 +141,7 @@ export const LoginScreen = () => {
       await fetchRestaurantName(rid);
       setMode('pin-entry');
     } catch (error) {
-      Alert.alert(t('common.error'), t('login.qr-process-failed'));
+      Alert.alert('Error', 'Failed to process QR code');
       setScanned(false);
     }
   };
@@ -149,14 +149,14 @@ export const LoginScreen = () => {
   // ---- Admin login ----
   const handleAdminLogin = async () => {
     if (!email || !password) {
-      Alert.alert(t('common.error'), t('login.email-password-required'));
+      Alert.alert('Error', 'Please enter email and password');
       return;
     }
     setLoading(true);
     try {
       await login(email, password);
     } catch (error) {
-      Alert.alert(t('login.login-failed'), error instanceof Error ? error.message : t('login.unknown-error'));
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -167,7 +167,7 @@ export const LoginScreen = () => {
     if (pinValue.length !== 6) return;
     const rid = restaurantId;
     if (!rid) {
-      Alert.alert(t('common.error'), t('login.restaurant-id-required'));
+      Alert.alert('Error', 'Restaurant ID is required.');
       return;
     }
 
@@ -179,7 +179,7 @@ export const LoginScreen = () => {
         await staffLogin(pinValue, rid);
       }
     } catch (error) {
-      Alert.alert(t('login.login-failed'), error instanceof Error ? error.message : t('login.unknown-error'));
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Unknown error');
       setPin('');
       setTimeout(() => pinInputRef.current?.focus(), 100);
     } finally {

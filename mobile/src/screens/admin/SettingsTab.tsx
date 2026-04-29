@@ -22,7 +22,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
 import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
-import { printerSettingsService } from '../../services/printerSettingsService';
+import { printerSettingsService, KitchenPrinter, BillPrinter, PrinterProfile } from '../../services/printerSettingsService';
 import { Ionicons } from '@expo/vector-icons';
 import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
@@ -396,6 +396,20 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [showSettingsTzPicker, setShowSettingsTzPicker] = useState(false);
   const [settingsTzSearch, setSettingsTzSearch] = useState('');
   const [printerFormData, setPrinterFormData] = useState<PrinterSettings | null>(null);
+  // Multi-printer state
+  const [kitchenPrintersList, setKitchenPrintersList] = useState<KitchenPrinter[]>([]);
+  const [billPrintersList, setBillPrintersList] = useState<BillPrinter[]>([]);
+  const [kitchenAutoPrint, setKitchenAutoPrint] = useState(false);
+  const [billAutoPrint, setBillAutoPrint] = useState(false);
+  const [editingPrinterItemId, setEditingPrinterItemId] = useState<string | null>(null);
+  const [editingPrinterItemName, setEditingPrinterItemName] = useState('');
+  const [editingPrinterItemCategories, setEditingPrinterItemCategories] = useState<number[]>([]);
+  const [editingPrinterItemTableCategoryIds, setEditingPrinterItemTableCategoryIds] = useState<number[]>([]);
+  const [editingPrinterItemOrderTypes, setEditingPrinterItemOrderTypes] = useState<string[]>(['all']);
+  const [menuCategories, setMenuCategories] = useState<{ id: number; name: string }[]>([]);
+  const [printerProfiles, setPrinterProfiles] = useState<PrinterProfile[]>([]);
+  const [showSaveProfileModal, setShowSaveProfileModal] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
   const [couponForm, setCouponForm] = useState({
     code: '',
     discount_type: 'percentage' as 'percentage' | 'fixed',
@@ -465,6 +479,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 }
               });
             }
+          } else if (typeLower === 'bill') {
+            flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
+            flatSettings[`${prefix}printer_host`] = printer.printer_host;
+            flatSettings[`${prefix}printer_port`] = printer.printer_port;
+            flatSettings[`${prefix}bluetooth_device_id`] = printer.bluetooth_device_id;
+            flatSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
+            if (printer.settings) {
+              // bill_printers array is in settings.bill_printers (not settings.bill_*prefix*)
+              if (Array.isArray(printer.settings.bill_printers)) {
+                flatSettings.bill_printers = printer.settings.bill_printers;
+              }
+              Object.entries(printer.settings).forEach(([key, value]) => {
+                if (key !== 'bill_printers') {
+                  flatSettings[`${prefix}${key}`] = value;
+                }
+              });
+            }
           } else {
             flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
             flatSettings[`${prefix}printer_host`] = printer.printer_host;
@@ -491,6 +522,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setPrinterSettings(flatSettings);
       setFormData(settingsRes.data);
       setPrinterFormData(flatSettings);
+
+      // Populate multi-printer lists from flat settings
+      if (Array.isArray(flatSettings.kitchen_printers)) {
+        setKitchenPrintersList(flatSettings.kitchen_printers);
+      }
+      if (Array.isArray(flatSettings.bill_printers)) {
+        setBillPrintersList(flatSettings.bill_printers);
+      }
+      setKitchenAutoPrint(!!flatSettings.kitchen_auto_print);
+      setBillAutoPrint(!!flatSettings.bill_auto_print);
 
       // Fetch coupons separately (non-blocking) with shorter timeout
       // Don't block settings load if coupons endpoint is slow/unavailable
@@ -1006,6 +1047,183 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Bluetooth device selection is now handled at runtime during printing
 
+  // ─── Multi-Printer helpers ─────────────────────────────────────────────────
+
+  const loadMenuCategoriesForPrinter = async () => {
+    if (menuCategories.length > 0) return; // already loaded
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/menu_categories`);
+      const cats = Array.isArray(res.data) ? res.data : (res.data?.categories || []);
+      setMenuCategories(cats.map((c: any) => ({ id: c.id, name: c.name })));
+    } catch (err) {
+      console.warn('[SettingsTab] Failed to load menu categories:', err);
+    }
+  };
+
+  const loadPrinterProfiles = async () => {
+    try {
+      const profiles = await printerSettingsService.getPrinterProfiles(restaurantId);
+      setPrinterProfiles(profiles);
+    } catch (err) {
+      console.warn('[SettingsTab] Failed to load printer profiles:', err);
+    }
+  };
+
+  const openPrinterItemConfigure = (type: 'kitchen' | 'bill', itemId: string) => {
+    const item = type === 'kitchen'
+      ? kitchenPrintersList.find(p => p.id === itemId)
+      : billPrintersList.find(p => p.id === itemId);
+    if (!item) return;
+
+    setEditingPrinterType(type);
+    setEditingPrinterItemId(itemId);
+    setEditingPrinterItemName(item.name);
+    setPrinterFormData({
+      printer_type: item.type,
+      printer_host: item.host,
+      printer_port: item.host ? 9100 : undefined,
+      bluetooth_device_id: item.bluetoothDevice,
+      bluetooth_device_name: item.bluetoothDevice,
+      [`${type}_bluetooth_device_id`]: item.bluetoothDevice,
+      [`${type}_bluetooth_device_name`]: item.bluetoothDevice,
+    } as PrinterSettings);
+    if (type === 'kitchen') {
+      setEditingPrinterItemCategories((item as KitchenPrinter).categories || []);
+      loadMenuCategoriesForPrinter();
+    } else {
+      setEditingPrinterItemTableCategoryIds((item as BillPrinter).tableCategoryIds || []);
+      setEditingPrinterItemOrderTypes((item as BillPrinter).orderTypes || ['all']);
+    }
+    setShowingPrinterSettingsPage(true);
+    loadPrinterProfiles();
+  };
+
+  const addNewPrinterItem = (type: 'kitchen' | 'bill') => {
+    const newId = `new-${Date.now()}`;
+    if (type === 'kitchen') {
+      const newItem: KitchenPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', categories: [] };
+      setKitchenPrintersList(prev => [...prev, newItem]);
+    } else {
+      const newItem: BillPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', tableCategoryIds: [], orderTypes: ['all'] };
+      setBillPrintersList(prev => [...prev, newItem]);
+    }
+    openPrinterItemConfigure(type, newId);
+  };
+
+  const deletePrinterItem = async (type: 'kitchen' | 'bill', itemId: string) => {
+    Alert.alert(
+      'Delete Printer',
+      'Remove this printer from the list?',
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              if (type === 'kitchen') {
+                const updated = kitchenPrintersList.filter(p => p.id !== itemId);
+                setKitchenPrintersList(updated);
+                await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
+              } else {
+                const updated = billPrintersList.filter(p => p.id !== itemId);
+                setBillPrintersList(updated);
+                await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+              }
+            } catch (err: any) {
+              Alert.alert(t('common.error'), err.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const savePrinterItem = async () => {
+    if (!editingPrinterType || !editingPrinterItemId || !printerFormData) return;
+    try {
+      const btId = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_id`] ?? printerFormData.bluetooth_device_id;
+      const btName = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_name`] ?? printerFormData.bluetooth_device_name;
+
+      if (editingPrinterType === 'kitchen') {
+        const updated = kitchenPrintersList.map(p =>
+          p.id === editingPrinterItemId
+            ? {
+                ...p,
+                name: editingPrinterItemName || p.name,
+                type: (printerFormData.printer_type as KitchenPrinter['type']) || p.type,
+                host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+                bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
+                categories: editingPrinterItemCategories,
+              }
+            : p
+        );
+        setKitchenPrintersList(updated);
+        await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
+      } else {
+        const updated = billPrintersList.map(p =>
+          p.id === editingPrinterItemId
+            ? {
+                ...p,
+                name: editingPrinterItemName || p.name,
+                type: (printerFormData.printer_type as BillPrinter['type']) || p.type,
+                host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+                bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
+                tableCategoryIds: editingPrinterItemTableCategoryIds,
+                orderTypes: editingPrinterItemOrderTypes,
+              }
+            : p
+        );
+        setBillPrintersList(updated);
+        await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+      }
+
+      setEditingPrinterItemId(null);
+      setEditingPrinterType(null);
+      setShowingPrinterSettingsPage(false);
+      Alert.alert(t('common.success'), t('settings.printer-saved'));
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || err.message);
+    }
+  };
+
+  const applyPrinterProfile = (profile: PrinterProfile) => {
+    setPrinterFormData(prev => ({
+      ...prev,
+      printer_type: profile.printer_type as any,
+      printer_host: profile.printer_host,
+      printer_port: profile.printer_port,
+      bluetooth_device_id: profile.bluetooth_device_id,
+      bluetooth_device_name: profile.bluetooth_device_name,
+      [`${editingPrinterType}_bluetooth_device_id`]: profile.bluetooth_device_id,
+      [`${editingPrinterType}_bluetooth_device_name`]: profile.bluetooth_device_name,
+    } as PrinterSettings));
+  };
+
+  const saveCurrentAsProfile = async () => {
+    if (!newProfileName.trim() || !printerFormData || !editingPrinterType) return;
+    try {
+      const btId = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_id`] ?? printerFormData.bluetooth_device_id;
+      const btName = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_name`] ?? printerFormData.bluetooth_device_name;
+      await printerSettingsService.savePrinterProfile(restaurantId, {
+        name: newProfileName.trim(),
+        printer_type: printerFormData.printer_type || 'none',
+        printer_host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+        printer_port: printerFormData.printer_type === 'network' ? (printerFormData.printer_port || 9100) : undefined,
+        bluetooth_device_id: btId,
+        bluetooth_device_name: btName,
+        settings: {},
+      });
+      await loadPrinterProfiles();
+      setShowSaveProfileModal(false);
+      setNewProfileName('');
+      Alert.alert(t('common.success'), `Profile "${newProfileName.trim()}" saved.`);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.message);
+    }
+  };
+
+  // ─── End Multi-Printer helpers ─────────────────────────────────────────────
+
   const resetCouponForm = () => {
     setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open' });
     setEditingCouponId(null);
@@ -1439,6 +1657,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Printer Configuration Page View (when editing a specific printer type)
   if (showingPrinterSettingsPage && editingPrinterType) {
+    const isItemEdit = !!editingPrinterItemId;
+    const backFromConfigure = () => {
+      if (isItemEdit) {
+        setEditingPrinterItemId(null);
+        setEditingPrinterType(null);
+        setShowingPrinterSettingsPage(false);
+      } else {
+        setEditingPrinterType(null);
+      }
+    };
+
     return (
       <>
         <View style={styles.container}>
@@ -1446,19 +1675,56 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={{ padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.printerPageTitle}>
             {editingPrinterType === 'qr' && t('settings.qr-printer')}
-            {editingPrinterType === 'bill' && t('settings.bill-printer')}
-            {editingPrinterType === 'kitchen' && t('settings.kitchen-printer')}
+            {editingPrinterType === 'bill' && (isItemEdit ? editingPrinterItemName || t('settings.bill-printer') : t('settings.bill-printer'))}
+            {editingPrinterType === 'kitchen' && (isItemEdit ? editingPrinterItemName || t('settings.kitchen-printer') : t('settings.kitchen-printer'))}
             {editingPrinterType === 'kpay' && t('settings.kpay-printer')}
           </Text>
-          <TouchableOpacity onPress={() => setEditingPrinterType(null)}>
+          <TouchableOpacity onPress={backFromConfigure}>
             <Text style={styles.backButton}>{t('settings.back-arrow')}</Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
           <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-            {/* Auto-Print Toggle */}
-            <View style={styles.formGroup}>
+
+            {/* ── Per-item fields (name + profile dropdown) ── */}
+            {isItemEdit && (
+              <>
+                {/* Printer Name */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Printer Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editingPrinterItemName}
+                    onChangeText={setEditingPrinterItemName}
+                    placeholder="e.g., Bar Station"
+                  />
+                </View>
+
+                {/* Load saved profile */}
+                {printerProfiles.length > 0 && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Load Saved Profile</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                      {printerProfiles.map(profile => (
+                        <TouchableOpacity
+                          key={profile.id}
+                          onPress={() => applyPrinterProfile(profile)}
+                          style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#3b82f6', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8, marginRight: 8 }}
+                        >
+                          <Text style={{ fontSize: 13, color: '#1d4ed8', fontWeight: '600' }}>{profile.name}</Text>
+                          <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(profile.printer_type)}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* Auto-Print Toggle (only for non-item or QR/KPAY types) */}
+            {!isItemEdit && (
+              <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={styles.label}>{t('settings.auto-print')}</Text>
                 <Switch
@@ -1486,7 +1752,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   }}
                 />
               </View>
-            </View>
+              </View>
+            )}
 
             {/* Printer Type Selector */}
             <View style={styles.formGroup}>
@@ -1765,24 +2032,109 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 12 }}>
                 {t('settings.kitchen-format-note') || 'Kitchen order format uses a standard layout.'}
               </Text>
+
+              {/* Category Routing (only when editing a specific kitchen printer item) */}
+              {isItemEdit && editingPrinterType === 'kitchen' && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { marginBottom: 8 }]}>Category Routing</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Orders with items from these categories will print to this printer.</Text>
+                  {menuCategories.length === 0 ? (
+                    <Text style={{ fontSize: 12, color: '#9ca3af' }}>Loading categories...</Text>
+                  ) : (
+                    menuCategories.map(cat => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        onPress={() => {
+                          setEditingPrinterItemCategories(prev =>
+                            prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
+                          );
+                        }}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                      >
+                        <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                          {editingPrinterItemCategories.includes(cat.id) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                        </View>
+                        <Text style={{ fontSize: 14, color: '#1f2937' }}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* Order type routing for bill printers */}
+              {isItemEdit && editingPrinterType === 'bill' && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { marginBottom: 8 }]}>Order Type Routing</Text>
+                  {['all', 'dine-in', 'order-now', 'to-go'].map(ot => (
+                    <TouchableOpacity
+                      key={ot}
+                      onPress={() => {
+                        setEditingPrinterItemOrderTypes(prev =>
+                          ot === 'all' ? ['all'] :
+                          prev.includes(ot) ? prev.filter(x => x !== ot && x !== 'all') : [...prev.filter(x => x !== 'all'), ot]
+                        );
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                    >
+                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                        {editingPrinterItemOrderTypes.includes(ot) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                      </View>
+                      <Text style={{ fontSize: 14, color: '#1f2937' }}>{ot === 'all' ? 'All Order Types' : ot}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           )}
         </ScrollView>
 
         <View style={styles.formActions}>
+          {/* Save as Profile button (only when editing a printer item) */}
+          {isItemEdit && (
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSecondary, { flex: 0, paddingHorizontal: 12 }]}
+              onPress={() => setShowSaveProfileModal(true)}
+            >
+              <Text style={styles.btnText}>💾</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
-            onPress={() => setEditingPrinterType(null)}
+            onPress={backFromConfigure}
           >
             <Text style={styles.btnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnPrimary]}
-            onPress={() => savePrinterSettings()}
+            onPress={() => isItemEdit ? savePrinterItem() : savePrinterSettings()}
           >
             <Text style={styles.btnText}>{t('settings.save')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Save Profile Modal */}
+        <Modal transparent animationType="fade" visible={showSaveProfileModal} onRequestClose={() => setShowSaveProfileModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 24, width: '85%' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 12 }}>Save as Profile</Text>
+              <TextInput
+                style={styles.input}
+                value={newProfileName}
+                onChangeText={setNewProfileName}
+                placeholder="Profile name (e.g., Main Kitchen)"
+                autoFocus
+              />
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                <TouchableOpacity onPress={() => setShowSaveProfileModal(false)} style={[styles.btn, styles.btnSecondary]}>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={saveCurrentAsProfile} style={[styles.btn, styles.btnPrimary]}>
+                  <Text style={styles.btnText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
       {bluetoothModal}
     </>
@@ -1848,85 +2200,84 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            {/* Bill Printer */}
+            {/* Bill Printer — multi-printer list */}
             <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.bill-printer')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                  <Switch value={billAutoPrint} onValueChange={async (v) => { setBillAutoPrint(v); await printerSettingsService.saveBillPrinters(restaurantId, billPrintersList, v); }} />
+                </View>
               </View>
-              {printerSettings?.bill_printer_type && printerSettings.bill_printer_type !== 'none' && (
-                <>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
-                    Type: {getPrinterTypeLabel(printerSettings.bill_printer_type)}
-                  </Text>
-                  {printerSettings.bill_bluetooth_device_name && (
-                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>
-                      ✓ Device: {printerSettings.bill_bluetooth_device_name}
-                    </Text>
-                  )}
-                  {printerSettings.bill_printer_host && (
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      Host: {printerSettings.bill_printer_host}:{printerSettings.bill_printer_port}
-                    </Text>
-                  )}
-                </>
+              {billPrintersList.length === 0 ? (
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No bill printers configured.</Text>
+              ) : (
+                billPrintersList.map(p => (
+                  <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                      {p.orderTypes && p.orderTypes[0] !== 'all' && <Text style={{ fontSize: 11, color: '#6b7280' }}>Types: {p.orderTypes.join(', ')}</Text>}
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => { loadPrinterProfiles(); openPrinterItemConfigure('bill', p.id); }} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deletePrinterItem('bill', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
               )}
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => { loadPrinterProfiles(); addNewPrinterItem('bill'); }}>
+                <Text style={styles.btnText}>+ Add Bill Printer</Text>
+              </TouchableOpacity>
+              {/* Single-printer fallback configure (format + connection) */}
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
                 onPress={() => {
                   setEditingPrinterType('bill');
-                  const billSettings: PrinterSettings = {
-                    printer_type: printerSettings?.bill_printer_type || 'none',
-                    printer_host: printerSettings?.bill_printer_host,
-                    printer_port: printerSettings?.bill_printer_port,
-                    bluetooth_device_id: printerSettings?.bill_bluetooth_device_id,
-                    bluetooth_device_name: printerSettings?.bill_bluetooth_device_name,
-                    bill_auto_print: printerSettings?.bill_auto_print,
-                  };
-                  setPrinterFormData(billSettings);
+                  setEditingPrinterItemId(null);
+                  setPrinterFormData({ printer_type: printerSettings?.bill_printer_type || 'none', printer_host: printerSettings?.bill_printer_host, printer_port: printerSettings?.bill_printer_port, bluetooth_device_id: printerSettings?.bill_bluetooth_device_id, bluetooth_device_name: printerSettings?.bill_bluetooth_device_name, bill_auto_print: printerSettings?.bill_auto_print } as PrinterSettings);
                 }}
               >
-                <Text style={styles.btnText}>{t('settings.configure')}</Text>
+                <Text style={styles.btnText}>{t('settings.configure')} Format</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Kitchen Printer */}
+            {/* Kitchen Printer — multi-printer list */}
             <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kitchen-printer')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                  <Switch value={kitchenAutoPrint} onValueChange={async (v) => { setKitchenAutoPrint(v); await printerSettingsService.saveKitchenPrinters(restaurantId, kitchenPrintersList, v); }} />
+                </View>
               </View>
-              {printerSettings?.kitchen_printer_type && printerSettings.kitchen_printer_type !== 'none' && (
-                <>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
-                    Type: {getPrinterTypeLabel(printerSettings.kitchen_printer_type)}
-                  </Text>
-                  {printerSettings.kitchen_bluetooth_device_name && (
-                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>
-                      ✓ Device: {printerSettings.kitchen_bluetooth_device_name}
-                    </Text>
-                  )}
-                  {printerSettings.kitchen_printer_host && (
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      Host: {printerSettings.kitchen_printer_host}:{printerSettings.kitchen_printer_port}
-                    </Text>
-                  )}
-                </>
+              {kitchenPrintersList.length === 0 ? (
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No kitchen printers configured.</Text>
+              ) : (
+                kitchenPrintersList.map(p => (
+                  <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                      {p.categories.length > 0 && <Text style={{ fontSize: 11, color: '#6b7280' }}>{p.categories.length} categories</Text>}
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => { loadPrinterProfiles(); openPrinterItemConfigure('kitchen', p.id); }} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deletePrinterItem('kitchen', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
               )}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
-                onPress={() => {
-                  setEditingPrinterType('kitchen');
-                  const kitchenSettings: PrinterSettings = {
-                    printer_type: printerSettings?.kitchen_printer_type || 'none',
-                    printer_host: printerSettings?.kitchen_printer_host,
-                    printer_port: printerSettings?.kitchen_printer_port,
-                    bluetooth_device_id: printerSettings?.kitchen_bluetooth_device_id,
-                    bluetooth_device_name: printerSettings?.kitchen_bluetooth_device_name,
-                    kitchen_auto_print: printerSettings?.kitchen_auto_print,
-                  };
-                  setPrinterFormData(kitchenSettings);
-                }}
-              >
-                <Text style={styles.btnText}>{t('settings.configure')}</Text>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => { loadPrinterProfiles(); addNewPrinterItem('kitchen'); }}>
+                <Text style={styles.btnText}>+ Add Kitchen Printer</Text>
               </TouchableOpacity>
             </View>
 

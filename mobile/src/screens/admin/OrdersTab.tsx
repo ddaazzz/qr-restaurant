@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput, SafeAreaView } from 'react-native';
 import { apiClient, API_URL } from '../../services/apiClient';
+import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import { Ionicons } from '@expo/vector-icons';
@@ -802,6 +803,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           restaurantId,
         });
 
+        let newOrderId: number | null = null;
+
         if (orderType === 'table') {
           if (!selectedTable) {
             throw new Error('Please select a table');
@@ -813,6 +816,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             { items }
           );
           console.log('[OrderSubmit] Table order submitted:', res);
+          newOrderId = res.data?.id || res.data?.order_id || null;
           Alert.alert(t('orders.success'), t('orders.table-order-success').replace('{0}', String(cart.length)));
         } else if (orderType === 'pay-now') {
           const res = await apiClient.post(
@@ -820,6 +824,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             { pax: 1, items }
           );
           console.log('[OrderSubmit] Counter order submitted:', res);
+          newOrderId = res.data?.orders?.[0]?.id || null;
           
           // Show payment modal right away for Order Now
           const session = res.data?.session;
@@ -841,7 +846,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             { pax: 1, items, customer_name: toGoCustomerName || '', customer_phone: customerPhone || '' }
           );
           console.log('[OrderSubmit] To-go order submitted:', res);
+          newOrderId = res.data?.id || res.data?.order_id || null;
           showToast(t('orders.togo-order-success').replace('{0}', String(cart.length)), 'success');
+        }
+
+        // Auto-print to kitchen if kitchen_auto_print is enabled (non-blocking)
+        if (newOrderId) {
+          try {
+            const printerConfig = await printerSettingsService.getPrinterSettings(restaurantId, false);
+            if (printerConfig.kitchen_auto_print) {
+              apiClient.post(`/api/restaurants/${restaurantId}/print-order`, { orderId: newOrderId, orderType: 'kitchen' }).catch(err => {
+                console.warn('[OrderSubmit] Auto-print kitchen failed (non-blocking):', err?.message);
+              });
+            }
+          } catch (_printErr) {
+            // non-blocking — ignore print setting fetch errors
+          }
         }
 
         // Clear cart and reset
