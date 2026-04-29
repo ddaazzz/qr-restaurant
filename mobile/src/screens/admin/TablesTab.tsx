@@ -2131,7 +2131,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   setShowSessionGearMenu(false);
                 }}
               >
-                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>End Order</Text>
+                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>{t('admin.end-order')}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -2143,13 +2143,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               style={{ backgroundColor: '#ef4444', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
               onPress={() => clearCallStaff(selectedSession.id)}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 Staff Called</Text>
-              <Text style={{ color: '#fff', fontSize: 12 }}>Tap to acknowledge</Text>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('admin.staff-called')}</Text>
+              <Text style={{ color: '#fff', fontSize: 12 }}>{t('admin.tap-to-acknowledge')}</Text>
             </TouchableOpacity>
           )}
           {selectedSession.bill_closure_requested && (
             <View style={{ backgroundColor: '#f59e0b', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
+              <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>{t('admin.bill-requested')}</Text>
             </View>
           )}
           {selectedSession.payment_received && (
@@ -2245,7 +2245,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           {splitPortions.length > 0 && (
             <View style={{ marginHorizontal: 16, marginBottom: 16, borderTopWidth: 2, borderTopColor: '#3b82f6', paddingTop: 12 }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#1d4ed8', marginBottom: 10 }}>
-                Split Bill — {splitPortions.length} ways
+                {t('admin.split-bill-ways', { count: String(splitPortions.length) })}
               </Text>
               {splitPortions.map((portion) => (
                 <View
@@ -2288,11 +2288,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             style={[styles.btn, styles.btnOutline]}
             onPress={printBillWithPrinterSelection}
           >
-            <Text style={[styles.btnText, { color: '#1f2937' }]}>Print Bill</Text>
+            <Text style={[styles.btnText, { color: '#1f2937' }]}>{t('admin.print-bill')}</Text>
           </TouchableOpacity>
           {paidViaPaymentAsiaOnline ? (
             <View style={[styles.btn, styles.btnDisabled]}>
-              <Text style={[styles.btnText, { color: '#6b7280' }]}>Paid Online</Text>
+              <Text style={[styles.btnText, { color: '#6b7280' }]}>{t('admin.paid-online')}</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -2322,7 +2322,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             style={[styles.btn, styles.btnSecondary]}
             onPress={() => endSession(selectedSession.id)}
           >
-            <Text style={styles.btnText}>End Order</Text>
+            <Text style={styles.btnText}>{t('admin.end-order')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -2336,23 +2336,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               {sessionBill && (
                 <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ color: '#666' }}>Subtotal</Text>
+                    <Text style={{ color: '#666' }}>{t('admin.order-subtotal-label')}</Text>
                     <Text>${((sessionBill.subtotal_cents || 0) / 100).toFixed(2)}</Text>
                   </View>
                   {(sessionBill.service_charge_cents || 0) > 0 && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: '#666' }}>Service Charge</Text>
+                      <Text style={{ color: '#666' }}>{t('admin.service-charge-label')}</Text>
                       <Text>${(sessionBill.service_charge_cents! / 100).toFixed(2)}</Text>
                     </View>
                   )}
                   {getDiscountCents() > 0 && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: '#e74c3c' }}>Discount</Text>
+                      <Text style={{ color: '#e74c3c' }}>{t('admin.discount-row')}</Text>
                       <Text style={{ color: '#e74c3c' }}>-${(getDiscountCents() / 100).toFixed(2)}</Text>
                     </View>
                   )}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                    <Text style={{ fontWeight: '700', fontSize: 16 }}>{t('admin.total-label')}</Text>
                     <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
                       ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
                     </Text>
@@ -2362,7 +2362,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
               {/* Split Bill Section */}
               <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 12, marginBottom: 12 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1d4ed8', marginBottom: 8 }}>Split Bill</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1d4ed8', marginBottom: 8 }}>{t('admin.split-bill')}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <TouchableOpacity
                     style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
@@ -2377,10 +2377,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   >
                     <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#374151' }}>+</Text>
                   </TouchableOpacity>
-                  <Text style={{ fontSize: 13, color: '#6b7280' }}>people</Text>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('admin.people')}</Text>
                   {sessionBill && (
                     <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669', marginLeft: 8 }}>
-                      = ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / splitCount / 100).toFixed(2)} each
+                      {'= $' + (((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / splitCount / 100).toFixed(2) + ' ' + t('admin.each')}
                     </Text>
                   )}
                 </View>
@@ -2391,19 +2391,19 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                     await confirmSplit();
                   }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Split &amp; Pay Per Person</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{t('admin.split-pay-per-person')}</Text>
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.label}>{t('admin.payment-method')}</Text>
               <View style={styles.selectGroup}>
                 {([
-                  { value: 'cash', label: 'Cash' },
-                  { value: 'card', label: 'Card' },
+                  { value: 'cash', label: t('admin.cash-label') },
+                  { value: 'card', label: t('admin.card-label') },
                   ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                    ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }]
+                    ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
                     : activePaymentTerminal?.vendor_name === 'kpay'
-                    ? [{ value: 'kpay', label: 'KPay Terminal' }]
+                    ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
                     : []),
                 ] as { value: string; label: string }[]).map((method) => (
                   <TouchableOpacity
@@ -2436,9 +2436,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   {selectedCouponId
                     ? (() => {
                         const c = coupons.find(cp => cp.id === selectedCouponId);
-                        return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : 'No discount';
+                        return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : t('admin.no-discount');
                       })()
-                    : 'No discount'}
+                    : t('admin.no-discount')}
                 </Text>
               </TouchableOpacity>
               {showCouponPicker && (
@@ -2448,7 +2448,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                       style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }}
                       onPress={() => { setSelectedCouponId(null); setShowCouponPicker(false); }}
                     >
-                      <Text style={{ color: '#666' }}>No discount</Text>
+                      <Text style={{ color: '#666' }}>{t('admin.no-discount')}</Text>
                     </TouchableOpacity>
                     {coupons.map(c => (
                       <TouchableOpacity
@@ -2464,7 +2464,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                       </TouchableOpacity>
                     ))}
                     {coupons.length === 0 && (
-                      <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>No coupons available</Text>
+                      <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>{t('admin.no-coupons-available')}</Text>
                     )}
                   </ScrollView>
                 </View>
@@ -2476,7 +2476,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 multiline
                 value={closeReason}
                 onChangeText={setCloseReason}
-                placeholder="Optional notes"
+                placeholder={t('admin.notes-placeholder')}
               />
 
               <View style={styles.modalActions}>
@@ -2527,7 +2527,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{t('admin.change-pax')}</Text>
 
-              <Text style={styles.label}>New Pax Count</Text>
+              <Text style={styles.label}>{t('admin.new-pax-count')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -2542,13 +2542,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowChangePaxModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitChangePax}
                 >
-                  <Text style={styles.btnText}>Update</Text>
+                  <Text style={styles.btnText}>{t('admin.update')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2559,9 +2559,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showMoveTableModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Move to Table</Text>
+              <Text style={styles.modalTitle}>{t('admin.move-to-table')}</Text>
 
-              <Text style={styles.label}>Select Available Table</Text>
+              <Text style={styles.label}>{t('admin.select-available-table')}</Text>
               <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
                 {tables
                   .filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id)
@@ -2584,13 +2584,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowMoveTableModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitMoveTable}
                 >
-                  <Text style={styles.btnText}>Move</Text>
+                  <Text style={styles.btnText}>{t('admin.move')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2721,7 +2721,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={openNewOrderModal}
               >
-                <Text style={styles.btnText}>New Order</Text>
+                <Text style={styles.btnText}>{t('orders.new-order')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -2769,7 +2769,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           }}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ justifyContent: 'center', flex: 1 }}>
             <Pressable style={styles.modalContent} onPress={() => {}}>
-              <Text style={styles.modalTitle}>New Order</Text>
+              <Text style={styles.modalTitle}>{t('orders.new-order')}</Text>
 
               <Text style={styles.label}>{t('admin.number-of-guests')}</Text>
               <TextInput
@@ -3045,7 +3045,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                             </Text>
                           </View>
                         ) : (
-                          <Text style={[styles.tableCardAvailableText, textColor]}>Available</Text>
+                          <Text style={[styles.tableCardAvailableText, textColor]}>{t('admin.table-available')}</Text>
                         )}
                       </View>
                     </TouchableOpacity>
@@ -3129,7 +3129,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <>
                 <Text style={styles.sectionTitle}>{t('admin.options')}</Text>
                 <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={openNewOrderModal}>
-                  <Text style={styles.btnText}>New Order</Text>
+                  <Text style={styles.btnText}>{t('orders.new-order')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -3166,7 +3166,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <Pressable style={styles.modalOverlay} onPress={() => { Keyboard.dismiss(); setShowSessionModal(false); }}>
               <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ justifyContent: 'center', flex: 1 }}>
                 <Pressable style={styles.modalContent} onPress={() => {}}>
-                  <Text style={styles.modalTitle}>New Order</Text>
+                  <Text style={styles.modalTitle}>{t('orders.new-order')}</Text>
                   <Text style={styles.label}>{t('admin.number-of-guests')}</Text>
                   <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={sessionPax} onChangeText={setSessionPax} placeholder="1" />
                   {qrMode === 'static_seat' && (
@@ -3422,11 +3422,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               style={[styles.btn, styles.btnOutline]}
               onPress={printBillWithPrinterSelection}
             >
-              <Text style={[styles.btnText, { color: '#1f2937' }]}>Print Bill</Text>
+              <Text style={[styles.btnText, { color: '#1f2937' }]}>{t('admin.print-bill')}</Text>
             </TouchableOpacity>
             {paidViaPaymentAsiaOnline ? (
               <View style={[styles.btn, styles.btnDisabled]}>
-                <Text style={[styles.btnText, { color: '#6b7280' }]}>Paid Online</Text>
+                <Text style={[styles.btnText, { color: '#6b7280' }]}>{t('admin.paid-online')}</Text>
               </View>
             ) : (
               <TouchableOpacity
@@ -3451,7 +3451,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               </TouchableOpacity>
             )}
             <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => endSession(selectedSession.id)}>
-              <Text style={styles.btnText}>End Order</Text>
+              <Text style={styles.btnText}>{t('admin.end-order')}</Text>
             </TouchableOpacity>
           </View>
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
@@ -3461,23 +3461,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 {sessionBill && (
                   <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: '#666' }}>Subtotal</Text>
+                      <Text style={{ color: '#666' }}>{t('admin.order-subtotal-label')}</Text>
                       <Text>${((sessionBill.subtotal_cents || 0) / 100).toFixed(2)}</Text>
                     </View>
                     {(sessionBill.service_charge_cents || 0) > 0 && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ color: '#666' }}>Service Charge</Text>
+                        <Text style={{ color: '#666' }}>{t('admin.service-charge-label')}</Text>
                         <Text>${(sessionBill.service_charge_cents! / 100).toFixed(2)}</Text>
                       </View>
                     )}
                     {getDiscountCents() > 0 && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ color: '#e74c3c' }}>Discount</Text>
+                        <Text style={{ color: '#e74c3c' }}>{t('admin.discount-row')}</Text>
                         <Text style={{ color: '#e74c3c' }}>-${(getDiscountCents() / 100).toFixed(2)}</Text>
                       </View>
                     )}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                      <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                      <Text style={{ fontWeight: '700', fontSize: 16 }}>{t('admin.total-label')}</Text>
                       <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
                         ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
                       </Text>
@@ -3523,12 +3523,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={styles.label}>{t('admin.payment-method')}</Text>
                 <View style={styles.selectGroup}>
                   {([
-                    { value: 'cash', label: 'Cash' },
-                    { value: 'card', label: 'Card' },
+                    { value: 'cash', label: t('admin.cash-label') },
+                    { value: 'card', label: t('admin.card-label') },
                     ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                      ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }]
+                      ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
                       : activePaymentTerminal?.vendor_name === 'kpay'
-                      ? [{ value: 'kpay', label: 'KPay Terminal' }]
+                      ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
                       : []),
                   ] as { value: string; label: string }[]).map((method) => (
                     <TouchableOpacity key={method.value} style={[styles.selectOption, paymentMethod === method.value && styles.selectOptionActive]} onPress={() => setPaymentMethod(method.value)}>
@@ -3539,14 +3539,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
                 <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowCouponPicker(!showCouponPicker)}>
                   <Text style={{ color: selectedCouponId ? '#333' : '#999' }}>
-                    {selectedCouponId ? (() => { const c = coupons.find(cp => cp.id === selectedCouponId); return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : 'No discount'; })() : 'No discount'}
+                    {selectedCouponId ? (() => { const c = coupons.find(cp => cp.id === selectedCouponId); return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : t('admin.no-discount'); })() : t('admin.no-discount')}
                   </Text>
                 </TouchableOpacity>
                 {showCouponPicker && (
                   <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginTop: -8, marginBottom: 8, maxHeight: 160 }}>
                     <ScrollView nestedScrollEnabled>
                       <TouchableOpacity style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }} onPress={() => { setSelectedCouponId(null); setShowCouponPicker(false); }}>
-                        <Text style={{ color: '#666' }}>No discount</Text>
+                        <Text style={{ color: '#666' }}>{t('admin.no-discount')}</Text>
                       </TouchableOpacity>
                       {coupons.map(c => (
                         <TouchableOpacity key={c.id} style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: selectedCouponId === c.id ? '#e8f4fd' : '#fff' }} onPress={() => { setSelectedCouponId(c.id); setShowCouponPicker(false); }}>
@@ -3554,12 +3554,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                           <Text style={{ color: '#666', fontSize: 12 }}>{c.discount_type === 'percentage' ? `${c.discount_value}% off` : `$${(c.discount_value / 100).toFixed(2)} off`}{c.description ? ` — ${c.description}` : ''}</Text>
                         </TouchableOpacity>
                       ))}
-                      {coupons.length === 0 && <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>No coupons available</Text>}
+                      {coupons.length === 0 && <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>{t('admin.no-coupons-available')}</Text>}
                     </ScrollView>
                   </View>
                 )}
                 <Text style={styles.label}>{t('admin.notes')}</Text>
-                <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder="Optional notes" />
+                <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder={t('admin.notes-placeholder')} />
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowCloseBillModal(false)}>
                     <Text style={styles.btnText}>{t('common.cancel')}</Text>
@@ -3597,14 +3597,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>{t('admin.change-pax')}</Text>
-                <Text style={styles.label}>New Pax Count</Text>
+                <Text style={styles.label}>{t('admin.new-pax-count')}</Text>
                 <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={newPaxValue} onChangeText={setNewPaxValue} placeholder="1" />
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowChangePaxModal(false)}>
-                    <Text style={styles.btnText}>Cancel</Text>
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submitChangePax}>
-                    <Text style={styles.btnText}>Update</Text>
+                    <Text style={styles.btnText}>{t('admin.update')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -3613,8 +3613,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showMoveTableModal} animationType="fade" transparent>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Move to Table</Text>
-                <Text style={styles.label}>Select Available Table</Text>
+                <Text style={styles.modalTitle}>{t('admin.move-to-table')}</Text>
+                <Text style={styles.label}>{t('admin.select-available-table')}</Text>
                 <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
                   {tables.filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id).map((table) => (
                     <TouchableOpacity key={table.id} style={[styles.tableOption, selectedMoveTable === table.id && styles.tableOptionSelected]} onPress={() => setSelectedMoveTable(table.id)}>
@@ -3624,10 +3624,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 </ScrollView>
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowMoveTableModal(false)}>
-                    <Text style={styles.btnText}>Cancel</Text>
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submitMoveTable}>
-                    <Text style={styles.btnText}>Move</Text>
+                    <Text style={styles.btnText}>{t('admin.move')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
