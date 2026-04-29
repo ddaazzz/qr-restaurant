@@ -2032,6 +2032,8 @@ async function _doRecordSplitPortion(sessionId, splitIndex, payment_method) {
     alert('Error: ' + err.message);
   }
 }
+
+function updateSplitPreview() {
   const modal = document.querySelector('.modal-overlay[data-split-total]');
   if (!modal) return;
   const total = parseInt(modal.getAttribute('data-split-total'), 10);
