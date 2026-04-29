@@ -1454,15 +1454,21 @@ router.get("/restaurants/:restaurantId/reports/payment-by-type", async (req, res
 
     const result = await pool.query(
       `SELECT
-        COALESCE(o.payment_method, 'cash') AS payment_method,
+        COALESCE(o.payment_method, 'cash') AS payment_vendor,
+        cp.payment_method AS payment_sub_method,
         COUNT(DISTINCT o.id) AS order_count,
-        COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS total_revenue_cents
+        COALESCE(SUM(ot.total_cents), 0) AS total_revenue_cents
        FROM orders o
-       JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
+       LEFT JOIN chuio_payments cp ON cp.order_id = o.id AND cp.status = 'completed'
+       LEFT JOIN (
+         SELECT order_id, SUM(price_cents * quantity) AS total_cents
+         FROM order_items WHERE removed = false
+         GROUP BY order_id
+       ) ot ON ot.order_id = o.id
        WHERE o.restaurant_id = $1
          AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
-       GROUP BY COALESCE(o.payment_method, 'cash')
-       ORDER BY total_revenue_cents DESC`,
+       GROUP BY COALESCE(o.payment_method, 'cash'), cp.payment_method
+       ORDER BY COALESCE(o.payment_method, 'cash'), total_revenue_cents DESC`,
       [restaurantId, daysBack]
     );
     res.json(result.rows);
@@ -1486,6 +1492,7 @@ router.get("/restaurants/:restaurantId/reports/staff-hours", async (req, res) =>
       `SELECT
         u.name AS staff_name,
         u.role,
+        u.hourly_rate_cents,
         COUNT(st.id) AS shift_count,
         SUM(COALESCE(st.duration_minutes,
           CASE WHEN st.clock_out_at IS NOT NULL
@@ -1498,7 +1505,7 @@ router.get("/restaurants/:restaurantId/reports/staff-hours", async (req, res) =>
        JOIN users u ON u.id = st.user_id
        WHERE st.restaurant_id = $1
          AND st.clock_in_at >= NOW() - ($2::int * INTERVAL '1 day')
-       GROUP BY u.id, u.name, u.role
+       GROUP BY u.id, u.name, u.role, u.hourly_rate_cents
        ORDER BY total_minutes DESC NULLS LAST`,
       [restaurantId, daysBack]
     );

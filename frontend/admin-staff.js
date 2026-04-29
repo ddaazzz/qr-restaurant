@@ -2,6 +2,8 @@
 
 let STAFF_EDIT_MODE = false;
 let STAFF_EDIT_ID = null; // Track which staff is being edited
+let STAFF_OLD_HOURLY_RATE = null; // Store old hourly rate to detect changes
+let CURRENT_WORK_DAYS = 30; // Default timeframe for work log (days)
 let staffInitialized = false;
 
 // Initialize staff section
@@ -206,6 +208,11 @@ async function editStaff(staffId, event) {
     } else {
       document.getElementById("staff-hourly-rate").value = "";
     }
+    STAFF_OLD_HOURLY_RATE = staff.hourly_rate_cents || null;
+
+    // Populate employment start date
+    const empStartInput = document.getElementById("staff-employment-start");
+    if (empStartInput) empStartInput.value = staff.employment_start_date ? staff.employment_start_date.split('T')[0] : '';
 
     // Populate email field
     const emailInput = document.getElementById("staff-email");
@@ -303,6 +310,14 @@ async function createOrUpdateStaff() {
   try {
     const payload = { name, pin, role, access_rights, hourly_rate_cents };
 
+    // Add employment start date if provided
+    const empStartInput = document.getElementById("staff-employment-start");
+    if (empStartInput) {
+      const empVal = empStartInput.value.trim();
+      if (empVal) payload.employment_start_date = empVal;
+      else if (STAFF_EDIT_ID) payload.employment_start_date = null;
+    }
+
     // Add email and password if provided
     const emailInput = document.getElementById("staff-email");
     const passwordInput = document.getElementById("staff-password");
@@ -314,6 +329,12 @@ async function createOrUpdateStaff() {
     if (passwordInput) {
       const password = passwordInput.value;
       if (password) payload.password = password;
+    }
+
+    // Detect hourly rate change and prompt for backfill
+    if (STAFF_EDIT_ID && hourly_rate_cents !== null && STAFF_OLD_HOURLY_RATE !== null && hourly_rate_cents !== STAFF_OLD_HOURLY_RATE) {
+      const backfill = confirm(t('admin.rate-changed-backfill-prompt') || 'Hourly rate changed. Apply new rate to all previous work log records too?\n\nOK = yes, backfill all history\nCancel = only apply to new shifts');
+      payload.backfill_hourly_rate = backfill;
     }
     
     const url = STAFF_EDIT_ID 
@@ -434,6 +455,7 @@ let CURRENT_STAFF_ID = null; // Track which staff is shown in modal
 
 function openStaffDetailModal(staffId) {
   CURRENT_STAFF_ID = staffId;
+  CURRENT_WORK_DAYS = 30; // Reset to default on open
   const modal = document.getElementById("staff-detail-modal");
   if (!modal) return;
   modal.style.display = "flex";
@@ -447,11 +469,24 @@ function closeStaffDetailModal() {
   CURRENT_STAFF_ID = null;
 }
 
+function setWorkLogDays(days) {
+  CURRENT_WORK_DAYS = days;
+  // Update filter button active states
+  [1, 7, 30, 3650].forEach(function(d) {
+    var btn = document.getElementById('work-days-btn-' + d);
+    if (btn) {
+      btn.style.background = d === days ? '#3b82f6' : '#e5e7eb';
+      btn.style.color = d === days ? 'white' : '#374151';
+    }
+  });
+  loadStaffDetailData();
+}
+
 async function loadStaffDetailData() {
   if (!CURRENT_STAFF_ID) return;
   
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${CURRENT_STAFF_ID}`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${CURRENT_STAFF_ID}?days=${CURRENT_WORK_DAYS}`);
     if (!res.ok) throw new Error('Failed to load staff details');
     
     const staff = await res.json();
@@ -467,6 +502,12 @@ async function loadStaffDetailData() {
       document.getElementById("staff-detail-wage").textContent = `$${rate}/hr`;
     } else {
       document.getElementById("staff-detail-wage").textContent = 'Not set';
+    }
+
+    // Show start date
+    const startDateEl = document.getElementById("staff-detail-start-date");
+    if (startDateEl) {
+      startDateEl.textContent = staff.employment_start_date ? staff.employment_start_date.split('T')[0] : '—';
     }
     
     // Update clock status
@@ -490,21 +531,38 @@ async function loadStaffDetailData() {
     if (staff.stats) {
       document.getElementById("staff-total-shifts").textContent = staff.stats.total_shifts;
       document.getElementById("staff-total-hours").textContent = staff.stats.total_hours.toFixed(1);
+      const salaryEl = document.getElementById("staff-estimated-salary");
+      if (salaryEl) {
+        if (staff.stats.estimated_salary_cents !== null && staff.stats.estimated_salary_cents !== undefined) {
+          salaryEl.textContent = '$' + (staff.stats.estimated_salary_cents / 100).toFixed(2);
+        } else {
+          salaryEl.textContent = '—';
+        }
+      }
     }
+
+    // Sync filter button active states
+    [1, 7, 30, 3650].forEach(function(d) {
+      var btn = document.getElementById('work-days-btn-' + d);
+      if (btn) {
+        btn.style.background = d === CURRENT_WORK_DAYS ? '#3b82f6' : '#e5e7eb';
+        btn.style.color = d === CURRENT_WORK_DAYS ? 'white' : '#374151';
+      }
+    });
     
     // Display timekeeping list
-    displayTimekeepingList(staff.timekeeping || []);
+    displayTimekeepingList(staff.timekeeping || [], staff.hourly_rate_cents);
   } catch (err) {
     console.error("Error loading staff details:", err);
   }
 }
 
-function displayTimekeepingList(records) {
+function displayTimekeepingList(records, staffHourlyRate) {
   const container = document.getElementById("staff-timekeeping-list");
   if (!container) return;
   
   // Render timekeeping list using template
-  renderTimekeepingList(records);
+  renderTimekeepingList(records, staffHourlyRate);
 }
 
 async function clockInStaff() {
@@ -710,14 +768,15 @@ function renderKitchenCategories(categories) {
 
 /**
  * Render timekeeping list using templates
- * @param {Array} records - Array of timekeeping records with clock_in_at, clock_out_at, duration_minutes
+ * @param {Array} records - Array of timekeeping records with clock_in_at, clock_out_at, duration_minutes, hourly_rate_cents
+ * @param {number|null} staffHourlyRate - Staff's current hourly rate in cents (fallback for records without snapshot)
  */
-function renderTimekeepingList(records) {
+function renderTimekeepingList(records, staffHourlyRate) {
   const container = document.getElementById("staff-timekeeping-list");
   if (!container) return;
   
   if (!records || records.length === 0) {
-    container.innerHTML = '<p style="color: #999; font-size: 14px;">No work history in the last 30 days</p>';
+    container.innerHTML = '<p style="color: #999; font-size: 14px;">No work history in the selected period</p>';
     return;
   }
   
@@ -733,11 +792,19 @@ function renderTimekeepingList(records) {
     const timeInStr = clockIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const timeOutStr = clockOut ? clockOut.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Still working';
     
+    // Calculate salary: use per-record snapshot rate if available, else fall back to current staff rate
+    const rateForRecord = record.hourly_rate_cents || staffHourlyRate || 0;
+    const salaryStr = rateForRecord > 0 && record.duration_minutes
+      ? '$' + (record.duration_minutes / 60 * rateForRecord / 100).toFixed(2)
+      : '';
+    
     const clone = template.content.cloneNode(true);
     clone.querySelector('.timekeeping-date').textContent = dateStr;
     clone.querySelector('.timekeeping-time-in').textContent = timeInStr;
     clone.querySelector('.timekeeping-time-out').textContent = timeOutStr;
     clone.querySelector('.timekeeping-hours').textContent = hours + 'h';
+    const salaryEl = clone.querySelector('.timekeeping-salary');
+    if (salaryEl) salaryEl.textContent = salaryStr;
     
     container.appendChild(clone);
   });

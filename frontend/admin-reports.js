@@ -590,9 +590,9 @@ function renderBusiestTables(stats) {
   var html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
     '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
     '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-table">Table</th>' +
-    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-orders">Orders</th>' +
-    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-revenue">Revenue</th>' +
-    '<th style="padding:10px 12px;" ></th>' +
+    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;width:70px;" data-i18n="admin.col-orders">Orders</th>' +
+    '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;width:100px;" data-i18n="admin.col-revenue">Revenue</th>' +
+    '<th style="padding:10px 12px;width:120px;"></th>' +
     '</tr></thead><tbody>';
 
   for (var ti = 0; ti < topTables.length; ti++) {
@@ -1150,40 +1150,76 @@ async function loadPaymentByType() {
       return;
     }
 
-    var totalRev = 0;
+    // Group rows by payment_vendor
+    var vendors = {};
+    var vendorOrder = [];
     for (var i = 0; i < data.length; i++) {
-      totalRev += parseInt(data[i].total_revenue_cents, 10) || 0;
+      var row = data[i];
+      var vendor = row.payment_vendor || 'cash';
+      if (!vendors[vendor]) {
+        vendors[vendor] = { order_count: 0, total_revenue_cents: 0, sub_methods: [] };
+        vendorOrder.push(vendor);
+      }
+      vendors[vendor].order_count += parseInt(row.order_count, 10) || 0;
+      vendors[vendor].total_revenue_cents += parseInt(row.total_revenue_cents, 10) || 0;
+      if (row.payment_sub_method) {
+        vendors[vendor].sub_methods.push({
+          method: row.payment_sub_method,
+          order_count: parseInt(row.order_count, 10) || 0,
+          total_revenue_cents: parseInt(row.total_revenue_cents, 10) || 0
+        });
+      }
     }
+
+    // Sort vendors by total revenue desc
+    vendorOrder.sort(function(a, b) { return vendors[b].total_revenue_cents - vendors[a].total_revenue_cents; });
+
+    var totalRev = 0;
+    for (var v = 0; v < vendorOrder.length; v++) totalRev += vendors[vendorOrder[v]].total_revenue_cents;
 
     var paymentColors = { cash: '#059669', kpay: '#667eea', 'payment-asia': '#e67e22', card: '#8b5cf6', alipay: '#dc2626', wechat: '#06b6d4' };
     var html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
       '<thead><tr style="border-bottom:2px solid #e5e7eb;background:#f9fafb;">' +
       '<th style="padding:10px 12px;text-align:left;font-weight:600;color:#6b7280;" data-i18n="admin.col-payment-method">Payment Method</th>' +
-      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-orders">Orders</th>' +
-      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-revenue">Revenue</th>' +
-      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;">%</th>' +
-      '<th style="padding:10px 12px;"></th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;width:70px;" data-i18n="admin.col-orders">Orders</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;width:100px;" data-i18n="admin.col-revenue">Revenue</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;width:50px;">%</th>' +
+      '<th style="padding:10px 12px;width:100px;"></th>' +
       '</tr></thead><tbody>';
 
-    for (var i = 0; i < data.length; i++) {
-      var row = data[i];
-      var rev = parseInt(row.total_revenue_cents, 10) || 0;
+    for (var vi = 0; vi < vendorOrder.length; vi++) {
+      var vname = vendorOrder[vi];
+      var vdata = vendors[vname];
+      var rev = vdata.total_revenue_cents;
       var pct = totalRev > 0 ? ((rev / totalRev) * 100) : 0;
-      var color = paymentColors[row.payment_method] || '#6b7280';
-      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
-        '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' +
+      var color = paymentColors[vname] || '#6b7280';
+      // Vendor row (bold)
+      html += '<tr style="border-bottom:1px solid #e5e7eb;background:#f9fafb;">' +
+        '<td style="padding:10px 12px;font-weight:600;color:#1f2937;">' +
           '<span style="display:inline-block;width:10px;height:10px;background:' + color + ';border-radius:2px;margin-right:6px;"></span>' +
-          row.payment_method +
+          vname +
         '</td>' +
-        '<td style="padding:10px 12px;text-align:right;color:#667eea;font-weight:600;">' + row.order_count + '</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#667eea;font-weight:600;">' + vdata.order_count + '</td>' +
         '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">$' + (rev / 100).toFixed(2) + '</td>' +
-        '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + pct.toFixed(1) + '%</td>' +
-        '<td style="padding:10px 12px;min-width:100px;">' +
+        '<td style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">' + pct.toFixed(1) + '%</td>' +
+        '<td style="padding:10px 12px;">' +
           '<div style="background:#f3f4f6;border-radius:4px;height:8px;overflow:hidden;">' +
             '<div style="background:' + color + ';height:100%;width:' + pct.toFixed(0) + '%;border-radius:4px;"></div>' +
           '</div>' +
         '</td>' +
         '</tr>';
+      // Sub-method rows (indented)
+      for (var si = 0; si < vdata.sub_methods.length; si++) {
+        var sm = vdata.sub_methods[si];
+        var smPct = totalRev > 0 ? ((sm.total_revenue_cents / totalRev) * 100) : 0;
+        html += '<tr style="border-bottom:1px solid #f5f5f5;">' +
+          '<td style="padding:6px 12px 6px 28px;color:#6b7280;font-size:12px;">↳ ' + sm.method + '</td>' +
+          '<td style="padding:6px 12px;text-align:right;color:#9ca3af;font-size:12px;">' + sm.order_count + '</td>' +
+          '<td style="padding:6px 12px;text-align:right;color:#6b7280;font-size:12px;">$' + (sm.total_revenue_cents / 100).toFixed(2) + '</td>' +
+          '<td style="padding:6px 12px;text-align:right;color:#9ca3af;font-size:12px;">' + smPct.toFixed(1) + '%</td>' +
+          '<td></td>' +
+          '</tr>';
+      }
     }
     html += '</tbody></table>';
     container.innerHTML = html;
@@ -1220,6 +1256,7 @@ async function loadStaffHours() {
       '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-shifts">Shifts</th>' +
       '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-total-hours">Total Hours</th>' +
       '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-avg-shift">Avg Shift</th>' +
+      '<th style="padding:10px 12px;text-align:right;font-weight:600;color:#6b7280;" data-i18n="admin.col-salary">Salary</th>' +
       '</tr></thead><tbody>';
 
     for (var i = 0; i < data.length; i++) {
@@ -1228,12 +1265,17 @@ async function loadStaffHours() {
       var shiftCount = parseInt(row.shift_count, 10) || 0;
       var totalHours = (totalMin / 60).toFixed(1);
       var avgShift = shiftCount > 0 ? (totalMin / shiftCount / 60).toFixed(1) : '—';
+      var salary = '—';
+      if (row.hourly_rate_cents && totalMin > 0) {
+        salary = '$' + (totalMin / 60 * row.hourly_rate_cents / 100).toFixed(2);
+      }
       html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
         '<td style="padding:10px 12px;font-weight:500;color:#1f2937;">' + row.staff_name + '</td>' +
         '<td style="padding:10px 12px;color:#6b7280;font-size:12px;text-transform:capitalize;">' + (row.role || '—') + '</td>' +
         '<td style="padding:10px 12px;text-align:right;color:#667eea;font-weight:600;">' + shiftCount + '</td>' +
         '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">' + totalHours + ' hrs</td>' +
         '<td style="padding:10px 12px;text-align:right;color:#6b7280;">' + avgShift + ' hrs</td>' +
+        '<td style="padding:10px 12px;text-align:right;color:#059669;font-weight:600;">' + salary + '</td>' +
         '</tr>';
     }
     html += '</tbody></table>';
