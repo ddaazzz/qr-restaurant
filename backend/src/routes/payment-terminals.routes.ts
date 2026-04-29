@@ -1012,15 +1012,17 @@ router.get('/restaurants/:restaurantId/kpay-transactions/:outTradeNo', async (re
 
 /**
  * GET /api/restaurants/:restaurantId/kpay-terminal/active
- * Returns the active KPay terminal config (for frontend gating)
+ * Returns the active physical terminal (KPay or PA-Offline) for frontend gating.
+ * KPay is preferred when both are active; vendor_name is included in the response.
  */
 router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const result = await pool.query(
-      `SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active
+      `SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active, vendor_name
        FROM payment_terminals
-       WHERE restaurant_id = $1 AND vendor_name = 'kpay' AND is_active = true
+       WHERE restaurant_id = $1 AND is_active = true AND vendor_name IN ('kpay', 'payment-asia-offline')
+       ORDER BY CASE vendor_name WHEN 'kpay' THEN 1 ELSE 2 END
        LIMIT 1`,
       [restaurantId]
     );

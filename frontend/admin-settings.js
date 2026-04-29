@@ -1763,11 +1763,17 @@ function renderPaymentTerminalsList() {
       html += '<div style="font-size: 11px; color: #dc2626; margin-top: 4px;">⚠️ ' + terminal.last_error_message + '</div>';
     }
     html += '</div>';
-    html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px;">';
+    html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px; align-items: flex-end;">';
     
-    // Activate button - only show for superadmin if not already active
-    if (!terminal.is_active && IS_SUPERADMIN) {
-      html += '<button onclick="activatePaymentTerminal(' + terminal.id + ')" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">✓ Activate</button>';
+    // Enable/disable toggle (superadmin only)
+    if (IS_SUPERADMIN) {
+      const toggleId = 'toggle-terminal-' + terminal.id;
+      html += `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; color:${terminal.is_active ? '#059669' : '#6b7280'};">`;
+      html += `<span>${terminal.is_active ? 'Enabled' : 'Disabled'}</span>`;
+      html += `<span style="position:relative; display:inline-block; width:36px; height:20px;">`;
+      html += `<input type="checkbox" id="${toggleId}" ${terminal.is_active ? 'checked' : ''} onchange="togglePaymentTerminal(${terminal.id}, this.checked)" style="opacity:0; width:0; height:0; position:absolute;">`;
+      html += `<span onclick="document.getElementById('${toggleId}').click()" style="position:absolute; cursor:pointer; inset:0; border-radius:20px; background:${terminal.is_active ? '#059669' : '#d1d5db'}; transition:0.2s;"><span style="position:absolute; left:${terminal.is_active ? '18px' : '2px'}; top:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:0.2s;"></span></span>`;
+      html += `</span></label>`;
     }
     
     html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">✎ Edit</button>';
@@ -1781,6 +1787,56 @@ function renderPaymentTerminalsList() {
     card.innerHTML = html;
     listContainer.appendChild(card);
   });
+}
+
+async function togglePaymentTerminal(terminalId, enable) {
+  try {
+    if (enable) {
+      // Activate: deactivates others of same vendor, sets active_payment_vendor on restaurant
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({})
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to enable');
+    } else {
+      // Deactivate: just flip is_active to false on this terminal
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ is_active: false })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to disable');
+    }
+    await loadPaymentTerminals();
+  } catch (err) {
+    alert('Error: ' + err.message);
+    await loadPaymentTerminals(); // re-render to reset toggle state
+  }
+}
+
+async function togglePaymentTerminal(terminalId, enable) {
+  try {
+    if (enable) {
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({})
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to enable');
+    } else {
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ is_active: false })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to disable');
+    }
+    await loadPaymentTerminals();
+  } catch (err) {
+    alert('Error: ' + err.message);
+    await loadPaymentTerminals();
+  }
 }
 
 function openPaymentTerminalForm() {
