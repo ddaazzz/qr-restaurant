@@ -15,9 +15,13 @@ function formatTimeWithTimezone(utcTime, timezone = 'UTC', format = 'datetime') 
     if (typeof utcTime === 'string') {
       // Handle PostgreSQL timestamp format (2026-02-16 09:37:15.808925)
       // by adding Z to make it explicitly UTC
-      const timeStr = utcTime.includes('T') || utcTime.includes('Z') 
-        ? utcTime 
-        : utcTime.replace(' ', 'T') + 'Z';
+      const timeStr = utcTime.includes('T') || utcTime.includes('Z')
+        ? utcTime
+        : utcTime.includes(' ')
+          ? utcTime.replace(' ', 'T') + 'Z'
+          : utcTime.length === 10   // date-only: YYYY-MM-DD
+            ? utcTime + 'T00:00:00Z'
+            : utcTime + 'Z';
       date = new Date(timeStr);
     } else {
       date = utcTime;

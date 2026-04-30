@@ -1,7 +1,10 @@
 import { Router } from "express";
+import multer from "multer";
 import pool from "../config/db";
 import { upload } from "../config/upload";
 import { isR2Configured, uploadToR2, getR2Folder } from "../config/storage";
+
+const memoryUpload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
@@ -69,7 +72,11 @@ router.get("/restaurants/:restaurantId/menu_categories",
 
       const result = await pool.query(
         `
-        SELECT id, name, sort_order
+        SELECT id, name, name_zh, sort_order,
+               COALESCE(time_restricted, FALSE) AS time_restricted,
+               TO_CHAR(available_from, 'HH24:MI') AS available_from,
+               TO_CHAR(available_to,   'HH24:MI') AS available_to,
+               COALESCE(days_of_week, '{}') AS days_of_week
         FROM menu_categories
         WHERE restaurant_id = $1
         ORDER BY sort_order, id
@@ -90,7 +97,7 @@ router.post("/restaurants/:restaurantId/menu_categories",
   async (req, res) => {
     try {
       const restaurantId = Number(req.params.restaurantId);
-      const { name } = req.body;
+      const { name, name_zh } = req.body;
 
       if (!restaurantId || !name) {
         return res.status(400).json({
@@ -100,11 +107,11 @@ router.post("/restaurants/:restaurantId/menu_categories",
 
       const result = await pool.query(
         `
-        INSERT INTO menu_categories (restaurant_id, name)
-        VALUES ($1, $2)
+        INSERT INTO menu_categories (restaurant_id, name, name_zh)
+        VALUES ($1, $2, $3)
         RETURNING *
         `,
-        [restaurantId, name.trim()]
+        [restaurantId, name.trim(), name_zh?.trim() || null]
       );
 
       res.status(201).json(result.rows[0]);
@@ -115,24 +122,56 @@ router.post("/restaurants/:restaurantId/menu_categories",
   }
 );
 
-//Update Category Name
+//Update Category (name + time restriction)
 router.patch("/menu_categories/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, name_zh, time_restricted, available_from, available_to, days_of_week } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ error: "name required" });
+    const updates: string[] = [];
+    const values: any[] = [];
+    let p = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${p++}`);
+      values.push(name.trim());
+    }
+    if (name_zh !== undefined) {
+      updates.push(`name_zh = $${p++}`);
+      values.push(name_zh?.trim() || null);
+    }
+    if (time_restricted !== undefined) {
+      updates.push(`time_restricted = $${p++}`);
+      values.push(!!time_restricted);
+    }
+    if (available_from !== undefined) {
+      updates.push(`available_from = $${p++}`);
+      values.push(available_from || null);
+    }
+    if (available_to !== undefined) {
+      updates.push(`available_to = $${p++}`);
+      values.push(available_to || null);
+    }
+    if (days_of_week !== undefined) {
+      updates.push(`days_of_week = $${p++}`);
+      // Accept an array of ints (1-7) or null for "every day"
+      const dow = Array.isArray(days_of_week) && days_of_week.length > 0 ? days_of_week : null;
+      values.push(dow);
     }
 
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "Nothing to update" });
+    }
+
+    values.push(id);
     const result = await pool.query(
-      `
-      UPDATE menu_categories
-      SET name = $1
-      WHERE id = $2
-      RETURNING *
-      `,
-      [name.trim(), id]
+      `UPDATE menu_categories SET ${updates.join(", ")} WHERE id = $${p}
+       RETURNING id, name, name_zh, sort_order,
+                 COALESCE(time_restricted, FALSE) AS time_restricted,
+                 TO_CHAR(available_from, 'HH24:MI') AS available_from,
+                 TO_CHAR(available_to,   'HH24:MI') AS available_to,
+                 COALESCE(days_of_week, '{}') AS days_of_week`,
+      values
     );
 
     if (result.rowCount === 0) {
@@ -198,6 +237,57 @@ router.delete("/menu_categories/:id", async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/restaurants/:restaurantId/menu-categories/reorder
+ * Bulk-update sort_order for menu categories
+ */
+router.put("/restaurants/:restaurantId/menu-categories/reorder", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ error: "categories array required" });
+    }
+    await Promise.all(
+      categories.map(({ id, sort_order }) =>
+        pool.query(
+          "UPDATE menu_categories SET sort_order = $1 WHERE id = $2 AND restaurant_id = $3",
+          [sort_order, id, restaurantId]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("REORDER CATEGORIES ERROR:", err);
+    res.status(500).json({ error: "Failed to reorder categories" });
+  }
+});
+
+/**
+ * PUT /api/restaurants/:restaurantId/menu-items/reorder
+ * Bulk-update sort_order for menu items (within a category or globally)
+ */
+router.put("/restaurants/:restaurantId/menu-items/reorder", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { items } = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: "items array required" });
+    }
+    await Promise.all(
+      items.map(({ id, sort_order }) =>
+        pool.query(
+          "UPDATE menu_items SET sort_order = $1 WHERE id = $2",
+          [sort_order, id]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("REORDER ITEMS ERROR:", err);
+    res.status(500).json({ error: "Failed to reorder items" });
+  }
+});
 
 // Get full menu for a restaurant
 // GET /restaurants/:restaurantId/menu
@@ -212,15 +302,18 @@ router.get("/restaurants/:restaurantId/menu", async (req, res) => {
     }
     try {
         const categoriesResult = await pool.query(
-            "SELECT * FROM menu_categories WHERE restaurant_id=$1 ORDER BY sort_order",
+            "SELECT id, name, name_zh, sort_order, time_restricted, available_from, available_to FROM menu_categories WHERE restaurant_id=$1 ORDER BY sort_order",
             [restaurantId]
         );
 
         const itemsResult = await pool.query(
-            `SELECT mi.*, mc.name AS category_name
+            `SELECT mi.id, mi.name, mi.name_zh, mi.price_cents, mi.description, mi.available, mi.image_url,
+                    mi.category_id, mi.is_meal_combo, mi.sort_order,
+                    mc.name AS category_name, mc.name_zh AS category_name_zh
              FROM menu_items mi
              JOIN menu_categories mc ON mi.category_id=mc.id
-             WHERE mi.available=true AND mc.restaurant_id=$1`,
+             WHERE mi.available=true AND mc.restaurant_id=$1
+             ORDER BY mi.sort_order, mi.id`,
             [restaurantId]
         );
 
@@ -299,13 +392,15 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       SELECT
       mi.id,
       mi.name,
+      mi.name_zh,
       mi.description,
       mi.price_cents,
       mi.available,
       mi.image_url,
       mi.category_id,
       mi.is_meal_combo,
-      mc.name AS category_name
+      mc.name AS category_name,
+      mc.name_zh AS category_name_zh
       FROM menu_items mi
       JOIN menu_categories mc ON mc.id = mi.category_id
       WHERE mc.restaurant_id = $1
@@ -458,6 +553,7 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
     const {
       category_id,
       name,
+      name_zh,
       price_cents,
       description,
       is_meal_combo
@@ -480,13 +576,14 @@ router.post("/restaurants/:restaurantId/menu-items", async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO menu_items
-        (category_id, name, price_cents, description, available, is_meal_combo)
-      VALUES ($1, $2, $3, $4, true, $5)
+        (category_id, name, name_zh, price_cents, description, available, is_meal_combo)
+      VALUES ($1, $2, $3, $4, $5, true, $6)
       RETURNING *
       `,
       [
         category_id,
         name.trim(),
+        name_zh?.trim() || null,
         price_cents,
         description || null,
         is_meal_combo || false
@@ -511,6 +608,7 @@ router.patch("/menu-items/:itemId", async (req, res) => {
     const { itemId } = req.params;
     const {
       name,
+      name_zh,
       price_cents,
       description,
       category_id,
@@ -552,16 +650,18 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       UPDATE menu_items
       SET
         name = COALESCE($1, name),
-        price_cents = COALESCE($2, price_cents),
-        description = COALESCE($3, description),
-        category_id = COALESCE($4, category_id),
-        is_meal_combo = COALESCE($5, is_meal_combo),
-        available = COALESCE($6, available)
-      WHERE id = $7
+        name_zh = COALESCE($2, name_zh),
+        price_cents = COALESCE($3, price_cents),
+        description = COALESCE($4, description),
+        category_id = COALESCE($5, category_id),
+        is_meal_combo = COALESCE($6, is_meal_combo),
+        available = COALESCE($7, available)
+      WHERE id = $8
       RETURNING *
       `,
       [
         name?.trim() ?? null,
+        name_zh?.trim() ?? null,
         price_cents ?? null,
         description ?? null,
         category_id ?? null,
@@ -1063,4 +1163,195 @@ router.get("/restaurants/:restaurantId/menu/items", async (req, res) => {
   }
 });
 
+
+/**
+ * POST /api/restaurants/:restaurantId/menu-import
+ * Import menu from Excel (.xlsx). Columns expected (row 0 = header):
+ *   A: Menu Category English
+ *   B: Menu Category Chinese
+ *   C: Food Item Name Chinese
+ *   D: Food Item Name English
+ *   E: Food Item Image URL (optional – if valid http/https URL, auto-uploaded to R2)
+ *   F: Price            (numeric, dollars)
+ *
+ * Creates categories (deduped by English name) and menu items.
+ * All items are created as available=true. Existing categories with the same
+ * name are reused; existing items (same name + category) are skipped.
+ */
+router.post(
+  "/restaurants/:restaurantId/menu-import",
+  memoryUpload.single("file"),
+  async (req, res) => {
+    try {
+      const restaurantId = Number(req.params.restaurantId);
+      if (!restaurantId || Number.isNaN(restaurantId)) {
+        return res.status(400).json({ error: "Invalid restaurant ID" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Check if menu import feature is enabled for this restaurant
+      const settingsCk = await pool.query(
+        `SELECT feature_flags FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+      const featureFlags: Record<string, any> = settingsCk.rows[0]?.feature_flags || {};
+      if (featureFlags.menu_import_enabled !== true) {
+        return res.status(403).json({ error: "Bulk menu import is not enabled for this restaurant. Contact support to enable this paid feature." });
+      }
+
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).json({ error: "Empty workbook" });
+      }
+      const sheet = workbook.Sheets[sheetName]!
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: null,
+      });
+
+      // Skip header row
+      const dataRows = rows.slice(1).filter(
+        (r) => r[0] || r[3] // must have category or English name
+      );
+
+      if (dataRows.length === 0) {
+        return res.status(400).json({ error: "No data rows found in file" });
+      }
+
+      // Load existing categories for this restaurant
+      const existingCats = await pool.query(
+        "SELECT id, name FROM menu_categories WHERE restaurant_id = $1",
+        [restaurantId]
+      );
+      const catMap: Record<string, number> = {};
+      for (const row of existingCats.rows) {
+        catMap[row.name.trim().toLowerCase()] = row.id;
+      }
+
+      const created = { categories: 0, items: 0, skipped: 0 };
+
+      for (const row of dataRows) {
+        const catNameEn = (row[0] ?? "").toString().trim();
+        const catNameZh = (row[1] ?? "").toString().trim() || null;
+        const itemNameZh = (row[2] ?? "").toString().trim() || null;
+        const itemNameEn = (row[3] ?? "").toString().trim();
+        const priceRaw = row[5];
+        const priceCents = priceRaw != null ? Math.round(Number(priceRaw) * 100) : 0;
+
+        if (!catNameEn && !itemNameEn) continue;
+
+        // Resolve or create category
+        const catKey = catNameEn.toLowerCase();
+        let categoryId: number | undefined = catMap[catKey];
+        if (!categoryId) {
+          const catRes = await pool.query(
+            `INSERT INTO menu_categories (restaurant_id, name, name_zh)
+             VALUES ($1, $2, $3)
+             ON CONFLICT DO NOTHING
+             RETURNING id`,
+            [restaurantId, catNameEn, catNameZh]
+          );
+          if (catRes.rows.length > 0) {
+            categoryId = catRes.rows[0].id as number;
+            catMap[catKey] = categoryId;
+            created.categories++;
+          } else {
+            // Rare race condition – re-fetch
+            const refetch = await pool.query(
+              "SELECT id FROM menu_categories WHERE restaurant_id=$1 AND lower(name)=$2",
+              [restaurantId, catKey]
+            );
+            if (refetch.rows.length === 0) continue;
+            categoryId = refetch.rows[0].id as number;
+            catMap[catKey] = categoryId;
+          }
+        } else {
+          // Update name_zh if provided and not yet set
+          if (catNameZh) {
+            await pool.query(
+              `UPDATE menu_categories SET name_zh = COALESCE(name_zh, $1) WHERE id = $2`,
+              [catNameZh, categoryId]
+            );
+          }
+        }
+
+        if (!itemNameEn) {
+          created.skipped++;
+          continue;
+        }
+
+        // Check if item already exists (by English name + category)
+        const existing = await pool.query(
+          "SELECT id FROM menu_items WHERE category_id=$1 AND lower(name)=$2",
+          [categoryId, itemNameEn.toLowerCase()]
+        );
+        if (existing.rows.length > 0) {
+          created.skipped++;
+          continue;
+        }
+
+        const insertResult = await pool.query(
+          `INSERT INTO menu_items (category_id, name, name_zh, price_cents, available)
+           VALUES ($1, $2, $3, $4, true)
+           RETURNING id`,
+          [categoryId, itemNameEn, itemNameZh, priceCents]
+        );
+        created.items++;
+
+        // Upload image from column E if it is a valid URL
+        const imageRaw = row[4];
+        if (
+          imageRaw &&
+          typeof imageRaw === "string" &&
+          isR2Configured()
+        ) {
+          const imageUrl = imageRaw.trim();
+          if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+            try {
+              const imgRes = await fetch(imageUrl);
+              if (imgRes.ok) {
+                const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+                const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+                const ext = (contentType.split("/")[1] || "jpg").split(";")[0];
+                const safeName = itemNameEn.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+                const filename = `${safeName}.${ext}`;
+                const r2Url = await uploadToR2(
+                  imgBuffer,
+                  filename,
+                  getR2Folder("menu", String(restaurantId)),
+                  contentType
+                );
+                const newItemId = insertResult.rows[0].id;
+                await pool.query(
+                  "UPDATE menu_items SET image_url = $1 WHERE id = $2",
+                  [r2Url, newItemId]
+                );
+              }
+            } catch (imgErr) {
+              console.warn(`[Menu Import] Image upload failed for "${itemNameEn}":`, imgErr);
+              // Non-fatal – item was already created, continue
+            }
+          }
+        }
+      }
+
+      res.json({
+        ok: true,
+        created_categories: created.categories,
+        created_items: created.items,
+        skipped_items: created.skipped,
+      });
+    } catch (err) {
+      console.error("MENU IMPORT ERROR:", err);
+      res.status(500).json({ error: "Failed to import menu" });
+    }
+  }
+);
+
 export default router;
+

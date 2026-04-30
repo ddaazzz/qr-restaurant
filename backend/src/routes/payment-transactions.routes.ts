@@ -9,6 +9,7 @@ import pool from '../config/db';
 import { paymentAsiaService } from '../services/paymentAsiaService';
 import paymentAsiaTransactionRepository from '../services/paymentAsiaTransactionRepository';
 import * as paymentStatusMapper from '../services/paymentStatusMapper';
+import { queueKitchenPrintJobs } from '../services/kitchenDispatch';
 import { webSocketServer } from '../services/websocket';
 
 const router = Router();
@@ -64,7 +65,7 @@ router.post(
       }
 
       // Apply defaults for optional customer fields
-      const customer_phone = req.body.customer_phone || '';
+      const customer_phone = req.body.customer_phone || '00000000';  // PA requires non-empty
       const customer_ip = req.body.customer_ip || req.ip || '127.0.0.1';
       const customer_address = req.body.customer_address || 'N/A';
       const customer_state = req.body.customer_state || 'HK';
@@ -180,11 +181,11 @@ router.post(
         paymentRecord = createPaymentRes.rows[0];
       }
 
-      // Initialize Payment Asia service
+      // Initialize Payment Asia service (always production for real payments)
       paymentAsiaService.initialize({
         merchantToken: terminal.merchant_token,
         secretCode: terminal.secret_code,
-        environment: terminal.payment_gateway_env || 'sandbox',
+        environment: 'production',
       });
 
       // Build payment form data (all required fields for Payment Asia form submission)
@@ -418,6 +419,22 @@ router.post('/restaurants/:restaurantId/webhook/payment-asia', async (req, res) 
         [merchantRef, payment.order_id, restaurantId]
       );
 
+      try {
+        await queueKitchenPrintJobs(Number(payment.order_id), Number(restaurantId));
+      } catch (dispatchErr) {
+        console.warn('[PaymentWebhook] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+      }
+    } else if (paymentStatus === 'failed') {
+      // Reset payment_method so the customer can retry from the menu
+      console.log('[PaymentAsia Webhook] Payment failed — resetting order payment_method for retry:', payment.order_id);
+      await pool.query(
+        `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL
+         WHERE id = $1 AND restaurant_id = $2`,
+        [payment.order_id, restaurantId]
+      );
+    }
+
+    if (paymentStatus === 'completed') {
       // Write to unified chuio_payments ledger
       try {
         const paNetworkRes = await pool.query(
@@ -563,6 +580,13 @@ async function handlePaymentReturn(req: any, res: any) {
          WHERE id = $2::int AND restaurant_id = $3::int`,
         [merchantRef, orderId, restaurantId]
       );
+
+      try {
+        await queueKitchenPrintJobs(Number(orderId), Number(restaurantId));
+      } catch (dispatchErr) {
+        console.warn('[PaymentReturn] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+      }
+
       console.log('[PaymentReturn] Order marked as paid:', orderId);
     } else if (paymentStatus === 'failed') {
       // Reset payment_method so the customer can retry with any payment method
@@ -573,38 +597,50 @@ async function handlePaymentReturn(req: any, res: any) {
         [orderId, restaurantId]
       );
       console.log('[PaymentReturn] PA payment failed — order payment_method reset for retry:', orderId);
+    } else if (paymentStatus === 'processing') {
+      // PA returned the customer without a definitive result (status=4).
+      // Reset payment_method so the customer can retry; the webhook will confirm if payment later succeeds.
+      await pool.query(
+        `UPDATE orders
+         SET payment_method = NULL, chuio_order_reference = NULL
+         WHERE id = $1::int AND restaurant_id = $2::int`,
+        [orderId, restaurantId]
+      );
+      console.log('[PaymentReturn] PA payment still processing — order payment_method reset for retry:', orderId);
     }
 
-      // Write to unified chuio_payments ledger
-      try {
-        const paNetworkRes2 = await pool.query(
-          `SELECT network, amount_cents, session_id, payment_gateway_env FROM payment_asia_transactions
-           WHERE merchant_reference = $1 LIMIT 1`,
-          [merchantRef]
-        );
-        const paRec2 = paNetworkRes2.rows[0];
-        const _paNetLabels2: Record<string,string> = { Alipay:'Alipay', Wechat:'WeChat Pay', CreditCard:'Credit Card', Octopus:'Octopus', Fps:'FPS', CUP:'UnionPay' };
-        const paMeth2 = paRec2?.network ? (_paNetLabels2[paRec2.network] || paRec2.network) : 'Online';
-        const paAmt2 = paRec2?.amount_cents || 0;
-        const paEnv2 = paRec2?.payment_gateway_env || 'sandbox';
-        const paSess2 = paRec2?.session_id || null;
-        await pool.query(
-          `INSERT INTO chuio_payments
-             (restaurant_id, order_id, session_id, payment_vendor, payment_method,
-              payment_gateway_env, order_reference, vendor_reference,
-              amount_cents, currency_code, total_cents, status, completed_at, extra_data)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'HKD',$9,'completed',NOW(),$10)
-           ON CONFLICT DO NOTHING`,
-          [
-            restaurantId, orderId, paSess2,
-            'payment-asia', paMeth2, paEnv2,
-            merchantRef, requestRef || null,
-            paAmt2,
-            JSON.stringify({ request_reference: requestRef }),
-          ]
-        );
-      } catch (ledgerErr2) {
-        console.warn('[PaymentReturn] chuio_payments write failed:', ledgerErr2 instanceof Error ? ledgerErr2.message : ledgerErr2);
+      // Write to unified chuio_payments ledger — only on successful completion
+      if (paymentStatus === 'completed') {
+        try {
+          const paNetworkRes2 = await pool.query(
+            `SELECT network, amount_cents, session_id, payment_gateway_env FROM payment_asia_transactions
+             WHERE merchant_reference = $1 LIMIT 1`,
+            [merchantRef]
+          );
+          const paRec2 = paNetworkRes2.rows[0];
+          const _paNetLabels2: Record<string,string> = { Alipay:'Alipay', Wechat:'WeChat Pay', CreditCard:'Credit Card', Octopus:'Octopus', Fps:'FPS', CUP:'UnionPay' };
+          const paMeth2 = paRec2?.network ? (_paNetLabels2[paRec2.network] || paRec2.network) : 'Online';
+          const paAmt2 = paRec2?.amount_cents || 0;
+          const paEnv2 = paRec2?.payment_gateway_env || 'sandbox';
+          const paSess2 = paRec2?.session_id || null;
+          await pool.query(
+            `INSERT INTO chuio_payments
+               (restaurant_id, order_id, session_id, payment_vendor, payment_method,
+                payment_gateway_env, order_reference, vendor_reference,
+                amount_cents, currency_code, total_cents, status, completed_at, extra_data)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'HKD',$9,'completed',NOW(),$10)
+             ON CONFLICT DO NOTHING`,
+            [
+              restaurantId, orderId, paSess2,
+              'payment-asia', paMeth2, paEnv2,
+              merchantRef, requestRef || null,
+              paAmt2,
+              JSON.stringify({ request_reference: requestRef }),
+            ]
+          );
+        } catch (ledgerErr2) {
+          console.warn('[PaymentReturn] chuio_payments write failed:', ledgerErr2 instanceof Error ? ledgerErr2.message : ledgerErr2);
+        }
       }
 
     // Redirect customer back to their menu session with payment result, or fallback to callback page
@@ -628,17 +664,24 @@ router.post('/restaurants/:restaurantId/payment/return', handlePaymentReturn);
 
 /**
  * GET /api/restaurants/:restaurantId/orders/:orderId/payment-status
- * Check the payment status of an order
+ * Check the payment status of an order.
+ * When our DB is still 'pending', queries Payment Asia directly for the authoritative status
+ * and updates the DB + resets the order if PA says failed/succeeded.
  */
 router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (req, res) => {
   try {
     const { restaurantId, orderId } = req.params;
 
     const result = await pool.query(
-      `SELECT id, payment_status, transaction_id, error_message, completed_at 
-       FROM order_payments 
-       WHERE order_id = $1 AND restaurant_id = $2
-       ORDER BY created_at DESC
+      `SELECT op.id, op.payment_status, op.transaction_id, op.error_message,
+              op.completed_at, op.created_at, op.chuio_order_reference,
+              pt.merchant_token, pt.secret_code, pt.payment_gateway_env
+       FROM order_payments op
+       JOIN restaurants r ON r.id = op.restaurant_id
+       LEFT JOIN payment_terminals pt
+         ON pt.id = r.active_payment_terminal_id AND pt.vendor_name = 'payment-asia'
+       WHERE op.order_id = $1 AND op.restaurant_id = $2
+       ORDER BY op.created_at DESC
        LIMIT 1`,
       [orderId, restaurantId]
     );
@@ -648,14 +691,131 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
     }
 
     const payment = result.rows[0];
+
+    // If our DB says pending or processing, go ask PA directly
+    if (['pending', 'processing'].includes(payment.payment_status) && payment.chuio_order_reference && payment.merchant_token) {
+      try {
+        console.log('[PaymentStatus] DB pending — querying PA directly for:', payment.chuio_order_reference);
+        paymentAsiaService.initialize({
+          merchantToken: payment.merchant_token,
+          secretCode: payment.secret_code,
+          environment: 'production',
+        });
+        const records = await paymentAsiaService.queryPayment(payment.chuio_order_reference);
+        // Find the sale record (type=1); ignore refund records
+        const saleRecord = records.find((r: any) => String(r.type) === '1') || records[0];
+
+        if (saleRecord) {
+          const paStatusCode = parseInt(String(saleRecord.status));
+          const resolvedStatus = paymentStatusMapper.getPaymentAsiaStatus(paStatusCode);
+          console.log('[PaymentStatus] PA query result: status code', paStatusCode, '→', resolvedStatus);
+
+          // Update our DB with the real status
+          await pool.query(
+            `UPDATE order_payments SET payment_status = $1,
+               transaction_id = COALESCE($2, transaction_id),
+               completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE completed_at END,
+               failed_at    = CASE WHEN $1 = 'failed'    THEN NOW() ELSE failed_at END,
+               updated_at = NOW()
+             WHERE id = $3`,
+            [resolvedStatus, saleRecord.request_reference || null, payment.id]
+          );
+
+          if (resolvedStatus === 'completed') {
+            await pool.query(
+              `UPDATE orders SET status = 'completed', payment_method = 'payment-asia'
+               WHERE id = $1 AND restaurant_id = $2`,
+              [orderId, restaurantId]
+            );
+
+            try {
+              await queueKitchenPrintJobs(Number(orderId), Number(restaurantId));
+            } catch (dispatchErr) {
+              console.warn('[PaymentStatus] Kitchen dispatch failed:', dispatchErr instanceof Error ? dispatchErr.message : dispatchErr);
+            }
+          } else if (resolvedStatus === 'failed') {
+            await pool.query(
+              `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL
+               WHERE id = $1 AND restaurant_id = $2 AND status != 'completed'`,
+              [orderId, restaurantId]
+            );
+          }
+
+          return res.json({
+            payment_status: resolvedStatus,
+            transaction_id: saleRecord.request_reference || null,
+            initiated_at: payment.created_at,
+            pa_status_code: paStatusCode,
+          });
+        } else {
+          // PA has no record yet — still genuinely pending (very fresh payment)
+          console.log('[PaymentStatus] PA query returned no records for:', payment.chuio_order_reference);
+        }
+      } catch (paErr: any) {
+        // PA query failed — fall through and return our DB status, don't crash
+        console.warn('[PaymentStatus] PA direct query failed:', paErr.message);
+      }
+    }
+
     res.json({
       payment_status: payment.payment_status,
       transaction_id: payment.transaction_id,
       error_message: payment.error_message,
       completed_at: payment.completed_at,
+      initiated_at: payment.created_at,
     });
   } catch (error: any) {
     console.error('[PaymentTransaction] Error getting payment status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/restaurants/:restaurantId/orders/:orderId/cancel-payment
+ * Allow the customer to cancel a stuck pending PA payment and retry.
+ * Only allowed if the order is not yet completed.
+ */
+router.post('/restaurants/:restaurantId/orders/:orderId/cancel-payment', async (req, res) => {
+  try {
+    const { restaurantId, orderId } = req.params;
+
+    const orderRes = await pool.query(
+      `SELECT id, status, payment_method FROM orders WHERE id = $1 AND restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+
+    if (orderRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orderRes.rows[0];
+
+    if (order.status === 'completed') {
+      return res.status(400).json({ error: 'Order is already completed and paid' });
+    }
+
+    if (order.payment_method !== 'payment-asia') {
+      return res.status(400).json({ error: 'No pending Payment Asia transaction to cancel' });
+    }
+
+    // Reset order so customer can initiate a new payment
+    await pool.query(
+      `UPDATE orders SET payment_method = NULL, chuio_order_reference = NULL WHERE id = $1 AND restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+
+    // Mark any pending payment records as cancelled
+    await pool.query(
+      `UPDATE order_payments SET payment_status = 'cancelled', error_message = 'Cancelled by customer',
+       updated_at = NOW()
+       WHERE order_id = $1 AND restaurant_id = $2 AND payment_status = 'pending'`,
+      [orderId, restaurantId]
+    );
+
+    console.log('[CancelPayment] Customer cancelled pending PA payment for order:', orderId);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[CancelPayment] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1040,7 +1200,7 @@ async function initPaymentAsiaForRestaurant(restaurantId: string, terminalId?: s
   paymentAsiaService.initialize({
     merchantToken: merchant_token,
     secretCode: secret_code,
-    environment: payment_gateway_env || 'sandbox',
+    environment: 'production',
   });
 }
 
@@ -1057,7 +1217,48 @@ router.post('/restaurants/:restaurantId/payment-asia/query', async (req, res) =>
 
     await initPaymentAsiaForRestaurant(restaurantId, terminal_id);
     const records = await paymentAsiaService.queryPayment(merchant_reference);
-    return res.json({ success: true, records });
+
+    // If a Sale record with status=1 (completed) is found, sync the order status.
+    // This handles the case where the webhook/return callback did not arrive (or was dropped)
+    // but the payment has actually been processed successfully.
+    // Note: query API status codes differ from webhook: 1=completed, 2=pending, 3=failed, 4=processing
+    const isSaleRecord = (r: any) => { const t = String(r.type); return t === '1' || t.toLowerCase() === 'sale'; };
+    const completedSale = records.find((r: any) => isSaleRecord(r) && String(r.status) === '1');
+
+    let synced = false;
+    if (completedSale) {
+      // Look up order_payments via chuio_order_reference (= merchant_reference sent to PA)
+      const paymentRes = await pool.query(
+        `SELECT id, order_id FROM order_payments
+         WHERE chuio_order_reference = $1 AND restaurant_id = $2
+         LIMIT 1`,
+        [merchant_reference, restaurantId]
+      );
+      if (paymentRes.rows.length > 0) {
+        const pmtRow = paymentRes.rows[0];
+        // Update order_payments to completed if not already
+        await pool.query(
+          `UPDATE order_payments
+           SET payment_status = 'completed',
+               completed_at   = COALESCE(completed_at, NOW()),
+               updated_at     = NOW()
+           WHERE id = $1 AND payment_status NOT IN ('completed', 'refunded')`,
+          [pmtRow.id]
+        );
+        // Update order to completed if still pending/processing
+        await pool.query(
+          `UPDATE orders
+           SET status = 'completed',
+               payment_method = COALESCE(NULLIF(payment_method, ''), 'payment-asia')
+           WHERE id = $1 AND restaurant_id = $2 AND status IN ('pending', 'processing', 'payment_processing')`,
+          [pmtRow.order_id, restaurantId]
+        );
+        synced = true;
+        console.log('[PaymentQuery] Synced order status to completed for merchant_reference:', merchant_reference);
+      }
+    }
+
+    return res.json({ success: true, records, synced });
   } catch (err: any) {
     console.error('[PaymentQuery] Error:', err);
     // Management API errors (e.g. sandbox token not recognised by gateway) are not fatal —

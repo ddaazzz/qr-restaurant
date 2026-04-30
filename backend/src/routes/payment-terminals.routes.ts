@@ -9,8 +9,54 @@ import pool from '../config/db';
 import { kpayTerminalService } from '../services/kpayTerminalService';
 import { paymentAsiaService } from '../services/paymentAsiaService';
 import jwt from 'jsonwebtoken';
+import https from 'https';
 
 const router = Router();
+
+/**
+ * Helper: make an HTTPS call to a Payment Asia Offline physical terminal.
+ * Terminals use self-signed TLS certs (rejectUnauthorized=false) and
+ * authenticate via `x-api-key` header (= app_secret stored in DB).
+ */
+function callPAOfflineTerminal(
+  terminal: { terminal_ip: string; terminal_port: number; app_secret: string },
+  method: 'GET' | 'POST',
+  path: string,
+  body?: object,
+): Promise<{ ok: boolean; data: any; raw: string }> {
+  return new Promise((resolve) => {
+    const bodyJson = body ? JSON.stringify(body) : undefined;
+    const options: https.RequestOptions = {
+      hostname: terminal.terminal_ip,
+      port: terminal.terminal_port,
+      path,
+      method,
+      headers: {
+        'x-api-key': terminal.app_secret,
+        'Content-Type': 'application/json',
+        ...(bodyJson ? { 'Content-Length': Buffer.byteLength(bodyJson) } : {}),
+      },
+      rejectUnauthorized: false, // PA terminal uses a self-signed certificate
+      timeout: 15000,
+    };
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(raw);
+          resolve({ ok: true, data, raw });
+        } catch {
+          resolve({ ok: false, data: null, raw });
+        }
+      });
+    });
+    req.on('error', (err: any) => resolve({ ok: false, data: null, raw: err.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, data: null, raw: 'Connection timeout' }); });
+    if (bodyJson) req.write(bodyJson);
+    req.end();
+  });
+}
 
 // Auth helper: verifies JWT and returns user info
 const verifyUser = async (req: Request): Promise<{ id: number; role: string; restaurant_id: number | null } | null> => {
@@ -39,9 +85,9 @@ router.get('/restaurants/:restaurantId/payment-terminals', async (req, res) => {
     const { restaurantId } = req.params;
     
     const result = await pool.query(
-      `SELECT id, vendor_name, is_active, app_id, terminal_ip, terminal_port, 
+      `SELECT id, vendor_name, is_active, app_id, terminal_ip, terminal_port,
               endpoint_path, metadata, last_tested_at, last_error_message,
-              created_at, updated_at
+              created_at, updated_at, payment_gateway_env, merchant_token
        FROM payment_terminals
        WHERE restaurant_id = $1
        ORDER BY created_at DESC`,
@@ -66,9 +112,10 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
     const { restaurantId, terminalId } = req.params;
     
     const result = await pool.query(
-      `SELECT id, vendor_name, is_active, app_id, app_secret, terminal_ip, 
-              terminal_port, endpoint_path, metadata, last_tested_at, 
-              last_error_message, created_at, updated_at
+      `SELECT id, vendor_name, is_active, app_id, app_secret, terminal_ip,
+              terminal_port, endpoint_path, metadata, last_tested_at,
+              last_error_message, created_at, updated_at,
+              merchant_token, secret_code, payment_gateway_env
        FROM payment_terminals
        WHERE id = $1 AND restaurant_id = $2`,
       [terminalId, restaurantId]
@@ -82,6 +129,7 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
     // Non-superadmins should not see secrets
     if (user.role !== 'superadmin') {
       terminal.app_secret = terminal.app_secret ? '••••••••' : '';
+      terminal.secret_code = terminal.secret_code ? '••••••••' : '';
     }
 
     res.json(terminal);
@@ -101,20 +149,14 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
   if (!user || user.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required' });
   try {
     const { restaurantId } = req.params;
-    const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata } = req.body;
-
-    // Validate required fields
-    if (!vendor_name || !app_id || !app_secret || !terminal_ip || !terminal_port) {
-      return res.status(400).json({
-        error: 'Missing required fields: vendor_name, app_id, app_secret, terminal_ip, terminal_port',
-      });
-    }
+    const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata,
+            merchant_token, secret_code, payment_gateway_env } = req.body;
 
     // Validate vendor name
-    const validVendors = ['kpay', 'other'];
-    if (!validVendors.includes(vendor_name)) {
+    const validVendors = ['kpay', 'payment-asia', 'payment-asia-offline', 'other'];
+    if (!vendor_name || !validVendors.includes(vendor_name)) {
       return res.status(400).json({
-        error: `Invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
+        error: `Missing or invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
       });
     }
 
@@ -130,14 +172,58 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
       });
     }
 
-    const result = await pool.query(
-      `INSERT INTO payment_terminals 
-       (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path, 
-                 metadata, created_at, updated_at`,
-      [restaurantId, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path || '/v2/pos/sign', metadata || {}]
-    );
+    let result;
+    if (vendor_name === 'payment-asia') {
+      const paToken = merchant_token || app_id;
+      const paSecret = secret_code || app_secret;
+      if (!paToken || !paSecret) {
+        return res.status(400).json({ error: 'merchant_token and secret_code are required for Payment Asia' });
+      }
+      result = await pool.query(
+        `INSERT INTO payment_terminals
+         (restaurant_id, vendor_name, app_id, app_secret, merchant_token, secret_code,
+          payment_gateway_env, terminal_ip, terminal_port, endpoint_path, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, vendor_name, is_active, app_id, merchant_token, payment_gateway_env,
+                   terminal_ip, terminal_port, endpoint_path, metadata, created_at, updated_at`,
+        [restaurantId, vendor_name, paToken, paSecret, paToken, paSecret,
+         payment_gateway_env || 'sandbox', terminal_ip || null, terminal_port || null,
+         endpoint_path || null, metadata || {}]
+      );
+    } else if (vendor_name === 'payment-asia-offline') {
+      // PA Offline terminal: uses physical POS device over LAN
+      // Credentials: terminal_ip, terminal_port, app_secret (= API key printed on terminal)
+      const apiKey = app_secret || app_id;
+      if (!terminal_ip || !terminal_port || !apiKey) {
+        return res.status(400).json({
+          error: 'Missing required fields for PA Offline: terminal_ip, terminal_port, api_key',
+        });
+      }
+      result = await pool.query(
+        `INSERT INTO payment_terminals
+         (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path,
+                   metadata, created_at, updated_at`,
+        [restaurantId, vendor_name, apiKey, apiKey, terminal_ip, terminal_port,
+         endpoint_path || '/api/sign', metadata || {}]
+      );
+    } else {
+      // KPay / other: require connection fields
+      if (!app_id || !app_secret || !terminal_ip || !terminal_port) {
+        return res.status(400).json({
+          error: 'Missing required fields: app_id, app_secret, terminal_ip, terminal_port',
+        });
+      }
+      result = await pool.query(
+        `INSERT INTO payment_terminals
+         (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path,
+                   metadata, created_at, updated_at`,
+        [restaurantId, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path || '/v2/pos/sign', metadata || {}]
+      );
+    }
 
     res.status(201).json(result.rows[0]);
   } catch (err: any) {
@@ -165,7 +251,8 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
   }
   try {
     const { restaurantId, terminalId } = req.params;
-    const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active } = req.body;
+    const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, is_active,
+            merchant_token, secret_code, payment_gateway_env } = req.body;
 
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -176,9 +263,29 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
       updates.push(`app_id = $${paramCount++}`);
       values.push(app_id);
     }
+    if (merchant_token !== undefined) {
+      updates.push(`merchant_token = $${paramCount++}`);
+      values.push(merchant_token);
+      if (app_id === undefined) {
+        updates.push(`app_id = $${paramCount++}`);
+        values.push(merchant_token);
+      }
+    }
     if (app_secret !== undefined) {
       updates.push(`app_secret = $${paramCount++}`);
       values.push(app_secret);
+    }
+    if (secret_code !== undefined) {
+      updates.push(`secret_code = $${paramCount++}`);
+      values.push(secret_code);
+      if (app_secret === undefined) {
+        updates.push(`app_secret = $${paramCount++}`);
+        values.push(secret_code);
+      }
+    }
+    if (payment_gateway_env !== undefined) {
+      updates.push(`payment_gateway_env = $${paramCount++}`);
+      values.push(payment_gateway_env);
     }
     if (terminal_ip !== undefined) {
       updates.push(`terminal_ip = $${paramCount++}`);
@@ -272,7 +379,7 @@ router.delete('/restaurants/:restaurantId/payment-terminals/:terminalId', async 
 router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', async (req, res) => {
   try {
     const { restaurantId, terminalId } = req.params;
-    const { payAmount, tipsAmount, payCurrency, description, customerName } = req.body;
+    const { payAmount, tipsAmount, payCurrency, description, customerName, session_id } = req.body;
 
     // Fetch the terminal configuration
     const terminalResult = await pool.query(
@@ -367,16 +474,28 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
 
         // Step 3: Store transaction in database for status polling
         const transactionId = saleResult.response?.transactionId || 'TXN-' + Date.now();
-        
+
+        // Resolve order_id from session if provided
+        let kpayOrderId: number | null = null;
+        if (session_id) {
+          const latestOrder = await pool.query(
+            `SELECT id FROM orders WHERE session_id = $1 AND restaurant_id = $2
+             ORDER BY created_at DESC LIMIT 1`,
+            [session_id, restaurantId],
+          );
+          kpayOrderId = latestOrder.rows[0]?.id ?? null;
+        }
+
         const storeResult = await pool.query(
-          `INSERT INTO kpay_transactions 
-           (restaurant_id, kpay_reference_id, status, amount_cents, currency_code, kpay_response)
-           VALUES ($1, $2, $3, $4, $5, $6)
+          `INSERT INTO kpay_transactions
+           (restaurant_id, session_id, order_id, kpay_reference_id, status, amount_cents, currency_code, kpay_response)
+           VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
            RETURNING id, kpay_reference_id, status`,
           [
             restaurantId,
+            session_id ?? null,
+            kpayOrderId,
             outTradeNo,
-            'pending',
             parseInt(payAmount),
             payCurrency || '344',
             JSON.stringify(saleResult.response),
@@ -425,7 +544,7 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
         paymentAsiaService.initialize({
           merchantToken: pa.merchant_token,
           secretCode: pa.secret_code,
-          environment: pa.payment_gateway_env || 'sandbox',
+          environment: 'sandbox', // Test always uses sandbox regardless of terminal config
         });
 
         const network = req.body.network ? String(req.body.network) : undefined;
@@ -437,6 +556,107 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
       } catch (paErr: any) {
         console.error('[PaymentTerminal] Payment Asia test error:', paErr);
         return res.status(500).json({ success: false, error: paErr.message || 'Payment Asia test failed' });
+      }
+    }
+
+    // Payment Asia Offline: initiate payment on physical terminal via LAN API
+    if (terminal.vendor_name === 'payment-asia-offline') {
+      try {
+        if (!terminal.terminal_ip || !terminal.terminal_port || !terminal.app_secret) {
+          return res.status(400).json({
+            success: false,
+            error: 'PA Offline terminal missing terminal_ip, terminal_port, or app_secret.',
+          });
+        }
+
+        // No amount → connectivity test (ping)
+        if (!payAmount) {
+          const pingResult = await callPAOfflineTerminal(
+            { terminal_ip: terminal.terminal_ip, terminal_port: terminal.terminal_port, app_secret: terminal.app_secret },
+            'GET', '/ping',
+          );
+          const ok = pingResult.ok && pingResult.data?.code === '1000';
+          return res.json({
+            success: ok,
+            message: ok ? 'PA terminal reachable' : 'PA terminal connection failed',
+            response: pingResult.data,
+            raw: ok ? undefined : pingResult.raw,
+          });
+        }
+
+        // Convert 12-digit padded-cents to decimal dollars (PA Offline expects e.g. "1.05")
+        const amountCents = parseInt(payAmount, 10);
+        const amountDollars = (amountCents / 100).toFixed(2);
+        const orderId = `PA-${restaurantId}-${terminalId}-${Date.now()}`;
+
+        console.log(`[PAOffline] Initiating payment: ${amountDollars} HKD  order_id=${orderId}`);
+
+        const createResult = await callPAOfflineTerminal(
+          { terminal_ip: terminal.terminal_ip, terminal_port: terminal.terminal_port, app_secret: terminal.app_secret },
+          'POST', '/order/create',
+          { order_id: orderId, amount: amountDollars, payment_method: 'QR_CODE' },
+        );
+
+        if (!createResult.ok || createResult.data?.code !== '1000') {
+          return res.status(400).json({
+            success: false,
+            status: 'failed',
+            message: createResult.data?.message || 'Payment initiation failed',
+            raw: createResult.raw,
+            logs: [`[PAOffline] ❌ POST /order/create failed — ${createResult.data?.message || createResult.raw}`],
+          });
+        }
+
+        // Resolve order_id from session if provided
+        let paOrderId: number | null = null;
+        if (session_id) {
+          const latestOrder = await pool.query(
+            `SELECT id FROM orders WHERE session_id = $1 AND restaurant_id = $2
+             ORDER BY created_at DESC LIMIT 1`,
+            [session_id, restaurantId],
+          );
+          paOrderId = latestOrder.rows[0]?.id ?? null;
+        }
+
+        // Store in pa_offline_transactions table
+        const createPayload = createResult.data?.payload || {};
+        await pool.query(
+          `INSERT INTO pa_offline_transactions
+             (restaurant_id, session_id, order_id, pa_order_id, amount_cents, currency,
+              payment_method, request_reference, merchant_reference, provider_reference,
+              pa_status_code, status, pa_response)
+           VALUES ($1, $2, $3, $4, $5, 'HKD', $6, $7, $8, $9, $10, 'pending', $11)`,
+          [
+            restaurantId,
+            session_id ?? null,
+            paOrderId,
+            orderId,
+            amountCents,
+            'QR_CODE',
+            createPayload.request_reference || null,
+            createPayload.merchant_reference || orderId,
+            createPayload.provider_reference || null,
+            String(createPayload.status ?? ''),
+            JSON.stringify(createPayload),
+          ],
+        );
+
+        return res.json({
+          success: true,
+          initiated: true,
+          status: 'pending',
+          code: '1000',
+          message: 'Payment initiated on PA terminal. Poll /test-status to confirm.',
+          outTradeNo: orderId,
+          amount: amountDollars,
+          logs: [
+            `[PAOffline] → POST /order/create  order_id=${orderId}  amount=${amountDollars} HKD`,
+            `[PAOffline] ✅ Payment initiated on terminal`,
+          ],
+        });
+      } catch (paErr: any) {
+        console.error('[PAOffline] /test error:', paErr);
+        return res.status(500).json({ success: false, error: paErr.message });
       }
     }
 
@@ -530,6 +750,77 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/test-status
           message: 'Status query failed',
           error: err.message,
         });
+      }
+    }
+
+    if (terminal.vendor_name === 'payment-asia-offline') {
+      try {
+        const queryResult = await callPAOfflineTerminal(
+          { terminal_ip: terminal.terminal_ip, terminal_port: terminal.terminal_port, app_secret: terminal.app_secret },
+          'POST', '/order/query',
+          { order_id: String(outTradeNo) },
+        );
+
+        if (!queryResult.ok || queryResult.data?.code !== '1000') {
+          return res.json({
+            success: false,
+            code: queryResult.data?.code || 'error',
+            status: 'failed',
+            message: queryResult.data?.message || 'Query failed',
+            outTradeNo,
+            logs: [`[PAOffline] ❌ POST /order/query failed — ${queryResult.data?.message || queryResult.raw}`],
+          });
+        }
+
+        const payload = queryResult.data.payload || {};
+        // PA Offline status: "1" = success/completed; "0" or absent = pending; others = failed/cancelled
+        const paStatus = String(payload.status ?? '0');
+        let mappedStatus: string;
+        if (paStatus === '1') mappedStatus = 'success';
+        else if (paStatus === '2') mappedStatus = 'failed';
+        else if (paStatus === '-1' || paStatus === '4') mappedStatus = 'cancelled';
+        else mappedStatus = 'pending';
+
+        if (mappedStatus === 'success') {
+          await pool.query(
+            `UPDATE pa_offline_transactions
+             SET status = 'completed', completed_at = NOW(),
+                 pa_response = $1, provider = $2, transaction_type = $3,
+                 provider_reference = COALESCE($4, provider_reference),
+                 request_reference = COALESCE($5, request_reference),
+                 pa_status_code = $6,
+                 pa_created_time = $7, pa_completed_time = $8
+             WHERE pa_order_id = $9 AND restaurant_id = $10`,
+            [
+              JSON.stringify(payload),
+              payload.provider || null,
+              payload.type || 'Sale',
+              payload.provider_reference || null,
+              payload.request_reference || null,
+              paStatus,
+              payload.created_time ? Number(payload.created_time) : null,
+              payload.completed_time ? Number(payload.completed_time) : null,
+              String(outTradeNo),
+              restaurantId,
+            ],
+          );
+        }
+
+        return res.json({
+          success: true,
+          code: queryResult.data.code,
+          status: mappedStatus,
+          message: queryResult.data.message || 'ok',
+          outTradeNo,
+          providerReference: payload.provider_reference,
+          amount: payload.amount,
+          currency: payload.currency || 'HKD',
+          completedTime: payload.completed_time,
+          logs: [`[PAOffline] ← /order/query  pa_status=${paStatus}  mapped=${mappedStatus}`],
+        });
+      } catch (paErr: any) {
+        console.error('[PAOffline] Status query error:', paErr);
+        return res.status(500).json({ success: false, status: 'error', message: paErr.message, outTradeNo });
       }
     }
 
@@ -751,6 +1042,46 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/close-tran
       return res.status(400).json({ error: 'outTradeNo is required' });
     }
 
+    // Check vendor before deciding which flow to use
+    const vendorResult = await pool.query(
+      `SELECT id, vendor_name, app_secret, terminal_ip, terminal_port
+       FROM payment_terminals WHERE id = $1 AND restaurant_id = $2`,
+      [terminalId, restaurantId],
+    );
+    if (vendorResult.rowCount === 0) return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+    const t = vendorResult.rows[0];
+
+    // PA Offline: send GET /order/cancel to the terminal device
+    if (t.vendor_name === 'payment-asia-offline') {
+      try {
+        const cancelResult = await callPAOfflineTerminal(
+          { terminal_ip: t.terminal_ip, terminal_port: t.terminal_port, app_secret: t.app_secret },
+          'GET', '/order/cancel',
+        );
+        const success = cancelResult.ok && cancelResult.data?.code === '1000';
+        if (success) {
+          await pool.query(
+            `UPDATE pa_offline_transactions
+             SET status = 'cancelled', completed_at = NOW()
+             WHERE pa_order_id = $1 AND restaurant_id = $2`,
+            [outTradeNo, restaurantId],
+          );
+        }
+        return res.json({
+          success,
+          message: cancelResult.data?.message || (success ? 'Transaction cancelled' : 'Cancel failed'),
+          outTradeNo,
+          logs: [
+            `[PAOffline] → GET /order/cancel`,
+            `[PAOffline] ${success ? '✅' : '❌'} ${cancelResult.data?.message || cancelResult.raw}`,
+          ],
+        });
+      } catch (paErr: any) {
+        console.error('[PAOffline] Close transaction error:', paErr);
+        return res.status(500).json({ success: false, error: paErr.message });
+      }
+    }
+
     const { terminal, error } = await initKPayTerminal(restaurantId, terminalId);
     if (error) return res.status(404).json({ success: false, error });
 
@@ -941,15 +1272,17 @@ router.get('/restaurants/:restaurantId/kpay-transactions/:outTradeNo', async (re
 
 /**
  * GET /api/restaurants/:restaurantId/kpay-terminal/active
- * Returns the active KPay terminal config (for frontend gating)
+ * Returns the active physical terminal (KPay or PA-Offline) for frontend gating.
+ * KPay is preferred when both are active; vendor_name is included in the response.
  */
 router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const result = await pool.query(
-      `SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active
+      `SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active, vendor_name
        FROM payment_terminals
-       WHERE restaurant_id = $1 AND vendor_name = 'kpay' AND is_active = true
+       WHERE restaurant_id = $1 AND is_active = true AND vendor_name IN ('kpay', 'payment-asia-offline')
+       ORDER BY CASE vendor_name WHEN 'kpay' THEN 1 ELSE 2 END
        LIMIT 1`,
       [restaurantId]
     );

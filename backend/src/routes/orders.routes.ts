@@ -160,12 +160,18 @@ for (const v of variants) {
 
 
       /* ------------------------------
-         Calculate price
+         Calculate price + fetch name snapshot
       ------------------------------ */
       const basePriceRes = await pool.query(
         `
-        SELECT price_cents FROM menu_items
-        WHERE id = $1 AND available = true
+        SELECT mi.price_cents,
+               mi.name              AS item_name,
+               mi.name_zh           AS item_name_zh,
+               mc.name              AS category_name,
+               mc.name_zh           AS category_name_zh
+        FROM menu_items mi
+        LEFT JOIN menu_categories mc ON mc.id = mi.category_id
+        WHERE mi.id = $1 AND mi.available = true
         `,
         [item.menu_item_id]
       );
@@ -174,7 +180,11 @@ for (const v of variants) {
         throw new Error("Menu item unavailable");
       }
 
-      const basePrice = Number(basePriceRes.rows[0].price_cents);
+      const basePrice        = Number(basePriceRes.rows[0].price_cents);
+      const itemNameSnapshot = basePriceRes.rows[0].item_name        || null;
+      const itemNameZhSnap   = basePriceRes.rows[0].item_name_zh     || null;
+      const catNameSnapshot  = basePriceRes.rows[0].category_name    || null;
+      const catNameZhSnap    = basePriceRes.rows[0].category_name_zh || null;
 
       let variantExtra = 0;
 
@@ -199,9 +209,10 @@ for (const v of variants) {
       const orderItemRes = await pool.query(
         `
         INSERT INTO order_items
-          (order_id, menu_item_id, quantity, price_cents, status, restaurant_id, notes)
+          (order_id, menu_item_id, quantity, price_cents, status, restaurant_id, notes,
+           item_name_snapshot, item_name_zh_snapshot, category_name_snapshot, category_name_zh_snapshot)
         VALUES
-          ($1, $2, $3, $4, 'pending', $5, $6)
+          ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10)
         RETURNING id
         `,
         [
@@ -210,7 +221,11 @@ for (const v of variants) {
           item.quantity,
           finalUnitPrice,
           restaurantId,
-          item.notes || null
+          item.notes || null,
+          itemNameSnapshot,
+          itemNameZhSnap,
+          catNameSnapshot,
+          catNameZhSnap,
         ]
       );
 
@@ -445,7 +460,8 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.quantity,
         oi.price_cents AS unit_price_cents,
 
-        COALESCE(mi.name, 'Deleted Item') AS item_name,
+        COALESCE(oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
+        COALESCE(oi.item_name_zh_snapshot, mi.name_zh) AS item_name_zh,
         COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
 
         COALESCE(
@@ -479,6 +495,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.quantity,
         oi.price_cents,
         mi.name,
+        mi.name_zh,
         ts.restaurant_id,
         mc.restaurant_id
 
@@ -515,6 +532,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
       const itemObj = {
         order_item_id: row.order_item_id,
         menu_item_name: row.item_name,
+        menu_item_name_zh: row.item_name_zh || null,
         quantity: row.quantity,
         status: row.item_status,
         unit_price_cents: row.unit_price_cents,
@@ -542,6 +560,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
           parentItem.addons.push({
             order_item_id: row.order_item_id,
             menu_item_name: row.item_name,
+            menu_item_name_zh: row.item_name_zh || null,
             quantity: row.quantity,
             unit_price_cents: row.unit_price_cents,
             item_total_cents: addonTotal,
@@ -558,7 +577,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
     }
 
     res.json({
-      items: Object.values(ordersMap).filter((order: any) => order.items.length > 0)
+      items: Object.values(ordersMap)
     });
   } catch (err) {
     console.error("Failed to load session orders:", err);
@@ -703,6 +722,12 @@ router.patch("/order-items/:orderItemId/status", async (req, res) => {
       return res.status(404).json({ error: "Order item not found or doesn't belong to this restaurant" });
     }
 
+    // Fetch current status before updating (for history log)
+    const currentItem = await pool.query(
+      `SELECT status, order_id FROM order_items WHERE id = $1`,
+      [orderItemId]
+    );
+
     const result = await pool.query(
       `
       UPDATE order_items
@@ -715,6 +740,16 @@ router.patch("/order-items/:orderItemId/status", async (req, res) => {
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Order item not found" });
+    }
+
+    // Log status change to history table (best-effort, non-blocking)
+    if (currentItem.rowCount! > 0) {
+      const prev = currentItem.rows[0];
+      pool.query(
+        `INSERT INTO order_item_status_history (order_item_id, order_id, restaurant_id, from_status, to_status)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [orderItemId, prev.order_id, restaurantId, prev.status, status]
+      ).catch((e: Error) => console.error("[status-history] insert failed:", e.message));
     }
 
     res.json(result.rows[0]);
@@ -1292,17 +1327,17 @@ router.get("/restaurants/:restaurantId/reports/top-items", async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-        mi.name AS item_name,
+        COALESCE(oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents
       FROM order_items oi
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
       WHERE o.restaurant_id = $1
         AND oi.removed = false
         AND oi.is_addon = false
         AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
-      GROUP BY mi.name
+      GROUP BY COALESCE(oi.item_name_snapshot, mi.name, 'Deleted Item')
       ORDER BY total_qty DESC
       LIMIT 10`,
       [restaurantId, daysBack]
@@ -1362,20 +1397,21 @@ router.get("/restaurants/:restaurantId/reports/sales-by-item", async (req, res) 
 
     const result = await pool.query(
       `SELECT
-        mi.name AS item_name,
-        mc.name AS category_name,
+        COALESCE(oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
+        COALESCE(oi.category_name_snapshot, mc.name, 'Uncategorized') AS category_name,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents,
         COUNT(DISTINCT o.id) AS order_count
       FROM order_items oi
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
       LEFT JOIN menu_categories mc ON mi.category_id = mc.id
       JOIN orders o ON o.id = oi.order_id
       WHERE o.restaurant_id = $1
         AND oi.removed = false
         AND oi.is_addon = false
         AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
-      GROUP BY mi.name, mc.name
+      GROUP BY COALESCE(oi.item_name_snapshot, mi.name, 'Deleted Item'),
+               COALESCE(oi.category_name_snapshot, mc.name, 'Uncategorized')
       ORDER BY total_revenue_cents DESC`,
       [restaurantId, daysBack]
     );
@@ -1398,20 +1434,20 @@ router.get("/restaurants/:restaurantId/reports/sales-by-category", async (req, r
 
     const result = await pool.query(
       `SELECT
-        COALESCE(mc.name, 'Uncategorized') AS category_name,
+        COALESCE(oi.category_name_snapshot, mc.name, 'Uncategorized') AS category_name,
         SUM(oi.quantity) AS total_qty,
         SUM(oi.price_cents * oi.quantity) AS total_revenue_cents,
         COUNT(DISTINCT o.id) AS order_count,
-        COUNT(DISTINCT mi.id) AS unique_items
+        COUNT(DISTINCT COALESCE(oi.item_name_snapshot, mi.name)) AS unique_items
       FROM order_items oi
-      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
       LEFT JOIN menu_categories mc ON mi.category_id = mc.id
       JOIN orders o ON o.id = oi.order_id
       WHERE o.restaurant_id = $1
         AND oi.removed = false
         AND oi.is_addon = false
         AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
-      GROUP BY COALESCE(mc.name, 'Uncategorized')
+      GROUP BY COALESCE(oi.category_name_snapshot, mc.name, 'Uncategorized')
       ORDER BY total_revenue_cents DESC`,
       [restaurantId, daysBack]
     );
@@ -1419,6 +1455,180 @@ router.get("/restaurants/:restaurantId/reports/sales-by-category", async (req, r
   } catch (err) {
     console.error("[sales-by-category]", err);
     res.status(500).json({ error: "Failed to load sales by category" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/payment-by-type
+ * Returns order count and revenue grouped by payment method
+ */
+router.get("/restaurants/:restaurantId/reports/payment-by-type", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { days } = req.query;
+    const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    const result = await pool.query(
+      `SELECT
+        COALESCE(o.payment_method, 'cash') AS payment_vendor,
+        cp.payment_method AS payment_sub_method,
+        COUNT(DISTINCT o.id) AS order_count,
+        COALESCE(SUM(ot.total_cents), 0) AS total_revenue_cents
+       FROM orders o
+       LEFT JOIN chuio_payments cp ON cp.order_id = o.id AND cp.status = 'completed'
+       LEFT JOIN (
+         SELECT order_id, SUM(price_cents * quantity) AS total_cents
+         FROM order_items WHERE removed = false
+         GROUP BY order_id
+       ) ot ON ot.order_id = o.id
+       WHERE o.restaurant_id = $1
+         AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+       GROUP BY COALESCE(o.payment_method, 'cash'), cp.payment_method
+       ORDER BY COALESCE(o.payment_method, 'cash'), total_revenue_cents DESC`,
+      [restaurantId, daysBack]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[payment-by-type]", err);
+    res.status(500).json({ error: "Failed to load payment type report" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/staff-hours
+ * Returns staff hours summary from timekeeping records
+ */
+router.get("/restaurants/:restaurantId/reports/staff-hours", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { days } = req.query;
+    const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    const result = await pool.query(
+      `SELECT
+        u.name AS staff_name,
+        u.role,
+        u.hourly_rate_cents,
+        COUNT(st.id) AS shift_count,
+        SUM(COALESCE(st.duration_minutes,
+          CASE WHEN st.clock_out_at IS NOT NULL
+               THEN EXTRACT(EPOCH FROM (st.clock_out_at - st.clock_in_at)) / 60
+               ELSE NULL END
+        )) AS total_minutes,
+        MIN(st.clock_in_at) AS first_shift,
+        MAX(COALESCE(st.clock_out_at, st.clock_in_at)) AS last_shift
+       FROM staff_timekeeping st
+       JOIN users u ON u.id = st.user_id
+       WHERE st.restaurant_id = $1
+         AND st.clock_in_at >= NOW() - ($2::int * INTERVAL '1 day')
+       GROUP BY u.id, u.name, u.role, u.hourly_rate_cents
+       ORDER BY total_minutes DESC NULLS LAST`,
+      [restaurantId, daysBack]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[staff-hours]", err);
+    res.status(500).json({ error: "Failed to load staff hours report" });
+  }
+});
+
+/**
+ * GET /restaurants/:restaurantId/reports/order-status-timing
+ * Returns average minutes between status transitions per item
+ */
+router.get("/restaurants/:restaurantId/reports/order-status-timing", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { days } = req.query;
+    const daysBack = days ? parseInt(days as string, 10) : 30;
+
+    const result = await pool.query(
+      `SELECT
+        h1.from_status,
+        h1.to_status,
+        COUNT(*) AS transition_count,
+        ROUND(AVG(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS avg_minutes,
+        ROUND(MIN(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS min_minutes,
+        ROUND(MAX(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS max_minutes
+       FROM order_item_status_history h1
+       JOIN order_item_status_history h2
+         ON h1.order_item_id = h2.order_item_id
+        AND h2.id = (
+          SELECT id FROM order_item_status_history h3
+          WHERE h3.order_item_id = h1.order_item_id
+            AND h3.changed_at > h1.changed_at
+          ORDER BY h3.changed_at ASC LIMIT 1
+        )
+       WHERE h1.restaurant_id = $1
+         AND h1.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
+         AND EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) > 0
+       GROUP BY h1.from_status, h1.to_status
+       ORDER BY h1.from_status, h1.to_status`,
+      [restaurantId, daysBack]
+    );
+
+    // Also return per-item averages for top 10 fastest/slowest items
+    const itemResult = await pool.query(
+      `SELECT
+        mi.name AS item_name,
+        h1.from_status,
+        h1.to_status,
+        ROUND(AVG(EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) / 60)::numeric, 1) AS avg_minutes,
+        COUNT(*) AS sample_count
+       FROM order_item_status_history h1
+       JOIN order_item_status_history h2
+         ON h1.order_item_id = h2.order_item_id
+        AND h2.id = (
+          SELECT id FROM order_item_status_history h3
+          WHERE h3.order_item_id = h1.order_item_id
+            AND h3.changed_at > h1.changed_at
+          ORDER BY h3.changed_at ASC LIMIT 1
+        )
+       JOIN order_items oi ON oi.id = h1.order_item_id
+       JOIN menu_items mi ON mi.id = oi.menu_item_id
+       WHERE h1.restaurant_id = $1
+         AND h1.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
+         AND h1.from_status = 'preparing' AND h1.to_status = 'ready'
+         AND EXTRACT(EPOCH FROM (h2.changed_at - h1.changed_at)) > 0
+       GROUP BY mi.name, h1.from_status, h1.to_status
+       HAVING COUNT(*) >= 2
+       ORDER BY avg_minutes ASC
+       LIMIT 10`,
+      [restaurantId, daysBack]
+    );
+
+    // Per-item prep time: from 'preparing' to 'served' (full cook-to-table duration)
+    const prepTimeResult = await pool.query(
+      `SELECT
+        mi.name AS item_name,
+        ROUND(AVG(EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) / 60)::numeric, 1) AS avg_minutes,
+        ROUND(MIN(EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) / 60)::numeric, 1) AS min_minutes,
+        ROUND(MAX(EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) / 60)::numeric, 1) AS max_minutes,
+        COUNT(*) AS sample_count
+       FROM order_item_status_history hp
+       JOIN (
+         SELECT order_item_id, MIN(changed_at) AS first_served
+         FROM order_item_status_history
+         WHERE to_status = 'served'
+         GROUP BY order_item_id
+       ) hs ON hs.order_item_id = hp.order_item_id
+            AND hs.first_served > hp.changed_at
+       JOIN order_items oi ON oi.id = hp.order_item_id
+       JOIN menu_items mi ON mi.id = oi.menu_item_id
+       WHERE hp.restaurant_id = $1
+         AND hp.changed_at >= NOW() - ($2::int * INTERVAL '1 day')
+         AND hp.to_status = 'preparing'
+         AND EXTRACT(EPOCH FROM (hs.first_served - hp.changed_at)) > 0
+       GROUP BY mi.name
+       ORDER BY avg_minutes ASC
+       LIMIT 20`,
+      [restaurantId, daysBack]
+    );
+
+    res.json({ transitions: result.rows, fastest_items: itemResult.rows, prep_time_by_item: prepTimeResult.rows });
+  } catch (err) {
+    console.error("[order-status-timing]", err);
+    res.status(500).json({ error: "Failed to load status timing report" });
   }
 });
 

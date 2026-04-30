@@ -16,6 +16,10 @@ export interface ReceiptData {
   restaurantName?: string;
   qrCode?: string; // QR code data/token to print
   printerPaperWidth?: number; // Paper width in mm (80 for standard, 58 for smaller)
+  language?: string; // 'en' (default) or 'zh' for Chinese labels
+  billHeaderText?: string; // Custom header text for bill receipts
+  billFooterText?: string; // Custom footer text for bill receipts
+  billFontSize?: 'small' | 'medium' | 'large'; // Font size for bill items
 }
 
 class ThermalPrinterService {
@@ -24,6 +28,23 @@ class ThermalPrinterService {
    */
   generateESCPOS(receipt: ReceiptData): Uint8Array {
     const commands: number[] = [];
+    const isZh = receipt.language === 'zh';
+
+    // Labels (English / Chinese)
+    const L = {
+      table:         isZh ? '餐桌:' : 'Table:',
+      pax:           isZh ? '人數:' : 'Pax:',
+      started:       isZh ? '開始:' : 'Started:',
+      scanToOrder:   isZh ? '掃碼點餐' : 'Scan to Order',
+      feedback:      isZh ? '感謝您的光顧！' : 'Let us know how we did!',
+      order:         isZh ? '訂單:' : 'Order:',
+      time:          isZh ? '時間:' : 'Time:',
+      items:         isZh ? '項目' : 'ITEMS',
+      subtotal:      isZh ? '小計' : 'Subtotal',
+      serviceCharge: isZh ? '服務費' : 'Service Charge',
+      total:         isZh ? '總計' : 'TOTAL',
+      scanToPlace:   isZh ? '掃碼點餐' : 'Scan to Place Order',
+    };
 
     // NOTE: Initialization (ESC @) is now done AFTER PIN authentication
     // So DO NOT include it here - the printer is already initialized
@@ -52,17 +73,17 @@ class ThermalPrinterService {
       commands.push(27, 97, 0); // ESC 'a' 0 - Left align
       
       if (receipt.tableNumber) {
-        this.appendText(commands, `Table: ${receipt.tableNumber}`);
+        this.appendText(commands, `${L.table} ${receipt.tableNumber}`);
         commands.push(10);
       }
       
       if (receipt.pax) {
-        this.appendText(commands, `Pax: ${receipt.pax}`);
+        this.appendText(commands, `${L.pax} ${receipt.pax}`);
         commands.push(10);
       }
       
       if (receipt.startTime) {
-        this.appendText(commands, `Started: ${receipt.startTime}`);
+        this.appendText(commands, `${L.started} ${receipt.startTime}`);
         commands.push(10);
       }
       
@@ -71,7 +92,7 @@ class ThermalPrinterService {
       // === TEXT ABOVE QR CODE - CENTERED BOLD (appears BEFORE QR) ===
       commands.push(27, 97, 1); // ESC 'a' 1 - Center
       commands.push(27, 33, 8); // ESC '!' 8 - Bold
-      this.appendText(commands, 'Scan to Order');
+      this.appendText(commands, L.scanToOrder);
       commands.push(27, 33, 0); // ESC '!' 0 - Normal
       commands.push(10, 10); // LF x2
       
@@ -86,7 +107,7 @@ class ThermalPrinterService {
       
       // === TEXT BELOW QR CODE - CENTERED (appears AFTER QR) ===
       commands.push(27, 97, 1); // ESC 'a' 1 - Center
-      this.appendText(commands, 'Let us know how we did!');
+      this.appendText(commands, L.feedback);
       commands.push(10, 10); // LF x2
       
       // Paper feed and cut
@@ -119,17 +140,17 @@ class ThermalPrinterService {
 
     // Print order/table info
     if (receipt.tableNumber) {
-      this.appendText(commands, `Table: ${receipt.tableNumber}`);
+      this.appendText(commands, `${L.table} ${receipt.tableNumber}`);
       commands.push(10);
     }
     if (receipt.orderNumber) {
-      this.appendText(commands, `Order: ${receipt.orderNumber}`);
+      this.appendText(commands, `${L.order} ${receipt.orderNumber}`);
       commands.push(10);
     }
 
     // Print timestamp
     if (receipt.timestamp) {
-      this.appendText(commands, `Time: ${receipt.timestamp}`);
+      this.appendText(commands, `${L.time} ${receipt.timestamp}`);
       commands.push(10);
     }
 
@@ -139,11 +160,18 @@ class ThermalPrinterService {
     this.appendText(commands, '========================================');
     commands.push(10, 10);
 
+    // === FONT SIZE (applied to items + totals) ===
+    if (receipt.billFontSize === 'large') {
+      commands.push(0x1D, 0x21, 0x01); // GS ! 0x01 - double height
+    } else if (receipt.billFontSize === 'small') {
+      commands.push(0x1B, 0x4D, 0x01); // ESC M 1 - Font B (compressed)
+    }
+
     // === ITEMS SECTION ===
     if (receipt.items && receipt.items.length > 0) {
       // Center align section header
       commands.push(27, 97, 1); // ESC 'a' 1 - Center
-      this.appendText(commands, 'ITEMS');
+      this.appendText(commands, L.items);
       commands.push(10);
 
       // Left align items
@@ -180,13 +208,13 @@ class ThermalPrinterService {
 
     if (receipt.subtotal !== undefined) {
       const subtotalStr = (receipt.subtotal / 100).toFixed(2);
-      this.appendText(commands, `Subtotal             ${subtotalStr}`);
+      this.appendText(commands, `${L.subtotal.padEnd(21)}${subtotalStr}`);
       commands.push(10);
     }
 
     if (receipt.serviceCharge && receipt.serviceCharge > 0) {
       const chargeStr = (receipt.serviceCharge / 100).toFixed(2);
-      this.appendText(commands, `Service Charge       ${chargeStr}`);
+      this.appendText(commands, `${L.serviceCharge.padEnd(21)}${chargeStr}`);
       commands.push(10);
     }
 
@@ -194,12 +222,16 @@ class ThermalPrinterService {
       // Bold text for total: ESC '!' 8
       commands.push(27, 33, 8); // ESC '!' 8 - Bold on
       const totalStr = (receipt.total / 100).toFixed(2);
-      this.appendText(commands, `TOTAL                ${totalStr}`);
+      this.appendText(commands, `${L.total.padEnd(21)}${totalStr}`);
       commands.push(10);
       commands.push(27, 33, 0); // ESC '!' 0 - Normal
     }
 
     commands.push(10, 10); // LF x2
+
+    // Reset font size to normal before footer
+    commands.push(0x1D, 0x21, 0x00); // GS ! 0x00 - normal
+    commands.push(0x1B, 0x4D, 0x00); // ESC M 0 - Font A (default)
 
     // === QR CODE SECTION ===
     if (receipt.qrCode) {
@@ -210,15 +242,36 @@ class ThermalPrinterService {
 
     // === FOOTER SECTION ===
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    
-    // Print start time if available
-    if (receipt.startTime) {
-      this.appendText(commands, `Time: ${receipt.startTime}`);
+
+    if (receipt.billHeaderText) {
+      commands.push(27, 33, 8); // ESC '!' 8 - Bold on
+      this.appendText(commands, receipt.billHeaderText);
+      commands.push(27, 33, 0); // ESC '!' 0 - Bold off
       commands.push(10);
     }
-    
-    this.appendText(commands, 'Scan to Place Order');
-    commands.push(10, 10, 10); // LF x3
+
+    if (receipt.billFooterText) {
+      this.appendText(commands, receipt.billFooterText);
+      commands.push(10);
+    }
+
+    // Only show scan-to-place if no bill-specific footer was provided
+    if (!receipt.billHeaderText && !receipt.billFooterText) {
+      if (receipt.startTime) {
+        this.appendText(commands, `${L.time} ${receipt.startTime}`);
+        commands.push(10);
+      }
+      this.appendText(commands, L.scanToPlace);
+      commands.push(10);
+    }
+
+    commands.push(10); // LF
+
+    // === POWERED BY (non-removable branding) ===
+    this.appendText(commands, '----------------------------------------');
+    commands.push(10);
+    this.appendText(commands, 'Powered by Chuio.io');
+    commands.push(10, 10); // LF x2
 
     // === PAPER FEED BEFORE CUT ===
     commands.push(27, 100, 5); // ESC d 5 - Feed paper 5 lines (CRITICAL for actual printing)

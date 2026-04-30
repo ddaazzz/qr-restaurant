@@ -121,12 +121,15 @@ async function runMigration(migration: Migration): Promise<boolean> {
 
 /**
  * Main migration runner
+ * @param standalone - if true (CLI usage), calls process.exit and pool.end
  */
-async function runAllMigrations() {
+async function runAllMigrations(standalone = false) {
   try {
     console.log('🔄 Starting database migration...\n');
-    console.log(`📊 Database: ${process.env.DATABASE_URL}`);
-    console.log('');
+    if (standalone) {
+      console.log(`📊 Database: ${process.env.DATABASE_URL}`);
+      console.log('');
+    }
 
     // Initialize migrations table
     await initializeMigrationsTable();
@@ -137,7 +140,8 @@ async function runAllMigrations() {
 
     if (migrations.length === 0) {
       console.log('ℹ️  No migrations to run');
-      process.exit(0);
+      if (standalone) process.exit(0);
+      return;
     }
 
     // Get already-run migrations
@@ -149,7 +153,8 @@ async function runAllMigrations() {
     
     if (pendingMigrations.length === 0) {
       console.log('✅ All migrations are up to date!');
-      process.exit(0);
+      if (standalone) process.exit(0);
+      return;
     }
 
     console.log(`⏳ Running ${pendingMigrations.length} pending migrations...\n`);
@@ -165,23 +170,25 @@ async function runAllMigrations() {
     console.log('');
     if (failureCount === 0) {
       console.log('✅ All migrations completed successfully!');
-      process.exit(0);
+      if (standalone) process.exit(0);
     } else {
       console.log(`❌ ${failureCount} migration(s) failed`);
       console.log('   Please check the errors above and fix them manually if needed');
-      process.exit(1);
+      if (standalone) process.exit(1);
+      else throw new Error(`${failureCount} migration(s) failed`);
     }
   } catch (err: any) {
     console.error('❌ Fatal error:', err.message);
-    process.exit(1);
+    if (standalone) process.exit(1);
+    else throw err;
   } finally {
-    await pool.end();
+    if (standalone) await pool.end();
   }
 }
 
 // Run migrations if this file is executed directly
 if (require.main === module) {
-  runAllMigrations();
+  runAllMigrations(true);
 }
 
 export { runAllMigrations, getMigrations, getRunMigrations };

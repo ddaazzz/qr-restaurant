@@ -98,7 +98,7 @@
           </button>
           <button class="menu-btn superadmin-only" data-section="users" onclick="switchSection('users')" id="users-nav-btn" style="display: none;">
             <span class="icon" style="font-size: 18px;">👥</span>
-            <span class="menu-text" data-i18n="admin.users-restaurants">Users & Restaurants</span>
+            <span class="menu-text">Users</span>
           </button>
         </div>
         
@@ -146,104 +146,7 @@
           <!-- Settings content loaded dynamically from admin-settings.html -->
         </section>
 
-        <!-- ================= USERS & RESTAURANTS SECTION ================= -->
-        <section id="section-users" class="content-section admin-only superadmin-only">
-          <div style="padding: 20px;">
-            <!-- Tab buttons -->
-            <div class="users-tab-bar">
-              <button class="users-tab-btn active" data-tab="users" onclick="switchUsersTab('users')" data-i18n="admin.users">Users</button>
-              <button class="users-tab-btn" data-tab="restaurants" onclick="switchUsersTab('restaurants')" data-i18n="admin.restaurants">Restaurants</button>
-            </div>
-
-            <!-- Users tab -->
-            <div id="users-tab-content">
-              <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
-                <button class="btn-primary" onclick="openUserModal()" style="font-size: 13px;">+ Create User</button>
-              </div>
-              <div id="users-list" class="users-list"></div>
-            </div>
-
-            <!-- Restaurants tab -->
-            <div id="restaurants-tab-content" style="display: none;">
-              <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
-                <button class="btn-primary" id="create-restaurant-btn" onclick="openRestaurantModal()" style="font-size: 13px;">+ Create Restaurant</button>
-              </div>
-              <div id="restaurants-list" class="users-list"></div>
-            </div>
-          </div>
-        </section>
-
       </main>
-    </div>
-
-    <!-- ================= USER MODAL ================= -->
-    <div id="user-modal" class="modal-overlay" style="display: none;">
-      <div class="modal-content" style="max-width: 500px;">
-        <div class="modal-header">
-          <h3 id="user-modal-title">Create User</h3>
-          <button class="modal-close" onclick="closeUserModal()">✕</button>
-        </div>
-        <div class="modal-body">
-          <div id="user-modal-error" style="display: none; background: #fef2f2; color: #dc2626; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;"></div>
-          <div class="form-group"><label id="user-form-password-label" style="display: block; margin-bottom: 8px; font-weight: 600;">Name</label><input id="user-form-name" type="text" placeholder="Full name" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></div>
-          <div id="user-form-email-section" class="form-group" style="display: none;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Email</label>
-            <input id="user-form-email" type="email" placeholder="Email address" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-          </div>
-          <div id="user-form-password-section" class="form-group" style="display: none;">
-            <label id="user-form-password-label" style="display: block; margin-bottom: 8px; font-weight: 600;">Password *</label>
-            <input id="user-form-password" type="password" placeholder="Password" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-            <input id="user-form-confirm-password" type="password" placeholder="Confirm password" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 8px;">
-          </div>
-          <div id="user-form-pin-section" class="form-group" style="display: none;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">PIN</label>
-            <input id="user-form-pin" type="text" placeholder="6-digit PIN" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-          </div>
-          <div class="form-group" style="margin-bottom: 12px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Role</label>
-            <div class="users-role-picker" style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button class="role-chip" data-role="superadmin" onclick="selectUserRole('superadmin')" style="padding: 8px 12px; border: 2px solid #ccc; background: white; border-radius: 6px; cursor: pointer; font-weight: 600;" id="role-superadmin-chip" style="display: none;">Super Admin</button>
-              <button class="role-chip" data-role="admin" onclick="selectUserRole('admin')" style="padding: 8px 12px; border: 2px solid #ccc; background: white; border-radius: 6px; cursor: pointer; font-weight: 600;" id="role-admin-chip" style="display: none;">Admin</button>
-              <button class="role-chip" data-role="staff" onclick="selectUserRole('staff')" style="padding: 8px 12px; border: 2px solid #4a90e2; background: #4a90e2; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; active">Staff</button>
-              <button class="role-chip" data-role="kitchen" onclick="selectUserRole('kitchen')" style="padding: 8px 12px; border: 2px solid #ccc; background: white; border-radius: 6px; cursor: pointer; font-weight: 600;">Kitchen</button>
-            </div>
-          </div>
-          <div class="form-group" style="margin-bottom: 12px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Hourly Rate ($)</label>
-            <input id="user-form-hourly-rate" type="number" placeholder="0.00" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-          </div>
-          <div id="user-form-restaurant-section" class="form-group" style="display: none;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Restaurant</label>
-            <select id="user-form-restaurant" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></select>
-          </div>
-        </div>
-        <div class="modal-footer" style="display: flex; gap: 8px; padding: 12px; border-top: 1px solid #ddd;">
-          <button onclick="closeUserModal()" class="btn-secondary" style="flex: 1; padding: 8px;">Cancel</button>
-          <button id="user-save-btn" onclick="saveUser()" class="btn-primary" style="flex: 1; padding: 8px;">Create User</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= RESTAURANT MODAL ================= -->
-    <div id="restaurant-modal" class="modal-overlay" style="display: none;">
-      <div class="modal-content" style="max-width: 500px;">
-        <div class="modal-header">
-          <h3 id="restaurant-modal-title">Create Restaurant</h3>
-          <button class="modal-close" onclick="closeRestaurantModal()">✕</button>
-        </div>
-        <div class="modal-body">
-          <div id="restaurant-modal-error" style="display: none; background: #fef2f2; color: #dc2626; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;"></div>
-          <div class="form-group"><label style="display: block; margin-bottom: 8px; font-weight: 600;">Restaurant Name</label><input id="restaurant-form-name" type="text" placeholder="Restaurant name" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></div>
-          <div class="form-group"><label style="display: block; margin-bottom: 8px; font-weight: 600;">Address</label><input id="restaurant-form-address" type="text" placeholder="Address" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></div>
-          <div class="form-group"><label style="display: block; margin-bottom: 8px; font-weight: 600;">Phone</label><input id="restaurant-form-phone" type="text" placeholder="Phone number" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></div>
-          <div class="form-group"><label style="display: block; margin-bottom: 8px; font-weight: 600;">Timezone</label><input id="restaurant-form-timezone" type="text" placeholder="e.g., Asia/Hong_Kong" value="UTC" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></div>
-          <div class="form-group"><label style="display: block; margin-bottom: 8px; font-weight: 600;">Service Charge (%)</label><input id="restaurant-form-sc" type="number" placeholder="0" step="0.1" value="0" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></div>
-        </div>
-        <div class="modal-footer" style="display: flex; gap: 8px; padding: 12px; border-top: 1px solid #ddd;">
-          <button onclick="closeRestaurantModal()" class="btn-secondary" style="flex: 1; padding: 8px;">Cancel</button>
-          <button id="restaurant-save-btn" onclick="saveRestaurant()" class="btn-primary" style="flex: 1; padding: 8px;">Create Restaurant</button>
-        </div>
-      </div>
     </div>
 
     <!-- QR Scanner Modal -->

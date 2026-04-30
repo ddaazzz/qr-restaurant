@@ -1,0 +1,466 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = __importDefault(require("../config/db"));
+const crypto_1 = __importDefault(require("crypto"));
+const router = (0, express_1.Router)();
+// GET table units (seats) with availability status
+router.get("/tables/:tableId/units", async (req, res) => {
+    try {
+        const { tableId } = req.params;
+        const result = await db_1.default.query(`SELECT tu.id, tu.unit_code, tu.display_name, tu.qr_token,
+              CASE WHEN ts.id IS NOT NULL THEN true ELSE false END AS occupied,
+              ts.id AS session_id, ts.pax
+       FROM table_units tu
+       LEFT JOIN table_sessions ts ON ts.table_unit_id = tu.id AND ts.ended_at IS NULL
+       WHERE tu.table_id = $1
+       ORDER BY tu.id`, [tableId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch table units" });
+    }
+});
+// GET derived table categories
+router.get("/restaurants/:restaurantId/table-categories", async (req, res) => {
+    const { restaurantId } = req.params;
+    const result = await db_1.default.query(`
+      SELECT id, "key"
+      FROM table_categories
+      WHERE restaurant_id = $1
+      ORDER BY sort_order
+      `, [restaurantId]);
+    res.json(result.rows);
+});
+router.get("/restaurants/:restaurantId/tables", async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const result = await db_1.default.query(`
+      SELECT
+        t.id,
+        t.name,
+        t.seat_count,
+        t.created_at,
+        t.category_id,
+        tc.key   AS category_key
+      FROM tables t
+      JOIN table_categories tc
+        ON tc.id = t.category_id
+      WHERE t.restaurant_id = $1
+      ORDER BY sort_order, t.name
+      `, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch tables" });
+    }
+});
+// POST new table category
+router.post("/restaurants/:restaurantId/table-categories", async (req, res) => {
+    const { restaurantId } = req.params;
+    const { name } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: "Category name is required" });
+    }
+    try {
+        const result = await db_1.default.query(`
+        INSERT INTO table_categories (restaurant_id, "key")
+        VALUES ($1, $2)
+        RETURNING *
+        `, [restaurantId, name.trim()]);
+        res.status(201).json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to create table category" });
+    }
+});
+/**
+ * CREATE table + QR token
+ * (Staff only)
+ */
+// CREATE tables for a restaurant
+// CREATE table + QR token (manual table name)
+router.post("/restaurants/:restaurantId/tables", async (req, res) => {
+    const client = await db_1.default.connect();
+    try {
+        await client.query("BEGIN");
+        const { restaurantId } = req.params;
+        const { category_id, name, seat_count } = req.body;
+        console.log(`📝 Creating table - category_id: ${category_id}, name: ${name}, seat_count: ${seat_count}`);
+        if (!name || !category_id || seat_count == null) {
+            return res.status(400).json({ error: "Category, name, and seat_count required" });
+        }
+        // Convert parameters to proper types
+        const categoryId = Number(category_id);
+        const seatCount = Number(seat_count);
+        if (isNaN(categoryId) || isNaN(seatCount)) {
+            return res.status(400).json({ error: "Invalid category_id or seat_count - must be numbers" });
+        }
+        console.log(`✅ Converted - categoryId: ${categoryId} (type: ${typeof categoryId}), seatCount: ${seatCount}`);
+        // 1️⃣ Check restaurant QR preference (static vs dynamic)
+        const restaurantRes = await client.query(`SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`, [restaurantId]);
+        const restaurantSettings = restaurantRes.rows[0];
+        const isStaticQR = restaurantSettings?.regenerate_qr_per_session === false;
+        console.log(`📊 Restaurant QR settings - isStaticQR: ${isStaticQR}`);
+        // 2️⃣ Insert table with user-provided name
+        const tableRes = await client.query(`
+      INSERT INTO tables (restaurant_id, name, category_id, seat_count)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+      `, [restaurantId, name.trim(), categoryId, seatCount]);
+        const table = tableRes.rows[0];
+        console.log(`✅ Table created with ID: ${table.id}`);
+        // 3️⃣ Create table units with QR codes
+        const units = [];
+        for (let i = 0; i < seatCount; i++) {
+            // Generate appropriate unit code (single letter A, B, C... or Seat1, Seat2...)
+            const unitCode = String.fromCharCode(65 + i); // A, B, C, D... (capital letters)
+            // Always generate a QR token for each unit
+            const qrToken = crypto_1.default.randomBytes(16).toString("hex");
+            console.log(`📦 Creating unit ${i + 1}/${seatCount} - unitCode: ${unitCode}, qrToken: ${qrToken.substring(0, 8)}...`);
+            const unitRes = await client.query(`
+        INSERT INTO table_units (table_id, unit_code, display_name, qr_token)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+        `, [
+                table.id,
+                unitCode,
+                `${name}${unitCode}`,
+                qrToken
+            ]);
+            units.push(unitRes.rows[0]);
+        }
+        await client.query("COMMIT");
+        console.log(`🎉 Table created successfully with ${units.length} units`);
+        res.status(201).json({ table, units });
+    }
+    catch (err) {
+        await client.query("ROLLBACK").catch(e => console.error("Rollback error:", e));
+        console.error("❌ Table creation error:", err);
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
+        console.error("Error stack:", errorStack);
+        res.status(500).json({ error: "Failed to create table", details: errorMsg });
+    }
+    finally {
+        client.release();
+    }
+});
+/**
+ * UPDATE table name
+ * (Admin / Staff)
+ */
+/**
+ * PATCH /tables/:tableId
+ * Update table name and/or seat_count
+ */
+router.patch("/tables/:tableId", async (req, res) => {
+    try {
+        const { tableId } = req.params;
+        const { name, seat_count } = req.body;
+        if (!name && !seat_count) {
+            return res.status(400).json({ error: "Nothing to update" });
+        }
+        // Build dynamic SET clause
+        const fields = [];
+        const values = [];
+        let idx = 1;
+        if (name) {
+            fields.push(`name = $${idx++}`);
+            values.push(name);
+        }
+        if (seat_count !== undefined) {
+            if (typeof seat_count !== "number" || seat_count <= 0) {
+                return res.status(400).json({ error: "Invalid seat count" });
+            }
+            fields.push(`seat_count = $${idx++}`);
+            values.push(seat_count);
+        }
+        values.push(tableId); // last param = tableId
+        const result = await db_1.default.query(`UPDATE tables
+       SET ${fields.join(", ")}
+       WHERE id = $${idx}
+       RETURNING *`, values);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Table not found" });
+        }
+        res.json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to update table" });
+    }
+});
+/**
+ * DELETE table
+ * (Admin only)
+ */
+// PATCH /table-categories/:categoryId - Update category name
+router.patch("/restaurants/:restaurantId/table-categories/:categoryId", async (req, res) => {
+    try {
+        const { categoryId, restaurantId } = req.params;
+        const { name } = req.body;
+        if (!name) {
+            return res.status(400).json({ error: "Category name is required" });
+        }
+        const result = await db_1.default.query(`
+      UPDATE table_categories
+      SET "key" = $1
+      WHERE id = $2 AND restaurant_id = $3
+      RETURNING *
+      `, [name.trim(), categoryId, restaurantId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Table category not found" });
+        }
+        res.json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to update table category" });
+    }
+});
+// DELETE /table-categories/:categoryId - Delete category
+router.delete("/restaurants/:restaurantId/table-categories/:categoryId", async (req, res) => {
+    try {
+        const { categoryId, restaurantId } = req.params;
+        // Check if category has tables
+        const tablesInCategory = await db_1.default.query(`
+      SELECT COUNT(*) as count
+      FROM tables
+      WHERE category_id = $1 AND restaurant_id = $2
+      `, [categoryId, restaurantId]);
+        if (parseInt(tablesInCategory.rows[0].count) > 0) {
+            return res.status(400).json({
+                error: "Cannot delete category with existing tables. Delete all tables first."
+            });
+        }
+        const result = await db_1.default.query(`
+      DELETE FROM table_categories
+      WHERE id = $1 AND restaurant_id = $2
+      RETURNING *
+      `, [categoryId, restaurantId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Table category not found" });
+        }
+        res.json({ success: true });
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to delete table category" });
+    }
+});
+// GET derived table categories
+router.get("/restaurants/:restaurantId/table-categories", async (req, res) => {
+    const { restaurantId } = req.params;
+    const result = await db_1.default.query(`
+      SELECT id, "key"
+      FROM table_categories
+      WHERE restaurant_id = $1
+      ORDER BY sort_order
+      `, [restaurantId]);
+    res.json(result.rows);
+});
+router.get("/restaurants/:restaurantId/tables", async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const result = await db_1.default.query(`
+      SELECT
+        t.id,
+        t.name,
+        t.seat_count,
+        t.created_at,
+        t.category_id,
+        tc.key   AS category_key
+      FROM tables t
+      JOIN table_categories tc
+        ON tc.id = t.category_id
+      WHERE t.restaurant_id = $1
+      ORDER BY sort_order, t.name
+      `, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch tables" });
+    }
+});
+// POST new table category
+router.post("/restaurants/:restaurantId/table-categories", async (req, res) => {
+    const { restaurantId } = req.params;
+    const { name } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: "Category name is required" });
+    }
+    try {
+        const result = await db_1.default.query(`
+        INSERT INTO table_categories (restaurant_id, "key")
+        VALUES ($1, $2)
+        RETURNING *
+        `, [restaurantId, name.trim()]);
+        res.status(201).json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to create table category" });
+    }
+});
+// Regenerate QR token (staff) - ✅ MULTI-RESTAURANT SUPPORT
+router.post("/tables/:tableId/regenerate-qr", async (req, res) => {
+    try {
+        const { tableId } = req.params;
+        const { restaurantId } = req.body;
+        if (!restaurantId) {
+            return res.status(400).json({ error: "Restaurant ID is required" });
+        }
+        // Verify table belongs to the restaurant
+        const tableCheck = await db_1.default.query(`SELECT id FROM tables WHERE id = $1 AND restaurant_id = $2`, [tableId, restaurantId]);
+        if (tableCheck.rowCount === 0) {
+            return res.status(404).json({ error: "Table not found or doesn't belong to this restaurant" });
+        }
+        const newToken = crypto_1.default.randomBytes(16).toString("hex");
+        const result = await db_1.default.query(`
+      UPDATE tables
+      SET qr_token = $1
+      WHERE id = $2 AND restaurant_id = $3
+      RETURNING id, name, qr_token
+      `, [newToken, tableId, restaurantId]);
+        res.json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to regenerate QR" });
+    }
+});
+/**
+ * PATCH /tables/:tableId
+ * Update table name and/or seat_count - ✅ MULTI-RESTAURANT SUPPORT
+ */
+router.patch("/tables/:tableId", async (req, res) => {
+    try {
+        const { tableId } = req.params;
+        const { name, seat_count, restaurantId } = req.body;
+        if (!restaurantId) {
+            return res.status(400).json({ error: "Restaurant ID is required" });
+        }
+        if (!name && !seat_count) {
+            return res.status(400).json({ error: "Nothing to update" });
+        }
+        // Verify table belongs to the restaurant
+        const tableCheck = await db_1.default.query(`SELECT id FROM tables WHERE id = $1 AND restaurant_id = $2`, [tableId, restaurantId]);
+        if (tableCheck.rowCount === 0) {
+            return res.status(404).json({ error: "Table not found or doesn't belong to this restaurant" });
+        }
+        // Build dynamic SET clause
+        const fields = [];
+        const values = [];
+        let idx = 1;
+        if (name) {
+            fields.push(`name = $${idx++}`);
+            values.push(name);
+        }
+        if (seat_count !== undefined) {
+            if (typeof seat_count !== "number" || seat_count <= 0) {
+                return res.status(400).json({ error: "Invalid seat count" });
+            }
+            fields.push(`seat_count = $${idx++}`);
+            values.push(seat_count);
+        }
+        values.push(tableId); // table ID
+        values.push(restaurantId); // restaurant ID for validation
+        const result = await db_1.default.query(`UPDATE tables
+       SET ${fields.join(", ")}
+       WHERE id = $${idx} AND restaurant_id = $${idx + 1}
+       RETURNING *`, values);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Table not found" });
+        }
+        res.json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to update table" });
+    }
+});
+/**
+ * DELETE table - ✅ MULTI-RESTAURANT SUPPORT
+ * (Admin only)
+ */
+router.delete("/restaurants/:restaurantId/tables/:tableId", async (req, res) => {
+    const client = await db_1.default.connect();
+    try {
+        const { tableId, restaurantId } = req.params;
+        await client.query("BEGIN");
+        // Verify table belongs to this restaurant
+        const tableCheck = await client.query(`SELECT id FROM tables WHERE id = $1 AND restaurant_id = $2`, [tableId, restaurantId]);
+        if (tableCheck.rowCount === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Table not found or doesn't belong to this restaurant" });
+        }
+        // Block delete if active session exists
+        const activeSession = await client.query(`
+      SELECT id
+      FROM table_sessions
+      WHERE table_id = $1
+        AND ended_at IS NULL
+      `, [tableId]);
+        if ((activeSession?.rowCount ?? 0) > 0) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+                error: "Cannot delete table with active session"
+            });
+        }
+        // Nullify kpay_transactions references to orders for this table's sessions
+        await client.query(`UPDATE kpay_transactions SET order_id = NULL
+       WHERE order_id IN (
+         SELECT o.id FROM orders o
+         JOIN table_sessions ts ON o.session_id = ts.id
+         WHERE ts.table_id = $1
+       )`, [tableId]);
+        const result = await client.query(`
+      DELETE FROM tables
+      WHERE id = $1 AND restaurant_id = $2
+      RETURNING *
+      `, [tableId, restaurantId]);
+        if (result.rowCount === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Table not found" });
+        }
+        await client.query("COMMIT");
+        res.json({ success: true });
+    }
+    catch (err) {
+        await client.query("ROLLBACK");
+        console.error(err);
+        res.status(500).json({ error: "Failed to delete table" });
+    }
+    finally {
+        client.release();
+    }
+});
+/**
+ * PUT /api/restaurants/:restaurantId/table-categories/reorder
+ * Bulk-update sort_order for table categories
+ */
+router.put("/restaurants/:restaurantId/table-categories/reorder", async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { categories } = req.body;
+        if (!Array.isArray(categories)) {
+            return res.status(400).json({ error: "categories array required" });
+        }
+        await Promise.all(categories.map(({ id, sort_order }) => db_1.default.query("UPDATE table_categories SET sort_order = $1 WHERE id = $2 AND restaurant_id = $3", [sort_order, id, restaurantId])));
+        res.json({ ok: true });
+    }
+    catch (err) {
+        console.error("REORDER TABLE CATEGORIES ERROR:", err);
+        res.status(500).json({ error: "Failed to reorder categories" });
+    }
+});
+exports.default = router;
+//# sourceMappingURL=tables.routes.js.map

@@ -61,6 +61,11 @@ function applyThemeColor(hex) {
 
 // cart, variants — unchanged
 let cart = { items: [], total: 0 };
+let menuColumns = 1; // 1 or 2, read from ui_config.menu_columns on scan
+
+// Service request items & cart
+let serviceRequestItems = [];
+let srCart = {}; // { [itemId]: quantity }
 const variantSelections = {};
 
 // Addon state for drawer
@@ -68,6 +73,16 @@ let drawerAddons = []; // addons loaded for current item
 let selectedDrawerAddons = {}; // { addonId: true/false }
 let addonVariantData = {}; // { addonItemId: [variants] } - cached
 let addonVariantSelections = {}; // { addonId: { variantId: [optionIds] } }
+
+// Chinese name helpers
+function getItemDisplayName(item) {
+  const lang = localStorage.getItem('language') || 'en';
+  return (lang === 'zh' && item.name_zh) ? item.name_zh : item.name;
+}
+function getCategoryDisplayName(cat) {
+  const lang = localStorage.getItem('language') || 'en';
+  return (lang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
+}
 
 // Search filter
 function filterMenu(query) {
@@ -109,6 +124,154 @@ function updateCartBadges() {
   });
 }
 
+// ============= SERVICE REQUEST CART =============
+function hasSrCartItems() {
+  return Object.values(srCart).some(q => q > 0);
+}
+
+function updateSrBadges() {
+  serviceRequestItems.forEach(item => {
+    const qty = srCart[item.id] || 0;
+    const badge = document.getElementById(`sr-badge-${item.id}`);
+    if (badge) {
+      badge.textContent = qty > 0 ? qty : '';
+      badge.style.display = qty > 0 ? 'flex' : 'none';
+    }
+  });
+  // Category badge — total SR qty
+  const totalSr = Object.values(srCart).reduce((s, q) => s + q, 0);
+  const catBadge = document.getElementById('cat-badge-service');
+  if (catBadge) {
+    catBadge.textContent = totalSr > 0 ? totalSr : '';
+    catBadge.style.display = totalSr > 0 ? 'flex' : 'none';
+  }
+}
+
+function addToSrCart(item) {
+  srCart[item.id] = (srCart[item.id] || 0) + 1;
+  updateSrBadges();
+  updateCartBar();
+}
+
+function removeFromSrCart(item) {
+  if (!srCart[item.id]) return;
+  srCart[item.id]--;
+  if (srCart[item.id] <= 0) delete srCart[item.id];
+  updateSrBadges();
+  updateCartBar();
+}
+
+async function loadAndRenderServiceRequests() {
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-request-items`);
+    if (!res.ok) return;
+    serviceRequestItems = await res.json();
+    if (!serviceRequestItems.length) return;
+    renderServiceRequestCategory();
+  } catch (e) {
+    // feature not enabled or network error — silently skip
+  }
+}
+
+function renderServiceRequestCategory() {
+  const currentLang = localStorage.getItem('language') || 'en';
+  const catLabel = currentLang === 'zh' ? '服務' : 'Service';
+
+  // Add to sidebar
+  const catDiv = document.getElementById('categories');
+  const catEl = document.createElement('div');
+  catEl.className = 'category-item';
+  catEl.id = 'cat-item-service';
+  catEl.dataset.categoryId = 'service';
+  catEl.innerHTML = `${catLabel}<span class="cat-badge" id="cat-badge-service" style="background-color:#8b5cf6;"></span>`;
+  catEl.onclick = () => {
+    const target = document.getElementById('category-service');
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'instant', block: 'start' });
+    setActiveCategory('service');
+  };
+  catDiv.appendChild(catEl);
+
+  // Add to menu grid
+  const menuContainer = document.getElementById('menu');
+  const catTitle = document.createElement('div');
+  catTitle.className = 'category';
+  catTitle.id = 'category-service';
+  catTitle.textContent = catLabel;
+  menuContainer.appendChild(catTitle);
+
+  const grid = document.createElement('div');
+  grid.className = menuColumns === 2 ? 'menu-grid two-columns' : 'menu-grid single-column';
+  grid.id = 'sr-grid';
+
+  serviceRequestItems.forEach(item => {
+    grid.appendChild(renderSrItemCard(item));
+  });
+
+  menuContainer.appendChild(grid);
+}
+
+function renderSrItemCard(item) {
+  const color = item.color || '#8b5cf6';
+  const currentLang = localStorage.getItem('language') || 'en';
+  const label = (currentLang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
+
+  const card = document.createElement('div');
+  card.className = 'menu-item';
+
+  card.innerHTML = `
+    <span class="cart-badge" id="sr-badge-${item.id}" style="background-color:${color};"></span>
+    <img
+      src="${item.image_url || '/uploads/website/placeholder.png'}"
+      onerror="this.src='/uploads/website/placeholder.png';"
+      alt="${label}"
+    />
+    <div class="menu-item-name">${label}</div>
+    <div class="menu-item-footer">
+      <span style="font-size:11px;font-weight:700;color:${color};padding:2px 8px;background:${color}22;border-radius:20px;">Request</span>
+    </div>
+  `;
+
+  // Tap card → add 1 to SR cart
+  card.onclick = () => addToSrCart(item);
+
+  // Tap badge circle → remove 1
+  const badge = card.querySelector(`#sr-badge-${item.id}`);
+  if (badge) {
+    badge.onclick = (e) => {
+      e.stopPropagation();
+      removeFromSrCart(item);
+    };
+  }
+
+  return card;
+}
+
+async function submitSrItems() {
+  for (const item of serviceRequestItems) {
+    const qty = srCart[item.id] || 0;
+    if (!qty) continue;
+    const currentLang = localStorage.getItem('language') || 'en';
+    const label = (currentLang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
+    for (let i = 0; i < qty; i++) {
+      try {
+        await fetch(`${API_BASE}/restaurants/${restaurantId}/service-requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            table_session_id: sessionId,
+            table_unit_id: tableUnitId,
+            request_type: item.request_type,
+            label
+          })
+        });
+      } catch (e) { /* best-effort */ }
+    }
+  }
+  srCart = {};
+  updateSrBadges();
+}
+
 // Language switching for customer menu
 function setLanguageFromMenu(lang) {
   localStorage.setItem('language', lang);
@@ -126,9 +289,10 @@ function setLanguageFromMenu(lang) {
   // Re-render cart to update labels
   updateCartBar();
   
-  // Update menu items if they're visible
-  if (document.getElementById('menu') && document.getElementById('menu').innerHTML) {
-    renderMenuItems(window.menu.items);
+  // Re-render menu and categories with updated language
+  if (window.menu && document.getElementById('menu') && document.getElementById('menu').innerHTML) {
+    renderMenu(window.menu);
+    renderCategories(window.menu.categories);
   }
 }
 
@@ -151,6 +315,9 @@ async function initLanding() {
   // Apply restaurant theme color
   if (session.theme_color) applyThemeColor(session.theme_color);
   
+  // Apply menu column layout from ui_config
+  menuColumns = (session.ui_config?.menu_columns === 2) ? 2 : 1;
+
   // Apply restaurant language preference if available
   if (session.language_preference) {
     localStorage.setItem('restaurantLanguage', session.language_preference);
@@ -308,6 +475,7 @@ async function startOrdering() {
   updateCartBar();
 
   await fetchAndApplyPaymentSettings();
+  await loadAndRenderServiceRequests();
 }
 
 function renderCategories(categories) {
@@ -319,7 +487,7 @@ function renderCategories(categories) {
   categories.forEach(cat => {
     const el = document.createElement("div");
     el.className = "category-item";
-    el.innerHTML = `${cat.name}<span class="cat-badge" id="cat-badge-${cat.id}"></span>`;
+    el.innerHTML = `${getCategoryDisplayName(cat)}<span class="cat-badge" id="cat-badge-${cat.id}"></span>`;
     el.dataset.categoryId = cat.id;
 
     el.onclick = () => {
@@ -351,13 +519,13 @@ function renderMenu(menu) {
     const categoryTitle = document.createElement("div");
     categoryTitle.className = "category";
     categoryTitle.id = `category-${category.id}`;
-    categoryTitle.textContent = category.name;
+    categoryTitle.textContent = getCategoryDisplayName(category);
     
     container.appendChild(categoryTitle);
 
     // Grid for items
     const grid = document.createElement("div");
-    grid.className = "menu-grid";
+    grid.className = menuColumns === 2 ? "menu-grid two-columns" : "menu-grid single-column";
 
     const categoryItems = items.filter(
       item => item.category_id === category.id && (item.available !== false)
@@ -387,7 +555,7 @@ function renderMenuItem(item) {
     alt="${item.name}"
   />
 
-  <div class="menu-item-name">${item.name}</div>
+  <div class="menu-item-name">${getItemDisplayName(item)}</div>
 
   <div class="menu-item-footer">
     <span class="menu-item-price">
@@ -422,7 +590,7 @@ function renderMenuItemWithVariants(item, addons){
     />
 
     <div class="menu-item-content">
-      <div class="menu-item-name">${item.name}</div>
+      <div class="menu-item-name">${getItemDisplayName(item)}</div>
       <div class="menu-item-price">
         $${(item.price_cents / 100).toFixed(2)}
       </div>
@@ -485,7 +653,7 @@ function renderMenuItemWithVariants(item, addons){
           />
           <span>
           ${o.name}${isUnavail ? ' (Sold Out)' : ''}
-          ${o.price_cents > 0 ? `(+$${(o.price_cents / 100).toFixed(2)})` : ""}
+          ${o.price_cents > 0 ? `(+$${(o.price_cents / 100).toFixed(2)})` : o.price_cents < 0 ? `(-$${(Math.abs(o.price_cents) / 100).toFixed(2)})` : ""}
           </span>
         `;
       
@@ -689,7 +857,7 @@ function renderAddonVariantSections(addons, container) {
         label.style.cssText = `display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; margin-bottom: 2px; cursor: pointer;${isUnavail ? ' opacity: 0.4; pointer-events: none;' : ''}`;
         label.innerHTML = `
           <input type="checkbox" ${selected ? 'checked' : ''} ${isUnavail ? 'disabled' : ''} style="accent-color: #667eea;" />
-          <span>${o.name}${isUnavail ? ' (Sold Out)' : ''}${o.price_cents > 0 ? ` (+$${(o.price_cents / 100).toFixed(2)})` : ''}</span>
+          <span>${o.name}${isUnavail ? ' (Sold Out)' : ''}${o.price_cents > 0 ? ` (+$${(o.price_cents / 100).toFixed(2)})` : o.price_cents < 0 ? ` (-$${(Math.abs(o.price_cents) / 100).toFixed(2)})` : ''}</span>
         `;
         if (!isUnavail) {
           label.querySelector('input').onchange = function() {
@@ -763,6 +931,12 @@ function initCategoryObserver(categories) {
         activeId = String(cat.id);
       }
     });
+
+    // Also check service category
+    const srEl = document.getElementById('category-service');
+    if (srEl && srEl.getBoundingClientRect().top <= triggerY) {
+      activeId = 'service';
+    }
 
     if (activeId !== null) setActiveCategory(activeId);
   };
@@ -840,6 +1014,7 @@ function addToCart(item) {
     const cartItem = {
       menuItemId: item.id,
       name: item.name,
+      name_zh: item.name_zh || null,
       image_url: item.image_url || null,
       quantity: 1,
       basePriceCents: item.price_cents,
@@ -990,51 +1165,55 @@ function updateVariantCounter(itemId, variant) {
 }
 
 async function submitOrder() {
-  if (!cart.items.length) return;
+  const hasFood = cart.items.length > 0;
+  const hasSr = hasSrCartItems();
+  if (!hasFood && !hasSr) return;
 
-  const payload = {
-    items: cart.items.map(i => ({
-      menu_item_id: i.menuItemId,
-      quantity: i.quantity,
-      selected_option_ids: i.variantOptionIds || [],
-      addons: (i.addons || []).map(a => ({
-        addon_id: a.addonId,
-        quantity: a.quantity || 1,
-        selected_option_ids: a.selected_option_ids || []
+  if (hasFood) {
+    const payload = {
+      items: cart.items.map(i => ({
+        menu_item_id: i.menuItemId,
+        quantity: i.quantity,
+        selected_option_ids: i.variantOptionIds || [],
+        addons: (i.addons || []).map(a => ({
+          addon_id: a.addonId,
+          quantity: a.quantity || 1,
+          selected_option_ids: a.selected_option_ids || []
+        }))
       }))
-    }))
-  };
+    };
 
-  const res = await fetch(
-    `${API_BASE}/sessions/${sessionId}/orders`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+    const res = await fetch(
+      `${API_BASE}/sessions/${sessionId}/orders`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || "Order failed");
+      return;
     }
-  );
 
-  if (!res.ok) {
-    const err = await res.json();
-    alert(err.error || "Order failed");
-    return;
+    const orderData = await res.json();
+    lastOrderId = orderData.order_id;
+
+    cart.items = [];
+    saveCartToStorage();
   }
 
-  const orderData = await res.json();
-  const orderId = orderData.order_id;
+  if (hasSr) {
+    await submitSrItems();
+  }
 
-  cart.items = [];
-  saveCartToStorage();
   updateCartBar();
   closeAllDrawers();
 
-  // Store the latest order ID for Pay Now
-  lastOrderId = orderId;
-
   // Refresh payment settings then navigate to orders drawer
   await fetchAndApplyPaymentSettings();
-
-  // Always navigate to orders drawer after placing order
   openOrdersDrawer();
 }
 
@@ -1117,9 +1296,35 @@ async function loadOrderStatus() {
     }
 
     const data = await res.json();
-    renderOrdersDrawer(data.items || [], tableName);
+    const orders = data.items || [];
+    renderOrdersDrawer(orders, tableName);
+
+    // If there's a pending PA order, fire a background payment-status check.
+    // The endpoint queries PA directly and updates the DB; the next poll will pick up the result.
+    const pendingPA = orders.find(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
+    if (pendingPA) {
+      fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${pendingPA.order_id}/payment-status`)
+        .catch(() => {}); // fire-and-forget; errors silently ignored
+    }
   } catch (error) {
     console.error("❌ Error loading orders:", error);
+  }
+}
+
+async function cancelPAPayment(orderId) {
+  if (!orderId) return;
+  try {
+    const res = await fetch(
+      `${API_BASE}/restaurants/${restaurantId}/orders/${orderId}/cancel-payment`,
+      { method: 'POST' }
+    );
+    if (res.ok) {
+      loadOrderStatus();
+    } else {
+      alert('Could not cancel payment. Please ask staff for assistance.');
+    }
+  } catch (e) {
+    alert('Network error — please try again.');
   }
 }
 
@@ -1167,7 +1372,8 @@ function renderOrdersDrawer(orders, tableName) {
         const line = item.item_total_cents || (item.unit_price_cents * item.quantity) || 0;
         subtotal += line;
 
-        const itemName = item.menu_item_name || item.name || 'Unknown';
+        const lang = localStorage.getItem('language') || 'en';
+        const itemName = (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || 'Unknown');
         const menuItem = window.menu && window.menu.items
           ? window.menu.items.find(i => i.id === item.menu_item_id || i.name === itemName)
           : null;
@@ -1181,7 +1387,7 @@ function renderOrdersDrawer(orders, tableName) {
           ? item.addons.map(addon => {
             const addonPrice = Number(addon.item_total_cents) || Number(addon.unit_price_cents) * Number(addon.quantity) || 0;
             const addonVarHtml = addon.variants ? `<div style="font-size: 10px; color: #9ca3af; margin-left: 20px;">${addon.variants}</div>` : '';
-            return `<div style="font-size: 11px; color: #667eea; margin-left: 12px; margin-top: 2px;">+ ${(addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity} <span style="color:#888;">$${(addonPrice / 100).toFixed(2)}</span></div>${addonVarHtml}`;
+            return `<div style="font-size: 11px; color: #667eea; margin-left: 12px; margin-top: 2px;">+ ${lang === 'zh' && addon.menu_item_name_zh ? addon.menu_item_name_zh : (addon.menu_item_name || addon.name || 'Addon')} x${addon.quantity} <span style="color:#888;">$${(addonPrice / 100).toFixed(2)}</span></div>${addonVarHtml}`;
           }).join('')
           : '';
 
@@ -1263,7 +1469,9 @@ function renderOrdersDrawer(orders, tableName) {
         }
         if (hasPendingPAOrder) {
           // PA initiated but webhook not yet confirmed — prevent double-pay
-          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>`;
+          const pendingPAOrder = orders.find(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
+          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>
+            <button class="btn-secondary" style="font-size:12px;margin-top:6px;" onclick="cancelPAPayment(${pendingPAOrder?.order_id})">✕ Cancel and try again</button>`;
         }
         if (orderPayEnabled) {
           // Order & Pay mode but no unpaid order yet — nothing to pay
@@ -1282,7 +1490,7 @@ function renderOrdersDrawer(orders, tableName) {
 function renderCartDrawer() {
   const el = document.getElementById("cart-drawer-content");
 
-  if (!cart.items.length) {
+  if (!cart.items.length && !hasSrCartItems()) {
     el.innerHTML = '<div class="empty-cart"><p>' + t('menu.cart-empty') + '</p></div>';
     return;
   }
@@ -1305,10 +1513,10 @@ function renderCartDrawer() {
     return `
       <div class="cart-item">
         <div class="cart-item-body">
-          ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${item.name}" loading="lazy">` : ''}
+          ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${getItemDisplayName(item)}" loading="lazy">` : ''}
           <div class="cart-item-details">
             <div class="cart-item-header">
-              <strong>${item.name}</strong>
+              <strong>${getItemDisplayName(item)}</strong>
               <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
             </div>
             ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}
@@ -1324,6 +1532,35 @@ function renderCartDrawer() {
       </div>
     `;
   }).join("");
+
+  // Service request items in cart
+  const currentLang = localStorage.getItem('language') || 'en';
+  serviceRequestItems.forEach(item => {
+    const qty = srCart[item.id] || 0;
+    if (!qty) return;
+    const color = item.color || '#8b5cf6';
+    const label = (currentLang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
+    html += `
+      <div class="cart-item">
+        <div class="cart-item-body">
+          ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${label}" loading="lazy">` : `<div class="order-item-thumb order-item-thumb-placeholder"></div>`}
+          <div class="cart-item-details">
+            <div class="cart-item-header">
+              <strong>${label}</strong>
+              <span style="font-size:11px;font-weight:700;color:${color};padding:2px 8px;background:${color}22;border-radius:20px;">Request</span>
+            </div>
+            <div class="qty-controls">
+              <button class="qty-btn" onclick="adjustSrCart(${item.id}, -1)">−</button>
+              <span class="qty-display">${qty}</span>
+              <button class="qty-btn" onclick="adjustSrCart(${item.id}, 1)">+</button>
+              <button class="qty-btn danger" onclick="adjustSrCart(${item.id}, -99)">🗑</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
   html += '</div>';
 
   const serviceCharge = Math.round(subtotal * serviceChargePct / 100);
@@ -1376,6 +1613,16 @@ function removeCartItem(index) {
   renderCartDrawer();
 }
 
+function adjustSrCart(itemId, delta) {
+  const item = serviceRequestItems.find(i => i.id === itemId);
+  if (!item) return;
+  srCart[itemId] = (srCart[itemId] || 0) + delta;
+  if (srCart[itemId] <= 0) delete srCart[itemId];
+  updateSrBadges();
+  updateCartBar();
+  renderCartDrawer();
+}
+
 function openCartDrawer() {
     closeAllDrawers();
 
@@ -1396,6 +1643,9 @@ function updateCartBar() {
   const totalEl = document.getElementById("cart-total");
 
   const count = cart.items.reduce((s, i) => s + i.quantity, 0);
+  const srCount = Object.values(srCart).reduce((s, q) => s + q, 0);
+  const totalCount = count + srCount;
+
   const subtotalCents = cart.items.reduce(
     (sum, i) => {
       const addonTotal = (i.addons || []).reduce((s, a) => s + (a.priceCents || 0) * (a.quantity || 1), 0);
@@ -1406,11 +1656,12 @@ function updateCartBar() {
   const serviceCharge = Math.round(subtotalCents * serviceChargePct / 100);
   const totalCents = subtotalCents + serviceCharge;
 
-  countEl.textContent = `${count} item${count !== 1 ? "s" : ""}`;
+  countEl.textContent = `${totalCount} item${totalCount !== 1 ? "s" : ""}`;
   totalEl.textContent = `$${(totalCents / 100).toFixed(2)}`;
 
-  btn.disabled = count === 0;
+  btn.disabled = totalCount === 0;
   updateCartBadges();
+  updateSrBadges();
 }
 
 async function openDrawer(itemId) {

@@ -24,8 +24,8 @@ function initializeTables() {
   }
 }
 
-/** Fetch the active KPay terminal and store in window._kpayTerminal.
- *  Used to conditionally show the KPay payment option in close-bill. */
+/** Fetch the active physical terminal (KPay or PA-Offline) and store in
+ *  window._activeTerminal (vendor_name included) and window._kpayTerminal (KPay compat). */
 async function loadActiveKPayTerminal() {
   try {
     const rid = restaurantId || localStorage.getItem('restaurantId');
@@ -33,8 +33,11 @@ async function loadActiveKPayTerminal() {
     const resp = await fetch(`${API}/restaurants/${rid}/kpay-terminal/active`);
     if (!resp.ok) return;
     const data = await resp.json();
-    window._kpayTerminal = data.configured ? data.terminal : null;
+    window._activeTerminal = data.configured ? data.terminal : null;
+    // Keep _kpayTerminal for backward-compat code paths
+    window._kpayTerminal = (data.configured && data.terminal?.vendor_name === 'kpay') ? data.terminal : null;
   } catch {
+    window._activeTerminal = null;
     window._kpayTerminal = null;
   }
 }
@@ -1357,9 +1360,18 @@ async function submitStartSession(tableId) {
       handleTableClick(table);
     }
 
-    // Note: Auto-print is now handled by WebSocket (session-notifier)
-    // This allows printing from any tab/page, not just when user is on tables tab
-    // So we don't need to call printQR here
+    // Auto-print QR if enabled and qr_mode is 'regenerate' (new QR per session)
+    const qrMode = ADMIN_SETTINGS_CACHE?.qr_mode || 'regenerate';
+    if (qrMode !== 'static_seat') {
+      try {
+        const qrAutoPrint = window.currentPrinterSettings?.qr_auto_print;
+        if (qrAutoPrint) {
+          await printQR(newSessionId, true, { tableId: tableId, sessionId: newSessionId });
+        }
+      } catch (autoErr) {
+        console.warn('[QR AutoPrint] Non-critical error during auto-print:', autoErr.message);
+      }
+    }
   } catch (err) {
     alert("Error starting session: " + err.message);
   }
@@ -1623,9 +1635,10 @@ async function renderSessionOrder(session) {
         ${t('admin.total-label')} —
       </div>
       <div style="display: flex; gap: 8px;">
+        ${(window.currentPrinterSettings?.bill_printer_type && window.currentPrinterSettings.bill_printer_type !== 'none') ? `
         <button style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: white; color: #333; font-weight: 600; cursor: pointer;" onclick="printBill(${session.id})">
           ${t('admin.print-bill')}
-        </button>
+        </button>` : ''}
         <button id="session-close-bill-btn" data-session-id="${session.id}" style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #1f2937; color: white; font-weight: 600; cursor: pointer;" onclick="closeBillModal(${session.id})">
           ${ADMIN_SETTINGS_CACHE?.order_pay_enabled ? 'Close Bill (Manual)' : 'Close Bill'}
         </button>
@@ -1703,6 +1716,17 @@ async function loadAndRenderOrders(sessionId) {
       </div>`;
     }).join("");
 
+    // If any order was paid via Payment Asia (completed), swap Close Bill → Paid Online
+    const paidViaPA = orders.some(o => o.order_payment_method === 'payment-asia' && o.order_status === 'completed');
+    const closeBillBtn = document.getElementById('session-close-bill-btn');
+    if (paidViaPA && closeBillBtn) {
+      closeBillBtn.textContent = '✅ Paid Online';
+      closeBillBtn.disabled = true;
+      closeBillBtn.style.background = '#9ca3af';
+      closeBillBtn.style.cursor = 'default';
+      closeBillBtn.onclick = null;
+    }
+
     // Service charge
     const serviceChargePercent = serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 0);
     const serviceCharge = Math.round(totalCents * serviceChargePercent / 100);
@@ -1725,6 +1749,44 @@ async function loadAndRenderOrders(sessionId) {
         <span>$${(grandTotal / 100).toFixed(2)}</span>
       </div>
     `;
+
+    // Render split portions (if split was previously initiated)
+    const splitPortionsEl = document.getElementById('session-split-portions');
+    if (splitPortionsEl) {
+      try {
+        const splitRes = await fetch(`${API}/sessions/${sessionId}/split-bill`);
+        if (splitRes.ok) {
+          const portions = await splitRes.json();
+          if (portions && portions.length > 0) {
+            splitPortionsEl.style.display = 'block';
+            splitPortionsEl.innerHTML = `
+              <div style="border-top: 2px solid #3b82f6; padding-top: 10px; margin-top: 4px;">
+                <p style="font-size: 13px; font-weight: 700; color: #1d4ed8; margin: 0 0 8px 0;">
+                  Split Bill — ${portions.length} ways
+                </p>
+                ${portions.map(p => `
+                  <div style="display: flex; align-items: center; justify-content: space-between; background: ${p.closed_at ? '#f0fdf4' : '#f8fafc'}; border: 1px solid ${p.closed_at ? '#bbf7d0' : '#e2e8f0'}; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;">
+                    <div>
+                      <span style="font-weight: 600; font-size: 13px;">Bill ${p.split_index} of ${p.split_count}</span>
+                      <span style="font-size: 16px; font-weight: 700; color: ${p.closed_at ? '#10b981' : '#3b82f6'}; margin-left: 12px;">$${(p.amount_cents / 100).toFixed(2)}</span>
+                      ${p.closed_at && p.payment_method ? `<span style="font-size: 11px; color: #6b7280; margin-left: 8px;">${p.payment_method}</span>` : ''}
+                    </div>
+                    ${p.closed_at
+                      ? `<span style="background: #10b981; color: #fff; border-radius: 10px; padding: 3px 10px; font-size: 11px; font-weight: 700;">Paid ✓</span>`
+                      : `<button onclick="paySplitPortion(${sessionId}, ${p.split_index}, ${p.amount_cents})" style="background: #3b82f6; color: #fff; border: none; border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">Close Bill</button>`
+                    }
+                  </div>
+                `).join('')}
+              </div>
+            `;
+          } else {
+            splitPortionsEl.style.display = 'none';
+          }
+        }
+      } catch (e) {
+        // ignore split fetch errors
+      }
+    }
 
   } catch (error) {
     console.error("Error in loadAndRenderOrders:", error);
@@ -1825,6 +1887,7 @@ async function splitBill(sessionId) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.setAttribute('data-split-total', total);
+  modal.setAttribute('data-split-session', sessionId);
   modal.innerHTML = `
     <div class="modal-content" style="width: 420px;">
       <h3>${t('admin.split-bill')}</h3>
@@ -1841,6 +1904,7 @@ async function splitBill(sessionId) {
       </div>
       <div class="modal-button-group">
         <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="confirmSplitBill()" class="modal-btn-primary" style="background: #3b82f6;">Confirm Split</button>
       </div>
     </div>
   `;
@@ -1849,6 +1913,124 @@ async function splitBill(sessionId) {
     const input = document.getElementById('split-count-input');
     if (input) { input.focus(); input.select(); }
   }, 50);
+}
+
+async function confirmSplitBill() {
+  const modal = document.querySelector('.modal-overlay[data-split-session]');
+  if (!modal) return;
+  const sessionId = parseInt(modal.getAttribute('data-split-session'), 10);
+  const input = document.getElementById('split-count-input');
+  const splitCount = Math.max(2, parseInt(input ? input.value : '2', 10) || 2);
+
+  const btn = modal.querySelector('button[onclick="confirmSplitBill()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating split…'; }
+
+  try {
+    const res = await fetch(`${API}/sessions/${sessionId}/split-bill/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ split_count: splitCount })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to create split');
+    }
+    modal.remove();
+    // Refresh the order panel so split portions appear
+    await loadAndRenderOrders(sessionId);
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirm Split'; }
+    alert('Error: ' + err.message);
+  }
+}
+
+async function paySplitPortion(sessionId, splitIndex, amountCents) {
+  const hasTerminal = !!window._activeTerminal;
+  const terminalMethod = window._activeTerminal?.vendor_name || 'kpay';
+  const paymentBtns = `
+    <div style="display:flex; gap:8px; margin-bottom:4px;" id="split-method-btns">
+      <button type="button" data-method="cash"
+        onclick="selectSplitMethod('cash')"
+        style="flex:1; padding:10px; border:2px solid #3b82f6; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; cursor:pointer; font-size:14px;">Cash</button>
+      ${hasTerminal
+        ? `<button type="button" data-method="${terminalMethod}"
+            onclick="selectSplitMethod('${terminalMethod}')"
+            style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; color:#374151; font-weight:600; cursor:pointer; font-size:14px;">Payment Terminal</button>`
+        : `<button type="button" data-method="card"
+            onclick="selectSplitMethod('card')"
+            style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; color:#374151; font-weight:600; cursor:pointer; font-size:14px;">Card</button>`
+      }
+    </div>
+    <input type="hidden" id="split-pay-method" value="cash">
+    <div id="split-terminal-notice" style="display:none; background:#fefce8; border:1px solid #fde68a; border-radius:6px; padding:8px 10px; margin-top:6px; font-size:13px; color:#92400e;">
+      Process the payment on the physical terminal, then click Confirm.
+    </div>
+  `;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content" style="width: 380px;">
+      <h3>Pay Portion ${splitIndex}</h3>
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 16px;">
+        <p style="margin: 0; font-size: 13px; color: #6b7280;">Amount due</p>
+        <p style="margin: 6px 0 0 0; font-size: 30px; font-weight: 700; color: #059669;">$${(amountCents / 100).toFixed(2)}</p>
+      </div>
+      <label style="display: block; margin-bottom: 16px;">
+        <span class="modal-content-label" style="display:block; margin-bottom:8px; font-weight:600;">Payment Method</span>
+        ${paymentBtns}
+      </label>
+      <div class="modal-button-group">
+        <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitSplitPortion(${sessionId}, ${splitIndex})" class="modal-btn-primary" style="background: #3b82f6;">Confirm Payment</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function selectSplitMethod(method) {
+  const hidden = document.getElementById('split-pay-method');
+  if (hidden) hidden.value = method;
+  document.querySelectorAll('#split-method-btns button[data-method]').forEach(btn => {
+    const isActive = btn.getAttribute('data-method') === method;
+    btn.style.background = isActive ? '#3b82f6' : '#fff';
+    btn.style.color = isActive ? '#fff' : '#374151';
+    btn.style.borderColor = isActive ? '#3b82f6' : '#e5e7eb';
+  });
+  const terminalNotice = document.getElementById('split-terminal-notice');
+  if (terminalNotice) terminalNotice.style.display = (method !== 'cash' && method !== 'card') ? 'block' : 'none';
+}
+
+async function submitSplitPortion(sessionId, splitIndex) {
+  const methodEl = document.getElementById('split-pay-method');
+  const payment_method = methodEl ? methodEl.value : 'cash';
+  const modal = document.querySelector('.modal-overlay');
+  if (modal) modal.remove();
+  await _doRecordSplitPortion(sessionId, splitIndex, payment_method);
+}
+
+async function _doRecordSplitPortion(sessionId, splitIndex, payment_method) {
+  try {
+    const res = await fetch(`${API}/sessions/${sessionId}/split-bill/${splitIndex}/pay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ payment_method })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Payment failed');
+    }
+    const data = await res.json();
+    if (data.sessionClosed) {
+      await loadTables();
+      const panel = document.getElementById('session-detail-panel');
+      if (panel) panel.style.display = 'none';
+    } else {
+      await loadAndRenderOrders(sessionId);
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
 }
 
 function updateSplitPreview() {
@@ -2118,15 +2300,36 @@ async function moveTableModal(tableId) {
           ${options}
         </select>
       </label>
-      <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 13px; color: #92400e;">
-        Table transfer feature coming soon.
-      </div>
       <div class="modal-button-group">
         <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
+        <button onclick="submitMoveTable(${table.sessions[0]?.id})" class="modal-btn-primary">Move</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+}
+
+async function submitMoveTable(sessionId) {
+  if (!sessionId) return alert('No active session on this table');
+  const select = document.getElementById('move-table-select');
+  const newTableId = select ? Number(select.value) : null;
+  if (!newTableId) return alert('Please select a target table');
+
+  try {
+    const res = await fetch(`${API}/table-sessions/${sessionId}/move-table`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_table_id: newTableId }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      return alert(`❌ ${err.error || 'Failed to move table'}`);
+    }
+    document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
+    await loadTablesCategoryTable();
+  } catch (e) {
+    alert('❌ Failed to move table');
+  }
 }
 
 async function changeSessionPaxModal(sessionId, currentPax) {
@@ -2255,6 +2458,58 @@ async function closeBillModal(sessionId) {
   // Ensure KPay terminal state is current before rendering the payment options
   await loadActiveKPayTerminal();
 
+  // Determine if email receipt is enabled for this restaurant
+  const emailReceiptEnabled = !!(ADMIN_SETTINGS_CACHE?.feature_flags?.email_receipt_enabled);
+
+  // Build payment method buttons:
+  // • No terminal → Cash / Card
+  // • Any active physical terminal (KPay or PA-Offline) → Cash / Pay on Terminal
+  const hasTerminal = !!window._activeTerminal;
+  const terminalMethod = window._activeTerminal?.vendor_name || 'kpay';
+  const paymentButtons = `
+    <div style="display:flex; gap:8px; margin-top:6px;" id="payment-method-btns">
+      <button type="button"
+        data-method="cash"
+        onclick="selectPaymentMethod('cash')"
+        style="flex:1; padding:10px; border:2px solid #3b82f6; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; cursor:pointer; font-size:14px;">
+        ${t('admin.payment-cash')}
+      </button>
+      ${hasTerminal
+        ? `<button type="button"
+            data-method="${terminalMethod}"
+            onclick="selectPaymentMethod('${terminalMethod}')"
+            style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; color:#374151; font-weight:600; cursor:pointer; font-size:14px;">
+            ${t('admin.payment-terminal')}
+          </button>`
+        : `<button type="button"
+            data-method="card"
+            onclick="selectPaymentMethod('card')"
+            style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; color:#374151; font-weight:600; cursor:pointer; font-size:14px;">
+            ${t('admin.payment-card')}
+          </button>`
+      }
+    </div>
+    <input type="hidden" id="payment-method" value="cash">
+  `;
+
+  // Email receipt fields (only shown when feature is enabled)
+  const emailReceiptFields = emailReceiptEnabled ? `
+    <div style="margin-bottom:15px; border-top:1px solid #e5e7eb; padding-top:14px;">
+      <label style="display:block; margin-bottom:8px;">
+        <span style="font-weight:600; display:block; margin-bottom:4px; font-size:13px;">${t('admin.customer-name-label')}</span>
+        <input type="text" id="receipt-customer-name" placeholder="${t('admin.customer-name-placeholder')}"
+          style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; box-sizing:border-box;"
+          value="${(session.customer_name || '').replace(/"/g, '&quot;')}">
+      </label>
+      <label style="display:block;">
+        <span style="font-weight:600; display:block; margin-bottom:4px; font-size:13px;">${t('admin.customer-email-label')}</span>
+        <input type="email" id="receipt-customer-email" placeholder="${t('admin.customer-email-placeholder')}"
+          style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; box-sizing:border-box;"
+          value="${(session.customer_email || '').replace(/"/g, '&quot;')}">
+      </label>
+    </div>
+  ` : '';
+
   // Create close bill modal with payment method, discount, and reason
   const closeBillWindow = document.createElement("div");
   closeBillWindow.className = "modal-overlay";
@@ -2278,17 +2533,17 @@ async function closeBillModal(sessionId) {
 
       <label style="display: block; margin-bottom: 15px;">
         <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.payment-method')}</span>
-        <select id="payment-method" onchange="onPaymentMethodChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="cash">${t('admin.payment-cash')}</option>
-          <option value="card">${t('admin.payment-card')}</option>
-          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
-        </select>
+        ${paymentButtons}
       </label>
 
       <!-- KPay notice (shown when kpay selected) -->
       <div id="kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:15px; font-size:13px; color:#1d4ed8;">
         Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.<br>
         Confirm to initiate — the terminal will prompt the customer.
+      </div>
+      <!-- PA Offline notice (shown when payment-asia-offline selected) -->
+      <div id="pa-offline-notice" style="display:none; background:#fefce8; border:1px solid #fde68a; border-radius:6px; padding:10px; margin-bottom:15px; font-size:13px; color:#92400e;">
+        Process the payment on the physical PA terminal, then click <strong>Close Bill</strong> to confirm.
       </div>
 
       <label style="display: block; margin-bottom: 15px;">
@@ -2304,6 +2559,8 @@ async function closeBillModal(sessionId) {
         <textarea id="close-reason" placeholder="${t('admin.bill-close-reason-placeholder')}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; height: 60px;"></textarea>
       </label>
 
+      ${emailReceiptFields}
+
       <div class="modal-button-group">
         <button onclick="this.closest('.modal-overlay').remove()" class="modal-cancel-btn">${t('admin.cancel-button')}</button>
         <button onclick="submitCloseBill(${sessionId}, ${grandTotal}, ${serviceCharge})" class="modal-btn-primary">${t('admin.close-bill-confirm')}</button>
@@ -2318,6 +2575,23 @@ function onPaymentMethodChange() {
   const method = document.getElementById('payment-method')?.value;
   const notice = document.getElementById('kpay-notice');
   if (notice) notice.style.display = method === 'kpay' ? 'block' : 'none';
+}
+
+function selectPaymentMethod(method) {
+  const hidden = document.getElementById('payment-method');
+  if (hidden) hidden.value = method;
+  // Update button styles
+  document.querySelectorAll('#payment-method-btns button[data-method]').forEach(btn => {
+    const isActive = btn.getAttribute('data-method') === method;
+    btn.style.background = isActive ? '#3b82f6' : '#fff';
+    btn.style.color = isActive ? '#fff' : '#374151';
+    btn.style.borderColor = isActive ? '#3b82f6' : '#e5e7eb';
+  });
+  // Show/hide notices
+  const kpayNotice = document.getElementById('kpay-notice');
+  if (kpayNotice) kpayNotice.style.display = method === 'kpay' ? 'block' : 'none';
+  const paOfflineNotice = document.getElementById('pa-offline-notice');
+  if (paOfflineNotice) paOfflineNotice.style.display = method === 'payment-asia-offline' ? 'block' : 'none';
 }
 
 async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
@@ -2341,6 +2615,12 @@ async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
 
   const finalAmount = grandTotal - discountApplied;
 
+  // Capture customer info for email receipt (if feature is enabled)
+  const customerNameEl = document.getElementById('receipt-customer-name');
+  const customerEmailEl = document.getElementById('receipt-customer-email');
+  const customerName = customerNameEl ? customerNameEl.value.trim() : '';
+  const customerEmail = customerEmailEl ? customerEmailEl.value.trim() : '';
+
   // ── KPay path: initiate terminal payment first ──────────────────────────
   if (paymentMethod === 'kpay') {
     if (!window._kpayTerminal) {
@@ -2361,8 +2641,39 @@ async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
     return;
   }
 
+  // ── PA Offline path: staff processes on terminal, we just record it ──────
+  if (paymentMethod === 'payment-asia-offline') {
+    const overlay = document.querySelector(".modal-overlay");
+    if (overlay) overlay.remove();
+    await _doCloseBill({ sessionId, paymentMethod: 'payment-asia-offline', finalAmount, discountApplied, serviceChargeAmount, reason });
+    return;
+  }
+
   // ── Cash / Card path (original flow) ──────────────────────────────────
   await _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason });
+
+  // ── Email receipt (if customer email provided) ──────────────────────────
+  if (customerEmail) {
+    const rid = localStorage.getItem('restaurantId');
+    // Save customer info to CRM
+    if (customerName || customerEmail) {
+      fetch(`${API}/sessions/${sessionId}/customer`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_name: customerName || undefined, customer_email: customerEmail, restaurantId: rid }),
+      }).catch(() => {});
+    }
+    // Send email receipt
+    fetch(`${API}/sessions/${sessionId}/receipts/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_email: customerEmail, restaurantId: rid }),
+    }).then(async res => {
+      if (res.ok) {
+        showToast('📧 Receipt sent to ' + customerEmail, 'success');
+      }
+    }).catch(() => {});
+  }
 }
 
 /**
@@ -2681,6 +2992,7 @@ async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApp
 
   await loadTablesCategoryTable();
   if (typeof loadOrdersHistoryLeftPanel === 'function') await loadOrdersHistoryLeftPanel();
+
   closeSessionPanel();
 }
 

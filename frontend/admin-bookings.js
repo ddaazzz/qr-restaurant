@@ -9,6 +9,7 @@ let bookingSearchQuery = '';
 
 // Initialize only when bookings section is loaded
 let bookingsInitialized = false;
+let bookingListenersAttached = false;
 
 function initializeBookings() {
   if (bookingsInitialized) return;
@@ -21,6 +22,9 @@ function initializeBookings() {
 }
 
 function attachEventListeners() {
+  if (bookingListenersAttached) return;
+  bookingListenersAttached = true;
+
   const btnNewBooking = document.getElementById('btn-new-booking');
   const btnPrevMonth = document.getElementById('btn-prev-month');
   const btnNextMonth = document.getElementById('btn-next-month');
@@ -49,11 +53,21 @@ function attachEventListeners() {
 
   const searchInput = document.getElementById('booking-search-input');
   if (searchInput) {
+    searchInput.placeholder = t('admin.booking-search-placeholder');
     searchInput.addEventListener('input', (e) => {
       bookingSearchQuery = e.target.value.trim().toLowerCase();
       renderBookingsForDate(selectedDate);
     });
   }
+
+  window.addEventListener('languageChanged', () => {
+    const bookingSearchInput = document.getElementById('booking-search-input');
+    if (bookingSearchInput) {
+      bookingSearchInput.placeholder = t('admin.booking-search-placeholder');
+    }
+    renderCalendar();
+    renderBookingsForDate(selectedDate);
+  });
 }
 
 function showLoading(show = true) {
@@ -82,8 +96,9 @@ function loadTables() {
 
 function updateTableDropdown() {
   const select = document.getElementById('booking-table');
+  if (!select) return;
   const currentValue = select.value;
-  select.innerHTML = '<option value="">Select a table</option>';
+  select.innerHTML = `<option value="">${t('admin.select-table')}</option>`;
   allTables.forEach(table => {
     const option = document.createElement('option');
     option.value = table.id;
@@ -134,7 +149,8 @@ function formatDateISO(date) {
 function formatDateDisplay(date) {
   // Use UTC-noon trick so timezone conversion never rolls to the previous/next day
   const utcNoon = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0));
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  const locale = (localStorage.getItem('language') || 'en') === 'zh' ? 'zh-HK' : 'en-US';
+  const formatter = new Intl.DateTimeFormat(locale, {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -149,7 +165,8 @@ function renderCalendar() {
   const month = currentDate.getMonth();
   
   // Update header
-  const monthYear = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: restaurantTimezone }).format(currentDate);
+  const locale = (localStorage.getItem('language') || 'en') === 'zh' ? 'zh-HK' : 'en-US';
+  const monthYear = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: restaurantTimezone }).format(currentDate);
   document.getElementById('calendar-month-year').textContent = monthYear;
 
   // Get first day and number of days in month
@@ -312,7 +329,7 @@ function renderBookingsForDate(date) {
 
 function openNewBookingModal() {
   editingBookingId = null;
-  document.getElementById('modal-title').textContent = 'New Booking';
+  document.getElementById('modal-title').textContent = t('admin.new-booking');
   document.getElementById('btn-delete-booking').classList.add('hidden');
   
   const form = document.getElementById('booking-form');
@@ -330,7 +347,7 @@ function editBooking(bookingId) {
   if (!booking) return;
 
   editingBookingId = bookingId;
-  document.getElementById('modal-title').textContent = 'Edit Booking';
+  document.getElementById('modal-title').textContent = t('admin.edit-booking');
   document.getElementById('btn-delete-booking').classList.remove('hidden');
 
   document.getElementById('booking-guest-name').value = booking.guest_name;
@@ -359,7 +376,7 @@ function saveBooking(e) {
   // Validate status is one of the allowed values
   const validStatuses = ['confirmed', 'completed', 'cancelled', 'no-show'];
   if (!validStatuses.includes(status)) {
-    alert('Invalid booking status');
+    alert(t('admin.invalid-booking-status'));
     return;
   }
 
@@ -376,7 +393,7 @@ function saveBooking(e) {
   };
 
   if (!data.guest_name || !data.table_id || !data.booking_date || !data.booking_time) {
-    alert('Please fill in all required fields');
+    alert(t('admin.fill-required-fields'));
     return;
   }
 
@@ -745,3 +762,63 @@ function buildBookingCardHTML_DEPRECATED(booking, allTables) {
     </div>
   `;
 }
+
+// ============= BOOKING FORM CRM SEARCH =============
+let _bookingNameTimer = null;
+
+function onBookingNameInput(value) {
+  if (_bookingNameTimer) clearTimeout(_bookingNameTimer);
+  var suggestions = document.getElementById('booking-customer-suggestions');
+  if (!value || value.length < 2) { if (suggestions) suggestions.style.display = 'none'; return; }
+  _bookingNameTimer = setTimeout(function() { searchBookingCustomers(value); }, 300);
+}
+
+async function searchBookingCustomers(query) {
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/customers?search=' + encodeURIComponent(query), {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    var customers = await res.json();
+    var container = document.getElementById('booking-customer-suggestions');
+    if (!container) return;
+    if (!customers || customers.length === 0) { container.style.display = 'none'; return; }
+    container.innerHTML = customers.map(function(c) {
+      var id = c.id;
+      var safeName = (c.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var safePhone = (c.phone || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var safeEmail = (c.email || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<div onclick="selectBookingCustomer(\'' + safeName + '\',\'' + safePhone + '\',\'' + safeEmail + '\')"'
+        + ' style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:13px;"'
+        + ' onmouseover="this.style.background=\'#f0f7ff\'" onmouseout="this.style.background=\'\'">'
+        + '<div style="font-weight:600;color:#1f2937;">' + (c.name || '') + '</div>'
+        + '<div style="font-size:11px;color:#6b7280;">'
+        + (c.phone ? c.phone : '')
+        + (c.phone && c.email ? ' · ' : '')
+        + (c.email ? c.email : '')
+        + '</div>'
+        + '</div>';
+    }).join('');
+    container.style.display = 'block';
+  } catch (e) { /* ignore */ }
+}
+
+function selectBookingCustomer(name, phone, email) {
+  var nameEl = document.getElementById('booking-guest-name');
+  var phoneEl = document.getElementById('booking-phone');
+  var emailEl = document.getElementById('booking-email');
+  if (nameEl) nameEl.value = name;
+  if (phoneEl && phone) phoneEl.value = phone;
+  if (emailEl && email) emailEl.value = email;
+  var suggestions = document.getElementById('booking-customer-suggestions');
+  if (suggestions) suggestions.style.display = 'none';
+}
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+  var suggestions = document.getElementById('booking-customer-suggestions');
+  var nameInput = document.getElementById('booking-guest-name');
+  if (suggestions && nameInput && !nameInput.contains(e.target) && !suggestions.contains(e.target)) {
+    suggestions.style.display = 'none';
+  }
+});

@@ -31,6 +31,10 @@
           <label data-i18n="admin.hourly-rate">Hourly Rate ($/hr)</label>
           <input id="staff-hourly-rate" type="number" data-i18n="admin.hourly-rate-placeholder" placeholder="e.g., 15.50" step="0.01" min="0" />
         </div>
+        <div class="form-group">
+          <label data-i18n="admin.employment-start-date">Start Date</label>
+          <input id="staff-employment-start" type="date" />
+        </div>
       </div>
 
       <div class="form-row" style="margin-top: 10px;">
@@ -122,6 +126,10 @@
           <label data-i18n="admin.detail-status" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Status</label>
           <p id="staff-detail-status" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
         </div>
+        <div>
+          <label data-i18n="admin.detail-start-date" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Start Date</label>
+          <p id="staff-detail-start-date" style="margin: 5px 0 0 0; font-size: 16px;">—</p>
+        </div>
       </div>
     </div>
 
@@ -141,8 +149,15 @@
 
     <!-- Work Hours Summary -->
     <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-      <h3 data-i18n="admin.work-hours-title" style="margin: 0 0 15px 0; font-size: 16px;">Work Hours (Last 30 Days)</h3>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <h3 data-i18n="admin.work-hours-title" style="margin: 0 0 10px 0; font-size: 16px;">Work Hours</h3>
+      <!-- Timeframe filter -->
+      <div style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+        <button onclick="setWorkLogDays(1)" id="work-days-btn-1" data-i18n="admin.work-log-today" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;cursor:pointer;background:#e5e7eb;color:#374151;">Today</button>
+        <button onclick="setWorkLogDays(7)" id="work-days-btn-7" data-i18n="admin.work-log-week" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;cursor:pointer;background:#e5e7eb;color:#374151;">Week</button>
+        <button onclick="setWorkLogDays(30)" id="work-days-btn-30" data-i18n="admin.work-log-month" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;cursor:pointer;background:#3b82f6;color:white;">Month</button>
+        <button onclick="setWorkLogDays(3650)" id="work-days-btn-3650" data-i18n="admin.work-log-all" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;cursor:pointer;background:#e5e7eb;color:#374151;">All</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
         <div>
           <label data-i18n="admin.days-worked" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Days Worked</label>
           <p id="staff-total-shifts" style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">0</p>
@@ -151,12 +166,16 @@
           <label data-i18n="admin.total-hours" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Total Hours</label>
           <p id="staff-total-hours" style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">0</p>
         </div>
+        <div>
+          <label data-i18n="admin.estimated-salary" style="font-size: 12px; color: #666; font-weight: 500; text-transform: uppercase;">Est. Salary</label>
+          <p id="staff-estimated-salary" style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #059669;">—</p>
+        </div>
       </div>
     </div>
 
     <!-- Work Log -->
     <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-      <h3 data-i18n="admin.work-log-title" style="margin: 0 0 15px 0; font-size: 16px;">Work Log (Last 30 Days)</h3>
+      <h3 data-i18n="admin.work-log-title" style="margin: 0 0 10px 0; font-size: 16px;">Work Log</h3>
       <div id="staff-timekeeping-list" style="max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch;">
         <p style="color: #999; font-size: 14px;">Loading...</p>
       </div>
@@ -196,7 +215,10 @@
     <div class="timekeeping-date" style="font-weight: 600; margin-bottom: 4px;"></div>
     <div style="color: #666;">
       <strong class="timekeeping-time-in"></strong> - <strong class="timekeeping-time-out"></strong>
-      <span class="timekeeping-hours" style="float: right; color: #3b82f6; font-weight: 600;"></span>
+      <span style="float: right;">
+        <span class="timekeeping-hours" style="color: #3b82f6; font-weight: 600;"></span>
+        <span class="timekeeping-salary" style="color: #059669; font-weight: 600; margin-left: 6px;"></span>
+      </span>
     </div>
   </div>
 </template>

@@ -27,33 +27,6 @@ let orderMap = {}; // Maps orderId to order details
     console.warn("⚠️ No restaurantId found in URL params or storage");
     // Don't redirect yet - they might be coming from login.html
   }
-
-  // Check if already authenticated via email login
-  const existingToken = localStorage.getItem("token");
-  const existingRole = localStorage.getItem("role");
-  if (existingToken && existingRole === "kitchen" && restaurantId) {
-    console.log("🔑 Kitchen already authenticated via email login, skipping PIN");
-    token = existingToken;
-    
-    // Restore allowed categories from localStorage
-    const storedRights = localStorage.getItem("accessRights");
-    if (storedRights) {
-      try {
-        const rawRights = JSON.parse(storedRights);
-        if (rawRights && rawRights.allowed_categories) {
-          allowedCategoryIds = rawRights.allowed_categories.map(id => parseInt(id, 10));
-        }
-      } catch {}
-    }
-
-    // Auto-initialize kitchen app after DOM ready
-    document.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("login-screen").style.display = "none";
-      document.getElementById("kitchen-app").classList.add("active");
-      loadKitchenOrders();
-      setInterval(loadKitchenOrders, 5000);
-    });
-  }
 })();
 
 // ============== PIN LOGIN ============== 
@@ -282,7 +255,6 @@ async function loadKitchenOrders() {
       if (!orderMap[orderId]) {
         orderMap[orderId] = {
           orderId,
-          restaurantOrderNumber: item.restaurant_order_number,
           table: item.table_name,
           orderType: item.order_type,
           items: [],
@@ -292,27 +264,7 @@ async function loadKitchenOrders() {
       orderMap[orderId].items.push(item);
     });
 
-    // Group addon items under their parent items for display
-    for (const orderId in orderMap) {
-      const order = orderMap[orderId];
-      const mainItems = [];
-      const addonsByParent = {};
-      for (const item of order.items) {
-        if (item.is_addon && item.parent_order_item_id) {
-          if (!addonsByParent[item.parent_order_item_id]) addonsByParent[item.parent_order_item_id] = [];
-          addonsByParent[item.parent_order_item_id].push(item);
-        } else {
-          mainItems.push(item);
-        }
-      }
-      // Attach addons to main items
-      for (const item of mainItems) {
-        item._addons = addonsByParent[item.order_item_id] || [];
-      }
-      order.items = mainItems;
-    }
-
-    renderKitchenOrders(Object.values(orderMap).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)));
+    renderKitchenOrders(Object.values(orderMap).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
   } catch (err) {
     console.error("❌ Failed to load kitchen items:", err);
   }
@@ -328,9 +280,7 @@ function renderKitchenOrders(orders) {
 
   container.innerHTML = orders.map(order => {
     const hasAllServed = order.items.every(item => item.status === "served");
-    const hasReady = order.items.some(item => item.status === "ready");
-    const hasPreparing = order.items.some(item => item.status === "preparing");
-    const statusClass = hasAllServed ? "served" : hasReady ? "ready" : hasPreparing ? "preparing" : "pending";
+    const statusClass = hasAllServed ? "ready" : (order.items.some(item => item.status === "preparing") ? "preparing" : "pending");
     
     // Determine display label: use table name if available and order type is 'table', otherwise use order type
     let displayLabel = order.table;
@@ -346,24 +296,15 @@ function renderKitchenOrders(orders) {
       }
     }
 
-    const orderNumber = order.restaurantOrderNumber || order.orderId;
-
     return `
       <div class="order-card ${statusClass}">
         <div class="card-header">
           <div>
-            <div class="card-title">${displayLabel} #${orderNumber}</div>
+            <div class="card-title">${displayLabel}</div>
+            <div class="card-time">#${order.orderId}</div>
           </div>
-          <div>
-            <span class="card-status-badge ${statusClass}">${
-              statusClass === 'pending' ? (typeof t === 'function' ? t('kitchen.pending') : 'PENDING') :
-              statusClass === 'preparing' ? (typeof t === 'function' ? t('kitchen.preparing') : 'PREPARING') :
-              statusClass === 'ready' ? (typeof t === 'function' ? t('kitchen.ready') : 'READY') :
-              (typeof t === 'function' ? t('kitchen.served') : 'SERVED')
-            }</span>
-          </div>
+          <div class="card-time">${getTimeAgo(order.createdAt)}</div>
         </div>
-        <div class="card-time-row">${getTimeAgo(order.createdAt)}</div>
         <div class="card-body">
           ${order.items.map(item => `
             <div class="order-item">
@@ -373,37 +314,17 @@ function renderKitchenOrders(orders) {
               </div>
               ${item.variants ? `<div class="item-variants">${item.variants}</div>` : ""}
               ${item.notes ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${item.notes}</div>` : ""}
-              ${(item._addons || []).map(addon => `
-                <div class="addon-item">
-                  <div class="item-header">
-                    <span class="item-name">+ ${addon.menu_item_name}</span>
-                    <span class="item-qty">×${addon.quantity}</span>
-                  </div>
-                  ${addon.variants ? `<div class="item-variants">${addon.variants}</div>` : ""}
-                  ${addon.notes ? `<div class="item-notes" style="color:#e65100;font-style:italic;font-size:12px;margin-top:2px;">📝 ${addon.notes}</div>` : ""}
-                </div>
-              `).join("")}
+              <span class="item-status ${item.status}">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[item.status] || item.status.charAt(0).toUpperCase() + item.status.slice(1)}</span>
             </div>
           `).join("")}
           
           <div class="card-actions">
-            ${(() => {
-              const allItemIds = order.items.flatMap(i => [i.order_item_id, ...(i._addons || []).map(a => a.order_item_id)]);
-              const printBtn = `<button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')">${typeof t === 'function' ? t('kitchen.print-order') : '🖨️ Print'}</button>`;
-              if (statusClass === 'pending') {
-                return `${printBtn}
-                <button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(allItemIds)}, 'preparing')">${typeof t === 'function' ? t('kitchen.start-preparing') : 'Start Preparing'}</button>`;
-              } else if (statusClass === 'preparing') {
-                return `${printBtn}
-                <button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(allItemIds)}, 'ready')">${typeof t === 'function' ? t('kitchen.ready') : 'Ready'}</button>`;
-              } else if (statusClass === 'ready') {
-                return `${printBtn}
-                <button class="btn-action btn-served" onclick="updateAllItemStatus(${JSON.stringify(allItemIds)}, 'served')">${typeof t === 'function' ? t('kitchen.served') : 'Served'}</button>`;
-              } else {
-                return `${printBtn}
-                <button class="btn-action btn-ready" disabled>${typeof t === 'function' ? t('kitchen.all-served') : 'All Served'}</button>`;
-              }
-            })()}
+            ${order.items.some(item => item.status === "pending") ? 
+              `<button class="btn-action btn-start" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'pending').map(i => i.order_item_id))}, 'preparing')">Start Preparing</button>
+              <button class="btn-action btn-print" onclick="handlePrintOrder('${order.orderId}')" data-i18n="kitchen.print-order">🖨️ Print</button>` 
+              : (order.items.some(item => item.status === "preparing") ? 
+              `<button class="btn-action btn-serve" onclick="updateAllItemStatus(${JSON.stringify(order.items.filter(i => i.status === 'preparing').map(i => i.order_item_id))}, 'served')">Serve</button>` 
+              : `<button class="btn-action btn-ready" disabled>All Served</button>`)}
           </div>
         </div>
       </div>
@@ -494,30 +415,13 @@ function handleLogout() {
 }
 
 // ============== INIT ============== 
-window.addEventListener("DOMContentLoaded", async () => {
+window.addEventListener("DOMContentLoaded", () => {
   // Check if user came from login.html with email/password
   const emailLoginFlag = sessionStorage.getItem("kitchenStaffLogged");
   
   // Use stored restaurantId from sessionStorage if available, otherwise use URL param
   if (!restaurantId && sessionStorage.getItem("restaurantId")) {
     restaurantId = sessionStorage.getItem("restaurantId");
-  }
-
-  // Fetch restaurant language preference and apply it to the PIN login page
-  if (restaurantId) {
-    try {
-      const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/settings`);
-      if (res.ok) {
-        const settings = await res.json();
-        if (settings.language_preference && typeof setLanguage === 'function') {
-          setLanguage(settings.language_preference);
-        }
-      }
-    } catch (err) {
-      // Network error - fall back to cached language preference
-      const cached = localStorage.getItem('language') || 'zh';
-      if (typeof setLanguage === 'function') setLanguage(cached);
-    }
   }
 
   console.log("Kitchen.html DOMContentLoaded - emailLoginFlag:", emailLoginFlag, "restaurantId:", restaurantId);
@@ -551,22 +455,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   updateLanguageButtonStates();
 });
 
-// ============== ADMIN MENU DROPDOWN ============== 
+// ============== ADMIN MENU DROPDOWN (kept for backward compat; Exit button calls openKitchenSwitcher) ============== 
 function toggleAdminDropdown() {
-  const dropdown = document.getElementById("admin-dropdown");
-  if (dropdown) {
-    dropdown.classList.toggle("hidden");
-  }
+  openKitchenSwitcher();
 }
-
-// Close dropdown when clicking outside
-document.addEventListener("click", (e) => {
-  const btn = document.getElementById("admin-menu-btn");
-  const dropdown = document.getElementById("admin-dropdown");
-  if (btn && dropdown && !btn.contains(e.target) && !dropdown.contains(e.target)) {
-    dropdown.classList.add("hidden");
-  }
-});
 
 // ============== PRINTING ============== 
 function handlePrintOrder(orderId) {
@@ -655,4 +547,181 @@ async function kitchenClockInFromPrompt() {
 function dismissKitchenClockInPrompt() {
   const el = document.getElementById("clock-in-prompt");
   if (el) el.remove();
+}
+
+// ============== KITCHEN SWITCHER ==============
+const KITCHEN_AVATAR_COLORS = ['#2c3e50','#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12','#1abc9c','#e67e22'];
+let kitchenSwitcherPin = "";
+let kitchenSwitcherSelectedId = null;
+let kitchenSwitcherStaffList = [];
+
+function getKitchenAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return KITCHEN_AVATAR_COLORS[Math.abs(hash) % KITCHEN_AVATAR_COLORS.length];
+}
+
+function getKitchenInitials(name) {
+  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+async function openKitchenSwitcher() {
+  const overlay = document.getElementById("kitchen-switcher");
+  if (!overlay) return;
+  showKitchenSwitcherGridView();
+  overlay.style.display = "flex";
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/staff`);
+    if (!res.ok) throw new Error("Failed to load staff");
+    const allStaff = await res.json();
+    // Only kitchen role, max 8
+    kitchenSwitcherStaffList = allStaff.filter(s => s.role === 'kitchen').slice(0, 8);
+    renderKitchenSwitcherGrid();
+  } catch (err) {
+    console.error("Kitchen switcher load error:", err);
+  }
+}
+
+function closeKitchenSwitcher() {
+  const overlay = document.getElementById("kitchen-switcher");
+  if (overlay) overlay.style.display = "none";
+}
+
+function renderKitchenSwitcherGrid() {
+  const grid = document.getElementById("kitchen-switcher-staff-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const activeEl = document.getElementById("kitchen-switcher-logged-in-name");
+  if (activeEl) {
+    const me = kitchenSwitcherStaffList.find(s => String(s.id) === String(window.kitchenUserId));
+    activeEl.textContent = me ? me.name : "";
+  }
+
+  kitchenSwitcherStaffList.forEach(staff => {
+    const isCurrent = String(staff.id) === String(window.kitchenUserId);
+    const card = document.createElement("div");
+    card.className = "switcher-staff-card" + (isCurrent ? " current-user" : "");
+
+    const color = getKitchenAvatarColor(staff.name);
+    const initials = getKitchenInitials(staff.name);
+    const clockedIn = staff.currently_clocked_in;
+
+    card.innerHTML =
+      `<div class="switcher-avatar" style="background:${color}">${initials}</div>` +
+      `<div class="switcher-card-name">${staff.name}</div>` +
+      (clockedIn
+        ? `<div class="switcher-card-status clocked-in" data-i18n="admin.switcher-clocked-in">${t('admin.switcher-clocked-in')}</div>`
+        : `<div class="switcher-card-status" data-i18n="admin.switcher-off">${t('admin.switcher-off')}</div>`) +
+      (isCurrent ? `<div class="switcher-active-badge" data-i18n="admin.switcher-active">${t('admin.switcher-active')}</div>` : "");
+
+    if (!isCurrent) {
+      card.onclick = () => selectKitchenSwitcherStaff(staff.id, staff.name);
+    }
+    grid.appendChild(card);
+  });
+}
+
+function showKitchenSwitcherGridView() {
+  const gridView = document.getElementById("kitchen-switcher-grid-view");
+  const pinView = document.getElementById("kitchen-switcher-pin-view");
+  if (gridView) gridView.style.display = "";
+  if (pinView) pinView.style.display = "none";
+  kitchenSwitcherPin = "";
+  kitchenSwitcherSelectedId = null;
+  updateKitchenSwitcherPinDots();
+}
+
+function selectKitchenSwitcherStaff(staffId, staffName) {
+  kitchenSwitcherSelectedId = staffId;
+  kitchenSwitcherPin = "";
+
+  const nameEl = document.getElementById("kitchen-switcher-pin-name");
+  if (nameEl) nameEl.textContent = staffName;
+
+  const avatarEl = document.getElementById("kitchen-switcher-pin-avatar");
+  if (avatarEl) {
+    avatarEl.textContent = getKitchenInitials(staffName);
+    avatarEl.style.background = getKitchenAvatarColor(staffName);
+  }
+
+  updateKitchenSwitcherPinDots();
+
+  document.getElementById("kitchen-switcher-grid-view").style.display = "none";
+  document.getElementById("kitchen-switcher-pin-view").style.display = "";
+
+  const errorEl = document.getElementById("kitchen-switcher-error");
+  if (errorEl) { errorEl.textContent = ""; errorEl.style.display = "none"; }
+}
+
+function backToKitchenSwitcherGrid() { showKitchenSwitcherGridView(); }
+
+function kitchenSwitcherPressKey(num) {
+  if (kitchenSwitcherPin.length < 6) {
+    kitchenSwitcherPin += String(num);
+    updateKitchenSwitcherPinDots();
+  }
+}
+
+function kitchenSwitcherClearPin() {
+  kitchenSwitcherPin = "";
+  updateKitchenSwitcherPinDots();
+}
+
+function updateKitchenSwitcherPinDots() {
+  document.querySelectorAll("#kitchen-switcher-pin-dots span")
+    .forEach((dot, idx) => dot.classList.toggle("filled", idx < kitchenSwitcherPin.length));
+}
+
+async function kitchenSwitcherSubmitPin() {
+  if (kitchenSwitcherPin.length !== 6 || !kitchenSwitcherSelectedId) return;
+  const errorEl = document.getElementById("kitchen-switcher-error");
+  if (errorEl) errorEl.style.display = "none";
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/kitchen-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: kitchenSwitcherPin, restaurantId })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.token) {
+      if (errorEl) { errorEl.textContent = data.error || "Invalid PIN"; errorEl.style.display = "block"; }
+      kitchenSwitcherPin = ""; updateKitchenSwitcherPinDots();
+      return;
+    }
+
+    // Verify PIN belongs to the kitchen staff member that was selected
+    if (String(data.user_id) !== String(kitchenSwitcherSelectedId)) {
+      if (errorEl) { errorEl.textContent = t('admin.switcher-wrong-pin'); errorEl.style.display = "block"; }
+      kitchenSwitcherPin = ""; updateKitchenSwitcherPinDots();
+      return;
+    }
+
+    // Switch to new kitchen user
+    token = data.token;
+    localStorage.setItem("token", token);
+    localStorage.setItem("role", "kitchen");
+    localStorage.setItem("restaurantId", restaurantId);
+
+    window.kitchenUserId = data.user_id || null;
+    window.kitchenCurrentlyClockedIn = data.currently_clocked_in || false;
+
+    if (data.access_rights && data.access_rights.allowed_categories) {
+      allowedCategoryIds = data.access_rights.allowed_categories.map(id => parseInt(id, 10));
+    }
+
+    closeKitchenSwitcher();
+
+    // Refresh clock button and prompt
+    updateKitchenClockBtn(window.kitchenCurrentlyClockedIn);
+    if (!window.kitchenCurrentlyClockedIn) showKitchenClockInPrompt();
+
+    // Reload orders with new token (interval already running)
+    loadKitchenOrders();
+
+  } catch (err) {
+    if (errorEl) { errorEl.textContent = "Connection error"; errorEl.style.display = "block"; }
+  }
 }

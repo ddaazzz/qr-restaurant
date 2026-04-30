@@ -807,3 +807,18 @@
     padding: 12px;
   }
 }
+/* ============= CRM ============= */
+.crm-customer-row:hover { background: #f0f7ff; cursor: pointer; }
+.crm-profile-card { border-radius: 10px; overflow: hidden; }
+.crm-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.crm-status-confirmed { background: #d1fae5; color: #065f46; }
+.crm-status-completed { background: #dbeafe; color: #1e40af; }
+.crm-status-cancelled { background: #fee2e2; color: #991b1b; }
+.crm-status-no-show   { background: #f3f4f6; color: #6b7280; }

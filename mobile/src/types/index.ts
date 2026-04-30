@@ -11,7 +11,6 @@ export interface AuthResponse {
   userId: string;
   access_rights?: Record<string, any> | string[];
   currently_clocked_in?: boolean;
-  apiBaseUrl?: string | null;
 }
 
 export interface AuthToken {

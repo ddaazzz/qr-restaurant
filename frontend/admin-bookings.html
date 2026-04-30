@@ -52,9 +52,10 @@
 
       <form id="booking-form">
         <div class="form-row">
-          <div class="form-group">
+          <div class="form-group" style="position:relative;">
             <label for="booking-guest-name" data-i18n="admin.guest-name">Guest Name *</label>
-            <input type="text" id="booking-guest-name" required placeholder="Enter guest name">
+            <input type="text" id="booking-guest-name" required placeholder="Enter guest name" autocomplete="off" oninput="onBookingNameInput(this.value)">
+            <div id="booking-customer-suggestions" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #d1d5db;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:200;max-height:160px;overflow-y:auto;margin-top:2px;"></div>
           </div>
           <div class="form-group">
             <label for="booking-phone" data-i18n="admin.phone">Phone</label>

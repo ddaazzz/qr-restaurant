@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chuio Merchant Reference Guide</title>
+  <meta name="description" content="Searchable Chuio merchant reference guide by heading pages." />
+  <link rel="stylesheet" href="/support/guide.css" />
+</head>
+<body>
+  <div class="page-bg"></div>
+  <header class="support-nav">
+    <div class="support-nav-inner">
+      <a class="support-logo" href="/">CHUIO</a>
+      <div class="support-nav-right">
+        <button class="langBtn" id="langToggle"></button>
+        <nav class="support-links">
+          <a href="/" id="navHome">Home</a>
+          <a href="/support" class="active" id="navSupport">Support</a>
+          <a href="/login" id="navLogin">Login</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="hero">
+      <span class="eyebrow" id="eyebrow">CHUIO SUPPORT</span>
+      <h1 id="heroTitle">Merchant Reference Guide</h1>
+      <p class="subtitle" id="heroSubtitle">Browse by heading and search by keywords. Each heading has its own shareable page link.</p>
+      <div class="searchWrap">
+        <input id="searchInput" type="search" placeholder="Search keywords like: printer, coupon, payment, kitchen, tables" aria-label="Search guide headings" />
+        <button id="clearBtn" type="button">Clear</button>
+      </div>
+      <p id="resultMeta" class="meta"></p>
+    </section>
+
+    <section id="topicGrid" class="grid" aria-live="polite"></section>
+    <div id="emptyState" class="empty" hidden></div>
+  </main>
+
+  <script src="/support/guide-data.js"></script>
+  <script src="/support/guide-data-zh.js"></script>
+  <script>
+    (function () {
+      function slugify(text) {
+        return String(text || '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+      }
+
+      function getLang() { return localStorage.getItem('guide-lang') || 'en'; }
+      function setLang(l) { localStorage.setItem('guide-lang', l); }
+
+      function localize(topic, lang) {
+        if (lang !== 'zh') return topic;
+        const zh = (window.CHUIO_GUIDE_TOPICS_ZH || []).find(t => t.slug === topic.slug);
+        if (!zh) return topic;
+        return {
+          ...topic,
+          title: zh.title || topic.title,
+          summary: zh.summary || topic.summary,
+          keywords: zh.keywords || topic.keywords,
+          sections: topic.sections.map((s, i) => {
+            const zhs = zh.sections && zh.sections[i];
+            if (!zhs) return s;
+            return { ...s, heading: zhs.heading || s.heading, summary: zhs.summary || s.summary, points: zhs.points || s.points };
+          })
+        };
+      }
+
+      const lang = getLang();
+      const rawTopics = (window.CHUIO_GUIDE_TOPICS || []).slice().sort((a, b) => a.step - b.step);
+      const topics = rawTopics.map(t => localize(t, lang));
+      const headingPages = topics.flatMap((topic, ti) => {
+        const rawSections = rawTopics[ti].sections || [];
+        return (topic.sections || []).map((section, index) => ({
+          step: topic.step,
+          topicTitle: topic.title,
+          topicSlug: topic.slug,
+          heading: section.heading,
+          headingSlug: rawSections[index] ? (rawSections[index].slug || slugify(rawSections[index].heading) || `heading-${index + 1}`) : `heading-${index + 1}`,
+          summary: section.summary || topic.summary,
+          keywords: topic.keywords || [],
+          pointsText: (section.points || []).join(' ')
+        }));
+      });
+
+      const grid = document.getElementById('topicGrid');
+      const input = document.getElementById('searchInput');
+      const clearBtn = document.getElementById('clearBtn');
+      const meta = document.getElementById('resultMeta');
+      const empty = document.getElementById('emptyState');
+
+      // Static UI strings
+      const ui = lang === 'zh' ? {
+        navHome: '首頁', navSupport: '支援', navLogin: '登錄',
+        eyebrow: 'CHUIO 支援',
+        heroTitle: '商戶參考指南',
+        heroSubtitle: '按標題瀏覽並按關鍵字搜索。每個標題都有自己的可分享頁面連結。',
+        searchPlaceholder: '搜索關鍵字，例如：打印機、優惠券、付款、廚房、餐桌',
+        clearLabel: '清除',
+        emptyState: '找不到相關內容，請嘗試其他關鍵字。'
+      } : {
+        navHome: 'Home', navSupport: 'Support', navLogin: 'Login',
+        eyebrow: 'CHUIO SUPPORT',
+        heroTitle: 'Merchant Reference Guide',
+        heroSubtitle: 'Browse by heading and search by keywords. Each heading has its own shareable page link.',
+        searchPlaceholder: 'Search keywords like: printer, coupon, payment, kitchen, tables',
+        clearLabel: 'Clear',
+        emptyState: 'No matching topic found. Try another keyword.'
+      };
+      document.getElementById('navHome').textContent = ui.navHome;
+      document.getElementById('navSupport').textContent = ui.navSupport;
+      document.getElementById('navLogin').textContent = ui.navLogin;
+      document.getElementById('eyebrow').textContent = ui.eyebrow;
+      document.getElementById('heroTitle').textContent = ui.heroTitle;
+      document.getElementById('heroSubtitle').textContent = ui.heroSubtitle;
+      input.placeholder = ui.searchPlaceholder;
+      clearBtn.textContent = ui.clearLabel;
+      empty.textContent = ui.emptyState;
+
+      function matches(page, query) {
+        if (!query) return true;
+        const q = query.toLowerCase().trim();
+        const haystack = [
+          page.topicTitle,
+          page.heading,
+          page.summary,
+          (page.keywords || []).join(' '),
+          page.pointsText
+        ].join(' ').toLowerCase();
+        return haystack.includes(q);
+      }
+
+      function card(page) {
+        const keywords = (page.keywords || []).slice(0, 5);
+        const openLabel = lang === 'zh' ? '開啟頁面' : 'Open Heading';
+        const stepLabel = lang === 'zh' ? `第 ${page.step} 步` : `Step ${page.step}`;
+        return `
+          <article class="card">
+            <div class="cardHead">
+              <span class="step">${stepLabel}</span>
+            </div>
+            <h3>${page.heading}</h3>
+            <p><strong>${page.topicTitle}</strong></p>
+            <p>${page.summary}</p>
+            <div class="tags">${keywords.map(k => `<span class="tag">${k}</span>`).join('')}</div>
+            <a class="open" href="/support/topic.html?slug=${encodeURIComponent(page.topicSlug)}&section=${encodeURIComponent(page.headingSlug)}">${openLabel}</a>
+          </article>
+        `;
+      }
+
+      function render() {
+        const query = input.value;
+        const filtered = headingPages.filter(p => matches(p, query));
+        grid.innerHTML = filtered.map(card).join('');
+        empty.hidden = filtered.length !== 0;
+        const shownLabel = lang === 'zh' ? `顯示 ${filtered.length} 個頁面` : `${filtered.length} heading page${filtered.length === 1 ? '' : 's'} shown`;
+        meta.textContent = shownLabel;
+      }
+
+      input.addEventListener('input', render);
+      clearBtn.addEventListener('click', function () {
+        input.value = '';
+        render();
+        input.focus();
+      });
+
+      // Language toggle
+      const langToggle = document.getElementById('langToggle');
+      if (langToggle) {
+        langToggle.textContent = lang === 'zh' ? 'EN' : '中文';
+        langToggle.addEventListener('click', function () {
+          setLang(lang === 'zh' ? 'en' : 'zh');
+          location.reload();
+        });
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

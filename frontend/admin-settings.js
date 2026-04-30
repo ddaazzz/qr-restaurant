@@ -44,7 +44,10 @@ async function initializeSettings() {
   } catch (err) {
     console.error("Failed to initialize settings:", err);
   }
-  
+
+  // Load CRM count preview for the settings card
+  loadCrmCountPreview();
+
   // Attach event listeners only once
   if (!settingsInitialized) {
     settingsInitialized = true;
@@ -212,11 +215,17 @@ async function showSettingsPage(pageName) {
       case 'booking-settings':
         await loadBookingSettingsModal();
         break;
+      case 'menu-settings':
+        await loadMenuSettingsPage();
+        break;
       case 'addon-presets':
         await loadAddonPresets();
         break;
       case 'variant-presets':
         await loadVariantPresets();
+        break;
+      case 'crm':
+        await loadCrmPage();
         break;
     }
   }
@@ -778,6 +787,56 @@ async function loadCouponsModal() {
     }
   } catch (err) {
     console.error("Failed to load coupons:", err);
+  }
+}
+
+// Load Menu Settings Page
+async function loadMenuSettingsPage() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
+    const settings = await res.json();
+
+    // Custom food item toggle (feature flag)
+    const toggle = document.getElementById('custom-food-item-toggle');
+    if (toggle) {
+      const flags = settings.feature_flags || {};
+      toggle.checked = flags.allow_custom_food_items === true;
+    }
+
+    // Menu layout columns
+    const cols = (settings.ui_config || {}).menu_columns || 1;
+    const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
+    if (radio) radio.checked = true;
+  } catch (err) {
+    console.error('Failed to load menu settings:', err);
+  }
+}
+
+async function saveCustomFoodItemSetting(enabled) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: { allow_custom_food_items: enabled } })
+    });
+    if (!res.ok) throw new Error('Failed to save setting');
+  } catch (err) {
+    console.error('Error saving custom food item setting:', err);
+    alert(adminSettingsT('admin.menu-settings-save-failed', 'Failed to save setting'));
+  }
+}
+
+async function saveMenuLayoutSetting(columns) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ui_config: { menu_columns: columns } })
+    });
+    if (!res.ok) throw new Error('Failed to save setting');
+  } catch (err) {
+    console.error('Error saving menu layout setting:', err);
+    alert(adminSettingsT('admin.menu-settings-save-failed', 'Failed to save setting'));
   }
 }
 
@@ -1605,6 +1664,22 @@ async function loadPaymentTerminals() {
     });
     if (res.ok) {
       PAYMENT_TERMINALS_CACHE = await res.json();
+    } else if (res.status === 401 || res.status === 403) {
+      PAYMENT_TERMINALS_CACHE = [];
+      // Auth failure — show error, not paid-service gate
+      const paidNotice = document.getElementById('terminal-paid-notice');
+      const mainContent = document.getElementById('terminal-main-content');
+      const addBtn = document.getElementById('terminal-add-btn');
+      if (paidNotice) paidNotice.style.display = 'none';
+      if (mainContent) mainContent.style.display = '';
+      if (addBtn) addBtn.style.display = 'none';
+      const errorDiv = document.getElementById('terminal-error');
+      if (errorDiv) {
+        errorDiv.textContent = 'Session expired — please refresh the page or log in again.';
+        errorDiv.style.display = 'block';
+      }
+      await loadOrderPayStatus();
+      return;
     } else {
       PAYMENT_TERMINALS_CACHE = [];
     }
@@ -1656,7 +1731,10 @@ function renderPaymentTerminalsList() {
     let html = '<div style="flex: 1;">';
     html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
     
-    const vendorDisplay = terminal.vendor_name === 'payment-asia' ? 'Payment Asia' : terminal.vendor_name.toUpperCase();
+    const vendorDisplay = terminal.vendor_name === 'payment-asia' ? 'Payment Asia (Online)'
+      : terminal.vendor_name === 'payment-asia-offline' ? 'Payment Asia (Offline)'
+      : terminal.vendor_name === 'kpay' ? 'KPay (Offline)'
+      : terminal.vendor_name.toUpperCase();
     html += '<span style="font-weight: bold; font-size: 14px;">' + vendorDisplay + '</span>';
     
     if (terminal.is_active) {
@@ -1668,6 +1746,9 @@ function renderPaymentTerminalsList() {
     if (terminal.vendor_name === 'payment-asia') {
       html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">Token: ' + (terminal.merchant_token || terminal.app_id || '').substring(0, 20) + '...</div>';
       html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">Environment: ' + (terminal.payment_gateway_env || 'sandbox') + '</div>';
+    } else if (terminal.vendor_name === 'payment-asia-offline') {
+      html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">IP: ' + (terminal.terminal_ip || '') + ':' + (terminal.terminal_port || '') + '</div>';
+      html += '<div style="font-size: 12px; color: #e97316; margin-bottom: 4px;">⚠️ LAN only — test from iOS app</div>';
     } else {
       html += '<div style="font-size: 12px; color: #666; margin-bottom: 4px;">ID: ' + (terminal.app_id || '') + '</div>';
       if (terminal.terminal_ip && terminal.terminal_port) {
@@ -1682,11 +1763,17 @@ function renderPaymentTerminalsList() {
       html += '<div style="font-size: 11px; color: #dc2626; margin-top: 4px;">⚠️ ' + terminal.last_error_message + '</div>';
     }
     html += '</div>';
-    html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px;">';
+    html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-left: 12px; align-items: flex-end;">';
     
-    // Activate button - only show for superadmin if not already active
-    if (!terminal.is_active && IS_SUPERADMIN) {
-      html += '<button onclick="activatePaymentTerminal(' + terminal.id + ')" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">✓ Activate</button>';
+    // Enable/disable toggle (superadmin only)
+    if (IS_SUPERADMIN) {
+      const toggleId = 'toggle-terminal-' + terminal.id;
+      html += `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; color:${terminal.is_active ? '#059669' : '#6b7280'};">`;
+      html += `<span>${terminal.is_active ? 'Enabled' : 'Disabled'}</span>`;
+      html += `<span style="position:relative; display:inline-block; width:36px; height:20px;">`;
+      html += `<input type="checkbox" id="${toggleId}" ${terminal.is_active ? 'checked' : ''} onchange="togglePaymentTerminal(${terminal.id}, this.checked)" style="opacity:0; width:0; height:0; position:absolute;">`;
+      html += `<span onclick="document.getElementById('${toggleId}').click()" style="position:absolute; cursor:pointer; inset:0; border-radius:20px; background:${terminal.is_active ? '#059669' : '#d1d5db'}; transition:0.2s;"><span style="position:absolute; left:${terminal.is_active ? '18px' : '2px'}; top:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:0.2s;"></span></span>`;
+      html += `</span></label>`;
     }
     
     html += '<button onclick="editPaymentTerminal(' + terminal.id + ')" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">✎ Edit</button>';
@@ -1700,6 +1787,56 @@ function renderPaymentTerminalsList() {
     card.innerHTML = html;
     listContainer.appendChild(card);
   });
+}
+
+async function togglePaymentTerminal(terminalId, enable) {
+  try {
+    if (enable) {
+      // Activate: deactivates others of same vendor, sets active_payment_vendor on restaurant
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({})
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to enable');
+    } else {
+      // Deactivate: just flip is_active to false on this terminal
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ is_active: false })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to disable');
+    }
+    await loadPaymentTerminals();
+  } catch (err) {
+    alert('Error: ' + err.message);
+    await loadPaymentTerminals(); // re-render to reset toggle state
+  }
+}
+
+async function togglePaymentTerminal(terminalId, enable) {
+  try {
+    if (enable) {
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({})
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to enable');
+    } else {
+      const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ is_active: false })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to disable');
+    }
+    await loadPaymentTerminals();
+  } catch (err) {
+    alert('Error: ' + err.message);
+    await loadPaymentTerminals();
+  }
 }
 
 function openPaymentTerminalForm() {
@@ -1725,6 +1862,9 @@ function clearPaymentTerminalForm() {
   document.getElementById('new-terminal-merchant-token').value = '';
   document.getElementById('new-terminal-secret-code').value = '';
   document.getElementById('new-terminal-gateway-env').value = 'sandbox';
+  document.getElementById('new-terminal-pa-offline-ip').value = '';
+  document.getElementById('new-terminal-pa-offline-port').value = '8080';
+  document.getElementById('new-terminal-pa-offline-api-key').value = '';
   document.getElementById('terminal-error').style.display = 'none';
   document.getElementById('terminal-success').style.display = 'none';
   document.getElementById('terminal-test-result').style.display = 'none';
@@ -1736,19 +1876,28 @@ function updatePaymentTerminalFields() {
   const vendor = document.getElementById('new-terminal-vendor').value;
   const kpayFields = document.getElementById('kpay-fields');
   const paymentAsiaFields = document.getElementById('payment-asia-fields');
+  const paOfflineFields = document.getElementById('payment-asia-offline-fields');
   const kpayBtn = document.getElementById('kpay-test-btn');
   const paymentAsiaBtn = document.getElementById('payment-asia-test-btn');
+  const paOfflineBtn = document.getElementById('payment-asia-offline-test-btn');
   
+  // Hide all field groups first
+  kpayFields.style.display = 'none';
+  paymentAsiaFields.style.display = 'none';
+  paOfflineFields.style.display = 'none';
+  kpayBtn.style.display = 'none';
+  paymentAsiaBtn.style.display = 'none';
+  paOfflineBtn.style.display = 'none';
+
   if (vendor === 'payment-asia') {
-    kpayFields.style.display = 'none';
     paymentAsiaFields.style.display = 'block';
-    kpayBtn.style.display = 'none';
     paymentAsiaBtn.style.display = 'block';
+  } else if (vendor === 'payment-asia-offline') {
+    paOfflineFields.style.display = 'block';
+    paOfflineBtn.style.display = 'block';
   } else {
     kpayFields.style.display = 'block';
-    paymentAsiaFields.style.display = 'none';
     kpayBtn.style.display = 'block';
-    paymentAsiaBtn.style.display = 'none';
   }
 }
 
@@ -1772,6 +1921,11 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').value = terminal.merchant_token || terminal.app_id || '';
       document.getElementById('new-terminal-secret-code').value = terminal.secret_code || terminal.app_secret || '';
       document.getElementById('new-terminal-gateway-env').value = terminal.payment_gateway_env || 'sandbox';
+    } else if (terminal.vendor_name === 'payment-asia-offline') {
+      // Load PA Offline fields
+      document.getElementById('new-terminal-pa-offline-ip').value = terminal.terminal_ip || '';
+      document.getElementById('new-terminal-pa-offline-port').value = terminal.terminal_port || '8080';
+      document.getElementById('new-terminal-pa-offline-api-key').value = terminal.app_secret || '';
     } else {
       // Load KPay fields
       document.getElementById('new-terminal-app-id').value = terminal.app_id || '';
@@ -1789,6 +1943,7 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').disabled = true;
       document.getElementById('new-terminal-secret-code').disabled = true;
       document.getElementById('new-terminal-gateway-env').disabled = true;
+      document.getElementById('new-terminal-pa-offline-api-key').disabled = true;
     } else {
       document.getElementById('new-terminal-vendor').disabled = false;
       document.getElementById('new-terminal-app-id').disabled = false;
@@ -1796,6 +1951,7 @@ async function editPaymentTerminal(terminalId) {
       document.getElementById('new-terminal-merchant-token').disabled = false;
       document.getElementById('new-terminal-secret-code').disabled = false;
       document.getElementById('new-terminal-gateway-env').disabled = false;
+      document.getElementById('new-terminal-pa-offline-api-key').disabled = false;
     }
 
     document.getElementById('payment-terminal-form-view').style.display = 'block';
@@ -1842,9 +1998,27 @@ async function savePaymentTerminal() {
     
     payload = {
       vendor_name: vendor,
-      app_id: merchantToken, // Merchant Token stored in app_id
-      app_secret: secretCode, // Secret Code stored in app_secret
+      merchant_token: merchantToken,
+      secret_code: secretCode,
       payment_gateway_env: env
+    };
+  } else if (vendor === 'payment-asia-offline') {
+    // PA Offline validation
+    const paOfflineIp = document.getElementById('new-terminal-pa-offline-ip').value.trim();
+    const paOfflinePort = document.getElementById('new-terminal-pa-offline-port').value.trim();
+    const paOfflineApiKey = document.getElementById('new-terminal-pa-offline-api-key').value.trim();
+
+    if (!paOfflineIp || !paOfflinePort || !paOfflineApiKey) {
+      showError('terminal-error', 'Terminal IP, Port, and API Key are required for PA Offline');
+      return;
+    }
+
+    payload = {
+      vendor_name: vendor,
+      terminal_ip: paOfflineIp,
+      terminal_port: parseInt(paOfflinePort),
+      app_secret: paOfflineApiKey,
+      app_id: paOfflineApiKey,
     };
   } else {
     // KPay validation
@@ -2074,6 +2248,26 @@ async function testPaymentAsia() {
   }
 }
 
+function testPaymentAsiaOffline() {
+  const resultDiv = document.getElementById('terminal-test-result');
+  resultDiv.style.background = '#fffbeb';
+  resultDiv.style.borderLeft = '4px solid #f59e0b';
+  resultDiv.style.color = '#92400e';
+  resultDiv.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="font-size: 20px;">📱</div>
+      <div>
+        <strong>Use the iOS app to test PA Offline terminals</strong>
+        <div style="font-size: 13px; margin-top: 4px; opacity: 0.9;">
+          PA Offline terminals communicate directly over your local network (LAN).<br>
+          The cloud server cannot reach private LAN IPs — open the iOS app, go to Settings → Payment Terminals, and tap <strong>Test</strong>.
+        </div>
+      </div>
+    </div>
+  `;
+  resultDiv.style.display = 'block';
+}
+
 async function activatePaymentTerminal(terminalId) {
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${terminalId}/activate`, {
@@ -2256,5 +2450,285 @@ async function toggleOrderPayFeature() {
       toggleBtn.textContent = 'Retry';
     }
     showError('terminal-error', 'Failed to toggle Order & Pay: ' + err.message);
+  }
+}
+
+// ============================================================
+// ==================== CRM ===================================
+// ============================================================
+
+var CRM_OFFSET = 0;
+var CRM_LIMIT  = 30;
+var CRM_SEARCH_TIMER = null;
+
+function adminSettingsT(key, fallback) {
+  try {
+    var translated = typeof t === 'function' ? t(key) : null;
+    return translated && translated !== key ? translated : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function formatTemplate(template, values) {
+  return values.reduce(function(result, value, index) {
+    return result.replace(new RegExp('\\{' + index + '\\}', 'g'), String(value));
+  }, template);
+}
+
+function crmCustomerCountText(count, showPlus) {
+  var countText = String(count) + (showPlus ? '+' : '');
+  var template = adminSettingsT(
+    count === 1 ? 'admin.crm-count-single' : 'admin.crm-count-multiple',
+    count === 1 ? '{0} customer' : '{0} customers'
+  );
+  return formatTemplate(template, [countText]);
+}
+
+function crmVisitSummary(visits, lastVisit) {
+  var template = adminSettingsT(
+    visits === 1 ? 'admin.crm-visits-summary-single' : 'admin.crm-visits-summary-multiple',
+    visits === 1 ? '{0} visit · {1}' : '{0} visits · {1}'
+  );
+  return formatTemplate(template, [visits || 0, lastVisit]);
+}
+
+async function loadCrmCountPreview() {
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/count', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    var data = await res.json();
+    var el = document.getElementById('crm-count-preview');
+    if (el) {
+      el.textContent = crmCustomerCountText(data.total || 0, false);
+      el.removeAttribute('data-i18n');
+    }
+  } catch (e) { /* silent */ }
+}
+
+async function loadCrmPage() {
+  CRM_OFFSET = 0;
+  var listEl    = document.getElementById('crm-customer-list');
+  var countEl   = document.getElementById('crm-customer-count');
+  var loadMoreEl = document.getElementById('crm-load-more-wrapper');
+  if (!listEl) return;
+
+  listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">' + adminSettingsT('admin.loading', 'Loading...') + '</p>';
+  if (loadMoreEl) loadMoreEl.style.display = 'none';
+
+  var search = (document.getElementById('crm-search-input') || {}).value || '';
+  var sortBy = (document.getElementById('crm-sort-select') || {}).value || 'last_visit';
+  var url = API + '/restaurants/' + restaurantId + '/crm/customers?limit=' + CRM_LIMIT + '&offset=0&sort_by=' + sortBy;
+  if (search.trim()) url += '&search=' + encodeURIComponent(search.trim());
+
+  try {
+    var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+
+    if (countEl) countEl.textContent = crmCustomerCountText(data.length, data.length === CRM_LIMIT);
+
+    if (data.length === 0) {
+      listEl.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">' + adminSettingsT('admin.crm-no-customers', 'No customers found. Import from bookings to get started.') + '</p>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    data.forEach(function(c) { listEl.appendChild(crmBuildRow(c)); });
+
+    CRM_OFFSET = data.length;
+    if (loadMoreEl) loadMoreEl.style.display = data.length >= CRM_LIMIT ? 'block' : 'none';
+    reTranslateContent();
+  } catch (err) {
+    console.error('[CRM]', err);
+    listEl.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">' + adminSettingsT('admin.crm-load-failed', 'Failed to load customers.') + '</p>';
+  }
+}
+
+async function crmLoadMore() {
+  var listEl    = document.getElementById('crm-customer-list');
+  var loadMoreEl = document.getElementById('crm-load-more-wrapper');
+  if (!listEl) return;
+
+  var search = (document.getElementById('crm-search-input') || {}).value || '';
+  var sortBy = (document.getElementById('crm-sort-select') || {}).value || 'last_visit';
+  var url = API + '/restaurants/' + restaurantId + '/crm/customers?limit=' + CRM_LIMIT + '&offset=' + CRM_OFFSET + '&sort_by=' + sortBy;
+  if (search.trim()) url += '&search=' + encodeURIComponent(search.trim());
+
+  try {
+    var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+    data.forEach(function(c) { listEl.appendChild(crmBuildRow(c)); });
+    CRM_OFFSET += data.length;
+    if (loadMoreEl) loadMoreEl.style.display = data.length >= CRM_LIMIT ? 'block' : 'none';
+  } catch (err) {
+    console.error('[CRM load more]', err);
+  }
+}
+
+function crmSearchDebounce() {
+  clearTimeout(CRM_SEARCH_TIMER);
+  CRM_SEARCH_TIMER = setTimeout(loadCrmPage, 350);
+}
+
+function crmBuildRow(c) {
+  var div = document.createElement('div');
+  div.className = 'crm-customer-row';
+  div.style.cssText = 'display:flex;align-items:center;padding:12px 4px;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+  div.onclick = function() { crmOpenProfile(c.id); };
+
+  var initials  = (c.name || '?').slice(0, 2).toUpperCase();
+  var lastVisit = c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString() : '—';
+  var spent     = c.total_spent_cents > 0 ? '$' + (c.total_spent_cents / 100).toFixed(2) : '—';
+  var contactLine = c.phone || c.email || adminSettingsT('admin.crm-no-contact', 'No contact details');
+
+  div.innerHTML =
+    '<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">' + initials + '</div>' +
+    '<div style="flex:1;margin-left:12px;min-width:0;">' +
+      '<div style="font-weight:600;font-size:13px;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.name || '—') + '</div>' +
+      '<div style="font-size:11px;color:#6b7280;">' + contactLine + '</div>' +
+    '</div>' +
+    '<div style="text-align:right;flex-shrink:0;">' +
+      '<div style="font-size:12px;color:#059669;font-weight:600;">' + spent + '</div>' +
+      '<div style="font-size:11px;color:#6b7280;">' + crmVisitSummary(c.total_visits || 0, lastVisit) + '</div>' +
+    '</div>';
+
+  return div;
+}
+
+async function crmOpenProfile(customerId) {
+  var profileView   = document.getElementById('crm-profile-view');
+  var listView      = document.getElementById('crm-list-view');
+  var profileContent = document.getElementById('crm-profile-content');
+  if (!profileView || !profileContent) return;
+
+  listView.style.display   = 'none';
+  profileView.style.display = 'block';
+  profileContent.innerHTML = '<p style="color:#999;text-align:center;padding:24px;">' + adminSettingsT('admin.loading', 'Loading...') + '</p>';
+
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/customers/' + customerId, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Failed');
+    var d = await res.json();
+    profileContent.innerHTML = crmBuildProfile(d);
+    reTranslateContent();
+  } catch (err) {
+    profileContent.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:24px;">' + adminSettingsT('admin.crm-load-customer-failed', 'Failed to load customer.') + '</p>';
+  }
+}
+
+function crmBackToList() {
+  document.getElementById('crm-profile-view').style.display = 'none';
+  document.getElementById('crm-list-view').style.display   = 'block';
+}
+
+function crmStatBox(label, value) {
+  return '<div style="flex:1;text-align:center;padding:12px 8px;border-right:1px solid #e5e7eb;">' +
+    '<div style="font-size:14px;font-weight:700;color:#1f2937;">' + value + '</div>' +
+    '<div style="font-size:11px;color:#6b7280;">' + label + '</div>' +
+    '</div>';
+}
+
+function crmBuildProfile(d) {
+  var c        = d.customer;
+  var orders   = d.orders || [];
+  var pastBk   = d.past_bookings || [];
+  var futureBk = d.future_bookings || [];
+  var initials = (c.name || '?').slice(0, 2).toUpperCase();
+  var spent    = c.total_spent_cents > 0 ? '$' + (c.total_spent_cents / 100).toFixed(2) : '$0.00';
+  var totalTransacted = d.total_transacted_cents > 0 ? '$' + (d.total_transacted_cents / 100).toFixed(2) : '$0.00';
+
+  var html =
+    '<div class="crm-profile-card" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">' +
+      '<div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:20px;color:#fff;display:flex;align-items:center;gap:14px;">' +
+        '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">' + initials + '</div>' +
+        '<div>' +
+          '<div style="font-size:18px;font-weight:700;">' + (c.name || '—') + '</div>' +
+          '<div style="font-size:12px;opacity:0.85;">' + (c.phone || '') + (c.phone && c.email ? '  ·  ' : '') + (c.email || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;">' +
+        crmStatBox(adminSettingsT('admin.crm-stat-visits', 'Visits'), c.total_visits || 0) +
+        crmStatBox(adminSettingsT('admin.crm-stat-spent-est', 'Spent (est.)'), spent) +
+        crmStatBox(adminSettingsT('admin.crm-stat-transacted', 'Transacted'), totalTransacted) +
+      '</div>' +
+      (c.notes ? '<div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f0f0f0;">📝 ' + c.notes + '</div>' : '') +
+    '</div>';
+
+  // Upcoming bookings
+  if (futureBk.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-upcoming-bookings', 'Upcoming Bookings') + '</h4>';
+    futureBk.forEach(function(b) {
+      html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:4px;">' +
+        '<strong>' + b.booking_date + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
+        (b.table_label ? '  ·  ' + adminSettingsT('admin.crm-table', 'Table') + ' ' + b.table_label : '') + '</div>';
+    });
+  }
+
+  // Recent orders
+  if (orders.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-recent-orders', 'Recent Orders') + '</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+      '<thead><tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">' +
+        '<th style="padding:8px;text-align:left;color:#6b7280;">#</th>' +
+        '<th style="padding:8px;text-align:left;color:#6b7280;">' + adminSettingsT('admin.crm-table', 'Table') + '</th>' +
+        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-total', 'Total') + '</th>' +
+        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-date', 'Date') + '</th>' +
+      '</tr></thead><tbody>';
+    orders.slice(0, 10).forEach(function(o) {
+      var total = parseInt(o.total_cents, 10) || 0;
+      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.id) + '</td>' +
+        '<td style="padding:8px;">' + (o.table_label || '—') + '</td>' +
+        '<td style="padding:8px;text-align:right;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</td>' +
+        '<td style="padding:8px;text-align:right;color:#6b7280;">' + new Date(o.created_at).toLocaleDateString() + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  // Past bookings
+  if (pastBk.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-past-bookings', 'Past Bookings') + '</h4>';
+    pastBk.slice(0, 8).forEach(function(b) {
+      var badgeColor = b.status === 'confirmed' ? '#059669' : b.status === 'cancelled' ? '#e74c3c' : '#6b7280';
+      html += '<div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:6px 0;border-bottom:1px solid #f5f5f5;">' +
+        '<span>' + b.booking_date + '</span>' +
+        '<span style="color:#6b7280;">' + b.pax + ' pax</span>' +
+        '<span style="padding:2px 8px;border-radius:12px;background:' + badgeColor + '20;color:' + badgeColor + ';font-size:11px;font-weight:600;">' + b.status + '</span>' +
+        '</div>';
+    });
+  }
+
+  if (orders.length === 0 && pastBk.length === 0 && futureBk.length === 0) {
+    html += '<p style="color:#999;font-size:13px;padding:16px 0;text-align:center;">' + adminSettingsT('admin.crm-no-history', 'No order or booking history yet.') + '</p>';
+  }
+
+  return html;
+}
+
+async function crmImportFromBookings() {
+  var btn = document.getElementById('crm-import-btn');
+  if (btn) { btn.disabled = true; btn.textContent = adminSettingsT('admin.crm-importing', 'Importing…'); }
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/import-from-bookings', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+    alert(formatTemplate(adminSettingsT('admin.crm-import-complete', 'Import complete: {0} new, {1} updated.'), [data.inserted || 0, data.updated || 0]));
+    await loadCrmPage();
+    loadCrmCountPreview();
+  } catch (err) {
+    console.error('[CRM import]', err);
+    alert(adminSettingsT('admin.crm-import-failed', 'Import failed. Please try again.'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = adminSettingsT('admin.crm-import-bookings', 'Import from Bookings'); }
   }
 }

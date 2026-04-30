@@ -28,19 +28,24 @@ router.get("/tables/:tableId/units", async (req, res) => {
 // GET derived table categories
 router.get("/restaurants/:restaurantId/table-categories",
   async (req, res) => {
-    const { restaurantId } = req.params;
+    try {
+      const { restaurantId } = req.params;
 
-    const result = await pool.query(
-      `
-      SELECT id, "key"
-      FROM table_categories
-      WHERE restaurant_id = $1
-      ORDER BY sort_order
-      `,
-      [restaurantId]
-    );
+      const result = await pool.query(
+        `
+        SELECT id, "key"
+        FROM table_categories
+        WHERE restaurant_id = $1
+        ORDER BY sort_order
+        `,
+        [restaurantId]
+      );
 
-    res.json(result.rows);
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch table categories" });
+    }
   }
 );
 
@@ -335,19 +340,24 @@ router.delete("/restaurants/:restaurantId/table-categories/:categoryId", async (
 // GET derived table categories
 router.get("/restaurants/:restaurantId/table-categories",
   async (req, res) => {
-    const { restaurantId } = req.params;
+    try {
+      const { restaurantId } = req.params;
 
-    const result = await pool.query(
-      `
-      SELECT id, "key"
-      FROM table_categories
-      WHERE restaurant_id = $1
-      ORDER BY sort_order
-      `,
-      [restaurantId]
-    );
+      const result = await pool.query(
+        `
+        SELECT id, "key"
+        FROM table_categories
+        WHERE restaurant_id = $1
+        ORDER BY sort_order
+        `,
+        [restaurantId]
+      );
 
-    res.json(result.rows);
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch table categories" });
+    }
   }
 );
 
@@ -591,5 +601,30 @@ router.delete("/restaurants/:restaurantId/tables/:tableId", async (req, res) => 
   }
 });
 
+/**
+ * PUT /api/restaurants/:restaurantId/table-categories/reorder
+ * Bulk-update sort_order for table categories
+ */
+router.put("/restaurants/:restaurantId/table-categories/reorder", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ error: "categories array required" });
+    }
+    await Promise.all(
+      categories.map(({ id, sort_order }) =>
+        pool.query(
+          "UPDATE table_categories SET sort_order = $1 WHERE id = $2 AND restaurant_id = $3",
+          [sort_order, id, restaurantId]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("REORDER TABLE CATEGORIES ERROR:", err);
+    res.status(500).json({ error: "Failed to reorder categories" });
+  }
+});
 
 export default router;

@@ -45,6 +45,29 @@ export interface KitchenPrinter {
   categories: number[];              // Menu category IDs
 }
 
+export interface BillPrinter {
+  id: string;
+  name: string;
+  type: 'network' | 'bluetooth';
+  host?: string;
+  bluetoothDevice?: string;
+  tableCategoryIds: number[];        // Table section IDs (empty = all tables)
+  orderTypes: string[];              // 'dine-in' | 'order-now' | 'to-go' | 'all'
+}
+
+export interface PrinterProfile {
+  id: number;
+  restaurant_id: number;
+  name: string;
+  printer_type: string;
+  printer_host?: string;
+  printer_port?: number;
+  bluetooth_device_id?: string;
+  bluetooth_device_name?: string;
+  settings?: Record<string, any>;
+  created_at?: string;
+}
+
 export interface BackendPrinterSettings {
   id: number;
   
@@ -90,7 +113,10 @@ export interface BackendPrinterSettings {
   kitchen_bluetooth_device_id?: string;
   kitchen_bluetooth_device_name?: string;
   kitchen_auto_print?: boolean;
-  kitchen_printers?: KitchenPrinter[];  // NEW: Array of kitchen printers
+  kitchen_printers?: KitchenPrinter[];  // Array of kitchen printers with category routing
+  
+  // Bill Printer Configuration (multi-printer support)
+  bill_printers?: BillPrinter[];        // Array of bill printers with table/order routing
   
   // Other settings
   print_logo?: boolean;
@@ -139,6 +165,10 @@ class PrinterSettingsService {
           if (row.settings.header_text) flat.bill_header_text = row.settings.header_text;
           if (row.settings.footer_text) flat.bill_footer_text = row.settings.footer_text;
           if (typeof row.settings.auto_print === 'boolean') flat.bill_auto_print = row.settings.auto_print;
+          // Extract multi-bill-printer array
+          if (Array.isArray(row.settings.bill_printers) && row.settings.bill_printers.length > 0) {
+            flat.bill_printers = row.settings.bill_printers;
+          }
         } else if (row.type === 'Kitchen') {
           if (typeof row.settings.auto_print === 'boolean') flat.kitchen_auto_print = row.settings.auto_print;
           // CRITICAL: Extract multi-printer array
@@ -273,6 +303,69 @@ class PrinterSettingsService {
     );
     
     return printer || null;
+  }
+
+  /**
+   * NEW: Get bill printers array with routing info
+   */
+  async getBillPrinters(restaurantId: string): Promise<BillPrinter[]> {
+    const settings = await this.getPrinterSettings(restaurantId);
+    return settings.bill_printers || [];
+  }
+
+  /**
+   * Save multi-kitchen-printer configuration
+   * Encodes all kitchen printers in the Kitchen row's settings.printers JSONB
+   */
+  async saveKitchenPrinters(restaurantId: string, printers: KitchenPrinter[], autoPrint: boolean): Promise<void> {
+    await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
+      type: 'Kitchen',
+      printer_type: 'none',
+      settings: { printers, auto_print: autoPrint },
+    });
+    this.invalidateCache(restaurantId);
+  }
+
+  /**
+   * Save multi-bill-printer configuration
+   * Encodes all bill printers in the Bill row's settings.bill_printers JSONB
+   */
+  async saveBillPrinters(restaurantId: string, printers: BillPrinter[], autoPrint: boolean): Promise<void> {
+    await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
+      type: 'Bill',
+      printer_type: 'none',
+      settings: { bill_printers: printers, auto_print: autoPrint },
+    });
+    this.invalidateCache(restaurantId);
+  }
+
+  /**
+   * Get saved printer profiles for a restaurant
+   */
+  async getPrinterProfiles(restaurantId: string): Promise<PrinterProfile[]> {
+    try {
+      const response = await apiClient.get(`/api/restaurants/${restaurantId}/printer-profiles`);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (err) {
+      console.error('[PrinterSettings] Failed to fetch printer profiles:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Save a named printer profile
+   * If a profile with the same name exists it will be updated (upsert)
+   */
+  async savePrinterProfile(restaurantId: string, profile: Omit<PrinterProfile, 'id' | 'restaurant_id' | 'created_at'>): Promise<PrinterProfile> {
+    const response = await apiClient.post(`/api/restaurants/${restaurantId}/printer-profiles`, profile);
+    return response.data;
+  }
+
+  /**
+   * Delete a saved printer profile
+   */
+  async deletePrinterProfile(restaurantId: string, profileId: number): Promise<void> {
+    await apiClient.delete(`/api/restaurants/${restaurantId}/printer-profiles/${profileId}`);
   }
 
   /**

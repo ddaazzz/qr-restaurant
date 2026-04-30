@@ -32,6 +32,8 @@ export interface ReceiptData {
   // Bill format customization from database settings
   billHeaderText?: string; // Customizable header text for bills (e.g., "Thank You")
   billFooterText?: string; // Customizable footer text for bills (e.g., "Follow us on social media")
+  billFontSize?: 'small' | 'medium' | 'large'; // Font size for bill receipt
+  language?: string; // 'en' (default) or 'zh' for Chinese labels
 }
 
 /**
@@ -40,6 +42,20 @@ export interface ReceiptData {
  */
 export function generateESCPOS(receipt: ReceiptData): Uint8Array {
   const commands: number[] = [];
+  const isZh = receipt.language === 'zh';
+  const L = {
+    table:         isZh ? '餐桌:' : 'Table:',
+    pax:           isZh ? '人數:' : 'Pax:',
+    started:       isZh ? '開始:' : 'Started:',
+    scanToOrder:   isZh ? '掃碼點餐' : 'Scan to Order',
+    feedback:      isZh ? '感謝您的光顧！' : 'Let us know how we did!',
+    order:         isZh ? '訂單:' : 'Order:',
+    time:          isZh ? '時間:' : 'Time:',
+    subtotal:      isZh ? '小計' : 'Subtotal',
+    serviceCharge: isZh ? '服務費' : 'Service Charge',
+    tax:           isZh ? '稅' : 'Tax',
+    total:         isZh ? '總計' : 'TOTAL',
+  };
 
   // === QR CODE ONLY RECEIPT (When no items) ===
   // For QR receipts, make QR code the dominant element covering full paper
@@ -68,18 +84,18 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
     commands.push(27, 97, 0); // ESC 'a' 0 - Left align
     
     if (receipt.tableNumber || receipt.tableName) {
-      appendText(commands, `Table: ${receipt.tableNumber || receipt.tableName}`);
+      appendText(commands, `${L.table} ${receipt.tableNumber || receipt.tableName}`);
       commands.push(10);
     }
     
     if (receipt.pax) {
-      appendText(commands, `Pax: ${receipt.pax}`);
+      appendText(commands, `${L.pax} ${receipt.pax}`);
       commands.push(10);
     }
     
     const timeStr = receipt.startTime || receipt.startedTime || receipt.timestamp;
     if (timeStr) {
-      appendText(commands, `Started: ${timeStr}`);
+      appendText(commands, `${L.started} ${timeStr}`);
       commands.push(10);
     }
     
@@ -88,7 +104,7 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
     // === TEXT ABOVE QR CODE - CENTERED BOLD (appears BEFORE QR) ===
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
     commands.push(27, 33, 8); // ESC '!' 8 - Bold
-    appendText(commands, receipt.qrTextAbove || 'Scan to Order');
+    appendText(commands, receipt.qrTextAbove || L.scanToOrder);
     commands.push(27, 33, 0); // ESC '!' 0 - Normal
     commands.push(10, 10); // LF x2
     
@@ -103,7 +119,7 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
     
     // === TEXT BELOW QR CODE - CENTERED (appears AFTER QR) ===
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    appendText(commands, receipt.qrTextBelow || 'Let us know how we did!');
+    appendText(commands, receipt.qrTextBelow || L.feedback);
     commands.push(10, 10); // LF x2
     
     // Paper feed and cut
@@ -147,18 +163,18 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
 
   // Print table and pax info
   if (receipt.tableNumber || receipt.tableName) {
-    appendText(commands, `Table: ${receipt.tableNumber || receipt.tableName}`);
+    appendText(commands, `${L.table} ${receipt.tableNumber || receipt.tableName}`);
     commands.push(10);
   }
   if (receipt.pax) {
-    appendText(commands, `Pax: ${receipt.pax}`);
+    appendText(commands, `${L.pax} ${receipt.pax}`);
     commands.push(10);
   }
 
   // Print timestamp
   const timestamp = receipt.timestamp || receipt.startTime || receipt.startedTime;
   if (timestamp) {
-    appendText(commands, `Time: ${timestamp}`);
+    appendText(commands, `${L.time} ${timestamp}`);
     commands.push(10);
   }
 
@@ -167,6 +183,13 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
   // === SEPARATOR ===
   appendText(commands, '========================================');
   commands.push(10, 10);
+
+  // === FONT SIZE (applied to items + totals) ===
+  if (receipt.billFontSize === 'large') {
+    commands.push(0x1D, 0x21, 0x01); // GS ! 0x01 - double height
+  } else if (receipt.billFontSize === 'small') {
+    commands.push(0x1B, 0x4D, 0x01); // ESC M 1 - Font B (compressed)
+  }
 
   // === ITEMS SECTION ===
   if (receipt.items && receipt.items.length > 0) {
@@ -205,24 +228,24 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
 
   if (receipt.subtotal !== undefined) {
     const subtotalStr = (receipt.subtotal / 100).toFixed(2);
-    const subtotalPadding = Math.max(1, 32 - 'Subtotal'.length - subtotalStr.length);
-    const subtotalLine = 'Subtotal' + ' '.repeat(subtotalPadding) + subtotalStr;
+    const subtotalPadding = Math.max(1, 32 - L.subtotal.length - subtotalStr.length);
+    const subtotalLine = L.subtotal + ' '.repeat(subtotalPadding) + subtotalStr;
     appendText(commands, subtotalLine);
     commands.push(10);
   }
 
   if (receipt.serviceCharge && receipt.serviceCharge > 0) {
     const chargeStr = (receipt.serviceCharge / 100).toFixed(2);
-    const chargePadding = Math.max(1, 32 - 'Service Charge'.length - chargeStr.length);
-    const chargeLine = 'Service Charge' + ' '.repeat(chargePadding) + chargeStr;
+    const chargePadding = Math.max(1, 32 - L.serviceCharge.length - chargeStr.length);
+    const chargeLine = L.serviceCharge + ' '.repeat(chargePadding) + chargeStr;
     appendText(commands, chargeLine);
     commands.push(10);
   }
 
   if (receipt.tax && receipt.tax > 0) {
     const taxStr = (receipt.tax / 100).toFixed(2);
-    const taxPadding = Math.max(1, 32 - 'Tax'.length - taxStr.length);
-    const taxLine = 'Tax' + ' '.repeat(taxPadding) + taxStr;
+    const taxPadding = Math.max(1, 32 - L.tax.length - taxStr.length);
+    const taxLine = L.tax + ' '.repeat(taxPadding) + taxStr;
     appendText(commands, taxLine);
     commands.push(10);
   }
@@ -231,14 +254,18 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
     // Bold text for total
     commands.push(27, 33, 8); // ESC '!' 8 - Bold on
     const totalStr = (receipt.total / 100).toFixed(2);
-    const totalPadding = Math.max(1, 32 - 'TOTAL'.length - totalStr.length);
-    const totalLine = 'TOTAL' + ' '.repeat(totalPadding) + totalStr;
+    const totalPadding = Math.max(1, 32 - L.total.length - totalStr.length);
+    const totalLine = L.total + ' '.repeat(totalPadding) + totalStr;
     appendText(commands, totalLine);
     commands.push(27, 33, 0); // ESC '!' 0 - Bold off
     commands.push(10);
   }
 
   commands.push(10, 10); // LF x2
+
+  // Reset font size to normal before footer
+  commands.push(0x1D, 0x21, 0x00); // GS ! 0x00 - normal
+  commands.push(0x1B, 0x4D, 0x00); // ESC M 0 - Font A (default)
 
   // === FOOTER SECTION ===
   // For bills, use custom header and footer text
@@ -256,6 +283,12 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
     commands.push(10);
   }
 
+  commands.push(10); // LF
+
+  // === POWERED BY (non-removable branding) ===
+  appendText(commands, '----------------------------------------');
+  commands.push(10);
+  appendText(commands, 'Powered by Chuio.io');
   commands.push(10, 10); // LF x2
 
   // === PAPER FEED BEFORE CUT ===

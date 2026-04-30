@@ -6,6 +6,11 @@ import { AuthResponse, LoginCredentials } from '../types';
 const defaultUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
 export const API_URL = defaultUrl;
 
+export const ENVIRONMENTS: Record<string, string> = {
+  'Production': 'https://chuio.io',
+  'Development': 'https://dev.chuio.io',
+};
+
 class APIClient {
   private client: AxiosInstance;
   private restaurantId: string | null = null;
@@ -34,16 +39,15 @@ class APIClient {
     this.setupAuthToken();
   }
 
-  private async setupAuthToken() {
-    // Environment is determined by build config (EXPO_PUBLIC_API_URL)
-    // Dev mode must be explicitly activated via Settings > tap 7 times
+  private setupAuthToken() {
+    // API URL is set by .env / .env.production at build time — no runtime restoration needed
   }
 
   // Auth endpoints
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
       const response = await this.client.post<AuthResponse>('/api/auth/login', credentials);
-      const { token, restaurantId, apiBaseUrl } = response.data;
+      const { token, restaurantId } = response.data;
       
       // Ensure token is a string
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
@@ -55,14 +59,6 @@ class APIClient {
         this.restaurantId = restaurantIdString;
       }
       this.token = tokenString;
-
-      // Switch to custom deployment URL if restaurant has one
-      if (apiBaseUrl) {
-        this.client.defaults.baseURL = apiBaseUrl;
-        await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
-      } else {
-        await SecureStore.deleteItemAsync('apiBaseUrl');
-      }
       
       return response.data;
     } catch (error) {
@@ -78,7 +74,7 @@ class APIClient {
         payload.restaurantId = restaurantId;
       }
       const response = await this.client.post<AuthResponse>('/api/auth/kitchen-login', payload);
-      const { token, restaurantId: responseRestaurantId, apiBaseUrl } = response.data;
+      const { token, restaurantId: responseRestaurantId } = response.data;
       
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       const restaurantIdString = responseRestaurantId ? (typeof responseRestaurantId === 'string' ? responseRestaurantId : String(responseRestaurantId)) : null;
@@ -89,14 +85,6 @@ class APIClient {
         this.restaurantId = restaurantIdString;
       }
       this.token = tokenString;
-
-      // Switch to custom deployment URL if restaurant has one
-      if (apiBaseUrl) {
-        this.client.defaults.baseURL = apiBaseUrl;
-        await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
-      } else {
-        await SecureStore.deleteItemAsync('apiBaseUrl');
-      }
       
       return response.data;
     } catch (error) {
@@ -112,7 +100,7 @@ class APIClient {
       }
       const response = await this.client.post<any>('/api/auth/staff-login', payload);
       const data = response.data;
-      const { token, restaurantId: responseRestaurantId, apiBaseUrl } = data;
+      const { token, restaurantId: responseRestaurantId } = data;
       
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       const restaurantIdString = responseRestaurantId ? (typeof responseRestaurantId === 'string' ? responseRestaurantId : String(responseRestaurantId)) : null;
@@ -123,14 +111,6 @@ class APIClient {
         this.restaurantId = restaurantIdString;
       }
       this.token = tokenString;
-
-      // Switch to custom deployment URL if restaurant has one
-      if (apiBaseUrl) {
-        this.client.defaults.baseURL = apiBaseUrl;
-        await SecureStore.setItemAsync('apiBaseUrl', apiBaseUrl);
-      } else {
-        await SecureStore.deleteItemAsync('apiBaseUrl');
-      }
 
       // Normalize field names and persist extra staff data
       const userId = String(data.user_id || data.userId || '');
@@ -159,13 +139,22 @@ class APIClient {
   async logout(): Promise<void> {
     await SecureStore.deleteItemAsync('authToken');
     await SecureStore.deleteItemAsync('restaurantId');
-    await SecureStore.deleteItemAsync('apiBaseUrl');
     await SecureStore.deleteItemAsync('userId');
     await SecureStore.deleteItemAsync('role');
     await SecureStore.deleteItemAsync('accessRights');
     await SecureStore.deleteItemAsync('clockedIn');
     this.token = null;
     this.restaurantId = null;
+    this.client.defaults.baseURL = API_URL;
+  }
+
+  getCurrentBaseUrl(): string {
+    return (this.client.defaults.baseURL as string) || API_URL;
+  }
+
+  async switchEnvironment(url: string): Promise<void> {
+    await SecureStore.setItemAsync('devEnvironmentUrl', url);
+    this.client.defaults.baseURL = url;
   }
 
   // Menu endpoints
@@ -568,6 +557,24 @@ class APIClient {
   async getRestaurants(): Promise<any[]> {
     try {
       const response = await this.client.get('/api/manage/restaurants');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async getRestaurantSettings(restaurantId: number): Promise<any> {
+    try {
+      const response = await this.client.get(`/api/restaurants/${restaurantId}/settings`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async patchRestaurantSettings(restaurantId: number, data: Record<string, any>): Promise<any> {
+    try {
+      const response = await this.client.patch(`/api/restaurants/${restaurantId}/settings`, data);
       return response.data;
     } catch (error) {
       throw this.handleError(error);

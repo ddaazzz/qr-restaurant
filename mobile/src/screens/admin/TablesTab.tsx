@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef } from 'react';
+import { Buffer } from 'buffer';
 import {
   View,
   Text,
@@ -21,15 +22,62 @@ import {
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
-import { apiClient, API_URL } from '../../services/apiClient';
+import { apiClient, API_URL, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
 
-// QR code base URL matches the API URL (set at build time)
-const getQrBaseUrl = () => API_URL;
+// Derive QR code base URL from current API environment
+const getQrBaseUrl = () => {
+  const currentUrl = apiClient.getCurrentBaseUrl();
+  // Map API URLs to their frontend domains
+  if (currentUrl === ENVIRONMENTS['Development'] || currentUrl === 'https://dev.chuio.io') {
+    return 'https://dev.chuio.io';
+  }
+  return 'https://chuio.io';
+};
+import TcpSocket from 'react-native-tcp-socket';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import { Ionicons } from '@expo/vector-icons';
+
+/**
+ * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.
+ * The mobile device is on the same LAN as the printer so this works even when
+ * the backend is deployed in the cloud.
+ */
+function sendEscPosToNetworkPrinter(host: string, port: number, data: Uint8Array, timeoutMs = 15000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      err ? reject(err) : resolve();
+    };
+    // Timeout: destroy the socket so server sees connection drop
+    const timer = setTimeout(() => {
+      try { client.destroy(); } catch (_) {}
+      done(new Error(`Printer connection timed out (${host}:${port})\n\nCheck: Settings → Privacy & Security → Local Network → enable this app`));
+    }, timeoutMs);
+    const client = TcpSocket.createConnection({ host, port }, () => {
+      client.write(data, undefined, (err: any) => {
+        if (err) {
+          clearTimeout(timer);
+          try { client.destroy(); } catch (_) {}
+          return done(new Error(`Write error: ${err.message}`));
+        }
+        // Send FIN (half-close) so server's 'end' event fires and it processes the data
+        client.end();
+      });
+    });
+    client.on('error', (err: any) => {
+      clearTimeout(timer);
+      try { client.destroy(); } catch (_) {}
+      done(new Error(err.message || String(err)));
+    });
+    // Resolve only after clean close — ensures server has received all data
+    client.on('close', () => { clearTimeout(timer); done(); });
+  });
+}
 
 interface TableCategory {
   id: number;
@@ -46,6 +94,10 @@ interface Session {
   order_id?: number;
   restaurant_order_number?: number;
   restaurant_session_number?: number;
+  payment_received?: boolean;
+  payment_received_at?: string;
+  payment_method_online?: string;
+  merchant_reference?: string;
 }
 
 interface Booking {
@@ -116,6 +168,8 @@ interface Order {
   order_id?: number;
   id?: number;
   restaurant_order_number?: number;
+  order_status?: string;
+  order_payment_method?: string;
   items: Array<{
     name?: string;
     item_name?: string;
@@ -143,6 +197,14 @@ export interface TablesTabRef {
   navigateToScannedQR: (sessionId: number) => void;
 }
 
+type TablesTabProps = {
+  restaurantId: string;
+  onOrderForTable?: (sessionId: number, tableName: string) => void;
+  searchQuery?: string;
+  selectedRoomId?: number | null;
+  onCategoriesLoaded?: (cats: TableCategory[]) => void;
+};
+
 const getTableTextColor = (bgColor: string) => {
   if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b' || bgColor === '#dddddd') {
     return { color: '#000' };
@@ -150,7 +212,7 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrderForTable?: (sessionId: number, tableName: string) => void; searchQuery?: string; selectedRoomId?: number | null; onCategoriesLoaded?: (cats: TableCategory[]) => void }>(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }, ref) => {
+export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) => {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -166,7 +228,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [sessionOrders, setSessionOrders] = useState<Order[]>([]);
-  const [serviceRequests, setServiceRequests] = useState<any[]>([]);
   const [sessionBill, setSessionBill] = useState<Bill | null>(null);
 
   // Modal states
@@ -235,6 +296,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [showCouponPicker, setShowCouponPicker] = useState(false);
   // Service charge
   const [serviceCharge, setServiceCharge] = useState(0);
+  // Active payment terminal (for close bill modal)
+  const [activePaymentTerminal, setActivePaymentTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  // KPay terminal payment overlay
+  const [showKPayModal, setShowKPayModal] = useState(false);
+  const [kpayStatus, setKpayStatus] = useState<'initiating' | 'waiting' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'aborting'>('initiating');
+  const [kpayOutTradeNo, setKpayOutTradeNo] = useState<string | null>(null);
+  const [kpayLogs, setKpayLogs] = useState<Array<{ text: string; color: string }>>([]);
+  const [kpayFinalAmount, setKpayFinalAmount] = useState(0);
+  const [kpayDiscountCents, setKpayDiscountCents] = useState(0);
+  const kpayPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up KPay poll timer on unmount
+  useEffect(() => {
+    return () => {
+      if (kpayPollTimerRef.current) clearTimeout(kpayPollTimerRef.current);
+    };
+  }, []);
 
   // Expose toggleEditMode and navigateToScannedQR through ref
   useImperativeHandle(ref, () => ({
@@ -386,6 +464,15 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         }
       } catch (e) {
         console.warn('Could not load service charge settings');
+      }
+
+      // Load active payment terminal
+      try {
+        const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
+        const active = (termRes.data || []).find((t: any) => t.is_active);
+        setActivePaymentTerminal(active || null);
+      } catch (e) {
+        // non-critical
       }
     } catch (err: any) {
       console.error('Error fetching table data:', err);
@@ -589,21 +676,21 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       console.log('[LoadOrders] API Response:', res.data);
       const orders = res.data.items || res.data || [];
       console.log('[LoadOrders] Parsed orders:', orders);
-      // Filter out orders with no valid items (empty orders or all deleted items)
-      const validOrders = (Array.isArray(orders) ? orders : []).filter((order: any) => {
-        if (!order.items || order.items.length === 0) return false;
-        return order.items.some((item: any) => {
-          const name = item.name || item.item_name || item.menu_item_name;
-          return name && name !== 'Deleted Item';
-        });
-      });
-      setSessionOrders(validOrders);
+      setSessionOrders(Array.isArray(orders) ? orders : []);
 
       const billRes = await apiClient.get(
         `/api/sessions/${sessionId}/bill`
       );
       console.log('[LoadBill] Bill data:', billRes.data);
       setSessionBill(billRes.data);
+
+      // Load split portions if any
+      try {
+        const splitRes = await apiClient.get(`/api/sessions/${sessionId}/split-bill`);
+        setSplitPortions(Array.isArray(splitRes.data) ? splitRes.data : []);
+      } catch {
+        setSplitPortions([]);
+      }
     } catch (err) {
       console.error('Error loading session orders:', err);
       Alert.alert('Error Loading Orders', 'Failed to load order details');
@@ -614,31 +701,6 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     setSelectedSession(session);
     setCurrentView('sessionDetail');
     await loadSessionOrders(session.id);
-    await loadServiceRequests(session.id);
-  };
-
-  const loadServiceRequests = async (sessionId: number) => {
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-requests?status=pending`);
-      // Filter to requests for this session
-      const sessionRequests = (res.data || []).filter((r: any) => r.table_session_id === sessionId);
-      setServiceRequests(sessionRequests);
-    } catch (err) {
-      // Silently fail — feature may not be enabled
-      setServiceRequests([]);
-    }
-  };
-
-  const fulfillServiceRequest = async (requestId: number) => {
-    try {
-      await apiClient.patch(`/api/restaurants/${restaurantId}/service-requests/${requestId}`, {
-        status: 'fulfilled',
-      });
-      // Remove from list
-      setServiceRequests(prev => prev.filter(r => r.id !== requestId));
-    } catch (err) {
-      console.error('Error fulfilling service request:', err);
-    }
   };
 
   const clearCallStaff = async (sessionId: number) => {
@@ -647,7 +709,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         restaurantId,
         call_staff_requested: false,
       });
-      await loadTables();
+      await loadTableData();
       if (selectedSession?.id === sessionId) {
         setSelectedSession(prev => prev ? { ...prev, call_staff_requested: false } : prev);
       }
@@ -893,8 +955,17 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           } catch (err: any) {
             console.error('[AutoPrintQR] Bluetooth send error:', err);
           }
+        } else if (printRes.data?.networkPrint) {
+          const { host, port, escposBase64 } = printRes.data.networkPrint;
+          try {
+            const escposBytes = new Uint8Array(Buffer.from(escposBase64, 'base64'));
+            await sendEscPosToNetworkPrinter(host, port, escposBytes);
+            console.log('[AutoPrintQR] ✓ QR sent directly to network printer');
+          } catch (netErr: any) {
+            console.error('[AutoPrintQR] Direct network print failed:', netErr.message);
+          }
         } else if (printRes.data?.success) {
-          console.log('[AutoPrintQR] ✓ QR queued for network printer');
+          console.log('[AutoPrintQR] ✓ QR sent to printer');
         } else if (printRes.data?.html) {
           await Print.printAsync({ html: printRes.data.html });
           console.log('[AutoPrintQR] ✓ QR sent to browser print');
@@ -1052,6 +1123,185 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     return coupon.discount_value;
   };
 
+  // ── Internal helper: call close-bill API, auto-print, reset UI ──────────
+  const _doCloseBill = async (
+    finalAmt: number,
+    discountCts: number,
+    method: string,
+    kpay_reference_id?: string,
+  ) => {
+    if (!selectedSession) return;
+    await apiClient.post(`/api/sessions/${selectedSession.id}/close-bill`, {
+      restaurantId: parseInt(restaurantId),
+      payment_method: method,
+      amount_paid: finalAmt,
+      discount_applied: discountCts,
+      service_charge: sessionBill?.service_charge_cents || 0,
+      notes: closeReason,
+      ...(kpay_reference_id ? { kpay_reference_id } : {}),
+    });
+
+    // Auto-print if enabled
+    try {
+      const printerRes = await apiClient.get(`/api/restaurants/${restaurantId}/printer-settings`);
+      if (printerRes.data?.bill_auto_print === true) {
+        await printBill(true);
+      }
+    } catch (autoError) {
+      console.log('[CloseBill] Auto-print check failed (non-critical):', autoError);
+    }
+
+    setShowCloseBillModal(false);
+    setShowKPayModal(false);
+    setPaymentMethod('cash');
+    setDiscountAmount('0');
+    setCloseReason('');
+    setSelectedCouponId(null);
+    setCoupons([]);
+    await loadTableData();
+    setCurrentView('grid');
+  };
+
+  // ── KPay terminal payment: initiate sale + poll until confirmed ──────────
+  const _addKPayLog = (text: string, color = '#00ff00') => {
+    setKpayLogs(prev => [...prev, { text, color }]);
+  };
+
+  const startKPayPayment = async (finalAmt: number, discountCts: number) => {
+    if (!activePaymentTerminal) return;
+    const amountInCents = String(finalAmt).padStart(12, '0');
+
+    try {
+      _addKPayLog('> Initiating payment…');
+      const resp = await apiClient.post(
+        `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test`,
+        {
+          payAmount: amountInCents,
+          tipsAmount: '000000000000',
+          payCurrency: '344',
+          session_id: selectedSession?.id ?? null,
+        },
+      );
+      const result = resp.data;
+
+      if (result.logs) {
+        result.logs.forEach((l: string) =>
+          _addKPayLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : l.includes('⚠️') ? '#ffd43b' : '#00ff00'),
+        );
+      }
+
+      if (!result.initiated) {
+        setKpayStatus('failed');
+        _addKPayLog('> ❌ Failed: ' + (result.message || 'Unknown error'), '#ff6b6b');
+        return;
+      }
+
+      setKpayOutTradeNo(result.outTradeNo);
+      setKpayStatus('waiting');
+      _addKPayLog(`> Initiated — outTradeNo: ${result.outTradeNo}`, '#ffd43b');
+      _addKPayLog('> Waiting for customer to tap / scan on terminal…', '#ffd43b');
+
+      // Poll for status
+      let attempts = 0;
+      const maxAttempts = 22;
+
+      const poll = async () => {
+        if (attempts >= maxAttempts) {
+          setKpayStatus('timeout');
+          _addKPayLog('> TIMEOUT — no response after 65s. Use Abort to free the terminal.', '#ffd43b');
+          return;
+        }
+        attempts++;
+        _addKPayLog(`> Polling… (${attempts}/${maxAttempts})`);
+
+        try {
+          const qResp = await apiClient.get(
+            `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test-status`,
+            { params: { outTradeNo: result.outTradeNo } },
+          );
+          const qData = qResp.data;
+          if (qData.logs) {
+            qData.logs.forEach((l: string) =>
+              _addKPayLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'),
+            );
+          }
+          _addKPayLog(`  Status: ${qData.status}  code: ${qData.code ?? '?'}`);
+
+          if (qData.status === 'success') {
+            setKpayStatus('success');
+            _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
+            try {
+              const vendor = activePaymentTerminal?.vendor_name || 'kpay';
+              await _doCloseBill(finalAmt, discountCts, vendor, result.outTradeNo);
+            } catch (closeErr: any) {
+              _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
+            }
+            return;
+          }
+
+          if (qData.status === 'cancelled' || qData.status === 'failed') {
+            setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
+            _addKPayLog(`> Payment ${qData.status}.`, '#ff6b6b');
+            return;
+          }
+
+          // Still pending — poll again in 3 s
+          kpayPollTimerRef.current = setTimeout(poll, 3000);
+        } catch (e: any) {
+          _addKPayLog(`  Poll error: ${e.message} — retrying…`, '#ffd43b');
+          kpayPollTimerRef.current = setTimeout(poll, 3000);
+        }
+      };
+
+      kpayPollTimerRef.current = setTimeout(poll, 2000);
+    } catch (err: any) {
+      setKpayStatus('failed');
+      _addKPayLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+    }
+  };
+
+  const abortKPayPayment = async () => {
+    if (kpayPollTimerRef.current) {
+      clearTimeout(kpayPollTimerRef.current);
+      kpayPollTimerRef.current = null;
+    }
+    if (!kpayOutTradeNo || !activePaymentTerminal) {
+      setShowKPayModal(false);
+      return;
+    }
+    Alert.alert(
+      'Abort Payment',
+      'Abort KPay transaction? This will close the pending payment on the terminal.',
+      [
+        { text: 'Cancel' },
+        {
+          text: 'Abort',
+          style: 'destructive',
+          onPress: async () => {
+            setKpayStatus('aborting');
+            _addKPayLog('> Aborting — sending close-transaction to terminal…', '#ffd43b');
+            try {
+              const r = await apiClient.post(
+                `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/close-transaction`,
+                { outTradeNo: kpayOutTradeNo },
+              );
+              const d = r.data;
+              if (d.logs) d.logs.forEach((l: string) => _addKPayLog(l, l.includes('✅') ? '#51cf66' : '#ffd43b'));
+              _addKPayLog(
+                d.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${d.message || d.error}`,
+                d.success ? '#51cf66' : '#ff6b6b',
+              );
+            } catch (e: any) {
+              _addKPayLog(`> Error: ${e.message}`, '#ff6b6b');
+            }
+            setKpayStatus('cancelled');
+          },
+        },
+      ],
+    );
+  };
+
+  // ── Main close bill handler ───────────────────────────────────────────────
   const closeBill = async () => {
     if (!selectedSession) return;
 
@@ -1059,41 +1309,35 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
     const finalAmount = grandTotal - discountCents;
 
-    try {
-      await apiClient.post(
-        `/api/sessions/${selectedSession.id}/close-bill`,
-        {
-          restaurantId: parseInt(restaurantId),
-          payment_method: paymentMethod,
-          amount_paid: finalAmount,
-          discount_applied: discountCents,
-          service_charge: sessionBill?.service_charge_cents || 0,
-          notes: closeReason,
-        }
-      );
-
-      // Check if bill auto-print is enabled
-      try {
-        const printerRes = await apiClient.get(
-          `/api/restaurants/${restaurantId}/printer-settings`
-        );
-
-        if (printerRes.data?.bill_auto_print === true) {
-          console.log('[CloseBill] Bill auto-print enabled, printing bill...');
-          // Auto-print the bill with the handleBillPrint logic
-          await printBill(true);
-        }
-      } catch (autoError) {
-        console.log('[CloseBill] Bill auto-print check failed (non-critical):', autoError);
-      }
-
+    // KPay physical terminal: show overlay + initiate sale
+    if (paymentMethod === 'kpay' && activePaymentTerminal?.vendor_name === 'kpay') {
       setShowCloseBillModal(false);
-      setPaymentMethod('cash');
-      setDiscountAmount('0');
-      setCloseReason('');
-      setSelectedCouponId(null);
-      setCoupons([]);      await loadTableData();
-      setCurrentView('grid');
+      setKpayFinalAmount(finalAmount);
+      setKpayDiscountCents(discountCents);
+      setKpayStatus('initiating');
+      setKpayLogs([{ text: '> Connecting to KPay terminal…', color: '#ffd43b' }]);
+      setKpayOutTradeNo(null);
+      setShowKPayModal(true);
+      await startKPayPayment(finalAmount, discountCents);
+      return;
+    }
+
+    // PA Offline physical terminal: same overlay flow, different backend API
+    if (paymentMethod === 'payment-asia-offline' && activePaymentTerminal?.vendor_name === 'payment-asia-offline') {
+      setShowCloseBillModal(false);
+      setKpayFinalAmount(finalAmount);
+      setKpayDiscountCents(discountCents);
+      setKpayStatus('initiating');
+      setKpayLogs([{ text: '> Connecting to PA terminal…', color: '#ffd43b' }]);
+      setKpayOutTradeNo(null);
+      setShowKPayModal(true);
+      await startKPayPayment(finalAmount, discountCents);
+      return;
+    }
+
+    // Cash / Card: direct close
+    try {
+      await _doCloseBill(finalAmount, discountCents, paymentMethod);
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
     }
@@ -1135,7 +1379,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
     try {
       await apiClient.patch(
         `/api/table-sessions/${selectedSession.id}`,
-        { pax: parseInt(newPaxValue) }
+        { pax: parseInt(newPaxValue), restaurantId: parseInt(restaurantId) }
       );
       setShowChangePaxModal(false);
       setNewPaxValue('');
@@ -1456,8 +1700,21 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             Alert.alert('Error', err.message || 'Failed to send to Bluetooth printer');
             setShowQRModal(true);
           }
+        } else if (printRes.data?.networkPrint) {
+          // Direct network print from device
+          const { host, port, escposBase64 } = printRes.data.networkPrint;
+          console.log('[PrintQR] Sending ESC/POS directly to network printer:', host, port);
+          try {
+            const escposBytes = new Uint8Array(Buffer.from(escposBase64, 'base64'));
+            await sendEscPosToNetworkPrinter(host, port, escposBytes);
+            Alert.alert('Printed', `QR code sent to printer at ${host}`);
+          } catch (netErr: any) {
+            console.error('[PrintQR] Direct network print failed:', netErr.message);
+            Alert.alert('Printer Unreachable', `Could not connect to printer at ${host}:${port}.\n\nError: ${netErr.message}`);
+            setShowQRModal(true);
+          }
         } else if (printRes.data?.success) {
-          Alert.alert('Queued', 'QR code queued for network printer');
+          Alert.alert('Printed', 'QR code sent to printer');
         } else if (printRes.data?.html) {
           // Backend returned HTML for browser printing
           await Print.printAsync({ html: printRes.data.html });
@@ -1480,14 +1737,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   };
 
   const printBillWithPrinterSelection = () => {
-    if (!selectedSession || !sessionBill) {
-      Alert.alert('Error', 'No bill data available');
-      return;
-    }
-    console.log('[PrintBill] Opening printer selection for bill');
-    setCurrentPrintJob('bill');
-    setShowPrinterModal(true);
     setShowSessionGearMenu(false);
+    printBill(false);
   };
 
 
@@ -1617,24 +1868,16 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       );
       console.log('[PrintBill] Printer settings response:', printerRes.data);
 
-      if (!printerRes.data || !printerRes.data.printer_type) {
+      // API returns an array of printer rows — find the Bill printer
+      const printerRows = Array.isArray(printerRes.data) ? printerRes.data : [];
+      const billPrinter = printerRows.find((p: any) => p.type === 'Bill');
+      const billPrinterType = billPrinter?.printer_type;
+
+      if (!billPrinterType || billPrinterType === 'none') {
         if (!autoPrint) {
           Alert.alert(
-            'No Printer Configured',
-            'Please configure a printer in Settings to enable printing. Would you like to set up a printer now?',
-            [
-              {
-                text: 'Cancel',
-                style: 'cancel',
-              },
-              {
-                text: 'Configure Printer',
-                onPress: () => {
-                  console.log('[PrintBill] User wants to configure printer');
-                },
-                style: 'default',
-              },
-            ]
+            'No Bill Printer Configured',
+            'Please configure a bill printer in Settings → Printer Settings.'
           );
         }
         return;
@@ -1683,8 +1926,26 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       console.log('[PrintBill] Print response:', printRes.data);
 
       if (printRes.data && printRes.data.success) {
+        // Handle direct network printing from device (cloud backend can't reach local printer)
+        if (printRes.data.networkPrint) {
+          const { host, port, escposBase64 } = printRes.data.networkPrint;
+          console.log('[PrintBill] Sending ESC/POS directly to network printer:', host, port);
+          try {
+            const escposBytes = new Uint8Array(Buffer.from(escposBase64, 'base64'));
+            await sendEscPosToNetworkPrinter(host, port, escposBytes);
+            console.log('[PrintBill] Network print sent successfully');
+            if (!autoPrint) {
+              Alert.alert('Printed', `Bill sent to printer at ${host}`);
+            }
+          } catch (netErr: any) {
+            console.error('[PrintBill] Direct network print failed:', netErr.message);
+            if (!autoPrint) {
+              Alert.alert('Printer Unreachable', `Could not connect to printer at ${host}:${port}.\n\nMake sure the printer is powered on and connected to the same network.\n\nError: ${netErr.message}`);
+            }
+          }
+        }
         // Handle browser printing - open native print dialog
-        if (printRes.data.html && !printRes.data.bluetoothDevice) {
+        else if (printRes.data.html && !printRes.data.bluetoothDevice) {
           console.log('[PrintBill] Opening native print dialog for browser printing');
           try {
             await Print.printAsync({
@@ -1895,6 +2156,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splitCount, setSplitCount] = useState(2);
   const [splitBillData, setSplitBillData] = useState<any>(null);
+  const [splitPortions, setSplitPortions] = useState<any[]>([]);
+  const [showSplitPayModal, setShowSplitPayModal] = useState(false);
+  const [activeSplitPortion, setActiveSplitPortion] = useState<any>(null);
+  const [splitPayMethod, setSplitPayMethod] = useState('cash');
+  const [splitPayLoading, setSplitPayLoading] = useState(false);
 
   const splitBill = async () => {
     if (!selectedSession) return;
@@ -1906,6 +2172,49 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       setShowSplitModal(true);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to load bill for splitting');
+    }
+  };
+
+  const confirmSplit = async () => {
+    if (!selectedSession) return;
+    try {
+      await apiClient.post(`/api/sessions/${selectedSession.id}/split-bill/init`, { split_count: splitCount });
+      setShowSplitModal(false);
+      // Reload orders + split portions
+      await loadSessionOrders(selectedSession.id);
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to create split bill');
+    }
+  };
+
+  const openSplitPayModal = (portion: any) => {
+    setActiveSplitPortion(portion);
+    setSplitPayMethod('cash');
+    setShowSplitPayModal(true);
+  };
+
+  const confirmSplitPay = async () => {
+    if (!activeSplitPortion || !selectedSession) return;
+    setSplitPayLoading(true);
+    try {
+      const res = await apiClient.post(
+        `/api/sessions/${selectedSession.id}/split-bill/${activeSplitPortion.split_index}/pay`,
+        { payment_method: splitPayMethod }
+      );
+      setShowSplitPayModal(false);
+      if (res.data.sessionClosed) {
+        await loadTableData();
+        setCurrentView('grid');
+        setSelectedSession(null);
+        setSessionOrders([]);
+        setSplitPortions([]);
+      } else {
+        await loadSessionOrders(selectedSession.id);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to process payment');
+    } finally {
+      setSplitPayLoading(false);
     }
   };
 
@@ -1923,6 +2232,11 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
 
   const isTablet = (Platform as any).isPad;
   const totals = calculateTotal();
+  const paidViaPaymentAsiaOnline =
+    (selectedSession?.payment_received === true) ||
+    sessionOrders.some(
+      (o) => o.order_payment_method === 'payment-asia' && o.order_status === 'completed'
+    );
   const screenWidth = Dimensions.get('window').width;
   const sidebarWidth = 130;
   const contentWidth = isTablet ? screenWidth - sidebarWidth - 24 : screenWidth - 24; // iPhone sidebar is overlay
@@ -2013,7 +2327,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   setShowSessionGearMenu(false);
                 }}
               >
-                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>End Order</Text>
+                <Text style={[styles.gearMenuItemText, styles.gearMenuItemTextDelete]}>{t('admin.end-order')}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -2025,25 +2339,22 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               style={{ backgroundColor: '#ef4444', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
               onPress={() => clearCallStaff(selectedSession.id)}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🔔 Staff Called</Text>
-              <Text style={{ color: '#fff', fontSize: 12 }}>Tap to acknowledge</Text>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('admin.staff-called')}</Text>
+              <Text style={{ color: '#fff', fontSize: 12 }}>{t('admin.tap-to-acknowledge')}</Text>
             </TouchableOpacity>
           )}
           {selectedSession.bill_closure_requested && (
             <View style={{ backgroundColor: '#f59e0b', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
+              <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>{t('admin.bill-requested')}</Text>
             </View>
           )}
-          {serviceRequests.length > 0 && serviceRequests.map((req) => (
-            <TouchableOpacity
-              key={req.id}
-              style={{ backgroundColor: '#8b5cf6', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-              onPress={() => fulfillServiceRequest(req.id)}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🛎️ {req.label}</Text>
-              <Text style={{ color: '#fff', fontSize: 12 }}>Tap to fulfill</Text>
-            </TouchableOpacity>
-          ))}
+          {selectedSession.payment_received && (
+            <View style={styles.paymentReceivedBanner}>
+              <Text style={styles.paymentReceivedTitle}>✅ Payment Received</Text>
+              <Text style={styles.paymentReceivedSub}>Via: {selectedSession.payment_method_online?.toUpperCase() || 'N/A'}</Text>
+              <Text style={styles.paymentReceivedSub}>Ref: {selectedSession.merchant_reference || '—'}</Text>
+            </View>
+          )}
           <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
           {sessionOrders.length === 0 ? (
             <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
@@ -2052,20 +2363,31 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               console.log(`[OrderRender] Order ${idx}:`, order);
               return (
                 <View key={idx} style={styles.orderCard}>
-                  <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                  {order.items && order.items.filter(item => {
-                    const name = item.name || item.item_name || item.menu_item_name;
-                    return name && name !== 'Deleted Item';
-                  }).length > 0 ? (
-                    order.items.filter(item => {
-                      const name = item.name || item.item_name || item.menu_item_name;
-                      return name && name !== 'Deleted Item';
-                    }).map((item, itemIdx) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
+                    {order.order_status === 'completed' ? (
+                      order.order_payment_method === 'payment-asia' ? (
+                        <View style={{ marginLeft: 8, backgroundColor: '#f59e0b', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>PA Paid</Text>
+                        </View>
+                      ) : (
+                        <View style={{ marginLeft: 8, backgroundColor: '#10b981', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Paid</Text>
+                        </View>
+                      )
+                    ) : (
+                      <View style={{ marginLeft: 8, backgroundColor: '#6b7280', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Not Paid</Text>
+                      </View>
+                    )}
+                  </View>
+                  {order.items && order.items.length > 0 ? (
+                    order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
                         <View style={styles.orderItem}>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.itemName}>
-                              {item.name || item.item_name || item.menu_item_name} x{item.quantity}
+                              {item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}
                             </Text>
                             <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
                             {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
@@ -2114,28 +2436,89 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
             </View>
           </View>
+
+          {/* Split Bill Portions */}
+          {splitPortions.length > 0 && (
+            <View style={{ marginHorizontal: 16, marginBottom: 16, borderTopWidth: 2, borderTopColor: '#3b82f6', paddingTop: 12 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1d4ed8', marginBottom: 10 }}>
+                {t('admin.split-bill-ways', { count: String(splitPortions.length) })}
+              </Text>
+              {splitPortions.map((portion) => (
+                <View
+                  key={portion.split_index}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    backgroundColor: portion.closed_at ? '#f0fdf4' : '#f8fafc',
+                    borderRadius: 8, padding: 12, marginBottom: 8,
+                    borderWidth: 1, borderColor: portion.closed_at ? '#bbf7d0' : '#e2e8f0',
+                  }}
+                >
+                  <View>
+                    <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
+                      Portion {portion.split_index}
+                    </Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
+                      ${(portion.amount_cents / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                  {portion.closed_at ? (
+                    <View style={{ backgroundColor: '#10b981', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Paid ✓</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                      onPress={() => openSplitPayModal(portion)}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Pay</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.actions}>
           <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary]}
-            onPress={async () => {
-              setShowCloseBillModal(true);
-              try {
-                const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
-                setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
-              } catch (e) {
-                setCoupons([]);
-              }
-            }}
+            style={[styles.btn, styles.btnOutline]}
+            onPress={printBillWithPrinterSelection}
           >
-            <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+            <Text style={[styles.btnText, { color: '#1f2937' }]}>{t('admin.print-bill')}</Text>
           </TouchableOpacity>
+          {paidViaPaymentAsiaOnline ? (
+            <View style={[styles.btn, styles.btnDisabled]}>
+              <Text style={[styles.btnText, { color: '#6b7280' }]}>{t('admin.paid-online')}</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary]}
+              onPress={async () => {
+                setShowCloseBillModal(true);
+                setSplitCount(2);
+                try {
+                  const [couponRes, termRes] = await Promise.all([
+                    apiClient.get(`/api/restaurants/${restaurantId}/coupons`),
+                    apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
+                  ]);
+                  setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
+                  const activeT = (termRes.data || []).find((t: any) => t.is_active);
+                  setActivePaymentTerminal(activeT || null);
+                  if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
+                  else setPaymentMethod('cash');
+                } catch (e) {
+                  setCoupons([]);
+                }
+              }}
+            >
+              <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
             onPress={() => endSession(selectedSession.id)}
           >
-            <Text style={styles.btnText}>End Order</Text>
+            <Text style={styles.btnText}>{t('admin.end-order')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -2149,23 +2532,23 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               {sessionBill && (
                 <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ color: '#666' }}>Subtotal</Text>
+                    <Text style={{ color: '#666' }}>{t('admin.order-subtotal-label')}</Text>
                     <Text>${((sessionBill.subtotal_cents || 0) / 100).toFixed(2)}</Text>
                   </View>
                   {(sessionBill.service_charge_cents || 0) > 0 && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: '#666' }}>Service Charge</Text>
+                      <Text style={{ color: '#666' }}>{t('admin.service-charge-label')}</Text>
                       <Text>${(sessionBill.service_charge_cents! / 100).toFixed(2)}</Text>
                     </View>
                   )}
                   {getDiscountCents() > 0 && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: '#e74c3c' }}>Discount</Text>
+                      <Text style={{ color: '#e74c3c' }}>{t('admin.discount-row')}</Text>
                       <Text style={{ color: '#e74c3c' }}>-${(getDiscountCents() / 100).toFixed(2)}</Text>
                     </View>
                   )}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                    <Text style={{ fontWeight: '700', fontSize: 16 }}>{t('admin.total-label')}</Text>
                     <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
                       ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
                     </Text>
@@ -2173,28 +2556,88 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 </View>
               )}
 
+              {/* Split Bill Section */}
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 12, marginBottom: 12 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1d4ed8', marginBottom: 8 }}>{t('admin.split-bill')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <TouchableOpacity
+                    style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                    onPress={() => setSplitCount(Math.max(2, splitCount - 1))}
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#374151' }}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1f2937', width: 40, textAlign: 'center' }}>{splitCount}</Text>
+                  <TouchableOpacity
+                    style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                    onPress={() => setSplitCount(Math.min(20, splitCount + 1))}
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#374151' }}>+</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('admin.people')}</Text>
+                  {sessionBill && (
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669', marginLeft: 8 }}>
+                      {'= $' + (((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / splitCount / 100).toFixed(2) + ' ' + t('admin.each')}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#1d4ed8', borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
+                  onPress={async () => {
+                    setShowCloseBillModal(false);
+                    await confirmSplit();
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{t('admin.split-pay-per-person')}</Text>
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.label}>{t('admin.payment-method')}</Text>
               <View style={styles.selectGroup}>
-                {['cash', 'card', 'online'].map((method) => (
+                {([
+                  { value: 'cash', label: t('admin.cash-label') },
+                  ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
+                    ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
+                    : activePaymentTerminal?.vendor_name === 'kpay'
+                    ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
+                    : [{ value: 'card', label: t('admin.card-label') }]),
+                ] as { value: string; label: string }[]).map((method) => (
                   <TouchableOpacity
-                    key={method}
+                    key={method.value}
                     style={[
                       styles.selectOption,
-                      paymentMethod === method && styles.selectOptionActive,
+                      paymentMethod === method.value && styles.selectOptionActive,
                     ]}
-                    onPress={() => setPaymentMethod(method)}
+                    onPress={() => setPaymentMethod(method.value)}
                   >
                     <Text
                       style={[
                         styles.selectOptionText,
-                        paymentMethod === method && styles.selectOptionTextActive,
+                        paymentMethod === method.value && styles.selectOptionTextActive,
                       ]}
                     >
-                      {method.charAt(0).toUpperCase() + method.slice(1)}
+                      {method.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* KPay notice */}
+              {paymentMethod === 'kpay' && (
+                <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 13, color: '#1d4ed8' }}>
+                    Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{'\n'}Tap Close Bill to initiate — the terminal will prompt the customer.
+                  </Text>
+                </View>
+              )}
+
+              {/* PA Offline notice */}
+              {paymentMethod === 'payment-asia-offline' && (
+                <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 13, color: '#92400e' }}>
+                    Process the payment on the physical PA terminal, then tap Close Bill to confirm.
+                  </Text>
+                </View>
+              )}
 
               {/* Coupon Picker */}
               <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
@@ -2206,9 +2649,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   {selectedCouponId
                     ? (() => {
                         const c = coupons.find(cp => cp.id === selectedCouponId);
-                        return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : 'No discount';
+                        return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : t('admin.no-discount');
                       })()
-                    : 'No discount'}
+                    : t('admin.no-discount')}
                 </Text>
               </TouchableOpacity>
               {showCouponPicker && (
@@ -2218,7 +2661,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                       style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }}
                       onPress={() => { setSelectedCouponId(null); setShowCouponPicker(false); }}
                     >
-                      <Text style={{ color: '#666' }}>No discount</Text>
+                      <Text style={{ color: '#666' }}>{t('admin.no-discount')}</Text>
                     </TouchableOpacity>
                     {coupons.map(c => (
                       <TouchableOpacity
@@ -2234,7 +2677,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                       </TouchableOpacity>
                     ))}
                     {coupons.length === 0 && (
-                      <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>No coupons available</Text>
+                      <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>{t('admin.no-coupons-available')}</Text>
                     )}
                   </ScrollView>
                 </View>
@@ -2246,7 +2689,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 multiline
                 value={closeReason}
                 onChangeText={setCloseReason}
-                placeholder="Optional notes"
+                placeholder={t('admin.notes-placeholder')}
               />
 
               <View style={styles.modalActions}>
@@ -2297,7 +2740,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{t('admin.change-pax')}</Text>
 
-              <Text style={styles.label}>New Pax Count</Text>
+              <Text style={styles.label}>{t('admin.new-pax-count')}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -2312,13 +2755,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowChangePaxModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitChangePax}
                 >
-                  <Text style={styles.btnText}>Update</Text>
+                  <Text style={styles.btnText}>{t('admin.update')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2329,9 +2772,9 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showMoveTableModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Move to Table</Text>
+              <Text style={styles.modalTitle}>{t('admin.move-to-table')}</Text>
 
-              <Text style={styles.label}>Select Available Table</Text>
+              <Text style={styles.label}>{t('admin.select-available-table')}</Text>
               <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
                 {tables
                   .filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id)
@@ -2354,13 +2797,13 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => setShowMoveTableModal(false)}
                 >
-                  <Text style={styles.btnText}>Cancel</Text>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary]}
                   onPress={submitMoveTable}
                 >
-                  <Text style={styles.btnText}>Move</Text>
+                  <Text style={styles.btnText}>{t('admin.move')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2446,6 +2889,108 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             </View>
           </View>
         </Modal>
+
+        {/* Split Bill Modal */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSplitModal} transparent animationType="fade" onRequestClose={() => setShowSplitModal(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>Split Bill</Text>
+              {splitBillData && (
+                <>
+                  <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>
+                    Total: ${((splitBillData.total_cents || splitBillData.grand_total_cents || 0) / 100).toFixed(2)}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
+                    Service Charge: ${((splitBillData.service_charge_cents || 0) / 100).toFixed(2)}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600', marginBottom: 8 }}>Split between:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <TouchableOpacity
+                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                      onPress={() => setSplitCount(Math.max(2, splitCount - 1))}
+                    >
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#374151' }}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#1f2937', width: 50, textAlign: 'center' }}>{splitCount}</Text>
+                    <TouchableOpacity
+                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                      onPress={() => setSplitCount(Math.min(20, splitCount + 1))}
+                    >
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#374151' }}>+</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>people</Text>
+                  </View>
+                  <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>Each person pays</Text>
+                    <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#059669' }}>
+                      ${(((splitBillData.total_cents || splitBillData.grand_total_cents || 0) / splitCount) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                </>
+              )}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                  onPress={() => setShowSplitModal(false)}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: '#3b82f6', borderRadius: 8 }}
+                  onPress={confirmSplit}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Confirm Split</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Split Pay Modal */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSplitPayModal} transparent animationType="fade" onRequestClose={() => setShowSplitPayModal(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
+                Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+              </Text>
+              <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
+                <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#059669' }}>
+                  ${((activeSplitPortion?.amount_cents || 0) / 100).toFixed(2)}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                {['cash', 'card'].map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m ? '#eff6ff' : '#fff' }}
+                    onPress={() => setSplitPayMethod(m)}
+                  >
+                    <Text style={{ fontWeight: '600', color: splitPayMethod === m ? '#3b82f6' : '#374151' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                  onPress={() => setShowSplitPayModal(false)}
+                  disabled={splitPayLoading}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: splitPayLoading ? '#93c5fd' : '#3b82f6', borderRadius: 8 }}
+                  onPress={confirmSplitPay}
+                  disabled={splitPayLoading}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>{splitPayLoading ? 'Processing…' : 'Confirm Payment'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     );
   }
@@ -2491,7 +3036,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={openNewOrderModal}
               >
-                <Text style={styles.btnText}>New Order</Text>
+                <Text style={styles.btnText}>{t('orders.new-order')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -2539,7 +3084,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           }}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ justifyContent: 'center', flex: 1 }}>
             <Pressable style={styles.modalContent} onPress={() => {}}>
-              <Text style={styles.modalTitle}>New Order</Text>
+              <Text style={styles.modalTitle}>{t('orders.new-order')}</Text>
 
               <Text style={styles.label}>{t('admin.number-of-guests')}</Text>
               <TextInput
@@ -2815,7 +3360,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                             </Text>
                           </View>
                         ) : (
-                          <Text style={[styles.tableCardAvailableText, textColor]}>Available</Text>
+                          <Text style={[styles.tableCardAvailableText, textColor]}>{t('admin.table-available')}</Text>
                         )}
                       </View>
                     </TouchableOpacity>
@@ -2899,7 +3444,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               <>
                 <Text style={styles.sectionTitle}>{t('admin.options')}</Text>
                 <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={openNewOrderModal}>
-                  <Text style={styles.btnText}>New Order</Text>
+                  <Text style={styles.btnText}>{t('orders.new-order')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -2936,7 +3481,7 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <Pressable style={styles.modalOverlay} onPress={() => { Keyboard.dismiss(); setShowSessionModal(false); }}>
               <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ justifyContent: 'center', flex: 1 }}>
                 <Pressable style={styles.modalContent} onPress={() => {}}>
-                  <Text style={styles.modalTitle}>New Order</Text>
+                  <Text style={styles.modalTitle}>{t('orders.new-order')}</Text>
                   <Text style={styles.label}>{t('admin.number-of-guests')}</Text>
                   <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={sessionPax} onChangeText={setSessionPax} placeholder="1" />
                   {qrMode === 'static_seat' && (
@@ -3069,35 +3614,43 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>💰 Bill Requested</Text>
               </View>
             )}
-            {serviceRequests.length > 0 && serviceRequests.map((req) => (
-              <TouchableOpacity
-                key={req.id}
-                style={{ backgroundColor: '#8b5cf6', borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-                onPress={() => fulfillServiceRequest(req.id)}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🛎️ {req.label}</Text>
-                <Text style={{ color: '#fff', fontSize: 12 }}>Tap to fulfill</Text>
-              </TouchableOpacity>
-            ))}
+            {selectedSession.payment_received && (
+              <View style={styles.paymentReceivedBanner}>
+                <Text style={styles.paymentReceivedTitle}>✅ Payment Received</Text>
+                <Text style={styles.paymentReceivedSub}>Via: {selectedSession.payment_method_online?.toUpperCase() || 'N/A'}</Text>
+                <Text style={styles.paymentReceivedSub}>Ref: {selectedSession.merchant_reference || '—'}</Text>
+              </View>
+            )}
             <Text style={styles.sectionTitle}>{t('admin.orders')}</Text>
             {sessionOrders.length === 0 ? (
               <Text style={styles.emptyText}>{t('admin.no-orders')}</Text>
             ) : (
               sessionOrders.map((order, idx) => (
                 <View key={idx} style={styles.orderCard}>
-                  <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
-                  {order.items && order.items.filter(item => {
-                    const name = item.name || item.item_name || item.menu_item_name;
-                    return name && name !== 'Deleted Item';
-                  }).length > 0 ? (
-                    order.items.filter(item => {
-                      const name = item.name || item.item_name || item.menu_item_name;
-                      return name && name !== 'Deleted Item';
-                    }).map((item, itemIdx) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.orderTitle}>Order #{order.restaurant_order_number || order.order_id || order.id}</Text>
+                    {order.order_status === 'completed' ? (
+                      order.order_payment_method === 'payment-asia' ? (
+                        <View style={{ marginLeft: 8, backgroundColor: '#f59e0b', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>PA Paid</Text>
+                        </View>
+                      ) : (
+                        <View style={{ marginLeft: 8, backgroundColor: '#10b981', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Paid</Text>
+                        </View>
+                      )
+                    ) : (
+                      <View style={{ marginLeft: 8, backgroundColor: '#6b7280', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Not Paid</Text>
+                      </View>
+                    )}
+                  </View>
+                  {order.items && order.items.length > 0 ? (
+                    order.items.map((item, itemIdx) => (
                       <View key={itemIdx}>
                         <View style={styles.orderItem}>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.itemName}>{item.name || item.item_name || item.menu_item_name} x{item.quantity}</Text>
+                            <Text style={styles.itemName}>{item.name || item.item_name || item.menu_item_name || 'Unknown Item'} x{item.quantity}</Text>
                             <Text style={styles.itemStatus}>{item.status || 'pending'}</Text>
                             {item.variants && item.variants !== '' && <Text style={styles.itemStatus}>{item.variants}</Text>}
                           </View>
@@ -3137,22 +3690,83 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 <Text style={styles.totalLabel}>{formatPrice(totals.total)}</Text>
               </View>
             </View>
+
+            {/* Split Bill Portions (tablet) */}
+            {splitPortions.length > 0 && (
+              <View style={{ marginHorizontal: 16, marginBottom: 16, borderTopWidth: 2, borderTopColor: '#3b82f6', paddingTop: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1d4ed8', marginBottom: 10 }}>
+                  Split Bill — {splitPortions.length} ways
+                </Text>
+                {splitPortions.map((portion) => (
+                  <View
+                    key={portion.split_index}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      backgroundColor: portion.closed_at ? '#f0fdf4' : '#f8fafc',
+                      borderRadius: 8, padding: 12, marginBottom: 8,
+                      borderWidth: 1, borderColor: portion.closed_at ? '#bbf7d0' : '#e2e8f0',
+                    }}
+                  >
+                    <View>
+                      <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
+                        Portion {portion.split_index}
+                      </Text>
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
+                        ${(portion.amount_cents / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                    {portion.closed_at ? (
+                      <View style={{ backgroundColor: '#10b981', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Paid ✓</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                        onPress={() => openSplitPayModal(portion)}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Pay</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </ScrollView>
           <View style={styles.actions}>
             <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary]}
-              onPress={async () => {
-                setShowCloseBillModal(true);
-                try {
-                  const res = await apiClient.get(`/api/restaurants/${restaurantId}/coupons`);
-                  setCoupons((res.data || []).filter((c: Coupon) => c.is_active));
-                } catch (e) { setCoupons([]); }
-              }}
+              style={[styles.btn, styles.btnOutline]}
+              onPress={printBillWithPrinterSelection}
             >
-              <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+              <Text style={[styles.btnText, { color: '#1f2937' }]}>{t('admin.print-bill')}</Text>
             </TouchableOpacity>
+            {paidViaPaymentAsiaOnline ? (
+              <View style={[styles.btn, styles.btnDisabled]}>
+                <Text style={[styles.btnText, { color: '#6b7280' }]}>{t('admin.paid-online')}</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary]}
+                onPress={async () => {
+                  setShowCloseBillModal(true);
+                  setSplitCount(2);
+                  try {
+                    const [couponRes, termRes] = await Promise.all([
+                      apiClient.get(`/api/restaurants/${restaurantId}/coupons`),
+                      apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
+                    ]);
+                    setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
+                    const activeT = (termRes.data || []).find((t: any) => t.is_active);
+                    setActivePaymentTerminal(activeT || null);
+                    if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
+                    else setPaymentMethod('cash');
+                  } catch (e) { setCoupons([]); }
+                }}
+              >
+                <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => endSession(selectedSession.id)}>
-              <Text style={styles.btnText}>End Order</Text>
+              <Text style={styles.btnText}>{t('admin.end-order')}</Text>
             </TouchableOpacity>
           </View>
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
@@ -3162,48 +3776,107 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 {sessionBill && (
                   <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: '#666' }}>Subtotal</Text>
+                      <Text style={{ color: '#666' }}>{t('admin.order-subtotal-label')}</Text>
                       <Text>${((sessionBill.subtotal_cents || 0) / 100).toFixed(2)}</Text>
                     </View>
                     {(sessionBill.service_charge_cents || 0) > 0 && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ color: '#666' }}>Service Charge</Text>
+                        <Text style={{ color: '#666' }}>{t('admin.service-charge-label')}</Text>
                         <Text>${(sessionBill.service_charge_cents! / 100).toFixed(2)}</Text>
                       </View>
                     )}
                     {getDiscountCents() > 0 && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ color: '#e74c3c' }}>Discount</Text>
+                        <Text style={{ color: '#e74c3c' }}>{t('admin.discount-row')}</Text>
                         <Text style={{ color: '#e74c3c' }}>-${(getDiscountCents() / 100).toFixed(2)}</Text>
                       </View>
                     )}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 6, marginTop: 4 }}>
-                      <Text style={{ fontWeight: '700', fontSize: 16 }}>Total</Text>
+                      <Text style={{ fontWeight: '700', fontSize: 16 }}>{t('admin.total-label')}</Text>
                       <Text style={{ fontWeight: '700', fontSize: 16, color: '#27ae60' }}>
                         ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / 100).toFixed(2)}
                       </Text>
                     </View>
                   </View>
                 )}
+
+                {/* Split Bill Section */}
+                <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 12, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#1d4ed8', marginBottom: 8 }}>Split Bill</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <TouchableOpacity
+                      style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                      onPress={() => setSplitCount(Math.max(2, splitCount - 1))}
+                    >
+                      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#374151' }}>{'\u2212'}</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1f2937', width: 40, textAlign: 'center' }}>{splitCount}</Text>
+                    <TouchableOpacity
+                      style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                      onPress={() => setSplitCount(Math.min(20, splitCount + 1))}
+                    >
+                      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#374151' }}>+</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>people</Text>
+                    {sessionBill && (
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#059669', marginLeft: 8 }}>
+                        = ${(((sessionBill.grand_total_cents || sessionBill.total_cents || 0) - getDiscountCents()) / splitCount / 100).toFixed(2)} each
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#1d4ed8', borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
+                    onPress={async () => {
+                      setShowCloseBillModal(false);
+                      await confirmSplit();
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Split &amp; Pay Per Person</Text>
+                  </TouchableOpacity>
+                </View>
+
                 <Text style={styles.label}>{t('admin.payment-method')}</Text>
                 <View style={styles.selectGroup}>
-                  {['cash', 'card', 'online'].map((method) => (
-                    <TouchableOpacity key={method} style={[styles.selectOption, paymentMethod === method && styles.selectOptionActive]} onPress={() => setPaymentMethod(method)}>
-                      <Text style={[styles.selectOptionText, paymentMethod === method && styles.selectOptionTextActive]}>{method.charAt(0).toUpperCase() + method.slice(1)}</Text>
+                  {([
+                    { value: 'cash', label: t('admin.cash-label') },
+                    ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
+                      ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
+                      : activePaymentTerminal?.vendor_name === 'kpay'
+                      ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
+                      : [{ value: 'card', label: t('admin.card-label') }]),
+                  ] as { value: string; label: string }[]).map((method) => (
+                    <TouchableOpacity key={method.value} style={[styles.selectOption, paymentMethod === method.value && styles.selectOptionActive]} onPress={() => setPaymentMethod(method.value)}>
+                      <Text style={[styles.selectOptionText, paymentMethod === method.value && styles.selectOptionTextActive]}>{method.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+                {/* KPay notice */}
+                {paymentMethod === 'kpay' && (
+                  <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 13, color: '#1d4ed8' }}>
+                      Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{'\n'}Tap Close Bill to initiate — the terminal will prompt the customer.
+                    </Text>
+                  </View>
+                )}
+                {/* PA Offline notice */}
+                {paymentMethod === 'payment-asia-offline' && (
+                  <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 13, color: '#92400e' }}>
+                      Process the payment on the physical PA terminal, then tap Close Bill to confirm.
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
                 <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowCouponPicker(!showCouponPicker)}>
                   <Text style={{ color: selectedCouponId ? '#333' : '#999' }}>
-                    {selectedCouponId ? (() => { const c = coupons.find(cp => cp.id === selectedCouponId); return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : 'No discount'; })() : 'No discount'}
+                    {selectedCouponId ? (() => { const c = coupons.find(cp => cp.id === selectedCouponId); return c ? `${c.code} - ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}` : t('admin.no-discount'); })() : t('admin.no-discount')}
                   </Text>
                 </TouchableOpacity>
                 {showCouponPicker && (
                   <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginTop: -8, marginBottom: 8, maxHeight: 160 }}>
                     <ScrollView nestedScrollEnabled>
                       <TouchableOpacity style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }} onPress={() => { setSelectedCouponId(null); setShowCouponPicker(false); }}>
-                        <Text style={{ color: '#666' }}>No discount</Text>
+                        <Text style={{ color: '#666' }}>{t('admin.no-discount')}</Text>
                       </TouchableOpacity>
                       {coupons.map(c => (
                         <TouchableOpacity key={c.id} style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: selectedCouponId === c.id ? '#e8f4fd' : '#fff' }} onPress={() => { setSelectedCouponId(c.id); setShowCouponPicker(false); }}>
@@ -3211,12 +3884,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                           <Text style={{ color: '#666', fontSize: 12 }}>{c.discount_type === 'percentage' ? `${c.discount_value}% off` : `$${(c.discount_value / 100).toFixed(2)} off`}{c.description ? ` — ${c.description}` : ''}</Text>
                         </TouchableOpacity>
                       ))}
-                      {coupons.length === 0 && <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>No coupons available</Text>}
+                      {coupons.length === 0 && <Text style={{ padding: 10, color: '#999', fontStyle: 'italic' }}>{t('admin.no-coupons-available')}</Text>}
                     </ScrollView>
                   </View>
                 )}
                 <Text style={styles.label}>{t('admin.notes')}</Text>
-                <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder="Optional notes" />
+                <TextInput style={[styles.input, styles.multilineInput]} multiline value={closeReason} onChangeText={setCloseReason} placeholder={t('admin.notes-placeholder')} />
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowCloseBillModal(false)}>
                     <Text style={styles.btnText}>{t('common.cancel')}</Text>
@@ -3254,14 +3927,14 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>{t('admin.change-pax')}</Text>
-                <Text style={styles.label}>New Pax Count</Text>
+                <Text style={styles.label}>{t('admin.new-pax-count')}</Text>
                 <TextInput style={styles.input} keyboardType="number-pad" inputAccessoryViewID="numpadDone" value={newPaxValue} onChangeText={setNewPaxValue} placeholder="1" />
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowChangePaxModal(false)}>
-                    <Text style={styles.btnText}>Cancel</Text>
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submitChangePax}>
-                    <Text style={styles.btnText}>Update</Text>
+                    <Text style={styles.btnText}>{t('admin.update')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -3270,8 +3943,8 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showMoveTableModal} animationType="fade" transparent>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Move to Table</Text>
-                <Text style={styles.label}>Select Available Table</Text>
+                <Text style={styles.modalTitle}>{t('admin.move-to-table')}</Text>
+                <Text style={styles.label}>{t('admin.select-available-table')}</Text>
                 <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
                   {tables.filter((t) => t.sessions.length === 0 && t.id !== selectedTable?.id).map((table) => (
                     <TouchableOpacity key={table.id} style={[styles.tableOption, selectedMoveTable === table.id && styles.tableOptionSelected]} onPress={() => setSelectedMoveTable(table.id)}>
@@ -3281,10 +3954,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
                 </ScrollView>
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowMoveTableModal(false)}>
-                    <Text style={styles.btnText}>Cancel</Text>
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submitMoveTable}>
-                    <Text style={styles.btnText}>Move</Text>
+                    <Text style={styles.btnText}>{t('admin.move')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -3621,12 +4294,134 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
               </>
             )}
 
-            <TouchableOpacity
-              style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
-              onPress={() => setShowSplitModal(false)}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                onPress={() => setShowSplitModal(false)}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: '#3b82f6', borderRadius: 8 }}
+                onPress={confirmSplit}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Confirm Split</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Split Pay Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSplitPayModal} transparent animationType="fade" onRequestClose={() => setShowSplitPayModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
+              Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+            </Text>
+            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
+              <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
+              <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#059669' }}>
+                ${((activeSplitPortion?.amount_cents || 0) / 100).toFixed(2)}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              {['cash', 'card'].map(m => (
+                <TouchableOpacity
+                  key={m}
+                  style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m ? '#eff6ff' : '#fff' }}
+                  onPress={() => setSplitPayMethod(m)}
+                >
+                  <Text style={{ fontWeight: '600', color: splitPayMethod === m ? '#3b82f6' : '#374151' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                onPress={() => setShowSplitPayModal(false)}
+                disabled={splitPayLoading}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: splitPayLoading ? '#93c5fd' : '#3b82f6', borderRadius: 8 }}
+                onPress={confirmSplitPay}
+                disabled={splitPayLoading}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>{splitPayLoading ? 'Processing…' : 'Confirm Payment'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* KPay Terminal Payment Overlay */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showKPayModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { width: '90%', maxWidth: 420 }]}>
+            {/* Header + status badge */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>KPay Terminal Payment</Text>
+              <View style={{
+                paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12,
+                backgroundColor: kpayStatus === 'success' ? '#d1fae5' : kpayStatus === 'failed' || kpayStatus === 'cancelled' ? '#fee2e2' : kpayStatus === 'timeout' ? '#fee2e2' : '#fef3c7',
+              }}>
+                <Text style={{
+                  fontSize: 12, fontWeight: '700',
+                  color: kpayStatus === 'success' ? '#065f46' : kpayStatus === 'failed' || kpayStatus === 'cancelled' || kpayStatus === 'timeout' ? '#dc2626' : '#b45309',
+                }}>
+                  {kpayStatus === 'initiating' ? 'Initiating…' : kpayStatus === 'waiting' ? 'Waiting…' : kpayStatus === 'success' ? 'Paid ✓' : kpayStatus === 'failed' ? 'Failed' : kpayStatus === 'cancelled' ? 'Cancelled' : kpayStatus === 'timeout' ? 'Timeout' : 'Aborting…'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Amount info */}
+            <View style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ color: '#666', fontSize: 13 }}>Amount</Text>
+                <Text style={{ fontWeight: '700', fontSize: 13 }}>HKD {(kpayFinalAmount / 100).toFixed(2)}</Text>
+              </View>
+              {activePaymentTerminal?.terminal_ip && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ color: '#666', fontSize: 13 }}>Terminal</Text>
+                  <Text style={{ fontSize: 13 }}>{activePaymentTerminal.terminal_ip}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Terminal log window */}
+            <ScrollView
+              style={{ backgroundColor: '#1a1a1a', borderRadius: 6, padding: 10, maxHeight: 160, marginBottom: 12 }}
+              ref={svRef => { if (svRef) svRef.scrollToEnd({ animated: true }); }}
             >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Close</Text>
-            </TouchableOpacity>
+              {kpayLogs.map((log, i) => (
+                <Text key={i} style={{ fontFamily: 'Courier New', fontSize: 11, color: log.color, lineHeight: 16 }}>
+                  {log.text}
+                </Text>
+              ))}
+            </ScrollView>
+
+            {/* Buttons */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(kpayStatus === 'initiating' || kpayStatus === 'waiting') && (
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 10, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, alignItems: 'center' }}
+                  onPress={abortKPayPayment}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#dc2626' }}>⏹ Abort</Text>
+                </TouchableOpacity>
+              )}
+              {(kpayStatus === 'success' || kpayStatus === 'failed' || kpayStatus === 'cancelled' || kpayStatus === 'timeout' || kpayStatus === 'aborting') && (
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 10, backgroundColor: '#d1fae5', borderWidth: 1, borderColor: '#6ee7b7', borderRadius: 6, alignItems: 'center' }}
+                  onPress={() => setShowKPayModal(false)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#065f46' }}>✓ Done</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </Modal>
@@ -4188,9 +4983,36 @@ const styles = StyleSheet.create({
   btnSecondary: {
     backgroundColor: '#e5e7eb',
   },
+  btnOutline: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  btnDisabled: {
+    backgroundColor: '#e5e7eb',
+    opacity: 0.6,
+  },
   btnText: {
     fontWeight: '600',
     fontSize: 13,
+  },
+  paymentReceivedBanner: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#4caf50',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  paymentReceivedTitle: {
+    color: '#2e7d32',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  paymentReceivedSub: {
+    color: '#555',
+    fontSize: 12,
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,

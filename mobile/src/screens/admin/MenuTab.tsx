@@ -20,6 +20,8 @@ import {
   Alert,
   Dimensions,
   Image,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
@@ -50,6 +52,7 @@ interface Variant {
 interface MenuItem {
   id: number;
   name: string;
+  name_zh?: string;
   description?: string;
   price_cents: number;
   category_id: number;
@@ -62,17 +65,444 @@ interface MenuItem {
 interface MenuCategory {
   id: number;
   name: string;
+  name_zh?: string;
+  time_restricted?: boolean;
+  available_from?: string | null;
+  available_to?: string | null;
+  days_of_week?: number[];
+}
+
+interface SRItem {
+  id: number;
+  request_type: string;
+  label_en: string;
+  label_zh?: string;
+  is_active: boolean;
+  sort_order: number;
+  color?: string;
+  image_url?: string;
 }
 
 export interface MenuTabRef {
   toggleEditMode: () => void;
 }
 
+// ==================== DRAGGABLE COMPONENTS ====================
+
+const DRAG_MENU_CATEGORY_H = 46;
+const DRAG_MENU_ITEM_H = 72;
+
+interface DraggableMenuCategoryProps {
+  category: MenuCategory;
+  index: number;
+  isActive: boolean;
+  activeDragIndex: number | null;
+  hoverIndex: number | null;
+  selectedCategory: number | null;
+  onDragGrant: (index: number, animY: Animated.Value) => void;
+  onDragMove: (dy: number) => void;
+  onDragRelease: (dy: number) => void;
+  onDragTerminate: () => void;
+  onSelect: (categoryId: number) => void;
+  t: (key: string) => string;
+}
+
+const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
+  category, index, isActive, activeDragIndex, hoverIndex, selectedCategory,
+  onDragGrant, onDragMove, onDragRelease, onDragTerminate,
+  onSelect, t,
+}: DraggableMenuCategoryProps) {
+  const { lang } = useTranslation();
+  const animY = useRef(new Animated.Value(0)).current;
+  const onDragGrantRef = useRef(onDragGrant);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragReleaseRef = useRef(onDragRelease);
+  const onDragTerminateRef = useRef(onDragTerminate);
+  useEffect(() => { onDragGrantRef.current = onDragGrant; }, [onDragGrant]);
+  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
+  useEffect(() => { onDragReleaseRef.current = onDragRelease; }, [onDragRelease]);
+  useEffect(() => { onDragTerminateRef.current = onDragTerminate; }, [onDragTerminate]);
+  const indexRef = useRef(index);
+  useEffect(() => { indexRef.current = index; }, [index]);
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { onDragGrantRef.current(indexRef.current, animY); },
+    onPanResponderMove: (_, { dy }) => { animY.setValue(dy); onDragMoveRef.current(dy); },
+    onPanResponderRelease: (_, { dy }) => { animY.setValue(0); onDragReleaseRef.current(dy); },
+    onPanResponderTerminate: () => { animY.setValue(0); onDragTerminateRef.current(); },
+  })).current;
+
+  let shift = 0;
+  if (!isActive && activeDragIndex !== null && hoverIndex !== null && activeDragIndex !== hoverIndex) {
+    if (activeDragIndex < hoverIndex && index > activeDragIndex && index <= hoverIndex) shift = -DRAG_MENU_CATEGORY_H;
+    if (activeDragIndex > hoverIndex && index >= hoverIndex && index < activeDragIndex) shift = DRAG_MENU_CATEGORY_H;
+  }
+
+  const isSelected = selectedCategory === category.id;
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY: isActive ? animY : shift }],
+        zIndex: isActive ? 1000 : 1,
+        shadowColor: isActive ? '#000' : 'transparent',
+        shadowOpacity: isActive ? 0.2 : 0,
+        shadowRadius: isActive ? 8 : 0,
+        elevation: isActive ? 8 : 0,
+      }}
+    >
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
+        marginHorizontal: 4,
+        backgroundColor: isActive ? '#e8f0fe' : 'transparent',
+        borderRadius: 20,
+      }}>
+        {/* Category pill — press to open editor */}
+        <TouchableOpacity
+          onPress={() => onSelect(category.id)}
+          style={[
+            styles.categoryBtn,
+            isSelected && styles.categoryBtnActive,
+            { flex: 1 },
+          ]}
+        >
+          <Text style={[styles.categoryBtnText, isSelected && styles.categoryBtnTextActive]} numberOfLines={1}>
+            {lang === 'zh' && category.name_zh ? category.name_zh : category.name}
+          </Text>
+        </TouchableOpacity>
+        {/* Drag handle */}
+        <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 8 }}>
+          <Ionicons name="menu-outline" size={20} color="#9ca3af" />
+        </View>
+      </View>
+    </Animated.View>
+  );
+});
+
+interface DraggableMenuCategoryListProps {
+  categories: MenuCategory[];
+  selectedCategory: number | null;
+  onReorder: (newCategories: MenuCategory[]) => void;
+  onSelect: (categoryId: number) => void;
+  onScrollEnabled: (v: boolean) => void;
+  t: (key: string) => string;
+}
+
+function DraggableMenuCategoryList({
+  categories, selectedCategory, onReorder, onSelect, onScrollEnabled, t,
+}: DraggableMenuCategoryListProps) {
+  const [orderedCats, setOrderedCats] = useState<MenuCategory[]>(categories);
+  useEffect(() => { setOrderedCats(categories); }, [categories]);
+  const orderedRef = useRef(orderedCats);
+  useEffect(() => { orderedRef.current = orderedCats; }, [orderedCats]);
+
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const fromIndexRef = useRef<number>(0);
+
+  const handleDragGrant = useCallback((index: number, _animY: Animated.Value) => {
+    fromIndexRef.current = index;
+    setActiveDragIndex(index);
+    setHoverIndex(index);
+    onScrollEnabled(false);
+  }, [onScrollEnabled]);
+
+  const handleDragMove = useCallback((dy: number) => {
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_CATEGORY_H)));
+    setHoverIndex(to);
+  }, []);
+
+  const handleDragRelease = useCallback((dy: number) => {
+    onScrollEnabled(true);
+    const to = Math.max(0, Math.min(orderedRef.current.length - 1, fromIndexRef.current + Math.round(dy / DRAG_MENU_CATEGORY_H)));
+    if (fromIndexRef.current !== to) {
+      const newCats = [...orderedRef.current];
+      const [moved] = newCats.splice(fromIndexRef.current, 1);
+      newCats.splice(to, 0, moved);
+      setOrderedCats(newCats);
+      onReorder(newCats);
+    }
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled, onReorder]);
+
+  const handleDragTerminate = useCallback(() => {
+    onScrollEnabled(true);
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled]);
+
+  return (
+    <View style={{ minHeight: orderedCats.length * DRAG_MENU_CATEGORY_H, paddingHorizontal: 8, paddingVertical: 4 }}>
+      {orderedCats.map((cat, idx) => (
+        <DraggableMenuCategory
+          key={cat.id}
+          category={cat}
+          index={idx}
+          isActive={activeDragIndex === idx}
+          activeDragIndex={activeDragIndex}
+          hoverIndex={hoverIndex}
+          selectedCategory={selectedCategory}
+          onDragGrant={handleDragGrant}
+          onDragMove={handleDragMove}
+          onDragRelease={handleDragRelease}
+          onDragTerminate={handleDragTerminate}
+          onSelect={onSelect}
+          t={t}
+        />
+      ))}
+    </View>
+  );
+}
+
+const GRID_NUM_COLS = 3;
+
+interface GridDragCardProps {
+  item: MenuItem;
+  index: number;
+  isActive: boolean;
+  isHoverTarget: boolean;
+  apiUrl: string;
+  formatPrice: (cents: number) => string;
+  onPress: (item: MenuItem) => void;
+  onToggleAvailability: (itemId: number, available: boolean) => void;
+  onDragGrant: (index: number) => void;
+  onDragMove: (dx: number, dy: number) => void;
+  onDragRelease: (dx: number, dy: number) => void;
+  onDragTerminate: () => void;
+  onMeasureHeight: (height: number) => void;
+}
+
+const GridDragCard = React.memo(function GridDragCard({
+  item, index, isActive, isHoverTarget, apiUrl, formatPrice,
+  onPress, onToggleAvailability,
+  onDragGrant, onDragMove, onDragRelease, onDragTerminate, onMeasureHeight,
+}: GridDragCardProps) {
+  const { lang } = useTranslation();
+  const animX = useRef(new Animated.Value(0)).current;
+  const animY = useRef(new Animated.Value(0)).current;
+  const onDragGrantRef = useRef(onDragGrant);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragReleaseRef = useRef(onDragRelease);
+  const onDragTerminateRef = useRef(onDragTerminate);
+  useEffect(() => { onDragGrantRef.current = onDragGrant; }, [onDragGrant]);
+  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
+  useEffect(() => { onDragReleaseRef.current = onDragRelease; }, [onDragRelease]);
+  useEffect(() => { onDragTerminateRef.current = onDragTerminate; }, [onDragTerminate]);
+  const indexRef = useRef(index);
+  useEffect(() => { indexRef.current = index; }, [index]);
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { onDragGrantRef.current(indexRef.current); },
+    onPanResponderMove: (_, { dx, dy }) => {
+      animX.setValue(dx);
+      animY.setValue(dy);
+      onDragMoveRef.current(dx, dy);
+    },
+    onPanResponderRelease: (_, { dx, dy }) => {
+      animX.setValue(0);
+      animY.setValue(0);
+      onDragReleaseRef.current(dx, dy);
+    },
+    onPanResponderTerminate: () => {
+      animX.setValue(0);
+      animY.setValue(0);
+      onDragTerminateRef.current();
+    },
+  })).current;
+
+  const imageUri = item.image_url
+    ? (item.image_url.startsWith('http') ? item.image_url : `${apiUrl}${item.image_url}`)
+    : `${apiUrl}/uploads/website/placeholder.png`;
+
+  return (
+    <Animated.View
+      style={[
+        styles.itemCardWrapper,
+        isHoverTarget && { borderWidth: 2, borderColor: '#4f46e5', borderRadius: 8 },
+        isActive && {
+          transform: [{ translateX: animX }, { translateY: animY }],
+          zIndex: 1000,
+          shadowColor: '#000',
+          shadowOpacity: 0.25,
+          shadowRadius: 10,
+          elevation: 10,
+          opacity: 0.9,
+        },
+      ]}
+      onLayout={(e) => { if (index === 0) onMeasureHeight(e.nativeEvent.layout.height); }}
+    >
+      {/* Drag handle - top-left corner */}
+      <View
+        {...panResponder.panHandlers}
+        style={{
+          position: 'absolute',
+          top: 4,
+          left: 4,
+          zIndex: 10,
+          backgroundColor: 'rgba(255,255,255,0.85)',
+          borderRadius: 4,
+          padding: 4,
+        }}
+      >
+        <Ionicons name="menu-outline" size={13} color="#6b7280" />
+      </View>
+      {/* Card body - same as normal grid */}
+      <TouchableOpacity style={styles.itemCard} onPress={() => onPress(item)}>
+        <Image source={{ uri: imageUri }} style={styles.itemImage} onError={() => {}} />
+        <View style={styles.itemContent}>
+          <Text style={styles.itemName} numberOfLines={2}>{lang === 'zh' && item.name_zh ? item.name_zh : item.name}</Text>
+          <View style={styles.itemMeta}>
+            <Text style={styles.itemPrice}>{formatPrice(item.price_cents)}</Text>
+            <View style={[styles.availabilityBadge, { backgroundColor: item.available ? '#d1f0d1' : '#fdd' }]}>
+              <Text style={[styles.availabilityText, { color: item.available ? '#2d7a2d' : '#c33' }]}>
+                {item.available ? '✓' : '✕'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+      {/* Availability toggle */}
+      <View style={styles.itemActionButtons}>
+        <TouchableOpacity style={styles.itemActionBtn} onPress={() => onToggleAvailability(item.id, item.available)}>
+          <Ionicons name={item.available ? 'eye-outline' : 'eye-off-outline'} size={16} color={item.available ? '#059669' : '#dc2626'} />
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+});
+
+interface DraggableMenuItemGridProps {
+  items: MenuItem[];
+  onReorder: (items: MenuItem[]) => void;
+  onScrollEnabled: (v: boolean) => void;
+  apiUrl: string;
+  onAddItem: () => void;
+  onItemPress: (item: MenuItem) => void;
+  onToggleAvailability: (itemId: number, available: boolean) => void;
+  formatPrice: (cents: number) => string;
+  addItemLabel: string;
+}
+
+function DraggableMenuItemGrid({
+  items, onReorder, onScrollEnabled, apiUrl,
+  onAddItem, onItemPress, onToggleAvailability, formatPrice, addItemLabel,
+}: DraggableMenuItemGridProps) {
+  const [orderedItems, setOrderedItems] = useState<MenuItem[]>(items);
+  // Only reset when the set of item IDs actually changes (e.g. category switch / item added/deleted)
+  // NOT on every parent render (filteredItems is a new array reference each time)
+  const prevItemIdsRef = useRef<string>('');
+  useEffect(() => {
+    const ids = items.map(i => i.id).join(',');
+    if (ids !== prevItemIdsRef.current) {
+      prevItemIdsRef.current = ids;
+      setOrderedItems(items);
+    }
+  }, [items]);
+  const orderedRef = useRef(orderedItems);
+  useEffect(() => { orderedRef.current = orderedItems; }, [orderedItems]);
+
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const fromIndexRef = useRef<number>(0);
+  const cardWidthRef = useRef<number>(100);
+  const cardHeightRef = useRef<number>(130);
+
+  const calcHoverIndex = useCallback((fromIdx: number, dx: number, dy: number) => {
+    const fromRow = Math.floor(fromIdx / GRID_NUM_COLS);
+    const fromCol = fromIdx % GRID_NUM_COLS;
+    const dRow = Math.round(dy / cardHeightRef.current);
+    const dCol = Math.round(dx / cardWidthRef.current);
+    const maxRow = Math.floor((orderedRef.current.length - 1) / GRID_NUM_COLS);
+    const toRow = Math.max(0, Math.min(maxRow, fromRow + dRow));
+    const toCol = Math.max(0, Math.min(GRID_NUM_COLS - 1, fromCol + dCol));
+    return Math.min(orderedRef.current.length - 1, toRow * GRID_NUM_COLS + toCol);
+  }, []);
+
+  const handleDragGrant = useCallback((idx: number) => {
+    fromIndexRef.current = idx;
+    setActiveDragIndex(idx);
+    setHoverIndex(idx);
+    onScrollEnabled(false);
+  }, [onScrollEnabled]);
+
+  const handleDragMove = useCallback((dx: number, dy: number) => {
+    setHoverIndex(calcHoverIndex(fromIndexRef.current, dx, dy));
+  }, [calcHoverIndex]);
+
+  const handleDragRelease = useCallback((dx: number, dy: number) => {
+    onScrollEnabled(true);
+    const to = calcHoverIndex(fromIndexRef.current, dx, dy);
+    if (fromIndexRef.current !== to) {
+      const newItems = [...orderedRef.current];
+      const [moved] = newItems.splice(fromIndexRef.current, 1);
+      newItems.splice(to, 0, moved);
+      setOrderedItems(newItems);
+      onReorder(newItems);
+    }
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled, calcHoverIndex, onReorder]);
+
+  const handleDragTerminate = useCallback(() => {
+    onScrollEnabled(true);
+    setActiveDragIndex(null);
+    setHoverIndex(null);
+  }, [onScrollEnabled]);
+
+  return (
+    <View
+      style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 12, rowGap: 12, columnGap: 10 }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        cardWidthRef.current = (w - 24 - 10 * (GRID_NUM_COLS - 1)) / GRID_NUM_COLS;
+      }}
+    >
+      {/* Add Item card - same size as regular grid cards */}
+      <TouchableOpacity
+        style={[styles.itemCardWrapper, styles.itemCard, styles.addItemCard]}
+        onPress={onAddItem}
+      >
+        <View style={styles.addItemImageArea}>
+          <Text style={styles.addItemIcon}>+</Text>
+        </View>
+        <View style={styles.itemContent}>
+          <Text style={styles.addItemLabel}>{addItemLabel}</Text>
+        </View>
+      </TouchableOpacity>
+      {orderedItems.map((item, idx) => (
+        <GridDragCard
+          key={item.id}
+          item={item}
+          index={idx}
+          isActive={activeDragIndex === idx}
+          isHoverTarget={hoverIndex === idx && activeDragIndex !== idx}
+          apiUrl={apiUrl}
+          formatPrice={formatPrice}
+          onPress={onItemPress}
+          onToggleAvailability={onToggleAvailability}
+          onDragGrant={handleDragGrant}
+          onDragMove={handleDragMove}
+          onDragRelease={handleDragRelease}
+          onDragTerminate={handleDragTerminate}
+          onMeasureHeight={(h) => { cardHeightRef.current = h; }}
+        />
+      ))}
+    </View>
+  );
+}
+
 // ==================== COMPONENT ====================
 
-export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuery?: string }>(
-  ({ restaurantId, searchQuery }, ref) => {
-    const { t } = useTranslation();
+export const MenuTab = forwardRef(
+  ({ restaurantId, searchQuery }: { restaurantId: string; searchQuery?: string }, ref: React.Ref<MenuTabRef>) => {
+    const { t, lang } = useTranslation();
     // ==================== STATE MANAGEMENT ====================
     
     // Data
@@ -85,6 +515,11 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
 
     // Edit mode - toggles item availability visibility and variant edit toggle visibility
     const [showAvailabilityToggles, setShowAvailabilityToggles] = useState(false);
+
+    // Drag-to-reorder states
+    const [categoryDragEnabled, setCategoryDragEnabled] = useState(false);
+    const [itemDragEnabled, setItemDragEnabled] = useState(false);
+    const [menuScrollEnabled, setMenuScrollEnabled] = useState(true);
 
     // Variant edit mode tracking - which variants are being edited
     const [editingVariantIds, setEditingVariantIds] = useState<Set<number>>(new Set());
@@ -115,6 +550,15 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
     const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
     const [categoryName, setCategoryName] = useState('');
     const [editingCategoryName, setEditingCategoryName] = useState('');
+    const [editingCategoryNameZh, setEditingCategoryNameZh] = useState('');
+    const [editingCategoryTimeRestricted, setEditingCategoryTimeRestricted] = useState(false);
+    const [editingCategoryFrom, setEditingCategoryFrom] = useState('11:00');
+    const [editingCategoryTo, setEditingCategoryTo] = useState('22:00');
+    const [editingCategoryDaysOfWeek, setEditingCategoryDaysOfWeek] = useState<number[]>([]);
+    const toggleEditingDayOfWeek = (day: number) =>
+      setEditingCategoryDaysOfWeek(prev =>
+        prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort((a, b) => a - b)
+      );
 
     // Food item management modals
     const [showItemModal, setShowItemModal] = useState(false);
@@ -158,6 +602,19 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
     const [uploadingImageItemId, setUploadingImageItemId] = useState<number | null>(null);
     const [uploadingImageContext, setUploadingImageContext] = useState<'inline' | 'new' | 'edit' | null>(null);
 
+    // Service request items management
+    const [showServiceRequestsSection, setShowServiceRequestsSection] = useState(false);
+    const [srItems, setSRItems] = useState<SRItem[]>([]);
+    const [loadingSRItems, setLoadingSRItems] = useState(false);
+    const [showSRItemModal, setShowSRItemModal] = useState(false);
+    const [editingSRItem, setEditingSRItem] = useState<SRItem | null>(null);
+    const [srItemLabelEn, setSRItemLabelEn] = useState('');
+    const [srItemLabelZh, setSRItemLabelZh] = useState('');
+    const [srItemRequestType, setSRItemRequestType] = useState('');
+    const [srItemColor, setSRItemColor] = useState('#4f46e5');
+    const [srItemIsActive, setSRItemIsActive] = useState(true);
+    const [uploadingSRItemImageId, setUploadingSRItemImageId] = useState<number | null>(null);
+
     // Addon management states
     const [addons, setAddons] = useState<Addon[]>([]);
     const [showAddonModal, setShowAddonModal] = useState(false);
@@ -197,7 +654,15 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         
         const allItems = Array.isArray(itemsRes.data) ? itemsRes.data : [];
         const allCategories: MenuCategory[] = Array.isArray(categoriesRes.data)
-          ? categoriesRes.data.map((c: any) => ({ id: c.id, name: c.name }))
+          ? categoriesRes.data.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              name_zh: c.name_zh,
+              time_restricted: c.time_restricted,
+              available_from: c.available_from,
+              available_to: c.available_to,
+              days_of_week: c.days_of_week ?? [],
+            }))
           : [];
         
         setItems(allItems);
@@ -247,6 +712,17 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       }
     };
 
+    const openCategoryEditor = (cat: MenuCategory) => {
+      setEditingCategoryId(cat.id);
+      setEditingCategoryName(cat.name);
+      setEditingCategoryNameZh(cat.name_zh ?? '');
+      setEditingCategoryTimeRestricted(cat.time_restricted ?? false);
+      setEditingCategoryFrom(cat.available_from ?? '11:00');
+      setEditingCategoryTo(cat.available_to ?? '22:00');
+      setEditingCategoryDaysOfWeek(cat.days_of_week ?? []);
+      setShowEditCategoryModal(true);
+    };
+
     const updateCategory = async (categoryId: number) => {
       if (!editingCategoryName.trim()) {
         Alert.alert(t('common.error'), t('menu.category-required'));
@@ -256,10 +732,23 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       try {
         await apiClient.patch(
           `/api/menu-categories/${categoryId}`,
-          { name: editingCategoryName }
+          {
+            name: editingCategoryName,
+            name_zh: editingCategoryNameZh.trim() || null,
+            time_restricted: editingCategoryTimeRestricted,
+            available_from: editingCategoryTimeRestricted ? editingCategoryFrom : null,
+            available_to: editingCategoryTimeRestricted ? editingCategoryTo : null,
+            days_of_week: editingCategoryTimeRestricted && editingCategoryDaysOfWeek.length > 0
+              ? editingCategoryDaysOfWeek : null,
+          }
         );
         setEditingCategoryId(null);
         setEditingCategoryName('');
+        setEditingCategoryNameZh('');
+        setEditingCategoryTimeRestricted(false);
+        setEditingCategoryFrom('11:00');
+        setEditingCategoryTo('22:00');
+        setEditingCategoryDaysOfWeek([]);
         setShowEditCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
@@ -290,6 +779,33 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
           },
         ]
       );
+    };
+
+    const saveMenuCategoryOrder = async (reorderedCategories: MenuCategory[]) => {
+      try {
+        await apiClient.put(
+          `/api/restaurants/${restaurantId}/menu-categories/reorder`,
+          { categories: reorderedCategories.map((cat, idx) => ({ id: cat.id, sort_order: idx })) }
+        );
+      } catch (err) {
+        console.warn('Failed to save menu category order:', err);
+      }
+    };
+
+    const saveMenuItemOrder = async (categoryId: number, reorderedItems: MenuItem[]) => {
+      // Update parent state immediately so filteredItems stays in the new order
+      setItems(prev => {
+        const otherItems = prev.filter(i => i.category_id !== categoryId);
+        return [...otherItems, ...reorderedItems];
+      });
+      try {
+        await apiClient.put(
+          `/api/restaurants/${restaurantId}/menu-items/reorder`,
+          { items: reorderedItems.map((item, idx) => ({ id: item.id, sort_order: idx })) }
+        );
+      } catch (err) {
+        console.warn('Failed to save menu item order:', err);
+      }
     };
 
     // ==================== FOOD ITEM OPERATIONS ====================
@@ -891,6 +1407,96 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       }
     };
 
+    // ==================== SERVICE REQUEST ITEM OPERATIONS ====================
+
+    const loadSRItems = async () => {
+      setLoadingSRItems(true);
+      try {
+        const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`);
+        setSRItems(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        Alert.alert(t('common.error'), 'Failed to load service request items');
+      } finally {
+        setLoadingSRItems(false);
+      }
+    };
+
+    const createSRItem = async () => {
+      if (!srItemRequestType.trim() || !srItemLabelEn.trim()) {
+        Alert.alert(t('common.error'), 'Request type and English label are required');
+        return;
+      }
+      try {
+        await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
+          request_type: srItemRequestType.trim(),
+          label_en: srItemLabelEn.trim(),
+          label_zh: srItemLabelZh.trim() || null,
+          color: srItemColor,
+          is_active: srItemIsActive,
+        });
+        setShowSRItemModal(false);
+        setEditingSRItem(null);
+        await loadSRItems();
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message || 'Failed to create item');
+      }
+    };
+
+    const saveSRItem = async () => {
+      if (!editingSRItem) return;
+      if (!srItemLabelEn.trim()) {
+        Alert.alert(t('common.error'), 'English label is required');
+        return;
+      }
+      try {
+        await apiClient.patch(
+          `/api/restaurants/${restaurantId}/service-request-items/${editingSRItem.id}`,
+          { label_en: srItemLabelEn.trim(), label_zh: srItemLabelZh.trim() || null, color: srItemColor, is_active: srItemIsActive }
+        );
+        setShowSRItemModal(false);
+        setEditingSRItem(null);
+        await loadSRItems();
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message || 'Failed to save item');
+      }
+    };
+
+    const deleteSRItem = (itemId: number) => {
+      Alert.alert('Delete Item', 'Delete this service request item?', [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${itemId}`);
+              await loadSRItems();
+            } catch {
+              Alert.alert(t('common.error'), 'Failed to delete item');
+            }
+          },
+        },
+      ]);
+    };
+
+    const uploadSRItemImageHandler = async (itemId: number) => {
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (result.canceled || !result.assets[0]?.uri) return;
+        setUploadingSRItemImageId(itemId);
+        const imageUrl = await apiClient.uploadSRItemImage(restaurantId, itemId, result.assets[0].uri);
+        setSRItems(prev => prev.map(it => it.id === itemId ? { ...it, image_url: imageUrl } : it));
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message || 'Failed to upload image');
+      } finally {
+        setUploadingSRItemImageId(null);
+      }
+    };
+
     const filteredItems = items.filter(i => {
       if (selectedCategory && i.category_id !== selectedCategory) return false;
       if (searchQuery && searchQuery.trim()) {
@@ -913,72 +1519,90 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
       <View style={styles.container}>
         {/* Category Bar */}
         <View style={styles.categoryBarWrapper}>
-          <ScrollView
-            horizontal
-            scrollEnabled={true}
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoryScroll}
-            contentContainerStyle={styles.categoryContent}
-          >
-            {showAvailabilityToggles && (
+          {showAvailabilityToggles ? (
+            /* Edit mode: vertical draggable category list replacing the horizontal scroll */
+            <>
               <TouchableOpacity
-                style={[styles.categoryBtn, styles.categoryBtnAdd]}
+                style={[styles.categoryBtn, styles.categoryBtnAdd, { margin: 8, alignSelf: 'flex-start' }]}
                 onPress={() => setShowCategoryModal(true)}
               >
                 <Text style={[styles.categoryBtnText, styles.categoryBtnAddText]}>
                   {t('menu.add-category') || '+ Add Category'}
                 </Text>
               </TouchableOpacity>
-            )}
-
-            {categories.map((cat) => (
-              <View key={cat.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <ScrollView scrollEnabled={menuScrollEnabled} style={{ maxHeight: 220 }}>
+                <DraggableMenuCategoryList
+                  categories={categories}
+                  selectedCategory={selectedCategory}
+                  onReorder={saveMenuCategoryOrder}
+                  onSelect={(id) => {
+                    const cat = categories.find(c => c.id === id);
+                    if (cat) openCategoryEditor(cat);
+                  }}
+                  onScrollEnabled={setMenuScrollEnabled}
+                  t={t}
+                />
+              </ScrollView>
+            </>
+          ) : (
+            /* Normal mode: horizontal scroll */
+            <ScrollView
+              horizontal
+              scrollEnabled={true}
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryScroll}
+              contentContainerStyle={styles.categoryContent}
+            >
+              {categories.map((cat) => (
                 <TouchableOpacity
+                  key={cat.id}
                   style={[
                     styles.categoryBtn,
-                    selectedCategory === cat.id && styles.categoryBtnActive,
+                    selectedCategory === cat.id && !showServiceRequestsSection && styles.categoryBtnActive,
                   ]}
-                  onPress={() => setSelectedCategory(cat.id)}
+                  onPress={() => { setSelectedCategory(cat.id); setShowServiceRequestsSection(false); }}
                 >
                   <Text
                     style={[
                       styles.categoryBtnText,
-                      selectedCategory === cat.id && styles.categoryBtnTextActive,
+                      selectedCategory === cat.id && !showServiceRequestsSection && styles.categoryBtnTextActive,
                     ]}
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
-                    {cat.name}
+                    {lang === 'zh' && cat.name_zh ? cat.name_zh : cat.name}
                   </Text>
                 </TouchableOpacity>
-                {/* Category edit/delete buttons - only visible when edit toggle is ON */}
-                {showAvailabilityToggles && (
-                  <View style={styles.categoryActionButtons}>
-                    <TouchableOpacity
-                      style={styles.categoryActionBtn}
-                      onPress={() => {
-                        setEditingCategoryId(cat.id);
-                        setEditingCategoryName(cat.name);
-                        setShowEditCategoryModal(true);
-                      }}
-                    >
-                      <Text style={styles.categoryActionBtnText}>{t('menu.edit')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.categoryActionBtn, styles.categoryActionBtnDelete]}
-                      onPress={() => deleteCategory(cat.id, cat.name)}
-                    >
-                      <Text style={styles.categoryActionBtnText}>{t('menu.del')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            ))}
-          </ScrollView>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
-        {/* Items Grid */}
+        {/* Items area: edit mode = draggable grid with handles; normal = grid */}
         <View style={styles.itemsGridWrapper}>
+          {selectedCategory && showAvailabilityToggles ? (
+            /* Edit mode: same grid layout but cards have ☰ drag handles */
+            <ScrollView
+              scrollEnabled={menuScrollEnabled}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
+              <DraggableMenuItemGrid
+                items={filteredItems}
+                onReorder={(reorderedItems) => saveMenuItemOrder(selectedCategory, reorderedItems)}
+                onScrollEnabled={setMenuScrollEnabled}
+                apiUrl={API_URL}
+                onAddItem={() => setShowItemModal(true)}
+                onItemPress={(item) => {
+                  setSelectedItem(item);
+                  setShowDetailPanel(true);
+                  if (item.is_meal_combo) { loadAddonsForItem(item.id); } else { setAddons([]); }
+                }}
+                onToggleAvailability={toggleAvailability}
+                formatPrice={formatPrice}
+                addItemLabel={t('menu.add-item-card')}
+              />
+            </ScrollView>
+          ) : (
           <FlatList
             data={selectedCategory && showAvailabilityToggles
               ? [...filteredItems, { id: 'add-item', name: t('menu.add-item-card'), isAddButton: true } as any]
@@ -1033,7 +1657,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                       />
                     )}
                     <View style={styles.itemContent}>
-                      <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+                      <Text style={styles.itemName} numberOfLines={2}>{lang === 'zh' && item.name_zh ? item.name_zh : item.name}</Text>
                       <View style={styles.itemMeta}>
                         <Text style={styles.itemPrice}>{formatPrice(item.price_cents)}</Text>
                         {showAvailabilityToggles && (
@@ -1075,6 +1699,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
             contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           />
+          )}
         </View>
 
         {/* Detail Panel */}
@@ -1084,7 +1709,7 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
               <TouchableOpacity onPress={() => { setEditingItemInlineId(null); setShowInlineVariantForm(false); setShowDetailPanel(false); loadMenuData(); }}>
                 <Text style={styles.detailCloseBtn}>✕</Text>
               </TouchableOpacity>
-              <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? t('menu.edit-item') : selectedItem.name}</Text>
+              <Text style={styles.detailTitle}>{editingItemInlineId === selectedItem.id ? t('menu.edit-item') : (lang === 'zh' && selectedItem.name_zh ? selectedItem.name_zh : selectedItem.name)}</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {editingItemInlineId !== selectedItem.id && (
                   <TouchableOpacity
@@ -1353,9 +1978,11 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                       )}
                                       <View>
                                         <Text style={[styles.optionName, option.is_available === false && { textDecorationLine: 'line-through' }]}>{option.name}</Text>
-                                        <Text style={styles.optionPrice}>
-                                          +{formatPrice(option.price_cents)}
-                                        </Text>
+                                        {option.price_cents !== 0 && (
+                                          <Text style={styles.optionPrice}>
+                                            {option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}
+                                          </Text>
+                                        )}
                                       </View>
                                     </View>
                                     {isVariantInEditMode && (
@@ -1743,9 +2370,11 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
                                   )}
                                   <View>
                                     <Text style={[styles.optionName, option.is_available === false && { textDecorationLine: 'line-through' }]}>{option.name}</Text>
-                                    <Text style={styles.optionPrice}>
-                                      +{formatPrice(option.price_cents)}
-                                    </Text>
+                                    {option.price_cents !== 0 && (
+                                      <Text style={styles.optionPrice}>
+                                        {option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}
+                                      </Text>
+                                    )}
                                   </View>
                                 </View>
                                 {/* Show option edit/delete only when variant is in edit mode */}
@@ -2138,34 +2767,139 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.edit-category')}</Text>
+              <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
+                <Text style={styles.modalTitle}>{t('menu.edit-category')}</Text>
 
-              <Text style={styles.label}>{t('menu.category-name')}</Text>
-              <TextInput
-                style={styles.input}
-                value={editingCategoryName}
-                onChangeText={setEditingCategoryName}
-                placeholder={t('menu.category-placeholder')}
-                autoFocus
-              />
+                <Text style={styles.label}>{t('menu.category-name')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editingCategoryName}
+                  onChangeText={setEditingCategoryName}
+                  placeholder={t('menu.category-placeholder')}
+                  autoFocus
+                />
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary]}
-                  onPress={() => {
-                    setShowEditCategoryModal(false);
-                    setEditingCategoryId(null);
-                  }}
-                >
-                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnPrimary]}
-                  onPress={() => editingCategoryId && updateCategory(editingCategoryId)}
-                >
-                  <Text style={styles.btnText}>{t('menu.save')}</Text>
-                </TouchableOpacity>
-              </View>
+                <Text style={styles.label}>{t('menu.category-name-zh') || 'Category Name (Chinese)'}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editingCategoryNameZh}
+                  onChangeText={setEditingCategoryNameZh}
+                  placeholder={t('menu.category-placeholder-zh') || 'e.g. 小食'}
+                />
+
+                {/* Time restriction toggle */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 4 }}>
+                  <Text style={styles.label}>{t('menu.timed-category') || 'Timed Category'}</Text>
+                  <TouchableOpacity
+                    onPress={() => setEditingCategoryTimeRestricted(v => !v)}
+                    style={{
+                      width: 46, height: 26, borderRadius: 13,
+                      backgroundColor: editingCategoryTimeRestricted ? '#3b82f6' : '#e5e7eb',
+                      justifyContent: 'center', paddingHorizontal: 3,
+                    }}
+                  >
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff',
+                      alignSelf: editingCategoryTimeRestricted ? 'flex-end' : 'flex-start',
+                      shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
+                    }} />
+                  </TouchableOpacity>
+                </View>
+
+                {editingCategoryTimeRestricted && (
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>{t('menu.from-time') || 'From'}</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editingCategoryFrom}
+                          onChangeText={setEditingCategoryFrom}
+                          placeholder="HH:MM"
+                          keyboardType="numbers-and-punctuation"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>{t('menu.to-time') || 'To'}</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editingCategoryTo}
+                          onChangeText={setEditingCategoryTo}
+                          placeholder="HH:MM"
+                          keyboardType="numbers-and-punctuation"
+                        />
+                      </View>
+                    </View>
+
+                    <Text style={[styles.label, { marginTop: 10 }]}>
+                      {t('menu.days-available') || 'Days Available (leave blank for every day)'}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                      {[
+                        { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' },
+                        { day: 3, label: 'Wed' }, { day: 4, label: 'Thu' },
+                        { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' },
+                        { day: 7, label: 'Sun' },
+                      ].map(({ day, label }) => {
+                        const active = editingCategoryDaysOfWeek.includes(day);
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            onPress={() => toggleEditingDayOfWeek(day)}
+                            style={{
+                              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+                              backgroundColor: active ? '#3b82f6' : '#e5e7eb',
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: active ? '#fff' : '#374151' }}>
+                              {label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
+
+                {/* Delete button */}
+                {editingCategoryId && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      const cat = categories.find(c => c.id === editingCategoryId);
+                      if (cat) {
+                        setShowEditCategoryModal(false);
+                        deleteCategory(editingCategoryId, cat.name);
+                      }
+                    }}
+                    style={{
+                      marginTop: 20, padding: 12, borderRadius: 8,
+                      backgroundColor: '#fee2e2', alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#dc2626', fontWeight: '600' }}>
+                      {t('menu.delete-category') || 'Delete Category'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnSecondary]}
+                    onPress={() => {
+                      setShowEditCategoryModal(false);
+                      setEditingCategoryId(null);
+                    }}
+                  >
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary]}
+                    onPress={() => editingCategoryId && updateCategory(editingCategoryId)}
+                  >
+                    <Text style={styles.btnText}>{t('menu.save')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -2716,6 +3450,79 @@ export const MenuTab = forwardRef<MenuTabRef, { restaurantId: string; searchQuer
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
+
+        {/* SR Item Create/Edit Modal */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSRItemModal} animationType="fade" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{editingSRItem ? 'Edit Service Request Item' : 'New Service Request Item'}</Text>
+
+              {!editingSRItem && (
+                <>
+                  <Text style={styles.label}>Request Type (unique key)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={srItemRequestType}
+                    onChangeText={setSRItemRequestType}
+                    placeholder="e.g. napkins, water"
+                    autoCapitalize="none"
+                  />
+                </>
+              )}
+
+              <Text style={styles.label}>English Label</Text>
+              <TextInput
+                style={styles.input}
+                value={srItemLabelEn}
+                onChangeText={setSRItemLabelEn}
+                placeholder="e.g. Extra Napkins"
+              />
+
+              <Text style={styles.label}>Chinese Label (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={srItemLabelZh}
+                onChangeText={setSRItemLabelZh}
+                placeholder="e.g. 额外纸巾"
+              />
+
+              <Text style={styles.label}>Color (hex)</Text>
+              <TextInput
+                style={styles.input}
+                value={srItemColor}
+                onChangeText={setSRItemColor}
+                placeholder="#4f46e5"
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}
+                onPress={() => setSRItemIsActive(prev => !prev)}
+              >
+                <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: '#3b82f6', backgroundColor: srItemIsActive ? '#3b82f6' : '#fff', justifyContent: 'center', alignItems: 'center' }}>
+                  {srItemIsActive && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                </View>
+                <Text style={{ fontSize: 14, color: '#374151' }}>Active</Text>
+              </TouchableOpacity>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => { setShowSRItemModal(false); setEditingSRItem(null); }}
+                >
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={editingSRItem ? saveSRItem : createSRItem}
+                >
+                  <Text style={styles.btnText}>{editingSRItem ? t('menu.save') : t('menu.create')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     );
   }

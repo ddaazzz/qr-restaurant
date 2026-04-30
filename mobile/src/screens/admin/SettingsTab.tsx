@@ -18,18 +18,18 @@ import {
   Keyboard,
   InputAccessoryView,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
-import { apiClient } from '../../services/apiClient';
+import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
-import { printerSettingsService } from '../../services/printerSettingsService';
+import { printerSettingsService, KitchenPrinter, BillPrinter, PrinterProfile } from '../../services/printerSettingsService';
 import { Ionicons } from '@expo/vector-icons';
 import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
+import { Linking } from 'react-native';
+import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
-import appJson from '../../../app.json';
 
 interface RestaurantSettings {
   id: number;
@@ -48,6 +48,7 @@ interface RestaurantSettings {
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
+  feature_flags?: Record<string, any>;
 }
 
 interface PrinterSettings {
@@ -107,8 +108,10 @@ interface Coupon {
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
   min_order_value?: number;
+  minimum_order_value?: number;
   max_uses?: number;
   description?: string;
+  coupon_type?: 'open' | 'closed';
 }
 
 interface Variant {
@@ -132,7 +135,7 @@ interface VariantPreset {
 
 interface PaymentTerminal {
   id: number;
-  vendor_name: 'kpay' | 'payment-asia' | 'other';
+  vendor_name: 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'other';
   is_active: boolean;
   app_id: string;
   terminal_ip?: string;
@@ -143,13 +146,73 @@ interface PaymentTerminal {
   last_error_message?: string;
   created_at?: string;
   updated_at?: string;
-  // Payment Asia fields
+  // Payment Asia (Online) fields
   merchant_token?: string;
   secret_code?: string;
   environment?: 'sandbox' | 'production';
+  payment_gateway_env?: 'sandbox' | 'production';
+}
+
+interface CrmCustomer {
+  id: number;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  total_visits?: number;
+  total_spent_cents?: number;
+  last_visit_at?: string | null;
+  created_at?: string;
+}
+
+interface CrmOrder {
+  order_id: number;
+  restaurant_order_number?: number | null;
+  status?: string;
+  payment_method?: string | null;
+  created_at: string;
+  order_type?: string | null;
+  session_id?: number | null;
+  linked_booking_id?: number | null;
+  table_label?: string | null;
+  pax?: number | null;
+  discount_applied?: number | null;
+  total_cents?: number;
+}
+
+interface CrmBooking {
+  id: number;
+  guest_name: string;
+  phone?: string | null;
+  pax: number;
+  booking_date: string;
+  booking_time?: string | null;
+  status: string;
+  notes?: string | null;
+  table_label?: string | null;
+  session_id?: number | null;
+  session_total_cents?: number | null;
+}
+
+interface CrmCustomerProfile {
+  customer: CrmCustomer;
+  orders: CrmOrder[];
+  total_transacted_cents: number;
+  past_bookings: CrmBooking[];
+  future_bookings: CrmBooking[];
+  eligible_coupons?: Array<{
+    id: number;
+    code: string;
+    discount_type: 'percentage' | 'fixed';
+    discount_value: number;
+    minimum_order_value?: number;
+    coupon_type?: 'open' | 'closed';
+    valid_until?: string | null;
+  }>;
 }
 
 export const SettingsTab = ({ restaurantId, navigation }: any) => {
+  const CRM_PAGE_SIZE = 30;
   const { t, lang, setLanguage } = useTranslation();
   const { user: currentUser, logout: authLogout } = useAuth();
   const isSuperadmin = currentUser?.role === 'superadmin';
@@ -161,9 +224,81 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
+  const [crmCount, setCrmCount] = useState<number | null>(null);
+  const [crmCustomers, setCrmCustomers] = useState<CrmCustomer[]>([]);
+  const [crmLoading, setCrmLoading] = useState(false);
+  const [crmLoadingMore, setCrmLoadingMore] = useState(false);
+  const [crmSearchInput, setCrmSearchInput] = useState('');
+  const [crmSearchTerm, setCrmSearchTerm] = useState('');
+  const [crmSortBy, setCrmSortBy] = useState<'last_visit' | 'total_spent' | 'total_orders' | 'created_at'>('last_visit');
+  const [crmOffset, setCrmOffset] = useState(0);
+  const [crmHasMore, setCrmHasMore] = useState(false);
+  const [crmProfileLoading, setCrmProfileLoading] = useState(false);
+  const [selectedCrmProfile, setSelectedCrmProfile] = useState<CrmCustomerProfile | null>(null);
+  const [crmError, setCrmError] = useState<string | null>(null);
+  const [crmOrderDetail, setCrmOrderDetail] = useState<any | null>(null);
+  const [crmOrderDetailLoading, setCrmOrderDetailLoading] = useState(false);
+  const [crmSyncing, setCrmSyncing] = useState(false);
+  const [showCrmEditModal, setShowCrmEditModal] = useState(false);
+  const [crmEditName, setCrmEditName] = useState('');
+  const [crmEditPhone, setCrmEditPhone] = useState('');
+  const [crmEditEmail, setCrmEditEmail] = useState('');
+  const [crmEditSaving, setCrmEditSaving] = useState(false);
+
+  // Dev environment switcher (hidden by default)
+  const [devTapCount, setDevTapCount] = useState(0);
+  const [showDevMenu, setShowDevMenu] = useState(false);
+  const [currentEnv, setCurrentEnv] = useState(apiClient.getCurrentBaseUrl());
+  const devTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDevTap = () => {
+    const newCount = devTapCount + 1;
+    setDevTapCount(newCount);
+    if (devTapTimer.current) clearTimeout(devTapTimer.current);
+    devTapTimer.current = setTimeout(() => setDevTapCount(0), 2000);
+    if (newCount >= 7) {
+      setShowDevMenu(!showDevMenu);
+      setDevTapCount(0);
+    }
+  };
+
+  const switchEnv = async (name: string, url: string) => {
+    Alert.alert(
+      'Switch Environment',
+      `Switch to ${name} (${url})?\n\nYou will be logged out.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.switchEnvironment(url);
+              setCurrentEnv(url);
+              await authLogout();
+            } catch (e) {
+              console.error('Env switch error:', e);
+              await authLogout();
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests';
+
+  interface SRItem {
+    id: number;
+    request_type: string;
+    label_en: string;
+    label_zh?: string;
+    is_active: boolean;
+    sort_order: number;
+    color?: string;
+    image_url?: string;
+  }
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -204,17 +339,43 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // Modal state: 'printer' | 'bluetooth' | null
   const [activeModal, setActiveModal] = useState<'printer' | 'bluetooth' | null>(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [editingCouponId, setEditingCouponId] = useState<number | null>(null);
   const [showPaymentTerminalModal, setShowPaymentTerminalModal] = useState(false);
   const [editingTerminalId, setEditingTerminalId] = useState<number | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState<any>(null);
   const [showCouponDetailModal, setShowCouponDetailModal] = useState(false);
+  // CRM coupon assignment
+  const [showAssignCouponModal, setShowAssignCouponModal] = useState(false);
+  const [assignCouponCustomerId, setAssignCouponCustomerId] = useState<number | null>(null);
   const [showVariantPresetsModal, setShowVariantPresetsModal] = useState(false);
   const [selectedVariantPreset, setSelectedVariantPreset] = useState<VariantPreset | null>(null);
   const [selectedAddonPreset, setSelectedAddonPreset] = useState<any>(null);
   const [addonPresetItems, setAddonPresetItems] = useState<any[]>([]);
   const [showStaffLogin, setShowStaffLogin] = useState(false);
+  // Menu settings state
+  const [menuSettingsLoading, setMenuSettingsLoading] = useState(false);
+  const [menuSettingsLoaded, setMenuSettingsLoaded] = useState(false);
+  const [menuColumns, setMenuColumns] = useState<1 | 2>(1);
+  const [allowCustomFoodItems, setAllowCustomFoodItems] = useState(false);
+  const [customItemLabel, setCustomItemLabel] = useState('');
+  // Feature flags (module enable/disable)
+  const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
+  const [moduleFlagsLoading, setModuleFlagsLoading] = useState(false);
+  const [moduleFlagsLoaded, setModuleFlagsLoaded] = useState(false);
+
+  // Service requests configuration
+  const [srItems, setSrItems] = useState<SRItem[]>([]);
+  const [srLoading, setSrLoading] = useState(false);
+  const [srLoaded, setSrLoaded] = useState(false);
+  const [showSrModal, setShowSrModal] = useState(false);
+  const [editingSrItem, setEditingSrItem] = useState<SRItem | null>(null);
+  const [srLabelEn, setSrLabelEn] = useState('');
+  const [srLabelZh, setSrLabelZh] = useState('');
+  const [srRequestType, setSrRequestType] = useState('');
+  const [srColor, setSrColor] = useState('#4f46e5');
+  const [srIsActive, setSrIsActive] = useState(true);
   const [showStaffQRModal, setShowStaffQRModal] = useState(false);
   const [showKitchenQRModal, setShowKitchenQRModal] = useState(false);
   
@@ -235,15 +396,30 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [showSettingsTzPicker, setShowSettingsTzPicker] = useState(false);
   const [settingsTzSearch, setSettingsTzSearch] = useState('');
   const [printerFormData, setPrinterFormData] = useState<PrinterSettings | null>(null);
+  // Multi-printer state
+  const [kitchenPrintersList, setKitchenPrintersList] = useState<KitchenPrinter[]>([]);
+  const [billPrintersList, setBillPrintersList] = useState<BillPrinter[]>([]);
+  const [kitchenAutoPrint, setKitchenAutoPrint] = useState(false);
+  const [billAutoPrint, setBillAutoPrint] = useState(false);
+  const [editingPrinterItemId, setEditingPrinterItemId] = useState<string | null>(null);
+  const [editingPrinterItemName, setEditingPrinterItemName] = useState('');
+  const [editingPrinterItemCategories, setEditingPrinterItemCategories] = useState<number[]>([]);
+  const [editingPrinterItemTableCategoryIds, setEditingPrinterItemTableCategoryIds] = useState<number[]>([]);
+  const [editingPrinterItemOrderTypes, setEditingPrinterItemOrderTypes] = useState<string[]>(['all']);
+  const [menuCategories, setMenuCategories] = useState<{ id: number; name: string }[]>([]);
+  const [printerProfiles, setPrinterProfiles] = useState<PrinterProfile[]>([]);
+  const [showSaveProfileModal, setShowSaveProfileModal] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
   const [couponForm, setCouponForm] = useState({
     code: '',
     discount_type: 'percentage' as 'percentage' | 'fixed',
     discount_value: '',
     min_order_value: '',
     description: '',
+    coupon_type: 'open' as 'open' | 'closed',
   });
   const [terminalForm, setTerminalForm] = useState({
-    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'other',
+    vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'other',
     app_id: '',
     app_secret: '',
     terminal_ip: '192.168.50.210',
@@ -252,6 +428,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     merchant_token: '',
     secret_code: '',
     environment: 'sandbox' as 'sandbox' | 'production',
+    // PA Offline fields
+    pa_offline_ip: '',
+    pa_offline_port: '8080',
+    pa_offline_api_key: '',
   });
   const [testingTerminal, setTestingTerminal] = useState(false);
   const [terminalTestResult, setTerminalTestResult] = useState<any>(null);
@@ -299,6 +479,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 }
               });
             }
+          } else if (typeLower === 'bill') {
+            flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
+            flatSettings[`${prefix}printer_host`] = printer.printer_host;
+            flatSettings[`${prefix}printer_port`] = printer.printer_port;
+            flatSettings[`${prefix}bluetooth_device_id`] = printer.bluetooth_device_id;
+            flatSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
+            if (printer.settings) {
+              // bill_printers array is in settings.bill_printers (not settings.bill_*prefix*)
+              if (Array.isArray(printer.settings.bill_printers)) {
+                flatSettings.bill_printers = printer.settings.bill_printers;
+              }
+              Object.entries(printer.settings).forEach(([key, value]) => {
+                if (key !== 'bill_printers') {
+                  flatSettings[`${prefix}${key}`] = value;
+                }
+              });
+            }
           } else {
             flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
             flatSettings[`${prefix}printer_host`] = printer.printer_host;
@@ -325,6 +522,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setPrinterSettings(flatSettings);
       setFormData(settingsRes.data);
       setPrinterFormData(flatSettings);
+
+      // Populate multi-printer lists from flat settings
+      if (Array.isArray(flatSettings.kitchen_printers)) {
+        setKitchenPrintersList(flatSettings.kitchen_printers);
+      }
+      if (Array.isArray(flatSettings.bill_printers)) {
+        setBillPrintersList(flatSettings.bill_printers);
+      }
+      setKitchenAutoPrint(!!flatSettings.kitchen_auto_print);
+      setBillAutoPrint(!!flatSettings.bill_auto_print);
 
       // Fetch coupons separately (non-blocking) with shorter timeout
       // Don't block settings load if coupons endpoint is slow/unavailable
@@ -457,6 +664,135 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const syncCrmFromBookings = async () => {
+    try {
+      setCrmSyncing(true);
+      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/sync-from-bookings`);
+      const { inserted, total } = res.data;
+      setCrmCount(total);
+      Alert.alert(t('common.success'), t('admin.crm-sync-complete', { inserted: inserted.toString(), total: total.toString() }));
+      fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || t('admin.crm-sync-failed'));
+    } finally {
+      setCrmSyncing(false);
+    }
+  };
+
+  const fetchCrmCount = async () => {
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/count`);
+      setCrmCount(typeof res.data?.total === 'number' ? res.data.total : 0);
+    } catch (err: any) {
+      console.warn('[Settings] Failed to fetch CRM count:', err.message);
+      setCrmCount(0);
+    }
+  };
+
+  const fetchCrmCustomers = async ({
+    offset = 0,
+    append = false,
+    search = crmSearchTerm,
+    sortBy = crmSortBy,
+  }: {
+    offset?: number;
+    append?: boolean;
+    search?: string;
+    sortBy?: 'last_visit' | 'total_spent' | 'total_orders' | 'created_at';
+  } = {}) => {
+    try {
+      setCrmError(null);
+      if (append) {
+        setCrmLoadingMore(true);
+      } else {
+        setCrmLoading(true);
+      }
+
+      const params = new URLSearchParams({
+        limit: String(CRM_PAGE_SIZE),
+        offset: String(offset),
+        sort_by: sortBy,
+      });
+
+      if (search.trim()) {
+        params.set('search', search.trim());
+      }
+
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers?${params.toString()}`);
+      const rows: CrmCustomer[] = Array.isArray(res.data) ? res.data : [];
+
+      setCrmCustomers((prev) => (append ? [...prev, ...rows] : rows));
+      setCrmOffset(offset + rows.length);
+      setCrmHasMore(rows.length >= CRM_PAGE_SIZE);
+
+      if (!search.trim()) {
+        setCrmCount((prev) => (prev === null ? rows.length : prev));
+      }
+    } catch (err: any) {
+      console.error('[Settings] Failed to fetch CRM customers:', err);
+      setCrmError(err.response?.data?.error || 'Failed to load customers');
+      if (!append) {
+        setCrmCustomers([]);
+        setCrmOffset(0);
+        setCrmHasMore(false);
+      }
+    } finally {
+      setCrmLoading(false);
+      setCrmLoadingMore(false);
+    }
+  };
+
+  const openCrmProfile = async (customerId: number) => {
+    try {
+      setCrmProfileLoading(true);
+      setCrmError(null);
+      setSelectedCrmProfile(null);
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
+      setSelectedCrmProfile(res.data);
+    } catch (err: any) {
+      console.error('[Settings] Failed to fetch CRM profile:', err);
+      setCrmError(err.response?.data?.error || 'Failed to load customer profile');
+    } finally {
+      setCrmProfileLoading(false);
+    }
+  };
+
+  const openCrmOrderDetail = async (orderId: number) => {
+    setCrmOrderDetailLoading(true);
+    setCrmOrderDetail(null);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/orders/${orderId}`);
+      setCrmOrderDetail(res.data);
+    } catch (err) {
+      console.error('[CRM] Failed to load order detail:', err);
+      Alert.alert('Error', 'Could not load order details.');
+    } finally {
+      setCrmOrderDetailLoading(false);
+    }
+  };
+
+  const saveCrmCustomerEdit = async () => {
+    if (!selectedCrmProfile || !crmEditName.trim()) {
+      Alert.alert(t('common.error'), t('admin.crm-name-required') || 'Name is required');
+      return;
+    }
+    setCrmEditSaving(true);
+    try {
+      await apiClient.patch(
+        `/api/restaurants/${restaurantId}/crm/customers/${selectedCrmProfile.customer.id}`,
+        { name: crmEditName.trim(), phone: crmEditPhone.trim() || null, email: crmEditEmail.trim() || null }
+      );
+      // Refresh profile in-place
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${selectedCrmProfile.customer.id}`);
+      setSelectedCrmProfile(res.data);
+      setShowCrmEditModal(false);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || t('admin.crm-save-failed') || 'Failed to save');
+    } finally {
+      setCrmEditSaving(false);
+    }
+  };
+
   const loadAddonPresetItems = async (presetId: number) => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
@@ -483,7 +819,21 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     fetchPaymentTerminals();
     fetchAddonPresets();
     fetchTerminalApplications();
+    fetchCrmCount();
   }, [restaurantId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCrmSearchTerm(crmSearchInput.trim());
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [crmSearchInput]);
+
+  useEffect(() => {
+    if (settingsPage !== 'crm') return;
+    fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
+  }, [settingsPage, crmSearchTerm, crmSortBy]);
 
   const getPrinterTypeLabel = (type?: string): string => {
     const labels: Record<string, string> = {
@@ -529,14 +879,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
       const prefix = editingPrinterType; // 'qr', 'bill', 'kitchen', or 'kpay'
 
+      // Map prefix to DB type value (must match CHECK constraint: 'QR', 'Bill', 'Kitchen', 'KPAY')
+      const typeMap: Record<string, string> = { qr: 'QR', bill: 'Bill', kitchen: 'Kitchen', kpay: 'KPAY' };
+      const dbType = typeMap[prefix] || prefix.toUpperCase();
+
+      // Bluetooth device may be stored under prefixed key (set by selectBluetoothDevice)
+      // or under the unprefixed key (loaded from DB for editing)
+      const btDeviceId = (printerFormData as any)[`${prefix}_bluetooth_device_id`] ?? printerFormData.bluetooth_device_id;
+      const btDeviceName = (printerFormData as any)[`${prefix}_bluetooth_device_name`] ?? printerFormData.bluetooth_device_name;
+
       // Build payload matching webapp format (individual record with type field)
       const payload: any = {
-        type: prefix.toUpperCase(),
+        type: dbType,
         printer_type: printerFormData.printer_type,
         printer_host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : null,
-        printer_port: printerFormData.printer_type === 'network' ? parseInt((printerFormData.printer_port as any)?.toString() || '9100') : null,
-        bluetooth_device_id: printerFormData.printer_type === 'bluetooth' ? printerFormData.bluetooth_device_id : null,
-        bluetooth_device_name: printerFormData.printer_type === 'bluetooth' ? printerFormData.bluetooth_device_name : null,
+        printer_port: printerFormData.printer_type === 'network' ? (printerFormData.printer_port || null) : null,
+        bluetooth_device_id: printerFormData.printer_type === 'bluetooth' ? btDeviceId : null,
+        bluetooth_device_name: printerFormData.printer_type === 'bluetooth' ? btDeviceName : null,
       };
 
       // Auto-print and paper width go into settings JSONB
@@ -688,10 +1047,211 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Bluetooth device selection is now handled at runtime during printing
 
+  // ─── Multi-Printer helpers ─────────────────────────────────────────────────
+
+  const loadMenuCategoriesForPrinter = async () => {
+    if (menuCategories.length > 0) return; // already loaded
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/menu_categories`);
+      const cats = Array.isArray(res.data) ? res.data : (res.data?.categories || []);
+      setMenuCategories(cats.map((c: any) => ({ id: c.id, name: c.name })));
+    } catch (err) {
+      console.warn('[SettingsTab] Failed to load menu categories:', err);
+    }
+  };
+
+  const loadPrinterProfiles = async () => {
+    try {
+      const profiles = await printerSettingsService.getPrinterProfiles(restaurantId);
+      setPrinterProfiles(profiles);
+    } catch (err) {
+      console.warn('[SettingsTab] Failed to load printer profiles:', err);
+    }
+  };
+
+  const openPrinterItemConfigure = (type: 'kitchen' | 'bill', itemId: string) => {
+    const item = type === 'kitchen'
+      ? kitchenPrintersList.find(p => p.id === itemId)
+      : billPrintersList.find(p => p.id === itemId);
+    if (!item) return;
+
+    setEditingPrinterType(type);
+    setEditingPrinterItemId(itemId);
+    setEditingPrinterItemName(item.name);
+    setPrinterFormData({
+      printer_type: item.type,
+      printer_host: item.host,
+      printer_port: item.host ? 9100 : undefined,
+      bluetooth_device_id: item.bluetoothDevice,
+      bluetooth_device_name: item.bluetoothDevice,
+      [`${type}_bluetooth_device_id`]: item.bluetoothDevice,
+      [`${type}_bluetooth_device_name`]: item.bluetoothDevice,
+    } as PrinterSettings);
+    if (type === 'kitchen') {
+      setEditingPrinterItemCategories((item as KitchenPrinter).categories || []);
+      loadMenuCategoriesForPrinter();
+    } else {
+      setEditingPrinterItemTableCategoryIds((item as BillPrinter).tableCategoryIds || []);
+      setEditingPrinterItemOrderTypes((item as BillPrinter).orderTypes || ['all']);
+    }
+    setShowingPrinterSettingsPage(true);
+    loadPrinterProfiles();
+  };
+
+  const addNewPrinterItem = (type: 'kitchen' | 'bill') => {
+    const newId = `new-${Date.now()}`;
+    if (type === 'kitchen') {
+      const newItem: KitchenPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', categories: [] };
+      setKitchenPrintersList(prev => [...prev, newItem]);
+    } else {
+      const newItem: BillPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', tableCategoryIds: [], orderTypes: ['all'] };
+      setBillPrintersList(prev => [...prev, newItem]);
+    }
+    openPrinterItemConfigure(type, newId);
+  };
+
+  const deletePrinterItem = async (type: 'kitchen' | 'bill', itemId: string) => {
+    Alert.alert(
+      'Delete Printer',
+      'Remove this printer from the list?',
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              if (type === 'kitchen') {
+                const updated = kitchenPrintersList.filter(p => p.id !== itemId);
+                setKitchenPrintersList(updated);
+                await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
+              } else {
+                const updated = billPrintersList.filter(p => p.id !== itemId);
+                setBillPrintersList(updated);
+                await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+              }
+            } catch (err: any) {
+              Alert.alert(t('common.error'), err.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const savePrinterItem = async () => {
+    if (!editingPrinterType || !editingPrinterItemId || !printerFormData) return;
+    try {
+      const btId = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_id`] ?? printerFormData.bluetooth_device_id;
+      const btName = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_name`] ?? printerFormData.bluetooth_device_name;
+
+      if (editingPrinterType === 'kitchen') {
+        const updated = kitchenPrintersList.map(p =>
+          p.id === editingPrinterItemId
+            ? {
+                ...p,
+                name: editingPrinterItemName || p.name,
+                type: (printerFormData.printer_type as KitchenPrinter['type']) || p.type,
+                host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+                bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
+                categories: editingPrinterItemCategories,
+              }
+            : p
+        );
+        setKitchenPrintersList(updated);
+        await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
+      } else {
+        const updated = billPrintersList.map(p =>
+          p.id === editingPrinterItemId
+            ? {
+                ...p,
+                name: editingPrinterItemName || p.name,
+                type: (printerFormData.printer_type as BillPrinter['type']) || p.type,
+                host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+                bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
+                tableCategoryIds: editingPrinterItemTableCategoryIds,
+                orderTypes: editingPrinterItemOrderTypes,
+              }
+            : p
+        );
+        setBillPrintersList(updated);
+        await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+      }
+
+      setEditingPrinterItemId(null);
+      setEditingPrinterType(null);
+      setShowingPrinterSettingsPage(false);
+      Alert.alert(t('common.success'), t('settings.printer-saved'));
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || err.message);
+    }
+  };
+
+  const applyPrinterProfile = (profile: PrinterProfile) => {
+    setPrinterFormData(prev => ({
+      ...prev,
+      printer_type: profile.printer_type as any,
+      printer_host: profile.printer_host,
+      printer_port: profile.printer_port,
+      bluetooth_device_id: profile.bluetooth_device_id,
+      bluetooth_device_name: profile.bluetooth_device_name,
+      [`${editingPrinterType}_bluetooth_device_id`]: profile.bluetooth_device_id,
+      [`${editingPrinterType}_bluetooth_device_name`]: profile.bluetooth_device_name,
+    } as PrinterSettings));
+  };
+
+  const saveCurrentAsProfile = async () => {
+    if (!newProfileName.trim() || !printerFormData || !editingPrinterType) return;
+    try {
+      const btId = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_id`] ?? printerFormData.bluetooth_device_id;
+      const btName = (printerFormData as any)[`${editingPrinterType}_bluetooth_device_name`] ?? printerFormData.bluetooth_device_name;
+      await printerSettingsService.savePrinterProfile(restaurantId, {
+        name: newProfileName.trim(),
+        printer_type: printerFormData.printer_type || 'none',
+        printer_host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+        printer_port: printerFormData.printer_type === 'network' ? (printerFormData.printer_port || 9100) : undefined,
+        bluetooth_device_id: btId,
+        bluetooth_device_name: btName,
+        settings: {},
+      });
+      await loadPrinterProfiles();
+      setShowSaveProfileModal(false);
+      setNewProfileName('');
+      Alert.alert(t('common.success'), `Profile "${newProfileName.trim()}" saved.`);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.message);
+    }
+  };
+
+  // ─── End Multi-Printer helpers ─────────────────────────────────────────────
+
+  const resetCouponForm = () => {
+    setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open' });
+    setEditingCouponId(null);
+  };
+
   const createCoupon = async () => {
     try {
       if (!couponForm.code || !couponForm.discount_value) {
         Alert.alert(t('settings.validation'), t('settings.fill-required'));
+        return;
+      }
+
+      if (editingCouponId) {
+        // Update existing coupon
+        await apiClient.patch(`/api/coupons/${editingCouponId}`, {
+          code: couponForm.code.toUpperCase(),
+          discount_type: couponForm.discount_type,
+          discount_value: parseFloat(couponForm.discount_value),
+          min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
+          minimum_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
+          description: couponForm.description || null,
+          coupon_type: couponForm.coupon_type,
+          restaurantId,
+        });
+        await fetchCoupons();
+        resetCouponForm();
+        setShowCouponModal(false);
+        Alert.alert(t('common.success'), t('settings.coupon-updated') || 'Coupon updated');
         return;
       }
 
@@ -701,20 +1261,52 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         discount_value: parseFloat(couponForm.discount_value),
         min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
         description: couponForm.description || null,
+        coupon_type: couponForm.coupon_type,
       });
 
       await fetchSettings();
-      setCouponForm({
-        code: '',
-        discount_type: 'percentage',
-        discount_value: '',
-        min_order_value: '',
-        description: '',
-      });
+      resetCouponForm();
       setShowCouponModal(false);
       Alert.alert(t('common.success'), t('settings.coupon-created'));
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || t('settings.coupon-failed'));
+    }
+  };
+
+  const openEditCoupon = (coupon: any) => {
+    setCouponForm({
+      code: coupon.code || '',
+      discount_type: coupon.discount_type || 'percentage',
+      discount_value: String(coupon.discount_value || ''),
+      min_order_value: String(coupon.minimum_order_value || coupon.min_order_value || ''),
+      description: coupon.description || '',
+      coupon_type: coupon.coupon_type || 'open',
+    });
+    setEditingCouponId(coupon.id);
+    setShowCouponDetailModal(false);
+    setSelectedCoupon(null);
+    setShowCouponModal(true);
+  };
+
+  const assignCouponToCustomer = async (customerId: number, couponId: number) => {
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/crm/customers/${customerId}/coupons`, { coupon_id: couponId });
+      // Reload customer profile
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
+      setSelectedCrmProfile(res.data);
+      Alert.alert(t('common.success'), t('settings.coupon-assigned') || 'Coupon assigned');
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to assign coupon');
+    }
+  };
+
+  const revokeCouponFromCustomer = async (customerId: number, couponId: number) => {
+    try {
+      await apiClient.delete(`/api/restaurants/${restaurantId}/crm/customers/${customerId}/coupons/${couponId}`);
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
+      setSelectedCrmProfile(res.data);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to revoke coupon');
     }
   };
 
@@ -759,10 +1351,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         return;
       }
 
+      const vendor = terminalForm.vendor_name;
+
       // Validation differs by vendor
-      if (terminalForm.vendor_name === 'payment-asia') {
+      if (vendor === 'payment-asia') {
         if (!terminalForm.merchant_token || !terminalForm.secret_code) {
           Alert.alert(t('settings.pa-validation'), t('settings.pa-validation-msg'));
+          return;
+        }
+      } else if (vendor === 'payment-asia-offline') {
+        if (!terminalForm.pa_offline_ip || !terminalForm.pa_offline_port || !terminalForm.pa_offline_api_key) {
+          Alert.alert(t('settings.validation'), 'Terminal IP, Port, and API Key are required for PA Offline');
           return;
         }
       } else {
@@ -772,28 +1371,29 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         }
       }
 
-      const payload: any = {
-        vendor_name: terminalForm.vendor_name,
-        app_id: terminalForm.app_id,
-        app_secret: terminalForm.app_secret,
-      };
+      let payload: any = { vendor_name: vendor };
 
-      if (terminalForm.vendor_name === 'payment-asia') {
+      if (vendor === 'payment-asia') {
         payload.merchant_token = terminalForm.merchant_token;
         payload.secret_code = terminalForm.secret_code;
-        payload.environment = terminalForm.environment;
+        payload.payment_gateway_env = terminalForm.environment; // fix: was 'environment'
+      } else if (vendor === 'payment-asia-offline') {
+        payload.terminal_ip = terminalForm.pa_offline_ip;
+        payload.terminal_port = parseInt(terminalForm.pa_offline_port);
+        payload.app_secret = terminalForm.pa_offline_api_key;
+        payload.app_id = terminalForm.pa_offline_api_key;
       } else {
+        payload.app_id = terminalForm.app_id;
+        payload.app_secret = terminalForm.app_secret;
         payload.terminal_ip = terminalForm.terminal_ip;
         payload.terminal_port = parseInt(terminalForm.terminal_port);
         payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
       }
 
       if (editingTerminalId) {
-        // Update existing terminal
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-updated'));
       } else {
-        // Create new terminal
         await apiClient.post(`/api/restaurants/${restaurantId}/payment-terminals`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-created'));
       }
@@ -813,13 +1413,59 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         return;
       }
 
+      const vendor = terminalForm.vendor_name;
+
+      // PA Online: open payment-test.html in Safari — the browser handles form submission
+      if (vendor === 'payment-asia') {
+        const baseUrl = apiClient.getCurrentBaseUrl();
+        const testUrl = `${baseUrl}/payment-test.html?terminalId=${editingTerminalId}&restaurantId=${restaurantId}`;
+        try {
+          await Linking.openURL(testUrl);
+          setTerminalTestResult({
+            success: true,
+            message: 'Sandbox payment test opened in browser. Complete the payment to verify.',
+          });
+        } catch {
+          Alert.alert(t('common.error'), 'Could not open browser. Please open: ' + testUrl);
+        }
+        return;
+      }
+
+      // PA Offline: ping the terminal directly over LAN
+      if (vendor === 'payment-asia-offline') {
+        const ip = terminalForm.pa_offline_ip;
+        const port = parseInt(terminalForm.pa_offline_port);
+        const apiKey = terminalForm.pa_offline_api_key;
+        if (!ip || !port || !apiKey) {
+          Alert.alert(t('common.error'), 'Save terminal first before testing');
+          return;
+        }
+        setTestingTerminal(true);
+        try {
+          const pingResult = await paTerminalPing({ terminalIp: ip, terminalPort: port, apiKey });
+          if (pingResult.success) {
+            const signResult = await paTerminalSign({ terminalIp: ip, terminalPort: port, apiKey });
+            const msg = signResult.success
+              ? `✅ Connected to PA terminal at ${ip}:${port}. Sign handshake OK.`
+              : `✅ Ping OK, but sign step failed: ${signResult.message}`;
+            setTerminalTestResult({ success: signResult.success || pingResult.success, message: msg });
+          } else {
+            setTerminalTestResult({ success: false, message: `❌ Cannot reach terminal at ${ip}:${port}. Check IP, port and network.` });
+          }
+        } catch (err: any) {
+          setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
+        } finally {
+          setTestingTerminal(false);
+        }
+        return;
+      }
+
+      // KPay / other: call backend test endpoint
       setTestingTerminal(true);
       const response = await apiClient.post(
         `/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}/test`
       );
-
       setTerminalTestResult(response.data);
-      
       if (response.data.success) {
         Alert.alert(
           t('settings.connection-success'),
@@ -868,7 +1514,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       endpoint_path: terminal.endpoint_path || '/v2/pos/sign',
       merchant_token: terminal.merchant_token || '',
       secret_code: '',
-      environment: terminal.environment || 'sandbox',
+      environment: terminal.environment || (terminal.payment_gateway_env as 'sandbox' | 'production') || 'sandbox',
+      pa_offline_ip: terminal.vendor_name === 'payment-asia-offline' ? (terminal.terminal_ip || '') : '',
+      pa_offline_port: terminal.vendor_name === 'payment-asia-offline' ? (terminal.terminal_port?.toString() || '8080') : '8080',
+      pa_offline_api_key: '',
     });
     setTerminalTestResult(null);
     setShowPaymentTerminalModal(true);
@@ -886,6 +1535,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       merchant_token: '',
       secret_code: '',
       environment: 'sandbox',
+      pa_offline_ip: '',
+      pa_offline_port: '8080',
+      pa_offline_api_key: '',
     });
     setTerminalTestResult(null);
   };
@@ -1005,6 +1657,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Printer Configuration Page View (when editing a specific printer type)
   if (showingPrinterSettingsPage && editingPrinterType) {
+    const isItemEdit = !!editingPrinterItemId;
+    const backFromConfigure = () => {
+      if (isItemEdit) {
+        setEditingPrinterItemId(null);
+        setEditingPrinterType(null);
+        setShowingPrinterSettingsPage(false);
+      } else {
+        setEditingPrinterType(null);
+      }
+    };
+
     return (
       <>
         <View style={styles.container}>
@@ -1012,19 +1675,56 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <View style={{ padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.printerPageTitle}>
             {editingPrinterType === 'qr' && t('settings.qr-printer')}
-            {editingPrinterType === 'bill' && t('settings.bill-printer')}
-            {editingPrinterType === 'kitchen' && t('settings.kitchen-printer')}
+            {editingPrinterType === 'bill' && (isItemEdit ? editingPrinterItemName || t('settings.bill-printer') : t('settings.bill-printer'))}
+            {editingPrinterType === 'kitchen' && (isItemEdit ? editingPrinterItemName || t('settings.kitchen-printer') : t('settings.kitchen-printer'))}
             {editingPrinterType === 'kpay' && t('settings.kpay-printer')}
           </Text>
-          <TouchableOpacity onPress={() => setEditingPrinterType(null)}>
+          <TouchableOpacity onPress={backFromConfigure}>
             <Text style={styles.backButton}>{t('settings.back-arrow')}</Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
           <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-            {/* Auto-Print Toggle */}
-            <View style={styles.formGroup}>
+
+            {/* ── Per-item fields (name + profile dropdown) ── */}
+            {isItemEdit && (
+              <>
+                {/* Printer Name */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Printer Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editingPrinterItemName}
+                    onChangeText={setEditingPrinterItemName}
+                    placeholder="e.g., Bar Station"
+                  />
+                </View>
+
+                {/* Load saved profile */}
+                {printerProfiles.length > 0 && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Load Saved Profile</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                      {printerProfiles.map(profile => (
+                        <TouchableOpacity
+                          key={profile.id}
+                          onPress={() => applyPrinterProfile(profile)}
+                          style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#3b82f6', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8, marginRight: 8 }}
+                        >
+                          <Text style={{ fontSize: 13, color: '#1d4ed8', fontWeight: '600' }}>{profile.name}</Text>
+                          <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(profile.printer_type)}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* Auto-Print Toggle (only for non-item or QR/KPAY types) */}
+            {!isItemEdit && (
+              <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={styles.label}>{t('settings.auto-print')}</Text>
                 <Switch
@@ -1052,7 +1752,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   }}
                 />
               </View>
-            </View>
+              </View>
+            )}
 
             {/* Printer Type Selector */}
             <View style={styles.formGroup}>
@@ -1107,11 +1808,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <Text style={styles.label}>{t('settings.port')}</Text>
                   <TextInput
                     style={styles.input}
-                    value={printerFormData?.printer_port?.toString() || '9100'}
+                    value={printerFormData?.printer_port?.toString() || ''}
                     onChangeText={(text) => {
-                      setPrinterFormData({ ...printerFormData, printer_port: parseInt(text) || 9100 } as PrinterSettings);
+                      const parsed = parseInt(text);
+                      setPrinterFormData({ ...printerFormData, printer_port: isNaN(parsed) ? undefined : parsed } as PrinterSettings);
                     }}
-                    placeholder="9100"
+                    placeholder="9100 (optional)"
                     keyboardType="number-pad"
                     inputAccessoryViewID="numpadDone"
                   />
@@ -1330,24 +2032,109 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 12 }}>
                 {t('settings.kitchen-format-note') || 'Kitchen order format uses a standard layout.'}
               </Text>
+
+              {/* Category Routing (only when editing a specific kitchen printer item) */}
+              {isItemEdit && editingPrinterType === 'kitchen' && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { marginBottom: 8 }]}>Category Routing</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Orders with items from these categories will print to this printer.</Text>
+                  {menuCategories.length === 0 ? (
+                    <Text style={{ fontSize: 12, color: '#9ca3af' }}>Loading categories...</Text>
+                  ) : (
+                    menuCategories.map(cat => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        onPress={() => {
+                          setEditingPrinterItemCategories(prev =>
+                            prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
+                          );
+                        }}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                      >
+                        <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                          {editingPrinterItemCategories.includes(cat.id) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                        </View>
+                        <Text style={{ fontSize: 14, color: '#1f2937' }}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* Order type routing for bill printers */}
+              {isItemEdit && editingPrinterType === 'bill' && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { marginBottom: 8 }]}>Order Type Routing</Text>
+                  {['all', 'dine-in', 'order-now', 'to-go'].map(ot => (
+                    <TouchableOpacity
+                      key={ot}
+                      onPress={() => {
+                        setEditingPrinterItemOrderTypes(prev =>
+                          ot === 'all' ? ['all'] :
+                          prev.includes(ot) ? prev.filter(x => x !== ot && x !== 'all') : [...prev.filter(x => x !== 'all'), ot]
+                        );
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                    >
+                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                        {editingPrinterItemOrderTypes.includes(ot) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                      </View>
+                      <Text style={{ fontSize: 14, color: '#1f2937' }}>{ot === 'all' ? 'All Order Types' : ot}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           )}
         </ScrollView>
 
         <View style={styles.formActions}>
+          {/* Save as Profile button (only when editing a printer item) */}
+          {isItemEdit && (
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSecondary, { flex: 0, paddingHorizontal: 12 }]}
+              onPress={() => setShowSaveProfileModal(true)}
+            >
+              <Text style={styles.btnText}>💾</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.btn, styles.btnSecondary]}
-            onPress={() => setEditingPrinterType(null)}
+            onPress={backFromConfigure}
           >
             <Text style={styles.btnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnPrimary]}
-            onPress={() => savePrinterSettings()}
+            onPress={() => isItemEdit ? savePrinterItem() : savePrinterSettings()}
           >
             <Text style={styles.btnText}>{t('settings.save')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Save Profile Modal */}
+        <Modal transparent animationType="fade" visible={showSaveProfileModal} onRequestClose={() => setShowSaveProfileModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 24, width: '85%' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 12 }}>Save as Profile</Text>
+              <TextInput
+                style={styles.input}
+                value={newProfileName}
+                onChangeText={setNewProfileName}
+                placeholder="Profile name (e.g., Main Kitchen)"
+                autoFocus
+              />
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                <TouchableOpacity onPress={() => setShowSaveProfileModal(false)} style={[styles.btn, styles.btnSecondary]}>
+                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={saveCurrentAsProfile} style={[styles.btn, styles.btnPrimary]}>
+                  <Text style={styles.btnText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
       {bluetoothModal}
     </>
@@ -1413,85 +2200,84 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            {/* Bill Printer */}
+            {/* Bill Printer — multi-printer list */}
             <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.bill-printer')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                  <Switch value={billAutoPrint} onValueChange={async (v) => { setBillAutoPrint(v); await printerSettingsService.saveBillPrinters(restaurantId, billPrintersList, v); }} />
+                </View>
               </View>
-              {printerSettings?.bill_printer_type && printerSettings.bill_printer_type !== 'none' && (
-                <>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
-                    Type: {getPrinterTypeLabel(printerSettings.bill_printer_type)}
-                  </Text>
-                  {printerSettings.bill_bluetooth_device_name && (
-                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>
-                      ✓ Device: {printerSettings.bill_bluetooth_device_name}
-                    </Text>
-                  )}
-                  {printerSettings.bill_printer_host && (
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      Host: {printerSettings.bill_printer_host}:{printerSettings.bill_printer_port}
-                    </Text>
-                  )}
-                </>
+              {billPrintersList.length === 0 ? (
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No bill printers configured.</Text>
+              ) : (
+                billPrintersList.map(p => (
+                  <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                      {p.orderTypes && p.orderTypes[0] !== 'all' && <Text style={{ fontSize: 11, color: '#6b7280' }}>Types: {p.orderTypes.join(', ')}</Text>}
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => { loadPrinterProfiles(); openPrinterItemConfigure('bill', p.id); }} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deletePrinterItem('bill', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
               )}
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => { loadPrinterProfiles(); addNewPrinterItem('bill'); }}>
+                <Text style={styles.btnText}>+ Add Bill Printer</Text>
+              </TouchableOpacity>
+              {/* Single-printer fallback configure (format + connection) */}
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
                 onPress={() => {
                   setEditingPrinterType('bill');
-                  const billSettings: PrinterSettings = {
-                    printer_type: printerSettings?.bill_printer_type || 'none',
-                    printer_host: printerSettings?.bill_printer_host,
-                    printer_port: printerSettings?.bill_printer_port,
-                    bluetooth_device_id: printerSettings?.bill_bluetooth_device_id,
-                    bluetooth_device_name: printerSettings?.bill_bluetooth_device_name,
-                    bill_auto_print: printerSettings?.bill_auto_print,
-                  };
-                  setPrinterFormData(billSettings);
+                  setEditingPrinterItemId(null);
+                  setPrinterFormData({ printer_type: printerSettings?.bill_printer_type || 'none', printer_host: printerSettings?.bill_printer_host, printer_port: printerSettings?.bill_printer_port, bluetooth_device_id: printerSettings?.bill_bluetooth_device_id, bluetooth_device_name: printerSettings?.bill_bluetooth_device_name, bill_auto_print: printerSettings?.bill_auto_print } as PrinterSettings);
                 }}
               >
-                <Text style={styles.btnText}>{t('settings.configure')}</Text>
+                <Text style={styles.btnText}>{t('settings.configure')} Format</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Kitchen Printer */}
+            {/* Kitchen Printer — multi-printer list */}
             <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kitchen-printer')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                  <Switch value={kitchenAutoPrint} onValueChange={async (v) => { setKitchenAutoPrint(v); await printerSettingsService.saveKitchenPrinters(restaurantId, kitchenPrintersList, v); }} />
+                </View>
               </View>
-              {printerSettings?.kitchen_printer_type && printerSettings.kitchen_printer_type !== 'none' && (
-                <>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
-                    Type: {getPrinterTypeLabel(printerSettings.kitchen_printer_type)}
-                  </Text>
-                  {printerSettings.kitchen_bluetooth_device_name && (
-                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>
-                      ✓ Device: {printerSettings.kitchen_bluetooth_device_name}
-                    </Text>
-                  )}
-                  {printerSettings.kitchen_printer_host && (
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      Host: {printerSettings.kitchen_printer_host}:{printerSettings.kitchen_printer_port}
-                    </Text>
-                  )}
-                </>
+              {kitchenPrintersList.length === 0 ? (
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No kitchen printers configured.</Text>
+              ) : (
+                kitchenPrintersList.map(p => (
+                  <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                      {p.categories.length > 0 && <Text style={{ fontSize: 11, color: '#6b7280' }}>{p.categories.length} categories</Text>}
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => { loadPrinterProfiles(); openPrinterItemConfigure('kitchen', p.id); }} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deletePrinterItem('kitchen', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
               )}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
-                onPress={() => {
-                  setEditingPrinterType('kitchen');
-                  const kitchenSettings: PrinterSettings = {
-                    printer_type: printerSettings?.kitchen_printer_type || 'none',
-                    printer_host: printerSettings?.kitchen_printer_host,
-                    printer_port: printerSettings?.kitchen_printer_port,
-                    bluetooth_device_id: printerSettings?.kitchen_bluetooth_device_id,
-                    bluetooth_device_name: printerSettings?.kitchen_bluetooth_device_name,
-                    kitchen_auto_print: printerSettings?.kitchen_auto_print,
-                  };
-                  setPrinterFormData(kitchenSettings);
-                }}
-              >
-                <Text style={styles.btnText}>{t('settings.configure')}</Text>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => { loadPrinterProfiles(); addNewPrinterItem('kitchen'); }}>
+                <Text style={styles.btnText}>+ Add Kitchen Printer</Text>
               </TouchableOpacity>
             </View>
 
@@ -1549,8 +2335,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
+    { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }) },
+
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
+    { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
+    { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
+    { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
@@ -1569,6 +2360,557 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <View style={{ width: 60 }} />
     </View>
   );
+
+  const formatCurrency = (amountCents?: number | null) => {
+    return `$${((amountCents || 0) / 100).toFixed(2)}`;
+  };
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString();
+  };
+
+  const renderCrmCustomerCard = (customer: CrmCustomer) => {
+    const initials = (customer.name || '?').slice(0, 2).toUpperCase();
+
+    return (
+      <TouchableOpacity
+        key={customer.id}
+        style={styles.crmCustomerCard}
+        activeOpacity={0.8}
+        onPress={() => openCrmProfile(customer.id)}
+      >
+        <View style={styles.crmCustomerAvatar}>
+          <Text style={styles.crmCustomerAvatarText}>{initials}</Text>
+        </View>
+        <View style={styles.crmCustomerMeta}>
+          <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
+          {!!(customer.phone || customer.email) ? (
+            <View style={{ marginTop: 2 }}>
+              {!!customer.phone && (
+                <Text style={styles.crmCustomerSubline}>📞 {customer.phone}</Text>
+              )}
+              {!!customer.email && (
+                <Text style={styles.crmCustomerSubline}>✉️ {customer.email}</Text>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.crmCustomerSubline}>No contact details</Text>
+          )}
+          <Text style={styles.crmCustomerSubline}>
+            {customer.total_visits || 0} visits · Last visit {formatDate(customer.last_visit_at)}
+          </Text>
+        </View>
+        <View style={styles.crmCustomerSpendBlock}>
+          <Text style={styles.crmCustomerSpend}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
+          <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const bookingStatusColor = (status: string) => {
+    if (status === 'confirmed') return { bg: '#dcfce7', text: '#16a34a' };
+    if (status === 'completed') return { bg: '#ede9fe', text: '#7c3aed' };
+    if (status === 'cancelled') return { bg: '#fee2e2', text: '#dc2626' };
+    if (status === 'no-show')   return { bg: '#fef3c7', text: '#d97706' };
+    return { bg: '#f3f4f6', text: '#6b7280' };
+  };
+
+  const renderCrmBookingRow = (booking: CrmBooking, tone: 'future' | 'past') => {
+    const colors = bookingStatusColor(booking.status);
+    return (
+      <View key={`${tone}-${booking.id}`} style={styles.crmHistoryRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.crmHistoryTitle}>
+            {formatDate(booking.booking_date)}{booking.booking_time ? ` · ${booking.booking_time}` : ''}
+          </Text>
+          <Text style={styles.crmHistoryMeta}>
+            {booking.pax} pax{booking.table_label ? ` · ${booking.table_label}` : ''}
+          </Text>
+        </View>
+        <View style={[styles.crmStatusBadge, { backgroundColor: colors.bg }]}>
+          <Text style={[styles.crmStatusBadgeText, { color: colors.text }]}>{booking.status}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderCrmProfile = () => {
+    if (crmProfileLoading) {
+      return (
+        <View style={styles.crmLoadingState}>
+          <ActivityIndicator size="small" color="#4f46e5" />
+          <Text style={styles.emptyText}>Loading customer...</Text>
+        </View>
+      );
+    }
+
+    if (!selectedCrmProfile) {
+      return null;
+    }
+
+    const { customer, orders, future_bookings, past_bookings, total_transacted_cents, eligible_coupons } = selectedCrmProfile;
+    const initials = (customer.name || '?').slice(0, 2).toUpperCase();
+
+    // Build unified timeline: merge past bookings + orders chronologically
+    const orderBySessionId = new Map<number, CrmOrder>();
+    orders.forEach(o => { if (o.session_id) orderBySessionId.set(o.session_id, o); });
+
+    type TLItem = { date: string; booking?: CrmBooking; order?: CrmOrder };
+    const timeline: TLItem[] = [];
+    const usedSessionIds = new Set<number>();
+
+    // Each past booking (with linked order if booking started a session)
+    past_bookings.forEach(b => {
+      const linkedOrder = b.session_id ? orderBySessionId.get(b.session_id) : undefined;
+      timeline.push({ date: b.booking_date, booking: b, order: linkedOrder });
+      if (linkedOrder?.session_id) usedSessionIds.add(linkedOrder.session_id);
+    });
+
+    // Standalone orders (not linked to any booking in past_bookings)
+    orders.forEach(o => {
+      if (!o.session_id || !usedSessionIds.has(o.session_id)) {
+        const dateStr = o.created_at ? o.created_at.substring(0, 10) : '';
+        timeline.push({ date: dateStr, order: o });
+      }
+    });
+
+    timeline.sort((a, b) => b.date.localeCompare(a.date));
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => setSelectedCrmProfile(null)}>
+            <Ionicons name="arrow-back" size={16} color="#4f46e5" />
+            <Text style={styles.crmBackToListText}>{t('admin.crm-back-to-list') || 'Back to customers'}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.crmProfileHero}>
+            <View style={styles.crmProfileHeroAvatar}>
+              <Text style={styles.crmProfileHeroAvatarText}>{initials}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCrmEditName(customer.name || '');
+                    setCrmEditPhone(customer.phone || '');
+                    setCrmEditEmail(customer.email || '');
+                    setShowCrmEditModal(true);
+                  }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: 6, marginLeft: 8 }}
+                >
+                  <Ionicons name="pencil" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <Text style={{ color: '#9ca3af', fontSize: 11 }}>📞</Text>
+                <Text style={styles.crmProfileContact}>{customer.phone || '—'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Text style={{ color: '#9ca3af', fontSize: 11 }}>✉️</Text>
+                <Text style={styles.crmProfileContact}>{customer.email || '—'}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.crmStatsRow}>
+            <View style={styles.crmStatCard}>
+              <Text style={styles.crmStatValue}>{customer.total_visits || 0}</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-visits') || 'Visits'}</Text>
+            </View>
+            <View style={styles.crmStatCard}>
+              <Text style={styles.crmStatValue}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-spent') || 'Spent'}</Text>
+            </View>
+            <View style={styles.crmStatCard}>
+              <Text style={styles.crmStatValue}>{formatCurrency(total_transacted_cents || 0)}</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-transacted') || 'Transacted'}</Text>
+            </View>
+            <View style={styles.crmStatCard}>
+              <Text style={styles.crmStatValue} numberOfLines={1} adjustsFontSizeToFit>{customer.last_visit_at ? formatDate(customer.last_visit_at) : '—'}</Text>
+              <Text style={styles.crmStatLabel}>{t('admin.crm-stat-last-visit') || 'Last Visit'}</Text>
+            </View>
+          </View>
+
+          {!!customer.notes && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.crm-notes') || 'Notes'}</Text>
+              <Text style={styles.sectionDescription}>{customer.notes}</Text>
+            </View>
+          )}
+
+          {future_bookings.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.crm-upcoming-bookings') || 'Upcoming Bookings'}</Text>
+              {future_bookings.map((booking) => renderCrmBookingRow(booking, 'future'))}
+            </View>
+          )}
+
+          {/* Unified history timeline */}
+          {timeline.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('admin.crm-history') || 'History'}</Text>
+              {timeline.map((item, idx) => {
+                const { booking, order } = item;
+                const colors = booking ? bookingStatusColor(booking.status) : null;
+                const hasOrder = !!order;
+                return (
+                  <View key={idx} style={[styles.crmHistoryRow, { flexDirection: 'column', alignItems: 'stretch', paddingVertical: 10 }]}>
+                    {/* Booking row */}
+                    {booking && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: hasOrder ? 6 : 0 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.crmHistoryTitle}>
+                            📅 {formatDate(booking.booking_date)}{booking.booking_time ? ` · ${booking.booking_time}` : ''}
+                          </Text>
+                          <Text style={styles.crmHistoryMeta}>
+                            {booking.pax} pax{booking.table_label ? ` · ${booking.table_label}` : ''}
+                          </Text>
+                        </View>
+                        {colors && (
+                          <View style={[styles.crmStatusBadge, { backgroundColor: colors.bg }]}>
+                            <Text style={[styles.crmStatusBadgeText, { color: colors.text }]}>{booking.status}</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                    {/* Order row (linked or standalone) */}
+                    {order && (
+                      <TouchableOpacity
+                        onPress={() => openCrmOrderDetail(order.order_id)}
+                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 6, padding: 8, marginTop: booking ? 2 : 0 }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#4f46e5' }}>
+                            🧾 Order #{order.restaurant_order_number || order.order_id}
+                          </Text>
+                          <Text style={styles.crmHistoryMeta}>
+                            {order.table_label || 'Counter'}{!booking ? ` · ${formatDate(order.created_at)}` : ''}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.crmOrderAmount}>{formatCurrency(order.total_cents || 0)}</Text>
+                          {(order.discount_applied || 0) > 0 && (
+                            <Text style={{ fontSize: 11, color: '#dc2626' }}>−{formatCurrency(order.discount_applied)}</Text>
+                          )}
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color="#9ca3af" style={{ marginLeft: 4 }} />
+                      </TouchableOpacity>
+                    )}
+                    {/* Booking only (no order) and not upcoming */}
+                    {booking && !order && booking.status !== 'confirmed' && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 6, padding: 8, marginTop: 2 }}>
+                        <Text style={{ fontSize: 11, color: '#9ca3af' }}>No order recorded for this visit</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Eligible Coupons */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('settings.eligible-coupons') || 'Eligible Coupons'}</Text>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
+                onPress={() => { setAssignCouponCustomerId(customer.id); setShowAssignCouponModal(true); }}
+              >
+                <Text style={styles.btnSmallText}>{t('common.assign') || 'Assign'}</Text>
+              </TouchableOpacity>
+            </View>
+            {eligible_coupons && eligible_coupons.length > 0 ? (
+              eligible_coupons.map((coupon) => (
+                <View key={coupon.id} style={[styles.couponCard, { flexDirection: 'row', alignItems: 'center' }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.couponCode}>{coupon.code}</Text>
+                    <Text style={styles.couponValue}>
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`}
+                      {' · '}
+                      <Text style={{ color: coupon.coupon_type === 'closed' ? '#b45309' : '#15803d' }}>
+                        {coupon.coupon_type === 'closed' ? (t('settings.coupon-closed') || 'Closed') : (t('settings.coupon-open') || 'Open')}
+                      </Text>
+                    </Text>
+                  </View>
+                  {coupon.coupon_type === 'closed' && (
+                    <TouchableOpacity
+                      onPress={() => Alert.alert(
+                        t('settings.revoke-coupon') || 'Revoke Access',
+                        `${t('settings.revoke-coupon-confirm') || 'Remove this customer\'s access to'} ${coupon.code}?`,
+                        [
+                          { text: t('common.cancel'), style: 'cancel' },
+                          { text: t('common.remove') || 'Remove', style: 'destructive', onPress: () => revokeCouponFromCustomer(customer.id, coupon.id) },
+                        ]
+                      )}
+                    >
+                      <Text style={{ color: '#dc2626', fontSize: 12, fontWeight: '600', marginLeft: 8 }}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>{t('settings.no-eligible-coupons') || 'No coupons assigned'}</Text>
+            )}
+          </View>
+
+          {timeline.length === 0 && future_bookings.length === 0 && !eligible_coupons?.length && (
+            <View style={styles.section}>
+              <Text style={styles.emptyText}>No order or booking history yet.</Text>
+            </View>
+          )}
+        </ScrollView>
+    );
+  };
+
+  const renderCrmOrderDetailContent = () => {
+    if (crmOrderDetailLoading) {
+      return (
+        <View style={{ padding: 32, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color="#4f46e5" />
+        </View>
+      );
+    }
+    if (!crmOrderDetail) return null;
+    const o = crmOrderDetail;
+    const subtotal = (o.items || []).reduce((sum: number, i: any) => {
+      const itemTotal = i.item_total_cents || (i.price_cents || 0) * (i.quantity || 1);
+      const addonsTotal = (i.addons || []).reduce((s: number, a: any) => s + (a.item_total_cents || (a.unit_price_cents || 0) * a.quantity), 0);
+      return sum + itemTotal + addonsTotal;
+    }, 0);
+    const serviceChargeAmt = (o.total_cents || 0) - subtotal;
+
+    // Status badge
+    const statusColors: Record<string, { bg: string; fg: string }> = {
+      completed: { bg: '#d1fae5', fg: '#065f46' },
+      cancelled: { bg: '#fee2e2', fg: '#991b1b' },
+      pending:   { bg: '#fef3c7', fg: '#92400e' },
+    };
+    const sc = statusColors[o.status] || { bg: '#dbeafe', fg: '#1e40af' };
+
+    return (
+      <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {/* Header row with status */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
+            Order #{o.restaurant_order_number || o.id}
+          </Text>
+          <View style={{ backgroundColor: sc.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: sc.fg }}>{(o.status || '').toUpperCase()}</Text>
+          </View>
+        </View>
+
+        {/* Order info rows */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Type</Text>
+          <Text style={{ fontSize: 13, color: '#1f2937' }}>
+            {o.order_type || 'Table'}{o.table_name ? ` — ${o.table_name}` : ''}
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Date</Text>
+          <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatDate(o.created_at)}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Items</Text>
+          <Text style={{ fontSize: 13, color: '#1f2937' }}>
+            {(o.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0)} items
+          </Text>
+        </View>
+
+        {/* Items section */}
+        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginVertical: 12, paddingTop: 12 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Items</Text>
+          {(o.items || []).map((item: any, idx: number) => (
+            <View key={idx} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, color: '#1f2937' }}>
+                    {item.menu_item_name || item.name || '—'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af' }}>×{item.quantity}</Text>
+                  {item.variants ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.variants}</Text> : null}
+                  {(item.addons || []).map((addon: any, ai: number) => (
+                    <Text key={ai} style={{ fontSize: 11, color: '#6366f1', marginTop: 1 }}>
+                      + {addon.menu_item_name} ×{addon.quantity}
+                    </Text>
+                  ))}
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>
+                  {formatCurrency(item.item_total_cents || (item.price_cents || 0) * (item.quantity || 1))}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Order Summary */}
+        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 12 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Order Summary</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>Subtotal</Text>
+            <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatCurrency(subtotal)}</Text>
+          </View>
+          {serviceChargeAmt > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={{ fontSize: 13, color: '#6b7280' }}>Service Charge</Text>
+              <Text style={{ fontSize: 13, color: '#1f2937' }}>{formatCurrency(serviceChargeAmt)}</Text>
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>Grand Total</Text>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{formatCurrency(o.total_cents || 0)}</Text>
+          </View>
+        </View>
+
+        {/* Payment Information */}
+        <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 8 }}>Payment Information</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Status</Text>
+            <Text style={{ fontSize: 13, color: '#374151', fontWeight: '500' }}>
+              {o.payment_received ? 'paid' : (o.payment_status || 'unpaid')}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Method</Text>
+            <Text style={{ fontSize: 13, color: '#374151' }}>
+              {o.payment_method_label || o.payment_method || o.payment_method_online || '—'}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  };
+
+  const renderCrmPage = () => {
+    const isTablet = (Platform as any).isPad;
+    const showOrderPanel = isTablet && (!!crmOrderDetail || crmOrderDetailLoading);
+
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader('CRM')}
+        <View style={{ flex: 1, flexDirection: showOrderPanel ? 'row' : 'column' }}>
+          {/* Left: profile or customers list */}
+          <View style={{ flex: 1 }}>
+            {selectedCrmProfile ? (
+              renderCrmProfile()
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>{t('admin.crm-customers') || 'Customers'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={styles.label}>
+                        {crmSearchTerm
+                          ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
+                          : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.btn, styles.btnSecondary, { paddingVertical: 4, paddingHorizontal: 10, opacity: crmSyncing ? 0.6 : 1 }]}
+                        disabled={crmSyncing}
+                        onPress={syncCrmFromBookings}
+                      >
+                        <Text style={[styles.crmLoadMoreText, { fontSize: 11 }]}>{crmSyncing ? 'Syncing...' : t('admin.crm-import-bookings') || 'Sync Bookings'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <TextInput
+                    style={styles.input}
+                    value={crmSearchInput}
+                    onChangeText={setCrmSearchInput}
+                    placeholder={t('admin.crm-search-placeholder') || 'Search name, phone or email'}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+
+                  <View style={styles.crmSortRow}>
+                    <Text style={styles.label}>Sort by:</Text>
+                    <View style={styles.crmSortChips}>
+                      {(['last_visit', 'total_spent', 'total_orders', 'created_at'] as const).map((val) => {
+                        const labels: Record<string, string> = {
+                          last_visit:   t('admin.crm-sort-last-visit')  || 'Last Visit',
+                          total_spent:  t('admin.crm-sort-spent')       || 'Most Spent',
+                          total_orders: t('admin.crm-sort-orders')      || 'Most Orders',
+                          created_at:   t('admin.crm-sort-newest')      || 'Newest',
+                        };
+                        const active = crmSortBy === val;
+                        return (
+                          <TouchableOpacity
+                            key={val}
+                            onPress={() => setCrmSortBy(val)}
+                            style={[styles.crmSortChip, active && styles.crmSortChipActive]}
+                          >
+                            <Text style={[styles.crmSortChipText, active && styles.crmSortChipTextActive]}>{labels[val]}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {crmLoading ? (
+                    <View style={styles.crmLoadingState}>
+                      <ActivityIndicator size="small" color="#4f46e5" />
+                      <Text style={styles.emptyText}>{t('admin.crm-loading') || 'Loading customers...'}</Text>
+                    </View>
+                  ) : crmError ? (
+                    <View style={styles.errorContainer}>
+                      <Text style={styles.errorText}>{crmError}</Text>
+                    </View>
+                  ) : crmCustomers.length === 0 ? (
+                    <Text style={styles.emptyText}>
+                      {crmSearchTerm ? t('admin.crm-no-results') || 'No customers matched your search.' : t('admin.crm-empty') || 'No customers yet. Import bookings to get started.'}
+                    </Text>
+                  ) : (
+                    <View style={styles.crmListWrap}>
+                      {crmCustomers.map((customer) => renderCrmCustomerCard(customer))}
+                    </View>
+                  )}
+
+                  {crmHasMore && !crmLoading && (
+                    <TouchableOpacity
+                      style={[styles.btn, styles.btnSecondary, styles.crmLoadMoreBtn, crmLoadingMore && { opacity: 0.6 }]}
+                      disabled={crmLoadingMore}
+                      onPress={() =>
+                        fetchCrmCustomers({
+                          offset: crmOffset,
+                          append: true,
+                          search: crmSearchTerm,
+                          sortBy: crmSortBy,
+                        })
+                      }
+                    >
+                      <Text style={styles.crmLoadMoreText}>{crmLoadingMore ? t('common.loading') || 'Loading...' : t('admin.crm-load-more') || 'Load More'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+
+          {/* Right panel: order detail (iPad side panel) */}
+          {showOrderPanel && (
+            <View style={{ width: 340, backgroundColor: '#fff', borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>
+                  {crmOrderDetail ? `Order #${crmOrderDetail.restaurant_order_number || crmOrderDetail.id}` : 'Loading…'}
+                </Text>
+                <TouchableOpacity onPress={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}>
+                  <Ionicons name="close" size={20} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              {renderCrmOrderDetailContent()}
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   // Language selection page
   const renderLanguagePage = () => (
@@ -2074,6 +3416,24 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </TouchableOpacity>
               </View>
               <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.item-status-desc')}</Text>
+              <View style={[styles.settingItem, { marginTop: 12 }]}>
+                <Text style={styles.label}>{t('settings.email-receipt-enabled')}</Text>
+                <TouchableOpacity
+                  style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.feature_flags?.email_receipt_enabled ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                  onPress={async () => {
+                    const newVal = !settings.feature_flags?.email_receipt_enabled;
+                    try {
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { feature_flags: { email_receipt_enabled: newVal } });
+                      setSettings({ ...settings, feature_flags: { ...(settings.feature_flags || {}), email_receipt_enabled: newVal } });
+                    } catch (err) {
+                      Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
+                    }
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.feature_flags?.email_receipt_enabled ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.email-receipt-desc')}</Text>
             </>
           )}
         </View>
@@ -2355,6 +3715,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         name: data.name || '',
         email: data.email || '',
         password: '',
+        confirmPassword: '',
         pin: data.pin || '',
       });
     } catch (err: any) {
@@ -2544,25 +3905,446 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         <Text style={styles.btnText}>{t('settings.logout')}</Text>
       </TouchableOpacity>
 
-      {/* Version label */}
-      <Text style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-        v{appJson.expo.version}
-      </Text>
+      {/* Version label — tap 7 times to reveal dev menu */}
+      <TouchableOpacity onPress={handleDevTap} activeOpacity={1}>
+        <Text style={{ textAlign: 'center', fontSize: 11, color: currentEnv !== ENVIRONMENTS['Production'] ? '#ef4444' : '#9ca3af', marginBottom: 8 }}>
+          v1.0.0{currentEnv !== ENVIRONMENTS['Production'] ? ` • DEV MODE (${Object.entries(ENVIRONMENTS).find(([, url]) => url === currentEnv)?.[0] || 'Custom'})` : (showDevMenu ? ` • Production` : '')}
+        </Text>
+      </TouchableOpacity>
+
+      {showDevMenu && (
+        <View style={{ backgroundColor: '#1e1b4b', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <Text style={{ color: '#c7d2fe', fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Developer Mode</Text>
+          <Text style={{ color: '#818cf8', fontSize: 11, marginBottom: 12 }}>API: {currentEnv}</Text>
+          {Object.entries(ENVIRONMENTS).map(([name, url]) => (
+            <TouchableOpacity
+              key={name}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                padding: 12, borderRadius: 8, marginBottom: 6,
+                backgroundColor: currentEnv === url ? '#312e81' : '#1e1b4b',
+                borderWidth: 1, borderColor: currentEnv === url ? '#6366f1' : '#374151',
+              }}
+              onPress={() => currentEnv !== url && switchEnv(name, url)}
+            >
+              <View>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{name}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11 }}>{url}</Text>
+              </View>
+              {currentEnv === url && (
+                <View style={{ backgroundColor: '#22c55e', width: 8, height: 8, borderRadius: 4 }} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 
   // Route to sub-page content
+  const loadMenuSettings = async () => {
+    setMenuSettingsLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
+      const s = res.data;
+      const flags = s.feature_flags || {};
+      const uiConf = s.ui_config || {};
+      setAllowCustomFoodItems(flags.allow_custom_food_items === true);
+      setMenuColumns((uiConf.menu_columns === 2 ? 2 : 1) as 1 | 2);
+      setCustomItemLabel(uiConf.custom_item_label || '');
+      setMenuSettingsLoaded(true);
+    } catch (err: any) {
+      console.warn('[MenuSettings] Failed to load:', err.message);
+    } finally {
+      setMenuSettingsLoading(false);
+    }
+  };
+
+  const saveMenuSettings = async (patch: object) => {
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, patch);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.settings-failed'));
+    }
+  };
+
+  const loadFeatureFlags = async () => {
+    setModuleFlagsLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/settings`);
+      const flags = res.data?.feature_flags || {};
+      setModuleFlags(flags);
+      setModuleFlagsLoaded(true);
+    } catch (err: any) {
+      console.warn('[FeatureFlags] Failed to load:', err.message);
+    } finally {
+      setModuleFlagsLoading(false);
+    }
+  };
+
+  const saveModuleFlag = async (key: string, value: boolean) => {
+    setModuleFlags(prev => ({ ...prev, [key]: value }));
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, {
+        feature_flags: { [key]: value },
+      });
+    } catch (err: any) {
+      setModuleFlags(prev => ({ ...prev, [key]: !value }));
+      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.settings-failed'));
+    }
+  };
+
+  const MODULE_FLAG_DEFS: { key: string; labelKey: string; defaultLabel: string; descKey: string; defaultDesc: string }[] = [
+    { key: 'bookings',             labelKey: 'settings.flag-bookings',          defaultLabel: 'Bookings',         descKey: 'settings.flag-bookings-desc',          defaultDesc: 'Table reservations module' },
+    { key: 'waitlist',             labelKey: 'settings.flag-waitlist',          defaultLabel: 'Waitlist',         descKey: 'settings.flag-waitlist-desc',          defaultDesc: 'Queue / walk-in waitlist' },
+    { key: 'crm',                  labelKey: 'settings.flag-crm',               defaultLabel: 'CRM',              descKey: 'settings.flag-crm-desc',               defaultDesc: 'Customer relationship management' },
+    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons and promotions' },
+    { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
+  ];
+
+  // ==================== SERVICE REQUESTS CRUD ====================
+
+  const loadSrItems = async () => {
+    setSrLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/service-request-items/all`);
+      setSrItems(Array.isArray(res.data) ? res.data : []);
+      setSrLoaded(true);
+    } catch {
+      Alert.alert(t('common.error'), t('admin.sr-load-failed'));
+    } finally {
+      setSrLoading(false);
+    }
+  };
+
+  const createSrItem = async () => {
+    if (!srRequestType.trim() || !srLabelEn.trim()) {
+      Alert.alert(t('common.error'), t('admin.sr-fields-required'));
+      return;
+    }
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/service-request-items`, {
+        request_type: srRequestType.trim(),
+        label_en: srLabelEn.trim(),
+        label_zh: srLabelZh.trim() || null,
+        color: srColor,
+        is_active: srIsActive,
+      });
+      setShowSrModal(false);
+      await loadSrItems();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err?.message || t('admin.sr-create-failed'));
+    }
+  };
+
+  const saveSrItem = async () => {
+    if (!editingSrItem) return;
+    if (!srLabelEn.trim()) {
+      Alert.alert(t('common.error'), t('admin.sr-label-en-required'));
+      return;
+    }
+    try {
+      await apiClient.patch(
+        `/api/restaurants/${restaurantId}/service-request-items/${editingSrItem.id}`,
+        { label_en: srLabelEn.trim(), label_zh: srLabelZh.trim() || null, color: srColor, is_active: srIsActive }
+      );
+      setShowSrModal(false);
+      setEditingSrItem(null);
+      await loadSrItems();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err?.message || t('admin.sr-save-failed'));
+    }
+  };
+
+  const deleteSrItem = (itemId: number) => {
+    Alert.alert(t('admin.sr-delete-title'), t('admin.sr-delete-msg'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'), style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${itemId}`);
+            await loadSrItems();
+          } catch {
+            Alert.alert(t('common.error'), t('admin.sr-delete-failed'));
+          }
+        },
+      },
+    ]);
+  };
+
+  const renderServiceRequestsPage = () => (
+    <View style={styles.container}>
+      {renderSubPageHeader(t('admin.service-requests') || 'Service Requests')}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+        <TouchableOpacity
+          style={[styles.btn, styles.btnPrimary, { marginBottom: 12, alignSelf: 'flex-start' }]}
+          onPress={() => {
+            setEditingSrItem(null);
+            setSrLabelEn('');
+            setSrLabelZh('');
+            setSrRequestType('');
+            setSrColor('#4f46e5');
+            setSrIsActive(true);
+            setShowSrModal(true);
+          }}
+        >
+          <Text style={styles.btnText}>{t('admin.sr-add-item') || '+ Add Service Request'}</Text>
+        </TouchableOpacity>
+        {srLoading ? (
+          <ActivityIndicator color="#3b82f6" style={{ marginTop: 24 }} />
+        ) : srItems.length === 0 ? (
+          <Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 24 }}>{t('admin.sr-no-items') || 'No service request items yet.'}</Text>
+        ) : (
+          srItems.map(item => (
+            <View key={item.id} style={{ flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
+              <View style={{ flex: 1, padding: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color || '#4f46e5' }} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, flex: 1 }} numberOfLines={1}>{item.label_en}</Text>
+                  <View style={{ backgroundColor: item.is_active ? '#d1fae5' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 10, color: item.is_active ? '#065f46' : '#991b1b', fontWeight: '600' }}>{item.is_active ? (t('admin.sr-active') || 'Active') : (t('admin.sr-off') || 'Off')}</Text>
+                  </View>
+                </View>
+                {item.label_zh ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.label_zh}</Text> : null}
+                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{t('admin.sr-type-label') || 'Type'}: {item.request_type}</Text>
+              </View>
+              <View style={{ justifyContent: 'center', gap: 6, paddingHorizontal: 8 }}>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#dbeafe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                  onPress={() => {
+                    setEditingSrItem(item);
+                    setSrLabelEn(item.label_en);
+                    setSrLabelZh(item.label_zh || '');
+                    setSrRequestType(item.request_type);
+                    setSrColor(item.color || '#4f46e5');
+                    setSrIsActive(item.is_active);
+                    setShowSrModal(true);
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>{t('common.edit')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#fee2e2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                  onPress={() => deleteSrItem(item.id)}
+                >
+                  <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>{t('common.delete')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      {/* SR Item Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSrModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{editingSrItem ? (t('admin.sr-edit-item') || 'Edit Service Request') : (t('admin.sr-new-item') || 'New Service Request')}</Text>
+
+            {!editingSrItem && (
+              <>
+                <Text style={styles.label}>{t('admin.sr-request-type') || 'Request Type (unique key)'}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={srRequestType}
+                  onChangeText={setSrRequestType}
+                  placeholder="e.g. napkins, water"
+                  autoCapitalize="none"
+                />
+              </>
+            )}
+
+            <Text style={styles.label}>{t('admin.sr-label-en') || 'English Label'}</Text>
+            <TextInput style={styles.input} value={srLabelEn} onChangeText={setSrLabelEn} placeholder="e.g. Extra Napkins" />
+
+            <Text style={styles.label}>{t('admin.sr-label-zh') || 'Chinese Label (optional)'}</Text>
+            <TextInput style={styles.input} value={srLabelZh} onChangeText={setSrLabelZh} placeholder="e.g. 额外纸巾" />
+
+            <Text style={styles.label}>{t('admin.sr-color') || 'Colour (hex)'}</Text>
+            <TextInput style={styles.input} value={srColor} onChangeText={setSrColor} placeholder="#4f46e5" autoCapitalize="none" />
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}
+              onPress={() => setSrIsActive(prev => !prev)}
+            >
+              <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: '#3b82f6', backgroundColor: srIsActive ? '#3b82f6' : '#fff', justifyContent: 'center', alignItems: 'center' }}>
+                {srIsActive && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+              </View>
+              <Text style={{ fontSize: 14, color: '#374151' }}>{t('admin.sr-active-label') || 'Active'}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => { setShowSrModal(false); setEditingSrItem(null); }}>
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={editingSrItem ? saveSrItem : createSrItem}>
+                <Text style={styles.btnText}>{editingSrItem ? t('common.save') : t('settings.create')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+
+  const renderFeatureFlagsPage = () => {
+    if (moduleFlagsLoading) {
+      return (
+        <View style={styles.container}>
+          {renderSubPageHeader(t('settings.feature-flags') || 'Feature Flags')}
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader(t('settings.feature-flags') || 'Feature Flags')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('settings.feature-flags-modules') || 'Modules'}</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+              {t('settings.feature-flags-hint') || 'Disabled modules are hidden from all users of this restaurant.'}
+            </Text>
+
+            {MODULE_FLAG_DEFS.map((def, idx) => {
+              const isOn = moduleFlags[def.key] !== false; // default true (opt-out)
+              return (
+                <View
+                  key={def.key}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingVertical: 12,
+                    borderBottomWidth: idx < MODULE_FLAG_DEFS.length - 1 ? 1 : 0,
+                    borderBottomColor: '#e5e7eb',
+                  }}
+                >
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={styles.label}>{t(def.labelKey) || def.defaultLabel}</Text>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t(def.descKey) || def.defaultDesc}</Text>
+                  </View>
+                  <Switch
+                    value={isOn}
+                    onValueChange={(val) => saveModuleFlag(def.key, val)}
+                    trackColor={{ false: '#d1d5db', true: '#6366f1' }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+              );
+            })}
+          </View>
+
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const renderMenuSettingsPage = () => {
+    if (menuSettingsLoading) {
+      return (
+        <View style={styles.container}>
+          {renderSubPageHeader(t('admin.menu-settings') || 'Menu Settings')}
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader(t('admin.menu-settings') || 'Menu Settings')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+
+          {/* Admin Portal section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('admin.menu-settings-admin-portal') || 'Admin Portal'}</Text>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={styles.label}>{t('admin.custom-food-item') || 'Custom Food Item'}</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('admin.custom-food-item-desc') || 'Allow staff to add free-text custom items to orders'}</Text>
+              </View>
+              <Switch
+                value={allowCustomFoodItems}
+                onValueChange={(val) => {
+                  setAllowCustomFoodItems(val);
+                  saveMenuSettings({ feature_flags: { allow_custom_food_items: val } });
+                }}
+              />
+            </View>
+            <View style={{ paddingVertical: 12, opacity: allowCustomFoodItems ? 1 : 0.45 }}>
+              <Text style={styles.label}>Default Item Label</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Name shown on the custom item card (staff can change it per order)</Text>
+              <TextInput
+                style={styles.input}
+                value={customItemLabel}
+                onChangeText={setCustomItemLabel}
+                placeholder="Custom Item"
+                editable={allowCustomFoodItems}
+                onBlur={() => allowCustomFoodItems && saveMenuSettings({ ui_config: { custom_item_label: customItemLabel.trim() || null } })}
+              />
+            </View>
+          </View>
+
+          {/* Customer Menu section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('admin.menu-settings-customer-menu') || 'Customer Menu'}</Text>
+
+            <Text style={[styles.label, { marginBottom: 10 }]}>{t('admin.menu-layout') || 'Menu Layout'}</Text>
+            {([1, 2] as const).map((cols) => (
+              <TouchableOpacity
+                key={cols}
+                style={[styles.option, menuColumns === cols && styles.optionActive]}
+                onPress={() => {
+                  setMenuColumns(cols);
+                  saveMenuSettings({ ui_config: { menu_columns: cols } });
+                }}
+              >
+                <Text style={[styles.optionText, menuColumns === cols && styles.optionTextActive]}>
+                  {cols === 1 ? (t('admin.single-column') || 'Single Column') : (t('admin.two-column') || 'Two Columns')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={{ backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#bae6fd', borderRadius: 6, padding: 10, marginTop: 16 }}>
+              <Text style={{ fontSize: 12, color: '#0369a1' }}>
+                <Text style={{ fontWeight: '600' }}>{t('admin.image-tip-title') || 'Image tip: '}</Text>
+                {t('admin.image-tip-desc') || 'Optimal food image size is 800 × 600 px (4:3 ratio).'}
+              </Text>
+            </View>
+          </View>
+
+        </ScrollView>
+      </View>
+    );
+  };
+
   const renderCurrentPage = () => {
     switch (settingsPage) {
       case 'language': return renderLanguagePage();
       case 'restaurant-info': return renderRestaurantInfoPage();
       case 'printer': return renderPrinterPage();
+      case 'crm': return renderCrmPage();
       case 'payment-terminals': return renderPaymentTerminalsPage();
       case 'qr-settings': return renderQRSettingsPage();
       case 'staff-links': return renderStaffLinksPage();
       case 'coupons': return renderCouponsPage();
       case 'variant-presets': return renderVariantPresetsPage();
       case 'addon-presets': return renderAddonPresetsPage();
+      case 'menu-settings':
+        if (!menuSettingsLoading && !menuSettingsLoaded) loadMenuSettings();
+        return renderMenuSettingsPage();
+      case 'feature-flags':
+        if (!moduleFlagsLoading && !moduleFlagsLoaded) loadFeatureFlags();
+        return renderFeatureFlagsPage();
+      case 'service-requests':
+        if (!srLoading && !srLoaded) loadSrItems();
+        return renderServiceRequestsPage();
       case 'users': return <UsersTab onBack={navigateBack} />;
       case 'profile':
         if (!profileData && !profileLoading) loadProfile();
@@ -2577,11 +4359,93 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         {renderCurrentPage()}
       </Animated.View>
 
+      {/* CRM Order Detail Modal (phone only — iPad uses side panel) */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={!(Platform as any).isPad && (!!crmOrderDetail || crmOrderDetailLoading)}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>
+                {crmOrderDetail ? `Order #${crmOrderDetail.restaurant_order_number || crmOrderDetail.id}` : 'Loading…'}
+              </Text>
+              <TouchableOpacity onPress={() => { setCrmOrderDetail(null); setCrmOrderDetailLoading(false); }}>
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            {renderCrmOrderDetailContent()}
+          </View>
+        </View>
+      </Modal>
+
+      {/* CRM Customer Edit Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showCrmEditModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowCrmEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('admin.crm-edit-customer') || 'Edit Customer'}</Text>
+
+            <Text style={styles.label}>{t('admin.crm-name') || 'Name'} *</Text>
+            <TextInput
+              style={styles.input}
+              value={crmEditName}
+              onChangeText={setCrmEditName}
+              placeholder="Customer name"
+              autoCapitalize="words"
+            />
+
+            <Text style={styles.label}>{t('admin.crm-phone') || 'Phone'}</Text>
+            <TextInput
+              style={styles.input}
+              value={crmEditPhone}
+              onChangeText={setCrmEditPhone}
+              placeholder="+852 xxxx xxxx"
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.label}>{t('admin.crm-email') || 'Email'}</Text>
+            <TextInput
+              style={styles.input}
+              value={crmEditEmail}
+              onChangeText={setCrmEditEmail}
+              placeholder="email@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => setShowCrmEditModal(false)}
+              >
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, crmEditSaving && { opacity: 0.6 }]}
+                disabled={crmEditSaving}
+                onPress={saveCrmCustomerEdit}
+              >
+                <Text style={styles.btnText}>{crmEditSaving ? (t('common.saving') || 'Saving...') : t('common.save')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Coupon Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('settings.create-coupon')}</Text>
+            <Text style={styles.modalTitle}>{editingCouponId ? (t('settings.edit-coupon') || 'Edit Coupon') : t('settings.create-coupon')}</Text>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.coupon-code')}</Text>
@@ -2675,18 +4539,40 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               />
             </View>
 
+            {/* Coupon access type */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{t('settings.coupon-access-type') || 'Access Type'}</Text>
+              <View style={styles.toggleGroup}>
+                <TouchableOpacity
+                  style={[styles.typeBtn, couponForm.coupon_type === 'open' && styles.typeBtnActive]}
+                  onPress={() => setCouponForm({ ...couponForm, coupon_type: 'open' })}
+                >
+                  <Text style={[styles.typeBtnText, couponForm.coupon_type === 'open' && styles.typeBtnTextActive]}>
+                    {t('settings.coupon-open') || 'Open'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeBtn, couponForm.coupon_type === 'closed' && styles.typeBtnActive]}
+                  onPress={() => setCouponForm({ ...couponForm, coupon_type: 'closed' })}
+                >
+                  <Text style={[styles.typeBtnText, couponForm.coupon_type === 'closed' && styles.typeBtnTextActive]}>
+                    {t('settings.coupon-closed') || 'Closed'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                {couponForm.coupon_type === 'open'
+                  ? (t('settings.coupon-open-desc') || 'Anyone with the code can use this coupon')
+                  : (t('settings.coupon-closed-desc') || 'Only customers you assign this coupon to can use it')}
+              </Text>
+            </View>
+
             <View style={styles.formActions}>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={() => {
                   setShowCouponModal(false);
-                  setCouponForm({
-                    code: '',
-                    discount_type: 'percentage',
-                    discount_value: '',
-                    min_order_value: '',
-                    description: '',
-                  });
+                  resetCouponForm();
                 }}
               >
                 <Text style={styles.btnText}>{t('common.cancel')}</Text>
@@ -2695,7 +4581,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={createCoupon}
               >
-                <Text style={styles.btnText}>{t('settings.create')}</Text>
+                <Text style={styles.btnText}>{editingCouponId ? (t('common.save') || 'Save') : t('settings.create')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2724,12 +4610,27 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     {selectedCoupon.discount_type === 'percentage' ? `${selectedCoupon.discount_value}% off` : `$${selectedCoupon.discount_value} off`}
                   </Text>
                 </View>
-                {selectedCoupon.min_order_value > 0 && (
+                {(selectedCoupon.minimum_order_value > 0 || selectedCoupon.min_order_value > 0) && (
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>{t('settings.min-order-label')}</Text>
-                    <Text style={{ fontSize: 14, color: '#1f2937' }}>${selectedCoupon.min_order_value}</Text>
+                    <Text style={{ fontSize: 14, color: '#1f2937' }}>${selectedCoupon.minimum_order_value || selectedCoupon.min_order_value}</Text>
                   </View>
                 )}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>{t('settings.coupon-access-type') || 'Access Type'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ backgroundColor: selectedCoupon.coupon_type === 'closed' ? '#fef3c7' : '#dcfce7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: selectedCoupon.coupon_type === 'closed' ? '#b45309' : '#15803d' }}>
+                        {selectedCoupon.coupon_type === 'closed' ? (t('settings.coupon-closed') || 'Closed') : (t('settings.coupon-open') || 'Open')}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>
+                      {selectedCoupon.coupon_type === 'closed'
+                        ? (t('settings.coupon-closed-desc') || 'Assigned customers only')
+                        : (t('settings.coupon-open-desc') || 'Anyone with the code')}
+                    </Text>
+                  </View>
+                </View>
                 {selectedCoupon.description ? (
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>{t('settings.description')}</Text>
@@ -2742,6 +4643,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     onPress={() => { setShowCouponDetailModal(false); setSelectedCoupon(null); }}
                   >
                     <Text style={styles.btnText}>{t('settings.close')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary]}
+                    onPress={() => openEditCoupon(selectedCoupon)}
+                  >
+                    <Text style={styles.btnText}>{t('common.edit') || 'Edit'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.btn, { backgroundColor: '#fee2e2' }]}
@@ -2765,6 +4672,49 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
       </Modal>
 
+      {/* Assign Coupon to Customer Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAssignCouponModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('settings.assign-coupon') || 'Assign Coupon'}</Text>
+              <TouchableOpacity onPress={() => setShowAssignCouponModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {coupons.filter(c => c.coupon_type === 'closed').length === 0 ? (
+                <Text style={[styles.emptyText, { padding: 16 }]}>
+                  {t('settings.no-closed-coupons') || 'No closed coupons available. Create a closed coupon first.'}
+                </Text>
+              ) : (
+                coupons.filter(c => c.coupon_type === 'closed').map(coupon => (
+                  <TouchableOpacity
+                    key={coupon.id}
+                    style={[styles.couponCard]}
+                    onPress={() => {
+                      if (assignCouponCustomerId) {
+                        assignCouponToCustomer(assignCouponCustomerId, coupon.id);
+                        setShowAssignCouponModal(false);
+                      }
+                    }}
+                  >
+                    <Text style={styles.couponCode}>{coupon.code}</Text>
+                    <Text style={styles.couponValue}>
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% off` : `$${coupon.discount_value} off`}
+                    </Text>
+                    {coupon.description ? <Text style={styles.couponDesc}>{coupon.description}</Text> : null}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { marginTop: 12 }]} onPress={() => setShowAssignCouponModal(false)}>
+              <Text style={styles.btnText}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Payment Terminal Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showPaymentTerminalModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -2779,7 +4729,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
               <View>
-                {(['kpay', 'payment-asia', 'other'] as const).map((vendor) => (
+                {(['kpay', 'payment-asia', 'payment-asia-offline', 'other'] as const).map((vendor) => (
                   <TouchableOpacity
                     key={vendor}
                     style={{ paddingVertical: 8 }}
@@ -2802,7 +4752,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         )}
                       </View>
                       <Text style={{ marginLeft: 10, fontSize: 14, color: '#1f2937', fontWeight: '500' }}>
-                        {vendor === 'kpay' ? 'KPay' : vendor === 'payment-asia' ? 'Payment Asia' : t('settings.other')}
+                        {vendor === 'kpay' ? 'KPay (Offline · Physical Terminal)'
+                          : vendor === 'payment-asia' ? 'Payment Asia (Online · Cloud Gateway)'
+                          : vendor === 'payment-asia-offline' ? 'Payment Asia (Offline · Physical Terminal)'
+                          : t('settings.other')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -2816,13 +4769,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('settings.payment-vendor')}</Text>
                 <Text style={{ fontSize: 14, color: '#6b7280', paddingVertical: 8 }}>
-                  {terminalForm.vendor_name === 'kpay' ? 'KPay' : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia' : 'Other'}
+                  {terminalForm.vendor_name === 'kpay' ? 'KPay (Offline · Physical Terminal)'
+                    : terminalForm.vendor_name === 'payment-asia' ? 'Payment Asia (Online)'
+                    : terminalForm.vendor_name === 'payment-asia-offline' ? 'Payment Asia (Offline)'
+                    : 'Other'}
                 </Text>
               </View>
             )}
 
-            {/* App ID - superadmin only */}
-            {isSuperadmin && (
+            {/* App ID - superadmin only, KPay/other only */}
+            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-offline' && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-id')}</Text>
               <TextInput
@@ -2834,8 +4790,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
             )}
 
-            {/* App Secret - superadmin only */}
-            {isSuperadmin && (
+            {/* App Secret - superadmin only, KPay/other only */}
+            {isSuperadmin && terminalForm.vendor_name !== 'payment-asia' && terminalForm.vendor_name !== 'payment-asia-offline' && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.app-secret')}</Text>
               <TextInput
@@ -2933,6 +4889,52 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                       </TouchableOpacity>
                     ))}
                   </View>
+                </View>
+              </>
+            )}
+
+            {/* Payment Asia (Offline) fields - superadmin only */}
+            {terminalForm.vendor_name === 'payment-asia-offline' && isSuperadmin && (
+              <>
+                <View style={[styles.formGroup, { backgroundColor: '#fffbeb', borderRadius: 6, padding: 10, borderWidth: 1, borderColor: '#fcd34d' }]}>
+                  <Text style={{ fontSize: 12, color: '#92400e' }}>
+                    ⚠️ PA Offline terminals communicate directly over your local network (LAN). The iOS app pings the terminal IP directly.
+                  </Text>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Terminal IP Address</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.pa_offline_ip}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_ip: text })}
+                    placeholder="e.g., 192.168.1.100"
+                    autoCapitalize="none"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Terminal Port</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.pa_offline_port}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_port: text })}
+                    placeholder="e.g., 8080"
+                    keyboardType="number-pad"
+                    inputAccessoryViewID="numpadDone"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>API Key</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.pa_offline_api_key}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_api_key: text })}
+                    placeholder="Enter API Key"
+                    secureTextEntry
+                  />
                 </View>
               </>
             )}
@@ -3228,9 +5230,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         <View key={idx} style={styles.variantDetailItem}>
                           <View style={styles.variantDetailContent}>
                             <Text style={styles.variantDetailName}>{option.name}</Text>
-                            {option.price_cents && option.price_cents > 0 && (
+                            {option.price_cents !== 0 && (
                               <Text style={styles.variantDetailMeta}>
-                                +${(option.price_cents / 100).toFixed(2)}
+                                {option.price_cents > 0 ? '+' : '-'}${Math.abs(option.price_cents / 100).toFixed(2)}
                               </Text>
                             )}
                           </View>
@@ -3714,6 +5716,213 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 16,
   },
+  crmSortRow: {
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  crmSortChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  crmSortChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  crmSortChipActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4f46e5',
+  },
+  crmSortChipText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  crmSortChipTextActive: {
+    color: '#fff',
+  },
+  crmListWrap: {
+    marginTop: 4,
+  },
+  crmCustomerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  crmCustomerAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#4f46e5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  crmCustomerAvatarText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  crmCustomerMeta: {
+    flex: 1,
+  },
+  crmCustomerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  crmCustomerSubline: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  crmCustomerSpendBlock: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  crmCustomerSpend: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  crmLoadingState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  crmLoadMoreBtn: {
+    marginTop: 12,
+  },
+  crmLoadMoreText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  crmBackToListBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  crmBackToListText: {
+    color: '#4f46e5',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  crmProfileHero: {
+    backgroundColor: '#4338ca',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  crmProfileHeroAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crmProfileHeroAvatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  crmProfileName: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  crmProfileContact: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    marginTop: 3,
+  },
+  crmStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  crmStatCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  crmStatValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  crmStatLabel: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#6b7280',
+    textTransform: 'uppercase',
+  },
+  crmHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    gap: 10,
+  },
+  crmHistoryTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  crmHistoryMeta: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 3,
+  },
+  crmOrderAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  crmStatusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  crmStatusBadgeUpcoming: {
+    backgroundColor: '#dcfce7',
+  },
+  crmStatusBadgePast: {
+    backgroundColor: '#e5e7eb',
+  },
+  crmStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  crmStatusBadgeTextUpcoming: {
+    color: '#166534',
+  },
+  crmStatusBadgeTextPast: {
+    color: '#4b5563',
+  },
   terminalCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3922,6 +6131,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#6b7280',
     fontWeight: '300',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
   },
   modalFooter: {
     flexDirection: 'row',

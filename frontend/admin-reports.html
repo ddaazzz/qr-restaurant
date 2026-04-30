@@ -11,6 +11,11 @@
       <button class="global-date-btn active" data-range="month" style="padding: 6px 14px; border: none; border-radius: 6px; background: #4a90e2; color: white; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('month')" data-i18n="admin.monthly-sales">30 Days</button>
       <button class="global-date-btn" data-range="all" style="padding: 6px 14px; border: 2px solid #4a90e2; border-radius: 6px; background: transparent; color: #4a90e2; cursor: pointer; font-size: 13px; font-weight: 600;" onclick="setGlobalDateRange('all')" data-i18n="admin.all-orders">All Time</button>
     </div>
+    <div style="margin-left: auto;">
+      <button onclick="showExportPage()" style="padding: 8px 18px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+        ⬇ Export
+      </button>
+    </div>
   </div>
 
   <!-- Metrics Row -->
@@ -28,6 +33,10 @@
       <div class="metric-value" id="metric-avg-bill">$0.00</div>
     </div>
     <div class="metric-card">
+      <div class="metric-label" data-i18n="admin.total-discounts">Total Discounts</div>
+      <div class="metric-value" id="metric-total-discounts" style="color: #dc2626;">$0.00</div>
+    </div>
+    <div class="metric-card">
       <div class="metric-label" data-i18n="admin.customers-per-day">Customers / Day</div>
       <div class="metric-value" id="metric-customers-per-day">0</div>
     </div>
@@ -36,20 +45,12 @@
       <div class="metric-value" id="metric-avg-spend-customer">$0.00</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label" data-i18n="admin.total-discounts">Total Discounts</div>
-      <div class="metric-value" id="metric-total-discounts" style="color: #dc2626;">$0.00</div>
-    </div>
-    <div class="metric-card">
       <div class="metric-label" data-i18n="admin.avg-daily-net-sales">Avg Daily Net Sales</div>
       <div class="metric-value" id="metric-avg-daily-net" style="color: #059669;">$0.00</div>
     </div>
     <div class="metric-card">
       <div class="metric-label" data-i18n="admin.avg-daily-customers">Avg Daily Customers</div>
       <div class="metric-value" id="metric-avg-daily-customers">0</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label" data-i18n="admin.sessions">Active Sessions</div>
-      <div class="metric-value" id="metric-active-sessions">0</div>
     </div>
     <div class="metric-card">
       <div class="metric-label" data-i18n="admin.total-bookings">Total Bookings</div>
@@ -63,6 +64,12 @@
       <div class="metric-label" data-i18n="admin.bookings-cancelled">Cancelled</div>
       <div class="metric-value" id="metric-bookings-cancelled" style="color: #dc2626;">0</div>
     </div>
+  </div>
+
+  <!-- Top Revenue Days (moved above revenue table) -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3 data-i18n="admin.report-top-revenue-days">Top Revenue Days</h3>
+    <div id="top-revenue-days" style="min-height: 60px;"></div>
   </div>
 
   <!-- Revenue Filters -->
@@ -109,46 +116,46 @@
     <div id="chart-hourly-revenue" style="height: 270px; overflow-x: auto;"></div>
   </div>
 
-  <!-- Top Items -->
-  <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-items">Top Selling Items</h3>
-    <div id="chart-top-items" style="min-height: 100px;"></div>
-  </div>
-
-  <!-- Top Revenue Days -->
-  <div class="section-card" style="margin-bottom: 24px;">
-    <h3 data-i18n="admin.report-top-revenue-days">Top Revenue Days</h3>
-    <div id="top-revenue-days" style="min-height: 60px;"></div>
-  </div>
-
   <!-- Order Status Breakdown -->
   <div class="section-card" style="margin-bottom: 24px;">
     <h3 data-i18n="admin.report-order-status">Order Status Breakdown</h3>
     <div id="order-status-breakdown" style="min-height: 60px;"></div>
   </div>
 
-  <!-- Sales by Category -->
+  <!-- Order Status Timing (avg time per status change) -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 style="margin: 0;" data-i18n="admin.report-sales-by-category">Sales by Category</h3>
+    <h3 data-i18n="admin.report-status-timing">Dish Preparation Speed</h3>
+    <div id="order-status-timing" style="min-height: 60px;"></div>
+  </div>
 
-    </div>
+  <!-- Payment by Type -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3 data-i18n="admin.report-payment-by-type">Payment by Type</h3>
+    <div id="payment-by-type-content" style="overflow-x: auto; min-height: 60px;"></div>
+  </div>
+
+  <!-- Staff Hours -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3 data-i18n="admin.report-staff-hours">Staff Hours</h3>
+    <div id="staff-hours-content" style="overflow-x: auto; min-height: 60px;"></div>
+  </div>
+
+  <!-- Sales by Category (moved above Sales by Item / Top Items) -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 16px;" data-i18n="admin.report-sales-by-category">Sales by Category</h3>
     <div id="sales-by-category-content" style="overflow-x: auto; min-height: 60px;"></div>
   </div>
 
-  <!-- Sales by Item -->
+  <!-- Sales by Item (replaces old Top Selling Items) -->
   <div class="section-card" style="margin-bottom: 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 style="margin: 0;" data-i18n="admin.report-sales-by-item">Sales by Item</h3>
-
-    </div>
+    <h3 style="margin: 0 0 16px;" data-i18n="admin.report-sales-by-item">Sales by Item</h3>
     <div id="sales-by-item-content" style="overflow-x: auto; min-height: 60px;"></div>
   </div>
 
   <!-- Daily Trends Table -->
   <div class="section-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 style="margin: 0;" data-i18n="admin.report-daily">Daily Trends</h3>
+      <h3 style="margin: 0;" data-i18n="admin.report-revenue-trends">Revenue Trends</h3>
       <div style="display: flex; gap: 8px;">
         <button id="trends-daily-btn" style="padding: 8px 12px; background: #4a90e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'daily')" data-i18n="admin.daily-sales">Daily</button>
         <button id="trends-weekly-btn" style="padding: 8px 12px; background: transparent; color: #4a90e2; border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;" onclick="renderDailyTrends(window.lastStats, 'weekly')" data-i18n="admin.weekly-sales">Weekly</button>
@@ -217,13 +224,22 @@
       <span style="font-size: 12px; color: #666;" data-i18n="admin.avg-bill-label">Avg Bill:</span>
       <div style="font-size: 18px; font-weight: 700; color: #6b7280;" data-field="avg-bill">$0.00</div>
     </div>
+    <div>
+      <span style="font-size: 12px; color: #666;" data-i18n="admin.total-discounts">Total Discounts:</span>
+      <div style="font-size: 18px; font-weight: 700; color: #dc2626;" data-field="total-discounts">$0.00</div>
+    </div>
+    <div>
+      <span style="font-size: 12px; color: #666;" data-i18n="admin.col-net-sales">Net Sales:</span>
+      <div style="font-size: 18px; font-weight: 700; color: #059669;" data-field="net-sales">$0.00</div>
+    </div>
   </div>
   <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
     <thead>
-      <tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">
-        <th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;" data-i18n="admin.col-date">Date</th>
-        <th style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280;" data-i18n="admin.col-orders">Orders</th>
-        <th style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280;" data-i18n="admin.col-revenue">Revenue</th>
+      <tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb; cursor: pointer;">
+        <th onclick="sortRevenueTable('date')" style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280; user-select:none;" data-i18n="admin.col-date">Date <span id="sort-indicator-date">&#9660;</span></th>
+        <th onclick="sortRevenueTable('orders')" style="padding: 12px; text-align: left; font-weight: 600; color: #6b7280; user-select:none;" data-i18n="admin.col-orders">Orders <span id="sort-indicator-orders"></span></th>
+        <th onclick="sortRevenueTable('discount')" style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280; user-select:none;" data-i18n="admin.col-discount">Discount <span id="sort-indicator-discount"></span></th>
+        <th onclick="sortRevenueTable('revenue')" style="padding: 12px; text-align: right; font-weight: 600; color: #6b7280; user-select:none;" data-i18n="admin.col-revenue">Revenue <span id="sort-indicator-revenue"></span></th>
       </tr>
     </thead>
     <tbody data-rows-container></tbody>
@@ -235,6 +251,7 @@
   <tr style="border-bottom: 1px solid #f0f0f0;">
     <td style="padding: 12px; color: #1f2937; font-weight: 500;" data-field="date"></td>
     <td style="padding: 12px; color: #667eea; font-weight: 600;" data-field="orders"></td>
+    <td style="padding: 12px; text-align: right; color: #dc2626;" data-field="discount"></td>
     <td style="padding: 12px; text-align: right; color: #059669; font-weight: 600;" data-field="revenue"></td>
   </tr>
 </template>
@@ -326,3 +343,89 @@
     }
   })();
 </script>
+
+<!-- ================== EXPORT PAGE ================== -->
+<div id="reports-export-page" style="display:none;">
+  <div style="max-width:680px;margin:0 auto;padding:20px 0;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+      <button onclick="hideExportPage()" style="background:none;border:none;cursor:pointer;color:var(--primary-color);font-size:14px;font-weight:600;padding:0;">&#8592; Back to Reports</button>
+      <h3 style="margin:0;flex:1;font-size:18px;font-weight:700;">Export Orders</h3>
+    </div>
+
+    <div class="section-card" style="padding:20px;">
+
+      <!-- Date Range -->
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Date Range</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">From</label>
+            <input type="date" id="export-date-from" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">To</label>
+            <input type="date" id="export-date-to" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Time Period -->
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Period</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;" id="export-period-buttons">
+          <button class="export-period-btn active" data-period="all"      onclick="selectExportPeriod('all')"       style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:#4a90e2;color:white;cursor:pointer;font-size:12px;font-weight:600;">All Day</button>
+          <button class="export-period-btn"        data-period="breakfast" onclick="selectExportPeriod('breakfast')" style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Breakfast (07:00–10:30)</button>
+          <button class="export-period-btn"        data-period="lunch"     onclick="selectExportPeriod('lunch')"     style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Lunch (11:00–15:00)</button>
+          <button class="export-period-btn"        data-period="tea"       onclick="selectExportPeriod('tea')"       style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Tea (15:00–17:30)</button>
+          <button class="export-period-btn"        data-period="dinner"    onclick="selectExportPeriod('dinner')"    style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Dinner (17:30–23:00)</button>
+          <button class="export-period-btn"        data-period="custom"    onclick="selectExportPeriod('custom')"    style="padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;background:transparent;color:#4a90e2;cursor:pointer;font-size:12px;font-weight:600;">Custom</button>
+        </div>
+        <!-- Custom time fields (shown only when Custom is selected) -->
+        <div id="export-custom-time" style="display:none;margin-top:12px;display:none;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">From Time</label>
+            <input type="time" id="export-period-from" value="00:00" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">To Time</label>
+            <input type="time" id="export-period-to" value="23:59" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Dining Type -->
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Dining Type <span style="font-size:11px;color:#9ca3af;font-weight:400;">(multi-select)</span></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <label class="export-type-chip" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:#4a90e2;color:white;user-select:none;">
+            <input type="checkbox" value="table" id="export-type-table" checked style="display:none;" onchange="updateExportTypeChip(this)" />Tables</label>
+          <label class="export-type-chip" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:#4a90e2;color:white;user-select:none;">
+            <input type="checkbox" value="now" id="export-type-now" checked style="display:none;" onchange="updateExportTypeChip(this)" />Order-Now</label>
+          <label class="export-type-chip" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #4a90e2;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:#4a90e2;color:white;user-select:none;">
+            <input type="checkbox" value="to_go" id="export-type-to-go" checked style="display:none;" onchange="updateExportTypeChip(this)" />To-Go</label>
+        </div>
+      </div>
+
+      <!-- Party Size -->
+      <div style="margin-bottom:24px;">
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Party Size</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">Min</label>
+            <input type="number" id="export-pax-min" min="1" placeholder="Any" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;color:#6b7280;">Max</label>
+            <input type="number" id="export-pax-max" min="1" placeholder="Any" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;" />
+          </div>
+        </div>
+      </div>
+
+      <button onclick="downloadExportCSV()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;">
+        ⬇ Download CSV
+      </button>
+      <div id="export-error" style="display:none;margin-top:10px;color:#dc2626;font-size:13px;text-align:center;"></div>
+    </div>
+  </div>
+</div>

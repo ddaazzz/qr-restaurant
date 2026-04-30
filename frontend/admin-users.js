@@ -502,31 +502,13 @@ async function openRestaurantDetail(restId) {
   bodyHtml += '<div class="detail-row"><span class="detail-label">Users</span><span class="detail-value">' + (rest.user_count || 0) + '</span></div>';
   bodyHtml += '</div></div>';
 
-  // --- Feature Flags & App Version Sections (Superadmin only) ---
+  // --- Premium Features (Feature Flags) ---
   if (IS_SUPERADMIN) {
     bodyHtml += '<div class="detail-section">';
-    bodyHtml += '<h4 class="detail-section-title">Feature Flags</h4>';
-    bodyHtml += '<div id="feature-flags-' + rest.id + '"><p style="color: #9ca3af; text-align: center; padding: 12px;">Loading...</p></div>';
+    bodyHtml += '<h4 class="detail-section-title">Premium Features</h4>';
+    bodyHtml += '<p style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">Disabled modules are hidden from all users of this restaurant.</p>';
+    bodyHtml += '<div id="restaurant-detail-flags"><p style="color: #9ca3af; text-align: center;">Loading...</p></div>';
     bodyHtml += '</div>';
-
-    // --- App Version Section ---
-    bodyHtml += '<div class="detail-section">';
-    bodyHtml += '<h4 class="detail-section-title">App Version (pinned)</h4>';
-    bodyHtml += '<div class="form-group" style="margin-bottom: 10px;">';
-    bodyHtml += '  <input type="text" id="deploy-version-' + rest.id + '" class="deploy-input" value="' + escapeHtml(rest.app_version || '') + '" placeholder="e.g. 1.1.2">';
-    bodyHtml += '</div>';
-    bodyHtml += '<button class="btn-primary" onclick="saveAppVersion(' + rest.id + ')" style="width: 100%; margin-top: 6px;">💾 Save App Version</button>';
-    bodyHtml += '</div>';
-
-    // --- Database Info Section ---
-    bodyHtml += '<div class="detail-section">';
-    bodyHtml += '<h4 class="detail-section-title">Database (Render)</h4>';
-    bodyHtml += '<div class="detail-grid">';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">DB Host</span><span class="detail-value" style="font-size: 11px; word-break: break-all;">dpg-d5neo34mrvns73fmt0sg-a.singapore-postgres.render.com</span></div>';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">Region</span><span class="detail-value">Singapore</span></div>';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">Engine</span><span class="detail-value">PostgreSQL</span></div>';
-    bodyHtml += '<div class="detail-row"><span class="detail-label">Note</span><span class="detail-value" style="font-size: 11px;">All restaurants share the same database. Data is isolated by restaurant_id.</span></div>';
-    bodyHtml += '</div></div>';
   }
 
   // --- Payment Terminal Applications ---
@@ -538,22 +520,46 @@ async function openRestaurantDetail(restId) {
   document.getElementById('restaurant-detail-body').innerHTML = bodyHtml;
   modal.style.display = 'flex';
 
-  // Fetch feature flags (superadmin)
+  // Fetch settings (feature flags) and applications in parallel
+  var flagDefs = [
+    { key: 'bookings',             label: 'Bookings',         desc: 'Table reservations module' },
+    { key: 'waitlist',             label: 'Waitlist',         desc: 'Queue / walk-in waitlist' },
+    { key: 'crm',                  label: 'CRM',              desc: 'Customer relationship management' },
+    { key: 'coupons',              label: 'Coupons',          desc: 'Discount coupons and promotions' },
+    { key: 'service_requests',     label: 'Service Requests', desc: 'Customer call-waiter / bill requests' },
+    { key: 'allow_custom_food_items', label: 'Custom Food Items', desc: 'Staff can add free-text items to orders' },
+  ];
+
   if (IS_SUPERADMIN) {
     try {
-      var cfgRes = await fetch(`${API}/restaurants/${restId}/config`, {
+      var settingsRes = await fetch(`${API}/restaurants/${restId}/settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (cfgRes.ok) {
-        var cfg = await cfgRes.json();
-        renderFeatureFlags(restId, cfg.feature_flags || {});
+      if (settingsRes.ok) {
+        var settings = await settingsRes.json();
+        var flags = settings.feature_flags || {};
+        var flagsHtml = '';
+        for (var fi = 0; fi < flagDefs.length; fi++) {
+          var fd = flagDefs[fi];
+          // Default: true (opt-out) — if explicitly false it's disabled
+          var isOn = flags[fd.key] !== false;
+          flagsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;' + (fi < flagDefs.length - 1 ? 'border-bottom:1px solid #f3f4f6;' : '') + '">';
+          flagsHtml += '  <div>';
+          flagsHtml += '    <div style="font-size:13px;font-weight:600;color:#111827;">' + escapeHtml(fd.label) + '</div>';
+          flagsHtml += '    <div style="font-size:11px;color:#6b7280;margin-top:2px;">' + escapeHtml(fd.desc) + '</div>';
+          flagsHtml += '  </div>';
+          flagsHtml += '  <label class="toggle-switch" style="flex-shrink:0;margin-left:12px;">';
+          flagsHtml += '    <input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleRestaurantFlag(' + restId + ', \'' + fd.key + '\', this.checked)">';
+          flagsHtml += '    <span class="toggle-slider"></span>';
+          flagsHtml += '  </label>';
+          flagsHtml += '</div>';
+        }
+        document.getElementById('restaurant-detail-flags').innerHTML = flagsHtml;
       } else {
-        var ffEl = document.getElementById('feature-flags-' + restId);
-        if (ffEl) ffEl.innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load feature flags</p>';
+        document.getElementById('restaurant-detail-flags').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load feature flags</p>';
       }
     } catch (err) {
-      var ffEl = document.getElementById('feature-flags-' + restId);
-      if (ffEl) ffEl.innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load feature flags</p>';
+      document.getElementById('restaurant-detail-flags').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load feature flags</p>';
     }
   }
 
@@ -573,50 +579,17 @@ async function openRestaurantDetail(restId) {
   }
 }
 
-// ============= FEATURE FLAGS =============
+// ============= FEATURE FLAG TOGGLE =============
 
-var FEATURE_FLAG_LABELS = {
-  bookings: 'Bookings',
-  waitlist: 'Waitlist',
-  coupons: 'Coupons',
-  addons: 'Add-ons',
-  variants: 'Variants',
-  staff_timekeeping: 'Staff Timekeeping',
-  kitchen_display: 'Kitchen Display',
-  printer_support: 'Printer Support',
-  crm: 'CRM',
-  multi_language: 'Multi-Language',
-  service_requests: 'Service Requests',
-};
-
-function renderFeatureFlags(restId, flags) {
-  var container = document.getElementById('feature-flags-' + restId);
-  if (!container) return;
-  var keys = Object.keys(FEATURE_FLAG_LABELS);
-  var html = '';
-  for (var i = 0; i < keys.length; i++) {
-    var key = keys[i];
-    var enabled = flags[key] === true;
-    html += '<div class="detail-row" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f3f4f6;">';
-    html += '<span style="font-size: 13px; color: #374151;">' + FEATURE_FLAG_LABELS[key] + '</span>';
-    html += '<label class="toggle-switch" style="margin: 0;">';
-    html += '<input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleFeatureFlag(' + restId + ', \'' + key + '\', this.checked)">';
-    html += '<span class="toggle-slider"></span>';
-    html += '</label>';
-    html += '</div>';
-  }
-  container.innerHTML = html || '<p style="color: #9ca3af;">No feature flags available</p>';
-}
-
-async function toggleFeatureFlag(restId, flagKey, enabled) {
+async function toggleRestaurantFlag(restId, flagKey, value) {
   try {
-    var res = await fetch(`${API}/restaurants/${restId}/config`, {
+    var res = await fetch(`${API}/restaurants/${restId}/settings`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ feature_flags: { [flagKey]: enabled } }),
+      body: JSON.stringify({ feature_flags: { [flagKey]: value } }),
     });
     if (!res.ok) {
       var data = await res.json();
@@ -627,8 +600,77 @@ async function toggleFeatureFlag(restId, flagKey, enabled) {
   }
 }
 
-async function saveAppVersion(restId) {
+// ============= CUSTOMIZATION TOGGLE =============
+
+async function toggleCustomization(restId, enable) {
+  var actionText = enable ? 'enable custom deployment for' : 'disable custom deployment for';
+  var rest = restaurantsData.find(function(r) { return r.id === restId; });
+  var restName = rest ? rest.name : '#' + restId;
+
+  if (!confirm('Are you sure you want to ' + actionText + ' "' + restName + '"?\n\n' +
+    (enable ? 'This will automatically:\n• Create a git branch\n• Create a Render web service\n• Copy production env vars\n• Set up custom domain & DNS\n• Auto-fill all deployment details' : 'The restaurant will revert to the shared platform.'))) {
+    var cb = document.getElementById('customization-toggle-' + restId);
+    if (cb) cb.checked = !enable;
+    return;
+  }
+
+  // Show deploying state
+  var toggleRow = document.getElementById('customization-toggle-' + restId);
+  if (toggleRow) toggleRow.disabled = true;
+  var deployDetails = document.getElementById('deploy-details-' + restId);
+  if (deployDetails && enable) {
+    deployDetails.innerHTML = '<div style="text-align: center; padding: 20px; color: #6366f1;"><div style="font-size: 24px; margin-bottom: 8px;">⏳</div><div style="font-weight: 600;">Deploying...</div><div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">Creating service, configuring DNS, copying env vars...</div></div>';
+  }
+
+  try {
+    var res = await fetch(`${API}/manage/restaurants/${restId}/toggle-customization`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ enable: enable }),
+    });
+
+    var data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Failed to toggle customization');
+      var cb = document.getElementById('customization-toggle-' + restId);
+      if (cb) { cb.checked = !enable; cb.disabled = false; }
+      return;
+    }
+
+    // Build result message
+    var msg = '✅ Customization ' + (enable ? 'enabled' : 'disabled') + ' for "' + restName + '"';
+    if (data.steps && data.steps.length) msg += '\n\nSteps completed:\n• ' + data.steps.join('\n• ');
+    if (data.errors && data.errors.length) msg += '\n\n⚠️ Warnings:\n• ' + data.errors.join('\n• ');
+    if (data.note) msg += '\n\nℹ️ ' + data.note;
+    alert(msg);
+
+    // Refresh data and re-open detail
+    await loadUsersManagement();
+    openRestaurantDetail(restId);
+  } catch (err) {
+    alert('Failed to toggle customization: ' + err.message);
+    var cb = document.getElementById('customization-toggle-' + restId);
+    if (cb) { cb.checked = !enable; cb.disabled = false; }
+  }
+}
+
+// ============= SAVE DEPLOYMENT SETTINGS =============
+
+async function saveDeploymentSettings(restId) {
   var version = document.getElementById('deploy-version-' + restId).value.trim();
+  var branch = document.getElementById('deploy-branch-' + restId).value.trim();
+  var renderServiceId = document.getElementById('deploy-render-' + restId).value.trim();
+  var apiBaseUrl = document.getElementById('deploy-url-' + restId).value.trim();
+
+  var payload = {};
+  payload.app_version = version || null;
+  payload.custom_branch = branch || null;
+  payload.render_service_id = renderServiceId || null;
+  payload.api_base_url = apiBaseUrl || null;
+
   try {
     var res = await fetch(`${API}/manage/restaurants/${restId}`, {
       method: 'PATCH',
@@ -636,15 +678,18 @@ async function saveAppVersion(restId) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ app_version: version || null }),
+      body: JSON.stringify(payload),
     });
+
     var data = await res.json();
     if (!res.ok) {
-      alert(data.error || 'Failed to save app version');
+      alert(data.error || 'Failed to save deployment settings');
       return;
     }
-    alert('App version saved.');
+
+    alert('Deployment settings saved successfully.');
     await loadUsersManagement();
+    openRestaurantDetail(restId);
   } catch (err) {
     alert('Failed to save: ' + err.message);
   }

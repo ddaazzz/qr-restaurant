@@ -1,5 +1,48 @@
 # QR Restaurant AI - Copilot Instructions
 
+---
+
+## ⚠️ CRITICAL: Dev-Only Policy — Read Before Anything Else
+
+**All code changes, commits, and deployments target the `dev` branch and `dev.chuio.io` environment ONLY.**
+
+### Rules — enforced without exception unless user explicitly says otherwise:
+
+1. **Branch**: Always work on `dev`. Never `git checkout main`, `git push origin main`, or merge `dev → main` unless the user explicitly says "merge to main" or "deploy to production".
+
+2. **API URLs in code**: Use `https://dev.chuio.io` as the backend URL for any dev/test context. Never hardcode `https://chuio.io` (production) into source code unless the user explicitly requests a production change.
+
+3. **Database**: The dev database is `chuio_dev_db` on `dpg-d7gq5j4p3tds73a44eo0-a.singapore-postgres.render.com`. Never run migrations, `psql`, or destructive queries against the production database without explicit instruction.
+
+4. **Mobile builds**: The mobile app is a **React Native app built and run via Xcode**. It is **NOT run with Expo Go or `expo start`**. The app is compiled as a native iOS binary via Xcode — never suggest using Expo Go, `npx expo start`, or the Expo dev client to run or test the app.
+
+   **Testing**: The app is tested by running it directly in **Xcode on the iOS Simulator** (or a connected device). There is no OTA update workflow for dev — redeploying Render **only updates the backend**. Any mobile JS/TS code change requires re-running the Xcode build to take effect. Never suggest pushing an EAS OTA update (`eas update`) as a way to deliver mobile changes during development.
+
+   The `mobile/.env.local` file must always contain **both** of these lines for day-to-day development:
+   ```
+   EXPO_PUBLIC_API_URL=https://dev.chuio.io
+   EXPO_PUBLIC_APP_ENV=dev
+   ```
+   The dev banner (`IS_DEV_BUILD`) and API URL both depend on these being set together. If `EXPO_PUBLIC_APP_ENV` is missing from `.env.local`, the build falls through to `.env.production` which sets it to `production` — causing no dev banner and pointing the app at `https://chuio.io`. Always ensure both lines are present after any script restores this file. The only exception is when running `scripts/bundle-production.sh` immediately before an Xcode App Store Archive — `scripts/bundle-dev.sh` must be run immediately after to restore both lines.
+
+5. **Render services**: There are two Render services — `dev.chuio.io` (dev) and `chuio.io` (prod). Dev deploys from `dev` branch; prod deploys from `main` branch. Never suggest or perform actions that affect the `main`-based production Render service unless told to merge.
+
+6. **Migrations**: Write and run new SQL migrations against the dev database only. Mirror to production only on explicit merge instruction.
+
+7. **Secrets and environment variables**: The dev and prod environments use separate secrets. When generating `.env` snippets or editing env config, use dev values unless a production context is explicitly requested.
+
+8. **Git operations to avoid without explicit approval**:
+   - `git push origin main`
+   - `git checkout main`
+   - `git merge dev` (on main)
+   - `git reset --hard` or `git push --force`
+   - Any command that writes to the production database
+
+### When the user says "merge to main" or "go to production":
+Only then switch to `main` branch, merge `dev → main`, push, and confirm Render will redeploy `chuio.io`.
+
+---
+
 ## System Architecture
 
 **Frontend-Backend Split:**

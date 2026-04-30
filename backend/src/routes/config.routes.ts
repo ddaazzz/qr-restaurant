@@ -20,19 +20,36 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
   try {
     const { restaurantId } = req.params;
 
-    const result = await pool.query(
-      `SELECT
-        id, name, logo_url, background_url, theme_color,
-        address, phone, timezone, language_preference,
-        service_charge_percent, qr_mode,
-        is_customized, app_version,
-        custom_domain, ui_mode, custom_frontend_url,
-        feature_flags, ui_config,
-        active_payment_vendor, active_payment_terminal_id,
-        payment_asia_order_pay_enabled, show_item_status_to_diners
-      FROM restaurants WHERE id = $1`,
-      [restaurantId]
-    );
+        let result;
+    try {
+      result = await pool.query(
+        `SELECT
+          id, name, logo_url, background_url, theme_color,
+          address, phone, timezone, language_preference,
+          service_charge_percent, qr_mode,
+          is_customized, app_version,
+          custom_domain, ui_mode, custom_frontend_url,
+          feature_flags, ui_config,
+          active_payment_vendor, active_payment_terminal_id,
+          payment_asia_order_pay_enabled, show_item_status_to_diners
+        FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+    } catch (queryErr) {
+      // Fallback for missing migration 074 columns
+      result = await pool.query(
+        `SELECT
+          id, name, logo_url, background_url, theme_color,
+          address, phone, timezone, language_preference,
+          service_charge_percent, qr_mode,
+          is_customized, app_version,
+          custom_domain, custom_frontend_url,
+          active_payment_vendor, active_payment_terminal_id,
+          payment_asia_order_pay_enabled, show_item_status_to_diners
+        FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+    }
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Restaurant not found" });

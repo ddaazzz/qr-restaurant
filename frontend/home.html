@@ -88,6 +88,7 @@
           <span></span>
           <span></span>
         </button>
+        <a href="/support/index.html" class="nav-login-btn" data-i18n="nav.support">Support</a>
         <a href="login.html" class="nav-login-btn" data-i18n="nav.login">Login</a>
         <div data-language-picker></div>
       </div>
@@ -221,26 +222,48 @@
 
       <div class="glass-panel rates-panel">
         <h3 class="fee-table-heading" data-i18n="home.rates-heading">Payment Processing Rates</h3>
-        <div class="fee-table-wrap">
-          <table class="fee-table">
-            <thead>
-              <tr>
-                <th data-i18n="home.rates-th-method">Payment Method</th>
-                <th data-i18n="home.rates-online">Online Channel</th>
-                <th data-i18n="home.rates-offline">Offline Channel</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td data-i18n="home.rates-alipay">Alipay</td><td>2.40%</td><td>2.05%</td></tr>
-              <tr><td data-i18n="home.rates-wechat">WeChat Pay</td><td>2.40%</td><td>2.05%</td></tr>
-              <tr><td data-i18n="home.rates-unionpay">UnionPay</td><td>3.20%</td><td>3.20%</td></tr>
-              <tr><td data-i18n="home.rates-fps">Faster Payment System (FPS)</td><td>2.20%</td><td>2.05%</td></tr>
-              <tr><td data-i18n="home.rates-visa-local">Visa / Mastercard / Apple Pay / Google Pay (Local)</td><td>3.65%</td><td>2.40%</td></tr>
-              <tr><td data-i18n="home.rates-visa-overseas">Visa / Mastercard / Apple Pay / Google Pay (Overseas)</td><td>4.65%</td><td>3.40%</td></tr>
-              <tr><td data-i18n="home.rates-octopus">Octopus</td><td>2.40%</td><td>2.30%</td></tr>
-              <tr><td data-i18n="home.rates-payme">Payme</td><td>2.40%</td><td>2.30%</td></tr>
-            </tbody>
-          </table>
+
+        <div class="payment-cards-grid">
+
+          <!-- Card 1: Alipay / WeChat Pay / FPS / UnionPay -->
+          <div class="payment-card">
+            <div class="payment-card-logos">
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/wechatpay.svg" alt="WeChat Pay" /></div>
+              <div class="payment-logo-slot"><img class="payment-logo--alipay" src="/uploads/website/home payments/Alipay.png" alt="Alipay" /></div>
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/UnionPay.svg" alt="UnionPay" /></div>
+            </div>
+            <div class="payment-card-divider"></div>
+            <p class="payment-card-label" data-i18n="home.rates-group1-label">Alipay / WeChat Pay / FPS</p>
+            <p class="payment-card-rate" data-i18n="home.rates-group1-rate">From 2%</p>
+            <p class="payment-card-note" data-i18n="home.rates-group1-note">*UnionPay 3.2%</p>
+          </div>
+
+          <!-- Card 2: Visa / Mastercard / Apple Pay / Google Pay -->
+          <div class="payment-card">
+            <div class="payment-card-logos payment-card-logos-grid">
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/visa.svg" alt="Visa" /></div>
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/mastercard.svg" alt="Mastercard" /></div>
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/applepay.png" alt="Apple Pay" /></div>
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/Googlepay.png" alt="Google Pay" /></div>
+            </div>
+            <div class="payment-card-divider"></div>
+            <p class="payment-card-label" data-i18n="home.rates-group2-label">Visa / Mastercard / Apple Pay &amp; Google Pay</p>
+            <p class="payment-card-rate" data-i18n="home.rates-group2-rate">From 2.4%</p>
+            <p class="payment-card-note payment-card-note-empty" aria-hidden="true">&nbsp;</p>
+          </div>
+
+          <!-- Card 3: Octopus / PayMe -->
+          <div class="payment-card">
+            <div class="payment-card-logos">
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/octopus.png" alt="Octopus" /></div>
+              <div class="payment-logo-slot"><img src="/uploads/website/home payments/Payme.png" alt="PayMe" /></div>
+            </div>
+            <div class="payment-card-divider"></div>
+            <p class="payment-card-label" data-i18n="home.rates-group3-label">Octopus / PayMe</p>
+            <p class="payment-card-rate" data-i18n="home.rates-group3-rate">From 2%</p>
+            <p class="payment-card-note payment-card-note-empty" aria-hidden="true">&nbsp;</p>
+          </div>
+
         </div>
 
         <h3 class="fee-table-heading service-packs-heading" data-i18n="home.sp-heading">Service Packs</h3>

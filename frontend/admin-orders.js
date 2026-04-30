@@ -378,7 +378,7 @@ function showItemVariantModal(item, variants) {
                       (variant.options || []).map(opt => `
                         <label class="variant-option-choice">
                           <input type="radio" name="variant-${variant.id}" value="${opt.id}" />
-                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : ''}</span>
+                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : ''}</span>
                         </label>
                       `).join('')
                       :
@@ -386,7 +386,7 @@ function showItemVariantModal(item, variants) {
                       (variant.options || []).map(opt => `
                         <label class="variant-option-choice">
                           <input type="checkbox" name="variant-${variant.id}" value="${opt.id}" />
-                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : ''}</span>
+                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : ''}</span>
                         </label>
                       `).join('')
                     }
@@ -1534,6 +1534,7 @@ function displayOrderDetails(order) {
         <div style="display:flex; gap:8px; margin-top:8px;" id="non-kpay-actions-${order.id}">
           <button onclick="orderVoid(${order.id})" style="padding:5px 12px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Void</button>
           <button onclick="orderRefund(${order.id})" style="padding:5px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Refund</button>
+          ${(window.currentPrinterSettings?.bill_printer_type && window.currentPrinterSettings.bill_printer_type !== 'none' && order.session_id) ? `<button onclick="printBill(${order.session_id})" style="padding:5px 12px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Print Bill</button>` : ''}
         </div>` : ''}
 
         ${paymentMethod === 'kpay' && order.kpay_reference_id ? `
@@ -1609,6 +1610,7 @@ function displayOrderDetails(order) {
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button onclick="openSettleBillModal(${order.id}, ${order.session_id})" style="padding:8px 18px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Settle Bill</button>
           <button onclick="loadExistingOrderForEdit(${order.id})" style="padding:8px 18px; background:#f59e0b; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Edit Order</button>
+          ${(window.currentPrinterSettings?.bill_printer_type && window.currentPrinterSettings.bill_printer_type !== 'none' && order.session_id) ? `<button onclick="printBill(${order.session_id})" style="padding:8px 18px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Print Bill</button>` : ''}
         </div>
       </div>
     `;

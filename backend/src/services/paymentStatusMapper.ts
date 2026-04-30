@@ -14,11 +14,12 @@
 export function getPaymentAsiaStatus(statusCode: number): string {
   if (statusCode === 1 || statusCode === 6 || statusCode === 8) {
     return 'completed';
-  } else if (statusCode === 0 || statusCode === 2) {
+  } else if (statusCode === 2) {
     return 'failed';
   } else if (statusCode === 4) {
     return 'processing';
   }
+  // status 0 = pending (payment not yet completed)
   return 'pending';
 }
 
@@ -33,9 +34,10 @@ export function getTransactionStatus(webhookStatus: string): string {
   const code = parseInt(webhookStatus);
   if (code === 1 || code === 6 || code === 8) {
     return 'approved';
-  } else if (code === 0 || code === 2) {
+  } else if (code === 2) {
     return 'failed';
   }
+  // code 0 = pending, code 4 = processing — both remain pending internally
   return 'pending';
 }
 
@@ -71,7 +73,7 @@ export function isPaymentApproved(statusCode: number): boolean {
  * Helper method for quick failure checks
  */
 export function isPaymentFailed(statusCode: number): boolean {
-  return statusCode === 0 || statusCode === 2;
+  return statusCode === 2;
 }
 
 /**

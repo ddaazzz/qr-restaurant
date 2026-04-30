@@ -14,6 +14,11 @@
 const printQueues = new Map(); // deviceId -> { isProcessing: bool, queue: [] }
 const PRINT_QUEUE_TIMEOUT = 5000; // 5 seconds timeout between prints
 
+function tr(key, fallback = '') {
+  if (typeof t === 'function') return t(key);
+  return fallback || key;
+}
+
 /**
  * Queue a print job and wait for it to complete
  */
@@ -43,6 +48,59 @@ async function queuePrintJob(deviceId, printFn) {
     }
   } finally {
     queue.isProcessing = false;
+  }
+}
+
+/**
+ * Try to send ESC/POS data to the local print bridge (print-bridge.js).
+ * The bridge is a tiny Node.js HTTP server running on the restaurant's
+ * computer at localhost:3001 that forwards bytes over TCP to the printer.
+ *
+ * Returns true if printing succeeded, false if the bridge is not running.
+ */
+async function sendViaPrintBridge(networkPrint) {
+  const BRIDGE_URL = 'https://localhost:3001/print-escpos';
+  const { host, port, escposBase64 } = networkPrint || {};
+  if (!host || !port || !escposBase64) {
+    console.warn('[PrintBridge] Skipping — networkPrint missing required fields (host/port/escposBase64)');
+    return false;
+  }
+  try {
+    console.log(`[PrintBridge] Trying local print bridge for ${host}:${port}…`);
+    const resp = await fetch(BRIDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host, port, escposBase64 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.error || `Bridge returned HTTP ${resp.status}`);
+    }
+    console.log('[PrintBridge] ✓ Printed via local bridge');
+    return true;
+  } catch (err) {
+    if (err.name === 'TypeError' || err.name === 'AbortError' || err.message.includes('fetch') || err.message.includes('Load failed')) {
+      // Bridge not running, or HTTPS certificate not yet trusted
+      console.warn('[PrintBridge] Bridge not reachable:', err.message);
+      alert(
+        tr('admin.printer-bridge-not-running',
+          `⚠️ Cannot reach the local print bridge.\n\n` +
+          `If the bridge is NOT running, start it:\n` +
+          `  node print-bridge.js\n\n` +
+          `If it IS running but you still see this message, you need to\n` +
+          `trust its HTTPS certificate once in your browser:\n` +
+          `  1. Open https://localhost:3001 in this browser\n` +
+          `  2. Click through the security warning to trust it\n` +
+          `  3. Return here and try printing again\n\n` +
+          `Alternatively, use the mobile app to print to ${host}:${port}.`
+        )
+      );
+    } else {
+      console.error('[PrintBridge] Print error:', err.message);
+      alert(`❌ Print bridge error: ${err.message}`);
+    }
+    return false;
   }
 }
 
@@ -446,7 +504,7 @@ async function printQRViaAPI(restaurantId, sessionId, tableId, tableName, qrToke
       // Browser printing - open print dialog
       console.log('[PrintRouter] Received HTML, opening print dialog');
       handleBrowserPrint(result.html);
-      alert('✅ Print dialog opened. Please select a printer and confirm.');
+      alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
       return result;
     } else if (result.bluetoothPayload) {
       // Bluetooth printing via Web Bluetooth API
@@ -462,7 +520,17 @@ async function printQRViaAPI(restaurantId, sessionId, tableId, tableName, qrToke
     } else if (result.jobId) {
       // Queued for printing
       console.log('[PrintRouter] QR code queued with job ID:', result.jobId);
-      alert('✅ QR code queued for printing');
+      alert(tr('admin.printer-queued-qr', '✅ QR code queued for printing'));
+      return result;
+    } else if (result.networkPrint) {
+      // Network printer: try local print bridge first, fall back to instructions.
+      if (result.html) {
+        console.log('[PrintRouter] Network printer — using HTML fallback for browser print');
+        handleBrowserPrint(result.html);
+        alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
+      } else {
+        await sendViaPrintBridge(result.networkPrint);
+      }
       return result;
     }
     
@@ -474,9 +542,9 @@ async function printQRViaAPI(restaurantId, sessionId, tableId, tableName, qrToke
     // Friendly error messages
     let userMessage = err.message;
     if (err.message && err.message.includes('No QR printer configured')) {
-      userMessage = '⚠️ QR printer not configured.\n\nPlease set up a printer in Settings first.';
+      userMessage = tr('admin.printer-qr-not-configured', '⚠️ QR printer not configured.\n\nPlease set up a printer in Settings first.');
     } else if (err.message && err.message.includes('not paired')) {
-      userMessage = '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in QR printer settings.';
+      userMessage = tr('admin.printer-bt-not-paired', '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in QR printer settings.');
     }
     
     alert('❌ ' + userMessage);
@@ -513,7 +581,7 @@ async function printOrderViaAPI(restaurantId, orderId, priority = 0) {
       // Browser printing
       console.log('[PrintRouter] Received HTML, opening print dialog');
       handleBrowserPrint(result.html);
-      alert('✅ Print dialog opened. Please select a printer and confirm.');
+      alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
       return result;
     } else if (result.bluetoothPayload) {
       // Bluetooth printing via Web Bluetooth API
@@ -529,7 +597,7 @@ async function printOrderViaAPI(restaurantId, orderId, priority = 0) {
     } else if (result.jobId) {
       // Queued for printing
       console.log('[PrintRouter] Order queued with job ID:', result.jobId);
-      alert('✅ Order queued for printing');
+      alert(tr('admin.printer-queued-order', '✅ Order queued for printing'));
       return result;
     }
 
@@ -541,11 +609,11 @@ async function printOrderViaAPI(restaurantId, orderId, priority = 0) {
     // Friendly error messages
     let userMessage = err.message;
     if (err.message && err.message.includes('No printer configured')) {
-      userMessage = '⚠️ Order printer not configured.\n\nPlease set up a printer in Settings first.';
+      userMessage = tr('admin.printer-order-not-configured', '⚠️ Order printer not configured.\n\nPlease set up a printer in Settings first.');
     } else if (err.message && err.message.includes('not paired')) {
-      userMessage = '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in order printer settings.';
+      userMessage = tr('admin.printer-bt-not-paired', '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in order printer settings.');
     } else if (err.message && err.message.includes('device not configured')) {
-      userMessage = '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.';
+      userMessage = tr('admin.printer-bt-device-not-configured', '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.');
     }
     
     alert('❌ ' + userMessage);
@@ -583,7 +651,7 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
       // Browser printing
       console.log('[PrintRouter] Received HTML, opening print dialog');
       handleBrowserPrint(result.html);
-      alert('✅ Print dialog opened. Please select a printer and confirm.');
+      alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
       return result;
     } else if (result.bluetoothPayload) {
       // Bluetooth printing via Web Bluetooth API
@@ -596,10 +664,24 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
         }
       }
       return result;
+    } else if (result.networkPrint) {
+      // Network printer: try local print bridge first, fall back to instructions.
+      if (result.html) {
+        // Backend provided an HTML fallback — use it directly
+        console.log('[PrintRouter] Network printer — using HTML fallback for browser print');
+        handleBrowserPrint(result.html);
+        alert(tr('admin.printer-open-dialog', '✅ Print dialog opened. Please select a printer and confirm.'));
+      } else {
+        await sendViaPrintBridge(result.networkPrint);
+      }
+      return result;
     } else if (result.jobId) {
-      // Queued for printing
-      console.log('[PrintRouter] Bill queued with job ID:', result.jobId);
-      alert('✅ Bill queued for printing');
+      console.log('[PrintRouter] Bill sent with job ID:', result.jobId);
+      alert(tr('admin.printer-queued-bill', '✅ Bill sent to printer'));
+      return result;
+    } else if (result.success) {
+      console.log('[PrintRouter] Bill printed successfully');
+      alert(tr('admin.printer-print-success', '✅ Bill printed successfully'));
       return result;
     }
 
@@ -611,11 +693,11 @@ async function printBillViaAPI(restaurantId, sessionId, billData, priority = 5) 
     // Friendly error messages
     let userMessage = err.message;
     if (err.message && err.message.includes('No printer configured')) {
-      userMessage = '⚠️ Bill printer not configured.\n\nPlease set up a printer in Settings first.';
+      userMessage = tr('admin.printer-bill-not-configured', '⚠️ Bill printer not configured.\n\nPlease set up a printer in Settings first.');
     } else if (err.message && err.message.includes('not paired')) {
-      userMessage = '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in bill printer settings.';
+      userMessage = tr('admin.printer-bt-not-paired', '⚠️ Bluetooth printer not paired.\n\nPlease pair your printer in your system Bluetooth settings, then configure it in bill printer settings.');
     } else if (err.message && err.message.includes('device not configured')) {
-      userMessage = '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.';
+      userMessage = tr('admin.printer-bt-device-not-configured', '⚠️ Bluetooth printer device not configured.\n\nPlease set up the printer device in Settings first.');
     }
     
     alert('❌ ' + userMessage);

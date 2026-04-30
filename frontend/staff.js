@@ -74,36 +74,6 @@ function getAccessibleFeatures() {
   
   // Store in sessionStorage so it persists after login
   sessionStorage.setItem("restaurantId", window.restaurantId);
-
-  // Check if already authenticated via email login
-  const existingToken = localStorage.getItem("token");
-  const existingRole = localStorage.getItem("role");
-  if (existingToken && existingRole === "staff") {
-    console.log("🔑 Staff already authenticated via email login, skipping PIN");
-    window.token = existingToken;
-    
-    // Restore access_rights from localStorage
-    const storedRights = localStorage.getItem("accessRights");
-    if (storedRights) {
-      try {
-        const rawRights = JSON.parse(storedRights);
-        if (Array.isArray(rawRights)) {
-          staffAccessRights = rawRights.map(right => {
-            if (typeof right === 'string') {
-              for (const [id, config] of Object.entries(ACCESS_RIGHTS_MAP)) {
-                if (config.name === right) return parseInt(id, 10);
-              }
-              return NaN;
-            }
-            return parseInt(right, 10);
-          }).filter(id => !isNaN(id));
-        }
-      } catch {}
-    }
-    
-    // Auto-initialize the staff app
-    document.addEventListener("DOMContentLoaded", () => initializeStaffApp());
-  }
 })();
  
 function pressKey(num) {
@@ -414,22 +384,10 @@ async function loadRestaurantInfo() {
   }
 }
 
-// ============== ADMIN MENU DROPDOWN ============== 
+// ============== ADMIN MENU DROPDOWN (kept for backward compat; Exit button calls openStaffSwitcher) ============== 
 function toggleAdminDropdown() {
-  const dropdown = document.getElementById("admin-dropdown");
-  if (dropdown) {
-    dropdown.classList.toggle("hidden");
-  }
+  openStaffSwitcher();
 }
-
-// Close dropdown when clicking outside
-document.addEventListener("click", (e) => {
-  const btn = document.getElementById("admin-menu-btn");
-  const dropdown = document.getElementById("admin-dropdown");
-  if (btn && dropdown && !btn.contains(e.target) && !dropdown.contains(e.target)) {
-    dropdown.classList.add("hidden");
-  }
-});
 
 // ============== LANGUAGE SWITCHING ============== 
 function updateLanguageButtonStates() {
@@ -529,4 +487,212 @@ async function clockInFromPrompt() {
 function dismissClockInPrompt() {
   const el = document.getElementById("clock-in-prompt");
   if (el) el.remove();
+}
+
+// ============== STAFF SWITCHER ==============
+let switcherPin = "";
+let switcherSelectedStaffId = null;
+let switcherStaffList = [];
+
+const AVATAR_COLORS = ['#2c3e50','#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12','#1abc9c','#e67e22'];
+
+function getSwitcherAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function getStaffInitials(name) {
+  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+async function openStaffSwitcher() {
+  const overlay = document.getElementById("staff-switcher");
+  if (!overlay) return;
+  showSwitcherGridView();
+  overlay.style.display = "flex";
+  try {
+    const res = await fetch(`${API_BASE}/restaurants/${window.restaurantId}/staff`);
+    if (!res.ok) throw new Error("Failed to load staff");
+    const allStaff = await res.json();
+    // Only staff role, max 8
+    switcherStaffList = allStaff.filter(s => s.role === 'staff').slice(0, 8);
+    renderSwitcherGrid();
+  } catch (err) {
+    console.error("Staff switcher load error:", err);
+  }
+}
+
+function closeStaffSwitcher() {
+  const overlay = document.getElementById("staff-switcher");
+  if (overlay) overlay.style.display = "none";
+}
+
+function renderSwitcherGrid() {
+  const grid = document.getElementById("switcher-staff-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  // Show current logged-in staff name
+  const activeEl = document.getElementById("switcher-logged-in-name");
+  if (activeEl) {
+    const me = switcherStaffList.find(s => String(s.id) === String(window.staffUserId));
+    activeEl.textContent = me ? me.name : "";
+  }
+
+  switcherStaffList.forEach(staff => {
+    const isCurrent = String(staff.id) === String(window.staffUserId);
+    const card = document.createElement("div");
+    card.className = "switcher-staff-card" + (isCurrent ? " current-user" : "");
+
+    const color = getSwitcherAvatarColor(staff.name);
+    const initials = getStaffInitials(staff.name);
+    const clockedIn = staff.currently_clocked_in;
+
+    card.innerHTML =
+      `<div class="switcher-avatar" style="background:${color}">${initials}</div>` +
+      `<div class="switcher-card-name">${staff.name}</div>` +
+      (clockedIn
+        ? `<div class="switcher-card-status clocked-in" data-i18n="admin.switcher-clocked-in">${t('admin.switcher-clocked-in')}</div>`
+        : `<div class="switcher-card-status" data-i18n="admin.switcher-off">${t('admin.switcher-off')}</div>`) +
+      (isCurrent ? `<div class="switcher-active-badge" data-i18n="admin.switcher-active">${t('admin.switcher-active')}</div>` : "");
+
+    if (!isCurrent) {
+      card.onclick = () => selectSwitcherStaff(staff.id, staff.name);
+    }
+    grid.appendChild(card);
+  });
+}
+
+function showSwitcherGridView() {
+  const gridView = document.getElementById("switcher-grid-view");
+  const pinView = document.getElementById("switcher-pin-view");
+  if (gridView) gridView.style.display = "";
+  if (pinView) pinView.style.display = "none";
+  switcherPin = "";
+  switcherSelectedStaffId = null;
+  updateSwitcherPinDots();
+}
+
+function selectSwitcherStaff(staffId, staffName) {
+  switcherSelectedStaffId = staffId;
+  switcherPin = "";
+
+  const nameEl = document.getElementById("switcher-pin-name");
+  if (nameEl) nameEl.textContent = staffName;
+
+  const avatarEl = document.getElementById("switcher-pin-avatar");
+  if (avatarEl) {
+    avatarEl.textContent = getStaffInitials(staffName);
+    avatarEl.style.background = getSwitcherAvatarColor(staffName);
+  }
+
+  updateSwitcherPinDots();
+
+  document.getElementById("switcher-grid-view").style.display = "none";
+  document.getElementById("switcher-pin-view").style.display = "";
+
+  const errorEl = document.getElementById("switcher-error");
+  if (errorEl) { errorEl.textContent = ""; errorEl.style.display = "none"; }
+}
+
+function backToSwitcherGrid() { showSwitcherGridView(); }
+
+function switcherPressKey(num) {
+  if (switcherPin.length < 6) {
+    switcherPin += String(num);
+    updateSwitcherPinDots();
+  }
+}
+
+function switcherClearPin() {
+  switcherPin = "";
+  updateSwitcherPinDots();
+}
+
+function updateSwitcherPinDots() {
+  document.querySelectorAll("#switcher-pin-dots span")
+    .forEach((dot, idx) => dot.classList.toggle("filled", idx < switcherPin.length));
+}
+
+async function switcherSubmitPin() {
+  if (switcherPin.length !== 6 || !switcherSelectedStaffId) return;
+  const errorEl = document.getElementById("switcher-error");
+  if (errorEl) errorEl.style.display = "none";
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/staff-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: switcherPin, restaurantId: window.restaurantId, role: "staff" })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.token) {
+      if (errorEl) { errorEl.textContent = data.error || "Invalid PIN"; errorEl.style.display = "block"; }
+      switcherPin = ""; updateSwitcherPinDots();
+      return;
+    }
+
+    // Verify the PIN belongs to the staff member that was selected
+    if (String(data.user_id) !== String(switcherSelectedStaffId)) {
+      if (errorEl) { errorEl.textContent = t('admin.switcher-wrong-pin'); errorEl.style.display = "block"; }
+      switcherPin = ""; updateSwitcherPinDots();
+      return;
+    }
+
+    closeStaffSwitcher();
+    await switchStaffUser(data);
+
+  } catch (err) {
+    if (errorEl) { errorEl.textContent = "Connection error"; errorEl.style.display = "block"; }
+  }
+}
+
+async function switchStaffUser(loginData) {
+  // Update credentials
+  window.token = loginData.token;
+  localStorage.setItem("token", loginData.token);
+  localStorage.setItem("role", "staff");
+  localStorage.setItem("restaurantId", window.restaurantId);
+  sessionStorage.setItem("restaurantId", window.restaurantId);
+
+  // Update identity
+  window.staffUserId = loginData.user_id || null;
+  window.staffCurrentlyClockedIn = loginData.currently_clocked_in || false;
+
+  // Update access rights
+  let raw = loginData.access_rights || [];
+  if (Array.isArray(raw)) {
+    staffAccessRights = raw.map(r => {
+      if (typeof r === 'string') {
+        for (const [id, cfg] of Object.entries(ACCESS_RIGHTS_MAP)) {
+          if (cfg.name === r) return parseInt(id, 10);
+        }
+        return NaN;
+      }
+      return parseInt(r, 10);
+    }).filter(id => !isNaN(id));
+  } else {
+    staffAccessRights = [];
+  }
+
+  // Refresh nav button visibility
+  [
+    { id: 'orders-nav-btn', f: 1 }, { id: 'tables-nav-btn', f: 2 }, { id: 'menu-nav-btn', f: 3 },
+    { id: 'staff-nav-btn', f: 4 }, { id: 'settings-nav-btn', f: 5 }, { id: 'bookings-nav-btn', f: 6 },
+    { id: 'reports-nav-btn', f: 7 },
+  ].forEach(({ id, f }) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('visible', hasAccessRight(f));
+  });
+
+  // Update clock button
+  updateClockBtn(window.staffCurrentlyClockedIn);
+  if (!window.staffCurrentlyClockedIn) showClockInPrompt();
+
+  // Reload the first accessible section for the new user
+  const features = getAccessibleFeatures();
+  const firstSection = features.length > 0 ? features[0] : 'tables';
+  await switchSection(firstSection);
 }

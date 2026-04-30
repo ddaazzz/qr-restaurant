@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.2</string>
+    <string>1.1.1</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -44,6 +44,14 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>This app connects directly to local network printers (e.g. Epson receipt printers) to print bills and QR codes.</string>
+    <key>NSBonjourServices</key>
+    <array>
+      <string>_pdl-datastream._tcp</string>
+      <string>_printer._tcp</string>
+      <string>_ipp._tcp</string>
+    </array>
     <key>NSBluetoothAlwaysAndWhenInUseUsageDescription</key>
     <string>We need Bluetooth to connect to receipt printers</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
@@ -56,6 +64,10 @@
     <string>Location is needed for Bluetooth scanning</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your photo library to upload staff profile pictures</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to save photos to your library</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIApplicationSupportsMultipleScenes</key>

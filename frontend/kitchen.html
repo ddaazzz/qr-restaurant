@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
-  <title>Kitchen Dashboard | Chuio</title>
+  <title data-i18n="kitchen.page-title">Kitchen Dashboard | Chuio</title>
   <link rel="stylesheet" href="kitchen.css" />
   <link rel="stylesheet" href="/language-switcher.css" />
   
@@ -63,28 +63,74 @@
   <div id="kitchen-app" class="kitchen-app">
     <div class="kitchen-header">
       <div class="kitchen-header-left">
-        <h1 data-i18n="kitchen.title">Kitchen Queue</h1>
-        <span class="live-indicator">● Live</span>
+        <h1 data-i18n="kitchen.kitchen-queue">Kitchen Queue</h1>
+        <span class="live-indicator" data-i18n="kitchen.live">● Live</span>
       </div>
       <div class="kitchen-header-right">
-        <button id="clock-btn" class="btn-secondary" onclick="toggleKitchenClockInOut()" style="display: none; margin-right: 8px;">⏱ Clock In</button>
-        <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
-          common.menu
+        <button id="clock-btn" class="btn-secondary" onclick="toggleKitchenClockInOut()" style="display: none; margin-right: 8px;" data-i18n="admin.clock-in">⏱ Clock In</button>
+        <button id="admin-menu-btn" class="admin-menu-btn" onclick="openKitchenSwitcher()">
+          <span data-i18n="admin.header-exit">Exit</span>
         </button>
-        <div id="admin-dropdown" class="admin-dropdown hidden">
-          <div class="dropdown-item lang-selector-dropdown">
-            <label style="display: block; padding: 10px 15px; font-weight: 500; border-bottom: 1px solid #ddd;">Language</label>
-            <button id="lang-en" class="lang-btn" onclick="setLanguage('en'); toggleAdminDropdown()">English</button>
-            <button id="lang-zh" class="lang-btn" onclick="setLanguage('zh'); toggleAdminDropdown()">中文</button>
-          </div>
-          <button class="dropdown-item" onclick="handleLogout()" data-i18n="kitchen.logout">🚪 Logout</button>
-        </div>
       </div>
     </div>
 
     <div class="kitchen-content">
       <div id="orders-container" class="orders-container">
         <p class="no-orders" data-i18n="kitchen.loading">Loading orders...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= KITCHEN SWITCHER OVERLAY ================= -->
+  <div id="kitchen-switcher" class="kitchen-switcher" style="display:none">
+    <div class="kitchen-switcher-box">
+      <div class="kitchen-switcher-header">
+        <div>
+          <h2 class="kitchen-switcher-title" data-i18n="admin.switcher-who">Who's working?</h2>
+          <p class="kitchen-switcher-subtitle"><span data-i18n="admin.switcher-active">Active</span>: <strong id="kitchen-switcher-logged-in-name"></strong></p>
+        </div>
+        <div class="kitchen-switcher-header-right">
+          <div class="switcher-lang-row">
+            <button id="lang-en" class="lang-btn" onclick="setLanguage('en')">EN</button>
+            <button id="lang-zh" class="lang-btn" onclick="setLanguage('zh')">中文</button>
+          </div>
+          <div class="switcher-action-row">
+            <button class="btn-secondary" onclick="closeKitchenSwitcher()">← Back</button>
+            <button class="btn-danger" onclick="handleLogout()" data-i18n="kitchen.logout">🚪 Logout</button>
+          </div>
+        </div>
+      </div>
+      <!-- Grid view -->
+      <div id="kitchen-switcher-grid-view">
+        <div id="kitchen-switcher-staff-grid" class="switcher-staff-grid"></div>
+      </div>
+      <!-- PIN view -->
+      <div id="kitchen-switcher-pin-view" style="display:none">
+        <div class="switcher-pin-header">
+          <button class="btn-secondary" onclick="backToKitchenSwitcherGrid()">← Back</button>
+          <div class="switcher-pin-who">
+            <div id="kitchen-switcher-pin-avatar" class="switcher-avatar-lg"></div>
+            <div id="kitchen-switcher-pin-name" class="switcher-pin-name-label"></div>
+          </div>
+        </div>
+        <div class="pin-dots" id="kitchen-switcher-pin-dots">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="keypad">
+          <button onclick="kitchenSwitcherPressKey(1)">1</button>
+          <button onclick="kitchenSwitcherPressKey(2)">2</button>
+          <button onclick="kitchenSwitcherPressKey(3)">3</button>
+          <button onclick="kitchenSwitcherPressKey(4)">4</button>
+          <button onclick="kitchenSwitcherPressKey(5)">5</button>
+          <button onclick="kitchenSwitcherPressKey(6)">6</button>
+          <button onclick="kitchenSwitcherPressKey(7)">7</button>
+          <button onclick="kitchenSwitcherPressKey(8)">8</button>
+          <button onclick="kitchenSwitcherPressKey(9)">9</button>
+          <button class="clear" onclick="kitchenSwitcherClearPin()">⌫</button>
+          <button onclick="kitchenSwitcherPressKey(0)">0</button>
+          <button class="enter" onclick="kitchenSwitcherSubmitPin()">⏎</button>
+        </div>
+        <div id="kitchen-switcher-error" class="error-message" style="display:none"></div>
       </div>
     </div>
   </div>

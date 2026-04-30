@@ -77,7 +77,8 @@ function createMenuItemCardElement(item, isEditMode) {
     imgEl.style.display = '';
   }
   
-  card.querySelector('.menu-item-name').textContent = item.name;
+  const _itemLang = getCurrentLanguage();
+  card.querySelector('.menu-item-name').textContent = (_itemLang === 'zh' && item.name_zh) ? item.name_zh : item.name;
   card.querySelector('.menu-item-price').textContent = '$' + (item.price_cents / 100).toFixed(2);
   
   // Add controls if in edit mode
@@ -251,7 +252,7 @@ function createVariantViewElement(variant) {
   if (optionsDiv) {
     if (variant.options && variant.options.length > 0) {
       optionsDiv.innerHTML = variant.options.map(function(opt) {
-        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : '';
         return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`;
       }).join('');
     } else {
@@ -304,7 +305,7 @@ function createVariantEditElement(variant) {
   if (optionsDiv) {
     if (variant.options && variant.options.length > 0) {
       optionsDiv.innerHTML = variant.options.map(function(opt) {
-        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : '';
         return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`;
       }).join('');
     } else {
@@ -371,7 +372,7 @@ function createVariantOptionsEditorElement(variant) {
   if (optionsList) {
     if (variant.options && variant.options.length > 0) {
       optionsList.innerHTML = variant.options.map(function(option) {
-        const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+        const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
         const isAvail = option.is_available !== false;
         const availStyle = isAvail ? 'background:#d1fae5;color:#065f46;' : 'background:#fee2e2;color:#991b1b;';
         const availLabel = isAvail ? '✓' : '✕';
@@ -459,6 +460,8 @@ function toggleMenuEditMode() {
       if (editModal) editModal.style.display = 'none';
       const variantModal = document.getElementById('variant-edit-modal');
       if (variantModal) variantModal.style.display = 'none';
+      // Close create-item panel if open
+      cancelCreateItem();
     }
   }
   
@@ -533,7 +536,16 @@ function renderMenuCategoryTabs() {
       SELECTED_MENU_CATEGORY && SELECTED_MENU_CATEGORY.id === cat.id
         ? "tab active"
         : "tab";
-    btn.textContent = cat.name;
+    const _catLang = getCurrentLanguage();
+    btn.textContent = (_catLang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
+    // Show clock indicator if time-restricted
+    if (cat.time_restricted) {
+      const clock = document.createElement('span');
+      clock.title = `Only available ${cat.available_from || '?'}–${cat.available_to || '?'}`;
+      clock.style.cssText = 'margin-left:4px;font-size:11px;opacity:0.75;';
+      clock.textContent = '🕐';
+      btn.appendChild(clock);
+    }
     btn.categoryId = cat.id;
     btn.style.flex = IS_EDIT_MODE ? "1" : "auto";
     btn.onclick = (e) => {
@@ -561,7 +573,7 @@ function renderMenuCategoryTabs() {
       editBtn.title = "Edit category name";
       editBtn.onclick = (e) => {
         e.stopPropagation();
-        editMenuCategory(cat.id, cat.name);
+        editMenuCategory(cat);
       };
       wrapper.appendChild(editBtn);
 
@@ -596,7 +608,7 @@ function renderMenuCategoryTabs() {
       
       const sidebarBtn = document.createElement("button");
       sidebarBtn.className = btn.className;
-      sidebarBtn.textContent = cat.name;
+      sidebarBtn.textContent = (_catLang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
       sidebarBtn.categoryId = cat.id;
       sidebarBtn.style.width = "100%";
       sidebarBtn.style.flex = IS_EDIT_MODE ? "1" : "auto";
@@ -618,7 +630,7 @@ function renderMenuCategoryTabs() {
         sidebarEditBtn.title = "Edit category name";
         sidebarEditBtn.onclick = (e) => {
           e.stopPropagation();
-          editMenuCategory(cat.id, cat.name);
+          editMenuCategory(cat);
         };
         sidebarWrapper.appendChild(sidebarEditBtn);
         
@@ -655,47 +667,256 @@ function renderMenuCategoryTabs() {
 }
 
 async function addMenuCategoryPrompt() {
-  const categoryName = prompt("Enter new menu category name (e.g., Appetizers, Mains):", "");
-  if (!categoryName || !categoryName.trim()) return;
+  // Show a small inline modal for English + Chinese name
+  const existing = document.getElementById('add-category-modal');
+  if (existing) existing.remove();
 
-  try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: categoryName.trim() })
-    });
+  const modal = document.createElement('div');
+  modal.id = 'add-category-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:22px;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);">
+      <h3 style="margin:0 0 16px 0;font-size:16px;font-weight:700;">New Category</h3>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Category Name (English)</label>
+        <input id="add-cat-name" type="text" placeholder="e.g., Appetizers"
+          style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Chinese Name (optional)</label>
+        <input id="add-cat-name-zh" type="text" placeholder="e.g., 前菜"
+          style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="add-cat-confirm-btn"
+          style="flex:1;padding:10px;background:var(--primary-color,#3b49df);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          ✓ Create
+        </button>
+        <button onclick="document.getElementById('add-category-modal').remove()"
+          style="padding:10px 16px;background:#f3f4f6;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => modal.querySelector('#add-cat-name').focus(), 50);
 
-    if (!res.ok) {
-      const err = await res.json();
-      return alert(err.error || "Failed to create category");
+  modal.querySelector('#add-cat-confirm-btn').onclick = async () => {
+    const name = document.getElementById('add-cat-name')?.value.trim();
+    const name_zh = document.getElementById('add-cat-name-zh')?.value.trim() || null;
+    if (!name) { alert('Category name is required'); return; }
+    try {
+      const res = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, name_zh })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        return alert(err.error || 'Failed to create category');
+      }
+      modal.remove();
+      await loadMenuItems();
+    } catch (err) {
+      alert('Error creating category: ' + err.message);
     }
-
-    await loadMenuItems();
-  } catch (err) {
-    alert("Error creating category: " + err.message);
-  }
+  };
 }
 
-async function editMenuCategory(categoryId, currentName) {
-  const newName = prompt("Edit menu category name:", currentName);
-  if (!newName || !newName.trim() || newName === currentName) return;
+// ============= CATEGORY EDIT MODAL =============
+
+function openCategoryEditModal(cat) {
+  // Remove existing modal if any
+  const existing = document.getElementById('category-edit-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'category-edit-modal';
+  modal.style.cssText = `
+    position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5);
+    display:flex;align-items:center;justify-content:center;
+  `;
+
+  const isRestricted = !!cat.time_restricted;
+  const fromVal = cat.available_from || '11:00';
+  const toVal   = cat.available_to   || '15:00';
+  const selectedDays = Array.isArray(cat.days_of_week) ? cat.days_of_week : [];
+
+  const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayPillsHtml = dayNames.map((label, i) => {
+    const day = i + 1;
+    const active = selectedDays.includes(day);
+    return `<label style="cursor:pointer;display:inline-block;">
+      <input type="checkbox" value="${day}" class="cat-edit-dow" ${active ? 'checked' : ''} style="display:none;" />
+      <span class="cat-edit-dow-pill" data-day="${day}"
+        style="display:inline-block;padding:5px 10px;border-radius:12px;font-size:12px;font-weight:600;
+               background:${active ? '#3b82f6' : '#e5e7eb'};color:${active ? '#fff' : '#374151'};
+               margin:2px;cursor:pointer;">${label}</span>
+    </label>`;
+  }).join('');
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:22px;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);">
+      <h3 style="margin:0 0 16px 0;font-size:16px;font-weight:700;">Edit Category</h3>
+
+      <!-- Name -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Category Name (English)</label>
+        <input id="cat-edit-name" type="text" value="${cat.name.replace(/"/g, '&quot;')}"
+          style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+      </div>
+
+      <!-- Chinese Name -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:5px;">Chinese Name (optional)</label>
+        <input id="cat-edit-name-zh" type="text" value="${(cat.name_zh || '').replace(/"/g, '&quot;')}"
+          placeholder="e.g., 前菜"
+          style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+      </div>
+
+      <!-- Time restriction toggle -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-bottom:14px;">
+        <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+          <div>
+            <div style="font-weight:600;font-size:13px;margin-bottom:2px;">⏰ Time-Based Availability</div>
+            <div style="font-size:12px;color:#6b7280;">Limit when customers can see this category</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">
+            <input type="checkbox" id="cat-edit-time-restricted" ${isRestricted ? 'checked' : ''}
+              style="opacity:0;width:0;height:0;"
+              onchange="document.getElementById('cat-edit-time-fields').style.display=this.checked?'block':'none'" />
+            <span id="cat-edit-toggle-slider"
+              style="position:absolute;cursor:pointer;inset:0;border-radius:24px;
+                     background:${isRestricted ? 'var(--primary-color,#3b49df)' : '#ccc'};
+                     transition:.25s;">
+              <span style="position:absolute;top:2px;left:${isRestricted ? '22px' : '2px'};width:20px;height:20px;
+                           background:#fff;border-radius:50%;transition:.25s;"></span>
+            </span>
+          </label>
+        </label>
+
+        <!-- Time picker fields -->
+        <div id="cat-edit-time-fields" style="margin-top:12px;display:${isRestricted ? 'block' : 'none'};">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <div style="flex:1;">
+              <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:3px;">From</label>
+              <input type="time" id="cat-edit-from" value="${fromVal}"
+                style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;box-sizing:border-box;" />
+            </div>
+            <div style="font-size:18px;color:#9ca3af;padding-top:18px;">→</div>
+            <div style="flex:1;">
+              <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:3px;">To</label>
+              <input type="time" id="cat-edit-to" value="${toVal}"
+                style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;box-sizing:border-box;" />
+            </div>
+          </div>
+          <p style="font-size:11px;color:#9ca3af;margin:8px 0 0 0;">
+            Uses the restaurant's configured timezone. Overnight windows (e.g. 22:00 → 02:00) are supported.
+          </p>
+
+          <!-- Days of week -->
+          <div id="cat-edit-days-section" style="margin-top:12px;">
+            <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Days Available <span style="font-weight:400;color:#9ca3af;">(leave all unchecked for every day)</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">${dayPillsHtml}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:8px;">
+        <button onclick="saveCategoryEdit(${cat.id})"
+          style="flex:1;padding:10px;background:var(--primary-color,#3b49df);color:#fff;border:none;
+                 border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          ✓ Save
+        </button>
+        <button onclick="document.getElementById('category-edit-modal').remove()"
+          style="padding:10px 16px;background:#f3f4f6;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Animate toggle slider on change
+  modal.querySelector('#cat-edit-time-restricted').addEventListener('change', function() {
+    const slider = modal.querySelector('#cat-edit-toggle-slider');
+    const knob   = slider.querySelector('span');
+    const timeFields = modal.querySelector('#cat-edit-time-fields');
+    if (this.checked) {
+      slider.style.background = 'var(--primary-color,#3b49df)';
+      knob.style.left = '22px';
+      timeFields.style.display = 'block';
+    } else {
+      slider.style.background = '#ccc';
+      knob.style.left = '2px';
+      timeFields.style.display = 'none';
+    }
+  });
+
+  // Day-of-week pill toggle
+  modal.querySelectorAll('.cat-edit-dow-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const cb = pill.previousElementSibling;
+      cb.checked = !cb.checked;
+      pill.style.background = cb.checked ? '#3b82f6' : '#e5e7eb';
+      pill.style.color = cb.checked ? '#fff' : '#374151';
+    });
+  });
+
+  // Close on backdrop click
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  document.body.appendChild(modal);
+  // Focus name input
+  setTimeout(() => modal.querySelector('#cat-edit-name').focus(), 50);
+}
+
+async function saveCategoryEdit(categoryId) {
+  const nameInput = document.getElementById('cat-edit-name');
+  const nameZhInput = document.getElementById('cat-edit-name-zh');
+  const timeRestrictedInput = document.getElementById('cat-edit-time-restricted');
+  const fromInput = document.getElementById('cat-edit-from');
+  const toInput   = document.getElementById('cat-edit-to');
+
+  const name = nameInput?.value.trim();
+  const name_zh = nameZhInput?.value.trim() || null;
+  if (!name) { alert('Category name is required'); return; }
+
+  const time_restricted = timeRestrictedInput?.checked || false;
+  const available_from  = time_restricted ? (fromInput?.value || null) : null;
+  const available_to    = time_restricted ? (toInput?.value   || null) : null;
+  const days_of_week    = time_restricted
+    ? Array.from(document.querySelectorAll('.cat-edit-dow:checked')).map(cb => parseInt(cb.value, 10))
+    : [];
+
+  if (time_restricted && (!available_from || !available_to)) {
+    alert('Please set both From and To times');
+    return;
+  }
 
   try {
     const res = await fetch(`${API}/menu_categories/${categoryId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() })
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, name_zh, time_restricted, available_from, available_to, days_of_week })
     });
 
     if (!res.ok) {
       const err = await res.json();
-      return alert(err.error || "Failed to update category");
+      return alert(err.error || 'Failed to update category');
     }
 
+    document.getElementById('category-edit-modal')?.remove();
     await loadMenuItems();
   } catch (err) {
-    alert("Error updating category: " + err.message);
+    alert('Error updating category: ' + err.message);
   }
+}
+
+async function editMenuCategory(cat) {
+  openCategoryEditModal(cat);
 }
 
 async function deleteMenuCategory(categoryId, categoryName) {
@@ -734,21 +955,12 @@ function renderMenuItemsGrid() {
 
   const items = MENU_ITEMS.filter(i => Number(i.category_id) === Number(SELECTED_MENU_CATEGORY.id));
 
-  // Add "Add Item" card in edit mode
-  if (IS_EDIT_MODE) {
-    const addCard = document.createElement("div");
-    addCard.className = "menu-item-card add-item-card";
-    const fragment = cloneTemplate('add-item-card-template');
-    if (fragment) addCard.appendChild(fragment);
-    addCard.onclick = () => startCreateItem();
-    grid.appendChild(addCard);
-  }
-
   if (!items.length) {
     if (!IS_EDIT_MODE) {
       grid.innerHTML = `<div class="empty-state"><p>No items in this category</p></div>`;
+      return;
     }
-    return;
+    // In edit mode with no items, fall through to show the add card below
   }
 
   items.forEach((item, index) => {
@@ -770,6 +982,16 @@ function renderMenuItemsGrid() {
       grid.appendChild(cardContent);
     }
   });
+
+  // Add "Add Item" card in edit mode (always at the end, after existing items)
+  if (IS_EDIT_MODE) {
+    const addCard = document.createElement("div");
+    addCard.className = "menu-item-card add-item-card";
+    const fragment = cloneTemplate('add-item-card-template');
+    if (fragment) addCard.appendChild(fragment);
+    addCard.onclick = () => startCreateItem();
+    grid.appendChild(addCard);
+  }
 }
 
 // Add new item via prompt
@@ -816,16 +1038,246 @@ function editMenuItemModal(itemId) {
   }
 }
 
+// ============= IMAGE CROP ENGINE =============
+// Crop state – single shared modal
+const _crop = {
+  onConfirm: null,        // callback(blob)
+  x: 0, y: 0,            // image offset in viewport (px)
+  scale: 1,              // zoom factor (1 = fit-to-viewport)
+  natW: 0, natH: 0,      // natural image dimensions
+  vpW: 0, vpH: 0,        // viewport dimensions (px)
+  baseScale: 1,          // fit scale (scale=1 → image fills viewport width)
+  minScale: 1,
+  drag: false,
+  dragX0: 0, dragY0: 0,
+  touchPrevDist: null,
+  OUTPUT_W: 800, OUTPUT_H: 600,  // 4:3 output
+};
+
+function _cropApplyTransform() {
+  const img = document.getElementById('crop-img');
+  if (!img) return;
+  img.style.transform = `translate(${_crop.x}px, ${_crop.y}px) scale(${_crop.scale})`;
+}
+
+function _cropClampXY() {
+  // Prevent image from leaving viewport edges (image must always cover the viewport)
+  const scaledW = _crop.natW * _crop.scale;
+  const scaledH = _crop.natH * _crop.scale;
+  const maxX = 0;
+  const minX = Math.min(0, _crop.vpW - scaledW);
+  const maxY = 0;
+  const minY = Math.min(0, _crop.vpH - scaledH);
+  _crop.x = Math.max(minX, Math.min(maxX, _crop.x));
+  _crop.y = Math.max(minY, Math.min(maxY, _crop.y));
+}
+
+function openCropModal(dataUrl, onConfirm) {
+  _crop.onConfirm = onConfirm;
+
+  const modal = document.getElementById('image-crop-modal');
+  const img   = document.getElementById('crop-img');
+  const vp    = document.getElementById('crop-viewport');
+  const slider = document.getElementById('crop-zoom-slider');
+
+  modal.style.display = 'flex';
+
+  img.onload = () => {
+    _crop.natW = img.naturalWidth;
+    _crop.natH = img.naturalHeight;
+    _crop.vpW  = vp.offsetWidth;
+    _crop.vpH  = vp.offsetHeight;
+
+    // Fit image so its shorter dimension covers the viewport
+    const scaleW = _crop.vpW / _crop.natW;
+    const scaleH = _crop.vpH / _crop.natH;
+    _crop.baseScale = Math.max(scaleW, scaleH);
+    _crop.minScale  = _crop.baseScale;
+    _crop.scale = _crop.baseScale;
+
+    // Centre
+    _crop.x = (_crop.vpW - _crop.natW * _crop.scale) / 2;
+    _crop.y = (_crop.vpH - _crop.natH * _crop.scale) / 2;
+    _cropClampXY();
+    _cropApplyTransform();
+
+    // Reset slider
+    slider.min   = 100;
+    slider.max   = 400;
+    slider.value = 100;
+  };
+  img.src = dataUrl;
+}
+
+function cancelImageCrop() {
+  document.getElementById('image-crop-modal').style.display = 'none';
+  _crop.onConfirm = null;
+}
+
+function confirmImageCrop() {
+  const img = document.getElementById('crop-img');
+  const vp  = document.getElementById('crop-viewport');
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = _crop.OUTPUT_W;
+  canvas.height = _crop.OUTPUT_H;
+  const ctx = canvas.getContext('2d');
+
+  // What portion of the natural image is visible in the viewport?
+  // viewport pixel (0,0) maps to source pixel (-_crop.x / _crop.scale, -_crop.y / _crop.scale)
+  const srcX = -_crop.x / _crop.scale;
+  const srcY = -_crop.y / _crop.scale;
+  const srcW = _crop.vpW  / _crop.scale;
+  const srcH = _crop.vpH  / _crop.scale;
+
+  ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, _crop.OUTPUT_W, _crop.OUTPUT_H);
+
+  canvas.toBlob(blob => {
+    document.getElementById('image-crop-modal').style.display = 'none';
+    if (_crop.onConfirm && blob) _crop.onConfirm(blob);
+    _crop.onConfirm = null;
+  }, 'image/jpeg', 0.88);
+}
+
+// Drag handlers
+function cropDragStart(e) {
+  _crop.drag = true;
+  _crop.dragX0 = e.clientX - _crop.x;
+  _crop.dragY0 = e.clientY - _crop.y;
+  const vp = document.getElementById('crop-viewport');
+  vp.style.cursor = 'grabbing';
+
+  const onMove = ev => {
+    if (!_crop.drag) return;
+    _crop.x = ev.clientX - _crop.dragX0;
+    _crop.y = ev.clientY - _crop.dragY0;
+    _cropClampXY();
+    _cropApplyTransform();
+  };
+  const onUp = () => {
+    _crop.drag = false;
+    vp.style.cursor = 'grab';
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+function cropTouchStart(e) {
+  if (e.touches.length === 1) {
+    _crop.drag = true;
+    _crop.dragX0 = e.touches[0].clientX - _crop.x;
+    _crop.dragY0 = e.touches[0].clientY - _crop.y;
+    _crop.touchPrevDist = null;
+  }
+  const onMove = ev => {
+    if (ev.touches.length === 1 && _crop.drag) {
+      _crop.x = ev.touches[0].clientX - _crop.dragX0;
+      _crop.y = ev.touches[0].clientY - _crop.dragY0;
+      _cropClampXY();
+      _cropApplyTransform();
+    } else if (ev.touches.length === 2) {
+      // Pinch zoom
+      const d = Math.hypot(
+        ev.touches[0].clientX - ev.touches[1].clientX,
+        ev.touches[0].clientY - ev.touches[1].clientY
+      );
+      if (_crop.touchPrevDist !== null) {
+        const ratio = d / _crop.touchPrevDist;
+        _cropSetScale(_crop.scale * ratio);
+      }
+      _crop.touchPrevDist = d;
+    }
+  };
+  const onEnd = () => {
+    _crop.drag = false;
+    _crop.touchPrevDist = null;
+    document.getElementById('crop-viewport').removeEventListener('touchmove', onMove);
+    document.getElementById('crop-viewport').removeEventListener('touchend', onEnd);
+  };
+  const vp = document.getElementById('crop-viewport');
+  vp.addEventListener('touchmove', onMove, { passive: false });
+  vp.addEventListener('touchend', onEnd);
+}
+
+function cropWheel(e) {
+  e.preventDefault();
+  const delta = e.deltaY < 0 ? 1.1 : 0.91;
+  _cropSetScale(_crop.scale * delta);
+}
+
+function cropZoomFromSlider(val) {
+  const pct = parseInt(val, 10) / 100;           // 1 – 4
+  _cropSetScale(_crop.minScale * pct);
+}
+
+function _cropSetScale(newScale) {
+  const min = _crop.minScale;
+  const max = _crop.minScale * 4;
+  newScale = Math.max(min, Math.min(max, newScale));
+
+  // Zoom around viewport centre
+  const cx = _crop.vpW / 2;
+  const cy = _crop.vpH / 2;
+  const ratio = newScale / _crop.scale;
+  _crop.x = cx - ratio * (cx - _crop.x);
+  _crop.y = cy - ratio * (cy - _crop.y);
+  _crop.scale = newScale;
+  _cropClampXY();
+  _cropApplyTransform();
+
+  // Sync slider
+  const slider = document.getElementById('crop-zoom-slider');
+  if (slider) slider.value = Math.round((newScale / _crop.minScale) * 100);
+}
+
+// ============= CROPPED BLOB STORAGE =============
+// Blobs produced by the crop modal, consumed by save functions
+let _newItemCroppedBlob = null;      // for create-item panel
+let _editItemCroppedBlobs = {};      // { itemId: blob }
+let _foodPanelCroppedBlob = null;    // for food-item-panel edit
+
 function previewEditItemImage(itemId, input) {
   const file = input.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    const previewBox = document.getElementById(`edit-item-image-preview-${itemId}`);
-    previewBox.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; border-radius: 8px;"/>`;
+    openCropModal(e.target.result, blob => {
+      _editItemCroppedBlobs[itemId] = blob;
+      const url = URL.createObjectURL(blob);
+      const previewBox = document.getElementById(`edit-item-image-preview-${itemId}`);
+      if (previewBox) previewBox.innerHTML = `<img src="${url}" style="max-width: 100%; border-radius: 8px;"/>`;
+    });
   };
   reader.readAsDataURL(file);
+}
+
+function previewFoodPanelImage(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    openCropModal(e.target.result, blob => {
+      _foodPanelCroppedBlob = blob;
+      const panelImage = document.getElementById('food-panel-image');
+      if (panelImage) panelImage.src = URL.createObjectURL(blob);
+    });
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function previewItemImage(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    openCropModal(e.target.result, blob => {
+      _newItemCroppedBlob = blob;
+      const preview = document.getElementById('new-item-image-preview');
+      if (preview) preview.innerHTML = `<img src="${URL.createObjectURL(blob)}" style="max-width: 100%; max-height: 150px;" />`;
+    });
+  };
+  reader.readAsDataURL(input.files[0]);
 }
 
 async function saveMenuItemEdit(itemId) {
@@ -838,7 +1290,9 @@ async function saveMenuItemEdit(itemId) {
   // Get meal/combo flag from checkbox
   const isMealCombo = document.querySelector('.edit-item-is-meal-combo')?.checked || false;
   
-  const imageFile = document.getElementById(`edit-item-image-${itemId}`).files[0];
+  // Use cropped blob if available, otherwise fall back to raw file
+  const imageBlob = _editItemCroppedBlobs[itemId] || null;
+  const imageFile = imageBlob ? null : document.getElementById(`edit-item-image-${itemId}`).files[0];
 
   if (!name || !price) return alert("Name and price are required");
 
@@ -858,8 +1312,11 @@ async function saveMenuItemEdit(itemId) {
       })
     });
 
-    // Upload image if changed
-    if (imageFile) {
+    // Upload image if changed (prefer cropped blob)
+    if (imageBlob) {
+      await uploadItemImage(itemId, imageBlob);
+      delete _editItemCroppedBlobs[itemId];
+    } else if (imageFile) {
       await uploadItemImage(itemId, imageFile);
     }
 
@@ -1012,6 +1469,11 @@ async function openFoodItemPanel(itemId) {
     }
     if (panelPrice) panelPrice.textContent = "$" + (item.price_cents / 100).toFixed(2);
     if (panelDesc) panelDesc.textContent = item.description || 'No description available';
+    // Show Chinese name if present (view mode)
+    const nameZhRow = document.getElementById('food-panel-name-zh-row');
+    const nameZhInput = document.getElementById('food-panel-name-zh-input');
+    if (nameZhRow) nameZhRow.style.display = 'none';
+    if (nameZhInput) nameZhInput.value = item.name_zh || '';
     
     // Populate variants
     if (variantsContainer) {
@@ -1030,7 +1492,7 @@ async function openFoodItemPanel(itemId) {
               </div>
               <div class="food-panel-variant-options">
                 ${variant.options && variant.options.length > 0 ? variant.options.map(function(opt) { 
-                  const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+                  const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : '';
                   return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`; 
                 }).join('') : '<span class="food-panel-variant-option">No options</span>'}
               </div>
@@ -1094,6 +1556,11 @@ function toggleFoodItemEdit() {
     nameSpan.style.display = 'none';
     nameInput.style.display = 'block';
     nameInput.value = item.name;
+    // Show Chinese name input in edit mode
+    const nameZhRow = document.getElementById('food-panel-name-zh-row');
+    const nameZhInput = document.getElementById('food-panel-name-zh-input');
+    if (nameZhRow) nameZhRow.style.display = 'block';
+    if (nameZhInput) nameZhInput.value = item.name_zh || '';
     
     priceSpan.style.display = 'none';
     priceInput.style.display = 'inline';
@@ -1205,6 +1672,8 @@ function cancelFoodItemEdit() {
   
   nameSpan.style.display = 'block';
   nameInput.style.display = 'none';
+  const nameZhRow = document.getElementById('food-panel-name-zh-row');
+  if (nameZhRow) nameZhRow.style.display = 'none';
   
   priceSpan.style.display = 'inline';
   priceInput.style.display = 'none';
@@ -1234,8 +1703,10 @@ async function saveFoodItemEdit() {
   const descInput = document.getElementById('food-panel-desc-input');
   const imageInput = document.getElementById('food-panel-image-input');
   const mealComboCheckbox = document.getElementById('food-panel-is-meal-combo');
+  const nameZhInput = document.getElementById('food-panel-name-zh-input');
   
   const newName = nameInput.value.trim();
+  const newNameZh = nameZhInput ? nameZhInput.value.trim() : '';
   const newPrice = parseInt(priceInput.value) || 0;
   const newDesc = descInput.value;
   const isMealCombo = mealComboCheckbox ? mealComboCheckbox.checked : false;
@@ -1248,6 +1719,7 @@ async function saveFoodItemEdit() {
   try {
     let updateData = {
       name: newName,
+      name_zh: newNameZh || null,
       price_cents: newPrice,
       description: newDesc,
       is_meal_combo: isMealCombo,
@@ -1262,17 +1734,18 @@ async function saveFoodItemEdit() {
     
     if (!res.ok) throw new Error('Failed to save');
     
-    // If image was changed, upload it separately
-    if (imageInput.files && imageInput.files[0]) {
+    // If image was changed, upload cropped blob or raw file
+    if (_foodPanelCroppedBlob) {
+      await uploadItemImage(currentEditingItemId, _foodPanelCroppedBlob);
+      _foodPanelCroppedBlob = null;
+    } else if (imageInput.files && imageInput.files[0]) {
       const formData = new FormData();
       formData.append('image', imageInput.files[0]);
       formData.append('restaurantId', localStorage.getItem('restaurantId'));
-      
       const uploadRes = await fetch(`${API}/menu-items/${currentEditingItemId}/image`, {
         method: 'POST',
         body: formData
       });
-      
       if (!uploadRes.ok) {
         console.warn('Failed to upload image, but item updated successfully');
       }
@@ -1282,6 +1755,7 @@ async function saveFoodItemEdit() {
     const item = MENU_ITEMS.find(function(i) { return i.id == currentEditingItemId; });
     if (item) {
       item.name = newName;
+      item.name_zh = newNameZh || null;
       item.price_cents = newPrice;
       item.description = newDesc;
       item.is_meal_combo = isMealCombo;
@@ -1303,17 +1777,6 @@ async function saveFoodItemEdit() {
     showToast('Item updated successfully');
   } catch (err) {
     alert('Error saving: ' + err.message);
-  }
-}
-
-function previewFoodPanelImage(input) {
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const panelImage = document.getElementById('food-panel-image');
-      panelImage.src = e.target.result;
-    };
-    reader.readAsDataURL(input.files[0]);
   }
 }
 
@@ -1431,7 +1894,7 @@ function startEditVariantFromPanel(variantId) {
           optionDiv.style.border = '1px solid #ddd';
           optionDiv.style.borderRadius = '3px';
           
-          const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+          const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
           optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
           optionsList.appendChild(optionDiv);
         });
@@ -1818,7 +2281,7 @@ async function saveVariantOption() {
             optionDiv.style.border = '1px solid #ddd';
             optionDiv.style.borderRadius = '3px';
             
-            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
             optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
             optionsList.appendChild(optionDiv);
           });
@@ -1945,7 +2408,7 @@ async function deleteVariantOption(optionId) {
             optionDiv.style.border = '1px solid #ddd';
             optionDiv.style.borderRadius = '3px';
             
-            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
             optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
             optionsList.appendChild(optionDiv);
           });
@@ -1986,18 +2449,25 @@ function cancelCreateItem() {
   if (panel) panel.classList.remove('active');
   // Clear form
   document.getElementById('new-item-name').value = '';
+  const nameZhEl = document.getElementById('new-item-name-zh');
+  if (nameZhEl) nameZhEl.value = '';
   document.getElementById('new-item-price').value = '';
   document.getElementById('new-item-desc').value = '';
+  _newItemCroppedBlob = null;
+  const preview = document.getElementById('new-item-image-preview');
+  if (preview) preview.innerHTML = '<div class="upload-placeholder">📸 Click to upload image</div>';
 }
 
 async function createMenuItem() {
   const nameEl = document.getElementById('new-item-name');
+  const nameZhEl = document.getElementById('new-item-name-zh');
   const priceEl = document.getElementById('new-item-price');
   const descEl = document.getElementById('new-item-desc');
   const categoryEl = document.getElementById('new-item-category');
   const imageEl = document.getElementById('new-item-image');
   
   const name = nameEl.value.trim();
+  const nameZh = nameZhEl ? nameZhEl.value.trim() : '';
   const price = parseInt(priceEl.value) || 0;
   const desc = descEl.value.trim();
   const categoryId = parseInt(categoryEl.value);
@@ -2016,6 +2486,7 @@ async function createMenuItem() {
     // Step 1: Create the menu item
     const itemData = {
       name,
+      name_zh: nameZh || null,
       price_cents: price,
       description: desc,
       category_id: categoryId
@@ -2036,8 +2507,11 @@ async function createMenuItem() {
     
     const newItem = await createRes.json();
     
-    // Step 2: Upload image if provided
-    if (imageEl.files && imageEl.files[0]) {
+    // Step 2: Upload image if provided (prefer cropped blob)
+    if (_newItemCroppedBlob) {
+      await uploadItemImage(newItem.id, _newItemCroppedBlob);
+      _newItemCroppedBlob = null;
+    } else if (imageEl.files && imageEl.files[0]) {
       const formData = new FormData();
       formData.append('image', imageEl.files[0]);
       formData.append('restaurantId', localStorage.getItem('restaurantId'));
@@ -2057,19 +2531,6 @@ async function createMenuItem() {
     await loadMenuItems();
   } catch (err) {
     alert('Error creating item: ' + err.message);
-  }
-}
-
-function previewItemImage(input) {
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const preview = document.getElementById('new-item-image-preview');
-      if (preview) {
-        preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 150px;" />`;
-      }
-    };
-    reader.readAsDataURL(input.files[0]);
   }
 }
 
@@ -2924,4 +3385,79 @@ async function deleteAddonFromItem(itemId, addonItemId) {
   } catch (err) {
     alert('Error deleting addon: ' + err.message);
   }
+}
+
+// ============= MENU IMPORT =============
+function openMenuImportModal() {
+  const existing = document.getElementById('menu-import-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'menu-import-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:24px;max-width:460px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);">
+      <h3 style="margin:0 0 8px 0;font-size:17px;font-weight:700;">📥 Import Menu from Excel</h3>
+      <p style="margin:0 0 16px 0;font-size:13px;color:#6b7280;">
+        Expected columns (row 1 = header, data from row 2):<br>
+        A: Category (English) &nbsp;·&nbsp; B: Category (Chinese)<br>
+        C: Item Name (Chinese) &nbsp;·&nbsp; D: Item Name (English)<br>
+        E: Image (ignored) &nbsp;·&nbsp; F: Price (dollars, e.g. 28.8)
+      </p>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Select .xlsx file</label>
+        <input type="file" id="menu-import-file" accept=".xlsx,.xls"
+          style="font-size:13px;width:100%;" />
+      </div>
+      <div id="menu-import-result" style="margin-bottom:12px;font-size:13px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="menu-import-confirm-btn"
+          style="flex:1;padding:10px;background:var(--primary-color,#3b49df);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          Import
+        </button>
+        <button onclick="document.getElementById('menu-import-modal').remove()"
+          style="padding:10px 16px;background:#f3f4f6;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+
+  modal.querySelector('#menu-import-confirm-btn').onclick = async () => {
+    const fileInput = document.getElementById('menu-import-file');
+    const resultDiv = document.getElementById('menu-import-result');
+    if (!fileInput.files || !fileInput.files[0]) {
+      resultDiv.innerHTML = '<span style="color:#c33;">Please select a file.</span>';
+      return;
+    }
+    const confirmBtn = modal.querySelector('#menu-import-confirm-btn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Importing…';
+    resultDiv.innerHTML = '';
+    try {
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      const res = await fetch(`${API}/restaurants/${restaurantId}/menu-import`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        resultDiv.innerHTML = `<span style="color:#c33;">Error: ${data.error || 'Import failed'}</span>`;
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Import';
+        return;
+      }
+      resultDiv.innerHTML = `<span style="color:#2d7a2d;">✓ Import complete! Categories created: ${data.created_categories}, Items created: ${data.created_items}, Skipped (duplicate): ${data.skipped_items}</span>`;
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Import';
+      await loadMenuItems();
+    } catch (err) {
+      resultDiv.innerHTML = `<span style="color:#c33;">Error: ${err.message}</span>`;
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Import';
+    }
+  };
 }

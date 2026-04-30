@@ -11,7 +11,6 @@ import {
   Modal,
   FlatList,
   RefreshControl,
-  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
@@ -40,7 +39,6 @@ interface Restaurant {
   service_charge_percent: number | null;
   language_preference: string | null;
   user_count: number;
-  feature_flags: Record<string, boolean> | null;
 }
 
 type Tab = 'users' | 'restaurants';
@@ -96,6 +94,8 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantApplications, setRestaurantApplications] = useState<any[]>([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
+  const [restaurantFeatureFlags, setRestaurantFeatureFlags] = useState<Record<string, boolean>>({});
+  const [loadingFlags, setLoadingFlags] = useState(false);
 
   const fetchData = useCallback(async () => {
     setFetchError(null);
@@ -309,15 +309,34 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
 
   const openRestaurantDetail = async (r: Restaurant) => {
     setSelectedRestaurant(r);
+    setRestaurantFeatureFlags({});
     setLoadingApplications(true);
+    setLoadingFlags(true);
     try {
-      const apps = await apiClient.getTerminalApplications(r.id);
+      const [apps, settings] = await Promise.all([
+        apiClient.getTerminalApplications(r.id),
+        apiClient.getRestaurantSettings(r.id),
+      ]);
       setRestaurantApplications(apps);
+      setRestaurantFeatureFlags(settings.feature_flags || {});
     } catch (err: any) {
-      console.warn('Failed to load applications:', err.message);
+      console.warn('Failed to load restaurant detail:', err.message);
       setRestaurantApplications([]);
     } finally {
       setLoadingApplications(false);
+      setLoadingFlags(false);
+    }
+  };
+
+  const toggleRestaurantFlag = async (flagKey: string, value: boolean) => {
+    if (!selectedRestaurant) return;
+    const optimistic = { ...restaurantFeatureFlags, [flagKey]: value };
+    setRestaurantFeatureFlags(optimistic);
+    try {
+      await apiClient.patchRestaurantSettings(selectedRestaurant.id, { feature_flags: { [flagKey]: value } });
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to update feature flag');
+      setRestaurantFeatureFlags({ ...optimistic, [flagKey]: !value });
     }
   };
 
@@ -814,7 +833,7 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
           <View style={[s.modalContent, { maxWidth: 600, width: '90%', maxHeight: '80%', borderRadius: 16 }]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{selectedRestaurant?.name || 'Restaurant Details'}</Text>
-              <TouchableOpacity onPress={() => { setSelectedRestaurant(null); setRestaurantApplications([]); }}>
+              <TouchableOpacity onPress={() => { setSelectedRestaurant(null); setRestaurantApplications([]); setRestaurantFeatureFlags({}); }}>
                 <Text style={s.closeBtn}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -853,33 +872,39 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                 </View>
               </View>
 
-              {/* Feature Flags */}
-              {isSuperadmin && selectedRestaurant && (
+              {/* Premium Features (Feature Flags) — superadmin only */}
+              {isSuperadmin && (
                 <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 10 }}>Feature Flags</Text>
-                  {['service_requests'].map(flag => {
-                    const flags = selectedRestaurant.feature_flags || {};
-                    const isEnabled = flags[flag] === true;
-                    return (
-                      <View key={flag} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                        <Text style={{ fontSize: 13, color: '#374151' }}>{flag.replace(/_/g, ' ')}</Text>
-                        <Switch
-                          value={isEnabled}
-                          onValueChange={async (val) => {
-                            try {
-                              const newFlags = { ...flags, [flag]: val };
-                              await apiClient.updateRestaurant(selectedRestaurant.id, { feature_flags: newFlags });
-                              setSelectedRestaurant({ ...selectedRestaurant, feature_flags: newFlags });
-                              // Also update in the list
-                              setRestaurants(prev => prev.map(r => r.id === selectedRestaurant.id ? { ...r, feature_flags: newFlags } : r));
-                            } catch (err: any) {
-                              Alert.alert('Error', err.message || 'Failed to update feature flag');
-                            }
-                          }}
-                        />
-                      </View>
-                    );
-                  })}
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>Premium Features</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Disabled modules are hidden from all users of this restaurant.</Text>
+                  {loadingFlags ? (
+                    <ActivityIndicator size="small" color="#4f46e5" style={{ paddingVertical: 12 }} />
+                  ) : (
+                    [
+                      { key: 'bookings',          label: 'Bookings',          desc: 'Table reservations module' },
+                      { key: 'waitlist',           label: 'Waitlist',          desc: 'Queue / walk-in waitlist' },
+                      { key: 'crm',                label: 'CRM',               desc: 'Customer relationship management' },
+                      { key: 'coupons',            label: 'Coupons',           desc: 'Discount coupons and promotions' },
+                      { key: 'service_requests',   label: 'Service Requests',  desc: 'Customer call-waiter / bill requests' },
+                      { key: 'custom_menu_items',  label: 'Custom Food Items', desc: 'Staff can add free-text items to orders' },
+                    ].map((fd, idx, arr) => {
+                      const isOn = restaurantFeatureFlags[fd.key] !== false;
+                      return (
+                        <View key={fd.key} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: idx < arr.length - 1 ? 1 : 0, borderBottomColor: '#f3f4f6' }}>
+                          <View style={{ flex: 1, marginRight: 12 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#111827' }}>{fd.label}</Text>
+                            <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{fd.desc}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => toggleRestaurantFlag(fd.key, !isOn)}
+                            style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: isOn ? '#4f46e5' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                          >
+                            <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', alignSelf: isOn ? 'flex-end' : 'flex-start' }} />
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })
+                  )}
                 </View>
               )}
 
