@@ -1488,9 +1488,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         onPress={() => selectCrmCustomer(c)}
                       >
                         <Text style={{ fontSize: 13, color: '#1f2937', fontWeight: '500' }}>{c.name}</Text>
-                        <Text style={{ fontSize: 11, color: '#6b7280' }}>
-                          {[c.phone, c.email].filter(Boolean).join(' · ') || ''}
-                        </Text>
+                        {!!c.email && <Text style={{ fontSize: 11, color: '#6b7280' }}>{c.email}</Text>}
+                        {!!c.phone && <Text style={{ fontSize: 11, color: '#6b7280' }}>{c.phone}</Text>}
                       </TouchableOpacity>
                     ))}
                     {customerSearchQuery.trim().length >= 1 && (
@@ -2274,7 +2273,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           <View style={[styles.radioButton, variantSelections[variant.id] === option.id && styles.radioButtonSelected]} />
                           <View style={styles.variantOptionContent}>
                             <Text style={styles.variantOptionName}>{option.name}</Text>
-                            {option.price_cents > 0 && <Text style={styles.variantOptionPrice}>+{formatPrice(option.price_cents)}</Text>}
+                            {option.price_cents !== 0 && <Text style={styles.variantOptionPrice}>{option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}</Text>}
                           </View>
                         </TouchableOpacity>
                       ))
@@ -2298,7 +2297,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                             <View style={[styles.checkbox, selected && styles.checkboxSelected]} />
                             <View style={styles.variantOptionContent}>
                               <Text style={styles.variantOptionName}>{option.name}</Text>
-                              {option.price_cents > 0 && <Text style={styles.variantOptionPrice}>+{formatPrice(option.price_cents)}</Text>}
+                              {option.price_cents !== 0 && <Text style={styles.variantOptionPrice}>{option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}</Text>}
                             </View>
                           </TouchableOpacity>
                         );
@@ -2380,7 +2379,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         onPress={() => setAddonVariantSelections(prev => ({ ...prev, [variant.id]: option.id }))}>
                         <View style={[styles.radioButton, addonVariantSelections[variant.id] === option.id && styles.radioButtonSelected]} />
                         <Text style={{ fontSize: 12, marginLeft: 8 }}>{option.name}</Text>
-                        {option.price_cents > 0 && <Text style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>+{formatPrice(option.price_cents)}</Text>}
+                        {option.price_cents !== 0 && <Text style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>{option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}</Text>}
                       </TouchableOpacity>
                     ))
                   ) : (
@@ -2399,7 +2398,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           }}>
                           <View style={[styles.checkbox, sel && styles.checkboxSelected]} />
                           <Text style={{ fontSize: 12, marginLeft: 8 }}>{option.name}</Text>
-                          {option.price_cents > 0 && <Text style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>+{formatPrice(option.price_cents)}</Text>}
+                          {option.price_cents !== 0 && <Text style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>{option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}</Text>}
                         </TouchableOpacity>
                       );
                     })

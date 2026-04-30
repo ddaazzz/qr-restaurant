@@ -2203,6 +2203,7 @@
   "orders.customer-saved": "Customer info saved",
   "orders.customer-save-failed": "Failed to save customer info",
   "orders.add-customer": "Add customer",
+  "orders.customer-phone-placeholder": "Phone number",
   "orders.customer-email-placeholder": "Email (optional)",
   "orders.email-receipt-btn": "Email Receipt",
   "orders.email-receipt-title": "Send Receipt",
