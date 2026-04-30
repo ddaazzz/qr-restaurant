@@ -1165,9 +1165,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   // ── PA-Offline terminal: initiate payment directly from LAN ──────────────
   const startPAOfflinePayment = async (finalAmt: number) => {
     const terminal = activePaymentTerminal;
-    if (!terminal?.terminal_ip || !terminal?.app_secret) {
+    // app_secret holds the API key; fall back to app_id if the endpoint returned it there instead
+    const apiKey = (terminal as any)?.app_secret || (terminal as any)?.app_id;
+    if (!terminal?.terminal_ip || !apiKey) {
       _addKPayLog('> ⚠️ No terminal credentials — confirm manually after customer pays.', '#ffd43b');
-      console.warn('[PAOffline] Missing terminal_ip or app_secret:', JSON.stringify(terminal));
+      console.warn('[PAOffline] Missing terminal_ip or api key. terminal:', JSON.stringify(terminal));
       return;
     }
     const port = terminal.terminal_port ?? 8888;
@@ -1177,12 +1179,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
     _addKPayLog(`> Connecting to PA terminal (${terminal.terminal_ip}:${port})…`, '#ffd43b');
     _addKPayLog(`> POST ${url}  amount=${amountDollars}`, '#ffd43b');
-    console.log(`[PAOffline] POST ${url}  amount=${amountDollars}  order_id=${orderId}`);
+    console.log(`[PAOffline] POST ${url}  amount=${amountDollars}  order_id=${orderId}  apiKey=${apiKey.slice(0, 8)}…`);
 
     try {
       const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'x-api-key': terminal.app_secret, 'Content-Type': 'application/json' },
+        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ order_id: orderId, amount: amountDollars, payment_method: 'QR_CODE' }),
       });
       const text = await resp.text();
