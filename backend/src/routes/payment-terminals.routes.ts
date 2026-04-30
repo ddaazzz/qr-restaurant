@@ -1279,7 +1279,7 @@ router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) =
   try {
     const { restaurantId } = req.params;
     const result = await pool.query(
-      `SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active, vendor_name
+      `SELECT id, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, is_active, vendor_name
        FROM payment_terminals
        WHERE restaurant_id = $1 AND is_active = true AND vendor_name IN ('kpay', 'payment-asia-offline')
        ORDER BY CASE vendor_name WHEN 'kpay' THEN 1 ELSE 2 END
@@ -1289,7 +1289,12 @@ router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) =
     if (result.rowCount === 0) {
       return res.json({ configured: false });
     }
-    return res.json({ configured: true, terminal: result.rows[0] });
+    const terminal = result.rows[0];
+    // Mask app_secret for KPay (not needed by mobile); expose it for PA-Offline (mobile calls terminal directly on LAN)
+    if (terminal.vendor_name !== 'payment-asia-offline') {
+      terminal.app_secret = terminal.app_secret ? '••••••••' : '';
+    }
+    return res.json({ configured: true, terminal });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

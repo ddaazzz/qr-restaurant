@@ -297,7 +297,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   // Service charge
   const [serviceCharge, setServiceCharge] = useState(0);
   // Active payment terminal (for close bill modal)
-  const [activePaymentTerminal, setActivePaymentTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  const [activePaymentTerminal, setActivePaymentTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string; terminal_port?: number; app_secret?: string } | null>(null);
   // KPay / PA terminal payment overlay
   const [showKPayModal, setShowKPayModal] = useState(false);
   const [isPaymentAsiaOffline, setIsPaymentAsiaOffline] = useState(false);
@@ -467,11 +467,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         console.warn('Could not load service charge settings');
       }
 
-      // Load active payment terminal
+      // Load active payment terminal (uses dedicated endpoint that includes credentials for PA-Offline)
       try {
-        const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
-        const active = (termRes.data || []).find((t: any) => t.is_active);
-        setActivePaymentTerminal(active || null);
+        const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-terminal/active`);
+        setActivePaymentTerminal(termRes.data?.configured ? termRes.data.terminal : null);
       } catch (e) {
         // non-critical
       }
@@ -1163,6 +1162,51 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     setCurrentView('grid');
   };
 
+  // ── PA-Offline terminal: initiate payment directly from LAN ──────────────
+  const startPAOfflinePayment = async (finalAmt: number) => {
+    const terminal = activePaymentTerminal;
+    if (!terminal?.terminal_ip || !terminal?.app_secret) {
+      _addKPayLog('> ⚠️ No terminal credentials — confirm manually after customer pays.', '#ffd43b');
+      console.warn('[PAOffline] Missing terminal_ip or app_secret:', JSON.stringify(terminal));
+      return;
+    }
+    const port = terminal.terminal_port ?? 8888;
+    const amountDollars = (finalAmt / 100).toFixed(2);
+    const orderId = `PA-MOB-${Date.now()}`;
+    const url = `http://${terminal.terminal_ip}:${port}/order/create`;
+
+    _addKPayLog(`> Connecting to PA terminal (${terminal.terminal_ip}:${port})…`, '#ffd43b');
+    _addKPayLog(`> POST ${url}  amount=${amountDollars}`, '#ffd43b');
+    console.log(`[PAOffline] POST ${url}  amount=${amountDollars}  order_id=${orderId}`);
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'x-api-key': terminal.app_secret, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, amount: amountDollars, payment_method: 'QR_CODE' }),
+      });
+      const text = await resp.text();
+      console.log(`[PAOffline] Response HTTP ${resp.status}:`, text);
+      _addKPayLog(`> HTTP ${resp.status} — ${text.slice(0, 120)}`, resp.ok ? '#00ff00' : '#ffd43b');
+      let data: any = {};
+      try { data = JSON.parse(text); } catch {}
+
+      if (data.code === '1000') {
+        setKpayOutTradeNo(orderId);
+        _addKPayLog(`> ✅ Terminal activated — QR code now showing on device`, '#51cf66');
+        _addKPayLog(`> Customer scans QR, then tap Confirm Payment.`, '#ffd43b');
+      } else {
+        _addKPayLog(`> ❌ Terminal error (code=${data.code ?? '?'}): ${data.message ?? text.slice(0, 80)}`, '#ff6b6b');
+        _addKPayLog(`> Confirm manually after customer pays, or tap Cancel.`, '#ffd43b');
+        console.error('[PAOffline] Terminal returned error:', data);
+      }
+    } catch (err: any) {
+      console.error('[PAOffline] Direct call failed:', err.message);
+      _addKPayLog(`> ⚠️ Cannot reach terminal: ${err.message}`, '#ff6b6b');
+      _addKPayLog(`> If HTTPS is required, HTTP may be blocked. Confirm manually.`, '#ffd43b');
+    }
+  };
+
   // ── KPay terminal payment: initiate sale + poll until confirmed ──────────
   const _addKPayLog = (text: string, color = '#00ff00') => {
     setKpayLogs(prev => [...prev, { text, color }]);
@@ -1305,10 +1349,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const confirmPAPayment = async () => {
     setKpayStatus('success');
     _addKPayLog('> ✅ Payment confirmed — closing bill…', '#51cf66');
+    console.log('[PAOffline] Confirm tapped — session:', selectedSession?.id, 'amount:', kpayFinalAmount, 'orderId:', kpayOutTradeNo);
     try {
-      await _doCloseBill(kpayFinalAmount, kpayDiscountCents, 'payment-asia-offline');
+      await _doCloseBill(kpayFinalAmount, kpayDiscountCents, 'payment-asia-offline', kpayOutTradeNo ?? undefined);
+      console.log('[PAOffline] Bill closed successfully');
     } catch (err: any) {
-      _addKPayLog(`  Close bill error: ${err.message}`, '#ffd43b');
+      console.error('[PAOffline] Close bill error:', err);
+      const msg = err.response?.data?.error || err.message || 'Unknown error';
+      _addKPayLog(`> ❌ Close bill failed: ${msg}`, '#ff6b6b');
+      setKpayStatus('failed');
+      Alert.alert('Payment Error', `Bill could not be closed:\n${msg}\n\nPlease try again.`);
     }
   };
 
@@ -1334,19 +1384,17 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       return;
     }
 
-    // PA Offline physical terminal: staff confirms payment manually (no cloud-to-LAN API call)
+    // PA Offline physical terminal: mobile calls terminal directly on LAN, then staff confirms
     if (paymentMethod === 'payment-asia-offline' && activePaymentTerminal?.vendor_name === 'payment-asia-offline') {
       setShowCloseBillModal(false);
       setKpayFinalAmount(finalAmount);
       setKpayDiscountCents(discountCents);
       setIsPaymentAsiaOffline(true);
       setKpayStatus('waiting');
-      setKpayLogs([
-        { text: '> PA terminal ready.', color: '#ffd43b' },
-        { text: '> Ask customer to scan QR on terminal, then tap Confirm.', color: '#ffd43b' },
-      ]);
+      setKpayLogs([]);
       setKpayOutTradeNo(null);
       setShowKPayModal(true);
+      await startPAOfflinePayment(finalAmount);
       return;
     }
 
@@ -2514,10 +2562,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 try {
                   const [couponRes, termRes] = await Promise.all([
                     apiClient.get(`/api/restaurants/${restaurantId}/coupons`),
-                    apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
+                    apiClient.get(`/api/restaurants/${restaurantId}/kpay-terminal/active`),
                   ]);
                   setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                  const activeT = (termRes.data || []).find((t: any) => t.is_active);
+                  const activeT = termRes.data?.configured ? termRes.data.terminal : null;
                   setActivePaymentTerminal(activeT || null);
                   if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
                   else setPaymentMethod('cash');
@@ -3767,10 +3815,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   try {
                     const [couponRes, termRes] = await Promise.all([
                       apiClient.get(`/api/restaurants/${restaurantId}/coupons`),
-                      apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
+                      apiClient.get(`/api/restaurants/${restaurantId}/kpay-terminal/active`),
                     ]);
                     setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                    const activeT = (termRes.data || []).find((t: any) => t.is_active);
+                    const activeT = termRes.data?.configured ? termRes.data.terminal : null;
                     setActivePaymentTerminal(activeT || null);
                     if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
                     else setPaymentMethod('cash');
