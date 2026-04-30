@@ -670,10 +670,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/sync-from-bookings`);
       const { inserted, total } = res.data;
       setCrmCount(total);
-      Alert.alert('Sync Complete', `Imported ${inserted} new customer${inserted === 1 ? '' : 's'} from bookings. Total: ${total}.`);
+      Alert.alert(t('common.success'), t('admin.crm-sync-complete', { inserted: inserted.toString(), total: total.toString() }));
       fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
     } catch (err: any) {
-      Alert.alert('Sync Failed', err.response?.data?.error || 'Failed to sync customers from bookings');
+      Alert.alert(t('common.error'), err.response?.data?.error || t('admin.crm-sync-failed'));
     } finally {
       setCrmSyncing(false);
     }
@@ -4011,7 +4011,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setSrItems(Array.isArray(res.data) ? res.data : []);
       setSrLoaded(true);
     } catch {
-      Alert.alert(t('common.error'), 'Failed to load service request items');
+      Alert.alert(t('common.error'), t('admin.sr-load-failed'));
     } finally {
       setSrLoading(false);
     }
@@ -4019,7 +4019,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const createSrItem = async () => {
     if (!srRequestType.trim() || !srLabelEn.trim()) {
-      Alert.alert(t('common.error'), 'Request type and English label are required');
+      Alert.alert(t('common.error'), t('admin.sr-fields-required'));
       return;
     }
     try {
@@ -4033,14 +4033,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setShowSrModal(false);
       await loadSrItems();
     } catch (err: any) {
-      Alert.alert(t('common.error'), err?.message || 'Failed to create item');
+      Alert.alert(t('common.error'), err?.message || t('admin.sr-create-failed'));
     }
   };
 
   const saveSrItem = async () => {
     if (!editingSrItem) return;
     if (!srLabelEn.trim()) {
-      Alert.alert(t('common.error'), 'English label is required');
+      Alert.alert(t('common.error'), t('admin.sr-label-en-required'));
       return;
     }
     try {
@@ -4052,21 +4052,21 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setEditingSrItem(null);
       await loadSrItems();
     } catch (err: any) {
-      Alert.alert(t('common.error'), err?.message || 'Failed to save item');
+      Alert.alert(t('common.error'), err?.message || t('admin.sr-save-failed'));
     }
   };
 
   const deleteSrItem = (itemId: number) => {
-    Alert.alert('Delete Item', 'Delete this service request item?', [
+    Alert.alert(t('admin.sr-delete-title'), t('admin.sr-delete-msg'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive',
+        text: t('common.delete'), style: 'destructive',
         onPress: async () => {
           try {
             await apiClient.delete(`/api/restaurants/${restaurantId}/service-request-items/${itemId}`);
             await loadSrItems();
           } catch {
-            Alert.alert(t('common.error'), 'Failed to delete item');
+            Alert.alert(t('common.error'), t('admin.sr-delete-failed'));
           }
         },
       },

@@ -2488,6 +2488,18 @@
   "admin.sr-color": "顏色（十六進位）",
   "admin.sr-active-label": "啟用",
 
+  "admin.sr-load-failed": "載入服務請求項目失敗",
+  "admin.sr-fields-required": "請求類型和英文標籤為必填項",
+  "admin.sr-label-en-required": "英文標籤為必填項",
+  "admin.sr-create-failed": "建立項目失敗",
+  "admin.sr-save-failed": "儲存項目失敗",
+  "admin.sr-delete-title": "刪除項目",
+  "admin.sr-delete-msg": "確認刪除此服務請求項目？",
+  "admin.sr-delete-failed": "刪除項目失敗",
+
+  "admin.crm-sync-complete": "已從預訂匯入 {inserted} 位新顧客。共 {total} 位。",
+  "admin.crm-sync-failed": "從預訂同步顧客失敗",
+
   "settings.feature-flags-desc": "啟用或停用功能模組",
   "settings.coupon-access-type": "訪問類型",
   "settings.coupon-assigned": "優惠券已成功分配",

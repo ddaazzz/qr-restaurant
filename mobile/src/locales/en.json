@@ -2348,6 +2348,18 @@
   "admin.sr-color": "Colour (hex)",
   "admin.sr-active-label": "Active",
 
+  "admin.sr-load-failed": "Failed to load service request items",
+  "admin.sr-fields-required": "Request type and English label are required",
+  "admin.sr-label-en-required": "English label is required",
+  "admin.sr-create-failed": "Failed to create item",
+  "admin.sr-save-failed": "Failed to save item",
+  "admin.sr-delete-title": "Delete Item",
+  "admin.sr-delete-msg": "Delete this service request item?",
+  "admin.sr-delete-failed": "Failed to delete item",
+
+  "admin.crm-sync-complete": "Imported {inserted} new customers from bookings. Total: {total}.",
+  "admin.crm-sync-failed": "Failed to sync customers from bookings",
+
   "settings.feature-flags-desc": "Enable or disable modules",
   "settings.coupon-access-type": "Access Type",
   "settings.coupon-assigned": "Coupon assigned successfully",
