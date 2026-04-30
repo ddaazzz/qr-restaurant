@@ -298,8 +298,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [serviceCharge, setServiceCharge] = useState(0);
   // Active payment terminal (for close bill modal)
   const [activePaymentTerminal, setActivePaymentTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
-  // KPay terminal payment overlay
+  // KPay / PA terminal payment overlay
   const [showKPayModal, setShowKPayModal] = useState(false);
+  const [isPaymentAsiaOffline, setIsPaymentAsiaOffline] = useState(false);
   const [kpayStatus, setKpayStatus] = useState<'initiating' | 'waiting' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'aborting'>('initiating');
   const [kpayOutTradeNo, setKpayOutTradeNo] = useState<string | null>(null);
   const [kpayLogs, setKpayLogs] = useState<Array<{ text: string; color: string }>>([]);
@@ -1301,6 +1302,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     );
   };
 
+  const confirmPAPayment = async () => {
+    setKpayStatus('success');
+    _addKPayLog('> ✅ Payment confirmed — closing bill…', '#51cf66');
+    try {
+      await _doCloseBill(kpayFinalAmount, kpayDiscountCents, 'payment-asia-offline');
+    } catch (err: any) {
+      _addKPayLog(`  Close bill error: ${err.message}`, '#ffd43b');
+    }
+  };
+
   // ── Main close bill handler ───────────────────────────────────────────────
   const closeBill = async () => {
     if (!selectedSession) return;
@@ -1314,6 +1325,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       setShowCloseBillModal(false);
       setKpayFinalAmount(finalAmount);
       setKpayDiscountCents(discountCents);
+      setIsPaymentAsiaOffline(false);
       setKpayStatus('initiating');
       setKpayLogs([{ text: '> Connecting to KPay terminal…', color: '#ffd43b' }]);
       setKpayOutTradeNo(null);
@@ -1322,16 +1334,19 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       return;
     }
 
-    // PA Offline physical terminal: same overlay flow, different backend API
+    // PA Offline physical terminal: staff confirms payment manually (no cloud-to-LAN API call)
     if (paymentMethod === 'payment-asia-offline' && activePaymentTerminal?.vendor_name === 'payment-asia-offline') {
       setShowCloseBillModal(false);
       setKpayFinalAmount(finalAmount);
       setKpayDiscountCents(discountCents);
-      setKpayStatus('initiating');
-      setKpayLogs([{ text: '> Connecting to PA terminal…', color: '#ffd43b' }]);
+      setIsPaymentAsiaOffline(true);
+      setKpayStatus('waiting');
+      setKpayLogs([
+        { text: '> PA terminal ready.', color: '#ffd43b' },
+        { text: '> Ask customer to scan QR on terminal, then tap Confirm.', color: '#ffd43b' },
+      ]);
       setKpayOutTradeNo(null);
       setShowKPayModal(true);
-      await startKPayPayment(finalAmount, discountCents);
       return;
     }
 
@@ -4357,13 +4372,15 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         </View>
       </Modal>
 
-      {/* KPay Terminal Payment Overlay */}
+      {/* Terminal Payment Overlay (KPay + PA-Offline) */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showKPayModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { width: '90%', maxWidth: 420 }]}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={[styles.modalContent, { width: '90%', maxWidth: 420, borderRadius: 12 }]}>
             {/* Header + status badge */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>KPay Terminal Payment</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
+                {isPaymentAsiaOffline ? 'PA Terminal Payment' : 'KPay Terminal Payment'}
+              </Text>
               <View style={{
                 paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12,
                 backgroundColor: kpayStatus === 'success' ? '#d1fae5' : kpayStatus === 'failed' || kpayStatus === 'cancelled' ? '#fee2e2' : kpayStatus === 'timeout' ? '#fee2e2' : '#fef3c7',
@@ -4405,7 +4422,25 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
             {/* Buttons */}
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {(kpayStatus === 'initiating' || kpayStatus === 'waiting') && (
+              {/* PA-Offline: Confirm + Cancel while waiting */}
+              {isPaymentAsiaOffline && kpayStatus === 'waiting' && (
+                <>
+                  <TouchableOpacity
+                    style={{ flex: 1, paddingVertical: 10, backgroundColor: '#d1fae5', borderWidth: 1, borderColor: '#6ee7b7', borderRadius: 6, alignItems: 'center' }}
+                    onPress={confirmPAPayment}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#065f46' }}>✓ Confirm Payment</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, paddingVertical: 10, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, alignItems: 'center' }}
+                    onPress={() => setShowKPayModal(false)}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>✗ Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {/* KPay: Abort while initiating / waiting */}
+              {!isPaymentAsiaOffline && (kpayStatus === 'initiating' || kpayStatus === 'waiting') && (
                 <TouchableOpacity
                   style={{ flex: 1, paddingVertical: 10, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, alignItems: 'center' }}
                   onPress={abortKPayPayment}
@@ -4413,6 +4448,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#dc2626' }}>⏹ Abort</Text>
                 </TouchableOpacity>
               )}
+              {/* Done button for terminal states */}
               {(kpayStatus === 'success' || kpayStatus === 'failed' || kpayStatus === 'cancelled' || kpayStatus === 'timeout' || kpayStatus === 'aborting') && (
                 <TouchableOpacity
                   style={{ flex: 1, paddingVertical: 10, backgroundColor: '#d1fae5', borderWidth: 1, borderColor: '#6ee7b7', borderRadius: 6, alignItems: 'center' }}
