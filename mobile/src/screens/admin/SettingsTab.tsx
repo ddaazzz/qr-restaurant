@@ -2335,12 +2335,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
-    { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? 'Loading customers...' : `${crmCount} customer${crmCount === 1 ? '' : 's'}` },
+    { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }) },
+
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
     { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
-    { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: 'Service Requests', description: 'Configure request types and labels' },
+    { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
@@ -4074,7 +4075,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const renderServiceRequestsPage = () => (
     <View style={styles.container}>
-      {renderSubPageHeader('Service Requests')}
+      {renderSubPageHeader(t('admin.service-requests') || 'Service Requests')}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
         <TouchableOpacity
           style={[styles.btn, styles.btnPrimary, { marginBottom: 12, alignSelf: 'flex-start' }]}
@@ -4088,12 +4089,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             setShowSrModal(true);
           }}
         >
-          <Text style={styles.btnText}>+ Add Service Request Item</Text>
+          <Text style={styles.btnText}>{t('admin.sr-add-item') || '+ Add Service Request'}</Text>
         </TouchableOpacity>
         {srLoading ? (
           <ActivityIndicator color="#3b82f6" style={{ marginTop: 24 }} />
         ) : srItems.length === 0 ? (
-          <Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 24 }}>No service request items yet.</Text>
+          <Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 24 }}>{t('admin.sr-no-items') || 'No service request items yet.'}</Text>
         ) : (
           srItems.map(item => (
             <View key={item.id} style={{ flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
@@ -4102,11 +4103,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color || '#4f46e5' }} />
                   <Text style={{ fontWeight: '700', fontSize: 13, flex: 1 }} numberOfLines={1}>{item.label_en}</Text>
                   <View style={{ backgroundColor: item.is_active ? '#d1fae5' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 10, color: item.is_active ? '#065f46' : '#991b1b', fontWeight: '600' }}>{item.is_active ? 'Active' : 'Off'}</Text>
+                    <Text style={{ fontSize: 10, color: item.is_active ? '#065f46' : '#991b1b', fontWeight: '600' }}>{item.is_active ? (t('admin.sr-active') || 'Active') : (t('admin.sr-off') || 'Off')}</Text>
                   </View>
                 </View>
                 {item.label_zh ? <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{item.label_zh}</Text> : null}
-                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Type: {item.request_type}</Text>
+                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{t('admin.sr-type-label') || 'Type'}: {item.request_type}</Text>
               </View>
               <View style={{ justifyContent: 'center', gap: 6, paddingHorizontal: 8 }}>
                 <TouchableOpacity
@@ -4121,13 +4122,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     setShowSrModal(true);
                   }}
                 >
-                  <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>Edit</Text>
+                  <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>{t('common.edit')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ backgroundColor: '#fee2e2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
                   onPress={() => deleteSrItem(item.id)}
                 >
-                  <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>Delete</Text>
+                  <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>{t('common.delete')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -4139,11 +4140,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSrModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingSrItem ? 'Edit Service Request Item' : 'New Service Request Item'}</Text>
+            <Text style={styles.modalTitle}>{editingSrItem ? (t('admin.sr-edit-item') || 'Edit Service Request') : (t('admin.sr-new-item') || 'New Service Request')}</Text>
 
             {!editingSrItem && (
               <>
-                <Text style={styles.label}>Request Type (unique key)</Text>
+                <Text style={styles.label}>{t('admin.sr-request-type') || 'Request Type (unique key)'}</Text>
                 <TextInput
                   style={styles.input}
                   value={srRequestType}
@@ -4154,13 +4155,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </>
             )}
 
-            <Text style={styles.label}>English Label</Text>
+            <Text style={styles.label}>{t('admin.sr-label-en') || 'English Label'}</Text>
             <TextInput style={styles.input} value={srLabelEn} onChangeText={setSrLabelEn} placeholder="e.g. Extra Napkins" />
 
-            <Text style={styles.label}>Chinese Label (optional)</Text>
+            <Text style={styles.label}>{t('admin.sr-label-zh') || 'Chinese Label (optional)'}</Text>
             <TextInput style={styles.input} value={srLabelZh} onChangeText={setSrLabelZh} placeholder="e.g. 额外纸巾" />
 
-            <Text style={styles.label}>Color (hex)</Text>
+            <Text style={styles.label}>{t('admin.sr-color') || 'Colour (hex)'}</Text>
             <TextInput style={styles.input} value={srColor} onChangeText={setSrColor} placeholder="#4f46e5" autoCapitalize="none" />
 
             <TouchableOpacity
@@ -4170,7 +4171,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: '#3b82f6', backgroundColor: srIsActive ? '#3b82f6' : '#fff', justifyContent: 'center', alignItems: 'center' }}>
                 {srIsActive && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
               </View>
-              <Text style={{ fontSize: 14, color: '#374151' }}>Active</Text>
+              <Text style={{ fontSize: 14, color: '#374151' }}>{t('admin.sr-active-label') || 'Active'}</Text>
             </TouchableOpacity>
 
             <View style={styles.modalActions}>
@@ -4178,7 +4179,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 <Text style={styles.btnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={editingSrItem ? saveSrItem : createSrItem}>
-                <Text style={styles.btnText}>{editingSrItem ? 'Save' : 'Create'}</Text>
+                <Text style={styles.btnText}>{editingSrItem ? t('common.save') : t('settings.create')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -5229,9 +5230,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                         <View key={idx} style={styles.variantDetailItem}>
                           <View style={styles.variantDetailContent}>
                             <Text style={styles.variantDetailName}>{option.name}</Text>
-                            {option.price_cents && option.price_cents > 0 && (
+                            {option.price_cents !== 0 && (
                               <Text style={styles.variantDetailMeta}>
-                                +${(option.price_cents / 100).toFixed(2)}
+                                {option.price_cents > 0 ? '+' : '-'}${Math.abs(option.price_cents / 100).toFixed(2)}
                               </Text>
                             )}
                           </View>
