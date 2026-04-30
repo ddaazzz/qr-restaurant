@@ -75,7 +75,8 @@ router.get("/restaurants/:restaurantId/menu_categories",
         SELECT id, name, name_zh, sort_order,
                COALESCE(time_restricted, FALSE) AS time_restricted,
                TO_CHAR(available_from, 'HH24:MI') AS available_from,
-               TO_CHAR(available_to,   'HH24:MI') AS available_to
+               TO_CHAR(available_to,   'HH24:MI') AS available_to,
+               COALESCE(days_of_week, '{}') AS days_of_week
         FROM menu_categories
         WHERE restaurant_id = $1
         ORDER BY sort_order, id
@@ -125,7 +126,7 @@ router.post("/restaurants/:restaurantId/menu_categories",
 router.patch("/menu_categories/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, name_zh, time_restricted, available_from, available_to } = req.body;
+    const { name, name_zh, time_restricted, available_from, available_to, days_of_week } = req.body;
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -151,6 +152,12 @@ router.patch("/menu_categories/:id", async (req, res) => {
       updates.push(`available_to = $${p++}`);
       values.push(available_to || null);
     }
+    if (days_of_week !== undefined) {
+      updates.push(`days_of_week = $${p++}`);
+      // Accept an array of ints (1-7) or null for "every day"
+      const dow = Array.isArray(days_of_week) && days_of_week.length > 0 ? days_of_week : null;
+      values.push(dow);
+    }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: "Nothing to update" });
@@ -162,7 +169,8 @@ router.patch("/menu_categories/:id", async (req, res) => {
        RETURNING id, name, name_zh, sort_order,
                  COALESCE(time_restricted, FALSE) AS time_restricted,
                  TO_CHAR(available_from, 'HH24:MI') AS available_from,
-                 TO_CHAR(available_to,   'HH24:MI') AS available_to`,
+                 TO_CHAR(available_to,   'HH24:MI') AS available_to,
+                 COALESCE(days_of_week, '{}') AS days_of_week`,
       values
     );
 

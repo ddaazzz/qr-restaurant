@@ -865,7 +865,7 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
       [payment_method, sessionId]
     );
 
-    // If KPay: mark the transaction as completed and store reference on orders
+    // If KPay: mark transaction as completed and store reference on orders
     if (payment_method === 'kpay' && kpay_reference_id) {
       await client.query(
         `UPDATE kpay_transactions
@@ -873,7 +873,21 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
          WHERE kpay_reference_id = $1 AND restaurant_id = $2`,
         [kpay_reference_id, restaurantId]
       );
-      // Store the outTradeNo on orders so history can look up the transaction
+      await client.query(
+        `UPDATE orders SET chuio_order_reference = $1 WHERE session_id = $2`,
+        [kpay_reference_id, sessionId]
+      );
+    }
+
+    // If PA Offline: mark transaction as completed in its own table
+    if (payment_method === 'payment-asia-offline' && kpay_reference_id) {
+      await client.query(
+        `UPDATE pa_offline_transactions
+         SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC',
+             chuio_order_reference = $1
+         WHERE pa_order_id = $2 AND restaurant_id = $3`,
+        [kpay_reference_id, kpay_reference_id, restaurantId]
+      );
       await client.query(
         `UPDATE orders SET chuio_order_reference = $1 WHERE session_id = $2`,
         [kpay_reference_id, sessionId]
@@ -1277,7 +1291,7 @@ router.post("/sessions/:sessionId/split-bill/:splitIndex/pay", async (req, res) 
       [sessionId]
     );
     const { split_count, split_bills_paid } = countRes.rows[0];
-    const nowPaid = Number(split_bills_paid) + 1; // +1 because DB update ran above
+    const nowPaid = Number(split_bills_paid); // already incremented by UPDATE above
 
     let sessionClosed = false;
     if (nowPaid >= Number(split_count)) {

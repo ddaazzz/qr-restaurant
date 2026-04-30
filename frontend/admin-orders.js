@@ -378,7 +378,7 @@ function showItemVariantModal(item, variants) {
                       (variant.options || []).map(opt => `
                         <label class="variant-option-choice">
                           <input type="radio" name="variant-${variant.id}" value="${opt.id}" />
-                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : ''}</span>
+                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : ''}</span>
                         </label>
                       `).join('')
                       :
@@ -386,7 +386,7 @@ function showItemVariantModal(item, variants) {
                       (variant.options || []).map(opt => `
                         <label class="variant-option-choice">
                           <input type="checkbox" name="variant-${variant.id}" value="${opt.id}" />
-                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : ''}</span>
+                          <span>${opt.name}${opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : ''}</span>
                         </label>
                       `).join('')
                     }

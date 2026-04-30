@@ -181,11 +181,11 @@ router.post(
         paymentRecord = createPaymentRes.rows[0];
       }
 
-      // Initialize Payment Asia service
+      // Initialize Payment Asia service (always production for real payments)
       paymentAsiaService.initialize({
         merchantToken: terminal.merchant_token,
         secretCode: terminal.secret_code,
-        environment: terminal.payment_gateway_env || 'sandbox',
+        environment: 'production',
       });
 
       // Build payment form data (all required fields for Payment Asia form submission)
@@ -699,7 +699,7 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
         paymentAsiaService.initialize({
           merchantToken: payment.merchant_token,
           secretCode: payment.secret_code,
-          environment: payment.payment_gateway_env || 'sandbox',
+          environment: 'production',
         });
         const records = await paymentAsiaService.queryPayment(payment.chuio_order_reference);
         // Find the sale record (type=1); ignore refund records
@@ -1200,7 +1200,7 @@ async function initPaymentAsiaForRestaurant(restaurantId: string, terminalId?: s
   paymentAsiaService.initialize({
     merchantToken: merchant_token,
     secretCode: secret_code,
-    environment: payment_gateway_env || 'sandbox',
+    environment: 'production',
   });
 }
 

@@ -197,6 +197,14 @@ export interface TablesTabRef {
   navigateToScannedQR: (sessionId: number) => void;
 }
 
+type TablesTabProps = {
+  restaurantId: string;
+  onOrderForTable?: (sessionId: number, tableName: string) => void;
+  searchQuery?: string;
+  selectedRoomId?: number | null;
+  onCategoriesLoaded?: (cats: TableCategory[]) => void;
+};
+
 const getTableTextColor = (bgColor: string) => {
   if (bgColor === '#f3f4f6' || bgColor === '#ffeb3b' || bgColor === '#dddddd') {
     return { color: '#000' };
@@ -204,7 +212,7 @@ const getTableTextColor = (bgColor: string) => {
   return { color: '#fff' };
 };
 
-export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrderForTable?: (sessionId: number, tableName: string) => void; searchQuery?: string; selectedRoomId?: number | null; onCategoriesLoaded?: (cats: TableCategory[]) => void }>(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }, ref) => {
+export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) => {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -1167,7 +1175,12 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       _addKPayLog('> Initiating payment…');
       const resp = await apiClient.post(
         `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test`,
-        { payAmount: amountInCents, tipsAmount: '000000000000', payCurrency: '344' },
+        {
+          payAmount: amountInCents,
+          tipsAmount: '000000000000',
+          payCurrency: '344',
+          session_id: selectedSession?.id ?? null,
+        },
       );
       const result = resp.data;
 
@@ -1218,11 +1231,10 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             setKpayStatus('success');
             _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
             try {
-              await _doCloseBill(finalAmt, discountCts, 'kpay', result.outTradeNo);
-              _addKPayLog('> ✅ Bill closed.', '#51cf66');
+              const vendor = activePaymentTerminal?.vendor_name || 'kpay';
+              await _doCloseBill(finalAmt, discountCts, vendor, result.outTradeNo);
             } catch (closeErr: any) {
-              _addKPayLog('> ❌ Bill close failed: ' + closeErr.message, '#ff6b6b');
-              Alert.alert('Error', 'Payment received but failed to close bill. Please close manually.');
+              _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
             }
             return;
           }
@@ -1310,7 +1322,20 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
       return;
     }
 
-    // PA Offline / Cash / Card: direct close
+    // PA Offline physical terminal: same overlay flow, different backend API
+    if (paymentMethod === 'payment-asia-offline' && activePaymentTerminal?.vendor_name === 'payment-asia-offline') {
+      setShowCloseBillModal(false);
+      setKpayFinalAmount(finalAmount);
+      setKpayDiscountCents(discountCents);
+      setKpayStatus('initiating');
+      setKpayLogs([{ text: '> Connecting to PA terminal…', color: '#ffd43b' }]);
+      setKpayOutTradeNo(null);
+      setShowKPayModal(true);
+      await startKPayPayment(finalAmount, discountCents);
+      return;
+    }
+
+    // Cash / Card: direct close
     try {
       await _doCloseBill(finalAmount, discountCents, paymentMethod);
     } catch (err: any) {
@@ -2864,6 +2889,108 @@ export const TablesTab = forwardRef<TablesTabRef, { restaurantId: string; onOrde
             </View>
           </View>
         </Modal>
+
+        {/* Split Bill Modal */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSplitModal} transparent animationType="fade" onRequestClose={() => setShowSplitModal(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>Split Bill</Text>
+              {splitBillData && (
+                <>
+                  <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>
+                    Total: ${((splitBillData.total_cents || splitBillData.grand_total_cents || 0) / 100).toFixed(2)}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
+                    Service Charge: ${((splitBillData.service_charge_cents || 0) / 100).toFixed(2)}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600', marginBottom: 8 }}>Split between:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <TouchableOpacity
+                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                      onPress={() => setSplitCount(Math.max(2, splitCount - 1))}
+                    >
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#374151' }}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#1f2937', width: 50, textAlign: 'center' }}>{splitCount}</Text>
+                    <TouchableOpacity
+                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}
+                      onPress={() => setSplitCount(Math.min(20, splitCount + 1))}
+                    >
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#374151' }}>+</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>people</Text>
+                  </View>
+                  <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>Each person pays</Text>
+                    <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#059669' }}>
+                      ${(((splitBillData.total_cents || splitBillData.grand_total_cents || 0) / splitCount) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                </>
+              )}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                  onPress={() => setShowSplitModal(false)}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: '#3b82f6', borderRadius: 8 }}
+                  onPress={confirmSplit}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Confirm Split</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Split Pay Modal */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showSplitPayModal} transparent animationType="fade" onRequestClose={() => setShowSplitPayModal(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
+                Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+              </Text>
+              <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
+                <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#059669' }}>
+                  ${((activeSplitPortion?.amount_cents || 0) / 100).toFixed(2)}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                {['cash', 'card'].map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m ? '#eff6ff' : '#fff' }}
+                    onPress={() => setSplitPayMethod(m)}
+                  >
+                    <Text style={{ fontWeight: '600', color: splitPayMethod === m ? '#3b82f6' : '#374151' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 12, alignItems: 'center', backgroundColor: '#e5e7eb', borderRadius: 8 }}
+                  onPress={() => setShowSplitPayModal(false)}
+                  disabled={splitPayLoading}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, paddingVertical: 12, alignItems: 'center', backgroundColor: splitPayLoading ? '#93c5fd' : '#3b82f6', borderRadius: 8 }}
+                  onPress={confirmSplitPay}
+                  disabled={splitPayLoading}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>{splitPayLoading ? 'Processing…' : 'Confirm Payment'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     );
   }

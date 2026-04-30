@@ -653,7 +653,7 @@ function renderMenuItemWithVariants(item, addons){
           />
           <span>
           ${o.name}${isUnavail ? ' (Sold Out)' : ''}
-          ${o.price_cents > 0 ? `(+$${(o.price_cents / 100).toFixed(2)})` : ""}
+          ${o.price_cents > 0 ? `(+$${(o.price_cents / 100).toFixed(2)})` : o.price_cents < 0 ? `(-$${(Math.abs(o.price_cents) / 100).toFixed(2)})` : ""}
           </span>
         `;
       
@@ -857,7 +857,7 @@ function renderAddonVariantSections(addons, container) {
         label.style.cssText = `display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; margin-bottom: 2px; cursor: pointer;${isUnavail ? ' opacity: 0.4; pointer-events: none;' : ''}`;
         label.innerHTML = `
           <input type="checkbox" ${selected ? 'checked' : ''} ${isUnavail ? 'disabled' : ''} style="accent-color: #667eea;" />
-          <span>${o.name}${isUnavail ? ' (Sold Out)' : ''}${o.price_cents > 0 ? ` (+$${(o.price_cents / 100).toFixed(2)})` : ''}</span>
+          <span>${o.name}${isUnavail ? ' (Sold Out)' : ''}${o.price_cents > 0 ? ` (+$${(o.price_cents / 100).toFixed(2)})` : o.price_cents < 0 ? ` (-$${(Math.abs(o.price_cents) / 100).toFixed(2)})` : ''}</span>
         `;
         if (!isUnavail) {
           label.querySelector('input').onchange = function() {

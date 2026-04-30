@@ -66,6 +66,10 @@ interface MenuCategory {
   id: number;
   name: string;
   name_zh?: string;
+  time_restricted?: boolean;
+  available_from?: string | null;
+  available_to?: string | null;
+  days_of_week?: number[];
 }
 
 interface SRItem {
@@ -100,15 +104,13 @@ interface DraggableMenuCategoryProps {
   onDragRelease: (dy: number) => void;
   onDragTerminate: () => void;
   onSelect: (categoryId: number) => void;
-  onEdit: (categoryId: number) => void;
-  onDelete: (categoryId: number) => void;
   t: (key: string) => string;
 }
 
 const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
   category, index, isActive, activeDragIndex, hoverIndex, selectedCategory,
   onDragGrant, onDragMove, onDragRelease, onDragTerminate,
-  onSelect, onEdit, onDelete, t,
+  onSelect, t,
 }: DraggableMenuCategoryProps) {
   const { lang } = useTranslation();
   const animY = useRef(new Animated.Value(0)).current;
@@ -156,36 +158,21 @@ const DraggableMenuCategory = React.memo(function DraggableMenuCategory({
         alignItems: 'center',
         marginBottom: 6,
         marginHorizontal: 4,
-        backgroundColor: isActive ? '#e8eaf6' : 'transparent',
+        backgroundColor: isActive ? '#e8f0fe' : 'transparent',
         borderRadius: 20,
       }}>
-        {/* Actual category pill button */}
+        {/* Category pill — press to open editor */}
         <TouchableOpacity
           onPress={() => onSelect(category.id)}
           style={[
-            {
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: isSelected ? '#4f46e5' : '#e5e7eb',
-              backgroundColor: isSelected ? '#4f46e5' : '#fff',
-              flex: 1,
-            },
+            styles.categoryBtn,
+            isSelected && styles.categoryBtnActive,
+            { flex: 1 },
           ]}
         >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: isSelected ? '#fff' : '#374151' }} numberOfLines={1}>
+          <Text style={[styles.categoryBtnText, isSelected && styles.categoryBtnTextActive]} numberOfLines={1}>
             {lang === 'zh' && category.name_zh ? category.name_zh : category.name}
           </Text>
-        </TouchableOpacity>
-        {/* Edit / Delete */}
-        <TouchableOpacity onPress={() => onEdit(category.id)} style={{ padding: 6, marginLeft: 4 }}>
-          <Ionicons name="pencil-outline" size={15} color="#4f46e5" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onDelete(category.id)} style={{ padding: 6 }}>
-          <Ionicons name="trash-outline" size={15} color="#ef4444" />
         </TouchableOpacity>
         {/* Drag handle */}
         <View {...panResponder.panHandlers} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 8 }}>
@@ -201,14 +188,12 @@ interface DraggableMenuCategoryListProps {
   selectedCategory: number | null;
   onReorder: (newCategories: MenuCategory[]) => void;
   onSelect: (categoryId: number) => void;
-  onEdit: (categoryId: number) => void;
-  onDelete: (categoryId: number) => void;
   onScrollEnabled: (v: boolean) => void;
   t: (key: string) => string;
 }
 
 function DraggableMenuCategoryList({
-  categories, selectedCategory, onReorder, onSelect, onEdit, onDelete, onScrollEnabled, t,
+  categories, selectedCategory, onReorder, onSelect, onScrollEnabled, t,
 }: DraggableMenuCategoryListProps) {
   const [orderedCats, setOrderedCats] = useState<MenuCategory[]>(categories);
   useEffect(() => { setOrderedCats(categories); }, [categories]);
@@ -267,8 +252,6 @@ function DraggableMenuCategoryList({
           onDragRelease={handleDragRelease}
           onDragTerminate={handleDragTerminate}
           onSelect={onSelect}
-          onEdit={onEdit}
-          onDelete={onDelete}
           t={t}
         />
       ))}
@@ -567,6 +550,15 @@ export const MenuTab = forwardRef(
     const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
     const [categoryName, setCategoryName] = useState('');
     const [editingCategoryName, setEditingCategoryName] = useState('');
+    const [editingCategoryNameZh, setEditingCategoryNameZh] = useState('');
+    const [editingCategoryTimeRestricted, setEditingCategoryTimeRestricted] = useState(false);
+    const [editingCategoryFrom, setEditingCategoryFrom] = useState('11:00');
+    const [editingCategoryTo, setEditingCategoryTo] = useState('22:00');
+    const [editingCategoryDaysOfWeek, setEditingCategoryDaysOfWeek] = useState<number[]>([]);
+    const toggleEditingDayOfWeek = (day: number) =>
+      setEditingCategoryDaysOfWeek(prev =>
+        prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort((a, b) => a - b)
+      );
 
     // Food item management modals
     const [showItemModal, setShowItemModal] = useState(false);
@@ -662,7 +654,15 @@ export const MenuTab = forwardRef(
         
         const allItems = Array.isArray(itemsRes.data) ? itemsRes.data : [];
         const allCategories: MenuCategory[] = Array.isArray(categoriesRes.data)
-          ? categoriesRes.data.map((c: any) => ({ id: c.id, name: c.name, name_zh: c.name_zh }))
+          ? categoriesRes.data.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              name_zh: c.name_zh,
+              time_restricted: c.time_restricted,
+              available_from: c.available_from,
+              available_to: c.available_to,
+              days_of_week: c.days_of_week ?? [],
+            }))
           : [];
         
         setItems(allItems);
@@ -712,6 +712,17 @@ export const MenuTab = forwardRef(
       }
     };
 
+    const openCategoryEditor = (cat: MenuCategory) => {
+      setEditingCategoryId(cat.id);
+      setEditingCategoryName(cat.name);
+      setEditingCategoryNameZh(cat.name_zh ?? '');
+      setEditingCategoryTimeRestricted(cat.time_restricted ?? false);
+      setEditingCategoryFrom(cat.available_from ?? '11:00');
+      setEditingCategoryTo(cat.available_to ?? '22:00');
+      setEditingCategoryDaysOfWeek(cat.days_of_week ?? []);
+      setShowEditCategoryModal(true);
+    };
+
     const updateCategory = async (categoryId: number) => {
       if (!editingCategoryName.trim()) {
         Alert.alert(t('common.error'), t('menu.category-required'));
@@ -721,10 +732,23 @@ export const MenuTab = forwardRef(
       try {
         await apiClient.patch(
           `/api/menu-categories/${categoryId}`,
-          { name: editingCategoryName }
+          {
+            name: editingCategoryName,
+            name_zh: editingCategoryNameZh.trim() || null,
+            time_restricted: editingCategoryTimeRestricted,
+            available_from: editingCategoryTimeRestricted ? editingCategoryFrom : null,
+            available_to: editingCategoryTimeRestricted ? editingCategoryTo : null,
+            days_of_week: editingCategoryTimeRestricted && editingCategoryDaysOfWeek.length > 0
+              ? editingCategoryDaysOfWeek : null,
+          }
         );
         setEditingCategoryId(null);
         setEditingCategoryName('');
+        setEditingCategoryNameZh('');
+        setEditingCategoryTimeRestricted(false);
+        setEditingCategoryFrom('11:00');
+        setEditingCategoryTo('22:00');
+        setEditingCategoryDaysOfWeek([]);
         setShowEditCategoryModal(false);
         await loadMenuData();
       } catch (err: any) {
@@ -1511,16 +1535,10 @@ export const MenuTab = forwardRef(
                   categories={categories}
                   selectedCategory={selectedCategory}
                   onReorder={saveMenuCategoryOrder}
-                  onSelect={setSelectedCategory}
-                  onEdit={(id) => {
+                  onSelect={(id) => {
                     const cat = categories.find(c => c.id === id);
-                    if (cat) {
-                      setEditingCategoryId(id);
-                      setEditingCategoryName(cat.name);
-                      setShowEditCategoryModal(true);
-                    }
+                    if (cat) openCategoryEditor(cat);
                   }}
-                  onDelete={deleteCategory}
                   onScrollEnabled={setMenuScrollEnabled}
                   t={t}
                 />
@@ -1960,9 +1978,11 @@ export const MenuTab = forwardRef(
                                       )}
                                       <View>
                                         <Text style={[styles.optionName, option.is_available === false && { textDecorationLine: 'line-through' }]}>{option.name}</Text>
-                                        <Text style={styles.optionPrice}>
-                                          +{formatPrice(option.price_cents)}
-                                        </Text>
+                                        {option.price_cents !== 0 && (
+                                          <Text style={styles.optionPrice}>
+                                            {option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}
+                                          </Text>
+                                        )}
                                       </View>
                                     </View>
                                     {isVariantInEditMode && (
@@ -2350,9 +2370,11 @@ export const MenuTab = forwardRef(
                                   )}
                                   <View>
                                     <Text style={[styles.optionName, option.is_available === false && { textDecorationLine: 'line-through' }]}>{option.name}</Text>
-                                    <Text style={styles.optionPrice}>
-                                      +{formatPrice(option.price_cents)}
-                                    </Text>
+                                    {option.price_cents !== 0 && (
+                                      <Text style={styles.optionPrice}>
+                                        {option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}
+                                      </Text>
+                                    )}
                                   </View>
                                 </View>
                                 {/* Show option edit/delete only when variant is in edit mode */}
@@ -2745,34 +2767,139 @@ export const MenuTab = forwardRef(
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showEditCategoryModal} animationType="fade" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t('menu.edit-category')}</Text>
+              <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
+                <Text style={styles.modalTitle}>{t('menu.edit-category')}</Text>
 
-              <Text style={styles.label}>{t('menu.category-name')}</Text>
-              <TextInput
-                style={styles.input}
-                value={editingCategoryName}
-                onChangeText={setEditingCategoryName}
-                placeholder={t('menu.category-placeholder')}
-                autoFocus
-              />
+                <Text style={styles.label}>{t('menu.category-name')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editingCategoryName}
+                  onChangeText={setEditingCategoryName}
+                  placeholder={t('menu.category-placeholder')}
+                  autoFocus
+                />
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnSecondary]}
-                  onPress={() => {
-                    setShowEditCategoryModal(false);
-                    setEditingCategoryId(null);
-                  }}
-                >
-                  <Text style={styles.btnText}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnPrimary]}
-                  onPress={() => editingCategoryId && updateCategory(editingCategoryId)}
-                >
-                  <Text style={styles.btnText}>{t('menu.save')}</Text>
-                </TouchableOpacity>
-              </View>
+                <Text style={styles.label}>{t('menu.category-name-zh') || 'Category Name (Chinese)'}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editingCategoryNameZh}
+                  onChangeText={setEditingCategoryNameZh}
+                  placeholder={t('menu.category-placeholder-zh') || 'e.g. 小食'}
+                />
+
+                {/* Time restriction toggle */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 4 }}>
+                  <Text style={styles.label}>{t('menu.timed-category') || 'Timed Category'}</Text>
+                  <TouchableOpacity
+                    onPress={() => setEditingCategoryTimeRestricted(v => !v)}
+                    style={{
+                      width: 46, height: 26, borderRadius: 13,
+                      backgroundColor: editingCategoryTimeRestricted ? '#3b82f6' : '#e5e7eb',
+                      justifyContent: 'center', paddingHorizontal: 3,
+                    }}
+                  >
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff',
+                      alignSelf: editingCategoryTimeRestricted ? 'flex-end' : 'flex-start',
+                      shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
+                    }} />
+                  </TouchableOpacity>
+                </View>
+
+                {editingCategoryTimeRestricted && (
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>{t('menu.from-time') || 'From'}</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editingCategoryFrom}
+                          onChangeText={setEditingCategoryFrom}
+                          placeholder="HH:MM"
+                          keyboardType="numbers-and-punctuation"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>{t('menu.to-time') || 'To'}</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editingCategoryTo}
+                          onChangeText={setEditingCategoryTo}
+                          placeholder="HH:MM"
+                          keyboardType="numbers-and-punctuation"
+                        />
+                      </View>
+                    </View>
+
+                    <Text style={[styles.label, { marginTop: 10 }]}>
+                      {t('menu.days-available') || 'Days Available (leave blank for every day)'}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                      {[
+                        { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' },
+                        { day: 3, label: 'Wed' }, { day: 4, label: 'Thu' },
+                        { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' },
+                        { day: 7, label: 'Sun' },
+                      ].map(({ day, label }) => {
+                        const active = editingCategoryDaysOfWeek.includes(day);
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            onPress={() => toggleEditingDayOfWeek(day)}
+                            style={{
+                              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+                              backgroundColor: active ? '#3b82f6' : '#e5e7eb',
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: active ? '#fff' : '#374151' }}>
+                              {label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
+
+                {/* Delete button */}
+                {editingCategoryId && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      const cat = categories.find(c => c.id === editingCategoryId);
+                      if (cat) {
+                        setShowEditCategoryModal(false);
+                        deleteCategory(editingCategoryId, cat.name);
+                      }
+                    }}
+                    style={{
+                      marginTop: 20, padding: 12, borderRadius: 8,
+                      backgroundColor: '#fee2e2', alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#dc2626', fontWeight: '600' }}>
+                      {t('menu.delete-category') || 'Delete Category'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnSecondary]}
+                    onPress={() => {
+                      setShowEditCategoryModal(false);
+                      setEditingCategoryId(null);
+                    }}
+                  >
+                    <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary]}
+                    onPress={() => editingCategoryId && updateCategory(editingCategoryId)}
+                  >
+                    <Text style={styles.btnText}>{t('menu.save')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>

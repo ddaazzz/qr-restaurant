@@ -252,7 +252,7 @@ function createVariantViewElement(variant) {
   if (optionsDiv) {
     if (variant.options && variant.options.length > 0) {
       optionsDiv.innerHTML = variant.options.map(function(opt) {
-        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : '';
         return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`;
       }).join('');
     } else {
@@ -305,7 +305,7 @@ function createVariantEditElement(variant) {
   if (optionsDiv) {
     if (variant.options && variant.options.length > 0) {
       optionsDiv.innerHTML = variant.options.map(function(opt) {
-        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+        const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : '';
         return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`;
       }).join('');
     } else {
@@ -372,7 +372,7 @@ function createVariantOptionsEditorElement(variant) {
   if (optionsList) {
     if (variant.options && variant.options.length > 0) {
       optionsList.innerHTML = variant.options.map(function(option) {
-        const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+        const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
         const isAvail = option.is_available !== false;
         const availStyle = isAvail ? 'background:#d1fae5;color:#065f46;' : 'background:#fee2e2;color:#991b1b;';
         const availLabel = isAvail ? '✓' : '✕';
@@ -742,6 +742,20 @@ function openCategoryEditModal(cat) {
   const isRestricted = !!cat.time_restricted;
   const fromVal = cat.available_from || '11:00';
   const toVal   = cat.available_to   || '15:00';
+  const selectedDays = Array.isArray(cat.days_of_week) ? cat.days_of_week : [];
+
+  const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayPillsHtml = dayNames.map((label, i) => {
+    const day = i + 1;
+    const active = selectedDays.includes(day);
+    return `<label style="cursor:pointer;display:inline-block;">
+      <input type="checkbox" value="${day}" class="cat-edit-dow" ${active ? 'checked' : ''} style="display:none;" />
+      <span class="cat-edit-dow-pill" data-day="${day}"
+        style="display:inline-block;padding:5px 10px;border-radius:12px;font-size:12px;font-weight:600;
+               background:${active ? '#3b82f6' : '#e5e7eb'};color:${active ? '#fff' : '#374151'};
+               margin:2px;cursor:pointer;">${label}</span>
+    </label>`;
+  }).join('');
 
   modal.innerHTML = `
     <div style="background:#fff;border-radius:14px;padding:22px;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);">
@@ -801,6 +815,12 @@ function openCategoryEditModal(cat) {
           <p style="font-size:11px;color:#9ca3af;margin:8px 0 0 0;">
             Uses the restaurant's configured timezone. Overnight windows (e.g. 22:00 → 02:00) are supported.
           </p>
+
+          <!-- Days of week -->
+          <div id="cat-edit-days-section" style="margin-top:12px;">
+            <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Days Available <span style="font-weight:400;color:#9ca3af;">(leave all unchecked for every day)</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">${dayPillsHtml}</div>
+          </div>
         </div>
       </div>
 
@@ -823,13 +843,26 @@ function openCategoryEditModal(cat) {
   modal.querySelector('#cat-edit-time-restricted').addEventListener('change', function() {
     const slider = modal.querySelector('#cat-edit-toggle-slider');
     const knob   = slider.querySelector('span');
+    const timeFields = modal.querySelector('#cat-edit-time-fields');
     if (this.checked) {
       slider.style.background = 'var(--primary-color,#3b49df)';
       knob.style.left = '22px';
+      timeFields.style.display = 'block';
     } else {
       slider.style.background = '#ccc';
       knob.style.left = '2px';
+      timeFields.style.display = 'none';
     }
+  });
+
+  // Day-of-week pill toggle
+  modal.querySelectorAll('.cat-edit-dow-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const cb = pill.previousElementSibling;
+      cb.checked = !cb.checked;
+      pill.style.background = cb.checked ? '#3b82f6' : '#e5e7eb';
+      pill.style.color = cb.checked ? '#fff' : '#374151';
+    });
   });
 
   // Close on backdrop click
@@ -854,6 +887,9 @@ async function saveCategoryEdit(categoryId) {
   const time_restricted = timeRestrictedInput?.checked || false;
   const available_from  = time_restricted ? (fromInput?.value || null) : null;
   const available_to    = time_restricted ? (toInput?.value   || null) : null;
+  const days_of_week    = time_restricted
+    ? Array.from(document.querySelectorAll('.cat-edit-dow:checked')).map(cb => parseInt(cb.value, 10))
+    : [];
 
   if (time_restricted && (!available_from || !available_to)) {
     alert('Please set both From and To times');
@@ -864,7 +900,7 @@ async function saveCategoryEdit(categoryId) {
     const res = await fetch(`${API}/menu_categories/${categoryId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, name_zh, time_restricted, available_from, available_to })
+      body: JSON.stringify({ name, name_zh, time_restricted, available_from, available_to, days_of_week })
     });
 
     if (!res.ok) {
@@ -1456,7 +1492,7 @@ async function openFoodItemPanel(itemId) {
               </div>
               <div class="food-panel-variant-options">
                 ${variant.options && variant.options.length > 0 ? variant.options.map(function(opt) { 
-                  const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : '';
+                  const priceLabel = opt.price_cents > 0 ? ' (+$' + (opt.price_cents / 100).toFixed(2) + ')' : opt.price_cents < 0 ? ' (-$' + (Math.abs(opt.price_cents) / 100).toFixed(2) + ')' : '';
                   return `<span class="food-panel-variant-option">${opt.name}${priceLabel}</span>`; 
                 }).join('') : '<span class="food-panel-variant-option">No options</span>'}
               </div>
@@ -1858,7 +1894,7 @@ function startEditVariantFromPanel(variantId) {
           optionDiv.style.border = '1px solid #ddd';
           optionDiv.style.borderRadius = '3px';
           
-          const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+          const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
           optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
           optionsList.appendChild(optionDiv);
         });
@@ -2245,7 +2281,7 @@ async function saveVariantOption() {
             optionDiv.style.border = '1px solid #ddd';
             optionDiv.style.borderRadius = '3px';
             
-            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
             optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
             optionsList.appendChild(optionDiv);
           });
@@ -2372,7 +2408,7 @@ async function deleteVariantOption(optionId) {
             optionDiv.style.border = '1px solid #ddd';
             optionDiv.style.borderRadius = '3px';
             
-            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : '';
+            const priceLabel = option.price_cents > 0 ? ' (+$' + (option.price_cents / 100).toFixed(2) + ')' : option.price_cents < 0 ? ' (-$' + (Math.abs(option.price_cents) / 100).toFixed(2) + ')' : '';
             optionDiv.innerHTML = '<span>' + option.name + priceLabel + '</span><button onclick="deleteVariantOption(' + option.id + ')" style="padding: 2px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">Delete</button>';
             optionsList.appendChild(optionDiv);
           });

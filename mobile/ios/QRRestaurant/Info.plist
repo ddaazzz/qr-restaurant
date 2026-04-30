@@ -64,6 +64,10 @@
     <string>Location is needed for Bluetooth scanning</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your photo library to upload staff profile pictures</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to save photos to your library</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIApplicationSupportsMultipleScenes</key>
