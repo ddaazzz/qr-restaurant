@@ -301,6 +301,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   // KPay / PA terminal payment overlay
   const [showKPayModal, setShowKPayModal] = useState(false);
   const [isPaymentAsiaOffline, setIsPaymentAsiaOffline] = useState(false);
+  const [paTerminalCallFailed, setPaTerminalCallFailed] = useState(false);
   const [kpayStatus, setKpayStatus] = useState<'initiating' | 'waiting' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'aborting'>('initiating');
   const [kpayOutTradeNo, setKpayOutTradeNo] = useState<string | null>(null);
   const [kpayLogs, setKpayLogs] = useState<Array<{ text: string; color: string }>>([]);
@@ -1170,8 +1171,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     if (!terminal?.terminal_ip || !apiKey) {
       _addKPayLog('> ⚠️ No terminal credentials — confirm manually after customer pays.', '#ffd43b');
       console.warn('[PAOffline] Missing terminal_ip or api key. terminal:', JSON.stringify(terminal));
+      setPaTerminalCallFailed(true);
       return;
     }
+    setPaTerminalCallFailed(false);
     const port = terminal.terminal_port ?? 8888;
     const amountDollars = (finalAmt / 100).toFixed(2);
     const orderId = `PA-MOB-${Date.now()}`;
@@ -1195,18 +1198,26 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
       if (data.code === '1000') {
         setKpayOutTradeNo(orderId);
+        setPaTerminalCallFailed(false);
         _addKPayLog(`> ✅ Terminal activated — QR code now showing on device`, '#51cf66');
         _addKPayLog(`> Customer scans QR, then tap Confirm Payment.`, '#ffd43b');
       } else {
+        setPaTerminalCallFailed(true);
         _addKPayLog(`> ❌ Terminal error (code=${data.code ?? '?'}): ${data.message ?? text.slice(0, 80)}`, '#ff6b6b');
-        _addKPayLog(`> Confirm manually after customer pays, or tap Cancel.`, '#ffd43b');
+        _addKPayLog(`> Cancel previous transaction on terminal, then tap Retry.`, '#ffd43b');
         console.error('[PAOffline] Terminal returned error:', data);
       }
     } catch (err: any) {
       console.error('[PAOffline] Direct call failed:', err.message);
+      setPaTerminalCallFailed(true);
       _addKPayLog(`> ⚠️ Cannot reach terminal: ${err.message}`, '#ff6b6b');
-      _addKPayLog(`> If HTTPS is required, HTTP may be blocked. Confirm manually.`, '#ffd43b');
+      _addKPayLog(`> Check network and tap Retry, or confirm manually.`, '#ffd43b');
     }
+  };
+
+  const retryPAOfflinePayment = async () => {
+    _addKPayLog(`> ─────── Retrying… ───────`, '#666666');
+    await startPAOfflinePayment(kpayFinalAmount);
   };
 
   // ── KPay terminal payment: initiate sale + poll until confirmed ──────────
@@ -1395,6 +1406,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       setKpayStatus('waiting');
       setKpayLogs([]);
       setKpayOutTradeNo(null);
+      setPaTerminalCallFailed(false);
       setShowKPayModal(true);
       await startPAOfflinePayment(finalAmount);
       return;
@@ -4433,13 +4445,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               </Text>
               <View style={{
                 paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12,
-                backgroundColor: kpayStatus === 'success' ? '#d1fae5' : kpayStatus === 'failed' || kpayStatus === 'cancelled' ? '#fee2e2' : kpayStatus === 'timeout' ? '#fee2e2' : '#fef3c7',
+                backgroundColor: kpayStatus === 'success' ? '#d1fae5' : kpayStatus === 'failed' || kpayStatus === 'cancelled' ? '#fee2e2' : kpayStatus === 'timeout' ? '#fee2e2' : (isPaymentAsiaOffline && paTerminalCallFailed) ? '#fee2e2' : '#fef3c7',
               }}>
                 <Text style={{
                   fontSize: 12, fontWeight: '700',
-                  color: kpayStatus === 'success' ? '#065f46' : kpayStatus === 'failed' || kpayStatus === 'cancelled' || kpayStatus === 'timeout' ? '#dc2626' : '#b45309',
+                  color: kpayStatus === 'success' ? '#065f46' : kpayStatus === 'failed' || kpayStatus === 'cancelled' || kpayStatus === 'timeout' ? '#dc2626' : (isPaymentAsiaOffline && paTerminalCallFailed) ? '#dc2626' : '#b45309',
                 }}>
-                  {kpayStatus === 'initiating' ? 'Initiating…' : kpayStatus === 'waiting' ? 'Waiting…' : kpayStatus === 'success' ? 'Paid ✓' : kpayStatus === 'failed' ? 'Failed' : kpayStatus === 'cancelled' ? 'Cancelled' : kpayStatus === 'timeout' ? 'Timeout' : 'Aborting…'}
+                  {kpayStatus === 'initiating' ? 'Initiating…' : kpayStatus === 'waiting' ? (isPaymentAsiaOffline && paTerminalCallFailed ? 'Terminal Error' : 'Waiting…') : kpayStatus === 'success' ? 'Paid ✓' : kpayStatus === 'failed' ? 'Failed' : kpayStatus === 'cancelled' ? 'Cancelled' : kpayStatus === 'timeout' ? 'Timeout' : 'Aborting…'}
                 </Text>
               </View>
             </View>
@@ -4475,6 +4487,15 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               {/* PA-Offline: Confirm + Cancel while waiting */}
               {isPaymentAsiaOffline && kpayStatus === 'waiting' && (
                 <>
+                  {/* Retry row — shown when terminal call failed */}
+                  {paTerminalCallFailed && (
+                    <TouchableOpacity
+                      style={{ flex: 1, paddingVertical: 10, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 6, alignItems: 'center' }}
+                      onPress={retryPAOfflinePayment}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1d4ed8' }}>↺ Retry</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={{ flex: 1, paddingVertical: 10, backgroundColor: '#d1fae5', borderWidth: 1, borderColor: '#6ee7b7', borderRadius: 6, alignItems: 'center' }}
                     onPress={confirmPAPayment}
