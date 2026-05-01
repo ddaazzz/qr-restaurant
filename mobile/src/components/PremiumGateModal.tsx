@@ -50,7 +50,11 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
   onClose,
   triggeredBy,
 }) => {
-  const { purchasePremium, restorePurchases, isLoading } = useSubscription();
+  const { purchasePremium, restorePurchases, isLoading, isInTrial, trialEndDate } = useSubscription();
+
+  const trialDaysLeft = isInTrial && trialEndDate
+    ? Math.max(0, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
 
   const handleUpgrade = async () => {
     await purchasePremium();
@@ -86,11 +90,21 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
                 <Ionicons name="star" size={32} color="#f59e0b" />
               </View>
             </View>
-            <Text style={styles.headline}>Unlock Premium</Text>
-            <Text style={styles.subheadline}>
-              Get full access to every feature for your restaurant — starting with a{' '}
-              <Text style={styles.trialHighlight}>14-day free trial</Text>.
-            </Text>
+            <Text style={styles.headline}>{isInTrial ? 'Premium Trial Active' : 'Unlock Premium'}</Text>
+            {isInTrial && trialDaysLeft !== null ? (
+              <Text style={styles.subheadline}>
+                Your free trial is active.{' '}
+                <Text style={styles.trialHighlight}>
+                  {trialDaysLeft === 0 ? 'It ends today' : `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} remaining`}
+                </Text>
+                {'. After the trial, HK$500/month will be charged automatically to your Apple ID.'}
+              </Text>
+            ) : (
+              <Text style={styles.subheadline}>
+                Get full access to every feature for your restaurant — starting with a{' '}
+                <Text style={styles.trialHighlight}>14-day free trial</Text>.
+              </Text>
+            )}
 
             {/* ── Triggered-feature callout ───────────────── */}
             {triggeredBy && (
@@ -151,24 +165,32 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
 
           {/* ── CTA Buttons ────────────────────────────────── */}
           <View style={styles.ctaContainer}>
-            <TouchableOpacity
-              style={[styles.ctaPrimary, isLoading && styles.ctaDisabled]}
-              onPress={handleUpgrade}
-              disabled={isLoading}
-              activeOpacity={0.85}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="star" size={16} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.ctaPrimaryText}>Start 14-Day Free Trial</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.ctaSecondary} onPress={restorePurchases} disabled={isLoading}>
-              <Text style={styles.ctaSecondaryText}>Restore Purchase</Text>
-            </TouchableOpacity>
+            {isInTrial ? (
+              <TouchableOpacity style={styles.ctaSecondary} onPress={onClose}>
+                <Text style={styles.ctaSecondaryText}>Got it</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.ctaPrimary, isLoading && styles.ctaDisabled]}
+                  onPress={handleUpgrade}
+                  disabled={isLoading}
+                  activeOpacity={0.85}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="star" size={16} color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={styles.ctaPrimaryText}>Start 14-Day Free Trial</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.ctaSecondary} onPress={restorePurchases} disabled={isLoading}>
+                  <Text style={styles.ctaSecondaryText}>Restore Purchase</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </View>

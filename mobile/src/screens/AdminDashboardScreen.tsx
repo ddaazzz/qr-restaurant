@@ -58,7 +58,12 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout, updateUser, switchRestaurant } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { isPremium, canAccess } = useSubscription();
+  const { isPremium, canAccess, isInTrial, trialEndDate } = useSubscription();
+
+  // Days remaining in trial (null if not in trial)
+  const trialDaysLeft = isInTrial && trialEndDate
+    ? Math.max(0, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
   const [activeTab, setActiveTab] = useState<TabType>('tables');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [premiumTrigger, setPremiumTrigger] = useState<PremiumFeatureKey | null>(null);
@@ -541,6 +546,20 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Text style={styles.sidebarBrand}>chuio.io</Text>
             </View>
 
+            {/* Trial banner */}
+            {isInTrial && trialDaysLeft !== null && (
+              <TouchableOpacity
+                style={styles.trialBanner}
+                onPress={() => { setPremiumTrigger(null); setShowPremiumModal(true); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="star" size={11} color="#fbbf24" style={{ marginRight: 4 }} />
+                <Text style={styles.trialBannerText}>
+                  {trialDaysLeft === 0 ? 'Trial ends today' : `Trial: ${trialDaysLeft}d left`}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {/* Tab buttons — fill remaining space */}
             <ScrollView style={styles.sidebarTabsContainer} contentContainerStyle={{ flex: 1, justifyContent: 'space-evenly' }} showsVerticalScrollIndicator={false}>
               {filteredTabs.map(
@@ -938,6 +957,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
+  },
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251,191,36,0.18)',
+    borderRadius: 8,
+    marginHorizontal: 8,
+    marginBottom: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.35)',
+  },
+  trialBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fbbf24',
+    letterSpacing: 0.3,
   },
   sidebarTabsContainer: {
     flex: 1,
