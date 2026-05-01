@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1B2C3D4E5F60001A2B3C4D5 /* Ionicons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002A2B3C4D5 /* Ionicons.ttf */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		546B5E1D4B3E72EE535F914F /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B7515FACBC6AFD642E0C43 /* ExpoModulesProvider.swift */; };
@@ -17,6 +18,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A1B2C3D4E5F60002A2B3C4D5 /* Ionicons.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = Ionicons.ttf; path = QRRestaurant/Ionicons.ttf; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* QRRestaurant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QRRestaurant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = QRRestaurant/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = QRRestaurant/Info.plist; sourceTree = "<group>"; };
@@ -62,6 +64,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				74AF6C06F6DA376A762F221B /* PrivacyInfo.xcprivacy */,
+				A1B2C3D4E5F60002A2B3C4D5 /* Ionicons.ttf */,
 			);
 			name = QRRestaurant;
 			sourceTree = "<group>";
@@ -197,6 +200,7 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				E3B5ECF32906DFDE12A47927 /* PrivacyInfo.xcprivacy in Resources */,
+				A1B2C3D4E5F60001A2B3C4D5 /* Ionicons.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

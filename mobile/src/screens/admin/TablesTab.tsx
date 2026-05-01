@@ -38,7 +38,7 @@ const getQrBaseUrl = () => {
 import TcpSocket from 'react-native-tcp-socket';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 
 /**
  * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.

@@ -4,7 +4,7 @@ import { apiClient, API_URL } from '../../services/apiClient';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 
 interface MenuItem {
   id: number;

@@ -23,7 +23,7 @@ import { BleManager } from 'react-native-ble-plx';
 import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { printerSettingsService, KitchenPrinter, BillPrinter, PrinterProfile } from '../../services/printerSettingsService';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';

@@ -18,7 +18,7 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from '../contexts/TranslationContext';
 import { apiClient } from '../services/apiClient';

@@ -26,7 +26,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { addonService, Addon } from '../../services/addonService';
 
 // ==================== INTERFACES ====================
