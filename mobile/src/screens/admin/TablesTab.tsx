@@ -1203,8 +1203,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         _addKPayLog(`> Customer scans QR, then tap Confirm Payment.`, '#ffd43b');
       } else {
         setPaTerminalCallFailed(true);
+        const hint = data.code === '1400'
+          ? '> Tap Retry — app will cancel stuck transaction then retry.'
+          : '> Cancel previous transaction on terminal, then tap Retry.';
         _addKPayLog(`> ❌ Terminal error (code=${data.code ?? '?'}): ${data.message ?? text.slice(0, 80)}`, '#ff6b6b');
-        _addKPayLog(`> Cancel previous transaction on terminal, then tap Retry.`, '#ffd43b');
+        _addKPayLog(hint, '#ffd43b');
         console.error('[PAOffline] Terminal returned error:', data);
       }
     } catch (err: any) {
@@ -1216,7 +1219,34 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   };
 
   const retryPAOfflinePayment = async () => {
+    const terminal = activePaymentTerminal;
+    const apiKey = (terminal as any)?.app_secret || (terminal as any)?.app_id;
+    const port = terminal?.terminal_port ?? 8888;
+
     _addKPayLog(`> ─────── Retrying… ───────`, '#666666');
+
+    // If terminal is busy (1400), cancel the stuck transaction first
+    if (terminal?.terminal_ip && apiKey) {
+      try {
+        _addKPayLog(`> Sending cancel to clear terminal…`, '#ffd43b');
+        const cancelUrl = `http://${terminal.terminal_ip}:${port}/order/cancel`;
+        console.log(`[PAOffline] Retry: GET ${cancelUrl}`);
+        const cancelResp = await fetch(cancelUrl, {
+          method: 'GET',
+          headers: { 'x-api-key': apiKey },
+        });
+        const cancelText = await cancelResp.text();
+        let cancelData: any = {};
+        try { cancelData = JSON.parse(cancelText); } catch {}
+        console.log(`[PAOffline] Cancel response:`, cancelData);
+        _addKPayLog(`> Cancel: code=${cancelData.code ?? '?'} ${cancelData.message ?? cancelText.slice(0, 60)}`,
+          cancelData.code === '1000' ? '#51cf66' : '#ffd43b');
+      } catch (e: any) {
+        _addKPayLog(`> Cancel attempt failed: ${e.message} — retrying anyway…`, '#ffd43b');
+        console.warn('[PAOffline] Cancel failed:', e.message);
+      }
+    }
+
     await startPAOfflinePayment(kpayFinalAmount);
   };
 
