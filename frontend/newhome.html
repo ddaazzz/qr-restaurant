@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chuio — The OS for Modern Dining</title>
+  <meta name="description" content="Replace your clunky POS with QR ordering, a smart kitchen display, real-time analytics, and seamless payments — unified into one platform." />
+  <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/newhome.css" />
+</head>
+<body class="nh-body">
+
+<!-- ═══════════════════════════════════════════════════════════════ NAVBAR -->
+<nav class="nh-nav" id="nh-nav">
+  <div class="nh-nav-inner">
+    <a href="/newhome.html">
+      <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="nh-nav-logo" />
+    </a>
+    <div class="nh-nav-links">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#comparison">Chuio vs POS</a>
+      <a href="#pricing">Pricing</a>
+      <a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer" class="nh-help-link">Help</a>
+    </div>
+    <div class="nh-nav-cta">
+      <a href="https://chuio.io/login.html" class="nh-nav-login">Log in</a>
+      <a href="https://chuio.io/register.html" class="nh-nav-get-started" target="_blank" rel="noopener noreferrer">
+        Get Started
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+    <button class="nh-hamburger" id="nh-hamburger" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</nav>
+
+<!-- Mobile Menu -->
+<div class="nh-mobile-menu" id="nh-mobile-menu">
+  <a href="#features">Features</a>
+  <a href="#how-it-works">How It Works</a>
+  <a href="#comparison">Chuio vs POS</a>
+  <a href="#pricing">Pricing</a>
+  <a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Help</a>
+  <div class="nh-mobile-divider"></div>
+  <a href="https://chuio.io/login.html" style="color:#6b7280;">Log in</a>
+  <a href="https://chuio.io/register.html" class="nh-mobile-cta" target="_blank" rel="noopener noreferrer">Get Started Free</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ HERO -->
+<section class="nh-hero">
+  <div class="nh-hero-grid"></div>
+  <div class="nh-hero-glow"></div>
+  <div class="nh-hero-deco1"></div>
+  <div class="nh-hero-deco2"></div>
+  <div class="nh-hero-deco3"></div>
+
+  <div class="nh-hero-inner">
+    <div class="nh-hero-badge">
+      <span class="nh-hero-badge-dot"></span>
+      Chuio OS 2.0 — Now Available
+    </div>
+
+    <div class="nh-hero-h1">
+      <span class="line1">The OS for</span>
+      <span class="line2">modern dining.</span>
+    </div>
+
+    <p class="nh-hero-desc">
+      Replace your clunky POS with QR ordering, a smart kitchen display, real-time analytics, and seamless payments — unified into one platform built for efficiency.
+    </p>
+
+    <div class="nh-hero-btns">
+      <a href="https://chuio.io/register.html" target="_blank" rel="noopener noreferrer" class="nh-btn-primary">
+        Start Free Trial
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="#how-it-works" class="nh-btn-outline">See How It Works</a>
+    </div>
+
+    <a href="https://apps.apple.com/hk/app/chuio/id6760214563" target="_blank" rel="noopener noreferrer" class="nh-hero-appstore">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+      <div class="nh-hero-appstore-text">
+        <p class="sub">Download on the</p>
+        <p class="main">App Store</p>
+      </div>
+    </a>
+
+    <div class="nh-hero-img-wrap">
+      <img src="/uploads/website/hero-final.png" alt="Chuio on multiple devices" class="nh-hero-img" />
+
+      <div class="nh-hero-float nh-hero-float-left">
+        <div class="nh-float-inner">
+          <div class="nh-float-icon green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+          </div>
+          <div>
+            <p class="nh-float-label">Avg Ticket Size</p>
+            <p class="nh-float-value">+15%</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="nh-hero-float nh-hero-float-right">
+        <div class="nh-float-inner">
+          <div class="nh-float-icon orange">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div>
+            <p class="nh-float-label">Table Turns</p>
+            <p class="nh-float-value">2.5× Faster</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="nh-hero-float nh-hero-float-bottom">
+        <div class="nh-float-avatars">
+          <span style="background:#F97316;"></span>
+          <span style="background:#3B82F6;"></span>
+          <span style="background:#10B981;"></span>
+        </div>
+        <p class="nh-float-bottom-text">Trusted by restaurants across <strong style="color:#111827;">Hong Kong</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ STATS -->
+<section class="nh-stats" id="nh-stats">
+  <div class="nh-stats-grid">
+    <div class="nh-stat" data-reveal data-delay="1">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="15" data-suffix="%">0%</div>
+      <p class="nh-stat-label">Avg Ticket Size Increase</p>
+    </div>
+    <div class="nh-stat" data-reveal data-delay="2">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="30" data-suffix=" min">0 min</div>
+      <p class="nh-stat-label">Saved per shift on average</p>
+    </div>
+    <div class="nh-stat" data-reveal data-delay="3">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="99" data-suffix=".9%">0.9%</div>
+      <p class="nh-stat-label">Platform Uptime</p>
+    </div>
+    <div class="nh-stat" data-reveal data-delay="4">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="0" data-suffix="">$0</div>
+      <p class="nh-stat-label">Zero upfront hardware cost</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FEATURES -->
+<section class="nh-features" id="features">
+  <div class="nh-features-inner">
+    <div class="nh-features-header" data-reveal>
+      <div>
+        <span class="nh-section-tag nh-tag-orange">Full Platform</span>
+        <h2 class="nh-section-h2">Every tool your<br /><span class="muted">restaurant needs.</span></h2>
+      </div>
+      <p class="nh-features-header-desc">One unified platform. No patchwork integrations. No monthly surprises.</p>
+    </div>
+
+    <div class="nh-cards-grid">
+      <!-- Menu Management -->
+      <div class="nh-feature-card" data-reveal data-delay="1">
+        <div class="nh-feature-card-img-wrap">
+          <img src="/uploads/website/menu-nobg.png" alt="Menu Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-green">Menu</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-green">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h18l-2 7H5L3 2z"/><path d="M5 9v13h14V9"/><path d="M9 9v13"/><path d="M15 9v13"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title">Menu Management</h3>
+          </div>
+          <p class="nh-feature-card-desc">Rich visual menus with images, modifiers, and 86 tracking. Push updates instantly across all devices.</p>
+          <div class="nh-feature-card-more">Learn more <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Table Management -->
+      <div class="nh-feature-card" data-reveal data-delay="2">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/Tables.png" alt="Table Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-pink">Floor Plan</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-pink">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title">Table Management</h3>
+          </div>
+          <p class="nh-feature-card-desc">Visual floor plan with live table status — who's ordering, waiting to pay, or ready to seat.</p>
+          <div class="nh-feature-card-more">Learn more <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Live Order Management -->
+      <div class="nh-feature-card" data-reveal data-delay="3">
+        <div class="nh-feature-card-img-wrap">
+          <img src="/uploads/website/order-nobg.png" alt="Live Order Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-violet">Operations</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-violet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="9" height="9"/><rect x="13" y="2" width="9" height="9"/><rect x="2" y="13" width="9" height="9"/><rect x="13" y="13" width="9" height="9"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title">Live Order Management</h3>
+          </div>
+          <p class="nh-feature-card-desc">Every active order across all tables in real time. Bump, modify, or void in a tap with a full audit trail.</p>
+          <div class="nh-feature-card-more">Learn more <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Kitchen Display System -->
+      <div class="nh-feature-card" data-reveal data-delay="4">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/kitchen%20dashboard.png" alt="Kitchen Display System" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-blue">Back of House</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-blue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title">Kitchen Display System</h3>
+          </div>
+          <p class="nh-feature-card-desc">Smart routing, color-coded ticket timing, station-specific views. Your kitchen runs faster with zero paper.</p>
+          <div class="nh-feature-card-more">Learn more <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Staff Management -->
+      <div class="nh-feature-card" data-reveal data-delay="5">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/Staff%20management.png" alt="Staff Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-indigo">Team</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-indigo">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4338ca" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title">Staff Management</h3>
+          </div>
+          <p class="nh-feature-card-desc">Role-based access, shift tracking, and performance data per team member — built into the same system.</p>
+          <div class="nh-feature-card-more">Learn more <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Analytics & Reports -->
+      <div class="nh-feature-card" data-reveal data-delay="6">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/reports.png" alt="Analytics &amp; Reports" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-cyan">Analytics</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-cyan">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title">Analytics &amp; Reports</h3>
+          </div>
+          <p class="nh-feature-card-desc">Revenue by item, staff performance, peak hours, and menu insights — in a dashboard that makes sense.</p>
+          <div class="nh-feature-card-more">Learn more <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ HOW IT WORKS -->
+<section class="nh-hiw" id="how-it-works">
+  <div class="nh-hiw-inner">
+    <div class="nh-hiw-header" data-reveal>
+      <span class="nh-section-tag nh-tag-gray">The Flow</span>
+      <h2 class="nh-section-h2">From scan to settled<br /><span class="muted">in 3 steps.</span></h2>
+      <p class="nh-section-desc" style="max-width:560px;margin:20px auto 0;">Chuio handles the entire guest journey — ordering, kitchen routing, and payment — without a single paper slip.</p>
+    </div>
+
+    <div class="nh-steps">
+      <!-- Step 01 -->
+      <div class="nh-step" data-reveal-left>
+        <div class="nh-step-text">
+          <span class="nh-step-num">01</span>
+          <h3 class="nh-step-h3">Guests scan the QR code</h3>
+          <p class="nh-step-desc">Each table has a unique QR code. Guests scan and see your full visual menu instantly — no app download, no account needed.</p>
+        </div>
+        <div class="nh-step-visual">
+          <div class="nh-step-img-wrap">
+            <img src="https://chuio.io/uploads/chuio/New/customer%20menu%20iphone.png" alt="Customer menu on phone" class="nh-step-img" />
+          </div>
+          <div class="nh-stag nh-stag-tr" data-stag-delay="0.35">
+            <div class="nh-stag-qr">
+              <img src="https://chuio.io/uploads/chuio/New/QR%20scan.png" alt="QR scan" />
+            </div>
+            <p class="nh-stag-title">Scan to order</p>
+            <p class="nh-stag-sub">No app needed</p>
+          </div>
+          <div class="nh-stag nh-stag-bl" data-stag-delay="0.5">
+            <div style="display:flex;align-items:center;margin-bottom:6px;">
+              <span class="nh-stag-dot green"></span>
+              <span class="nh-stag-title" style="color:#15803d;">Order placed!</span>
+            </div>
+            <p class="nh-stag-sub">Pad Thai × 2 sent to kitchen</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 02 -->
+      <div class="nh-step reverse" data-reveal-right>
+        <div class="nh-step-text">
+          <span class="nh-step-num">02</span>
+          <h3 class="nh-step-h3">Orders hit the kitchen instantly</h3>
+          <p class="nh-step-desc">The moment a guest orders, it appears on the kitchen display — routed to the right station with the correct modifiers and timing.</p>
+        </div>
+        <div class="nh-step-visual">
+          <div class="nh-step-img-wrap">
+            <img src="https://chuio.io/uploads/chuio/New/kitchen%20dashboard.png" alt="Kitchen dashboard" class="nh-step-img cover" />
+          </div>
+          <div class="nh-stag nh-stag-tl" data-stag-delay="0.35">
+            <div style="display:flex;align-items:center;margin-bottom:6px;">
+              <span class="nh-stag-dot orange"></span>
+              <span class="nh-stag-title" style="color:#ea580c;">New ticket — Table 4</span>
+            </div>
+            <p class="nh-stag-sub">Routed to Wok Station</p>
+          </div>
+          <div class="nh-stag nh-stag-br" data-stag-delay="0.5">
+            <div class="nh-stag-timer">
+              <p class="small">Avg prep time</p>
+              <p class="big">4:30 <span>min</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 03 -->
+      <div class="nh-step" data-reveal-left>
+        <div class="nh-step-text">
+          <span class="nh-step-num">03</span>
+          <h3 class="nh-step-h3">Pay and go in seconds</h3>
+          <p class="nh-step-desc">Guests pay from their phone — Apple Pay, Google Pay, or card. No flagging down a server. No waiting. Tables turn faster.</p>
+        </div>
+        <div class="nh-step-visual">
+          <div class="nh-step-img-wrap">
+            <img src="https://chuio.io/uploads/chuio/New/Mobile%20Payment.png" alt="Mobile payment" class="nh-step-img" />
+          </div>
+          <div class="nh-stag nh-stag-tr" data-stag-delay="0.35">
+            <p class="nh-stag-sub" style="margin-bottom:8px;">Pay with</p>
+            <div class="nh-stag-pay-methods">
+              <span class="dark">Local Payment</span>
+              <span class="light">Card</span>
+            </div>
+          </div>
+          <div class="nh-stag nh-stag-bl" data-stag-delay="0.5">
+            <div style="display:flex;align-items:center;margin-bottom:6px;">
+              <span class="nh-stag-dot blue"></span>
+              <span class="nh-stag-title" style="color:#1d4ed8;">Payment complete</span>
+            </div>
+            <p class="nh-stag-sub">Receipt emailed instantly</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ GUEST EXPERIENCE -->
+<section class="nh-guest">
+  <div class="nh-guest-glow"></div>
+  <div class="nh-guest-inner">
+    <div class="nh-guest-header" data-reveal>
+      <span class="nh-section-tag nh-tag-orange">Guest Experience</span>
+      <h2 class="nh-section-h2">A dining experience<br /><span class="muted">guests will love.</span></h2>
+      <p class="nh-section-desc" style="max-width:560px;margin:20px auto 0;">From the moment they scan to the moment they leave, Chuio makes every touchpoint feel effortless.</p>
+    </div>
+
+    <div class="nh-guest-layout">
+      <!-- Photo -->
+      <div class="nh-guest-img-col" data-reveal-left>
+        <div class="nh-guest-img-frame">
+          <img src="https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=1200" alt="Guests enjoying dining experience" class="nh-guest-img" />
+        </div>
+        <div class="nh-guest-img-overlay"></div>
+        <div class="nh-guest-review">
+          <div class="nh-guest-stars">
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="nh-guest-review-text">"Ordering was so easy!"</p>
+          <p class="nh-guest-review-by">Guest review via Chuio</p>
+        </div>
+      </div>
+
+      <!-- Cards -->
+      <div class="nh-guest-cards-col">
+        <div class="nh-guest-card pink" data-reveal data-delay="1">
+          <div class="nh-guest-card-icon icon-bg-pink">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title">Loyalty Programme</h3>
+          <p class="nh-guest-card-desc">Reward returning guests with points, perks, and exclusive offers.</p>
+        </div>
+        <div class="nh-guest-card violet" data-reveal data-delay="2">
+          <div class="nh-guest-card-icon icon-bg-violet">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title">Coupons &amp; Promos</h3>
+          <p class="nh-guest-card-desc">Create time-limited discounts and promo codes that guests redeem at checkout.</p>
+        </div>
+        <div class="nh-guest-card blue" data-reveal data-delay="3">
+          <div class="nh-guest-card-icon icon-bg-blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title">Staff Reports</h3>
+          <p class="nh-guest-card-desc">Track individual staff performance, tips, and shift summaries in one view.</p>
+        </div>
+        <div class="nh-guest-card green" data-reveal data-delay="4">
+          <div class="nh-guest-card-icon icon-bg-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title">Reservations</h3>
+          <p class="nh-guest-card-desc">Let guests book tables in advance with real-time availability and confirmations.</p>
+        </div>
+        <a href="https://apps.apple.com/hk/app/chuio/id6760214563" target="_blank" rel="noopener noreferrer" class="nh-guest-appstore" data-reveal data-delay="5">
+          <div class="nh-guest-appstore-text">
+            <p class="title">Available on iOS</p>
+            <p class="sub">Download the Chuio app for your restaurant</p>
+          </div>
+          <img src="https://chuio.io/uploads/website/App%20Store%20Download.png" alt="Download on the App Store" />
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ COMPARISON -->
+<section class="nh-compare" id="comparison">
+  <div class="nh-compare-inner">
+    <div class="nh-compare-header" data-reveal>
+      <span class="nh-section-tag nh-tag-red">The Honest Comparison</span>
+      <h2 class="nh-section-h2">Chuio vs<br /><span class="muted">Traditional POS.</span></h2>
+      <p class="nh-section-desc" style="max-width:512px;margin:20px auto 0;">Most restaurant tech is old software with a new coat of paint. Chuio was built from scratch for the modern dining room.</p>
+    </div>
+
+    <div class="nh-compare-images">
+      <div class="nh-compare-img-col" data-reveal-left>
+        <span class="nh-compare-label pos">Traditional POS</span>
+        <div class="nh-compare-img-frame pos">
+          <img src="https://chuio.io/uploads/chuio/V2/pos%20bill.jpg" alt="Traditional POS bill" class="grayscale" />
+          <div class="nh-compare-img-footer pos">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>Paper receipt — slow, wasteful, error-prone</span>
+          </div>
+        </div>
+      </div>
+      <div class="nh-compare-img-col" data-reveal-right>
+        <span class="nh-compare-label chuio">Chuio</span>
+        <div class="nh-compare-img-frame chuio">
+          <img src="https://chuio.io/uploads/chuio/V2/chuio%20bill.jpg" alt="Chuio digital bill" />
+          <div class="nh-compare-img-footer chuio">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            <span>Digital bill — paid in seconds from the table</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nh-compare-lists">
+      <!-- Traditional POS -->
+      <div class="nh-compare-list pos" data-reveal>
+        <div class="nh-compare-list-header">
+          <div class="nh-compare-list-header-icon pos">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </div>
+          <div>
+            <h3>Traditional POS</h3>
+            <p style="font-size:14px;color:#9ca3af;">Old model, high friction</p>
+          </div>
+        </div>
+        <ul>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text">$2,000+ upfront hardware per terminal</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text">Manual order-taking prone to human error</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text">Paper tickets lost, smudged, or out of order</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text">Guests wait 5–10 min to pay — tables turn slow</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text">Clunky software — days to train new staff</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text">No real-time data — blind to what's selling</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text">Separate tools for POS, KDS, payments, menus</span></li>
+        </ul>
+      </div>
+      <!-- Chuio -->
+      <div class="nh-compare-list chuio" data-reveal data-delay="1">
+        <div class="nh-compare-list-header">
+          <div class="nh-compare-list-header-icon chuio">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div>
+            <h3>Chuio</h3>
+            <p style="font-size:14px;color:#9ca3af;">Built for the modern restaurant</p>
+          </div>
+        </div>
+        <ul>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text">Zero hardware cost — runs on any iPad</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text">Instant QR ordering — guests order themselves</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text">Digital KDS with smart routing &amp; timing</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text">Pay from the table in under 30 seconds</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text">Intuitive setup in under an hour</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text">Live analytics across items, staff, and periods</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text">One platform — ordering, kitchen, and payments</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ PRICING -->
+<section class="nh-pricing" id="pricing">
+  <div class="nh-pricing-glow"></div>
+  <div class="nh-pricing-inner">
+    <div class="nh-pricing-header" data-reveal>
+      <span class="nh-section-tag nh-tag-orange">Pricing</span>
+      <h2 class="nh-section-h2">Start free.<br /><span class="muted">Scale when ready.</span></h2>
+      <p class="nh-section-desc" style="max-width:400px;margin:20px auto 0;">Get started at zero cost. Upgrade to Premium when you need the full Chuio experience.</p>
+    </div>
+
+    <div class="nh-plans">
+      <!-- Free -->
+      <div class="nh-plan-free" data-reveal data-delay="1">
+        <div>
+          <h3 class="nh-plan-name">Free</h3>
+          <p class="nh-plan-tagline">Core tools to get your restaurant digital — no strings attached.</p>
+          <div class="nh-plan-price-row">
+            <span class="nh-plan-price">$0</span>
+            <span class="nh-plan-price-suffix">/month</span>
+          </div>
+        </div>
+        <a href="https://chuio.io/register.html" target="_blank" rel="noopener noreferrer" class="nh-plan-btn gray">Get Started Free</a>
+        <div class="nh-plan-divider light"></div>
+        <ul class="nh-plan-features">
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>QR Code Ordering</li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Order Management</li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Menu Management</li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Table Management</li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Online Payments (card, Apple Pay, Google Pay)</li>
+          <li class="excluded"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Staff Management &amp; Reports</li>
+          <li class="excluded"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Bookings &amp; Reservations</li>
+          <li class="excluded"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Item Availability Tracking</li>
+          <li class="excluded"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Timed Menus</li>
+          <li class="excluded"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Local Payment Terminal Integration</li>
+          <li class="excluded"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Loyalty &amp; Coupons</li>
+        </ul>
+      </div>
+
+      <!-- Premium -->
+      <div class="nh-plan-premium" data-reveal data-delay="2">
+        <span class="nh-plan-popular">Most Popular</span>
+        <div>
+          <h3 class="nh-plan-name white">Premium</h3>
+          <p class="nh-plan-tagline" style="color:rgba(255,255,255,0.5);">The full Chuio platform — every feature your restaurant needs to thrive.</p>
+          <div class="nh-plan-price-row">
+            <span class="nh-plan-price white">$400</span>
+            <div class="nh-plan-hkd">
+              <span>HKD</span>
+              <span>/month</span>
+            </div>
+          </div>
+          <p class="nh-plan-usd">≈ USD $52 / month</p>
+        </div>
+        <a href="https://chuio.io/register.html" target="_blank" rel="noopener noreferrer" class="nh-plan-btn orange">Start Free Trial</a>
+        <div class="nh-plan-divider dark"></div>
+        <ul class="nh-plan-features">
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Free</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Local payment terminal integration</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Split a table / split bill</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Item availability tracking (86 items)</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Bookings &amp; reservations</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Staff management &amp; reports</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Timed menus</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Open food items</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Auto-match food combos &amp; meals</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Custom piece ordering</li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Service requests</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Enterprise -->
+    <div class="nh-enterprise" data-reveal>
+      <div class="nh-enterprise-header">
+        <div>
+          <span class="nh-section-tag nh-tag-gray">Enterprise</span>
+          <h3 class="nh-enterprise-title">Everything, plus full customisation.</h3>
+          <p class="nh-enterprise-desc">For restaurant groups and brands that need a bespoke platform — dedicated consulting, app customisation, and white-glove onboarding via our Service Packs.</p>
+        </div>
+        <a href="https://chuio.io/register.html" target="_blank" rel="noopener noreferrer" class="nh-enterprise-btn">
+          View Service Packs
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+      <div class="nh-sp-grid">
+        <div class="nh-sp-card" style="--sp-accent:#3B82F6;">
+          <p class="nh-sp-hours">5 HRS</p>
+          <p class="nh-sp-price">HKD 4,000</p>
+          <p class="nh-sp-new">New customers</p>
+          <p class="nh-sp-label">General Walkthrough</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Email &amp; Phone Support</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Training &amp; Coaching</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Configuration</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Project Management</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Data Import Assistance</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>On-site Consulting</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>App Customisation</li>
+          </ul>
+        </div>
+        <div class="nh-sp-card" style="--sp-accent:#22C55E;">
+          <p class="nh-sp-hours">10 HRS</p>
+          <p class="nh-sp-price">HKD 8,000</p>
+          <p class="nh-sp-new">New customers</p>
+          <p class="nh-sp-label">Basic Configuration</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Email &amp; Phone Support</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Training &amp; Coaching</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Configuration</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Project Management</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Data Import Assistance</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>On-site Consulting</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>App Customisation</li>
+          </ul>
+        </div>
+        <div class="nh-sp-card popular" style="--sp-accent:#FF6A2A;">
+          <p class="nh-sp-hours">25 HRS</p>
+          <p class="nh-sp-price">HKD 18,500</p>
+          <p class="nh-sp-new">New customers</p>
+          <p class="nh-sp-label">Normal Setup</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Email &amp; Phone Support</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Training &amp; Coaching</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Configuration</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Project Management</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Data Import Assistance</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>On-site Consulting</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>App Customisation</li>
+          </ul>
+        </div>
+        <div class="nh-sp-card" style="--sp-accent:#8B5CF6;">
+          <p class="nh-sp-hours">50 HRS</p>
+          <p class="nh-sp-price">HKD 35,000</p>
+          <p class="nh-sp-new">New customers</p>
+          <p class="nh-sp-label">Customization / Advanced</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Email &amp; Phone Support</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Training &amp; Coaching</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Configuration</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Project Management</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Data Import Assistance</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>On-site Consulting</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>App Customisation</li>
+          </ul>
+        </div>
+        <div class="nh-sp-card" style="--sp-accent:#F43F5E;">
+          <p class="nh-sp-hours">100 HRS</p>
+          <p class="nh-sp-price">HKD 65,000</p>
+          <p class="nh-sp-new">New customers</p>
+          <p class="nh-sp-label">Enterprise</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Email &amp; Phone Support</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Training &amp; Coaching</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Configuration</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Project Management</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>Data Import Assistance</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>On-site Consulting</li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>App Customisation</li>
+          </ul>
+        </div>
+      </div>
+      <p class="nh-sp-note">All Service Packs include Premium plan. New customer pricing shown (15% discount applied). <a href="https://chuio.io/">See full details →</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ CTA -->
+<section class="nh-cta">
+  <div class="nh-cta-glow"></div>
+  <div class="nh-cta-grid"></div>
+  <div class="nh-cta-inner">
+    <div class="nh-cta-badge">
+      <span class="dot"></span>
+      14-day free trial — no credit card required
+    </div>
+    <h2 class="nh-cta-h2">Ready to run a<br /><span class="orange">smarter restaurant?</span></h2>
+    <p class="nh-cta-desc">Join thousands of restaurants that have left their traditional POS behind. Setup takes under an hour.</p>
+    <div class="nh-cta-btns">
+      <a href="https://chuio.io/register.html" target="_blank" rel="noopener noreferrer" class="nh-btn-cta">
+        Start Your Free Trial
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <button class="nh-btn-cta-outline" data-open-demo>Book a Demo</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ SUPPORT -->
+<section class="nh-support">
+  <div class="nh-support-inner">
+    <div class="nh-support-card" data-reveal>
+      <div class="nh-support-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
+      <div class="nh-support-text">
+        <span class="nh-section-tag nh-tag-orange">Merchant Guide</span>
+        <h2>Need help setting up?</h2>
+        <p>Our merchant reference guide walks you through everything — from configuring your menu and tables to processing payments and reading your analytics dashboard.</p>
+      </div>
+      <div class="nh-support-btns">
+        <a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer" class="nh-support-btn-primary">
+          Open Help Guide
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I+need+help+with+setup&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-support-btn-outline">Chat with Us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FAQ -->
+<section class="nh-faq" id="faq">
+  <div class="nh-faq-inner">
+    <div class="nh-faq-header" data-reveal>
+      <div class="nh-faq-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <h2 class="nh-faq-h2">Frequently asked questions</h2>
+      <p class="nh-faq-desc">Everything you need to know about Chuio. Can't find the answer you're looking for? <a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Visit our Help Centre</a></p>
+    </div>
+
+    <div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Are there any hidden fees like cloud hosting or other web-related charges?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>None whatsoever. When you register a Chuio account, everything you need to run your restaurant is included in your monthly plan. We do not charge separately for cloud hosting, software updates, or platform access. The only additional costs that may apply are optional Service Packs or features explicitly outlined in your plan — nothing more.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">What exactly is included in the monthly subscription?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Your monthly plan covers full access to the Chuio platform including QR ordering, kitchen display system, table management, payments processing, real-time analytics, and unlimited menu updates. There are no per-transaction fees hidden within the platform itself — you pay a flat monthly rate per location.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Is there a free trial? Do I need a credit card to start?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Yes — every new restaurant gets a 14-day free trial with full access to all features. No credit card is required to start. You only enter payment details when you decide to continue after the trial period.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">What is a Service Pack, and do I need one?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Service Packs are optional blocks of pre-purchased expert time you can use for setup, training, customisation, or onsite consulting. They are separate from your subscription. Most restaurants can set up Chuio themselves using our documentation. Service Packs are for those who want hands-on help or need custom features built.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Which devices and operating systems does Chuio work on?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Chuio runs on iPads and iPhones (iOS) for the restaurant management and kitchen display side, and on any device with a modern browser for the owner dashboard and analytics. Customers scan a QR code and order from their own smartphone — no app download required for guests.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Can I cancel my subscription at any time?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Yes. There are no long-term contracts. You can cancel your subscription at any time from your account settings and you will not be charged after your current billing period ends. We do not charge cancellation fees.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Is my restaurant data secure?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Absolutely. All data is encrypted in transit and at rest. We use industry-standard security practices and our infrastructure is hosted on enterprise-grade cloud providers. We never sell your data to third parties, and you retain full ownership of all your restaurant and customer data.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Can I use Chuio across multiple restaurant locations?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Yes. Chuio supports multi-location management. Each location is billed as a separate unit under your account, and you can manage all locations from a unified owner dashboard. Contact us for group pricing if you operate multiple venues.</p></div>
+      </div>
+    </div>
+
+    <div class="nh-faq-cta" data-reveal>
+      <div class="nh-faq-cta-text">
+        <p>Still have questions?</p>
+        <small>Our team is happy to help — reach out and we'll get back to you promptly.</small>
+      </div>
+      <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I+have+a+question&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-faq-cta-btn">
+        Chat with us
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FOOTER -->
+<footer class="nh-footer">
+  <div class="nh-footer-inner">
+    <div class="nh-footer-grid">
+      <div class="nh-footer-brand">
+        <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="logo" />
+        <p>The all-in-one restaurant OS. QR ordering, kitchen display, payments, and analytics in one platform.</p>
+        <a href="https://apps.apple.com/hk/app/chuio/id6760214563" target="_blank" rel="noopener noreferrer" class="nh-footer-appstore">
+          <img src="https://chuio.io/uploads/website/App%20Store%20Download.png" alt="Download on the App Store" />
+        </a>
+      </div>
+      <div class="nh-footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#">QR Ordering</a></li>
+          <li><a href="#">Kitchen Display</a></li>
+          <li><a href="#">Payments</a></li>
+          <li><a href="#">Analytics</a></li>
+          <li><a href="#">Menu Management</a></li>
+          <li><a href="#">Table Management</a></li>
+        </ul>
+      </div>
+      <div class="nh-footer-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#">About Us</a></li>
+          <li><a href="#how-it-works">How It Works</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">Careers</a></li>
+        </ul>
+      </div>
+      <div class="nh-footer-col">
+        <h4>Support</h4>
+        <ul>
+          <li><a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Help Center</a></li>
+          <li><a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Getting Started</a></li>
+          <li><a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+your+plans&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer">Contact Sales</a></li>
+          <li><a href="#">System Status</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="nh-footer-bottom">
+      <p class="nh-footer-copy">© 2025 Chuio. All rights reserved.</p>
+      <div class="nh-footer-legal">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+        <a href="#">Cookie Policy</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════════════ DEMO MODAL -->
+<div id="nh-demo-modal" class="nh-modal-overlay" id="nh-modal-overlay" style="display:none;">
+  <div class="nh-modal">
+    <div class="nh-modal-top-bar"></div>
+    <button class="nh-modal-close" id="nh-modal-close" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="nh-modal-body">
+      <span class="nh-section-tag nh-tag-orange">Book a Demo</span>
+      <h2>Ready for the Future?</h2>
+      <p class="sub">Be among the first restaurants to experience modern QR ordering. Join our waitlist for exclusive early access — completely free.</p>
+      <form class="nh-modal-form" id="nh-demo-form">
+        <input type="text" id="demo-name" placeholder="Restaurant Name" required />
+        <input type="email" id="demo-email" placeholder="Email Address" required />
+        <input type="tel" id="demo-phone" placeholder="Phone Number" required />
+        <button type="submit" class="nh-modal-submit">I'm Ready for Launch!</button>
+      </form>
+      <p class="nh-modal-note">✓ No spam &nbsp;•&nbsp; ✓ Free forever &nbsp;•&nbsp; ✓ Early access to beta features</p>
+      <p class="nh-modal-whatsapp">Or connect directly: <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+joining+the+waitlist&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a></p>
+    </div>
+  </div>
+</div>
+
+<script src="/newhome.js"></script>
+</body>
+</html>
