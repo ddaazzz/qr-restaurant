@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Service Packs — Chuio Restaurant OS</title>
+  <meta name="description" content="Pre-purchased blocks of expert time. Use them for setup, training, customisation, onsite visits — whatever your restaurant needs to succeed with Chuio." />
+  <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/newhome.css" />
+  <style>
+    /* ── SP HERO ──────────────────────────────────────────────────── */
+    .sp-hero{padding:160px 0 80px;background:#fff;position:relative;overflow:hidden;text-align:center}
+    .sp-hero-grid{position:absolute;inset:0;background-image:radial-gradient(circle,#e5e7eb 1px,transparent 1px);background-size:28px 28px;opacity:.5}
+    .sp-hero-glow{position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(255,106,42,.12) 0%,transparent 70%);pointer-events:none}
+    .sp-hero-inner{max-width:800px;margin:0 auto;padding:0 40px;position:relative;z-index:1}
+    .sp-hero-h1{font-size:clamp(42px,6vw,72px);font-weight:800;line-height:1.08;letter-spacing:-2px;color:#111827;margin:20px 0}
+    .sp-hero-h1 span{color:#9ca3af}
+    .sp-hero-desc{font-size:18px;color:#6b7280;max-width:560px;margin:0 auto 36px;line-height:1.7}
+    .sp-hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+    /* ── SP HOURS ─────────────────────────────────────────────────── */
+    .sp-hours{padding:80px 0;background:#F7F8FC}
+    .sp-hours-inner{max-width:1200px;margin:0 auto;padding:0 40px}
+    .sp-hours-header{text-align:center;margin-bottom:56px}
+    .sp-hours-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+    .sp-hour-card{background:#fff;border-radius:16px;padding:28px;border:1px solid #f3f4f6;transition:transform .2s,box-shadow .2s}
+    .sp-hour-card:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,0,0,.08)}
+    .sp-hour-card-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+    .sp-hour-card h3{font-size:15px;font-weight:700;color:#111827;margin-bottom:8px}
+    .sp-hour-card p{font-size:13px;color:#6b7280;line-height:1.6}
+
+    /* ── SP PACKS ─────────────────────────────────────────────────── */
+    .sp-packs{padding:100px 0;background:#fff}
+    .sp-packs-inner{max-width:1280px;margin:0 auto;padding:0 40px}
+    .sp-packs-header{text-align:center;margin-bottom:8px}
+    .sp-packs-note{text-align:center;font-size:14px;color:#9ca3af;margin-bottom:56px}
+    .sp-packs-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px}
+    .sp-pack-card{background:#fff;border-radius:20px;border:1.5px solid #f3f4f6;padding:28px 24px 24px;display:flex;flex-direction:column;position:relative;transition:transform .2s,box-shadow .2s}
+    .sp-pack-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.1)}
+    .sp-pack-card.popular{border-color:#FF6A2A;box-shadow:0 0 0 3px rgba(255,106,42,.1)}
+    .sp-pack-popular-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#FF6A2A;color:#fff;font-size:11px;font-weight:700;padding:4px 14px;border-radius:99px;white-space:nowrap;letter-spacing:.3px}
+    .sp-pack-hrs{font-size:28px;font-weight:800;color:var(--pack-color);letter-spacing:-1px}
+    .sp-pack-hrs span{font-size:14px;font-weight:600;color:#9ca3af;letter-spacing:0}
+    .sp-pack-name{font-size:17px;font-weight:700;color:#111827;margin:8px 0 4px}
+    .sp-pack-tagline{font-size:13px;color:#6b7280;line-height:1.5;margin-bottom:20px}
+    .sp-pack-price{font-size:26px;font-weight:800;color:#111827;letter-spacing:-.5px}
+    .sp-pack-price-sub{font-size:12px;color:#9ca3af;margin-bottom:16px}
+    .sp-pack-divider{height:1px;background:#f3f4f6;margin:16px 0}
+    .sp-pack-features{list-style:none;padding:0;margin:0 0 24px;display:flex;flex-direction:column;gap:8px;flex:1}
+    .sp-pack-features li{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:#374151;line-height:1.5}
+    .sp-pack-features li svg{flex-shrink:0;margin-top:2px}
+    .sp-pack-btn{display:block;text-align:center;padding:12px;border-radius:10px;font-size:14px;font-weight:600;transition:all .2s;margin-top:auto;cursor:pointer}
+    .sp-pack-btn.colored{background:var(--pack-color);color:#fff}
+    .sp-pack-btn.colored:hover{opacity:.88}
+    .sp-pack-btn.outline{border:1.5px solid #e5e7eb;color:#374151}
+    .sp-pack-btn.outline:hover{border-color:#9ca3af;color:#111827}
+    .sp-packs-wa{text-align:center;margin-top:40px;font-size:15px;color:#6b7280}
+    .sp-packs-wa a{color:#FF6A2A;font-weight:600}
+
+    /* ── SP HOW IT WORKS ──────────────────────────────────────────── */
+    .sp-how{padding:100px 0;background:#F7F8FC}
+    .sp-how-inner{max-width:1000px;margin:0 auto;padding:0 40px}
+    .sp-how-header{text-align:center;margin-bottom:64px}
+    .sp-how-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:32px}
+    .sp-how-step{text-align:center}
+    .sp-how-step-num{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:14px;background:#fff;border:1.5px solid #f3f4f6;font-size:20px;font-weight:800;color:#FF6A2A;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+    .sp-how-step h3{font-size:16px;font-weight:700;color:#111827;margin-bottom:10px}
+    .sp-how-step p{font-size:14px;color:#6b7280;line-height:1.6}
+
+    /* ── SP TERMS ─────────────────────────────────────────────────── */
+    .sp-terms{padding:80px 0;background:#fff}
+    .sp-terms-inner{max-width:800px;margin:0 auto;padding:0 40px}
+    .sp-terms-header{text-align:center;margin-bottom:40px}
+    .sp-terms-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+    .sp-terms-list li{display:flex;gap:16px;padding:20px;background:#F7F8FC;border-radius:12px;font-size:14px;color:#374151;line-height:1.7}
+    .sp-terms-num{flex-shrink:0;width:24px;height:24px;border-radius:6px;background:#FF6A2A;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px}
+
+    /* ── SP CTA ───────────────────────────────────────────────────── */
+    .sp-cta{padding:100px 0;background:#111827;position:relative;overflow:hidden;text-align:center}
+    .sp-cta-glow{position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(255,106,42,.2) 0%,transparent 70%);pointer-events:none}
+    .sp-cta-grid{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.05) 1px,transparent 1px);background-size:28px 28px}
+    .sp-cta-inner{max-width:680px;margin:0 auto;padding:0 40px;position:relative;z-index:1}
+    .sp-cta-h2{font-size:clamp(32px,5vw,52px);font-weight:800;color:#fff;line-height:1.1;letter-spacing:-1.5px;margin:20px 0 16px}
+    .sp-cta-h2 span{color:#FF6A2A}
+    .sp-cta-desc{font-size:17px;color:rgba(255,255,255,.55);line-height:1.7;margin-bottom:36px}
+    .sp-cta-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+    /* ── RESPONSIVE ───────────────────────────────────────────────── */
+    @media(max-width:1100px){.sp-packs-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:768px){
+      .sp-hero{padding:120px 0 60px}
+      .sp-hero-inner,.sp-hours-inner,.sp-packs-inner,.sp-how-inner,.sp-terms-inner,.sp-cta-inner{padding:0 20px}
+      .sp-hours-grid{grid-template-columns:1fr 1fr}
+      .sp-packs-grid{grid-template-columns:1fr 1fr}
+      .sp-how-steps{grid-template-columns:1fr 1fr}
+    }
+    @media(max-width:480px){
+      .sp-hours-grid{grid-template-columns:1fr}
+      .sp-packs-grid{grid-template-columns:1fr}
+      .sp-how-steps{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body class="nh-body">
+
+<!-- ═══════════════════════════════════════════════════════════════ NAVBAR -->
+<nav class="nh-nav" id="nh-nav">
+  <div class="nh-nav-inner">
+    <a href="/newhome.html">
+      <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="nh-nav-logo" />
+    </a>
+    <div class="nh-nav-links">
+      <a href="/newhome.html#features">Features</a>
+      <a href="/newhome.html#how-it-works">How It Works</a>
+      <a href="/newhome.html#comparison">Chuio vs POS</a>
+      <a href="/newhome.html#pricing">Pricing</a>
+      <a href="/servicepacks.html" style="color:#FF6A2A;font-weight:600;">Service Packs</a>
+      <a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Help</a>
+    </div>
+    <div class="nh-nav-cta">
+      <a href="https://chuio.io/login.html" class="nh-nav-login">Log in</a>
+      <a href="https://chuio.io/register.html" class="nh-nav-get-started" target="_blank" rel="noopener noreferrer">
+        Get Started
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+    <button class="nh-hamburger" id="nh-hamburger" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</nav>
+
+<!-- Mobile Menu -->
+<div class="nh-mobile-menu" id="nh-mobile-menu">
+  <a href="/newhome.html#features">Features</a>
+  <a href="/newhome.html#how-it-works">How It Works</a>
+  <a href="/newhome.html#comparison">Chuio vs POS</a>
+  <a href="/newhome.html#pricing">Pricing</a>
+  <a href="/servicepacks.html" style="color:#FF6A2A;font-weight:600;">Service Packs</a>
+  <a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Help</a>
+  <div class="nh-mobile-divider"></div>
+  <a href="https://chuio.io/login.html" style="color:#6b7280;">Log in</a>
+  <a href="https://chuio.io/register.html" class="nh-mobile-cta" target="_blank" rel="noopener noreferrer">Get Started Free</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ HERO -->
+<section class="sp-hero">
+  <div class="sp-hero-grid"></div>
+  <div class="sp-hero-glow"></div>
+  <div class="sp-hero-inner">
+    <div data-reveal>
+      <span class="nh-section-tag nh-tag-orange">Professional Services</span>
+      <h1 class="sp-hero-h1">Service<br /><span>Packs.</span></h1>
+      <p class="sp-hero-desc">Pre-purchased blocks of expert time. Use them for setup, training, customisation, or onsite visits — whatever your restaurant needs to succeed with Chuio.</p>
+      <div class="sp-hero-btns">
+        <a href="#packs" class="nh-btn-primary">
+          Choose a Pack
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27d+like+advice+on+which+Service+Pack+is+right+for+me&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-btn-outline">Talk to Us First</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ WHAT HOURS CAN BE USED FOR -->
+<section class="sp-hours">
+  <div class="sp-hours-inner">
+    <div class="sp-hours-header" data-reveal>
+      <span class="nh-section-tag nh-tag-gray">Flexible Hours</span>
+      <h2 class="nh-section-h2">What hours<br /><span class="muted">can be used for.</span></h2>
+      <p class="nh-section-desc" style="max-width:520px;margin:16px auto 0;">Every hour is flexible — mix and match across these service categories based on what you need most.</p>
+    </div>
+    <div class="sp-hours-grid">
+      <!-- Configuration -->
+      <div class="sp-hour-card" data-reveal data-delay="1">
+        <div class="sp-hour-card-icon" style="background:#fff7ed;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 1 0 4.93 19.07 10 10 0 0 0 19.07 4.93z"/><path d="M15.54 8.46a5 5 0 1 0-7.07 7.07"/></svg>
+        </div>
+        <h3>Configuration</h3>
+        <p>Platform setup, menu builds, hardware connectivity</p>
+      </div>
+      <!-- Project Management -->
+      <div class="sp-hour-card" data-reveal data-delay="2">
+        <div class="sp-hour-card-icon" style="background:#eff6ff;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <h3>Project Management</h3>
+        <p>Dedicated oversight from scoping to go-live</p>
+      </div>
+      <!-- Support -->
+      <div class="sp-hour-card" data-reveal data-delay="3">
+        <div class="sp-hour-card-icon" style="background:#f0fdf4;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>Support</h3>
+        <p>Hands-on issue resolution and troubleshooting</p>
+      </div>
+      <!-- Training -->
+      <div class="sp-hour-card" data-reveal data-delay="4">
+        <div class="sp-hour-card-icon" style="background:#fdf4ff;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9333ea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </div>
+        <h3>Training</h3>
+        <p>Staff walkthroughs, manager sessions, admin guides</p>
+      </div>
+      <!-- Data Assistance -->
+      <div class="sp-hour-card" data-reveal data-delay="5">
+        <div class="sp-hour-card-icon" style="background:#f0fdfa;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        </div>
+        <h3>Data Assistance</h3>
+        <p>Menu data import, analytics setup, reporting</p>
+      </div>
+      <!-- Onsite Consulting -->
+      <div class="sp-hour-card" data-reveal data-delay="6">
+        <div class="sp-hour-card-icon" style="background:#fff1f2;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e11d48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <h3>Onsite Consulting</h3>
+        <p>In-person visits to your restaurant location</p>
+      </div>
+      <!-- App Customisation -->
+      <div class="sp-hour-card" data-reveal data-delay="7" style="--sp-delay:0.49s;">
+        <div class="sp-hour-card-icon" style="background:#fefce8;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>App Customisation</h3>
+        <p>Bespoke features, UI changes, and integrations</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ PACKS -->
+<section class="sp-packs" id="packs">
+  <div class="sp-packs-inner">
+    <div class="sp-packs-header" data-reveal>
+      <span class="nh-section-tag nh-tag-orange">Choose Your Pack</span>
+      <h2 class="nh-section-h2">Pick the right pack<br /><span class="muted">for your restaurant.</span></h2>
+    </div>
+    <p class="sp-packs-note" data-reveal>All packs include Premium plan access. Buy once, use anytime within 12 months.</p>
+
+    <div class="sp-packs-grid">
+      <!-- 5 hrs -->
+      <div class="sp-pack-card" style="--pack-color:#3B82F6;" data-reveal data-delay="1">
+        <div class="sp-pack-hrs">5 <span>HRS</span></div>
+        <div class="sp-pack-name">General Walkthrough</div>
+        <div class="sp-pack-tagline">Perfect for new restaurants wanting a guided tour and Q&amp;A session to get up and running quickly.</div>
+        <div class="sp-pack-price">HKD 4,000</div>
+        <div class="sp-pack-price-sub">one-time · new customers</div>
+        <div class="sp-pack-divider"></div>
+        <ul class="sp-pack-features">
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>System overview &amp; orientation</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Q&amp;A with a Chuio specialist</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Basic menu setup guidance</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>App walkthrough on your device</li>
+        </ul>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+the+General+Walkthrough+Service+Pack+(5+hrs)&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="sp-pack-btn outline">Get this pack</a>
+      </div>
+
+      <!-- 10 hrs -->
+      <div class="sp-pack-card" style="--pack-color:#22C55E;" data-reveal data-delay="2">
+        <div class="sp-pack-hrs">10 <span>HRS</span></div>
+        <div class="sp-pack-name">Basic Configuration</div>
+        <div class="sp-pack-tagline">Ideal for small restaurants needing hands-on help with initial setup and staff training.</div>
+        <div class="sp-pack-price">HKD 8,000</div>
+        <div class="sp-pack-price-sub">one-time · new customers</div>
+        <div class="sp-pack-divider"></div>
+        <ul class="sp-pack-features">
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Starter</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Menu &amp; category configuration</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Staff accounts &amp; permissions</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Printer &amp; hardware setup</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Payment gateway onboarding</li>
+        </ul>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+the+Basic+Configuration+Service+Pack+(10+hrs)&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="sp-pack-btn outline">Get this pack</a>
+      </div>
+
+      <!-- 25 hrs — Most Popular -->
+      <div class="sp-pack-card popular" style="--pack-color:#FF6A2A;" data-reveal data-delay="3">
+        <span class="sp-pack-popular-badge">Most Popular</span>
+        <div class="sp-pack-hrs">25 <span>HRS</span></div>
+        <div class="sp-pack-name">Normal Setup</div>
+        <div class="sp-pack-tagline">Our most popular pack. A comprehensive setup covering all core features with team training.</div>
+        <div class="sp-pack-price">HKD 18,500</div>
+        <div class="sp-pack-price-sub">one-time · new customers</div>
+        <div class="sp-pack-divider"></div>
+        <ul class="sp-pack-features">
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Basic</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Full QR ordering setup</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Kitchen display system config</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Table layout configuration</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Reports &amp; analytics setup</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>On-site support session</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Dedicated onboarding manager</li>
+        </ul>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+the+Normal+Setup+Service+Pack+(25+hrs)&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="sp-pack-btn colored">Get this pack</a>
+      </div>
+
+      <!-- 50 hrs -->
+      <div class="sp-pack-card" style="--pack-color:#8B5CF6;" data-reveal data-delay="4">
+        <div class="sp-pack-hrs">50 <span>HRS</span></div>
+        <div class="sp-pack-name">Advanced Setup</div>
+        <div class="sp-pack-tagline">For larger operations or multi-location restaurants needing deep customisation and integration work.</div>
+        <div class="sp-pack-price">HKD 35,000</div>
+        <div class="sp-pack-price-sub">one-time · new customers</div>
+        <div class="sp-pack-divider"></div>
+        <ul class="sp-pack-features">
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Normal</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Multi-location configuration</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Custom menu design</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Advanced analytics dashboard</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Data migration assistance</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>2× on-site consulting sessions</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Priority support channel</li>
+        </ul>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+the+Advanced+Setup+Service+Pack+(50+hrs)&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="sp-pack-btn outline">Get this pack</a>
+      </div>
+
+      <!-- 100 hrs -->
+      <div class="sp-pack-card" style="--pack-color:#F43F5E;" data-reveal data-delay="5">
+        <div class="sp-pack-hrs">100 <span>HRS</span></div>
+        <div class="sp-pack-name">Enterprise</div>
+        <div class="sp-pack-tagline">Full white-glove service for restaurant groups and brands requiring bespoke platform customisation.</div>
+        <div class="sp-pack-price">HKD 65,000</div>
+        <div class="sp-pack-price-sub">one-time · new customers</div>
+        <div class="sp-pack-divider"></div>
+        <ul class="sp-pack-features">
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Advanced</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Full app customisation</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Branding &amp; UI white-labelling</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Custom integrations</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Dedicated project manager</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Unlimited on-site sessions</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>24/7 priority support</li>
+          <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F43F5E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Monthly review calls</li>
+        </ul>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+the+Enterprise+Service+Pack+(100+hrs)&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="sp-pack-btn outline">Get this pack</a>
+      </div>
+    </div>
+
+    <p class="sp-packs-wa" data-reveal>Not sure which pack fits? <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27d+like+advice+on+which+Service+Pack+is+right+for+me&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp →</a></p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ HOW IT WORKS -->
+<section class="sp-how">
+  <div class="sp-how-inner">
+    <div class="sp-how-header" data-reveal>
+      <span class="nh-section-tag nh-tag-gray">The Process</span>
+      <h2 class="nh-section-h2">How Service Packs<br /><span class="muted">work.</span></h2>
+      <p class="nh-section-desc" style="max-width:480px;margin:16px auto 0;">Simple, transparent, and built around your schedule.</p>
+    </div>
+    <div class="sp-how-steps">
+      <div class="sp-how-step" data-reveal data-delay="1">
+        <div class="sp-how-step-num">01</div>
+        <h3>Purchase a pack</h3>
+        <p>Choose the pack that fits your needs. Pay once, receive your hours.</p>
+      </div>
+      <div class="sp-how-step" data-reveal data-delay="2">
+        <div class="sp-how-step-num">02</div>
+        <h3>Book your sessions</h3>
+        <p>Schedule time with our team — remote or on-site, at your convenience.</p>
+      </div>
+      <div class="sp-how-step" data-reveal data-delay="3">
+        <div class="sp-how-step-num">03</div>
+        <h3>Track your balance</h3>
+        <p>We track hours transparently. You always know what's been used.</p>
+      </div>
+      <div class="sp-how-step" data-reveal data-delay="4">
+        <div class="sp-how-step-num">04</div>
+        <h3>Go live</h3>
+        <p>Your restaurant runs on Chuio exactly how you want it — from day one.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FAQ -->
+<section class="nh-faq">
+  <div class="nh-faq-inner">
+    <div class="nh-faq-header" data-reveal>
+      <div class="nh-faq-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <h2 class="nh-faq-h2">Common questions</h2>
+      <p class="nh-faq-desc">Everything you need to know about Service Packs. <a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Visit our Help Centre</a></p>
+    </div>
+
+    <div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">What exactly counts as a 'service hour'?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>A service hour covers any time our team spends working on your account — including configuration, training calls, project management, support tickets, onsite visits, data imports, or custom development. Time is tracked in minimum increments and includes all related work and communication.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Can I buy more hours if I run out?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Yes. Additional hours may be purchased at any time. Services may be paused if available hours are exhausted until additional hours are confirmed. We'll always notify you when your balance is running low.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Do hours expire?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Purchased hours are valid for 12 months from the date of purchase. We recommend scheduling your sessions early to make the most of your pack. Hours are non-refundable once utilised.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Is the Service Pack included in the monthly subscription?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>No. Service Packs are a separate, optional purchase on top of your monthly plan. The monthly subscription covers access to the Chuio platform. Service Packs cover expert time from our team.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Do I need a Service Pack to get started?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>No. Most restaurants can set up Chuio themselves using our documentation and Help Centre. Service Packs are for those who want hands-on help or need custom features built. You can always add one later.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q">Can I split hours across different services?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p>Yes. Every hour is completely flexible. You can allocate them however you like — a mix of training, configuration, onsite visits, and support. Just let us know your priorities when you book.</p></div>
+      </div>
+    </div>
+
+    <div class="nh-faq-cta" data-reveal>
+      <div class="nh-faq-cta-text">
+        <p>Still have questions?</p>
+        <small>Our team is happy to help — reach out and we'll get back to you promptly.</small>
+      </div>
+      <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I+have+a+question+about+Service+Packs&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-faq-cta-btn">
+        Chat with us
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ TERMS -->
+<section class="sp-terms">
+  <div class="sp-terms-inner">
+    <div class="sp-terms-header" data-reveal>
+      <span class="nh-section-tag nh-tag-gray">Legal</span>
+      <h2 class="nh-section-h2" style="font-size:clamp(24px,3vw,36px);">Terms &amp; Conditions</h2>
+    </div>
+    <ol class="sp-terms-list" data-reveal>
+      <li><span class="sp-terms-num">1</span>Service Pack hours are billed and deducted based on actual time spent across services including project management, support, training, configuration, data assistance, onsite consulting, and customisation.</li>
+      <li><span class="sp-terms-num">2</span>Time is tracked in minimum increments and includes all related work and communication.</li>
+      <li><span class="sp-terms-num">3</span>Purchased hours are valid for 12 months from the date of purchase and are non-refundable once utilised.</li>
+      <li><span class="sp-terms-num">4</span>Additional hours may be purchased at any time if required. Services may be paused if available hours are exhausted until additional hours are confirmed.</li>
+      <li><span class="sp-terms-num">5</span>Onsite services and custom development may be subject to scheduling, scope confirmation, and additional costs.</li>
+      <li><span class="sp-terms-num">6</span>By purchasing a Service Pack, the client agrees to these terms and acknowledges that work outside the defined scope may incur additional charges.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ CTA -->
+<section class="sp-cta">
+  <div class="sp-cta-glow"></div>
+  <div class="sp-cta-grid"></div>
+  <div class="sp-cta-inner">
+    <span class="nh-section-tag nh-tag-orange">Get Started</span>
+    <h2 class="sp-cta-h2">Ready to get<br /><span>started?</span></h2>
+    <p class="sp-cta-desc">Speak to our team and we'll help you choose the right Service Pack for your restaurant.</p>
+    <div class="sp-cta-btns">
+      <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+a+Service+Pack&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-btn-cta">
+        Book a Free Consultation
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="https://chuio.io/register.html" target="_blank" rel="noopener noreferrer" class="nh-btn-cta-outline">Start Free Trial</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FOOTER -->
+<footer class="nh-footer">
+  <div class="nh-footer-inner">
+    <div class="nh-footer-grid">
+      <div class="nh-footer-brand">
+        <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="logo" />
+        <p>The all-in-one restaurant OS. QR ordering, kitchen display, payments, and analytics in one platform.</p>
+        <a href="https://apps.apple.com/hk/app/chuio/id6760214563" target="_blank" rel="noopener noreferrer" class="nh-footer-appstore">
+          <img src="https://chuio.io/uploads/website/App%20Store%20Download.png" alt="Download on the App Store" />
+        </a>
+      </div>
+      <div class="nh-footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/newhome.html#features">QR Ordering</a></li>
+          <li><a href="/newhome.html#features">Kitchen Display</a></li>
+          <li><a href="/newhome.html#features">Payments</a></li>
+          <li><a href="/newhome.html#features">Analytics</a></li>
+          <li><a href="/newhome.html#features">Menu Management</a></li>
+          <li><a href="/newhome.html#features">Table Management</a></li>
+        </ul>
+      </div>
+      <div class="nh-footer-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="/newhome.html">Home</a></li>
+          <li><a href="/newhome.html#how-it-works">How It Works</a></li>
+          <li><a href="/newhome.html#pricing">Pricing</a></li>
+          <li><a href="/servicepacks.html">Service Packs</a></li>
+        </ul>
+      </div>
+      <div class="nh-footer-col">
+        <h4>Support</h4>
+        <ul>
+          <li><a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Help Center</a></li>
+          <li><a href="https://chuio.io/support/index.html" target="_blank" rel="noopener noreferrer">Getting Started</a></li>
+          <li><a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+your+plans&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer">Contact Sales</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="nh-footer-bottom">
+      <p class="nh-footer-copy">© 2025 Chuio. All rights reserved.</p>
+      <div class="nh-footer-legal">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/newhome.js"></script>
+</body>
+</html>
