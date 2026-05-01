@@ -299,10 +299,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [kpayManagerPassword, setKpayManagerPassword] = useState('');
     const [showPaRefundModal, setShowPaRefundModal] = useState(false);
     const [paRefundAmount, setPaRefundAmount] = useState('');
+    const [paRefundIsOffline, setPaRefundIsOffline] = useState(false);
 
     // Live transaction details
     const [kpayTxDetails, setKpayTxDetails] = useState<any>(null);
     const [paTxDetails, setPaTxDetails] = useState<any>(null);
+    const [paOfflineTxDetails, setPaOfflineTxDetails] = useState<any>(null);
     const [txLoading, setTxLoading] = useState(false);
 
     // Expose toggleHistory through ref
@@ -508,6 +510,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const loadTransactionDetails = async (order: Order) => {
       setKpayTxDetails(null);
       setPaTxDetails(null);
+      setPaOfflineTxDetails(null);
       const vendor = resolveVendor(order);
       const ref = order.kpay_reference_id || order.cp_vendor_ref;
       if (!ref) return;
@@ -521,6 +524,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           const merchantRef = order.cp_vendor_ref || ref;
           const res = await apiClient.post(`/api/restaurants/${restaurantId}/payment-asia/query`, { merchant_reference: merchantRef });
           setPaTxDetails(res.data);
+        } else if (vendor === 'payment-asia-offline') {
+          const res = await apiClient.get(`/api/restaurants/${restaurantId}/pa-offline-transactions/${ref}`);
+          setPaOfflineTxDetails(res.data);
         }
       } catch (err) {
         // Query failed — we still show what we have from the order record
@@ -1159,18 +1165,61 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    // === Payment Asia Refund ===
+    // === Payment Asia (online) Refund ===
     const openPaRefund = () => {
       if (!selectedHistoryOrder) return;
       const totalDollars = ((selectedHistoryOrder.cp_total_cents || selectedHistoryOrder.total_cents || 0) / 100).toFixed(2);
       setPaRefundAmount(totalDollars);
+      setPaRefundIsOffline(false);
+      setShowPaRefundModal(true);
+    };
+
+    // === Payment Asia Offline Void ===
+    const handlePaOfflineVoid = async (order: Order) => {
+      const paOrderId = order.cp_vendor_ref || order.kpay_reference_id;
+      if (!paOrderId) { Alert.alert(t('orders.error'), 'No PA order reference found'); return; }
+      Alert.alert(
+        'Void PA Terminal Payment',
+        `Void transaction ${paOrderId}?\n\nOnly works for same-day, unsettled transactions.`,
+        [
+          { text: t('orders.cancel') },
+          {
+            text: 'Void',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Find the active PA-Offline terminal
+                const termListRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
+                const paTerminal = (termListRes.data || []).find((t: any) => t.vendor_name === 'payment-asia-offline' && t.is_active);
+                if (!paTerminal) { Alert.alert(t('orders.error'), 'No active PA-Offline terminal found'); return; }
+                await apiClient.post(
+                  `/api/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/cancel`,
+                  { outTradeNo: `VOID-${Date.now()}`, originOutTradeNo: paOrderId },
+                );
+                Alert.alert(t('orders.success'), 'Void request sent to terminal.');
+                await reloadSelectedOrder(order.id);
+              } catch (err: any) {
+                Alert.alert('Void Failed', err.response?.data?.error || err.message);
+              }
+            },
+          },
+        ],
+      );
+    };
+
+    // === Payment Asia Offline Refund ===
+    const openPaOfflineRefund = () => {
+      if (!selectedHistoryOrder) return;
+      const totalDollars = ((selectedHistoryOrder.cp_total_cents || selectedHistoryOrder.total_cents || 0) / 100).toFixed(2);
+      setPaRefundAmount(totalDollars);
+      setPaRefundIsOffline(true);
       setShowPaRefundModal(true);
     };
 
     const submitPaRefund = async () => {
       if (!selectedHistoryOrder) return;
-      const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
-      if (!merchantRef) {
+      const paOrderId = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
+      if (!paOrderId) {
         Alert.alert(t('orders.error'), t('orders.no-pa-ref'));
         return;
       }
@@ -1179,10 +1228,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         return;
       }
       try {
-        await apiClient.post(
-          `/api/restaurants/${restaurantId}/payment-asia/refund`,
-          { merchant_reference: merchantRef, amount: parseFloat(paRefundAmount) }
-        );
+        if (paRefundIsOffline) {
+          // PA-Offline: route through terminal via backend
+          const termListRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
+          const paTerminal = (termListRes.data || []).find((t: any) => t.vendor_name === 'payment-asia-offline' && t.is_active);
+          if (!paTerminal) { Alert.alert(t('orders.error'), 'No active PA-Offline terminal found'); return; }
+          await apiClient.post(
+            `/api/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/refund`,
+            { originOutTradeNo: paOrderId, refundAmount: paRefundAmount },
+          );
+        } else {
+          // PA Online: use PA gateway refund
+          await apiClient.post(
+            `/api/restaurants/${restaurantId}/payment-asia/refund`,
+            { merchant_reference: paOrderId, amount: parseFloat(paRefundAmount) },
+          );
+        }
         setShowPaRefundModal(false);
         Alert.alert(t('orders.success'), t('orders.refund-pa-success'));
         await reloadSelectedOrder(selectedHistoryOrder.id);
@@ -1823,6 +1884,87 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             );
           })()}
 
+          {/* PA-Offline Transaction Details */}
+          {(() => {
+            const vendor = resolveVendor(selectedHistoryOrder);
+            if (vendor !== 'payment-asia-offline') return null;
+            const paOrderId = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
+            if (!paOrderId) return null;
+
+            const fmtTime = (ts: any) => {
+              if (!ts) return null;
+              const n = Number(ts);
+              return isNaN(n) ? String(ts) : new Date(n * 1000).toLocaleString();
+            };
+            const tx = paOfflineTxDetails;
+            const paStatusLabels: Record<string, string> = {
+              completed: 'Completed ✓', voided: 'Voided', refunded: 'Refunded',
+              partial_refund: 'Partial Refund', failed: 'Failed', cancelled: 'Cancelled', pending: 'Pending',
+            };
+            const txStatus = tx?.status || '';
+
+            return (
+              <View style={{ backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#86efac' }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#166534', marginBottom: 8 }}>PA Terminal Transaction</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Order Ref</Text>
+                  <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{paOrderId}</Text>
+                </View>
+                {txLoading && <ActivityIndicator size="small" color="#16a34a" style={{ marginVertical: 8 }} />}
+                {tx && (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>Amount</Text>
+                      <Text style={{ fontSize: 12, color: '#1f2937' }}>{tx.currency || 'HKD'} {((tx.amount_cents || 0) / 100).toFixed(2)}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>Status</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: txStatus === 'completed' ? '#16a34a' : txStatus === 'voided' || txStatus === 'refunded' ? '#ef4444' : '#374151' }}>
+                        {paStatusLabels[txStatus] || txStatus || '—'}
+                      </Text>
+                    </View>
+                    {tx.payment_method && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Method</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{tx.payment_method}</Text>
+                      </View>
+                    )}
+                    {tx.provider && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Provider</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{tx.provider}</Text>
+                      </View>
+                    )}
+                    {tx.provider_reference && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Provider Ref</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{tx.provider_reference}</Text>
+                      </View>
+                    )}
+                    {tx.request_reference && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Request Ref</Text>
+                        <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{tx.request_reference}</Text>
+                      </View>
+                    )}
+                    {fmtTime(tx.pa_created_time) && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Created</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{fmtTime(tx.pa_created_time)}</Text>
+                      </View>
+                    )}
+                    {fmtTime(tx.pa_completed_time) && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Completed</Text>
+                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{fmtTime(tx.pa_completed_time)}</Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+            );
+          })()}
+
           {/* Payment Asia Transaction Details */}
           {(() => {
             const vendor = resolveVendor(selectedHistoryOrder);
@@ -1967,6 +2109,29 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       onPress={openKpayRefund}
                     >
                       <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
+
+            if (vendor === 'payment-asia-offline') {
+              return (
+                <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
+                      onPress={() => handlePaOfflineVoid(selectedHistoryOrder)}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>Void</Text>
+                      <Text style={{ fontSize: 10, color: '#b45309', marginTop: 2 }}>Same-day only</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                      onPress={openPaOfflineRefund}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>Refund</Text>
+                      <Text style={{ fontSize: 10, color: '#b91c1c', marginTop: 2 }}>PA Terminal</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -2876,7 +3041,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           </View>
         </Modal>
 
-        {/* Payment Asia Refund Modal */}
+        {/* Payment Asia Refund Modal (shared for online PA and PA-Offline) */}
         <Modal
           supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
           visible={showPaRefundModal}
@@ -2886,17 +3051,24 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.pa-refund')}</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
+                {paRefundIsOffline ? 'Refund — PA Terminal' : t('orders.pa-refund')}
+              </Text>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
                 Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
               </Text>
+              {paRefundIsOffline && (
+                <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, padding: 8, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 11, color: '#166534' }}>Leave amount blank for a full refund.</Text>
+                </View>
+              )}
               <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-dollar')}</Text>
               <TextInput
                 style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
                 keyboardType="numeric"
                 value={paRefundAmount}
                 onChangeText={setPaRefundAmount}
-                placeholder="0.00"
+                placeholder={paRefundIsOffline ? '0.00 (blank = full)' : '0.00'}
               />
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
