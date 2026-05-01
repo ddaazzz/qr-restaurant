@@ -1199,8 +1199,8 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       if (data.code === '1000') {
         setKpayOutTradeNo(orderId);
         setPaTerminalCallFailed(false);
-        _addKPayLog(`> ✅ Terminal activated — QR code now showing on device`, '#51cf66');
-        _addKPayLog(`> Customer scans QR, then tap Confirm Payment.`, '#ffd43b');
+        _addKPayLog(`> ✅ Terminal activated — QR displayed. Polling for payment…`, '#51cf66');
+        startPAOfflinePoll(orderId, finalAmt);
       } else {
         setPaTerminalCallFailed(true);
         const hint = data.code === '1400'
@@ -1218,14 +1218,85 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     }
   };
 
+  const startPAOfflinePoll = (orderId: string, finalAmt: number) => {
+    if (!activePaymentTerminal) return;
+    let attempts = 0;
+    const maxAttempts = 40; // 40 × 3s = 2 min
+
+    const poll = async () => {
+      if (attempts >= maxAttempts) {
+        setKpayStatus('timeout');
+        setPaTerminalCallFailed(true);
+        _addKPayLog('> TIMEOUT — no payment received after 2 min.', '#ffd43b');
+        _addKPayLog('> Tap Confirm Payment if the customer has paid, or Cancel.', '#ffd43b');
+        return;
+      }
+      attempts++;
+      console.log(`[PAOffline] Poll ${attempts}/${maxAttempts}  order_id=${orderId}`);
+
+      try {
+        const qResp = await apiClient.get(
+          `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test-status`,
+          { params: { outTradeNo: orderId } },
+        );
+        const qData = qResp.data;
+        console.log(`[PAOffline] Poll result: status=${qData.status}  code=${qData.code}`);
+
+        if (qData.status === 'success') {
+          setKpayStatus('success');
+          _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
+          try {
+            await _doCloseBill(finalAmt, kpayDiscountCents, 'payment-asia-offline', orderId);
+          } catch (closeErr: any) {
+            _addKPayLog(`> ❌ Close bill error: ${closeErr.response?.data?.error || closeErr.message}`, '#ff6b6b');
+            setKpayStatus('failed');
+          }
+          return;
+        }
+
+        if (qData.status === 'cancelled') {
+          setKpayStatus('cancelled');
+          setPaTerminalCallFailed(true);
+          _addKPayLog('> Payment cancelled on terminal. Tap Retry to start a new transaction.', '#ff6b6b');
+          return;
+        }
+
+        if (qData.status === 'failed') {
+          setKpayStatus('failed');
+          setPaTerminalCallFailed(true);
+          _addKPayLog('> Payment failed. Tap Retry to try again.', '#ff6b6b');
+          return;
+        }
+
+        // Still pending — show a dot every 3 polls to indicate liveness
+        if (attempts % 3 === 0) {
+          _addKPayLog(`> Waiting for customer… (${attempts * 3}s)`, '#444444');
+        }
+        kpayPollTimerRef.current = setTimeout(poll, 3000);
+      } catch (e: any) {
+        console.warn(`[PAOffline] Poll error (attempt ${attempts}):`, e.message);
+        kpayPollTimerRef.current = setTimeout(poll, 3000);
+      }
+    };
+
+    kpayPollTimerRef.current = setTimeout(poll, 3000);
+  };
+
   const retryPAOfflinePayment = async () => {
+    // Stop any in-progress poll
+    if (kpayPollTimerRef.current) {
+      clearTimeout(kpayPollTimerRef.current);
+      kpayPollTimerRef.current = null;
+    }
+
     const terminal = activePaymentTerminal;
     const apiKey = (terminal as any)?.app_secret || (terminal as any)?.app_id;
     const port = terminal?.terminal_port ?? 8888;
 
+    setKpayStatus('waiting');
     _addKPayLog(`> ─────── Retrying… ───────`, '#666666');
 
-    // If terminal is busy (1400), cancel the stuck transaction first
+    // Cancel any stuck transaction on the terminal first
     if (terminal?.terminal_ip && apiKey) {
       try {
         _addKPayLog(`> Sending cancel to clear terminal…`, '#ffd43b');
@@ -1245,6 +1316,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         _addKPayLog(`> Cancel attempt failed: ${e.message} — retrying anyway…`, '#ffd43b');
         console.warn('[PAOffline] Cancel failed:', e.message);
       }
+
+      // Wait 2.5s — terminal requires a pause between cancel and next create
+      _addKPayLog(`> Waiting for terminal to reset…`, '#444444');
+      await new Promise(resolve => setTimeout(resolve, 2500));
     }
 
     await startPAOfflinePayment(kpayFinalAmount);
@@ -4481,7 +4556,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   fontSize: 12, fontWeight: '700',
                   color: kpayStatus === 'success' ? '#065f46' : kpayStatus === 'failed' || kpayStatus === 'cancelled' || kpayStatus === 'timeout' ? '#dc2626' : (isPaymentAsiaOffline && paTerminalCallFailed) ? '#dc2626' : '#b45309',
                 }}>
-                  {kpayStatus === 'initiating' ? 'Initiating…' : kpayStatus === 'waiting' ? (isPaymentAsiaOffline && paTerminalCallFailed ? 'Terminal Error' : 'Waiting…') : kpayStatus === 'success' ? 'Paid ✓' : kpayStatus === 'failed' ? 'Failed' : kpayStatus === 'cancelled' ? 'Cancelled' : kpayStatus === 'timeout' ? 'Timeout' : 'Aborting…'}
+                  {kpayStatus === 'initiating' ? 'Initiating…'
+                    : kpayStatus === 'waiting' ? (isPaymentAsiaOffline && paTerminalCallFailed ? 'Terminal Error' : 'Waiting…')
+                    : kpayStatus === 'success' ? 'Paid ✓'
+                    : kpayStatus === 'failed' ? 'Failed'
+                    : kpayStatus === 'cancelled' ? 'Cancelled'
+                    : kpayStatus === 'timeout' ? 'Timeout'
+                    : 'Aborting…'}
                 </Text>
               </View>
             </View>
@@ -4514,11 +4595,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
             {/* Buttons */}
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {/* PA-Offline: Confirm + Cancel while waiting */}
-              {isPaymentAsiaOffline && kpayStatus === 'waiting' && (
-                <>
-                  {/* Retry row — shown when terminal call failed */}
-                  {paTerminalCallFailed && (
+              {/* PA-Offline: buttons */}
+              {isPaymentAsiaOffline && kpayStatus !== 'success' && (
+                <View style={{ flexDirection: 'row', gap: 8, flex: 1 }}>
+                  {/* Retry — shown when failed/cancelled/timeout or terminal call error */}
+                  {(paTerminalCallFailed || kpayStatus === 'cancelled' || kpayStatus === 'failed' || kpayStatus === 'timeout') && (
                     <TouchableOpacity
                       style={{ flex: 1, paddingVertical: 10, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 6, alignItems: 'center' }}
                       onPress={retryPAOfflinePayment}
@@ -4534,11 +4615,14 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={{ flex: 1, paddingVertical: 10, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, alignItems: 'center' }}
-                    onPress={() => setShowKPayModal(false)}
+                    onPress={() => {
+                      if (kpayPollTimerRef.current) { clearTimeout(kpayPollTimerRef.current); kpayPollTimerRef.current = null; }
+                      setShowKPayModal(false);
+                    }}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>✗ Cancel</Text>
                   </TouchableOpacity>
-                </>
+                </View>
               )}
               {/* KPay: Abort while initiating / waiting */}
               {!isPaymentAsiaOffline && (kpayStatus === 'initiating' || kpayStatus === 'waiting') && (
