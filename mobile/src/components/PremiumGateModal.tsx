@@ -6,8 +6,7 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
-  ActivityIndicator,
-  Platform,
+  Linking,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import {
@@ -50,15 +49,14 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
   onClose,
   triggeredBy,
 }) => {
-  const { purchasePremium, restorePurchases, isLoading, isInTrial, trialEndDate } = useSubscription();
+  const { isInTrial, trialEndDate } = useSubscription();
 
   const trialDaysLeft = isInTrial && trialEndDate
     ? Math.max(0, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : null;
 
-  const handleUpgrade = async () => {
-    await purchasePremium();
-    // Modal stays open — purchase listener will update tier and user can close
+  const handleSubscribe = () => {
+    Linking.openURL('https://chuio.io/upgrade');
   };
 
   return (
@@ -97,12 +95,12 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
                 <Text style={styles.trialHighlight}>
                   {trialDaysLeft === 0 ? 'It ends today' : `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} remaining`}
                 </Text>
-                {'. After the trial, HK$500/month will be charged automatically to your Apple ID.'}
+                {'. Subscribe on our website to continue after the trial.'}  
               </Text>
             ) : (
               <Text style={styles.subheadline}>
-                Get full access to every feature for your restaurant — starting with a{' '}
-                <Text style={styles.trialHighlight}>14-day free trial</Text>.
+                Get full access to every feature for your restaurant.{' '}
+                <Text style={styles.trialHighlight}>Subscribe on chuio.io</Text>{' '}to unlock Premium — starting with a 14-day free trial.
               </Text>
             )}
 
@@ -154,13 +152,8 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
 
             {/* ── Pricing note ────────────────────────────── */}
             <Text style={styles.pricingNote}>
-              HK$500 / month • 14-day free trial • Cancel anytime
+              HK$500 / month • 14-day free trial • Cancel anytime • Managed at chuio.io
             </Text>
-            {Platform.OS === 'ios' && (
-              <Text style={styles.pricingNote}>
-                Payment will be charged to your Apple ID after the free trial. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.
-              </Text>
-            )}
           </ScrollView>
 
           {/* ── CTA Buttons ────────────────────────────────── */}
@@ -172,22 +165,15 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
             ) : (
               <>
                 <TouchableOpacity
-                  style={[styles.ctaPrimary, isLoading && styles.ctaDisabled]}
-                  onPress={handleUpgrade}
-                  disabled={isLoading}
+                  style={styles.ctaPrimary}
+                  onPress={handleSubscribe}
                   activeOpacity={0.85}
                 >
-                  {isLoading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="star" size={16} color="#fff" style={{ marginRight: 8 }} />
-                      <Text style={styles.ctaPrimaryText}>Start 14-Day Free Trial</Text>
-                    </>
-                  )}
+                  <Ionicons name="star" size={16} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.ctaPrimaryText}>Subscribe on chuio.io</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.ctaSecondary} onPress={restorePurchases} disabled={isLoading}>
-                  <Text style={styles.ctaSecondaryText}>Restore Purchase</Text>
+                <TouchableOpacity style={styles.ctaSecondary} onPress={onClose}>
+                  <Text style={styles.ctaSecondaryText}>Maybe later</Text>
                 </TouchableOpacity>
               </>
             )}

@@ -2,6 +2,7 @@ import { Router } from "express";
 import pool from "../config/db";
 import { upload } from "../config/upload";
 import { isR2Configured, uploadToR2, getR2Folder } from "../config/storage";
+import jwt from "jsonwebtoken";
 
 const router = Router();
 
@@ -92,80 +93,37 @@ router.get("/:restaurantId/subscription", async (req, res) => {
   }
 });
 
-// POST verify Apple receipt and update subscription
-router.post("/:restaurantId/subscription/verify-receipt", async (req, res) => {
+// POST update subscription tier — superadmin only (called from web dashboard)
+router.post("/:restaurantId/subscription", async (req, res) => {
   try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Authentication required" });
+    let caller: any;
+    try {
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+      const userResult = await pool.query("SELECT id, role FROM users WHERE id = $1", [decoded.id]);
+      caller = userResult.rows[0];
+    } catch { return res.status(401).json({ error: "Invalid token" }); }
+    if (!caller || caller.role !== "superadmin") {
+      return res.status(403).json({ error: "Superadmin access required" });
+    }
+
     const { restaurantId } = req.params;
-    const { receipt } = req.body;
+    const { tier, trial_end_date } = req.body as { tier: 'free' | 'premium'; trial_end_date?: string | null };
 
-    if (!receipt) {
-      return res.status(400).json({ error: "receipt is required" });
+    if (!tier || !['free', 'premium'].includes(tier)) {
+      return res.status(400).json({ error: "tier must be 'free' or 'premium'" });
     }
-
-    // Verify with Apple's receipt validation API
-    const APPLE_VERIFY_URL = process.env.NODE_ENV === 'production'
-      ? 'https://buy.itunes.apple.com/verifyReceipt'
-      : 'https://sandbox.itunes.apple.com/verifyReceipt';
-
-    const appleSharedSecret = process.env.APPLE_IAP_SHARED_SECRET;
-    if (!appleSharedSecret) {
-      return res.status(500).json({ error: "Server not configured for IAP verification" });
-    }
-
-    const appleResponse = await fetch(APPLE_VERIFY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 'receipt-data': receipt, password: appleSharedSecret, 'exclude-old-transactions': true }),
-    });
-
-    const appleData = await appleResponse.json() as any;
-
-    // status 0 = valid, 21007 = sandbox receipt sent to production
-    if (appleData.status === 21007) {
-      // Retry with sandbox
-      const sandboxResponse = await fetch('https://sandbox.itunes.apple.com/verifyReceipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 'receipt-data': receipt, password: appleSharedSecret, 'exclude-old-transactions': true }),
-      });
-      const sandboxData = await sandboxResponse.json() as any;
-      if (sandboxData.status !== 0) {
-        return res.status(400).json({ error: "Invalid receipt", status: sandboxData.status });
-      }
-      Object.assign(appleData, sandboxData);
-    } else if (appleData.status !== 0) {
-      return res.status(400).json({ error: "Invalid receipt", status: appleData.status });
-    }
-
-    // Find the latest active subscription in latest_receipt_info
-    const latestReceipts: any[] = appleData.latest_receipt_info || [];
-    const now = Date.now();
-    const activeReceipt = latestReceipts
-      .filter((r: any) => parseInt(r.expires_date_ms) > now)
-      .sort((a: any, b: any) => parseInt(b.expires_date_ms) - parseInt(a.expires_date_ms))[0];
-
-    if (!activeReceipt) {
-      // No active subscription — downgrade to free
-      await pool.query(
-        "UPDATE restaurants SET subscription_tier = 'free', subscription_trial_end = NULL WHERE id = $1",
-        [restaurantId]
-      );
-      return res.json({ tier: 'free', trial_end_date: null });
-    }
-
-    const expiresDate = new Date(parseInt(activeReceipt.expires_date_ms));
-    const isTrialPeriod = activeReceipt.is_trial_period === 'true';
-    const trialEndDate = isTrialPeriod ? expiresDate.toISOString() : null;
 
     await pool.query(
-      "UPDATE restaurants SET subscription_tier = 'premium', subscription_trial_end = $1 WHERE id = $2",
-      [trialEndDate, restaurantId]
+      "UPDATE restaurants SET subscription_tier = $1, subscription_trial_end = $2 WHERE id = $3",
+      [tier, trial_end_date ?? null, restaurantId]
     );
 
-    res.json({ tier: 'premium', trial_end_date: trialEndDate });
+    res.json({ tier, trial_end_date: trial_end_date ?? null });
   } catch (err) {
-    console.error("Error verifying receipt:", err);
-    res.status(500).json({ error: "Failed to verify receipt" });
+    console.error("Error updating subscription:", err);
+    res.status(500).json({ error: "Failed to update subscription" });
   }
 });
 

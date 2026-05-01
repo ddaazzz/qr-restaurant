@@ -41,7 +41,6 @@
     "react-native": "0.81.5",
     "react-native-ble-plx": "^3.2.0",
     "react-native-gesture-handler": "2.28.0",
-    "react-native-iap": "^15.2.0",
     "react-native-modal": "13.0.1",
     "react-native-qrcode-svg": "^6.3.0",
     "react-native-svg": "^15.15.4",
