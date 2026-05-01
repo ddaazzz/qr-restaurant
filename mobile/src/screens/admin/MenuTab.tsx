@@ -28,6 +28,8 @@ import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { addonService, Addon } from '../../services/addonService';
+import { useSubscription } from '../../contexts/SubscriptionContext';
+import { PremiumGateModal } from '../../components/PremiumGateModal';
 
 // ==================== INTERFACES ====================
 
@@ -503,6 +505,8 @@ function DraggableMenuItemGrid({
 export const MenuTab = forwardRef(
   ({ restaurantId, searchQuery }: { restaurantId: string; searchQuery?: string }, ref: React.Ref<MenuTabRef>) => {
     const { t, lang } = useTranslation();
+    const { canAccess } = useSubscription();
+    const [showPremiumModal, setShowPremiumModal] = useState(false);
     // ==================== STATE MANAGEMENT ====================
     
     // Data
@@ -636,9 +640,13 @@ export const MenuTab = forwardRef(
 
     useImperativeHandle(ref, () => ({
       toggleEditMode() {
+        if (!canAccess('item_availability')) {
+          setShowPremiumModal(true);
+          return;
+        }
         setShowAvailabilityToggles(prev => !prev);
       }
-    }), []);
+    }), [canAccess]);
 
     // ==================== API CALLS ====================
 
@@ -3522,6 +3530,12 @@ export const MenuTab = forwardRef(
             </View>
           </View>
         </Modal>
+
+      <PremiumGateModal
+        visible={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        triggeredBy="item_availability"
+      />
 
       </View>
     );
