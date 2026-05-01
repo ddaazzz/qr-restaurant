@@ -1518,7 +1518,7 @@ export const MenuTab = forwardRef(
     return (
       <View style={styles.container}>
         {/* Category Bar */}
-        <View style={styles.categoryBarWrapper}>
+        <View style={[styles.categoryBarWrapper, showAvailabilityToggles && { height: undefined }]}>
           {showAvailabilityToggles ? (
             /* Edit mode: vertical draggable category list replacing the horizontal scroll */
             <>
