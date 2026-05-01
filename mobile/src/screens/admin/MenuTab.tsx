@@ -1518,7 +1518,7 @@ export const MenuTab = forwardRef(
     return (
       <View style={styles.container}>
         {/* Category Bar */}
-        <View style={[styles.categoryBarWrapper, showAvailabilityToggles && { height: undefined }]}>
+        <View style={styles.categoryBarWrapper}>
           {showAvailabilityToggles ? (
             /* Edit mode: vertical draggable category list replacing the horizontal scroll */
             <>
@@ -3542,13 +3542,14 @@ const styles = StyleSheet.create({
   },
 
   // Category Bar - ISOLATED CONTEXT (no flex growth)
+  // No fixed height here — normal mode is constrained by categoryScroll's height:48,
+  // and edit mode needs to expand to fit the draggable list.
   categoryBarWrapper: {
     flex: 0,
-    height: 48,
+    flexShrink: 0,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    flexShrink: 0,
   },
   categoryScroll: {
     backgroundColor: '#fff',
