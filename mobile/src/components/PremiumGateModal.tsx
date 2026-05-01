@@ -55,8 +55,8 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
     ? Math.max(0, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : null;
 
-  const handleSubscribe = () => {
-    Linking.openURL('https://chuio.io/upgrade');
+  const handleManageAccount = () => {
+    Linking.openURL('https://chuio.io/login');
   };
 
   return (
@@ -95,12 +95,12 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
                 <Text style={styles.trialHighlight}>
                   {trialDaysLeft === 0 ? 'It ends today' : `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} remaining`}
                 </Text>
-                {'. Subscribe on our website to continue after the trial.'}  
+                {'. Sign in to your account to manage your subscription.'}
               </Text>
             ) : (
               <Text style={styles.subheadline}>
-                Get full access to every feature for your restaurant.{' '}
-                <Text style={styles.trialHighlight}>Subscribe on chuio.io</Text>{' '}to unlock Premium — starting with a 14-day free trial.
+                Premium features are managed through your Chuio account.{' '}
+                Sign in to activate or manage your subscription.
               </Text>
             )}
 
@@ -152,31 +152,19 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
 
             {/* ── Pricing note ────────────────────────────── */}
             <Text style={styles.pricingNote}>
-              HK$500 / month • 14-day free trial • Cancel anytime • Managed at chuio.io
+              HK$500 / month • 14-day free trial • Cancel anytime
             </Text>
           </ScrollView>
 
           {/* ── CTA Buttons ────────────────────────────────── */}
           <View style={styles.ctaContainer}>
-            {isInTrial ? (
-              <TouchableOpacity style={styles.ctaSecondary} onPress={onClose}>
-                <Text style={styles.ctaSecondaryText}>Got it</Text>
-              </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.ctaPrimary}
-                  onPress={handleSubscribe}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="star" size={16} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.ctaPrimaryText}>Subscribe on chuio.io</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.ctaSecondary} onPress={onClose}>
-                  <Text style={styles.ctaSecondaryText}>Maybe later</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <TouchableOpacity style={styles.ctaPrimary} onPress={handleManageAccount} activeOpacity={0.85}>
+              <Ionicons name="person-circle-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.ctaPrimaryText}>Manage Account</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ctaSecondary} onPress={onClose}>
+              <Text style={styles.ctaSecondaryText}>Got it</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
