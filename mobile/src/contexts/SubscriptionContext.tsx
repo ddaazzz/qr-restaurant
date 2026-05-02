@@ -63,11 +63,14 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
   const isPremium = isSuperadmin || tier === 'premium';
   const isInTrial = !isSuperadmin && trialEndDate != null && trialEndDate > new Date();
 
-  // All features are currently enabled for all restaurants by default.
-  // Feature-level gating remains in place for future per-restaurant configuration.
+  // All features are enabled for all restaurants by default,
+  // except payment_terminals which requires an active premium subscription.
   const canAccess = useCallback(
-    (_feature: PremiumFeatureKey): boolean => true,
-    [],
+    (feature: PremiumFeatureKey): boolean => {
+      if (feature === 'payment_terminals') return isPremium;
+      return true;
+    },
+    [isPremium],
   );
 
   // ------------------------------------------------------------------
