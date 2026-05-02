@@ -36,8 +36,6 @@
     if (l.startsWith('zh-sg')) return 'SGD';
     if (l.startsWith('ja')) return 'JPY';
     if (l.startsWith('en-us')) return 'USD';
-    if (l.startsWith('en-gb')) return 'GBP';
-    if (l.startsWith('en-au')) return 'AUD';
     if (l.startsWith('en-sg')) return 'SGD';
     return 'HKD';
   }
@@ -73,20 +71,49 @@
   }
 
   // ── Language switching ─────────────────────────────────────────────────
+
+  // Finds the last non-empty text node that is a direct child of el.
+  // Used so that elements containing SVG icons can have their label text swapped
+  // without destroying the icon (setting textContent would wipe child elements).
+  function getLeafText(el) {
+    for (var i = el.childNodes.length - 1; i >= 0; i--) {
+      var n = el.childNodes[i];
+      if (n.nodeType === 3 && n.textContent.trim()) return n.textContent.trim();
+    }
+    return el.textContent.trim();
+  }
+
+  function setLeafText(el, text) {
+    for (var i = el.childNodes.length - 1; i >= 0; i--) {
+      var n = el.childNodes[i];
+      if (n.nodeType === 3 && n.textContent.trim()) { n.textContent = text; return; }
+    }
+    // fallback: no text node found — shouldn't happen
+    el.textContent = text;
+  }
+
   function applyLang() {
     var isZh = currentLang === 'zh';
 
-    // data-zh elements: swap textContent
+    // data-zh elements: swap text.
+    // If the element has child ELEMENTS (e.g. an SVG icon), only the trailing
+    // text node is swapped so the icon is preserved.
     document.querySelectorAll('[data-zh]').forEach(function (el) {
+      var hasChildEls = el.children.length > 0;
       if (isZh) {
-        // Save original EN text on first run
         if (!el.hasAttribute('data-en')) {
-          el.setAttribute('data-en', el.textContent);
+          el.setAttribute('data-en', hasChildEls ? getLeafText(el) : el.textContent);
         }
-        el.textContent = el.getAttribute('data-zh');
+        if (hasChildEls) {
+          setLeafText(el, el.getAttribute('data-zh'));
+        } else {
+          el.textContent = el.getAttribute('data-zh');
+        }
       } else {
         var en = el.getAttribute('data-en');
-        if (en !== null) el.textContent = en;
+        if (en !== null) {
+          if (hasChildEls) { setLeafText(el, en); } else { el.textContent = en; }
+        }
       }
     });
 
