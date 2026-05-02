@@ -63,14 +63,12 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
   const isPremium = isSuperadmin || tier === 'premium';
   const isInTrial = !isSuperadmin && trialEndDate != null && trialEndDate > new Date();
 
-  // All features are enabled for all restaurants by default,
-  // except payment_terminals which requires an active premium subscription.
+  // All features are enabled for all restaurants by default.
+  // Feature-level gating remains in place for future per-restaurant configuration.
+  // Local payment terminal access is controlled by Chuio setup, not subscription tier.
   const canAccess = useCallback(
-    (feature: PremiumFeatureKey): boolean => {
-      if (feature === 'payment_terminals') return isPremium;
-      return true;
-    },
-    [isPremium],
+    (_feature: PremiumFeatureKey): boolean => true,
+    [],
   );
 
   // ------------------------------------------------------------------

@@ -2342,7 +2342,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc'), premiumFeature: 'printer_management' },
     { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }), premiumFeature: 'crm' },
 
-    { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }), premiumFeature: 'payment_terminals' },
+    { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
     { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline', label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
