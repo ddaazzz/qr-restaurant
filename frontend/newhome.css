@@ -116,8 +116,8 @@ ul { list-style: none; }
 .nh-cards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .nh-feature-card { background: #fff; border: 1px solid #f3f4f6; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: transform 0.3s ease, box-shadow 0.3s ease; cursor: pointer; }
 .nh-feature-card:hover { transform: translateY(-6px); box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
-.nh-feature-card-img-wrap { position: relative; overflow: hidden; background: #f9fafb; }
-.nh-feature-card-img { width: 100%; height: auto; object-fit: contain; transition: transform 0.5s ease; }
+.nh-feature-card-img-wrap { position: relative; overflow: hidden; background: #f9fafb; height: 220px; }
+.nh-feature-card-img { width: 100%; height: 100%; object-fit: cover; object-position: center 15%; transition: transform 0.5s ease; }
 .nh-feature-card:hover .nh-feature-card-img { transform: scale(1.05); }
 .nh-feature-card-tag { position: absolute; top: 12px; left: 12px; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
 .tag-green { background: #f0fdf4; color: #16a34a; }
@@ -462,3 +462,11 @@ ul { list-style: none; }
 @media (max-width: 480px) {
   .nh-sp-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── I18N / CURRENCY CONTROLS ─────────────────────────────────────── */
+.nh-i18n-controls { display: flex; align-items: center; gap: 8px; margin-right: 4px; }
+.nh-lang-btn { padding: 4px 12px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: transparent; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer; transition: all 0.15s; font-family: inherit; line-height: 1.4; }
+.nh-lang-btn:hover { border-color: #FF6A2A; color: #FF6A2A; }
+.nh-currency-select { padding: 4px 8px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: transparent; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer; font-family: inherit; outline: none; }
+.nh-currency-select:hover { border-color: #FF6A2A; }
+@media (max-width: 900px) { .nh-i18n-controls { display: none !important; } }
