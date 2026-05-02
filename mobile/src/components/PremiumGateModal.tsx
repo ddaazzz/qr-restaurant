@@ -152,7 +152,7 @@ export const PremiumGateModal: React.FC<PremiumGateModalProps> = ({
 
             {/* ── Pricing note ────────────────────────────── */}
             <Text style={styles.pricingNote}>
-              HK$500 / month • 14-day free trial • Cancel anytime
+              HK$500 / month • 30-day free trial • Cancel anytime
             </Text>
           </ScrollView>
 
