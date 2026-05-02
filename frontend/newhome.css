@@ -262,6 +262,7 @@ ul { list-style: none; }
 .nh-plan-premium { background: #111827; border: 2px solid #111827; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; position: relative; box-shadow: 0 20px 60px -10px rgba(0,0,0,0.2); transition: transform 0.2s; }
 .nh-plan-premium:hover { transform: translateY(-4px); }
 .nh-plan-popular { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); padding: 6px 16px; border-radius: 9999px; background: #FF6A2A; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.nh-plan-trial-badge { display: inline-block; margin-bottom: 12px; padding: 4px 12px; border-radius: 9999px; background: #dcfce7; color: #15803d; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
 .nh-plan-name { font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 4px; }
 .nh-plan-name.white { color: #fff; }
 .nh-plan-tagline { font-size: 14px; color: #9ca3af; margin-bottom: 20px; }
