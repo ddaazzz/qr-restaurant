@@ -48,6 +48,9 @@ async function initializeSettings() {
   // Load CRM count preview for the settings card
   loadCrmCountPreview();
 
+  // Load SR items count preview for the settings card
+  loadSrCountPreview();
+
   // Attach event listeners only once
   if (!settingsInitialized) {
     settingsInitialized = true;
@@ -223,6 +226,9 @@ async function showSettingsPage(pageName) {
         break;
       case 'variant-presets':
         await loadVariantPresets();
+        break;
+      case 'service-requests':
+        await loadServiceRequestItems();
         break;
       case 'crm':
         await loadCrmPage();
@@ -2730,5 +2736,202 @@ async function crmImportFromBookings() {
     alert(adminSettingsT('admin.crm-import-failed', 'Import failed. Please try again.'));
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = adminSettingsT('admin.crm-import-bookings', 'Import from Bookings'); }
+  }
+}
+
+// ==================== SERVICE REQUEST ITEMS ====================
+
+var _srItems = [];
+var _editingSrItemId = null;
+
+async function loadSrCountPreview() {
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/all', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    var items = await res.json();
+    var preview = document.getElementById('sr-items-preview');
+    if (preview && items.length > 0) {
+      preview.textContent = formatTemplate(adminSettingsT('admin.sr-count-preview', '{0} item(s)'), [items.length]);
+    }
+  } catch {}
+}
+
+async function loadServiceRequestItems() {
+  var listEl = document.getElementById('sr-items-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="text-align:center;color:#999;padding:24px;" data-i18n="admin.loading">Loading…</p>';
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/all', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Failed to load');
+    _srItems = await res.json();
+    _renderSrItems();
+    // Update card preview
+    var preview = document.getElementById('sr-items-preview');
+    if (preview) preview.textContent = _srItems.length > 0
+      ? formatTemplate(adminSettingsT('admin.sr-count-preview', '{0} item(s)'), [_srItems.length])
+      : adminSettingsT('admin.service-requests-desc', 'Custom call-waiter request types');
+  } catch (err) {
+    console.error('[SR]', err);
+    if (listEl) listEl.innerHTML = '<p style="text-align:center;color:#e74c3c;padding:24px;">Failed to load service request items.</p>';
+  }
+}
+
+function _renderSrItems() {
+  var listEl = document.getElementById('sr-items-list');
+  if (!listEl) return;
+  if (!_srItems.length) {
+    listEl.innerHTML = '<p style="text-align:center;color:#9ca3af;padding:24px;" data-i18n="admin.sr-no-items">No service request items yet. Tap + Add to create one.</p>';
+    return;
+  }
+  listEl.innerHTML = '';
+  _srItems.forEach(function(item) {
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border-color);border-radius:8px;margin-bottom:10px;background:#fff;';
+    var dot = document.createElement('span');
+    dot.style.cssText = 'width:12px;height:12px;border-radius:50%;flex-shrink:0;background:' + (item.color || '#4f46e5') + ';';
+    var info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;';
+    var badge = '<span style="display:inline-block;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;margin-left:6px;background:' + (item.is_active ? '#d1fae5' : '#fee2e2') + ';color:' + (item.is_active ? '#065f46' : '#991b1b') + ';">' + (item.is_active ? adminSettingsT('admin.sr-active','Active') : adminSettingsT('admin.sr-off','Off')) + '</span>';
+    info.innerHTML = '<div style="font-size:14px;font-weight:600;">' + escapeHtml(item.label_en) + badge + '</div>'
+      + (item.label_zh ? '<div style="font-size:12px;color:#6b7280;">' + escapeHtml(item.label_zh) + '</div>' : '')
+      + '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">' + adminSettingsT('admin.sr-type-label','Type') + ': ' + escapeHtml(item.request_type) + '</div>';
+    var actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+    var editBtn = document.createElement('button');
+    editBtn.className = 'btn-secondary';
+    editBtn.style.cssText = 'font-size:12px;padding:5px 10px;';
+    editBtn.textContent = adminSettingsT('common.edit','Edit');
+    editBtn.onclick = function() { openSrItemModal(item); };
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn-danger';
+    delBtn.style.cssText = 'font-size:12px;padding:5px 10px;';
+    delBtn.textContent = adminSettingsT('common.delete','Delete');
+    delBtn.onclick = function() { deleteSrItem(item.id); };
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    div.appendChild(dot);
+    div.appendChild(info);
+    div.appendChild(actions);
+    listEl.appendChild(div);
+  });
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openSrItemModal(item) {
+  _editingSrItemId = item ? item.id : null;
+  var titleEl = document.getElementById('sr-modal-title');
+  var requestTypeInput = document.getElementById('sr-input-request-type');
+  var labelEnInput = document.getElementById('sr-input-label-en');
+  var labelZhInput = document.getElementById('sr-input-label-zh');
+  var colorInput = document.getElementById('sr-input-color');
+  var colorPreview = document.getElementById('sr-color-preview');
+  var activeInput = document.getElementById('sr-input-active');
+  var errorEl = document.getElementById('sr-modal-error');
+  if (errorEl) errorEl.style.display = 'none';
+
+  if (item) {
+    if (titleEl) titleEl.textContent = adminSettingsT('admin.sr-edit-item','Edit Service Request');
+    if (requestTypeInput) { requestTypeInput.value = item.request_type; requestTypeInput.disabled = true; }
+    if (labelEnInput) labelEnInput.value = item.label_en || '';
+    if (labelZhInput) labelZhInput.value = item.label_zh || '';
+    if (colorInput) { colorInput.value = item.color || '#4f46e5'; }
+    if (colorPreview) colorPreview.textContent = item.color || '#4f46e5';
+    if (activeInput) activeInput.checked = !!item.is_active;
+  } else {
+    if (titleEl) titleEl.textContent = adminSettingsT('admin.sr-add-item','Add Service Request');
+    if (requestTypeInput) { requestTypeInput.value = ''; requestTypeInput.disabled = false; }
+    if (labelEnInput) labelEnInput.value = '';
+    if (labelZhInput) labelZhInput.value = '';
+    if (colorInput) colorInput.value = '#4f46e5';
+    if (colorPreview) colorPreview.textContent = '#4f46e5';
+    if (activeInput) activeInput.checked = true;
+  }
+  if (colorInput) colorInput.oninput = function() {
+    if (colorPreview) colorPreview.textContent = colorInput.value;
+  };
+  document.getElementById('sr-item-modal').style.display = 'flex';
+}
+
+function closeSrItemModal() {
+  document.getElementById('sr-item-modal').style.display = 'none';
+  _editingSrItemId = null;
+}
+
+async function saveSrItem() {
+  var requestType = (document.getElementById('sr-input-request-type').value || '').trim();
+  var labelEn = (document.getElementById('sr-input-label-en').value || '').trim();
+  var labelZh = (document.getElementById('sr-input-label-zh').value || '').trim() || null;
+  var color = document.getElementById('sr-input-color').value || '#4f46e5';
+  var isActive = document.getElementById('sr-input-active').checked;
+  var errorEl = document.getElementById('sr-modal-error');
+  var saveBtn = document.getElementById('sr-save-btn');
+
+  if (!labelEn) {
+    errorEl.textContent = adminSettingsT('admin.sr-label-en-required','English label is required.');
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!_editingSrItemId && !requestType) {
+    errorEl.textContent = adminSettingsT('admin.sr-request-type-required','Request type is required.');
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!_editingSrItemId && !/^[a-z0-9_]+$/.test(requestType)) {
+    errorEl.textContent = adminSettingsT('admin.sr-request-type-invalid','Use only lowercase letters, numbers, and underscores.');
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  errorEl.style.display = 'none';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = adminSettingsT('admin.saving','Saving…'); }
+
+  try {
+    var url, method, body;
+    if (_editingSrItemId) {
+      url = API + '/restaurants/' + restaurantId + '/service-request-items/' + _editingSrItemId;
+      method = 'PATCH';
+      body = JSON.stringify({ label_en: labelEn, label_zh: labelZh, color: color, is_active: isActive });
+    } else {
+      url = API + '/restaurants/' + restaurantId + '/service-request-items';
+      method = 'POST';
+      body = JSON.stringify({ request_type: requestType, label_en: labelEn, label_zh: labelZh, color: color, is_active: isActive });
+    }
+    var res = await fetch(url, {
+      method: method,
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: body
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save');
+    closeSrItemModal();
+    await loadServiceRequestItems();
+  } catch (err) {
+    console.error('[SR save]', err);
+    errorEl.textContent = err.message || adminSettingsT('admin.sr-save-failed','Failed to save. Please try again.');
+    errorEl.style.display = 'block';
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = adminSettingsT('admin.save','Save'); }
+  }
+}
+
+async function deleteSrItem(itemId) {
+  if (!confirm(adminSettingsT('admin.sr-delete-confirm','Delete this service request item? This cannot be undone.'))) return;
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/' + itemId, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Failed to delete');
+    await loadServiceRequestItems();
+  } catch (err) {
+    console.error('[SR delete]', err);
+    alert(adminSettingsT('admin.sr-delete-failed','Failed to delete. Please try again.'));
   }
 }

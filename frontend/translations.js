@@ -14,8 +14,6 @@ const translations = {
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
     'nav.login': 'Login',
-    'nav.help': 'Help Centre',
-    'nav.get-started': 'Get Started',
     'nav.back-home': '← Home',
     'nav.kitchen-dashboard': 'Kitchen Dashboard',
 
@@ -1459,6 +1457,31 @@ const translations = {
     'admin.addon-presets': 'Addon Presets',
     'admin.variant-presets': 'Variant Presets',
     'admin.manage-presets': 'Manage preset addon and variant lists',
+    'admin.service-requests': 'Service Requests',
+    'admin.service-requests-desc': 'Custom call-waiter request types',
+    'admin.sr-page-desc': 'Define custom service request types customers can tap from the menu.',
+    'admin.sr-add-item': 'Add Service Request',
+    'admin.sr-edit-item': 'Edit Service Request',
+    'admin.sr-no-items': 'No service request items yet. Tap + Add to create one.',
+    'admin.sr-request-type': 'Request Type (identifier) *',
+    'admin.sr-request-type-hint': 'Lowercase letters, numbers and underscores only.',
+    'admin.sr-request-type-required': 'Request type is required.',
+    'admin.sr-request-type-invalid': 'Use only lowercase letters, numbers, and underscores.',
+    'admin.sr-label-en': 'English Label *',
+    'admin.sr-label-zh': 'Chinese Label',
+    'admin.sr-color': 'Color',
+    'admin.sr-active': 'Active',
+    'admin.sr-active-desc': 'Only active items appear in the customer menu.',
+    'admin.sr-off': 'Off',
+    'admin.sr-type-label': 'Type',
+    'admin.sr-count-preview': '{0} item(s)',
+    'admin.sr-delete-confirm': 'Delete this service request item? This cannot be undone.',
+    'admin.sr-label-en-required': 'English label is required.',
+    'admin.sr-save-failed': 'Failed to save. Please try again.',
+    'admin.sr-delete-failed': 'Failed to delete. Please try again.',
+    'admin.sr-load-failed': 'Failed to load service request items.',
+    'common.edit': 'Edit',
+    'common.delete': 'Delete',
 
     // Order Management (2 keys)
     'admin.cart-is-empty': 'Cart is empty',
@@ -1724,49 +1747,6 @@ const translations = {
     'menu.enter-coupon': 'Please enter a coupon code',
     'menu.session-not-found': 'Session not found',
     'menu.change-language': 'Language',
-
-    // Register page
-    'register.title': 'Create Your Account',
-    'register.subtitle': 'Get started in just a few steps',
-    'register.back-login': '← Login',
-    'register.email': 'Email Address',
-    'register.password': 'Password',
-    'register.password-placeholder': 'Min 8 characters',
-    'register.confirm-password': 'Confirm Password',
-    'register.confirm-password-placeholder': 'Re-enter password',
-    'register.send-code': 'Send Verification Code',
-    'register.verify-prompt': 'Enter the 6-digit code sent to',
-    'register.verify-code': 'Verify Code',
-    'register.resend-countdown': 'Resend code in',
-    'register.resend': 'Resend Code',
-    'register.back': '← Back',
-    'register.full-name': 'Full Name *',
-    'register.restaurant-name': 'Restaurant Name *',
-    'register.address': 'Address',
-    'register.country': 'Country',
-    'register.phone': 'Contact Number',
-    'register.timezone': 'Timezone',
-    'register.create': 'Create Restaurant',
-    'register.success-title': 'Welcome to Chuio!',
-    'register.success-desc': 'Your restaurant has been created successfully.',
-    'register.go-dashboard': 'Go to Dashboard →',
-    'register.have-account': 'Already have an account?',
-    'register.sign-in': 'Sign In',
-
-    // Reset password page
-    'reset.back-login': '← Login',
-    'reset.validating': 'Validating reset link...',
-    'reset.invalid-title': 'Invalid or Expired Link',
-    'reset.invalid-desc': 'This password reset link is no longer valid. Please request a new one.',
-    'reset.request-new': 'Request New Link',
-    'reset.title': 'Set New Password',
-    'reset.subtitle': 'Enter your new password below',
-    'reset.new-password': 'New Password',
-    'reset.confirm-password': 'Confirm New Password',
-    'reset.submit': 'Reset Password',
-    'reset.success-title': 'Password Reset!',
-    'reset.success-desc': 'Your password has been updated successfully. You can now sign in with your new password.',
-    'reset.go-login': 'Go to Login',
   },
   zh: {
     // Navigation
@@ -1782,8 +1762,6 @@ const translations = {
     'nav.privacy': '隱私政策',
     'nav.terms': '服務條款',
     'nav.login': '登錄',
-    'nav.help': '幫助中心',
-    'nav.get-started': '立即開始',
     'nav.back-home': '← 首頁',
     'nav.kitchen-dashboard': '廚房儀表板',
 
@@ -3672,6 +3650,31 @@ const translations = {
     'admin.addon-presets': '附加項預設',
     'admin.variant-presets': '變體預設',
     'admin.manage-presets': '管理預設附加項和變體列表',
+    'admin.service-requests': '服務請求',
+    'admin.service-requests-desc': '自定義呼叫服務員請求類型',
+    'admin.sr-page-desc': '定義顧客可從菜單點擊的自定義服務請求類型。',
+    'admin.sr-add-item': '添加服務請求',
+    'admin.sr-edit-item': '編輯服務請求',
+    'admin.sr-no-items': '暫無服務請求項目，點擊 + 添加以創建。',
+    'admin.sr-request-type': '請求類型（標識符）*',
+    'admin.sr-request-type-hint': '只允許小寫字母、數字和下劃線。',
+    'admin.sr-request-type-required': '請求類型為必填項。',
+    'admin.sr-request-type-invalid': '只允許小寫字母、數字和下劃線。',
+    'admin.sr-label-en': '英文標籤 *',
+    'admin.sr-label-zh': '中文標籤',
+    'admin.sr-color': '顏色',
+    'admin.sr-active': '啟用',
+    'admin.sr-active-desc': '只有啟用的項目才會出現在顧客菜單中。',
+    'admin.sr-off': '停用',
+    'admin.sr-type-label': '類型',
+    'admin.sr-count-preview': '{0} 個項目',
+    'admin.sr-delete-confirm': '刪除此服務請求項目？此操作無法撤銷。',
+    'admin.sr-label-en-required': '英文標籤為必填項。',
+    'admin.sr-save-failed': '保存失敗，請重試。',
+    'admin.sr-delete-failed': '刪除失敗，請重試。',
+    'admin.sr-load-failed': '加載服務請求項目失敗。',
+    'common.edit': '編輯',
+    'common.delete': '刪除',
 
     // Order Management (Chinese)
     'admin.cart-is-empty': '購物車為空',
@@ -3938,49 +3941,6 @@ const translations = {
     'menu.enter-coupon': '請輸入優惠券代碼',
     'menu.session-not-found': '找不到工作階段',
     'menu.change-language': '語言',
-
-    // Register page
-    'register.title': '建立您的帳戶',
-    'register.subtitle': '只需幾個步驟即可開始',
-    'register.back-login': '← 登入',
-    'register.email': '電郵地址',
-    'register.password': '密碼',
-    'register.password-placeholder': '最少 8 個字元',
-    'register.confirm-password': '確認密碼',
-    'register.confirm-password-placeholder': '再次輸入密碼',
-    'register.send-code': '發送驗證碼',
-    'register.verify-prompt': '請輸入發送至以下地址的 6 位驗證碼',
-    'register.verify-code': '驗證',
-    'register.resend-countdown': '重新發送（',
-    'register.resend': '重新發送驗證碼',
-    'register.back': '← 返回',
-    'register.full-name': '全名 *',
-    'register.restaurant-name': '餐廳名稱 *',
-    'register.address': '地址',
-    'register.country': '國家/地區',
-    'register.phone': '聯絡電話',
-    'register.timezone': '時區',
-    'register.create': '建立餐廳',
-    'register.success-title': '歡迎使用 Chuio！',
-    'register.success-desc': '您的餐廳已成功建立。',
-    'register.go-dashboard': '前往控制台 →',
-    'register.have-account': '已有帳戶？',
-    'register.sign-in': '登入',
-
-    // Reset password page
-    'reset.back-login': '← 登入',
-    'reset.validating': '正在驗證重置連結...',
-    'reset.invalid-title': '連結無效或已過期',
-    'reset.invalid-desc': '此密碼重置連結已不再有效，請重新申請。',
-    'reset.request-new': '重新申請連結',
-    'reset.title': '設定新密碼',
-    'reset.subtitle': '請在下方輸入您的新密碼',
-    'reset.new-password': '新密碼',
-    'reset.confirm-password': '確認新密碼',
-    'reset.submit': '重置密碼',
-    'reset.success-title': '密碼已重置！',
-    'reset.success-desc': '您的密碼已成功更新，現在可以使用新密碼登入。',
-    'reset.go-login': '前往登入',
   }
 };
 
@@ -4003,7 +3963,6 @@ function t(key, lang = null) {
 // Set language (applies UI changes only, does NOT save to database)
 window.setLanguage = function(lang) {
   localStorage.setItem('language', lang);
-  localStorage.setItem('chuio-lang', lang); // keep in sync with chuio-i18n.js
   // Also save as restaurant language preference locally
   localStorage.setItem('restaurantLanguage', lang);
   document.documentElement.lang = lang;
@@ -4069,11 +4028,9 @@ function getCurrentLanguage() {
   // Check if URL contains /en path - set English as the language preference
   if (window.location.pathname.includes('/en')) {
     localStorage.setItem('language', 'en');
-    localStorage.setItem('chuio-lang', 'en');
     return 'en';
   }
-
-  // Read from either key (chuio-i18n.js uses 'chuio-lang', translations.js uses 'language')
-  const lang = localStorage.getItem('language') || localStorage.getItem('chuio-lang') || 'en';
+  
+  const lang = localStorage.getItem('language') || 'zh';
   return lang;
 }
