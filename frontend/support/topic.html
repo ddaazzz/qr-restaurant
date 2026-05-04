@@ -6,22 +6,30 @@
   <title>Guide Topic | Chuio Support</title>
   <meta name="description" content="Chuio guide topic details" />
   <link rel="stylesheet" href="/support/guide.css" />
+  <link rel="stylesheet" href="/newhome.css" />
 </head>
 <body>
   <div class="page-bg"></div>
-  <header class="support-nav">
-    <div class="support-nav-inner">
-      <a class="support-logo" href="/">CHUIO</a>
-      <div class="support-nav-right">
-        <button class="langBtn" id="headerLangToggle"></button>
-        <nav class="support-links">
-          <a href="/" id="navHome">Home</a>
-          <a href="/support" class="active" id="navSupport">Support</a>
-          <a href="/login" id="navLogin">Login</a>
-        </nav>
+  <nav class="nh-nav" id="nh-nav">
+    <div class="nh-nav-inner">
+      <a href="/home.html"><img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="nh-nav-logo" /></a>
+      <div class="nh-nav-links">
+        <a href="/" id="navHome">Home</a>
+        <a href="/support" class="active" id="navSupport">Support</a>
+        <a href="/login" id="navLogin">Login</a>
+      </div>
+      <div class="nh-nav-cta">
+        <a href="/login" class="nh-nav-login" id="navLoginCta">Log in</a>
+      </div>
+      <div class="nh-i18n-controls">
+        <div class="nh-lang-switch">
+          <button class="nh-ls-btn active" id="nh-ls-en">EN</button>
+          <span class="nh-ls-sep">｜</span>
+          <button class="nh-ls-btn" id="nh-ls-zh">繁體</button>
+        </div>
       </div>
     </div>
-  </header>
+  </nav>
   <main class="shell">
     <a class="back" href="/support/index.html" id="backLink">← Back to Guide Index</a>
     <article id="topicView" class="topic"></article>
@@ -43,10 +51,11 @@
 
       // Language helpers
       function getLang() {
-        return localStorage.getItem('guide-lang') || 'en';
+        return localStorage.getItem('guide-lang') || localStorage.getItem('chuio-lang') || 'en';
       }
       function setLang(l) {
         localStorage.setItem('guide-lang', l);
+        localStorage.setItem('chuio-lang', l);
       }
       function localize(topic, lang) {
         if (lang !== 'zh') return topic;
@@ -112,13 +121,13 @@
       document.getElementById('backLink').textContent = ui.backLink;
 
       // Set header lang toggle
-      const headerLangBtn = document.getElementById('headerLangToggle');
-      if (headerLangBtn) {
-        headerLangBtn.textContent = lang === 'zh' ? 'EN' : '中文';
-        headerLangBtn.addEventListener('click', function () {
-          setLang(lang === 'zh' ? 'en' : 'zh');
-          location.reload();
-        });
+      const enBtn = document.getElementById('nh-ls-en');
+      const zhBtn = document.getElementById('nh-ls-zh');
+      if (enBtn && zhBtn) {
+        if (lang === 'zh') { enBtn.classList.remove('active'); zhBtn.classList.add('active'); }
+        else { enBtn.classList.add('active'); zhBtn.classList.remove('active'); }
+        enBtn.addEventListener('click', function() { setLang('en'); location.reload(); });
+        zhBtn.addEventListener('click', function() { setLang('zh'); location.reload(); });
       }
 
       const topicSections = (rawTopic.sections || []).map((section, index) => ({
