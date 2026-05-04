@@ -130,9 +130,38 @@
   // ── SERVICE PACK HOVER COLORS ─────────────────────────────────────────────
   // Already handled by CSS var(--sp-accent) defined inline on each card element
 
+  // ── ACTIVE NAV HIGHLIGHT ON SCROLL ────────────────────────────────────────
+  const navLinks = document.querySelectorAll('.nh-nav-links a[href^="#"]');
+  const sectionIds = Array.from(navLinks).flatMap(a => [
+    a.getAttribute('href').slice(1),
+    ...(a.dataset.alsoActive ? a.dataset.alsoActive.split(',') : [])
+  ]);
+  const sections = [...new Set(sectionIds)].map(id => document.getElementById(id)).filter(Boolean);
+
+  if (sections.length) {
+    const navObs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(a => {
+            const ids = [a.getAttribute('href').slice(1), ...(a.dataset.alsoActive ? a.dataset.alsoActive.split(',') : [])];
+            a.classList.toggle('nh-nav-active', ids.includes(id));
+          });
+        }
+      });
+    }, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+    sections.forEach(sec => navObs.observe(sec));
+  }
+
   // ── SMOOTH SCROLL for anchor links ────────────────────────────────────────
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
+      // If a real navigation URL is set, follow it instead of scrolling
+      const navHref = this.dataset.navHref;
+      if (navHref) {
+        window.location.href = navHref;
+        return;
+      }
       const href = this.getAttribute('href');
       if (href === '#') return;
       const target = document.querySelector(href);

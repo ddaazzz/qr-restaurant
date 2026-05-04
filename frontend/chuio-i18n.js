@@ -116,6 +116,17 @@
       }
     });
 
+    // data-zh-html elements: swap innerHTML (for elements containing hyperlinks etc.)
+    document.querySelectorAll('[data-zh-html]').forEach(function (el) {
+      if (isZh) {
+        if (!el.hasAttribute('data-en-html')) el.setAttribute('data-en-html', el.innerHTML);
+        el.innerHTML = el.getAttribute('data-zh-html');
+      } else {
+        var enHtml = el.getAttribute('data-en-html');
+        if (enHtml !== null) el.innerHTML = enHtml;
+      }
+    });
+
     // Placeholder translations
     document.querySelectorAll('[data-zh-ph]').forEach(function (el) {
       if (isZh) {

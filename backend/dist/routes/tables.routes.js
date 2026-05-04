@@ -27,14 +27,20 @@ router.get("/tables/:tableId/units", async (req, res) => {
 });
 // GET derived table categories
 router.get("/restaurants/:restaurantId/table-categories", async (req, res) => {
-    const { restaurantId } = req.params;
-    const result = await db_1.default.query(`
-      SELECT id, "key"
-      FROM table_categories
-      WHERE restaurant_id = $1
-      ORDER BY sort_order
-      `, [restaurantId]);
-    res.json(result.rows);
+    try {
+        const { restaurantId } = req.params;
+        const result = await db_1.default.query(`
+        SELECT id, "key"
+        FROM table_categories
+        WHERE restaurant_id = $1
+        ORDER BY sort_order
+        `, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch table categories" });
+    }
 });
 router.get("/restaurants/:restaurantId/tables", async (req, res) => {
     try {
@@ -257,14 +263,20 @@ router.delete("/restaurants/:restaurantId/table-categories/:categoryId", async (
 });
 // GET derived table categories
 router.get("/restaurants/:restaurantId/table-categories", async (req, res) => {
-    const { restaurantId } = req.params;
-    const result = await db_1.default.query(`
-      SELECT id, "key"
-      FROM table_categories
-      WHERE restaurant_id = $1
-      ORDER BY sort_order
-      `, [restaurantId]);
-    res.json(result.rows);
+    try {
+        const { restaurantId } = req.params;
+        const result = await db_1.default.query(`
+        SELECT id, "key"
+        FROM table_categories
+        WHERE restaurant_id = $1
+        ORDER BY sort_order
+        `, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch table categories" });
+    }
 });
 router.get("/restaurants/:restaurantId/tables", async (req, res) => {
     try {

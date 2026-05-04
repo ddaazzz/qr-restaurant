@@ -51,15 +51,15 @@ document.getElementById('btn-send-code').addEventListener('click', async functio
   var confirmPassword = document.getElementById('reg-confirm-password').value;
 
   if (!email || !email.includes('@')) {
-    showError('Please enter a valid email address');
+    showError(t('register.error-valid-email'));
     return;
   }
   if (password.length < 8) {
-    showError('Password must be at least 8 characters');
+    showError(t('register.error-password-length'));
     return;
   }
   if (password !== confirmPassword) {
-    showError('Passwords do not match');
+    showError(t('register.error-passwords-match'));
     return;
   }
 
@@ -84,7 +84,7 @@ document.getElementById('btn-send-code').addEventListener('click', async functio
     // Focus first code input
     document.querySelector('.code-digit[data-index="0"]').focus();
   } catch (err) {
-    showError('Network error. Please try again.');
+    showError(t('register.error-network'));
   } finally {
     setLoading(btn, false);
   }
@@ -124,7 +124,7 @@ document.getElementById('btn-verify-code').addEventListener('click', async funct
   var code = '';
   document.querySelectorAll('.code-digit').forEach(function(d) { code += d.value; });
   if (code.length !== 6) {
-    showError('Please enter the full 6-digit code');
+    showError(t('register.error-code-digits'));
     return;
   }
 
@@ -138,12 +138,12 @@ document.getElementById('btn-verify-code').addEventListener('click', async funct
     });
     var data = await res.json();
     if (!res.ok) {
-      showError(data.error || 'Invalid code');
+      showError(data.error || t('register.error-code-digits'));
       return;
     }
     showStep(2);
   } catch (err) {
-    showError('Network error. Please try again.');
+    showError(t('register.error-network'));
   } finally {
     setLoading(btn, false);
   }
@@ -155,20 +155,23 @@ document.getElementById('btn-back-to-email').addEventListener('click', function(
 
 function startResendTimer() {
   var seconds = 60;
-  var timerEl = document.getElementById('resend-timer');
   var btnResend = document.getElementById('btn-resend');
   btnResend.disabled = true;
-  btnResend.innerHTML = 'Resend code in <span id="resend-timer">' + seconds + '</span>s';
-  timerEl = document.getElementById('resend-timer');
+  document.getElementById('resend-prefix').textContent = t('register.resend-countdown') + ' ';
+  document.getElementById('resend-timer').textContent = seconds;
+  document.getElementById('resend-suffix').textContent = t('register.resend-countdown-suffix');
 
   if (resendCountdown) clearInterval(resendCountdown);
   resendCountdown = setInterval(function() {
     seconds--;
+    var timerEl = document.getElementById('resend-timer');
     if (timerEl) timerEl.textContent = seconds;
     if (seconds <= 0) {
       clearInterval(resendCountdown);
       btnResend.disabled = false;
-      btnResend.textContent = 'Resend code';
+      document.getElementById('resend-prefix').textContent = '';
+      document.getElementById('resend-suffix').textContent = '';
+      document.getElementById('resend-timer').textContent = t('register.resend');
     }
   }, 1000);
 }
@@ -193,11 +196,11 @@ document.getElementById('btn-create-restaurant').addEventListener('click', async
   var fullName = document.getElementById('reg-full-name').value.trim();
   var name = document.getElementById('reg-restaurant-name').value.trim();
   if (!fullName) {
-    showError('Full name is required');
+    showError(t('register.error-full-name'));
     return;
   }
   if (!name) {
-    showError('Restaurant name is required');
+    showError(t('register.error-restaurant-name'));
     return;
   }
 
@@ -220,7 +223,7 @@ document.getElementById('btn-create-restaurant').addEventListener('click', async
     });
     var data = await res.json();
     if (!res.ok) {
-      showError(data.error || 'Registration failed');
+      showError(data.error || t('register.error-network'));
       return;
     }
 
@@ -233,7 +236,7 @@ document.getElementById('btn-create-restaurant').addEventListener('click', async
 
     showStep('success');
   } catch (err) {
-    showError('Network error. Please try again.');
+    showError(t('register.error-network'));
   } finally {
     setLoading(btn, false);
   }

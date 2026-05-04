@@ -36,6 +36,21 @@ export declare class CustomerReceiptService {
      */
     private sendEmailReceipt;
     /**
+     * Send email receipt directly (bypasses customer_receipt_enabled check).
+     * Used for the "Email Receipt" feature triggered by staff or post-payment prompt.
+     */
+    sendEmailDirect(restaurantId: number, sessionId: number, customerEmail: string, receiptData: {
+        items: Array<{
+            name: string;
+            quantity: number;
+            price: number;
+        }>;
+        subtotal: number;
+        serviceCharge: number;
+        total: number;
+        tableNumber?: string;
+    }): Promise<CustomerReceipt>;
+    /**
      * Send receipt via SMS (placeholder)
      */
     private sendSmsReceipt;

@@ -13,7 +13,49 @@ const db_1 = __importDefault(require("../config/db"));
 const kpayTerminalService_1 = require("../services/kpayTerminalService");
 const paymentAsiaService_1 = require("../services/paymentAsiaService");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const https_1 = __importDefault(require("https"));
 const router = (0, express_1.Router)();
+/**
+ * Helper: make an HTTPS call to a Payment Asia Offline physical terminal.
+ * Terminals use self-signed TLS certs (rejectUnauthorized=false) and
+ * authenticate via `x-api-key` header (= app_secret stored in DB).
+ */
+function callPAOfflineTerminal(terminal, method, path, body) {
+    return new Promise((resolve) => {
+        const bodyJson = body ? JSON.stringify(body) : undefined;
+        const options = {
+            hostname: terminal.terminal_ip,
+            port: terminal.terminal_port,
+            path,
+            method,
+            headers: {
+                'x-api-key': terminal.app_secret,
+                'Content-Type': 'application/json',
+                ...(bodyJson ? { 'Content-Length': Buffer.byteLength(bodyJson) } : {}),
+            },
+            rejectUnauthorized: false, // PA terminal uses a self-signed certificate
+            timeout: 15000,
+        };
+        const req = https_1.default.request(options, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk; });
+            res.on('end', () => {
+                try {
+                    const data = JSON.parse(raw);
+                    resolve({ ok: true, data, raw });
+                }
+                catch {
+                    resolve({ ok: false, data: null, raw });
+                }
+            });
+        });
+        req.on('error', (err) => resolve({ ok: false, data: null, raw: err.message }));
+        req.on('timeout', () => { req.destroy(); resolve({ ok: false, data: null, raw: 'Connection timeout' }); });
+        if (bodyJson)
+            req.write(bodyJson);
+        req.end();
+    });
+}
 // Auth helper: verifies JWT and returns user info
 const verifyUser = async (req) => {
     const token = req.headers.authorization?.split(" ")[1];
@@ -101,7 +143,7 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
         const { restaurantId } = req.params;
         const { vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata, merchant_token, secret_code, payment_gateway_env } = req.body;
         // Validate vendor name
-        const validVendors = ['kpay', 'payment-asia', 'other'];
+        const validVendors = ['kpay', 'payment-asia', 'payment-asia-offline', 'other'];
         if (!vendor_name || !validVendors.includes(vendor_name)) {
             return res.status(400).json({
                 error: `Missing or invalid vendor_name. Must be one of: ${validVendors.join(', ')}`,
@@ -129,6 +171,22 @@ router.post('/restaurants/:restaurantId/payment-terminals', async (req, res) => 
                    terminal_ip, terminal_port, endpoint_path, metadata, created_at, updated_at`, [restaurantId, vendor_name, paToken, paSecret, paToken, paSecret,
                 payment_gateway_env || 'sandbox', terminal_ip || null, terminal_port || null,
                 endpoint_path || null, metadata || {}]);
+        }
+        else if (vendor_name === 'payment-asia-offline') {
+            // PA Offline terminal: uses physical POS device over LAN
+            // Credentials: terminal_ip, terminal_port, app_secret (= API key printed on terminal)
+            const apiKey = app_secret || app_id;
+            if (!terminal_ip || !terminal_port || !apiKey) {
+                return res.status(400).json({
+                    error: 'Missing required fields for PA Offline: terminal_ip, terminal_port, api_key',
+                });
+            }
+            result = await db_1.default.query(`INSERT INTO payment_terminals
+         (restaurant_id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, vendor_name, is_active, app_id, terminal_ip, terminal_port, endpoint_path,
+                   metadata, created_at, updated_at`, [restaurantId, vendor_name, apiKey, apiKey, terminal_ip, terminal_port,
+                endpoint_path || '/api/sign', metadata || {}]);
         }
         else {
             // KPay / other: require connection fields
@@ -281,7 +339,7 @@ router.delete('/restaurants/:restaurantId/payment-terminals/:terminalId', async 
 router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', async (req, res) => {
     try {
         const { restaurantId, terminalId } = req.params;
-        const { payAmount, tipsAmount, payCurrency, description, customerName } = req.body;
+        const { payAmount, tipsAmount, payCurrency, description, customerName, session_id } = req.body;
         // Fetch the terminal configuration
         const terminalResult = await db_1.default.query(`SELECT id, vendor_name, app_id, app_secret, terminal_ip, terminal_port, endpoint_path
        FROM payment_terminals
@@ -361,13 +419,21 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
                 }
                 // Step 3: Store transaction in database for status polling
                 const transactionId = saleResult.response?.transactionId || 'TXN-' + Date.now();
-                const storeResult = await db_1.default.query(`INSERT INTO kpay_transactions 
-           (restaurant_id, kpay_reference_id, status, amount_cents, currency_code, kpay_response)
-           VALUES ($1, $2, $3, $4, $5, $6)
+                // Resolve order_id from session if provided
+                let kpayOrderId = null;
+                if (session_id) {
+                    const latestOrder = await db_1.default.query(`SELECT id FROM orders WHERE session_id = $1 AND restaurant_id = $2
+             ORDER BY created_at DESC LIMIT 1`, [session_id, restaurantId]);
+                    kpayOrderId = latestOrder.rows[0]?.id ?? null;
+                }
+                const storeResult = await db_1.default.query(`INSERT INTO kpay_transactions
+           (restaurant_id, session_id, order_id, kpay_reference_id, status, amount_cents, currency_code, kpay_response)
+           VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
            RETURNING id, kpay_reference_id, status`, [
                     restaurantId,
+                    session_id ?? null,
+                    kpayOrderId,
                     outTradeNo,
-                    'pending',
                     parseInt(payAmount),
                     payCurrency || '344',
                     JSON.stringify(saleResult.response),
@@ -410,7 +476,7 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
                 paymentAsiaService_1.paymentAsiaService.initialize({
                     merchantToken: pa.merchant_token,
                     secretCode: pa.secret_code,
-                    environment: pa.payment_gateway_env || 'sandbox',
+                    environment: 'sandbox', // Test always uses sandbox regardless of terminal config
                 });
                 const network = req.body.network ? String(req.body.network) : undefined;
                 const returnTo = req.body.return_to ? decodeURIComponent(String(req.body.return_to)) : undefined;
@@ -421,6 +487,86 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/test', asy
             catch (paErr) {
                 console.error('[PaymentTerminal] Payment Asia test error:', paErr);
                 return res.status(500).json({ success: false, error: paErr.message || 'Payment Asia test failed' });
+            }
+        }
+        // Payment Asia Offline: initiate payment on physical terminal via LAN API
+        if (terminal.vendor_name === 'payment-asia-offline') {
+            try {
+                if (!terminal.terminal_ip || !terminal.terminal_port || !terminal.app_secret) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'PA Offline terminal missing terminal_ip, terminal_port, or app_secret.',
+                    });
+                }
+                // No amount → connectivity test (ping)
+                if (!payAmount) {
+                    const pingResult = await callPAOfflineTerminal({ terminal_ip: terminal.terminal_ip, terminal_port: terminal.terminal_port, app_secret: terminal.app_secret }, 'GET', '/ping');
+                    const ok = pingResult.ok && pingResult.data?.code === '1000';
+                    return res.json({
+                        success: ok,
+                        message: ok ? 'PA terminal reachable' : 'PA terminal connection failed',
+                        response: pingResult.data,
+                        raw: ok ? undefined : pingResult.raw,
+                    });
+                }
+                // Convert 12-digit padded-cents to decimal dollars (PA Offline expects e.g. "1.05")
+                const amountCents = parseInt(payAmount, 10);
+                const amountDollars = (amountCents / 100).toFixed(2);
+                const orderId = `PA-${restaurantId}-${terminalId}-${Date.now()}`;
+                console.log(`[PAOffline] Initiating payment: ${amountDollars} HKD  order_id=${orderId}`);
+                const createResult = await callPAOfflineTerminal({ terminal_ip: terminal.terminal_ip, terminal_port: terminal.terminal_port, app_secret: terminal.app_secret }, 'POST', '/order/create', { order_id: orderId, amount: amountDollars, payment_method: 'QR_CODE' });
+                if (!createResult.ok || createResult.data?.code !== '1000') {
+                    return res.status(400).json({
+                        success: false,
+                        status: 'failed',
+                        message: createResult.data?.message || 'Payment initiation failed',
+                        raw: createResult.raw,
+                        logs: [`[PAOffline] ❌ POST /order/create failed — ${createResult.data?.message || createResult.raw}`],
+                    });
+                }
+                // Resolve order_id from session if provided
+                let paOrderId = null;
+                if (session_id) {
+                    const latestOrder = await db_1.default.query(`SELECT id FROM orders WHERE session_id = $1 AND restaurant_id = $2
+             ORDER BY created_at DESC LIMIT 1`, [session_id, restaurantId]);
+                    paOrderId = latestOrder.rows[0]?.id ?? null;
+                }
+                // Store in pa_offline_transactions table
+                const createPayload = createResult.data?.payload || {};
+                await db_1.default.query(`INSERT INTO pa_offline_transactions
+             (restaurant_id, session_id, order_id, pa_order_id, amount_cents, currency,
+              payment_method, request_reference, merchant_reference, provider_reference,
+              pa_status_code, status, pa_response)
+           VALUES ($1, $2, $3, $4, $5, 'HKD', $6, $7, $8, $9, $10, 'pending', $11)`, [
+                    restaurantId,
+                    session_id ?? null,
+                    paOrderId,
+                    orderId,
+                    amountCents,
+                    'QR_CODE',
+                    createPayload.request_reference || null,
+                    createPayload.merchant_reference || orderId,
+                    createPayload.provider_reference || null,
+                    String(createPayload.status ?? ''),
+                    JSON.stringify(createPayload),
+                ]);
+                return res.json({
+                    success: true,
+                    initiated: true,
+                    status: 'pending',
+                    code: '1000',
+                    message: 'Payment initiated on PA terminal. Poll /test-status to confirm.',
+                    outTradeNo: orderId,
+                    amount: amountDollars,
+                    logs: [
+                        `[PAOffline] → POST /order/create  order_id=${orderId}  amount=${amountDollars} HKD`,
+                        `[PAOffline] ✅ Payment initiated on terminal`,
+                    ],
+                });
+            }
+            catch (paErr) {
+                console.error('[PAOffline] /test error:', paErr);
+                return res.status(500).json({ success: false, error: paErr.message });
             }
         }
         // For other vendors
@@ -501,6 +647,70 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId/test-status
                 });
             }
         }
+        if (terminal.vendor_name === 'payment-asia-offline') {
+            try {
+                const queryResult = await callPAOfflineTerminal({ terminal_ip: terminal.terminal_ip, terminal_port: terminal.terminal_port, app_secret: terminal.app_secret }, 'POST', '/order/query', { order_id: String(outTradeNo) });
+                if (!queryResult.ok || queryResult.data?.code !== '1000') {
+                    return res.json({
+                        success: false,
+                        code: queryResult.data?.code || 'error',
+                        status: 'failed',
+                        message: queryResult.data?.message || 'Query failed',
+                        outTradeNo,
+                        logs: [`[PAOffline] ❌ POST /order/query failed — ${queryResult.data?.message || queryResult.raw}`],
+                    });
+                }
+                const payload = queryResult.data.payload || {};
+                // PA Offline status: "1" = success/completed; "0" or absent = pending; others = failed/cancelled
+                const paStatus = String(payload.status ?? '0');
+                let mappedStatus;
+                if (paStatus === '1')
+                    mappedStatus = 'success';
+                else if (paStatus === '2')
+                    mappedStatus = 'failed';
+                else if (paStatus === '-1' || paStatus === '4')
+                    mappedStatus = 'cancelled';
+                else
+                    mappedStatus = 'pending';
+                if (mappedStatus === 'success') {
+                    await db_1.default.query(`UPDATE pa_offline_transactions
+             SET status = 'completed', completed_at = NOW(),
+                 pa_response = $1, provider = $2, transaction_type = $3,
+                 provider_reference = COALESCE($4, provider_reference),
+                 request_reference = COALESCE($5, request_reference),
+                 pa_status_code = $6,
+                 pa_created_time = $7, pa_completed_time = $8
+             WHERE pa_order_id = $9 AND restaurant_id = $10`, [
+                        JSON.stringify(payload),
+                        payload.provider || null,
+                        payload.type || 'Sale',
+                        payload.provider_reference || null,
+                        payload.request_reference || null,
+                        paStatus,
+                        payload.created_time ? Number(payload.created_time) : null,
+                        payload.completed_time ? Number(payload.completed_time) : null,
+                        String(outTradeNo),
+                        restaurantId,
+                    ]);
+                }
+                return res.json({
+                    success: true,
+                    code: queryResult.data.code,
+                    status: mappedStatus,
+                    message: queryResult.data.message || 'ok',
+                    outTradeNo,
+                    providerReference: payload.provider_reference,
+                    amount: payload.amount,
+                    currency: payload.currency || 'HKD',
+                    completedTime: payload.completed_time,
+                    logs: [`[PAOffline] ← /order/query  pa_status=${paStatus}  mapped=${mappedStatus}`],
+                });
+            }
+            catch (paErr) {
+                console.error('[PAOffline] Status query error:', paErr);
+                return res.status(500).json({ success: false, status: 'error', message: paErr.message, outTradeNo });
+            }
+        }
         // For other vendors
         res.status(400).json({
             error: `Status query not yet implemented for vendor: ${terminal.vendor_name}`,
@@ -578,8 +788,44 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/cancel', a
     try {
         const { restaurantId, terminalId } = req.params;
         const { outTradeNo, originOutTradeNo, callbackUrl } = req.body;
-        if (!outTradeNo || !originOutTradeNo) {
-            return res.status(400).json({ error: 'outTradeNo and originOutTradeNo are required' });
+        if (!originOutTradeNo) {
+            return res.status(400).json({ error: 'originOutTradeNo is required' });
+        }
+        // Check vendor to route PA-Offline separately
+        const vendorCheck = await db_1.default.query(`SELECT id, vendor_name, app_secret, terminal_ip, terminal_port FROM payment_terminals WHERE id = $1 AND restaurant_id = $2`, [terminalId, restaurantId]);
+        if (vendorCheck.rowCount === 0)
+            return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+        const tv = vendorCheck.rows[0];
+        // PA Offline void: call POST /order/void on the physical terminal
+        if (tv.vendor_name === 'payment-asia-offline') {
+            try {
+                const voidResult = await callPAOfflineTerminal({ terminal_ip: tv.terminal_ip, terminal_port: tv.terminal_port, app_secret: tv.app_secret }, 'POST', '/order/void', { order_id: originOutTradeNo });
+                const success = voidResult.ok && voidResult.data?.code === '1000';
+                if (success) {
+                    await db_1.default.query(`UPDATE pa_offline_transactions SET status = 'voided', completed_at = NOW(), pa_response = $1 WHERE pa_order_id = $2 AND restaurant_id = $3`, [JSON.stringify(voidResult.data?.payload || {}), originOutTradeNo, restaurantId]);
+                    await db_1.default.query(`UPDATE orders SET payment_status = 'voided' WHERE chuio_order_reference = $1 AND restaurant_id = $2`, [originOutTradeNo, restaurantId]);
+                    try {
+                        await db_1.default.query(`UPDATE chuio_payments SET status = 'voided' WHERE order_reference = $1`, [originOutTradeNo]);
+                    }
+                    catch (_) { }
+                }
+                return res.json({
+                    success,
+                    message: voidResult.data?.message || (success ? 'Transaction voided' : 'Void failed'),
+                    originOutTradeNo,
+                    logs: [
+                        `[PAOffline] → POST /order/void  order_id=${originOutTradeNo}`,
+                        `[PAOffline] ${success ? '✅' : '❌'} ${voidResult.data?.message || voidResult.raw}`,
+                    ],
+                });
+            }
+            catch (paErr) {
+                console.error('[PAOffline] Void error:', paErr);
+                return res.status(500).json({ success: false, error: paErr.message });
+            }
+        }
+        if (!outTradeNo) {
+            return res.status(400).json({ error: 'outTradeNo is required for KPay void' });
         }
         const { terminal, error } = await initKPayTerminal(restaurantId, terminalId);
         if (error)
@@ -615,7 +861,50 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/cancel', a
 router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/refund', async (req, res) => {
     try {
         const { restaurantId, terminalId } = req.params;
-        const { outTradeNo, refundType, refNo, transactionNo, commitTime, refundAmount, managerPassword, callbackUrl } = req.body;
+        const { outTradeNo, originOutTradeNo, refundType, refNo, transactionNo, commitTime, refundAmount, managerPassword, callbackUrl } = req.body;
+        // Check vendor to route PA-Offline separately
+        const vendorCheckR = await db_1.default.query(`SELECT id, vendor_name, app_secret, terminal_ip, terminal_port FROM payment_terminals WHERE id = $1 AND restaurant_id = $2`, [terminalId, restaurantId]);
+        if (vendorCheckR.rowCount === 0)
+            return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+        const tvr = vendorCheckR.rows[0];
+        // PA Offline refund: call POST /order/refund on the physical terminal
+        if (tvr.vendor_name === 'payment-asia-offline') {
+            const paOrderId = originOutTradeNo || outTradeNo;
+            if (!paOrderId)
+                return res.status(400).json({ error: 'originOutTradeNo (pa_order_id) is required for PA-Offline refund' });
+            try {
+                const refBody = { order_id: paOrderId };
+                if (refundAmount)
+                    refBody.amount = String(refundAmount);
+                const refResult = await callPAOfflineTerminal({ terminal_ip: tvr.terminal_ip, terminal_port: tvr.terminal_port, app_secret: tvr.app_secret }, 'POST', '/order/refund', refBody);
+                const success = refResult.ok && refResult.data?.code === '1000';
+                if (success) {
+                    const refStatus = refundAmount ? 'partial_refund' : 'refunded';
+                    const dbRes = await db_1.default.query(`UPDATE pa_offline_transactions SET status = $1, completed_at = NOW(), pa_response = $2 WHERE pa_order_id = $3 AND restaurant_id = $4 RETURNING amount_cents`, [refStatus, JSON.stringify(refResult.data?.payload || {}), paOrderId, restaurantId]);
+                    await db_1.default.query(`UPDATE orders SET payment_status = $1 WHERE chuio_order_reference = $2 AND restaurant_id = $3`, [refStatus, paOrderId, restaurantId]);
+                    try {
+                        const refAmtCents = refundAmount ? Math.round(parseFloat(String(refundAmount)) * 100) : (dbRes.rows[0]?.amount_cents || 0);
+                        await db_1.default.query(`UPDATE chuio_payments SET status = $1, refund_amount_cents = $2, refunded_at = NOW() WHERE order_reference = $3`, [refStatus, refAmtCents, paOrderId]);
+                    }
+                    catch (_) { }
+                }
+                return res.json({
+                    success,
+                    message: refResult.data?.message || (success ? 'Refund submitted' : 'Refund failed'),
+                    originOutTradeNo: paOrderId,
+                    refundAmount: refundAmount || null,
+                    payload: refResult.data?.payload || null,
+                    logs: [
+                        `[PAOffline] → POST /order/refund  order_id=${paOrderId}${refundAmount ? `  amount=${refundAmount}` : ' (full)'}`,
+                        `[PAOffline] ${success ? '✅' : '❌'} ${refResult.data?.message || refResult.raw}`,
+                    ],
+                });
+            }
+            catch (paErr) {
+                console.error('[PAOffline] Refund error:', paErr);
+                return res.status(500).json({ success: false, error: paErr.message });
+            }
+        }
         if (!outTradeNo || !refundType || !managerPassword) {
             return res.status(400).json({ error: 'outTradeNo, refundType, and managerPassword are required' });
         }
@@ -683,6 +972,37 @@ router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/close-tran
         const { outTradeNo } = req.body;
         if (!outTradeNo) {
             return res.status(400).json({ error: 'outTradeNo is required' });
+        }
+        // Check vendor before deciding which flow to use
+        const vendorResult = await db_1.default.query(`SELECT id, vendor_name, app_secret, terminal_ip, terminal_port
+       FROM payment_terminals WHERE id = $1 AND restaurant_id = $2`, [terminalId, restaurantId]);
+        if (vendorResult.rowCount === 0)
+            return res.status(404).json({ success: false, error: 'Payment terminal not found' });
+        const t = vendorResult.rows[0];
+        // PA Offline: send GET /order/cancel to the terminal device
+        if (t.vendor_name === 'payment-asia-offline') {
+            try {
+                const cancelResult = await callPAOfflineTerminal({ terminal_ip: t.terminal_ip, terminal_port: t.terminal_port, app_secret: t.app_secret }, 'GET', '/order/cancel');
+                const success = cancelResult.ok && cancelResult.data?.code === '1000';
+                if (success) {
+                    await db_1.default.query(`UPDATE pa_offline_transactions
+             SET status = 'cancelled', completed_at = NOW()
+             WHERE pa_order_id = $1 AND restaurant_id = $2`, [outTradeNo, restaurantId]);
+                }
+                return res.json({
+                    success,
+                    message: cancelResult.data?.message || (success ? 'Transaction cancelled' : 'Cancel failed'),
+                    outTradeNo,
+                    logs: [
+                        `[PAOffline] → GET /order/cancel`,
+                        `[PAOffline] ${success ? '✅' : '❌'} ${cancelResult.data?.message || cancelResult.raw}`,
+                    ],
+                });
+            }
+            catch (paErr) {
+                console.error('[PAOffline] Close transaction error:', paErr);
+                return res.status(500).json({ success: false, error: paErr.message });
+            }
         }
         const { terminal, error } = await initKPayTerminal(restaurantId, terminalId);
         if (error)
@@ -849,20 +1169,113 @@ router.get('/restaurants/:restaurantId/kpay-transactions/:outTradeNo', async (re
     }
 });
 /**
+ * GET /api/restaurants/:restaurantId/pa-offline-transactions/:pa_order_id
+ * Load PA-Offline transaction record from DB (+ optional live query from terminal).
+ */
+router.get('/restaurants/:restaurantId/pa-offline-transactions/:pa_order_id', async (req, res) => {
+    try {
+        const { restaurantId, pa_order_id } = req.params;
+        const dbRes = await db_1.default.query(`SELECT id, pa_order_id, amount_cents, currency, payment_method,
+              request_reference, merchant_reference, provider_reference,
+              pa_status_code, status, provider, transaction_type,
+              pa_created_time, pa_completed_time, created_at, completed_at,
+              pa_response
+       FROM pa_offline_transactions
+       WHERE pa_order_id = $1 AND restaurant_id = $2
+       ORDER BY created_at DESC LIMIT 1`, [pa_order_id, restaurantId]);
+        if (dbRes.rowCount === 0) {
+            return res.status(404).json({ error: 'PA-Offline transaction not found' });
+        }
+        const txn = { ...dbRes.rows[0] };
+        // Optionally do a live query on the terminal for the freshest status
+        try {
+            const termRes = await db_1.default.query(`SELECT app_secret, terminal_ip, terminal_port FROM payment_terminals
+         WHERE restaurant_id = $1 AND vendor_name = 'payment-asia-offline' AND is_active = true LIMIT 1`, [restaurantId]);
+            if ((termRes.rowCount ?? 0) > 0) {
+                const tt = termRes.rows[0];
+                const liveResult = await callPAOfflineTerminal({ terminal_ip: tt.terminal_ip, terminal_port: tt.terminal_port, app_secret: tt.app_secret }, 'POST', '/order/query', { order_id: pa_order_id });
+                if (liveResult.ok && liveResult.data?.code === '1000') {
+                    const payload = liveResult.data.payload || {};
+                    const paStatus = String(payload.status ?? '0');
+                    let mappedStatus = paStatus === '1' ? 'completed' : paStatus === '2' ? 'failed' : (paStatus === '-1' || paStatus === '4') ? 'cancelled' : txn.status;
+                    // Only update if terminal reports a more definitive status
+                    if (mappedStatus !== txn.status && txn.status !== 'voided' && txn.status !== 'refunded' && txn.status !== 'partial_refund') {
+                        txn.status = mappedStatus;
+                    }
+                    txn.live_pa_status = paStatus;
+                    txn.live_payload = payload;
+                }
+            }
+        }
+        catch (_) { /* live query failure is non-fatal */ }
+        return res.json(txn);
+    }
+    catch (err) {
+        console.error('[PAOffline] Transaction lookup error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * POST /api/restaurants/:restaurantId/payment-terminals/:terminalId/pa-offline/refund-query
+ * Query the status of a PA-Offline refund.
+ * Body: { pa_order_id }
+ */
+router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/pa-offline/refund-query', async (req, res) => {
+    try {
+        const { restaurantId, terminalId } = req.params;
+        const { pa_order_id } = req.body;
+        if (!pa_order_id)
+            return res.status(400).json({ error: 'pa_order_id is required' });
+        const termRes = await db_1.default.query(`SELECT app_secret, terminal_ip, terminal_port FROM payment_terminals WHERE id = $1 AND restaurant_id = $2`, [terminalId, restaurantId]);
+        if (termRes.rowCount === 0)
+            return res.status(404).json({ success: false, error: 'Terminal not found' });
+        const tt = termRes.rows[0];
+        const queryResult = await callPAOfflineTerminal({ terminal_ip: tt.terminal_ip, terminal_port: tt.terminal_port, app_secret: tt.app_secret }, 'POST', '/order/refund/query', { order_id: pa_order_id });
+        const success = queryResult.ok && queryResult.data?.code === '1000';
+        const payload = queryResult.data?.payload || {};
+        // refund status: '1'=completed, '0'=pending, '2'=failed
+        const refStatus = String(payload.status ?? '');
+        const mappedRefStatus = refStatus === '1' ? 'completed' : refStatus === '0' ? 'pending' : refStatus === '2' ? 'failed' : 'unknown';
+        return res.json({
+            success,
+            code: queryResult.data?.code || 'error',
+            status: mappedRefStatus,
+            message: queryResult.data?.message || '',
+            pa_order_id,
+            payload,
+            logs: [
+                `[PAOffline] → POST /order/refund/query  order_id=${pa_order_id}`,
+                `[PAOffline] ${success ? '✅' : '❌'} refund_status=${refStatus}  mapped=${mappedRefStatus}`,
+            ],
+        });
+    }
+    catch (err) {
+        console.error('[PAOffline] Refund query error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+/**
  * GET /api/restaurants/:restaurantId/kpay-terminal/active
- * Returns the active KPay terminal config (for frontend gating)
+ * Returns the active physical terminal (KPay or PA-Offline) for frontend gating.
+ * KPay is preferred when both are active; vendor_name is included in the response.
  */
 router.get('/restaurants/:restaurantId/kpay-terminal/active', async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const result = await db_1.default.query(`SELECT id, app_id, terminal_ip, terminal_port, endpoint_path, is_active
+        const result = await db_1.default.query(`SELECT id, app_id, app_secret, terminal_ip, terminal_port, endpoint_path, is_active, vendor_name
        FROM payment_terminals
-       WHERE restaurant_id = $1 AND vendor_name = 'kpay' AND is_active = true
+       WHERE restaurant_id = $1 AND is_active = true AND vendor_name IN ('kpay', 'payment-asia-offline')
+       ORDER BY CASE vendor_name WHEN 'kpay' THEN 1 ELSE 2 END
        LIMIT 1`, [restaurantId]);
         if (result.rowCount === 0) {
             return res.json({ configured: false });
         }
-        return res.json({ configured: true, terminal: result.rows[0] });
+        const terminal = result.rows[0];
+        // Mask app_secret for KPay (not needed by mobile); expose it for PA-Offline (mobile calls terminal directly on LAN)
+        if (terminal.vendor_name !== 'payment-asia-offline') {
+            terminal.app_secret = terminal.app_secret ? '••••••••' : '';
+        }
+        return res.json({ configured: true, terminal });
     }
     catch (err) {
         res.status(500).json({ error: err.message });

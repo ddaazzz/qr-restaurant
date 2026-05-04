@@ -31,6 +31,8 @@ ul { list-style: none; }
 .nh-nav-links a:hover { color: #111827; }
 .nh-nav-links a.nh-help-link { color: #FF6A2A; }
 .nh-nav-links a.nh-help-link:hover { color: rgba(255,106,42,0.8); }
+.nh-nav-links a.nh-nav-active { color: #FF6A2A; }
+.nh-nav-links a.nh-nav-active:hover { color: rgba(255,106,42,0.8); }
 .nh-nav-cta { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .nh-nav-login { font-size: 14px; font-weight: 500; color: #6b7280; transition: color 0.2s; }
 .nh-nav-login:hover { color: #111827; }
@@ -38,7 +40,7 @@ ul { list-style: none; }
 .nh-nav-get-started:hover { background: #FF6A2A; }
 .nh-nav-get-started svg { transition: transform 0.2s; }
 .nh-nav-get-started:hover svg { transform: translateX(2px); }
-.nh-hamburger { display: none; background: none; border: none; cursor: pointer; padding: 4px; color: #374151; }
+.nh-hamburger { display: none; background: none; border: none; cursor: pointer; padding: 4px; color: #374151; margin-left: auto; }
 .nh-mobile-menu { display: none; position: fixed; top: 60px; left: 0; right: 0; z-index: 40; background: #fff; border-bottom: 1px solid #e5e7eb; box-shadow: 0 8px 24px rgba(0,0,0,0.08); padding: 24px; flex-direction: column; gap: 20px; }
 .nh-mobile-menu.open { display: flex; }
 .nh-mobile-menu a { font-size: 16px; font-weight: 500; color: #1f2937; }
@@ -56,8 +58,8 @@ ul { list-style: none; }
 .nh-hero-badge { margin-bottom: 28px; display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 9999px; border: 1px solid #fed7aa; background: #fff7ed; color: #FF6A2A; font-size: 14px; font-weight: 600; animation: fadeIn 0.5s ease both; }
 .nh-hero-badge-dot { width: 6px; height: 6px; border-radius: 9999px; background: #FF6A2A; animation: pulse 2s infinite; }
 .nh-hero-h1 { margin-bottom: 24px; animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.15s both; }
-.nh-hero-h1 .line1 { display: block; font-size: clamp(48px, 9vw, 90px); font-weight: 900; letter-spacing: -0.05em; line-height: 1.0; color: #111827; }
-.nh-hero-h1 .line2 { display: block; font-size: clamp(48px, 9vw, 90px); font-weight: 900; letter-spacing: -0.05em; line-height: 1.0; color: #FF6A2A; }
+.nh-hero-h1 .line1 { display: block; font-size: clamp(48px, 9vw, 90px); font-weight: 800; letter-spacing: -0.05em; line-height: 1.0; color: #111827; }
+.nh-hero-h1 .line2 { display: block; font-size: clamp(48px, 9vw, 90px); font-weight: 800; letter-spacing: -0.05em; line-height: 1.0; color: #FF6A2A; }
 .nh-hero-desc { font-size: 18px; color: #6b7280; max-width: 640px; margin-bottom: 40px; line-height: 1.625; font-weight: 300; animation: fadeUp 0.6s cubic-bezier(0.22,1,0.36,1) 0.45s both; }
 .nh-hero-btns { display: flex; flex-direction: row; gap: 12px; margin-bottom: 40px; animation: fadeUp 0.6s cubic-bezier(0.22,1,0.36,1) 0.55s both; }
 .nh-btn-primary { height: 56px; padding: 0 36px; border-radius: 9999px; background: #111827; color: #fff; font-weight: 600; font-size: 18px; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; box-shadow: 0 2px 20px rgba(0,0,0,0.12); }
@@ -104,7 +106,7 @@ ul { list-style: none; }
 .nh-tag-orange { background: #fff7ed; color: #FF6A2A; }
 .nh-tag-gray { background: #f3f4f6; color: #6b7280; }
 .nh-tag-red { background: #fef2f2; color: #ef4444; }
-.nh-section-h2 { font-size: clamp(32px, 5vw, 60px); font-weight: 900; letter-spacing: -0.05em; color: #111827; line-height: 1.05; }
+.nh-section-h2 { font-size: clamp(32px, 5vw, 60px); font-weight: 800; letter-spacing: -0.05em; color: #111827; line-height: 1.05; }
 .nh-section-h2 .muted { color: #9ca3af; }
 .nh-section-desc { font-size: 18px; color: #6b7280; font-weight: 300; line-height: 1.625; }
 
@@ -322,7 +324,7 @@ ul { list-style: none; }
 .nh-cta-inner { max-width: 896px; margin: 0 auto; padding: 0 40px; text-align: center; position: relative; z-index: 10; }
 .nh-cta-badge { margin-bottom: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 9999px; border: 1px solid rgba(249,115,22,0.3); background: rgba(249,115,22,0.05); color: #FF6A2A; font-size: 14px; font-weight: 600; }
 .nh-cta-badge .dot { width: 8px; height: 8px; border-radius: 9999px; background: #FF6A2A; animation: pulse 2s infinite; }
-.nh-cta-h2 { font-size: clamp(40px, 6vw, 72px); font-weight: 900; letter-spacing: -0.05em; color: #fff; margin-bottom: 28px; line-height: 1.0; }
+.nh-cta-h2 { font-size: clamp(40px, 6vw, 72px); font-weight: 800; letter-spacing: -0.05em; color: #fff; margin-bottom: 28px; line-height: 1.0; }
 .nh-cta-h2 .orange { color: #FF6A2A; }
 .nh-cta-desc { font-size: 20px; color: rgba(255,255,255,0.45); margin-bottom: 48px; max-width: 512px; margin-left: auto; margin-right: auto; font-weight: 300; line-height: 1.625; }
 .nh-cta-btns { display: flex; flex-direction: row; gap: 16px; justify-content: center; }
@@ -339,7 +341,7 @@ ul { list-style: none; }
 .nh-support-card { border-radius: 24px; background: linear-gradient(135deg, #f9fafb, rgba(255,247,237,0.4)); border: 1px solid #fed7aa; padding: 48px; display: flex; align-items: center; gap: 64px; }
 .nh-support-icon { flex-shrink: 0; width: 64px; height: 64px; border-radius: 16px; background: rgba(255,106,42,0.1); display: flex; align-items: center; justify-content: center; }
 .nh-support-text { flex: 1; }
-.nh-support-text h2 { font-size: clamp(20px, 2.5vw, 28px); font-weight: 900; color: #111827; letter-spacing: -0.025em; margin-bottom: 8px; }
+.nh-support-text h2 { font-size: clamp(20px, 2.5vw, 28px); font-weight: 800; color: #111827; letter-spacing: -0.025em; margin-bottom: 8px; }
 .nh-support-text p { color: #6b7280; font-weight: 300; line-height: 1.625; max-width: 560px; }
 .nh-support-btns { display: flex; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
 .nh-support-btn-primary { height: 48px; padding: 0 32px; border-radius: 9999px; background: #111827; color: #fff; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; transition: background 0.2s; white-space: nowrap; }
@@ -352,7 +354,7 @@ ul { list-style: none; }
 .nh-faq-inner { max-width: 768px; margin: 0 auto; padding: 0 40px; }
 .nh-faq-header { text-align: center; margin-bottom: 56px; }
 .nh-faq-icon { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 16px; background: #fff7ed; margin-bottom: 20px; }
-.nh-faq-h2 { font-size: clamp(24px, 4vw, 48px); font-weight: 900; letter-spacing: -0.05em; color: #111827; margin-bottom: 16px; }
+.nh-faq-h2 { font-size: clamp(24px, 4vw, 48px); font-weight: 800; letter-spacing: -0.05em; color: #111827; margin-bottom: 16px; }
 .nh-faq-desc { color: #9ca3af; max-width: 512px; margin: 0 auto; }
 .nh-faq-desc a { color: #FF6A2A; font-weight: 500; }
 .nh-faq-desc a:hover { text-decoration: underline; }
@@ -366,6 +368,7 @@ ul { list-style: none; }
 .nh-faq-item.open .nh-faq-answer { max-height: 400px; opacity: 1; }
 .nh-faq-answer p { font-size: 14px; color: #6b7280; line-height: 1.7; padding-bottom: 20px; }
 .nh-faq-cta { margin-top: 48px; padding: 24px; border-radius: 16px; background: #fff7ed; border: 1px solid #fed7aa; display: flex; align-items: center; gap: 20px; }
+.nh-faq-cta-text { flex: 1; }
 .nh-faq-cta-text p { font-weight: 700; color: #111827; margin-bottom: 4px; }
 .nh-faq-cta-text small { font-size: 14px; color: #6b7280; }
 .nh-faq-cta-btn { flex-shrink: 0; padding: 12px 24px; border-radius: 9999px; background: #FF6A2A; color: #fff; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; transition: background 0.2s; }
@@ -447,8 +450,8 @@ ul { list-style: none; }
   .nh-stat:nth-child(odd) { border-right: 1px solid rgba(255,255,255,0.1); }
   .nh-stat:nth-child(1), .nh-stat:nth-child(2) { border-bottom: 1px solid rgba(255,255,255,0.1); }
   .nh-cards-grid { grid-template-columns: 1fr; }
-  .nh-features-header { flex-direction: column; }
-  .nh-features-header-desc { text-align: left; max-width: none; }
+  .nh-features-header { flex-direction: column; align-items: center; text-align: center; }
+  .nh-features-header-desc { text-align: center; max-width: none; }
   .nh-guest-cards-col { grid-template-columns: 1fr; }
   .nh-guest-appstore { grid-column: span 1; }
   .nh-compare-lists { grid-template-columns: 1fr; }

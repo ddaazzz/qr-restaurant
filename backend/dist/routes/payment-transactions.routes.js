@@ -92,7 +92,7 @@ router.post('/restaurants/:restaurantId/sessions/:sessionId/orders/:orderId/init
             });
         }
         // Apply defaults for optional customer fields
-        const customer_phone = req.body.customer_phone || '';
+        const customer_phone = req.body.customer_phone || '00000000'; // PA requires non-empty
         const customer_ip = req.body.customer_ip || req.ip || '127.0.0.1';
         const customer_address = req.body.customer_address || 'N/A';
         const customer_state = req.body.customer_state || 'HK';
@@ -172,11 +172,11 @@ router.post('/restaurants/:restaurantId/sessions/:sessionId/orders/:orderId/init
             ]);
             paymentRecord = createPaymentRes.rows[0];
         }
-        // Initialize Payment Asia service
+        // Initialize Payment Asia service (always production for real payments)
         paymentAsiaService_1.paymentAsiaService.initialize({
             merchantToken: terminal.merchant_token,
             secretCode: terminal.secret_code,
-            environment: terminal.payment_gateway_env || 'sandbox',
+            environment: 'production',
         });
         // Build payment form data (all required fields for Payment Asia form submission)
         const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
@@ -528,31 +528,33 @@ async function handlePaymentReturn(req, res) {
          WHERE id = $1::int AND restaurant_id = $2::int`, [orderId, restaurantId]);
             console.log('[PaymentReturn] PA payment still processing — order payment_method reset for retry:', orderId);
         }
-        // Write to unified chuio_payments ledger
-        try {
-            const paNetworkRes2 = await db_1.default.query(`SELECT network, amount_cents, session_id, payment_gateway_env FROM payment_asia_transactions
-           WHERE merchant_reference = $1 LIMIT 1`, [merchantRef]);
-            const paRec2 = paNetworkRes2.rows[0];
-            const _paNetLabels2 = { Alipay: 'Alipay', Wechat: 'WeChat Pay', CreditCard: 'Credit Card', Octopus: 'Octopus', Fps: 'FPS', CUP: 'UnionPay' };
-            const paMeth2 = paRec2?.network ? (_paNetLabels2[paRec2.network] || paRec2.network) : 'Online';
-            const paAmt2 = paRec2?.amount_cents || 0;
-            const paEnv2 = paRec2?.payment_gateway_env || 'sandbox';
-            const paSess2 = paRec2?.session_id || null;
-            await db_1.default.query(`INSERT INTO chuio_payments
-             (restaurant_id, order_id, session_id, payment_vendor, payment_method,
-              payment_gateway_env, order_reference, vendor_reference,
-              amount_cents, currency_code, total_cents, status, completed_at, extra_data)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'HKD',$9,'completed',NOW(),$10)
-           ON CONFLICT DO NOTHING`, [
-                restaurantId, orderId, paSess2,
-                'payment-asia', paMeth2, paEnv2,
-                merchantRef, requestRef || null,
-                paAmt2,
-                JSON.stringify({ request_reference: requestRef }),
-            ]);
-        }
-        catch (ledgerErr2) {
-            console.warn('[PaymentReturn] chuio_payments write failed:', ledgerErr2 instanceof Error ? ledgerErr2.message : ledgerErr2);
+        // Write to unified chuio_payments ledger — only on successful completion
+        if (paymentStatus === 'completed') {
+            try {
+                const paNetworkRes2 = await db_1.default.query(`SELECT network, amount_cents, session_id, payment_gateway_env FROM payment_asia_transactions
+             WHERE merchant_reference = $1 LIMIT 1`, [merchantRef]);
+                const paRec2 = paNetworkRes2.rows[0];
+                const _paNetLabels2 = { Alipay: 'Alipay', Wechat: 'WeChat Pay', CreditCard: 'Credit Card', Octopus: 'Octopus', Fps: 'FPS', CUP: 'UnionPay' };
+                const paMeth2 = paRec2?.network ? (_paNetLabels2[paRec2.network] || paRec2.network) : 'Online';
+                const paAmt2 = paRec2?.amount_cents || 0;
+                const paEnv2 = paRec2?.payment_gateway_env || 'sandbox';
+                const paSess2 = paRec2?.session_id || null;
+                await db_1.default.query(`INSERT INTO chuio_payments
+               (restaurant_id, order_id, session_id, payment_vendor, payment_method,
+                payment_gateway_env, order_reference, vendor_reference,
+                amount_cents, currency_code, total_cents, status, completed_at, extra_data)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'HKD',$9,'completed',NOW(),$10)
+             ON CONFLICT DO NOTHING`, [
+                    restaurantId, orderId, paSess2,
+                    'payment-asia', paMeth2, paEnv2,
+                    merchantRef, requestRef || null,
+                    paAmt2,
+                    JSON.stringify({ request_reference: requestRef }),
+                ]);
+            }
+            catch (ledgerErr2) {
+                console.warn('[PaymentReturn] chuio_payments write failed:', ledgerErr2 instanceof Error ? ledgerErr2.message : ledgerErr2);
+            }
         }
         // Redirect customer back to their menu session with payment result, or fallback to callback page
         const menuReturnUrl = String(req.query.menu_return_url || '');
@@ -603,7 +605,7 @@ router.get('/restaurants/:restaurantId/orders/:orderId/payment-status', async (r
                 paymentAsiaService_1.paymentAsiaService.initialize({
                     merchantToken: payment.merchant_token,
                     secretCode: payment.secret_code,
-                    environment: payment.payment_gateway_env || 'sandbox',
+                    environment: 'production',
                 });
                 const records = await paymentAsiaService_1.paymentAsiaService.queryPayment(payment.chuio_order_reference);
                 // Find the sale record (type=1); ignore refund records
@@ -1034,7 +1036,7 @@ async function initPaymentAsiaForRestaurant(restaurantId, terminalId) {
     paymentAsiaService_1.paymentAsiaService.initialize({
         merchantToken: merchant_token,
         secretCode: secret_code,
-        environment: payment_gateway_env || 'sandbox',
+        environment: 'production',
     });
 }
 /**

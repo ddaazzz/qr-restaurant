@@ -15,7 +15,7 @@
 <body class="nh-body">
 
 <!-- NAVBAR -->
-<nav class="nh-nav" id="nh-nav">
+<nav class="nh-nav scrolled" id="nh-nav">
   <div class="nh-nav-inner">
     <a href="/home.html">
       <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="nh-nav-logo" />
@@ -23,7 +23,7 @@
     <div class="nh-nav-links">
       <a href="/home.html#features" data-zh="功能">Features</a>
       <a href="/home.html#how-it-works" data-zh="使用方法">How It Works</a>
-      <a href="/home.html#pricing" data-zh="定價">Pricing</a>
+      <a href="/home.html#pricing" data-zh="價格">Pricing</a>
       <a href="/support" class="active" data-zh="幫助">Help</a>
     </div>
     <div class="nh-nav-cta">
@@ -44,7 +44,7 @@
 <div class="nh-mobile-menu" id="nh-mobile-menu">
   <a href="/home.html#features" data-zh="功能">Features</a>
   <a href="/home.html#how-it-works" data-zh="使用方法">How It Works</a>
-  <a href="/home.html#pricing" data-zh="定價">Pricing</a>
+  <a href="/home.html#pricing" data-zh="價格">Pricing</a>
   <a href="/support" data-zh="幫助">Help</a>
   <div class="nh-mobile-divider"></div>
   <a href="/login.html" style="color:#6b7280;" data-zh="登入">Log in</a>
@@ -79,7 +79,7 @@
         <h4 data-zh="產品">Product</h4>
         <ul>
           <li><a href="/home.html#features" data-zh="功能">Features</a></li>
-          <li><a href="/home.html#pricing" data-zh="定價">Pricing</a></li>
+          <li><a href="/home.html#pricing" data-zh="價格">Pricing</a></li>
         </ul>
       </div>
       <div class="nh-footer-col">
@@ -112,8 +112,15 @@
         .replace(/\s+/g, '-').replace(/-+/g, '-');
     }
 
-    function getLang() { return localStorage.getItem('guide-lang') || 'en'; }
-    function setLang(l) { localStorage.setItem('guide-lang', l); }
+    function getLang() { return localStorage.getItem('guide-lang') || localStorage.getItem('chuio-lang') || localStorage.getItem('language') || 'en'; }
+    function setLang(l) { localStorage.setItem('guide-lang', l); localStorage.setItem('chuio-lang', l); localStorage.setItem('language', l); }
+
+    const lang = getLang();
+
+    // Apply data-zh translations to nav/footer when Chinese is selected
+    if (lang === 'zh') {
+      document.querySelectorAll('[data-zh]').forEach(function(el) { el.textContent = el.dataset.zh; });
+    }
 
     function localize(topic, lang) {
       if (lang !== 'zh') return topic;
@@ -132,7 +139,6 @@
       };
     }
 
-    const lang = getLang();
     const rawTopics = (window.CHUIO_GUIDE_TOPICS || []).slice().sort((a, b) => a.step - b.step);
     const topics = rawTopics.map(t => localize(t, lang));
     const headingPages = topics.flatMap((topic, ti) => {
