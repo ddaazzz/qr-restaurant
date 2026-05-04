@@ -127,12 +127,15 @@
       }
     });
 
-    // Update lang toggle labels
-    var label = document.getElementById('nh-lang-label');
-    if (label) label.textContent = isZh ? '中文' : 'EN';
-    document.querySelectorAll('.nh-lang-label-m').forEach(function (el) {
-      el.textContent = isZh ? '中文' : 'EN';
-    });
+    // Update language switch button active states
+    var lsEn = document.getElementById('nh-ls-en');
+    var lsZh = document.getElementById('nh-ls-zh');
+    var lsEnM = document.getElementById('nh-ls-en-m');
+    var lsZhM = document.getElementById('nh-ls-zh-m');
+    if (lsEn) lsEn.classList.toggle('active', !isZh);
+    if (lsZh) lsZh.classList.toggle('active', isZh);
+    if (lsEnM) lsEnM.classList.toggle('active', !isZh);
+    if (lsZhM) lsZhM.classList.toggle('active', isZh);
 
     // Update <html lang>
     document.documentElement.lang = isZh ? 'zh-Hant' : 'en';
@@ -140,6 +143,12 @@
 
   // ── Public API ─────────────────────────────────────────────────────────
   window.chuioI18n = {
+    setLang: function (lang) {
+      currentLang = lang;
+      try { localStorage.setItem('chuio-lang', currentLang); localStorage.setItem('language', currentLang); } catch (e) {}
+      applyLang();
+      updatePrices();
+    },
     toggleLang: function () {
       currentLang = currentLang === 'en' ? 'zh' : 'en';
       try { localStorage.setItem('chuio-lang', currentLang); localStorage.setItem('language', currentLang); } catch (e) {}

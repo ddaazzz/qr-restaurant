@@ -122,18 +122,11 @@
       <a href="/support/index.html" target="_blank" rel="noopener noreferrer" data-zh="幫助">Help</a>
     </div>
     <div class="nh-i18n-controls">
-      <button class="nh-lang-btn" id="nh-lang-toggle" onclick="window.chuioI18n&&window.chuioI18n.toggleLang()"><span id="nh-lang-label">EN</span></button>
-      <select class="nh-currency-select" id="nh-currency-select" onchange="window.chuioI18n&&window.chuioI18n.setCurrency(this.value)">
-        <option value="HKD">HKD</option>
-        <option value="USD">USD</option>
-        <option value="CNY">CNY</option>
-        <option value="TWD">TWD</option>
-        <option value="SGD">SGD</option>
-        <option value="JPY">JPY</option>
-        <option value="EUR">EUR</option>
-        <option value="GBP">GBP</option>
-        <option value="AUD">AUD</option>
-      </select>
+      <div class="nh-lang-switch">
+        <button class="nh-ls-btn active" id="nh-ls-en" onclick="window.chuioI18n&&window.chuioI18n.setLang('en')">EN</button>
+        <span class="nh-ls-sep">｜</span>
+        <button class="nh-ls-btn" id="nh-ls-zh" onclick="window.chuioI18n&&window.chuioI18n.setLang('zh')">繁體</button>
+      </div>
     </div>
     <div class="nh-nav-cta">
       <a href="/login.html" class="nh-nav-login" data-zh="登入">Log in</a>
@@ -156,19 +149,10 @@
   <a href="/home.html#pricing" data-zh="定價">Pricing</a>
   <a href="/servicepacks.html" style="color:#FF6A2A;font-weight:600;" data-zh="服務套餐">Service Packs</a>
   <a href="/support/index.html" target="_blank" rel="noopener noreferrer" data-zh="幫助">Help</a>
-  <div class="nh-i18n-controls">
-    <button class="nh-lang-btn" id="nh-lang-toggle-mobile" onclick="window.chuioI18n&&window.chuioI18n.toggleLang()"><span id="nh-lang-label-mobile">EN</span></button>
-    <select class="nh-currency-select" id="nh-currency-select-mobile" onchange="window.chuioI18n&&window.chuioI18n.setCurrency(this.value)">
-      <option value="HKD">HKD</option>
-      <option value="USD">USD</option>
-      <option value="CNY">CNY</option>
-      <option value="TWD">TWD</option>
-      <option value="SGD">SGD</option>
-      <option value="JPY">JPY</option>
-      <option value="EUR">EUR</option>
-      <option value="GBP">GBP</option>
-      <option value="AUD">AUD</option>
-    </select>
+  <div style="display:flex;gap:0;padding:4px 0;">
+    <button class="nh-ls-btn active" id="nh-ls-en-m" onclick="window.chuioI18n&&window.chuioI18n.setLang('en')" style="font-size:14px;">EN</button>
+    <span class="nh-ls-sep" style="font-size:14px;">｜</span>
+    <button class="nh-ls-btn" id="nh-ls-zh-m" onclick="window.chuioI18n&&window.chuioI18n.setLang('zh')" style="font-size:14px;">繁體</button>
   </div>
   <div class="nh-mobile-divider"></div>
   <a href="/login.html" style="color:#6b7280;" data-zh="登入">Log in</a>
