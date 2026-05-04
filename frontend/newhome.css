@@ -466,10 +466,10 @@ ul { list-style: none; }
 /* ── I18N / CURRENCY CONTROLS ─────────────────────────────────────── */
 .nh-i18n-controls { display: flex; align-items: center; margin-left: 8px; }
 .nh-lang-switch { display: flex; align-items: center; }
-.nh-ls-btn { background: none; border: none; font-size: 13px; font-weight: 500; color: #9ca3af; cursor: pointer; padding: 2px 7px; font-family: inherit; transition: color 0.15s; line-height: 1; }
+.nh-ls-btn { background: none; border: none; font-size: 10px; font-weight: 500; color: #9ca3af; cursor: pointer; padding: 1px 4px; font-family: inherit; transition: color 0.15s; line-height: 1; }
 .nh-ls-btn:hover { color: #374151; }
 .nh-ls-btn.active { color: #111827; font-weight: 700; }
-.nh-ls-sep { color: #d1d5db; font-size: 13px; line-height: 1; pointer-events: none; user-select: none; }
+.nh-ls-sep { color: #d1d5db; font-size: 10px; line-height: 1; pointer-events: none; user-select: none; }
 .nh-mobile-lang { display: flex; align-items: center; padding: 2px 0; }
 .nh-mobile-lang .nh-ls-btn { font-size: 16px; padding: 4px 10px; }
 .nh-mobile-lang .nh-ls-sep { font-size: 16px; }
