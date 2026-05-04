@@ -687,8 +687,11 @@ async function submitTableOrder() {
   }
   
   try {
-    // Create order for the selected table (reuse session if editing)
-    await createOrder(tableId ? parseInt(tableId) : null, EDITING_EXISTING_SESSION_ID || undefined);
+    // Only reuse an existing session when editing a specific existing order.
+    // For fresh table orders EDITING_EXISTING_SESSION_ID may be stale (from a
+    // previously viewed completed order), so we must ignore it.
+    const effectiveSessionId = EDITING_EXISTING_ORDER_ID ? (EDITING_EXISTING_SESSION_ID || undefined) : undefined;
+    await createOrder(tableId ? parseInt(tableId) : null, effectiveSessionId);
     
     // Clear cart and edit state
     ORDERS_CART = [];
@@ -1001,7 +1004,7 @@ async function createOrder(tableId, sessionId) {
   
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to create order');
+    throw new Error(errorData.error || errorData.message || 'Failed to create order');
   }
   
   return res.json();

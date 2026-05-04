@@ -862,6 +862,7 @@ async function loadTablesCategoryTable() {
     if (r.session_id) {
       tableMap[r.table_id].sessions.push({
         id: r.session_id,
+        restaurant_session_number: r.restaurant_session_number,
         table_unit_id: r.table_unit_id,
         pax: Number(r.pax),
         started_at: r.started_at,
@@ -1069,7 +1070,7 @@ async function renderSessionsList(table) {
       <div class="session-list-item" style="padding: 12px; background: ${sessionColor}15; border: 2px solid ${sessionColor}; border-radius: 6px; margin-bottom: 8px; cursor: pointer;" onclick="selectSessionToView(${session.id})">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong>${t('admin.session-label').replace('{0}', session.id)}${session.booking_guest_name ? ` – ${session.booking_guest_name}` : ''}</strong>
+            <strong>${t('admin.session-label').replace('{0}', session.restaurant_session_number || session.id)}${session.booking_guest_name ? ` – ${session.booking_guest_name}` : ''}</strong>
             <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">${session.pax} pax • ${t('admin.dining')} ${duration}</div>
           </div>
           <div style="text-align: right; font-size: 14px; font-weight: 600; color: ${sessionColor};">
@@ -1086,7 +1087,7 @@ async function renderSessionsList(table) {
     <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
     <h2 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 900; color: var(--text-dark);">${table.name}</h2>
     <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-light);">
-      ○ ${usedSeats}/${table.seat_count} seats occupied
+      ○ ${usedSeats}/${table.seat_count} ${t('admin.table-occupied') || 'Occupied'}
     </p>
 
     <div style="margin-bottom: 16px;">
