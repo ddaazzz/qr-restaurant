@@ -35,7 +35,6 @@
     if (l.startsWith('zh-tw') || l === 'zh-hant') return 'TWD';
     if (l.startsWith('zh-sg')) return 'SGD';
     if (l.startsWith('ja')) return 'JPY';
-    if (l.startsWith('en-us')) return 'USD';
     if (l.startsWith('en-sg')) return 'SGD';
     return 'HKD';
   }
