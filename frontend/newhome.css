@@ -24,14 +24,14 @@ ul { list-style: none; }
 /* === NAVBAR === */
 .nh-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; transition: all 0.3s ease; padding: 4px 0; }
 .nh-nav.scrolled { background: rgba(255,255,255,0.92); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(229,231,235,0.8); box-shadow: 0 1px 6px rgba(0,0,0,0.06); padding: 2px 0; }
-.nh-nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 40px; display: flex; align-items: center; justify-content: space-between; position: relative; }
+.nh-nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 40px; display: flex; align-items: center; justify-content: flex-start; gap: 16px; position: relative; }
 .nh-nav-logo { height: 80px; width: auto; }
 .nh-nav-links { display: flex; align-items: center; gap: 28px; position: absolute; left: 50%; transform: translateX(-50%); }
 .nh-nav-links a { font-size: 14px; font-weight: 500; color: #6b7280; transition: color 0.2s; }
 .nh-nav-links a:hover { color: #111827; }
 .nh-nav-links a.nh-help-link { color: #FF6A2A; }
 .nh-nav-links a.nh-help-link:hover { color: rgba(255,106,42,0.8); }
-.nh-nav-cta { display: flex; align-items: center; gap: 12px; }
+.nh-nav-cta { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .nh-nav-login { font-size: 14px; font-weight: 500; color: #6b7280; transition: color 0.2s; }
 .nh-nav-login:hover { color: #111827; }
 .nh-nav-get-started { height: 36px; padding: 0 20px; border-radius: 9999px; background: #111827; color: #fff; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; }
@@ -464,10 +464,13 @@ ul { list-style: none; }
 }
 
 /* ── I18N / CURRENCY CONTROLS ─────────────────────────────────────── */
-.nh-i18n-controls { display: flex; align-items: center; margin-right: 4px; }
+.nh-i18n-controls { display: flex; align-items: center; margin-left: 8px; }
 .nh-lang-switch { display: flex; align-items: center; }
 .nh-ls-btn { background: none; border: none; font-size: 13px; font-weight: 500; color: #9ca3af; cursor: pointer; padding: 2px 7px; font-family: inherit; transition: color 0.15s; line-height: 1; }
 .nh-ls-btn:hover { color: #374151; }
 .nh-ls-btn.active { color: #111827; font-weight: 700; }
 .nh-ls-sep { color: #d1d5db; font-size: 13px; line-height: 1; pointer-events: none; user-select: none; }
+.nh-mobile-lang { display: flex; align-items: center; padding: 2px 0; }
+.nh-mobile-lang .nh-ls-btn { font-size: 16px; padding: 4px 10px; }
+.nh-mobile-lang .nh-ls-sep { font-size: 16px; }
 @media (max-width: 900px) { .nh-i18n-controls { display: none !important; } }
