@@ -3999,6 +3999,7 @@ function t(key, lang = null) {
 // Set language (applies UI changes only, does NOT save to database)
 window.setLanguage = function(lang) {
   localStorage.setItem('language', lang);
+  localStorage.setItem('chuio-lang', lang); // keep in sync with chuio-i18n.js
   // Also save as restaurant language preference locally
   localStorage.setItem('restaurantLanguage', lang);
   document.documentElement.lang = lang;
@@ -4064,9 +4065,11 @@ function getCurrentLanguage() {
   // Check if URL contains /en path - set English as the language preference
   if (window.location.pathname.includes('/en')) {
     localStorage.setItem('language', 'en');
+    localStorage.setItem('chuio-lang', 'en');
     return 'en';
   }
-  
-  const lang = localStorage.getItem('language') || 'zh';
+
+  // Read from either key (chuio-i18n.js uses 'chuio-lang', translations.js uses 'language')
+  const lang = localStorage.getItem('language') || localStorage.getItem('chuio-lang') || 'en';
   return lang;
 }

@@ -143,7 +143,7 @@
   window.chuioI18n = {
     toggleLang: function () {
       currentLang = currentLang === 'en' ? 'zh' : 'en';
-      try { localStorage.setItem('chuio-lang', currentLang); } catch (e) {}
+      try { localStorage.setItem('chuio-lang', currentLang); localStorage.setItem('language', currentLang); } catch (e) {}
       applyLang();
       updatePrices();
     },
@@ -160,7 +160,7 @@
 
   // ── Init ───────────────────────────────────────────────────────────────
   function init() {
-    try { currentLang = localStorage.getItem('chuio-lang') || detectLang(); } catch (e) { currentLang = detectLang(); }
+    try { currentLang = localStorage.getItem('chuio-lang') || localStorage.getItem('language') || detectLang(); } catch (e) { currentLang = detectLang(); }
     try { currentCurrency = localStorage.getItem('chuio-currency') || detectCurrency(); } catch (e) { currentCurrency = detectCurrency(); }
     applyLang();
     updatePrices();
