@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Careers — Chuio</title>
+  <meta name="description" content="Join the team building the future of restaurant technology. View open roles at Chuio." />
+  <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/newhome.css" />
+  <style>
+    .careers-hero {
+      padding: 120px 24px 80px;
+      text-align: center;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .careers-hero h1 {
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 800;
+      color: #111827;
+      line-height: 1.1;
+      margin: 0 0 20px;
+      letter-spacing: -0.03em;
+    }
+    .careers-hero h1 span { color: #FF6A2A; }
+    .careers-hero p {
+      font-size: 18px;
+      color: #6b7280;
+      line-height: 1.7;
+      max-width: 560px;
+      margin: 0 auto 40px;
+    }
+    .careers-section {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 100px;
+    }
+    .careers-no-roles {
+      background: #fff;
+      border: 1px solid #f3f4f6;
+      border-radius: 20px;
+      padding: 60px 40px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .careers-no-roles .icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    .careers-no-roles h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+      margin: 0 0 12px;
+    }
+    .careers-no-roles p {
+      font-size: 16px;
+      color: #6b7280;
+      line-height: 1.7;
+      max-width: 480px;
+      margin: 0 auto 32px;
+    }
+    .careers-cta-email {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #FF6A2A;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 12px;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .careers-cta-email:hover {
+      background: #e55a1a;
+      transform: translateY(-2px);
+    }
+    .careers-values {
+      margin-top: 64px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+    .careers-value-card {
+      background: #fff;
+      border: 1px solid #f3f4f6;
+      border-radius: 16px;
+      padding: 28px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .careers-value-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111827;
+      margin: 12px 0 8px;
+    }
+    .careers-value-card p {
+      font-size: 14px;
+      color: #6b7280;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .careers-value-emoji { font-size: 28px; }
+    @media (max-width: 600px) {
+      .careers-hero { padding: 100px 20px 60px; }
+      .careers-no-roles { padding: 40px 24px; }
+    }
+  </style>
+</head>
+<body class="nh-body">
+
+<!-- NAVBAR -->
+<nav class="nh-nav" id="nh-nav">
+  <div class="nh-nav-inner">
+    <a href="/home.html">
+      <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="nh-nav-logo" />
+    </a>
+    <div class="nh-nav-links">
+      <a href="/home.html#features" data-zh="功能">Features</a>
+      <a href="/home.html#how-it-works" data-zh="使用方法">How It Works</a>
+      <a href="/home.html#pricing" data-zh="定價">Pricing</a>
+      <a href="/support" data-zh="幫助">Help</a>
+    </div>
+    <div class="nh-nav-cta">
+      <a href="https://chuio.io/login.html" class="nh-nav-login" data-zh="登入">Log in</a>
+      <a href="https://chuio.io/register.html" class="nh-nav-get-started" target="_blank" rel="noopener noreferrer">
+        <span data-zh="立即開始">Get Started</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+    <button class="nh-hamburger" id="nh-hamburger" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</nav>
+
+<!-- Mobile Menu -->
+<div class="nh-mobile-menu" id="nh-mobile-menu">
+  <a href="/home.html#features" data-zh="功能">Features</a>
+  <a href="/home.html#how-it-works" data-zh="使用方法">How It Works</a>
+  <a href="/home.html#pricing" data-zh="定價">Pricing</a>
+  <a href="/support" data-zh="幫助">Help</a>
+  <div class="nh-mobile-divider"></div>
+  <a href="https://chuio.io/login.html" style="color:#6b7280;" data-zh="登入">Log in</a>
+  <a href="https://chuio.io/register.html" class="nh-mobile-cta" target="_blank" rel="noopener noreferrer" data-zh="免費開始">Get Started Free</a>
+</div>
+
+<!-- HERO -->
+<div class="careers-hero">
+  <span class="nh-section-tag nh-tag-orange" data-zh="工作機會">We're Hiring</span>
+  <h1 data-zh="打造餐飲業<br /><span>未來</span>的機會">Build the future of <span>dining</span></h1>
+  <p data-zh="我們正在建設一個讓餐廳更聰明地運營的平台。如果您對餐飲科技充滿熱情，我們希望認識您。">We're building a platform that helps restaurants operate smarter. If you're passionate about restaurant technology, we'd love to meet you.</p>
+</div>
+
+<!-- CONTENT -->
+<div class="careers-section">
+  <div class="careers-no-roles">
+    <div class="icon">📭</div>
+    <h2 data-zh="目前沒有空缺職位">No open roles right now</h2>
+    <p data-zh="我們目前沒有在招聘，但總是歡迎出色的人才主動聯繫。把您的簡歷發給我們，如果有合適的機會，我們會第一個想到您。">We're not actively hiring right now, but we're always open to hearing from talented people. Send us your CV and we'll reach out when something fits.</p>
+    <a href="mailto:dta@chuio.io?subject=Career%20Enquiry&body=Hi%20Chuio%20team%2C%0A%0AI%20would%20love%20to%20join%20your%20team.%20Here%20is%20a%20bit%20about%20me%3A" class="careers-cta-email">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+      <span data-zh="發送申請至 dta@chuio.io">Send your CV to dta@chuio.io</span>
+    </a>
+  </div>
+
+  <div class="careers-values">
+    <div class="careers-value-card">
+      <div class="careers-value-emoji">🚀</div>
+      <h3 data-zh="快速成長">Move fast</h3>
+      <p data-zh="我們是一支精簡的團隊，快速行動，直接影響真實的餐廳。">We're a lean team that ships quickly and impacts real restaurants directly.</p>
+    </div>
+    <div class="careers-value-card">
+      <div class="careers-value-emoji">🍽️</div>
+      <h3 data-zh="以餐廳為先">Restaurants first</h3>
+      <p data-zh="我們建設的一切都以讓餐廳運營者的生活更輕鬆為核心。">Everything we build is centred on making life easier for restaurant operators.</p>
+    </div>
+    <div class="careers-value-card">
+      <div class="careers-value-emoji">🌏</div>
+      <h3 data-zh="香港建造">Built in HK</h3>
+      <p data-zh="我們植根香港，服務全亞洲的餐廳，並雄心走向全球。">We're rooted in Hong Kong, serving restaurants across Asia with global ambitions.</p>
+    </div>
+    <div class="careers-value-card">
+      <div class="careers-value-emoji">💡</div>
+      <h3 data-zh="擁有您的工作">Own your work</h3>
+      <p data-zh="每位團隊成員都對自己負責的領域有真實的擁有感和決策權。">Every team member has real ownership and decision-making power over their area.</p>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="nh-footer">
+  <div class="nh-footer-inner">
+    <div class="nh-footer-grid">
+      <div class="nh-footer-brand">
+        <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="logo" />
+        <p data-zh="全方位餐廠管理系統。QR點餐、廚房顯示、支付及數據分析——全部整合於一個平台。">The all-in-one restaurant OS. QR ordering, kitchen display, payments, and analytics in one platform.</p>
+      </div>
+      <div class="nh-footer-col">
+        <h4 data-zh="公司">Company</h4>
+        <ul>
+          <li><a href="/home.html" data-zh="首頁">Home</a></li>
+          <li><a href="/home.html#pricing" data-zh="定價">Pricing</a></li>
+          <li><a href="/careers.html" data-zh="工作機會">Careers</a></li>
+        </ul>
+      </div>
+      <div class="nh-footer-col">
+        <h4 data-zh="支持">Support</h4>
+        <ul>
+          <li><a href="/support" data-zh="幫助中心">Help Center</a></li>
+          <li><a href="mailto:dta@chuio.io" data-zh="聯絡我們">Contact Us</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="nh-footer-bottom">
+      <p class="nh-footer-copy" data-zh="© 2026 Chuio。版權所有。">© 2026 Chuio. All rights reserved.</p>
+      <div class="nh-footer-legal">
+        <a href="/privacy.html" data-zh="隱私政策">Privacy Policy</a>
+        <a href="/terms.html" data-zh="服務條款">Terms of Service</a>
+        <a href="/privacy.html#cookies" data-zh="Cookie 政策">Cookie Policy</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/chuio-i18n.js"></script>
+<script>
+  // Mobile menu toggle
+  (function() {
+    var ham = document.getElementById('nh-hamburger');
+    var menu = document.getElementById('nh-mobile-menu');
+    if (ham && menu) {
+      ham.addEventListener('click', function() {
+        menu.classList.toggle('open');
+      });
+    }
+  })();
+</script>
+</body>
+</html>

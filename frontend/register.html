@@ -160,7 +160,7 @@
       </a>
       <div></div>
       <div class="nav-actions">
-        <a href="login.html" class="nav-login-btn">← Login</a>
+        <a href="login.html" class="nav-login-btn" data-i18n="register.back-login">← Login</a>
         <div data-language-picker></div>
       </div>
     </div>
@@ -170,8 +170,8 @@
   <main>
     <div class="login-container register-container">
       <div class="login-header">
-        <h1 id="page-title">Create Your Account</h1>
-        <p id="page-subtitle">Get started in just a few steps</p>
+        <h1 id="page-title" data-i18n="register.title">Create Your Account</h1>
+        <p id="page-subtitle" data-i18n="register.subtitle">Get started in just a few steps</p>
       </div>
 
       <!-- Step indicators -->
@@ -186,18 +186,18 @@
       <!-- STEP 0: Email & Password -->
       <div class="step-section active" id="step-0">
         <div class="form-group">
-          <label for="reg-email">Email Address</label>
+          <label for="reg-email" data-i18n="register.email">Email Address</label>
           <input type="email" id="reg-email" placeholder="your@email.com" required autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="reg-password">Password</label>
+          <label for="reg-password" data-i18n="register.password">Password</label>
           <input type="password" id="reg-password" placeholder="Min 8 characters" required autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="reg-confirm-password">Confirm Password</label>
+          <label for="reg-confirm-password" data-i18n="register.confirm-password">Confirm Password</label>
           <input type="password" id="reg-confirm-password" placeholder="Re-enter password" required autocomplete="off" />
         </div>
-        <button class="login-btn" id="btn-send-code">Send Verification Code</button>
+        <button class="login-btn" id="btn-send-code" data-i18n="register.send-code">Send Verification Code</button>
       </div>
 
       <!-- STEP 1: Verification Code -->
@@ -213,39 +213,39 @@
           <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="4" autocomplete="off" />
           <input type="text" maxlength="1" inputmode="numeric" class="code-digit" data-index="5" autocomplete="off" />
         </div>
-        <button class="login-btn" id="btn-verify-code">Verify Code</button>
+        <button class="login-btn" id="btn-verify-code" data-i18n="register.verify-code">Verify Code</button>
         <div class="resend-link">
           <button id="btn-resend" disabled>Resend code in <span id="resend-timer">60</span>s</button>
         </div>
         <div class="btn-row">
-          <button class="btn-secondary" id="btn-back-to-email">← Back</button>
+          <button class="btn-secondary" id="btn-back-to-email" data-i18n="register.back">← Back</button>
         </div>
       </div>
 
       <!-- STEP 2: Restaurant Info -->
       <div class="step-section" id="step-2">
         <div class="form-group">
-          <label for="reg-full-name">Full Name *</label>
+          <label for="reg-full-name" data-i18n="register.full-name">Full Name *</label>
           <input type="text" id="reg-full-name" placeholder="John Doe" required autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="reg-restaurant-name">Restaurant Name *</label>
+          <label for="reg-restaurant-name" data-i18n="register.restaurant-name">Restaurant Name *</label>
           <input type="text" id="reg-restaurant-name" placeholder="My Restaurant" required autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="reg-address">Address</label>
+          <label for="reg-address" data-i18n="register.address">Address</label>
           <input type="text" id="reg-address" placeholder="123 Main St, City" autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="reg-country">Country</label>
+          <label for="reg-country" data-i18n="register.country">Country</label>
           <input type="text" id="reg-country" placeholder="e.g. Hong Kong" autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="reg-phone">Contact Number</label>
+          <label for="reg-phone" data-i18n="register.phone">Contact Number</label>
           <input type="tel" id="reg-phone" placeholder="+852 1234 5678" autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="reg-timezone">Timezone</label>
+          <label for="reg-timezone" data-i18n="register.timezone">Timezone</label>
           <select id="reg-timezone" class="tz-select" autocomplete="off">
             <option value="Pacific/Midway">UTC-11 — Midway Island</option>
             <option value="Pacific/Honolulu">UTC-10 — Hawaii</option>
@@ -275,19 +275,19 @@
             <option value="Pacific/Auckland">UTC+12 — Auckland, NZ</option>
           </select>
         </div>
-        <button class="login-btn" id="btn-create-restaurant" style="background: #059669;">Create Restaurant</button>
+        <button class="login-btn" id="btn-create-restaurant" style="background: #059669;" data-i18n="register.create">Create Restaurant</button>
       </div>
 
       <!-- SUCCESS -->
       <div class="step-section" id="success-section">
         <div class="success-icon">🎉</div>
-        <h2 style="text-align: center; margin-bottom: 8px;">Welcome to Chuio!</h2>
-        <p>Your restaurant has been created successfully.</p>
-        <button class="login-btn" id="btn-go-dashboard">Go to Dashboard →</button>
+        <h2 style="text-align: center; margin-bottom: 8px;" data-i18n="register.success-title">Welcome to Chuio!</h2>
+        <p data-i18n="register.success-desc">Your restaurant has been created successfully.</p>
+        <button class="login-btn" id="btn-go-dashboard" data-i18n="register.go-dashboard">Go to Dashboard →</button>
       </div>
 
       <div class="login-link" id="login-link-row">
-        Already have an account? <a href="login.html">Sign In</a>
+        <span data-i18n="register.have-account">Already have an account?</span> <a href="login.html" data-i18n="register.sign-in">Sign In</a>
       </div>
     </div>
   </main>
