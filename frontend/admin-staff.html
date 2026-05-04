@@ -103,7 +103,15 @@
 <div id="staff-detail-modal" class="modal" style="display: none;">
   <div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0;">
-      <h2 id="staff-detail-name" style="margin: 0; font-size: clamp(18px, 5vw, 24px);">Staff Name</h2>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div id="staff-detail-avatar-wrap" style="position:relative;cursor:pointer;" onclick="document.getElementById('staff-avatar-input').click()" title="Upload photo">
+          <img id="staff-detail-avatar-img" src="" alt="" style="display:none;width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #e5e7eb;">
+          <div id="staff-detail-avatar-initials" style="width:52px;height:52px;border-radius:50%;background:#667eea;color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #e5e7eb;user-select:none;"></div>
+          <div style="position:absolute;bottom:0;right:0;background:#667eea;color:#fff;border-radius:50%;width:18px;height:18px;font-size:12px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">✎</div>
+          <input type="file" id="staff-avatar-input" accept="image/*" style="display:none;" onchange="uploadStaffAvatar(event)">
+        </div>
+        <h2 id="staff-detail-name" style="margin: 0; font-size: clamp(18px, 5vw, 24px);">Staff Name</h2>
+      </div>
       <button onclick="closeStaffDetailModal()" style="font-size: 24px; background: none; border: none; cursor: pointer; color: #999; flex-shrink: 0;">✕</button>
     </div>
 

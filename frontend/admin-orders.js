@@ -1421,15 +1421,22 @@ function displayOrderDetails(order) {
   
   let itemsTotal = 0;
   if (order.items && order.items.length > 0) {
+    const itemStatusLabels = { pending: t('kitchen.pending') || 'Pending', preparing: t('kitchen.preparing') || 'Preparing', served: t('admin.served') || 'Served', completed: t('admin.served') || 'Served' };
+    const itemStatusColors = { pending: '#f59e0b', preparing: '#3b82f6', served: '#10b981', completed: '#10b981' };
     order.items.forEach(item => {
       itemsTotal += item.item_total_cents || 0;
+      const statusLabel = itemStatusLabels[item.status] || item.status || '';
+      const statusColor = itemStatusColors[item.status] || '#9ca3af';
       html += `
         <div style="padding: 12px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #667eea;">
-          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: ${item.variants ? '6px' : '0'};">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: ${(item.variants || item.status) ? '6px' : '0'};">
             <div style="flex: 1;">
               <div style="font-weight: 600; color: #333; font-size: 13px;">${item.menu_item_name} × ${item.quantity}</div>
             </div>
-            <div style="font-weight: 600; color: #667eea; font-size: 13px; margin-left: 8px;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${statusLabel ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${statusColor}20;color:${statusColor};white-space:nowrap;">${statusLabel}</span>` : ''}
+              <div style="font-weight: 600; color: #667eea; font-size: 13px;white-space:nowrap;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
+            </div>
           </div>
           ${item.variants ? `<div style="font-size: 11px; color: #999;">${item.variants}</div>` : ''}
           ${item.addons && item.addons.length > 0 ? item.addons.map(a => `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">+ ${a.menu_item_name} ×${a.quantity} ($${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)})</div>`).join('') : ''}
@@ -1443,7 +1450,8 @@ function displayOrderDetails(order) {
   html += `</div></div>`;
   
   // Order Summary
-  const serviceCharge = Math.round(itemsTotal * 0.1);
+  const serviceChargePercent = window.serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 10);
+  const serviceCharge = Math.round(itemsTotal * serviceChargePercent / 100);
   const grandTotal = itemsTotal + serviceCharge;
   
   html += `
@@ -1456,7 +1464,7 @@ function displayOrderDetails(order) {
       </div>
       
       <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; font-size: 13px;">
-        <div style="color: #666;">Service Charge (10%)</div>
+        <div style="color: #666;">Service Charge (${serviceChargePercent}%)</div>
         <div style="color: #333; font-weight: 500;">$${(serviceCharge / 100).toFixed(2)}</div>
       </div>
       

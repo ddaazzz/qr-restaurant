@@ -469,6 +469,36 @@ function closeStaffDetailModal() {
   CURRENT_STAFF_ID = null;
 }
 
+async function uploadStaffAvatar(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file || !CURRENT_STAFF_ID) return;
+  const formData = new FormData();
+  formData.append('image', file);
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/staff/${CURRENT_STAFF_ID}/avatar`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') },
+      body: formData
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    const data = await res.json();
+    const avatarImg = document.getElementById('staff-detail-avatar-img');
+    const avatarInitials = document.getElementById('staff-detail-avatar-initials');
+    if (avatarImg && data.avatar_url) {
+      avatarImg.src = data.avatar_url;
+      avatarImg.style.display = 'block';
+      if (avatarInitials) avatarInitials.style.display = 'none';
+    }
+    // Refresh staff list to update any displayed avatars
+    loadStaff();
+  } catch (err) {
+    console.error('Avatar upload error:', err);
+    alert('Failed to upload avatar. Please try again.');
+  }
+  event.target.value = '';
+}
+
+
 function setWorkLogDays(days) {
   CURRENT_WORK_DAYS = days;
   // Update filter button active states
@@ -493,6 +523,22 @@ async function loadStaffDetailData() {
     
     // Update staff info
     document.getElementById("staff-detail-name").textContent = staff.name;
+
+    // Show avatar or initials
+    const avatarImg = document.getElementById('staff-detail-avatar-img');
+    const avatarInitials = document.getElementById('staff-detail-avatar-initials');
+    if (avatarImg && avatarInitials) {
+      if (staff.avatar_url) {
+        avatarImg.src = staff.avatar_url;
+        avatarImg.style.display = 'block';
+        avatarInitials.style.display = 'none';
+      } else {
+        avatarImg.style.display = 'none';
+        avatarInitials.style.display = 'flex';
+        avatarInitials.textContent = (staff.name || '?').charAt(0).toUpperCase();
+      }
+    }
+
     document.getElementById("staff-detail-role").textContent = staff.role === 'kitchen' ? t('admin.kitchen-role') : t('admin.staff-role');
     document.getElementById("staff-detail-pin").textContent = staff.pin || '-';
     

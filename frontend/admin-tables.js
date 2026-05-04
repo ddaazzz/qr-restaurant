@@ -1699,7 +1699,7 @@ async function loadAndRenderOrders(sessionId) {
                   <span style="color:#999;font-size:0.85em;white-space:nowrap;">x${i.quantity}</span>
                 </div>
                 ${i.variants && i.variants.trim() ? `<div style="font-size:0.8em;color:#777;font-style:italic;margin-bottom:2px;">${i.variants}</div>` : ''}
-                <div style="font-size:0.8em;color:#aaa;">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[i.status] || i.status}</div>
+                <div style="font-size:0.8em;color:#aaa;">${({pending: t('kitchen.pending') || 'Pending', preparing: t('kitchen.preparing') || 'Preparing', served: t('admin.served') || 'Served', completed: t('admin.served') || 'Served'})[i.status] || i.status}</div>
               </div>
               <div style="text-align: right; white-space: nowrap; font-weight: 600;">$${(itemTotal / 100).toFixed(2)}</div>
             </div>
