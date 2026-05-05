@@ -39,10 +39,38 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializePrinterQueue = initializePrinterQueue;
 exports.getPrinterQueueInstance = getPrinterQueueInstance;
 const express_1 = __importDefault(require("express"));
+const net = __importStar(require("net"));
 const db_1 = __importDefault(require("../config/db"));
 const printerService_1 = require("../services/printerService");
 const printerQueue_1 = require("../services/printerQueue");
 const thermalPrinterService_1 = require("../services/thermalPrinterService");
+/**
+ * Send raw data to a network (TCP/IP) thermal printer.
+ * Resolves when data is fully flushed; rejects on error or timeout.
+ */
+function sendToNetworkPrinter(host, port, data, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+        const socket = new net.Socket();
+        let settled = false;
+        const done = (err) => {
+            if (settled)
+                return;
+            settled = true;
+            socket.destroy();
+            err ? reject(err) : resolve();
+        };
+        socket.setTimeout(timeoutMs);
+        socket.on('timeout', () => done(new Error(`Connection to ${host}:${port} timed out after ${timeoutMs}ms`)));
+        socket.on('error', done);
+        socket.connect(port, host, () => {
+            socket.write(data, (err) => {
+                if (err)
+                    return done(err);
+                socket.end(() => done());
+            });
+        });
+    });
+}
 const router = express_1.default.Router();
 // QR code domain — set CHUIO_DOMAIN env var for different environments
 const QR_DOMAIN = process.env.CHUIO_DOMAIN || 'chuio.io';
@@ -114,22 +142,34 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req, res) => 
     try {
         // If type is specified, update/insert single printer
         if (type) {
+            // Normalize type casing to match DB constraint ('QR', 'Bill', 'Kitchen', 'KPAY')
+            const typeNormalizeMap = {
+                'qr': 'QR', 'QR': 'QR',
+                'bill': 'Bill', 'BILL': 'Bill', 'Bill': 'Bill',
+                'kitchen': 'Kitchen', 'KITCHEN': 'Kitchen', 'Kitchen': 'Kitchen',
+                'kpay': 'KPAY', 'KPAY': 'KPAY',
+            };
+            const normalizedType = typeNormalizeMap[type] || type;
             // Always include 'enabled: true' in settings to satisfy check_settings_enabled constraint.
             // PostgreSQL evaluates CHECK constraints against the proposed INSERT row (EXCLUDED) even
             // when ON CONFLICT DO UPDATE fires, so the INSERT VALUES must satisfy the constraint too.
             const settingsWithEnabled = settings ? { enabled: true, ...settings } : { enabled: true };
+            // Only default port to 9100 for network printers; otherwise store null
+            const resolvedPort = (printer_type === 'network' || printer_type === 'thermal')
+                ? (printer_port || 9100)
+                : null;
             const result = await db_1.default.query(`INSERT INTO printers (restaurant_id, type, printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, menu_category_id, settings)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
          ON CONFLICT (restaurant_id, type) DO UPDATE SET
            printer_type = COALESCE(EXCLUDED.printer_type, printers.printer_type),
-           printer_host = COALESCE(EXCLUDED.printer_host, printers.printer_host),
-           printer_port = COALESCE(EXCLUDED.printer_port, printers.printer_port, 9100),
-           bluetooth_device_id = COALESCE(EXCLUDED.bluetooth_device_id, printers.bluetooth_device_id),
-           bluetooth_device_name = COALESCE(EXCLUDED.bluetooth_device_name, printers.bluetooth_device_name),
+           printer_host = EXCLUDED.printer_host,
+           printer_port = EXCLUDED.printer_port,
+           bluetooth_device_id = EXCLUDED.bluetooth_device_id,
+           bluetooth_device_name = EXCLUDED.bluetooth_device_name,
            menu_category_id = COALESCE(EXCLUDED.menu_category_id, printers.menu_category_id),
            settings = printers.settings || $9::jsonb,
            updated_at = now()
-         RETURNING *`, [restaurantId, type, printer_type, printer_host, printer_port || 9100, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settingsWithEnabled)]);
+         RETURNING *`, [restaurantId, normalizedType, printer_type, printer_host, resolvedPort, bluetooth_device_id, bluetooth_device_name, menu_category_id, JSON.stringify(settingsWithEnabled)]);
             return res.json(result.rows[0]);
         }
         else {
@@ -208,15 +248,18 @@ router.post("/restaurants/:restaurantId/print-order", async (req, res) => {
         const [restaurantResult, orderResult, kitchenPrinterResult] = await Promise.all([
             db_1.default.query(`SELECT name FROM restaurants WHERE id = $1`, [restaurantId]),
             db_1.default.query(`SELECT oi.order_item_id, oi.order_id, oi.item_name, oi.quantity, 
-                oi.variants, ts.table_name, o.created_at
+                oi.variants, oi.menu_item_id,
+                ts.table_name, o.created_at,
+                mi.menu_category_id
          FROM order_items oi
          JOIN orders o ON oi.order_id = o.id
          LEFT JOIN table_sessions ts ON o.session_id = ts.id
+         LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
          WHERE oi.order_id = $1 AND o.restaurant_id = $2
          ORDER BY oi.order_item_id`, [orderId, restaurantId]),
-            // Get kitchen printer config from unified printers table
+            // Get kitchen printer config including multi-printer settings from printers.settings.printers
             db_1.default.query(`SELECT printer_type, printer_host, printer_port,
-                bluetooth_device_id, bluetooth_device_name
+                bluetooth_device_id, bluetooth_device_name, settings
          FROM printers WHERE restaurant_id = $1 AND type = 'Kitchen'`, [restaurantId]),
         ]);
         if (restaurantResult.rowCount === 0) {
@@ -226,11 +269,118 @@ router.post("/restaurants/:restaurantId/print-order", async (req, res) => {
             return res.status(404).json({ error: "Order not found" });
         }
         const restaurantName = restaurantResult.rows[0].name;
-        const printerConfig = (kitchenPrinterResult.rowCount ?? 0) > 0
+        const kitchenRow = (kitchenPrinterResult.rowCount ?? 0) > 0
             ? kitchenPrinterResult.rows[0]
-            : { printer_type: 'none' };
+            : { printer_type: 'none', settings: {} };
+        const kitchenSettings = kitchenRow.settings || {};
         const items = orderResult.rows;
-        const tableNumber = items[0].table_name || "To-Go";
+        const tableNumber = items[0]?.table_name || "To-Go";
+        const timestamp = new Date(items[0]?.created_at || Date.now()).toLocaleTimeString();
+        /**
+         * Helper: send ESC/POS to a single printer config (network or bluetooth fallback)
+         * Returns a response descriptor for the caller to handle.
+         */
+        const buildPrintResponse = async (cfg, orderData, itemsForPayload) => {
+            const escposArray = (0, thermalPrinterService_1.generateKitchenOrderESCPOS)(orderData);
+            if (cfg.type === 'network') {
+                const host = cfg.host;
+                const port = cfg.port || 9100;
+                const netMod = await Promise.resolve().then(() => __importStar(require('net')));
+                await new Promise((resolve, reject) => {
+                    const client = new netMod.Socket();
+                    client.setTimeout(5000);
+                    client.connect(port, host, () => {
+                        client.write(Buffer.from(escposArray), () => { client.end(); resolve(); });
+                    });
+                    client.on('error', reject);
+                    client.on('timeout', () => { client.destroy(); reject(new Error(`Kitchen printer ${host}:${port} timed out`)); });
+                });
+                return { network: true };
+            }
+            if (cfg.type === 'bluetooth') {
+                return {
+                    bluetooth: true,
+                    btId: cfg.btId,
+                    btName: cfg.btName,
+                    escposBase64: Buffer.from(escposArray).toString('base64'),
+                };
+            }
+            // browser / none / fallback
+            const payload = {
+                orderNumber: String(orderId), tableNumber,
+                items: itemsForPayload.map((i) => ({ name: i.item_name, quantity: i.quantity, variants: i.variants })),
+                timestamp, restaurantName,
+                type: orderType,
+                printerConfig: { type: cfg.type, host: cfg.host, port: cfg.port, bluetoothDeviceId: cfg.btId, bluetoothDeviceName: cfg.btName },
+            };
+            return { html: (0, printerService_1.generateReceiptHTML)(payload) };
+        };
+        // -------------------------------------------------------------------
+        // Multi-printer routing: if settings.printers array exists, route each
+        // order item to the appropriate kitchen printer by menu_category_id.
+        // Falls back to the single-printer config on the Kitchen row.
+        // -------------------------------------------------------------------
+        const multiPrinters = Array.isArray(kitchenSettings.printers) ? kitchenSettings.printers : [];
+        if (multiPrinters.length > 0) {
+            const results = [];
+            const unroutedItems = [];
+            for (const printer of multiPrinters) {
+                const printerCategories = Array.isArray(printer.categories) ? printer.categories.map(Number) : [];
+                // Items routed to this printer: match by menu_category_id, or all items if no categories configured
+                const routedItems = printerCategories.length > 0
+                    ? items.filter(i => printerCategories.includes(Number(i.menu_category_id)))
+                    : items;
+                if (routedItems.length === 0)
+                    continue;
+                const cfg = {
+                    type: printer.type || 'none',
+                    host: printer.host || undefined,
+                    port: printer.port || 9100,
+                    btId: printer.bluetooth_device || printer.bluetoothDevice || undefined,
+                    btName: printer.bluetooth_device || printer.bluetoothDevice || undefined,
+                };
+                const orderData = {
+                    orderNumber: String(orderId), tableNumber,
+                    items: routedItems.map(i => ({ name: i.item_name, quantity: i.quantity, variants: i.variants || undefined })),
+                    timestamp, restaurantName,
+                };
+                try {
+                    const r = await buildPrintResponse(cfg, orderData, routedItems);
+                    results.push({ printer: printer.name || printer.id, ...r });
+                    // Track unrouted items only when routing by category
+                    if (printerCategories.length === 0)
+                        break; // all items covered by this printer
+                }
+                catch (printErr) {
+                    console.error(`[print-order] Failed to print to ${printer.name}:`, printErr);
+                    results.push({ printer: printer.name || printer.id, error: printErr.message });
+                }
+            }
+            // Any items not covered by any category-routed printer go to first printer as fallback
+            if (unroutedItems.length > 0 && multiPrinters.length > 0) {
+                console.warn(`[print-order] ${unroutedItems.length} items not matched by category routing — sent to first printer`);
+            }
+            // Build combined response
+            const networkCount = results.filter(r => r.network).length;
+            const btPayloads = results.filter(r => r.bluetooth);
+            const htmlResult = results.find(r => r.html);
+            if (btPayloads.length > 0) {
+                return res.json({
+                    success: true,
+                    bluetoothPayload: btPayloads[0],
+                    message: `Order routed to ${results.length} kitchen printer(s)`,
+                    printerResults: results,
+                });
+            }
+            if (htmlResult) {
+                return res.json({ success: true, html: htmlResult.html, message: "Print-ready HTML generated", printerResults: results });
+            }
+            return res.json({ success: true, message: `Order sent to ${networkCount} network kitchen printer(s)`, printerResults: results });
+        }
+        // -------------------------------------------------------------------
+        // Single-printer fallback (legacy or single configured printer)
+        // -------------------------------------------------------------------
+        const printerConfig = kitchenRow;
         // Build kitchen order data for TM-U220 ESC/POS generation
         const kitchenOrderData = {
             orderNumber: String(orderId),
@@ -240,7 +390,7 @@ router.post("/restaurants/:restaurantId/print-order", async (req, res) => {
                 quantity: i.quantity,
                 variants: i.variants || undefined,
             })),
-            timestamp: new Date(items[0].created_at).toLocaleTimeString(),
+            timestamp,
             restaurantName,
         };
         const payload = {
@@ -251,7 +401,7 @@ router.post("/restaurants/:restaurantId/print-order", async (req, res) => {
                 quantity: i.quantity,
                 variants: i.variants,
             })),
-            timestamp: new Date(items[0].created_at).toLocaleTimeString(),
+            timestamp,
             restaurantName,
             type: orderType,
             printerConfig: {
@@ -318,7 +468,7 @@ router.post("/restaurants/:restaurantId/print-order", async (req, res) => {
         });
     }
     catch (err) {
-        if (err.message.includes("not initialized")) {
+        if (err.message?.includes("not initialized")) {
             console.error("❌ Printer queue not initialized");
             return res.status(500).json({ error: "Printer queue not initialized" });
         }
@@ -756,30 +906,48 @@ router.post("/restaurants/:restaurantId/print-qr", async (req, res) => {
             return res.json({ success: true, bluetoothPayload: qrPayload });
         }
         // For thermal/network printers, queue the job
-        const jobData = {
-            type: 'qr',
-            tableNumber: tableName,
-            qrToken: qrToken,
-            qrDataUrl: `https://${QR_DOMAIN}/${qrToken}`,
-            restaurantName: restaurantName,
-            printerConfig: {
-                type: printerConfig.printer_type,
-                host: printerConfig.printer_host,
-                port: printerConfig.printer_port,
-            },
-        };
-        const queue = getPrinterQueueInstance();
-        if (queue) {
-            const job = await queue.addJob(parseInt(restaurantId), jobData, {
-                jobType: 'qr',
-                ...(parseInt(sessionId) ? { sessionId: parseInt(sessionId) } : {}),
-                priority,
-            });
-            console.log('[PrintQR] Queued job:', job.id);
-            return res.json({ success: true, jobId: job.id, message: 'QR code queued for printing' });
-        }
-        else {
-            return res.status(500).json({ error: "Print queue not available" });
+        // For thermal/network printers: generate ESC/POS and return to client for direct sending
+        {
+            const host = printerConfig.printer_host;
+            const port = printerConfig.printer_port || 9100;
+            // Build ESC/POS QR receipt
+            let textAboveQR = 'Scan to Order';
+            let textBelowQR = 'Let us know how we did!';
+            const settingsResult2 = await db_1.default.query(`SELECT COALESCE((settings->>'qr_text_above'),'') as text_above, COALESCE((settings->>'qr_text_below'),'') as text_below FROM printers WHERE restaurant_id = $1 AND type = $2`, [restaurantId, 'QR']);
+            if ((settingsResult2.rowCount ?? 0) > 0) {
+                if (settingsResult2.rows[0].text_above)
+                    textAboveQR = settingsResult2.rows[0].text_above;
+                if (settingsResult2.rows[0].text_below)
+                    textBelowQR = settingsResult2.rows[0].text_below;
+            }
+            const qrReceiptData = {
+                restaurantName,
+                tableName,
+                qrToken,
+                qrTextAbove: textAboveQR,
+                qrTextBelow: textBelowQR,
+                printerPaperWidth: 80,
+            };
+            const escpos = (0, thermalPrinterService_1.generateESCPOS)(qrReceiptData);
+            const escposBase64 = Buffer.from(escpos).toString('base64');
+            // Try direct TCP (works when backend is on the same LAN)
+            try {
+                await sendToNetworkPrinter(host, port, Buffer.from(escpos));
+                console.log('[PrintQR] Direct TCP print successful');
+                return res.json({ success: true, jobId: `qr-${tableId}-${Date.now()}`, message: `QR printed to ${host}:${port}` });
+            }
+            catch (tcpErr) {
+                console.log('[PrintQR] Backend TCP failed (expected on cloud):', tcpErr.message);
+                // Build an HTML fallback so the browser can still print
+                const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://${QR_DOMAIN}/${qrToken}`)}`;
+                const htmlFallback = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:'Courier New',monospace;text-align:center;padding:12px}@media print{body{margin:0}}</style></head><body><h2>${restaurantName}</h2><p>Table: ${tableName}</p><img src="${qrImageUrl}" style="width:200px;height:200px" alt="QR"/><p>Scan to Order</p></body></html>`;
+                return res.json({
+                    success: true,
+                    networkPrint: { host, port, escposBase64 },
+                    html: htmlFallback,
+                    message: `Send ESC/POS data directly to ${host}:${port}`,
+                });
+            }
         }
     }
     catch (err) {
@@ -863,15 +1031,72 @@ router.post("/restaurants/:restaurantId/print-bill", async (req, res) => {
                 message: "Print-ready HTML generated for browser printing",
             });
         }
-        // For thermal/network printers, return success immediately
+        // For thermal/network printers, generate ESC/POS and return to client for direct printing.
+        // The backend may be on a cloud server that cannot reach the local network printer —
+        // returning the raw bytes lets the iOS/Android app (on the same LAN) send them directly.
         if (printerConfig.printer_type === "thermal" || printerConfig.printer_type === "network") {
-            console.log('[PrintBill] Sending to network printer:', printerConfig.printer_host);
-            return res.json({
-                success: true,
-                jobId: `bill-${sessionId}-${Date.now()}`,
-                status: "queued",
-                message: `Bill queued for printing on ${printerConfig.printer_host}:${printerConfig.printer_port || 9100}`,
-            });
+            const host = printerConfig.printer_host;
+            const port = printerConfig.printer_port || 9100;
+            console.log('[PrintBill] Network printer config:', host, port);
+            // Extract bill format settings
+            let billHeaderText = 'Thank You';
+            let billFooterText = 'Follow us on social media';
+            let billFontSize = 'medium';
+            if (printerConfig.settings) {
+                const s = typeof printerConfig.settings === 'string'
+                    ? JSON.parse(printerConfig.settings)
+                    : printerConfig.settings;
+                if (s.bill_header_text)
+                    billHeaderText = s.bill_header_text;
+                if (s.bill_footer_text)
+                    billFooterText = s.bill_footer_text;
+                if (s.bill_font_size === 'small' || s.bill_font_size === 'large')
+                    billFontSize = s.bill_font_size;
+            }
+            const networkReceiptData = {
+                restaurantName,
+                restaurantAddress,
+                restaurantPhone,
+                orderNumber: String(sessionId),
+                tableNumber: billData.table || 'Receipt',
+                pax: billData.pax,
+                items: billData.items || [],
+                subtotal: billData.subtotal,
+                serviceCharge: billData.serviceCharge,
+                tax: billData.tax,
+                total: billData.total,
+                timestamp: new Date().toLocaleString(),
+                printerPaperWidth: 80,
+                billHeaderText,
+                billFooterText,
+                billFontSize,
+            };
+            const escpos = (0, thermalPrinterService_1.generateESCPOS)(networkReceiptData);
+            const escposBase64 = Buffer.from(escpos).toString('base64');
+            // Attempt direct TCP print first (works when backend is on the same LAN as printer)
+            try {
+                await sendToNetworkPrinter(host, port, Buffer.from(escpos));
+                console.log('[PrintBill] Direct TCP print successful');
+                return res.json({
+                    success: true,
+                    jobId: `bill-${sessionId}-${Date.now()}`,
+                    message: `Bill printed to ${host}:${port}`,
+                });
+            }
+            catch (tcpErr) {
+                // Backend cannot reach printer (cloud deployment) — send bytes back to client
+                console.log('[PrintBill] Backend TCP failed (expected on cloud):', tcpErr.message);
+                return res.json({
+                    success: true,
+                    networkPrint: {
+                        host,
+                        port,
+                        escposBase64,
+                    },
+                    html: (0, printerService_1.generateReceiptHTML)(payload),
+                    message: `Send ESC/POS data directly to ${host}:${port}`,
+                });
+            }
         }
         // For Bluetooth printers
         if (printerConfig.printer_type === "bluetooth") {
@@ -882,9 +1107,10 @@ router.post("/restaurants/:restaurantId/print-bill", async (req, res) => {
                 });
             }
             console.log('[PrintBill] Sending to Bluetooth printer:', printerConfig.bluetooth_device_name);
-            // Get bill format settings (header and footer text) from printer settings
+            // Get bill format settings (header, footer, font size) from printer settings
             let billHeaderText = 'Thank You';
             let billFooterText = 'Follow us on social media';
+            let billFontSizeBt = 'medium';
             if (printerConfig.settings) {
                 const settings = typeof printerConfig.settings === 'string'
                     ? JSON.parse(printerConfig.settings)
@@ -893,6 +1119,8 @@ router.post("/restaurants/:restaurantId/print-bill", async (req, res) => {
                     billHeaderText = settings.bill_header_text;
                 if (settings.bill_footer_text)
                     billFooterText = settings.bill_footer_text;
+                if (settings.bill_font_size === 'small' || settings.bill_font_size === 'large')
+                    billFontSizeBt = settings.bill_font_size;
             }
             // Generate ESC/POS commands using thermalPrinterService
             const receiptData = {
@@ -909,9 +1137,9 @@ router.post("/restaurants/:restaurantId/print-bill", async (req, res) => {
                 total: billData.total,
                 timestamp: new Date().toLocaleString(),
                 printerPaperWidth: 80,
-                // Bill-specific customization
-                billHeaderText: billHeaderText,
-                billFooterText: billFooterText
+                billHeaderText,
+                billFooterText,
+                billFontSize: billFontSizeBt,
             };
             const escposCommands = (0, thermalPrinterService_1.generateESCPOS)(receiptData);
             const escposBase64 = Buffer.from(escposCommands).toString('base64');
@@ -1208,6 +1436,66 @@ router.post("/restaurants/:restaurantId/print-kpay-receipt", async (req, res) =>
     catch (err) {
         console.error('[PrintKPay] Error:', err);
         res.status(500).json({ error: 'Failed to print KPay receipt' });
+    }
+});
+/**
+ * GET printer profiles for a restaurant
+ */
+router.get("/restaurants/:restaurantId/printer-profiles", async (req, res) => {
+    const { restaurantId } = req.params;
+    try {
+        const result = await db_1.default.query(`SELECT id, restaurant_id, name, printer_type, printer_host, printer_port,
+              bluetooth_device_id, bluetooth_device_name, settings, created_at
+       FROM printer_profiles WHERE restaurant_id = $1 ORDER BY name`, [restaurantId]);
+        res.json(result.rows);
+    }
+    catch (err) {
+        console.error("[PrinterProfiles] GET failed:", err);
+        res.status(500).json({ error: "Failed to fetch printer profiles" });
+    }
+});
+/**
+ * POST create a printer profile
+ */
+router.post("/restaurants/:restaurantId/printer-profiles", async (req, res) => {
+    const { restaurantId } = req.params;
+    const { name, printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, settings } = req.body;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Profile name is required" });
+    }
+    try {
+        const result = await db_1.default.query(`INSERT INTO printer_profiles (restaurant_id, name, printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, settings)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+       ON CONFLICT (restaurant_id, name) DO UPDATE SET
+         printer_type = EXCLUDED.printer_type,
+         printer_host = EXCLUDED.printer_host,
+         printer_port = EXCLUDED.printer_port,
+         bluetooth_device_id = EXCLUDED.bluetooth_device_id,
+         bluetooth_device_name = EXCLUDED.bluetooth_device_name,
+         settings = EXCLUDED.settings
+       RETURNING *`, [restaurantId, name.trim(), printer_type || 'none', printer_host || null, printer_port || null, bluetooth_device_id || null, bluetooth_device_name || null, JSON.stringify(settings || {})]);
+        res.status(201).json(result.rows[0]);
+    }
+    catch (err) {
+        console.error("[PrinterProfiles] POST failed:", err);
+        res.status(500).json({ error: "Failed to save printer profile" });
+    }
+});
+/**
+ * DELETE a printer profile
+ */
+router.delete("/restaurants/:restaurantId/printer-profiles/:profileId", async (req, res) => {
+    const { restaurantId, profileId } = req.params;
+    try {
+        const result = await db_1.default.query(`DELETE FROM printer_profiles WHERE id = $1 AND restaurant_id = $2 RETURNING id`, [profileId, restaurantId]);
+        if ((result.rowCount ?? 0) === 0) {
+            return res.status(404).json({ error: "Profile not found" });
+        }
+        res.json({ success: true, id: Number(profileId) });
+    }
+    catch (err) {
+        console.error("[PrinterProfiles] DELETE failed:", err);
+        res.status(500).json({ error: "Failed to delete printer profile" });
     }
 });
 exports.default = router;

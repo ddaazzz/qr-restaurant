@@ -11,6 +11,7 @@ const db_1 = __importDefault(require("../config/db")); // adjust if you use your
 const logStaffActivity_1 = require("../services/logStaffActivity");
 const staffActions_1 = require("../constants/staffActions");
 const upload_1 = require("../config/upload");
+const storage_1 = require("../config/storage");
 const emailService_1 = require("../services/emailService");
 const router = (0, express_1.Router)();
 // POST /api/auth/login
@@ -112,7 +113,7 @@ router.get("/auth/admin-restaurants", async (req, res) => {
     }
 });
 router.post("/restaurants/:restaurantId/staff", async (req, res) => {
-    const { name, pin, role = "staff", access_rights = [], hourly_rate_cents } = req.body;
+    const { name, pin, role = "staff", access_rights = [], hourly_rate_cents, employment_start_date } = req.body;
     const { restaurantId } = req.params;
     // Validate all required fields
     if (!name || !pin) {
@@ -139,8 +140,8 @@ router.post("/restaurants/:restaurantId/staff", async (req, res) => {
         if (pinCheck.rowCount && pinCheck.rowCount > 0) {
             return res.status(400).json({ error: "PIN already exists for another staff member in this restaurant" });
         }
-        const result = await db_1.default.query(`INSERT INTO users (name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, role, pin, access_rights, hourly_rate_cents`, [name, null, staffRole, pin, restaurantId, JSON.stringify(access_rights), hourly_rate_cents || null]);
+        const result = await db_1.default.query(`INSERT INTO users (name, email, role, pin, restaurant_id, access_rights, hourly_rate_cents, employment_start_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, role, pin, access_rights, hourly_rate_cents, employment_start_date`, [name, null, staffRole, pin, restaurantId, JSON.stringify(access_rights), hourly_rate_cents || null, employment_start_date || null]);
         console.log(`✅ Staff created for restaurant ${restaurantId}: ${name}`);
         res.json({ staff: result.rows[0], success: true });
     }
@@ -153,7 +154,7 @@ router.get("/restaurants/:restaurantId/staff", async (req, res) => {
     const { restaurantId } = req.params;
     try {
         const result = await db_1.default.query(`SELECT 
-        id, name, email, role, pin, access_rights, hourly_rate_cents,
+        id, name, email, role, pin, access_rights, hourly_rate_cents, avatar_url,
         (SELECT COUNT(*) FROM staff_timekeeping WHERE user_id = users.id AND clock_out_at IS NULL) as currently_clocked_in
       FROM users 
       WHERE restaurant_id = $1 AND (role = 'staff' OR role = 'kitchen')`, [restaurantId]);
@@ -173,9 +174,10 @@ router.get("/restaurants/:restaurantId/staff", async (req, res) => {
 // ✅ GET single staff member (for editing)
 router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
     const { restaurantId, staffId } = req.params;
+    const daysBack = req.query.days ? Math.min(parseInt(req.query.days, 10) || 30, 3650) : 30;
     try {
         const result = await db_1.default.query(`SELECT 
-        id, name, email, role, pin, access_rights, hourly_rate_cents,
+        id, name, email, role, pin, access_rights, hourly_rate_cents, avatar_url, employment_start_date,
         (SELECT COUNT(*) FROM staff_timekeeping WHERE user_id = users.id AND clock_out_at IS NULL) > 0 as currently_clocked_in
       FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`, [staffId, restaurantId]);
         if (result.rowCount === 0) {
@@ -184,24 +186,28 @@ router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
         const staff = result.rows[0];
         // Parse access_rights JSON
         staff.access_rights = staff.access_rights ? (typeof staff.access_rights === 'string' ? JSON.parse(staff.access_rights) : staff.access_rights) : [];
-        // Fetch recent timekeeping records (last 30 days)
+        // Fetch recent timekeeping records filtered by days
         const timekeepingResult = await db_1.default.query(`SELECT 
-        id, clock_in_at, clock_out_at, duration_minutes 
+        id, clock_in_at, clock_out_at, duration_minutes, hourly_rate_cents
       FROM staff_timekeeping 
-      WHERE user_id = $1 AND restaurant_id = $2 AND clock_in_at >= NOW() - INTERVAL '30 days'
+      WHERE user_id = $1 AND restaurant_id = $2 AND clock_in_at >= NOW() - ($3::int * INTERVAL '1 day')
       ORDER BY clock_in_at DESC
-      LIMIT 30`, [staffId, restaurantId]);
+      LIMIT 200`, [staffId, restaurantId, daysBack]);
         staff.timekeeping = timekeepingResult.rows;
-        // Calculate stats
+        // Calculate stats for the same time window
         const statsResult = await db_1.default.query(`SELECT 
         COUNT(*) as total_shifts,
         COALESCE(SUM(duration_minutes), 0) as total_minutes
       FROM staff_timekeeping 
-      WHERE user_id = $1 AND restaurant_id = $2 AND clock_in_at >= NOW() - INTERVAL '30 days' AND clock_out_at IS NOT NULL`, [staffId, restaurantId]);
+      WHERE user_id = $1 AND restaurant_id = $2 AND clock_in_at >= NOW() - ($3::int * INTERVAL '1 day') AND clock_out_at IS NOT NULL`, [staffId, restaurantId, daysBack]);
         const stats = statsResult.rows[0];
+        const totalMinutes = parseInt(stats.total_minutes) || 0;
+        const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+        const hourlyRate = staff.hourly_rate_cents || 0;
         staff.stats = {
             total_shifts: parseInt(stats.total_shifts),
-            total_hours: Math.round((parseInt(stats.total_minutes) / 60) * 100) / 100
+            total_hours: totalHours,
+            estimated_salary_cents: hourlyRate > 0 ? Math.round(totalHours * hourlyRate) : null
         };
         res.json(staff);
     }
@@ -213,7 +219,7 @@ router.get("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
 // ✅ PATCH staff member (update)
 router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
     const { restaurantId, staffId } = req.params;
-    const { name, pin, role, access_rights, hourly_rate_cents } = req.body;
+    const { name, pin, role, access_rights, hourly_rate_cents, avatar_url, employment_start_date, backfill_hourly_rate } = req.body;
     try {
         // Verify staff belongs to restaurant
         const staffCheck = await db_1.default.query(`SELECT id, role FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`, [staffId, restaurantId]);
@@ -267,13 +273,27 @@ router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
             params.push(hourly_rate_cents);
             paramIndex++;
         }
+        if (avatar_url !== undefined) {
+            updates.push(`avatar_url = $${paramIndex}`);
+            params.push(avatar_url);
+            paramIndex++;
+        }
+        if (employment_start_date !== undefined) {
+            updates.push(`employment_start_date = $${paramIndex}`);
+            params.push(employment_start_date || null);
+            paramIndex++;
+        }
         if (updates.length === 0) {
             return res.status(400).json({ error: "No fields to update" });
         }
         // Add WHERE clause parameters (separate from SET updates)
         params.push(staffId);
-        const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, name, role, pin, access_rights`;
+        const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, name, role, pin, access_rights, hourly_rate_cents, employment_start_date`;
         const result = await db_1.default.query(query, params);
+        // If hourly rate changed and backfill requested, update all historical timekeeping records
+        if (backfill_hourly_rate && hourly_rate_cents !== undefined && hourly_rate_cents !== null) {
+            await db_1.default.query(`UPDATE staff_timekeeping SET hourly_rate_cents = $1 WHERE user_id = $2 AND restaurant_id = $3`, [hourly_rate_cents, staffId, restaurantId]);
+        }
         console.log(`✅ Staff updated: ${staffId} in restaurant ${restaurantId}`);
         const staff = result.rows[0];
         // Parse access_rights JSON
@@ -283,6 +303,36 @@ router.patch("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
     catch (err) {
         console.error("Failed to update staff:", err);
         res.status(500).json({ error: "Failed to update staff" });
+    }
+});
+// POST /api/restaurants/:restaurantId/staff/:staffId/avatar - Upload avatar image
+router.post("/restaurants/:restaurantId/staff/:staffId/avatar", upload_1.upload.single("image"), async (req, res) => {
+    const { restaurantId, staffId } = req.params;
+    try {
+        // Verify staff belongs to restaurant
+        const staffCheck = await db_1.default.query(`SELECT id FROM users WHERE id = $1 AND restaurant_id = $2 AND (role = 'staff' OR role = 'kitchen')`, [staffId, restaurantId]);
+        if (staffCheck.rowCount === 0) {
+            return res.status(404).json({ error: "Staff member not found" });
+        }
+        if (!req.file) {
+            return res.status(400).json({ error: "Image file is required" });
+        }
+        let avatarUrl;
+        if ((0, storage_1.isR2Configured)() && req.file.buffer) {
+            avatarUrl = await (0, storage_1.uploadToR2)(req.file.buffer, req.file.originalname, `restaurants/${restaurantId}/staff`, req.file.mimetype);
+        }
+        else {
+            const folder = `uploads/restaurants/${restaurantId}/staff`;
+            const fs = require("fs");
+            fs.mkdirSync(folder, { recursive: true });
+            avatarUrl = `/uploads/restaurants/${restaurantId}/staff/${req.file.filename}`;
+        }
+        await db_1.default.query(`UPDATE users SET avatar_url = $1 WHERE id = $2 AND restaurant_id = $3`, [avatarUrl, staffId, restaurantId]);
+        res.json({ avatar_url: avatarUrl, success: true });
+    }
+    catch (err) {
+        console.error("Failed to upload staff avatar:", err);
+        res.status(500).json({ error: "Failed to upload avatar" });
     }
 });
 router.delete("/restaurants/:restaurantId/staff/:staffId", async (req, res) => {
@@ -476,9 +526,12 @@ router.post("/restaurants/:restaurantId/staff/:staffId/clock-in", async (req, re
         if ((activeCheck.rowCount ?? 0) > 0) {
             return res.status(400).json({ error: "Staff member already clocked in" });
         }
-        const result = await db_1.default.query(`INSERT INTO staff_timekeeping (user_id, restaurant_id, clock_in_at) 
-       VALUES ($1, $2, NOW())
-       RETURNING id, clock_in_at`, [staffId, restaurantId]);
+        // Snapshot the current hourly rate at clock-in time
+        const rateResult = await db_1.default.query(`SELECT hourly_rate_cents FROM users WHERE id = $1`, [staffId]);
+        const rateSnapshot = rateResult.rows[0]?.hourly_rate_cents || null;
+        const result = await db_1.default.query(`INSERT INTO staff_timekeeping (user_id, restaurant_id, clock_in_at, hourly_rate_cents) 
+       VALUES ($1, $2, NOW(), $3)
+       RETURNING id, clock_in_at`, [staffId, restaurantId, rateSnapshot]);
         res.status(201).json(result.rows[0]);
     }
     catch (err) {

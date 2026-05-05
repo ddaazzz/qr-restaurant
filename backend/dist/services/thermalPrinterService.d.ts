@@ -33,6 +33,7 @@ export interface ReceiptData {
     qrTextBelow?: string;
     billHeaderText?: string;
     billFooterText?: string;
+    billFontSize?: 'small' | 'medium' | 'large';
     language?: string;
 }
 /**

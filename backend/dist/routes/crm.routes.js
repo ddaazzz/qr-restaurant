@@ -165,7 +165,7 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", (0, featureFl
          o.payment_method,
          o.created_at,
          ts.order_type,
-         COALESCE(t.name, ts.table_name, 'Counter') AS table_label,
+         COALESCE(t.name, 'Counter') AS table_label,
          ts.pax,
          (
            SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
@@ -221,6 +221,32 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", (0, featureFl
         res.status(500).json({ error: "Internal server error" });
     }
 });
+// PATCH /restaurants/:restaurantId/crm/customers/:customerId
+// Update a CRM customer's name, phone, and/or email
+router.patch("/restaurants/:restaurantId/crm/customers/:customerId", (0, featureFlags_1.requireFeature)("crm"), async (req, res) => {
+    try {
+        const { restaurantId, customerId } = req.params;
+        const { name, phone, email } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: "Name is required" });
+        }
+        const result = await db_1.default.query(`UPDATE crm_customers
+       SET name = $1,
+           phone = $2,
+           email = $3,
+           updated_at = NOW()
+       WHERE id = $4 AND restaurant_id = $5
+       RETURNING id, name, phone, email, notes, total_visits, total_spent_cents, last_visit_at, created_at`, [name.trim(), phone?.trim() || null, email?.trim() || null, customerId, restaurantId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Customer not found" });
+        }
+        res.json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
 // POST /restaurants/:restaurantId/crm/customers
 // Create a new CRM customer
 router.post("/restaurants/:restaurantId/crm/customers", (0, featureFlags_1.requireFeature)("crm"), async (req, res) => {
@@ -241,19 +267,63 @@ router.post("/restaurants/:restaurantId/crm/customers", (0, featureFlags_1.requi
     }
 });
 // PATCH /sessions/:sessionId/customer
-// Update customer_name and customer_phone on a table session
+// Update customer_name, customer_phone, and customer_email on a table session
+// Also upserts customer to CRM when a name is provided
 router.patch("/sessions/:sessionId/customer", async (req, res) => {
     try {
         const { sessionId } = req.params;
-        const { customer_name, customer_phone } = req.body;
+        const { customer_name, customer_phone, customer_email } = req.body;
         const result = await db_1.default.query(`UPDATE table_sessions
-       SET customer_name = $1, customer_phone = $2
-       WHERE id = $3
-       RETURNING id, customer_name, customer_phone`, [customer_name || null, customer_phone || null, sessionId]);
+       SET customer_name = $1, customer_phone = $2, customer_email = $3
+       WHERE id = $4
+       RETURNING id, customer_name, customer_phone, customer_email, restaurant_id`, [customer_name || null, customer_phone || null, customer_email || null, sessionId]).catch(async (err) => {
+            // Fallback if customer_email column doesn't exist yet (migration pending)
+            if (err.message?.includes('customer_email')) {
+                return db_1.default.query(`UPDATE table_sessions
+           SET customer_name = $1, customer_phone = $2
+           WHERE id = $3
+           RETURNING id, customer_name, customer_phone, restaurant_id`, [customer_name || null, customer_phone || null, sessionId]);
+            }
+            throw err;
+        });
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Session not found" });
         }
-        res.json(result.rows[0]);
+        const session = result.rows[0];
+        // Upsert to CRM if a name is provided
+        if (customer_name && session.restaurant_id) {
+            try {
+                let crmId = null;
+                // Try to find existing customer by phone, then email
+                if (customer_phone) {
+                    const existing = await db_1.default.query(`SELECT id FROM crm_customers WHERE restaurant_id = $1 AND phone = $2 LIMIT 1`, [session.restaurant_id, customer_phone]);
+                    if (existing.rows.length > 0)
+                        crmId = existing.rows[0].id;
+                }
+                if (!crmId && customer_email) {
+                    const existing = await db_1.default.query(`SELECT id FROM crm_customers WHERE restaurant_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1`, [session.restaurant_id, customer_email]);
+                    if (existing.rows.length > 0)
+                        crmId = existing.rows[0].id;
+                }
+                if (crmId) {
+                    await db_1.default.query(`UPDATE crm_customers
+             SET name = $2,
+                 phone = COALESCE(NULLIF($3, ''), phone),
+                 email = COALESCE(NULLIF($4, ''), email),
+                 updated_at = NOW()
+             WHERE id = $1`, [crmId, customer_name, customer_phone || null, customer_email || null]);
+                }
+                else {
+                    await db_1.default.query(`INSERT INTO crm_customers (restaurant_id, name, phone, email, total_visits, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 1, NOW(), NOW())
+             ON CONFLICT DO NOTHING`, [session.restaurant_id, customer_name, customer_phone || null, customer_email || null]);
+                }
+            }
+            catch (crmErr) {
+                console.warn("[CRM] Non-fatal: failed to upsert customer:", crmErr);
+            }
+        }
+        res.json(session);
     }
     catch (err) {
         console.error(err);

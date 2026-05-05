@@ -38,7 +38,9 @@ const getQrBaseUrl = () => {
 import TcpSocket from 'react-native-tcp-socket';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
+import { useSubscription } from '../../contexts/SubscriptionContext';
+import { PremiumGateModal } from '../../components/PremiumGateModal';
 
 /**
  * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.
@@ -214,6 +216,8 @@ const getTableTextColor = (bgColor: string) => {
 
 export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) => {
   const { t } = useTranslation();
+  const { canAccess } = useSubscription();
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -2316,7 +2320,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
-                onPress={splitBill}
+                onPress={() => { if (!canAccess('bill_split')) { setShowPremiumModal(true); return; } splitBill(); }}
               >
                 <Text style={styles.gearMenuItemText}>{t('admin.split-bill')}</Text>
               </TouchableOpacity>
@@ -3590,7 +3594,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 <TouchableOpacity style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]} onPress={testPrintBill}>
                   <Text style={styles.gearMenuItemText}>{t('admin.test-print')}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.gearMenuItem} onPress={splitBill}>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={() => { if (!canAccess('bill_split')) { setShowPremiumModal(true); return; } splitBill(); }}>
                   <Text style={styles.gearMenuItemText}>{t('admin.split-bill')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.gearMenuItem, styles.gearMenuItemDelete]} onPress={() => { endSession(selectedSession.id); setShowSessionGearMenu(false); }}>
@@ -4436,6 +4440,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
           </View>
         </InputAccessoryView>
       )}
+
+      <PremiumGateModal
+        visible={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        triggeredBy="bill_split"
+      />
 
     </View>
   );

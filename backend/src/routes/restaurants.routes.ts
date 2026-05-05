@@ -2,6 +2,7 @@ import { Router } from "express";
 import pool from "../config/db";
 import { upload } from "../config/upload";
 import { isR2Configured, uploadToR2, getR2Folder } from "../config/storage";
+import jwt from "jsonwebtoken";
 
 const router = Router();
 
@@ -65,6 +66,64 @@ router.post("/:restaurantId/background", upload.single("image"), async (req, res
   } catch (err) {
     console.error("Error uploading background:", err);
     res.status(500).json({ error: "Failed to upload background image" });
+  }
+});
+
+// ==================== SUBSCRIPTION ====================
+
+// GET subscription tier for a restaurant
+router.get("/:restaurantId/subscription", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const result = await pool.query(
+      "SELECT subscription_tier, subscription_trial_end FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+    const row = result.rows[0];
+    res.json({
+      tier: row.subscription_tier || 'free',
+      trial_end_date: row.subscription_trial_end || null,
+    });
+  } catch (err) {
+    console.error("Error fetching subscription:", err);
+    res.status(500).json({ error: "Failed to fetch subscription" });
+  }
+});
+
+// POST update subscription tier — superadmin only (called from web dashboard)
+router.post("/:restaurantId/subscription", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Authentication required" });
+    let caller: any;
+    try {
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+      const userResult = await pool.query("SELECT id, role FROM users WHERE id = $1", [decoded.id]);
+      caller = userResult.rows[0];
+    } catch { return res.status(401).json({ error: "Invalid token" }); }
+    if (!caller || caller.role !== "superadmin") {
+      return res.status(403).json({ error: "Superadmin access required" });
+    }
+
+    const { restaurantId } = req.params;
+    const { tier, trial_end_date } = req.body as { tier: 'free' | 'premium'; trial_end_date?: string | null };
+
+    if (!tier || !['free', 'premium'].includes(tier)) {
+      return res.status(400).json({ error: "tier must be 'free' or 'premium'" });
+    }
+
+    await pool.query(
+      "UPDATE restaurants SET subscription_tier = $1, subscription_trial_end = $2 WHERE id = $3",
+      [tier, trial_end_date ?? null, restaurantId]
+    );
+
+    res.json({ tier, trial_end_date: trial_end_date ?? null });
+  } catch (err) {
+    console.error("Error updating subscription:", err);
+    res.status(500).json({ error: "Failed to update subscription" });
   }
 });
 

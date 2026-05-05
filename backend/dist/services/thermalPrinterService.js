@@ -136,6 +136,13 @@ function generateESCPOS(receipt) {
     // === SEPARATOR ===
     appendText(commands, '========================================');
     commands.push(10, 10);
+    // === FONT SIZE (applied to items + totals) ===
+    if (receipt.billFontSize === 'large') {
+        commands.push(0x1D, 0x21, 0x01); // GS ! 0x01 - double height
+    }
+    else if (receipt.billFontSize === 'small') {
+        commands.push(0x1B, 0x4D, 0x01); // ESC M 1 - Font B (compressed)
+    }
     // === ITEMS SECTION ===
     if (receipt.items && receipt.items.length > 0) {
         for (const item of receipt.items) {
@@ -198,6 +205,9 @@ function generateESCPOS(receipt) {
         commands.push(10);
     }
     commands.push(10, 10); // LF x2
+    // Reset font size to normal before footer
+    commands.push(0x1D, 0x21, 0x00); // GS ! 0x00 - normal
+    commands.push(0x1B, 0x4D, 0x00); // ESC M 0 - Font A (default)
     // === FOOTER SECTION ===
     // For bills, use custom header and footer text
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
@@ -211,6 +221,11 @@ function generateESCPOS(receipt) {
         appendText(commands, receipt.billFooterText);
         commands.push(10);
     }
+    commands.push(10); // LF
+    // === POWERED BY (non-removable branding) ===
+    appendText(commands, '----------------------------------------');
+    commands.push(10);
+    appendText(commands, 'Powered by Chuio.io');
     commands.push(10, 10); // LF x2
     // === PAPER FEED BEFORE CUT ===
     commands.push(27, 100, 5); // ESC d 5 - Feed paper 5 lines

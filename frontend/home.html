@@ -2,371 +2,934 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
-  <title>Chuio - QR Code Restaurant Ordering & Kitchen Management System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chuio — The OS for Modern Dining</title>
+  <meta name="description" content="Replace your clunky POS with QR ordering, a smart kitchen display, real-time analytics, and seamless payments — unified into one platform." />
   <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png" />
-  <link rel="apple-touch-icon" href="/uploads/chuio/V2/App%20Icon%20B%26W.png" />
-  <meta name="description" content="Chuio is a modern, all‑in‑one restaurant platform uniting QR ordering, point‑of‑sale, table reservations and staff coordination. From single‑site cafes to multi‑chain restaurants, we help restaurateurs streamline service, speed up kitchen workflows and grow with clear guest insights.">
-  <meta name="keywords" content="QR ordering system, restaurant management software, kitchen display system, table management, digital menu ordering">
-  <meta name="author" content="Chuio">
-  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-  <meta property="og:title" content="Chuio - QR Code Restaurant Ordering System" />
-  <meta property="og:description" content="Chuio is a modern, all‑in‑one restaurant platform uniting QR ordering, point‑of‑sale, table reservations and staff coordination. From single‑site cafes to multi‑chain restaurants, we help restaurateurs streamline service, speed up kitchen workflows and grow with clear guest insights." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://chuio.io" />
-  <meta property="og:image" content="https://chuio.io/uploads/chuio/V2/App%20Icon%20B%26W.png" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Chuio - QR Code Restaurant Ordering System" />
-  <meta name="twitter:description" content="Chuio is a modern, all‑in‑one restaurant platform uniting QR ordering, point‑of‑sale, table reservations and staff coordination. From single‑site cafes to multi‑chain restaurants, we help restaurateurs streamline service, speed up kitchen workflows and grow with clear guest insights." />
-  <meta name="theme-color" content="#2C3E50">
-  <link rel="canonical" href="https://chuio.io">
-
-  <link rel="stylesheet" href="home.css" />
-  <link rel="stylesheet" href="language-switcher.css" />
-  
-  <!-- SEO Structured Data (JSON-LD) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Chuio - Restaurant Management System",
-    "description": "Modern QR code ordering system with real-time kitchen management, complete menu control, and staff management for restaurants.",
-    "url": "https://chuio.io",
-    "applicationCategory": "BusinessApplication",
-    "offers": {
-      "@type": "Offer",
-      "price": "399",
-      "priceCurrency": "HKD"
-    },
-    "author": {
-      "@type": "Organization",
-      "name": "Chuio",
-      "url": "https://chuio.io",
-      "logo": "https://chuio.io/uploads/chuio/V2/App%20Icon%20B%26W.png"
-    }
-  }
-  </script>
-  
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "Chuio",
-    "url": "https://chuio.io",
-    "logo": "https://chuio.io/uploads/chuio/V2/App%20Icon%20B%26W.png",
-    "description": "Restaurant management and QR ordering platform",
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "contactType": "Customer Support",
-      "email": "support@chuio.io"
-    }
-  }
-  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/newhome.css" />
 </head>
-<body>
-  <!-- Fixed page background -->
-  <div class="page-bg"></div>
+<body class="nh-body">
 
-  <!-- NAVIGATION -->
-  <nav class="glass-nav">
-    <div class="nav-container">
-      <a href="#home" class="logo">
-        <img src="/uploads/chuio/V2/App%20Icon%20B%26W.png" alt="Chuio Logo" />
-        <div class="logo-text">
-          <span class="logo-name">Chuio</span>
-          <span class="logo-sub" data-i18n="home.logo-sub">All-in-One Restaurant Manager</span>
-        </div>
+<!-- ═══════════════════════════════════════════════════════════════ NAVBAR -->
+<nav class="nh-nav" id="nh-nav">
+  <div class="nh-nav-inner">
+    <a href="/home.html">
+      <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="nh-nav-logo" />
+    </a>
+    <div class="nh-nav-links">
+      <a href="#features" data-zh="功能">Features</a>
+      <a href="#how-it-works" data-zh="使用方法">How It Works</a>
+      <a href="#comparison" data-zh="為何選擇 Chuio？">Why Chuio</a>
+      <a href="#pricing" data-zh="定價">Pricing</a>
+      <a href="#support" data-also-active="faq" data-zh="支援">Help</a>
+    </div>
+    <div class="nh-nav-cta">
+      <a href="/login.html" class="nh-nav-login" data-zh="登入">Log in</a>
+      <a href="/register.html" class="nh-nav-get-started" target="_blank" rel="noopener noreferrer">
+        <span data-zh="立即開始">Get Started</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </a>
-      <ul class="nav-links" id="navLinks">
-        <li><a href="#who-are-we" data-i18n="home.nav-who">Who?</a></li>
-        <li><a href="#products" data-i18n="home.nav-what">What?</a></li>
-        <li><a href="#how-it-works" data-i18n="home.nav-how">How?</a></li>
-      </ul>
-      <div class="nav-actions">
-        <button class="hamburger" id="hamburger" aria-label="Toggle menu">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-        <a href="/support/index.html" class="nav-login-btn" data-i18n="nav.support">Support</a>
-        <a href="login.html" class="nav-login-btn" data-i18n="nav.login">Login</a>
-        <div data-language-picker></div>
+    </div>
+    <div class="nh-i18n-controls">
+      <div class="nh-lang-switch">
+        <button class="nh-ls-btn active" id="nh-ls-en" onclick="window.chuioI18n&&window.chuioI18n.setLang('en')">EN</button>
+        <span class="nh-ls-sep">｜</span>
+        <button class="nh-ls-btn" id="nh-ls-zh" onclick="window.chuioI18n&&window.chuioI18n.setLang('zh')">繁體</button>
       </div>
     </div>
-  </nav>
+    <button class="nh-hamburger" id="nh-hamburger" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</nav>
 
+<!-- Mobile Menu -->
+<div class="nh-mobile-menu" id="nh-mobile-menu">
+  <a href="#features" data-zh="功能">Features</a>
+  <a href="#how-it-works" data-zh="使用方法">How It Works</a>
+  <a href="#comparison" data-zh="為何選擇 Chuio？">Why Chuio</a>
+  <a href="#pricing" data-zh="定價">Pricing</a>
+  <a href="/support" data-zh="支援">Help</a>
+  <div class="nh-mobile-lang">
+    <button class="nh-ls-btn active" id="nh-ls-en-m" onclick="window.chuioI18n&&window.chuioI18n.setLang('en')">EN</button>
+    <span class="nh-ls-sep">｜</span>
+    <button class="nh-ls-btn" id="nh-ls-zh-m" onclick="window.chuioI18n&&window.chuioI18n.setLang('zh')">繁體</button>
+  </div>
+  <div class="nh-mobile-divider"></div>
+  <a href="/login.html" style="color:#6b7280;" data-zh="登入">Log in</a>
+  <a href="/register.html" class="nh-mobile-cta" target="_blank" rel="noopener noreferrer" data-zh="免費開始">Get Started Free</a>
+</div>
 
-  <!-- ===== SECTION 1: HERO ===== -->
-  <section id="home" class="page-section hero-section">
-    <div class="glass-panel hero-panel">
-      <div class="hero-three-col">
-        <div class="hero-col-left">
-          <h1 class="hero-headline"><span class="hero-word-chuio">Chuio</span><span class="hero-word-sub" data-i18n="home.hero-tagline">is an All&#8209;in&#8209;One<br>Restaurant Management System</span></h1>
+<!-- ═══════════════════════════════════════════════════════════════ HERO -->
+<section class="nh-hero">
+  <div class="nh-hero-grid"></div>
+  <div class="nh-hero-glow"></div>
+  <div class="nh-hero-deco1"></div>
+  <div class="nh-hero-deco2"></div>
+  <div class="nh-hero-deco3"></div>
+
+  <div class="nh-hero-inner">
+    <div class="nh-hero-badge">
+      <span class="nh-hero-badge-dot"></span>
+      <span data-zh="Chuio OS 2.0 — 正式推出">Chuio OS 2.0 — Now Available</span>
+    </div>
+
+    <div class="nh-hero-h1">
+      <span class="line1" data-zh="現代餐廳">The OS for</span>
+      <span class="line2" data-zh="管理系統">modern dining</span>
+    </div>
+
+    <p class="nh-hero-desc" data-zh="以 QR 點餐、智能廚房顯示系統、即時數據分析及無縫支付，取代笨重的傳統 POS —— 全部整合於一個提升效率的平台。">
+      Replace your clunky POS with QR ordering, a smart kitchen display, real-time analytics, and seamless payments — unified into one platform built for efficiency.
+    </p>
+
+    <div class="nh-hero-btns">
+      <a href="/register.html" target="_blank" rel="noopener noreferrer" class="nh-btn-primary">
+        <span data-zh="開始免費試用">Start Free Trial</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="#how-it-works" class="nh-btn-outline" data-zh="查看使用方法">See How It Works</a>
+    </div>
+
+    <a href="https://apps.apple.com/hk/app/chuio/id6760214563" target="_blank" rel="noopener noreferrer" class="nh-hero-appstore">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+      <div class="nh-hero-appstore-text">
+        <p class="sub">Download on the</p>
+        <p class="main">App Store</p>
+      </div>
+    </a>
+
+    <div class="nh-hero-img-wrap">
+      <img src="/uploads/website/hero-final.png" alt="Chuio on multiple devices" class="nh-hero-img" />
+
+      <div class="nh-hero-float nh-hero-float-left">
+        <div class="nh-float-inner">
+          <div class="nh-float-icon green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+          </div>
+          <div>
+            <p class="nh-float-label" data-zh="平均消費金額">Avg Ticket Size</p>
+            <p class="nh-float-value" data-zh="+15%">+15%</p>
+          </div>
         </div>
-        <div class="hero-col-center">
-          <img src="/uploads/chuio/V2/hero image.png" alt="Chuio Restaurant Management" class="hero-device-img" />
-          <a href="https://apps.apple.com/hk/app/chuio/id6760214563?l=en-GB" class="app-store-button" target="_blank" rel="noopener noreferrer">
-            <img src="/uploads/website/App Store Download.png" alt="Download on the App Store" />
-          </a>
-          <p class="app-store-subtitle">Download Our App and Try It Now For Free. (iOS - iPhone and iPad)</p>
+      </div>
+
+      <div class="nh-hero-float nh-hero-float-right">
+        <div class="nh-float-inner">
+          <div class="nh-float-icon orange">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div>
+            <p class="nh-float-label" data-zh="翻桌速度">Table Turns</p>
+            <p class="nh-float-value" data-zh="提升 2.5 倍">2.5× Faster</p>
+          </div>
         </div>
-        <div class="hero-col-right">
-          <p class="hero-mission" data-i18n="home.hero-mission">We aim to digitise all restaurant operations to provide efficiency and transparency within the industry.</p>
+      </div>
+
+      <div class="nh-hero-float nh-hero-float-bottom">
+        <div class="nh-float-avatars">
+          <span style="background:#F97316;"></span>
+          <span style="background:#3B82F6;"></span>
+          <span style="background:#10B981;"></span>
+        </div>
+        <p class="nh-float-bottom-text">Trusted by restaurants across <strong style="color:#111827;">Hong Kong</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ STATS -->
+<section class="nh-stats" id="nh-stats">
+  <div class="nh-stats-grid">
+    <div class="nh-stat" data-reveal data-delay="1">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="15" data-suffix="%">0%</div>
+      <p class="nh-stat-label" data-zh="平均消費提升">Avg Ticket Size Increase</p>
+    </div>
+    <div class="nh-stat" data-reveal data-delay="2">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="30" data-suffix=" min">0 min</div>
+      <p class="nh-stat-label" data-zh="每更平均節省時間">Saved per shift on average</p>
+    </div>
+    <div class="nh-stat" data-reveal data-delay="3">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="99" data-suffix=".9%">0.9%</div>
+      <p class="nh-stat-label" data-zh="系統正常運行時間">Platform Uptime</p>
+    </div>
+    <div class="nh-stat" data-reveal data-delay="4">
+      <div class="nh-stat-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <div class="nh-stat-num" data-counter="0" data-suffix="">$0</div>
+      <p class="nh-stat-label" data-zh="零前期硬件費用">Zero upfront hardware cost</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FEATURES -->
+<section class="nh-features" id="features">
+  <div class="nh-features-inner">
+    <div class="nh-features-header" data-reveal>
+      <div>
+        <span class="nh-section-tag nh-tag-orange" data-zh="全功能平台">Full Platform</span>
+        <h2 class="nh-section-h2"><span data-zh="您的餐廳所需，">Every tool your</span><br /><span class="muted" data-zh="一應俱全">restaurant needs</span></h2>
+      </div>
+      <p class="nh-features-header-desc" data-zh="一個統一平台，無需拼湊整合，無隱藏收費。">One unified platform. No patchwork integrations. No monthly surprises.</p>
+    </div>
+
+    <div class="nh-cards-grid">
+      <!-- Menu Management -->
+      <div class="nh-feature-card" data-reveal data-delay="1">
+        <div class="nh-feature-card-img-wrap">
+          <img src="/uploads/website/menu-nobg.png" alt="Menu Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-green" data-zh="菜單">Menu</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-green">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h18l-2 7H5L3 2z"/><path d="M5 9v13h14V9"/><path d="M9 9v13"/><path d="M15 9v13"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title" data-zh="菜單管理">Menu Management</h3>
+          </div>
+          <p class="nh-feature-card-desc" data-zh="支援圖片、配料選項及售罄追蹤。即時更新並同步至所有裝置。">Rich visual menus with images, modifiers, and 86 tracking. Push updates instantly across all devices.</p>
+          <div class="nh-feature-card-more"><span data-zh="了解更多">Learn more</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Table Management -->
+      <div class="nh-feature-card" data-reveal data-delay="2">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/Tables.png" alt="Table Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-pink" data-zh="平面圖">Floor Plan</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-pink">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title" data-zh="桌台管理">Table Management</h3>
+          </div>
+          <p class="nh-feature-card-desc" data-zh="視覺化平面圖，即時顯示桌台狀態 —— 點餐中、等候結帳或準備入座。">Visual floor plan with live table status — who's ordering, waiting to pay, or ready to seat.</p>
+          <div class="nh-feature-card-more"><span data-zh="了解更多">Learn more</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Live Order Management -->
+      <div class="nh-feature-card" data-reveal data-delay="3">
+        <div class="nh-feature-card-img-wrap">
+          <img src="/uploads/website/order-nobg.png" alt="Live Order Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-violet" data-zh="運營">Operations</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-violet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="9" height="9"/><rect x="13" y="2" width="9" height="9"/><rect x="2" y="13" width="9" height="9"/><rect x="13" y="13" width="9" height="9"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title" data-zh="即時訂單管理">Live Order Management</h3>
+          </div>
+          <p class="nh-feature-card-desc" data-zh="即時掌握所有桌台訂單。可調整優先次序、修改或取消，並保留完整記錄。">Every active order across all tables in real time. Bump, modify, or void in a tap with a full audit trail.</p>
+          <div class="nh-feature-card-more"><span data-zh="了解更多">Learn more</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Kitchen Display System -->
+      <div class="nh-feature-card" data-reveal data-delay="4">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/kitchen%20dashboard.png" alt="Kitchen Display System" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-blue" data-zh="後廚">Back of House</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-blue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title" data-zh="廚房顯示系統">Kitchen Display System</h3>
+          </div>
+          <p class="nh-feature-card-desc" data-zh="智能分流、顏色計時提示及分站顯示。廚房全面無紙化，大幅提升效率。">Smart routing, color-coded ticket timing, station-specific views. Your kitchen runs faster with zero paper.</p>
+          <div class="nh-feature-card-more"><span data-zh="了解更多">Learn more</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Staff Management -->
+      <div class="nh-feature-card" data-reveal data-delay="5">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/Staff%20management.png" alt="Staff Management" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-indigo" data-zh="團隊">Team</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-indigo">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4338ca" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title" data-zh="員工管理">Staff Management</h3>
+          </div>
+          <p class="nh-feature-card-desc" data-zh="角色權限設定、排班管理及個人績效數據，全數整合於同一系統。">Role-based access, shift tracking, and performance data per team member — built into the same system.</p>
+          <div class="nh-feature-card-more"><span data-zh="了解更多">Learn more</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Analytics & Reports -->
+      <div class="nh-feature-card" data-reveal data-delay="6">
+        <div class="nh-feature-card-img-wrap">
+          <img src="https://chuio.io/uploads/chuio/New/reports.png" alt="Analytics &amp; Reports" class="nh-feature-card-img" />
+          <span class="nh-feature-card-tag tag-cyan" data-zh="數據">Analytics</span>
+        </div>
+        <div class="nh-feature-card-body">
+          <div class="nh-feature-card-title-row">
+            <div class="nh-feature-card-icon icon-cyan">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </div>
+            <h3 class="nh-feature-card-title" data-zh="數據分析與報告">Analytics &amp; Reports</h3>
+          </div>
+          <p class="nh-feature-card-desc" data-zh="按菜式收入、員工表現、高峰時段及菜單表現，提供清晰數據儀表板。">Revenue by item, staff performance, peak hours, and menu insights — in a dashboard that makes sense.</p>
+          <div class="nh-feature-card-more"><span data-zh="了解更多">Learn more</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
         </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ===== SECTION 2: WHO ARE WE ===== -->
-  <section id="who-are-we" class="page-section who-section">
-    <div class="glass-panel who-panel">
-      <h2 class="section-heading" data-i18n="home.who-heading">WHO are we?</h2>
-      <div class="who-inner">
-        <div class="who-text">
-          <p class="who-intro" data-i18n="home.who-intro">Chuio is your one-stop-shop to manage your restaurant with a fully digitised system for both your daily operations and customer relations.</p>
-          <p class="who-sub" data-i18n="home.who-sub">From start to finish, we offer you a fully integrated package all under one platform.</p>
+<!-- ═══════════════════════════════════════════════════════════════ HOW IT WORKS -->
+<section class="nh-hiw" id="how-it-works">
+  <div class="nh-hiw-inner">
+    <div class="nh-hiw-header" data-reveal>
+      <span class="nh-section-tag nh-tag-gray" data-zh="流程">The Flow</span>
+      <h2 class="nh-section-h2"><span data-zh="由掃碼到結帳，">From scan to settled</span><br /><span class="muted" data-zh="只需三個步驟">in 3 steps</span></h2>
+      <p class="nh-section-desc" style="max-width:560px;margin:20px auto 0;" data-zh="Chuio 全面處理餐飲流程 —— 點餐、廚房分流及支付 —— 全程無需紙單。">Chuio handles the entire guest journey — ordering, kitchen routing, and payment — without a single paper slip.</p>
+    </div>
+
+    <div class="nh-steps">
+      <!-- Step 01 -->
+      <div class="nh-step" data-reveal-left>
+        <div class="nh-step-text">
+          <span class="nh-step-num">01</span>
+          <h3 class="nh-step-h3" data-zh="掃碼點餐">Guests scan the QR code</h3>
+          <p class="nh-step-desc" data-zh="每張桌均設專屬 QR 碼。顧客掃描後即可瀏覽完整電子菜單 —— 無需下載 App，無需註冊。">Each table has a unique QR code. Guests scan and see your full visual menu instantly — no app download, no account needed.</p>
         </div>
-        <ul class="who-features">
-          <li data-i18n="home.feature-booking">Booking System</li>
-          <li data-i18n="home.feature-queuing">Queuing System</li>
-          <li data-i18n="home.feature-ordering">Food Ordering</li>
-          <li data-i18n="home.feature-processing">Order Processing</li>
-          <li data-i18n="home.feature-tables">Table Management</li>
-          <li data-i18n="home.feature-staff">Staff Management</li>
-          <li data-i18n="home.feature-payments">Secure Payments</li>
-          <li data-i18n="home.feature-loyalty">Customer Loyalty Programmes</li>
-          <li data-i18n="home.feature-business">Business Management</li>
+        <div class="nh-step-visual">
+          <div class="nh-step-img-wrap">
+            <img src="https://chuio.io/uploads/chuio/New/customer%20menu%20iphone.png" alt="Customer menu on phone" class="nh-step-img" />
+          </div>
+          <div class="nh-stag nh-stag-tr" data-stag-delay="0.35">
+            <div class="nh-stag-qr">
+              <img src="https://chuio.io/uploads/chuio/New/QR%20scan.png" alt="QR scan" />
+            </div>
+            <p class="nh-stag-title" data-zh="掃碼點餐">Scan to order</p>
+            <p class="nh-stag-sub" data-zh="無需應用程式">No app needed</p>
+          </div>
+          <div class="nh-stag nh-stag-bl" data-stag-delay="0.5">
+            <div style="display:flex;align-items:center;margin-bottom:6px;">
+              <span class="nh-stag-dot green"></span>
+              <span class="nh-stag-title" style="color:#15803d;" data-zh="訂單已提交！">Order placed!</span>
+            </div>
+            <p class="nh-stag-sub" data-zh="泰式炒麵 × 2 已送至廚房">Pad Thai × 2 sent to kitchen</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 02 -->
+      <div class="nh-step reverse" data-reveal-right>
+        <div class="nh-step-text">
+          <span class="nh-step-num">02</span>
+          <h3 class="nh-step-h3" data-zh="訂單即時傳送至廚房">Orders hit the kitchen instantly</h3>
+          <p class="nh-step-desc" data-zh="顧客下單後，訂單即時顯示於廚房系統，自動分流至相關工作站，並附上正確配料與時間。">The moment a guest orders, it appears on the kitchen display — routed to the right station with the correct modifiers and timing.</p>
+        </div>
+        <div class="nh-step-visual">
+          <div class="nh-step-img-wrap">
+            <img src="https://chuio.io/uploads/chuio/New/kitchen%20dashboard.png" alt="Kitchen dashboard" class="nh-step-img cover" />
+          </div>
+          <div class="nh-stag nh-stag-tl" data-stag-delay="0.35">
+            <div style="display:flex;align-items:center;margin-bottom:6px;">
+              <span class="nh-stag-dot orange"></span>
+              <span class="nh-stag-title" style="color:#ea580c;" data-zh="新小票 — 第4號桌">New ticket — Table 4</span>
+            </div>
+            <p class="nh-stag-sub" data-zh="已分流至炒鍋工作站">Routed to Wok Station</p>
+          </div>
+          <div class="nh-stag nh-stag-br" data-stag-delay="0.5">
+            <div class="nh-stag-timer">
+              <p class="small" data-zh="平均備餐時間">Avg prep time</p>
+              <p class="big">4:30 <span>min</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 03 -->
+      <div class="nh-step" data-reveal-left>
+        <div class="nh-step-text">
+          <span class="nh-step-num">03</span>
+          <h3 class="nh-step-h3" data-zh="幾秒完成支付">Pay and go in seconds</h3>
+          <p class="nh-step-desc" data-zh="顧客可使用 Apple Pay、Google Pay 或信用卡付款。無需等候服務員，大幅提升翻桌效率。">Guests pay from their phone — Apple Pay, Google Pay, or card. No flagging down a server. No waiting. Tables turn faster.</p>
+        </div>
+        <div class="nh-step-visual">
+          <div class="nh-step-img-wrap">
+            <img src="https://chuio.io/uploads/chuio/New/Mobile%20Payment.png" alt="Mobile payment" class="nh-step-img" />
+          </div>
+          <div class="nh-stag nh-stag-tr" data-stag-delay="0.35">
+            <p class="nh-stag-sub" style="margin-bottom:8px;" data-zh="以下方式支付">Pay with</p>
+            <div class="nh-stag-pay-methods">
+              <span class="dark">Local Payment</span>
+              <span class="light">Card</span>
+            </div>
+          </div>
+          <div class="nh-stag nh-stag-bl" data-stag-delay="0.5">
+            <div style="display:flex;align-items:center;margin-bottom:6px;">
+              <span class="nh-stag-dot blue"></span>
+              <span class="nh-stag-title" style="color:#1d4ed8;" data-zh="支付完成">Payment complete</span>
+            </div>
+            <p class="nh-stag-sub" data-zh="收據已馬上寄出">Receipt emailed instantly</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ GUEST EXPERIENCE -->
+<section class="nh-guest">
+  <div class="nh-guest-glow"></div>
+  <div class="nh-guest-inner">
+    <div class="nh-guest-header" data-reveal>
+      <span class="nh-section-tag nh-tag-orange" data-zh="顧客體驗">Guest Experience</span>
+      <h2 class="nh-section-h2"><span data-zh="讓賓客">A dining experience</span><br /><span class="muted" data-zh="一試難忘">guests will love</span></h2>
+      <p class="nh-section-desc" style="max-width:560px;margin:20px auto 0;" data-zh="從掃碼到離開，Chuio 讓每一個接觸點都自然流暢、輕鬆無阻。">From the moment they scan to the moment they leave, Chuio makes every touchpoint feel effortless.</p>
+    </div>
+
+    <div class="nh-guest-layout">
+      <!-- Photo -->
+      <div class="nh-guest-img-col" data-reveal-left>
+        <div class="nh-guest-img-frame">
+          <img src="https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=1200" alt="Guests enjoying dining experience" class="nh-guest-img" />
+        </div>
+        <div class="nh-guest-img-overlay"></div>
+        <div class="nh-guest-review">
+          <div class="nh-guest-stars">
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="nh-guest-review-text" data-zh="「點餐非常方便！」">"Ordering was so easy!"</p>
+          <p class="nh-guest-review-by" data-zh="Chuio 顧客評價">Guest review via Chuio</p>
+        </div>
+      </div>
+
+      <!-- Cards -->
+      <div class="nh-guest-cards-col">
+        <div class="nh-guest-card pink" data-reveal data-delay="1">
+          <div class="nh-guest-card-icon icon-bg-pink">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title" data-zh="會員獎賞計劃">Loyalty Programme</h3>
+          <p class="nh-guest-card-desc" data-zh="以積分、會員專屬優惠及禮遇吸引回頭客。">Reward returning guests with points, perks, and exclusive offers.</p>
+        </div>
+        <div class="nh-guest-card violet" data-reveal data-delay="2">
+          <div class="nh-guest-card-icon icon-bg-violet">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title" data-zh="優惠券及推廣活動">Coupons &amp; Promos</h3>
+          <p class="nh-guest-card-desc" data-zh="建立限時優惠及折扣碼，顧客結帳時可直接使用。">Create time-limited discounts and promo codes that guests redeem at checkout.</p>
+        </div>
+        <div class="nh-guest-card blue" data-reveal data-delay="3">
+          <div class="nh-guest-card-icon icon-bg-blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title" data-zh="員工報告">Staff Reports</h3>
+          <p class="nh-guest-card-desc" data-zh="於單一介面查看員工表現、小費及更表摘要。">Track individual staff performance, tips, and shift summaries in one view.</p>
+        </div>
+        <div class="nh-guest-card green" data-reveal data-delay="4">
+          <div class="nh-guest-card-icon icon-bg-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <h3 class="nh-guest-card-title" data-zh="預約訂座">Reservations</h3>
+          <p class="nh-guest-card-desc" data-zh="顧客可提前預約，即時查看座位情況並收到確認通知。">Let guests book tables in advance with real-time availability and confirmations.</p>
+        </div>
+        <a href="https://apps.apple.com/hk/app/chuio/id6760214563" target="_blank" rel="noopener noreferrer" class="nh-guest-appstore" data-reveal data-delay="5">
+          <div class="nh-guest-appstore-text">
+            <p class="title" data-zh="iOS 可用">Available on iOS</p>
+            <p class="sub" data-zh="下載 Chuio 餐廳應用程式">Download the Chuio app for your restaurant</p>
+          </div>
+          <img src="https://chuio.io/uploads/website/App%20Store%20Download.png" alt="Download on the App Store" />
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ COMPARISON -->
+<section class="nh-compare" id="comparison">
+  <div class="nh-compare-inner">
+    <div class="nh-compare-header" data-reveal>
+      <span class="nh-section-tag nh-tag-red" data-zh="誠實比較">The Honest Comparison</span>
+      <h2 class="nh-section-h2"><span data-zh="Chuio vs">Chuio vs</span><br /><span class="muted" data-zh="傳統 POS 系統">Traditional POS</span></h2>
+      <p class="nh-section-desc" style="max-width:512px;margin:20px auto 0;" data-zh="大多數餐飲科技只是舊系統換新包裝。Chuio 為現代餐廳重新打造。">Most restaurant tech is old software with a new coat of paint. Chuio was built from scratch for the modern dining room.</p>
+    </div>
+
+    <div class="nh-compare-images">
+      <div class="nh-compare-img-col" data-reveal-left>
+        <span class="nh-compare-label pos" data-zh="傳統 POS 系統">Traditional POS</span>
+        <div class="nh-compare-img-frame pos">
+          <img src="https://chuio.io/uploads/chuio/V2/pos%20bill.jpg" alt="Traditional POS bill" class="grayscale" />
+          <div class="nh-compare-img-footer pos">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span data-zh="紙質單據 —— 緩慢、浪費、易出錯">Paper receipt — slow, wasteful, error-prone</span>
+          </div>
+        </div>
+      </div>
+      <div class="nh-compare-img-col" data-reveal-right>
+        <span class="nh-compare-label chuio">Chuio</span>
+        <div class="nh-compare-img-frame chuio">
+          <img src="https://chuio.io/uploads/chuio/V2/chuio%20bill.jpg" alt="Chuio digital bill" />
+          <div class="nh-compare-img-footer chuio">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            <span data-zh="電子帳單 —— 幾秒內完成桌邊支付">Digital bill — paid in seconds from the table</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nh-compare-lists">
+      <!-- Traditional POS -->
+      <div class="nh-compare-list pos" data-reveal>
+        <div class="nh-compare-list-header">
+          <div class="nh-compare-list-header-icon pos">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </div>
+          <div>
+            <h3 data-zh="傳統 POS 系統">Traditional POS</h3>
+            <p style="font-size:14px;color:#9ca3af;" data-zh="舊模式，摩擦不斷">Old model, high friction</p>
+          </div>
+        </div>
+        <ul>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text" data-zh="每部終端機需 $2,000+ 前期硬件費">$2,000+ upfront hardware per terminal</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text" data-zh="人手點餐易出錯">Manual order-taking prone to human error</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text" data-zh="紙單易遺失或混亂">Paper tickets lost, smudged, or out of order</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text" data-zh="顧客等候 5–10 分鐘付款">Guests wait 5–10 min to pay — tables turn slow</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text" data-zh="軟件複雜，新員工需數天培訓">Clunky software — days to train new staff</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text" data-zh="無即時數據分析">No real-time data — blind to what's selling</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span class="li-text" data-zh="POS、KDS、支付及菜單需使用不同系統">Separate tools for POS, KDS, payments, menus</span></li>
+        </ul>
+      </div>
+      <!-- Chuio -->
+      <div class="nh-compare-list chuio" data-reveal data-delay="1">
+        <div class="nh-compare-list-header">
+          <div class="nh-compare-list-header-icon chuio">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div>
+            <h3 data-zh="Chuio">Chuio</h3>
+            <p style="font-size:14px;color:#9ca3af;" data-zh="專為現代餐廳打造">Built for the modern restaurant</p>
+          </div>
+        </div>
+        <ul>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text" data-zh="零硬件費，任何 iPad 均可使用">Zero hardware cost — runs on any iPad</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text" data-zh="即時 QR 自助點餐">Instant QR ordering — guests order themselves</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text" data-zh="智能廚房分流及計時">Digital KDS with smart routing &amp; timing</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text" data-zh="30 秒內完成桌邊支付">Pay from the table in under 30 seconds</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text" data-zh="一小時內完成設定">Intuitive setup in under an hour</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text" data-zh="即時菜式與員工分析">Live analytics across items, staff, and periods</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="li-text" data-zh="一個平台整合點餐、廚房及支付">One platform — ordering, kitchen, and payments</span></li>
         </ul>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ===== SECTION 3: WHAT WE PROVIDE ===== -->
-  <section id="products" class="page-section provides-section">
-    <div class="glass-panel provides-panel">
-      <h2 class="section-heading" data-i18n="home.what-heading">WHAT do we provide?</h2>
-
-      <div class="carousel-stage" id="carouselStage">
-        <div class="carousel-track" id="carouselTrack">
-          <div class="carousel-slide" data-index="0">
-            <img src="/uploads/chuio/New/Orders.png" alt="Orders Management" loading="lazy" />
-          </div>
-          <div class="carousel-slide" data-index="1">
-            <img src="/uploads/chuio/New/Menu Management.png" alt="Menu Management" loading="lazy" />
-          </div>
-          <div class="carousel-slide" data-index="2">
-            <img src="/uploads/chuio/New/Tables.png" alt="Table Management" loading="lazy" />
-          </div>
-          <div class="carousel-slide" data-index="3">
-            <div class="slide-dual">
-              <img src="/uploads/chuio/New/QR scan.png" alt="QR Scan Ordering" loading="lazy" />
-              <img src="/uploads/chuio/New/customer menu iphone.png" alt="Customer Menu" loading="lazy" />
-              <img src="/uploads/chuio/New/Mobile Payment.png" alt="Mobile Payment" loading="lazy" />
-            </div>
-          </div>
-          <div class="carousel-slide" data-index="4">
-            <img src="/uploads/chuio/New/Staff management.png" alt="Staff Management" loading="lazy" />
-          </div>
-          <div class="carousel-slide" data-index="5">
-            <img src="/uploads/chuio/New/kitchen dashboard.png" alt="Kitchen Dashboard" loading="lazy" />
-          </div>
-          <div class="carousel-slide" data-index="6">
-            <img src="/uploads/chuio/New/multiple ipad.png" alt="Multi-Device Support" loading="lazy" />
-          </div>
-          <div class="carousel-slide" data-index="7">
-            <img src="/uploads/chuio/New/reports.png" alt="Business Analytics" loading="lazy" />
-          </div>
-        </div>
-      </div>
-
-      <div class="carousel-label" id="carouselLabel">
-        <h3 id="carouselTitle">Orders Management</h3>
-        <p id="carouselDesc">This is where the staff and/or customer manages the food order. We provide a flexible and widely customisable menu for you to edit as you see fit.</p>
-      </div>
-
-      <div class="carousel-controls">
-        <button class="carousel-btn" id="carouselPrev" aria-label="Previous">&#8592;</button>
-        <button class="carousel-btn" id="carouselNext" aria-label="Next">&#8594;</button>
-      </div>
-      <div class="carousel-dots" id="carouselDots"></div>
+<!-- ═══════════════════════════════════════════════════════════════ PRICING -->
+<section class="nh-pricing" id="pricing">
+  <div class="nh-pricing-glow"></div>
+  <div class="nh-pricing-inner">
+    <div class="nh-pricing-header" data-reveal>
+      <span class="nh-section-tag nh-tag-orange" data-zh="定價">Pricing</span>
+      <h2 class="nh-section-h2"><span data-zh="清晰透明，">Simple pricing</span><br /><span class="muted" data-zh="功能全包">Everything included</span></h2>
+      <p class="nh-section-desc" style="max-width:460px;margin:20px auto 0;" data-zh="單一方案，包含所有功能。免費試用 30 天 —— 無需信用卡。">One plan. Every feature. 30 days free to try — no credit card required.</p>
     </div>
-  </section>
 
-  <!-- ===== SECTION 4: HOW IT WORKS ===== -->
-  <section id="how-it-works" class="page-section how-section">
-    <div class="how-panels-wrap">
-
-      <div class="glass-panel how-panel">
-        <h2 class="section-heading" data-i18n="home.how-heading">HOW does it work?</h2>
-
-        <div class="bills-comparison">
-          <div class="bill-side">
-            <div class="bill-tag bill-tag-chuio">Chuio</div>
-            <img src="/uploads/chuio/V2/chuio bill.jpg" alt="Chuio — Free" class="bill-img" />
-          </div>
-          <div class="bills-center">
-            <p class="how-free-headline">
-              <span class="how-word-big">CHUIO</span>
-              <span data-i18n="home.free-middle">is completely</span>
-              <span class="how-word-big" data-i18n="home.free-keyword">FREE</span>
-              <span data-i18n="home.free-end">to use.</span>
-            </p>
-            <p class="how-free-sub" data-i18n="home.free-sub">We don't charge anything other than processing payments. Please see the table below for details:</p>
-          </div>
-          <div class="bill-side">
-            <div class="bill-tag bill-tag-pos" data-i18n="home.pos-tag">Traditional P.O.S</div>
-            <img src="/uploads/chuio/V2/pos bill.jpg" alt="Traditional POS costs — over $30,000" class="bill-img" />
+    <div class="nh-plans">
+      <!-- 30-Day Free Trial -->
+      <div class="nh-plan-free" data-reveal data-delay="1">
+        <div>
+          <span class="nh-plan-trial-badge" data-zh="30 天免費試用">30-Day Free Trial</span>
+          <h3 class="nh-plan-name" data-zh="免費體驗所有功能">Try everything free</h3>
+          <p class="nh-plan-tagline" data-zh="無需信用卡。第一天即解鎖所有功能。">No credit card required. Every feature unlocked from day one.</p>
+          <div class="nh-plan-price-row">
+            <span class="nh-plan-price">$0</span>
+            <span class="nh-plan-price-suffix" data-zh="/ 30 天">/30 days</span>
           </div>
         </div>
+        <a href="/register.html" target="_blank" rel="noopener noreferrer" class="nh-plan-btn gray" data-zh="開始免費試用">Start Free Trial</a>
+        <div class="nh-plan-divider light"></div>
+        <ul class="nh-plan-features">
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="QR 點餐">QR Code Ordering</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="訂單管理">Order Management</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="菜單管理">Menu Management</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="桌台管理">Table Management</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="線上支付（信用卡、Apple Pay、Google Pay）">Online Payments (card, Apple Pay, Google Pay)</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="員工管理及報告">Staff Management &amp; Reports</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="預約功能">Bookings &amp; Reservations</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="存貨追蹤">Item Availability Tracking</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="限時菜單">Timed Menus</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="本地支付終端機">Local Payment Terminal </span><span style="font-size:11px;color:#9ca3af;">(Chuio setup)</span></li>
+          <li class="included"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-zh="會員及優惠券">Loyalty &amp; Coupons</span></li>
+        </ul>
       </div>
 
-      <div class="glass-panel rates-panel">
-        <h3 class="fee-table-heading" data-i18n="home.rates-heading">Payment Processing Rates</h3>
-
-        <div class="payment-cards-grid">
-
-          <!-- Card 1: Alipay / WeChat Pay / FPS / UnionPay -->
-          <div class="payment-card">
-            <div class="payment-card-logos">
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/wechatpay.svg" alt="WeChat Pay" /></div>
-              <div class="payment-logo-slot"><img class="payment-logo--alipay" src="/uploads/website/home payments/Alipay.png" alt="Alipay" /></div>
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/UnionPay.svg" alt="UnionPay" /></div>
+      <!-- Chuio Plan -->
+      <div class="nh-plan-premium" data-reveal data-delay="2">
+        <span class="nh-plan-popular">Recommended</span>
+        <div>
+          <h3 class="nh-plan-name white" data-zh="Chuio">Chuio</h3>
+          <p class="nh-plan-tagline" style="color:rgba(255,255,255,0.5);" data-zh="完整 Chuio 方案 —— 所有功能，固定月費。">The full Chuio platform — every feature, one flat monthly price.</p>
+          <div class="nh-plan-price-row">
+            <span class="nh-plan-price white" data-hkd="500">$500</span>
+            <div class="nh-plan-hkd">
+              <span id="nh-plan-currency-label">HKD</span>
+              <span data-zh="/ 月">/month</span>
             </div>
-            <div class="payment-card-divider"></div>
-            <p class="payment-card-label" data-i18n="home.rates-group1-label">Alipay / WeChat Pay / FPS</p>
-            <p class="payment-card-rate" data-i18n="home.rates-group1-rate">From 2%</p>
-            <p class="payment-card-note" data-i18n="home.rates-group1-note">*UnionPay 3.2%</p>
           </div>
-
-          <!-- Card 2: Visa / Mastercard / Apple Pay / Google Pay -->
-          <div class="payment-card">
-            <div class="payment-card-logos payment-card-logos-grid">
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/visa.svg" alt="Visa" /></div>
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/mastercard.svg" alt="Mastercard" /></div>
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/applepay.png" alt="Apple Pay" /></div>
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/Googlepay.png" alt="Google Pay" /></div>
-            </div>
-            <div class="payment-card-divider"></div>
-            <p class="payment-card-label" data-i18n="home.rates-group2-label">Visa / Mastercard / Apple Pay &amp; Google Pay</p>
-            <p class="payment-card-rate" data-i18n="home.rates-group2-rate">From 2.4%</p>
-            <p class="payment-card-note payment-card-note-empty" aria-hidden="true">&nbsp;</p>
-          </div>
-
-          <!-- Card 3: Octopus / PayMe -->
-          <div class="payment-card">
-            <div class="payment-card-logos">
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/octopus.png" alt="Octopus" /></div>
-              <div class="payment-logo-slot"><img src="/uploads/website/home payments/Payme.png" alt="PayMe" /></div>
-            </div>
-            <div class="payment-card-divider"></div>
-            <p class="payment-card-label" data-i18n="home.rates-group3-label">Octopus / PayMe</p>
-            <p class="payment-card-rate" data-i18n="home.rates-group3-rate">From 2%</p>
-            <p class="payment-card-note payment-card-note-empty" aria-hidden="true">&nbsp;</p>
-          </div>
-
+          <p class="nh-plan-usd" data-usd-equiv="true">≈ USD $64 / month &nbsp;&bull;&nbsp; Cancel anytime</p>
         </div>
-
-        <h3 class="fee-table-heading service-packs-heading" data-i18n="home.sp-heading">Service Packs</h3>
-        <div class="fee-table-wrap service-packs-wrap">
-          <table class="fee-table service-packs-table">
-            <thead>
-              <tr>
-                <th data-i18n="home.sp-consultant">Dedicated Consultant</th>
-                <th data-i18n="home.sp-5h">5 Hours</th>
-                <th data-i18n="home.sp-10h">10 Hours</th>
-                <th data-i18n="home.sp-25h">25 Hours</th>
-                <th data-i18n="home.sp-50h">50 Hours</th>
-                <th data-i18n="home.sp-100h">100 Hours</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td data-i18n="home.sp-project">Project Management</td><td></td><td>√</td><td>√</td><td>√</td><td>√</td></tr>
-              <tr><td data-i18n="home.sp-support">Email &amp; Phone Support</td><td>√</td><td>√</td><td>√</td><td>√</td><td>√</td></tr>
-              <tr><td data-i18n="home.sp-training">Training &amp; Coaching</td><td>√</td><td>√</td><td>√</td><td>√</td><td>√</td></tr>
-              <tr><td data-i18n="home.sp-config">Configuration</td><td>√</td><td>√</td><td>√</td><td>√</td><td>√</td></tr>
-              <tr><td data-i18n="home.sp-import">Data Import Assistance</td><td></td><td>√</td><td>√</td><td>√</td><td>√</td></tr>
-              <tr><td data-i18n="home.sp-onsite">On-site Consulting</td><td></td><td>√</td><td>√</td><td>√</td><td>√</td></tr>
-              <tr><td data-i18n="home.sp-custom">App Customisation</td><td></td><td>√</td><td>√</td><td>√</td><td>√</td></tr>
-              <tr class="service-pack-divider-row"><td colspan="6"></td></tr>
-              <tr><td data-i18n="home.sp-returning">Returning Customers</td><td>HKD 4,700</td><td>HKD 9,400</td><td>HKD 21,800</td><td>HKD 41,200</td><td>HKD 76,500</td></tr>
-              <tr><td data-i18n="home.sp-new">New Customers (15% off)</td><td>HKD 4,000</td><td>HKD 8,000</td><td>HKD 18,500</td><td>HKD 35,000</td><td>HKD 65,000</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&amp;text=Hi+Chuio%2C+I%27m+interested+in+subscribing&amp;type=phone_number&amp;app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-plan-btn orange">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:7px;flex-shrink:0;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.71 3.41 2 2 0 0 1 3.69 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span data-zh="聯絡我們">Contact Us</span>
+        </a>
+        <div class="nh-plan-divider dark"></div>
+        <ul class="nh-plan-features">
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="QR 點餐">QR Code Ordering</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="訂單管理">Order Management</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="菜單管理">Menu Management</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="桌台管理">Table Management</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="線上支付（信用卡、Apple Pay、Google Pay）">Online Payments (card, Apple Pay, Google Pay)</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="員工管理及報告">Staff Management &amp; Reports</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="預約功能">Bookings &amp; Reservations</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="存貨追蹤">Item Availability Tracking</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="限時菜單">Timed Menus</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="本地支付終端機">Local Payment Terminal </span><span style="font-size:11px;opacity:0.6;">(Chuio setup)</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="會員及優惠券">Loyalty &amp; Coupons</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="分單功能">Bill Splitting</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="廚房顯示系統">Kitchen Display System</span></li>
+          <li class="white-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="服務呼叫功能">Service Requests</span></li>
+        </ul>
       </div>
-
     </div>
-  </section>
 
-  <!-- ===== SECTION 5: WAITLIST / CONTACT ===== -->
-  <section id="waitlist" class="page-section waitlist-section">
-    <div class="glass-panel waitlist-panel">
-      <h2 data-i18n="home.ready-future">Ready for the Future?</h2>
-      <p data-i18n="home.waitlist-desc">Be among the first restaurants to experience modern QR ordering. Join our waitlist for exclusive early access — completely free.</p>
-
-      <div class="waitlist-form-wrapper">
-        <form id="waitlist-form" class="waitlist-form">
-          <input type="text" placeholder="Restaurant Name" data-i18n-placeholder="home.placeholder-restaurant" required />
-          <input type="email" placeholder="Email Address" data-i18n-placeholder="home.placeholder-email" required />
-          <input type="tel" placeholder="Phone Number" data-i18n-placeholder="home.placeholder-phone" required />
-          <button type="submit" data-i18n="home.ready-launch">I'm Ready for Launch!</button>
-        </form>
-        <p class="waitlist-note" data-i18n="home.waitlist-note">✓ No spam &nbsp;·&nbsp; ✓ Free forever &nbsp;·&nbsp; ✓ Early access to beta features</p>
-      </div>
-      <p class="waitlist-whatsapp-link"><span data-i18n="home.whatsapp-prefix">Or connect directly:</span> <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20joining%20the%20waitlist" data-i18n="home.whatsapp-contact">Message us on WhatsApp</a></p>
-    </div>
-  </section>
-
-  <!-- FOOTER -->
-  <footer>
-    <div class="footer-container">
-      <div class="footer-grid">
-        <div class="footer-section">
-          <h4 data-i18n="footer.brand">Chuio</h4>
-          <p data-i18n="footer.brand-desc">Chuio is a modern, all‑in‑one restaurant platform uniting QR ordering, point‑of‑sale, table reservations and staff coordination. From single‑site cafes to multi‑chain restaurants, we help restaurateurs streamline service, speed up kitchen workflows and grow with clear guest insights.</p>
-          <p class="copyright" data-i18n="footer.copyright">© 2026 Chuio. All rights reserved.</p>
+    <!-- Enterprise -->
+    <div class="nh-enterprise" data-reveal>
+      <div class="nh-enterprise-header">
+        <div>
+          <span class="nh-section-tag nh-tag-gray" data-zh="企業方案">Enterprise</span>
+          <h3 class="nh-enterprise-title" data-zh="包含所有功能，並提供完整客製化服務。">Everything, plus full customisation.</h3>
+          <p class="nh-enterprise-desc" data-zh="適合需要系統整合及品牌客製的餐飲集團。提供專屬顧問、系統設定及進階支援。">For restaurant groups and brands that need a bespoke platform — dedicated consulting, app customisation, and white-glove onboarding via our Service Packs.</p>
         </div>
-        <div class="footer-section">
-          <h4 data-i18n="footer.product-title">Product</h4>
-          <ul>
-            <li><a href="home.html#products" data-i18n="footer.features">Features</a></li>
-            <li><a href="products.html" data-i18n="footer.products">Products</a></li>
+        <a href="/servicepacks.html" class="nh-enterprise-btn" data-zh="查看服務套裝">
+          View Service Packs
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+      <div class="nh-sp-grid">
+        <div class="nh-sp-card" style="--sp-accent:#3B82F6;">
+          <p class="nh-sp-hours" data-zh="5小時">5 HRS</p>
+          <p class="nh-sp-original" data-hkd="4700">HKD 4,700</p>
+          <p class="nh-sp-price" data-hkd="4000">HKD 4,000</p>
+          <p class="nh-sp-new" data-zh="新客戶專屬">New customers</p>
+          <p class="nh-sp-label" data-zh="一般帶領">General Walkthrough</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="電郵及電話支援">Email &amp; Phone Support</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="培訓及指導">Training &amp; Coaching</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="系統配置">Configuration</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="項目管理">Project Management</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="數據匯入協助">Data Import Assistance</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="現場顧問服務">On-site Consulting</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="應用程式客製化">App Customisation</span></li>
           </ul>
         </div>
-        <div class="footer-section">
-          <h4 data-i18n="footer.legal-title">Legal</h4>
-          <ul>
-            <li><a href="privacy.html" data-i18n="footer.privacy">Privacy Policy</a></li>
-            <li><a href="terms.html" data-i18n="footer.terms">Terms of Service</a></li>
-            <li><a href="mailto:support@chuio.io" data-i18n="footer.contact">Contact Us</a></li>
+        <div class="nh-sp-card" style="--sp-accent:#22C55E;">
+          <p class="nh-sp-hours" data-zh="10小時">10 HRS</p>
+          <p class="nh-sp-original" data-hkd="9400">HKD 9,400</p>
+          <p class="nh-sp-price" data-hkd="8000">HKD 8,000</p>
+          <p class="nh-sp-new" data-zh="新客戶專屬">New customers</p>
+          <p class="nh-sp-label" data-zh="基本配置">Basic Configuration</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="電郵及電話支援">Email &amp; Phone Support</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="培訓及指導">Training &amp; Coaching</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="系統配置">Configuration</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="項目管理">Project Management</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="數據匯入協助">Data Import Assistance</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="現場顧問服務">On-site Consulting</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="應用程式客製化">App Customisation</span></li>
           </ul>
         </div>
-        <div class="footer-section">
-          <h4 data-i18n="footer.support-title">Support</h4>
-          <ul>
-            <li><a href="mailto:support@chuio.io" data-i18n="footer.email-support">Email Support</a></li>
-            <li><a href="https://wa.me/85267455358" data-i18n="footer.whatsapp-support">WhatsApp Support</a></li>
-            <li><a href="login.html" data-i18n="footer.admin-portal">Admin Portal</a></li>
+        <div class="nh-sp-card popular" style="--sp-accent:#FF6A2A;">
+          <p class="nh-sp-hours" data-zh="25小時">25 HRS</p>
+          <p class="nh-sp-original" data-hkd="21800">HKD 21,800</p>
+          <p class="nh-sp-price" data-hkd="18500">HKD 18,500</p>
+          <p class="nh-sp-new" data-zh="新客戶專屬">New customers</p>
+          <p class="nh-sp-label" data-zh="標準安裝">Normal Setup</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="電郵及電話支援">Email &amp; Phone Support</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="培訓及指導">Training &amp; Coaching</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="系統配置">Configuration</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="項目管理">Project Management</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="數據匯入協助">Data Import Assistance</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="現場顧問服務">On-site Consulting</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="應用程式客製化">App Customisation</span></li>
+          </ul>
+        </div>
+        <div class="nh-sp-card" style="--sp-accent:#8B5CF6;">
+          <p class="nh-sp-hours" data-zh="50小時">50 HRS</p>
+          <p class="nh-sp-original" data-hkd="41200">HKD 41,200</p>
+          <p class="nh-sp-price" data-hkd="35000">HKD 35,000</p>
+          <p class="nh-sp-new" data-zh="新客戶專屬">New customers</p>
+          <p class="nh-sp-label" data-zh="自訂化 / 進階">Customization / Advanced</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="電郵及電話支援">Email &amp; Phone Support</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="培訓及指導">Training &amp; Coaching</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="系統配置">Configuration</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="項目管理">Project Management</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="數據匯入協助">Data Import Assistance</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="現場顧問服務">On-site Consulting</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="應用程式客製化">App Customisation</span></li>
+          </ul>
+        </div>
+        <div class="nh-sp-card" style="--sp-accent:#F43F5E;">
+          <p class="nh-sp-hours" data-zh="100小時">100 HRS</p>
+          <p class="nh-sp-original" data-hkd="76500">HKD 76,500</p>
+          <p class="nh-sp-price" data-hkd="65000">HKD 65,000</p>
+          <p class="nh-sp-new" data-zh="新客戶專屬">New customers</p>
+          <p class="nh-sp-label" data-zh="企業方案">Enterprise</p>
+          <div class="nh-sp-divider"></div>
+          <ul class="nh-sp-features">
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="電郵及電話支援">Email &amp; Phone Support</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="培訓及指導">Training &amp; Coaching</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="系統配置">Configuration</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="項目管理">Project Management</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="數據匯入協助">Data Import Assistance</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="現場顧問服務">On-site Consulting</span></li>
+            <li><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg><span data-zh="應用程式客製化">App Customisation</span></li>
           </ul>
         </div>
       </div>
-      <div class="footer-bottom">
-        <p data-i18n="footer.platform-desc">Chuio is a modern restaurant management and QR ordering platform designed to streamline operations and enhance customer experience.</p>
-        <div class="footer-address">
-          <p class="label" data-i18n="footer.contact-address">Business Address</p>
-          <p>Flat G, 14/F Imperial Building</p>
-          <p>58 Canton Road, Tsim Sha Tsui</p>
-          <p>Hong Kong</p>
-          <p><span data-i18n="footer.contact-phone">Phone</span>: +852 63433995</p>
-          <p><span data-i18n="footer.contact-email">Email</span>: <a href="mailto:dta@chuio.io">dta@chuio.io</a></p>
-        </div>
+      <p class="nh-sp-note" data-zh="所有服務套裝均包含 Chuio 訂閱。新客戶優惠價（已折扣 15%）。">All Service Packs include your Chuio subscription. New customer pricing shown (15% discount applied). <a href="/servicepacks.html">See full details →</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ CTA -->
+<section class="nh-cta">
+  <div class="nh-cta-glow"></div>
+  <div class="nh-cta-grid"></div>
+  <div class="nh-cta-inner">
+    <div class="nh-cta-badge">
+      <span class="dot"></span>
+      <span data-zh="30 天免費試用 —— 無需信用卡">30-day free trial — no credit card required</span>
+    </div>
+    <h2 class="nh-cta-h2"><span data-zh="準備好打造">Ready to run a</span><br /><span class="orange" data-zh="更智能的餐廳？">smarter restaurant?</span></h2>
+    <p class="nh-cta-desc" data-zh="加入數千間已放棄傳統 POS 的餐廳。安裝少於一小時即可完成。">Join thousands of restaurants that have left their traditional POS behind. Setup takes under an hour.</p>
+    <div class="nh-cta-btns">
+      <a href="/register.html" target="_blank" rel="noopener noreferrer" class="nh-btn-cta" data-zh="開始免費試用">
+        Start Your Free Trial
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <button class="nh-btn-cta-outline" data-open-demo data-zh="預約示範">Book a Demo</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ SUPPORT -->
+<section class="nh-support" id="support">
+  <div class="nh-support-inner">
+    <div class="nh-support-card" data-reveal>
+      <div class="nh-support-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
+      <div class="nh-support-text">
+        <span class="nh-section-tag nh-tag-orange" data-zh="商戶指南">Merchant Guide</span>
+        <h2 data-zh="需要安裝支援？">Need help setting up?</h2>
+        <p data-zh="我們的商戶參考指南包含完整指導——從配置菜單、桌台到處理支付及查看數據儀表板。">Our merchant reference guide walks you through everything — from configuring your menu and tables to processing payments and reading your analytics dashboard.</p>
+      </div>
+      <div class="nh-support-btns">
+        <a href="/support" class="nh-support-btn-primary" data-zh="開啟支援指南">
+          Open Help Guide
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I+need+help+with+setup&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-support-btn-outline" data-zh="與我們討論">Chat with Us</a>
       </div>
     </div>
-  </footer>
-  <script src="translations.js"></script>
-  <script src="language-switcher.js"></script>
-  <script src="mobile-menu.js"></script>
-  <script src="home.js"></script>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FAQ -->
+<section class="nh-faq" id="faq">
+  <div class="nh-faq-inner">
+    <div class="nh-faq-header" data-reveal>
+      <div class="nh-faq-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF6A2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <h2 class="nh-faq-h2" data-zh="常見問題">Frequently asked questions</h2>
+      <p class="nh-faq-desc" data-zh-html="關於 Chuio 的常見問題。找不到答案？請<a href='/support'>瀏覽我們的幫助中心</a>。">Everything you need to know about Chuio. Can't find the answer you're looking for? <a href="/support">Visit our Help Centre</a></p>
+    </div>
+
+    <div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="是否有任何隱藏費用？">Are there any hidden fees like cloud hosting or other web-related charges?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="絕對沒有。當您註冊 Chuio 帳戶後，運行餐廳所需的一切均包含在月費方案內。我們不會對雲端托管、軟體更新或平台使用另行收費。任何可能適用的額外費用，僅限於選用的服務套裝或方案中明確列明的功能，僅此而已。">None whatsoever. When you register a Chuio account, everything you need to run your restaurant is included in your monthly plan. We do not charge separately for cloud hosting, software updates, or platform access. The only additional costs that may apply are optional Service Packs or features explicitly outlined in your plan — nothing more.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="月費包括哪些功能？">What exactly is included in the monthly subscription?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="您的月費方案包含完整使用 Chuio 平台的權限，包括 QR 點餐、廚房顯示系統、桌台管理、支付處理、即時數據分析及無限次菜單更新。平台本身不收取每筆交易費用——您每間分店支付固定月費。">Your monthly plan covers full access to the Chuio platform including QR ordering, kitchen display system, table management, payments processing, real-time analytics, and unlimited menu updates. There are no per-transaction fees hidden within the platform itself — you pay a flat monthly rate per location.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="是否提供免費試用？">Is there a free trial? Do I need a credit card to start?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="有——每間新餐廠均可獲得30天免費試用，可使用全部功能。開始時無需信用卡。只有在您決定試用期後繼續使用時，才需輸入付款資料。">Yes — every new restaurant gets a 30-day free trial with full access to all features. No credit card is required to start. You only enter payment details when you decide to continue after the trial period.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="服務套裝是否必須購買？">What is a Service Pack, and do I need one?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="服務套餐是可選用的預購專家時數，可用於安裝、培訓、客製化或現場咨詢。它們與訂閱分開計算。大多數餐廠可以依據我們的文檔自行安裝 Chuio。服務套餐適合需要實地支援或需要客製功能的用戶。">Service Packs are optional blocks of pre-purchased expert time you can use for setup, training, customisation, or onsite consulting. They are separate from your subscription. Most restaurants can set up Chuio themselves using our documentation. Service Packs are for those who want hands-on help or need custom features built.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="支援哪些裝置及系統？">Which devices and operating systems does Chuio work on?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="Chuio 在 iPad 和 iPhone（iOS）上運行，適用於餐廠管理和廚房顯示。業主儀表板和數據分析支援任何具備現代瀏覽器的裝置。顧客掃描 QR 碼即可從自己的智慧型手機點餐，無需下載任何應用程式。">Chuio runs on iPads and iPhones (iOS) for the restaurant management and kitchen display side, and on any device with a modern browser for the owner dashboard and analytics. Customers scan a QR code and order from their own smartphone — no app download required for guests.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="可以隨時取消嗎？">Can I cancel my subscription at any time?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="可以。沒有長期合約約束。您可以隨時從帳戶設定取消訂閱，當前計費周期結束後將不再收費。我們不收取取消費。">Yes. There are no long-term contracts. You can cancel your subscription at any time from your account settings and you will not be charged after your current billing period ends. We do not charge cancellation fees.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="數據是否安全？">Is my restaurant data secure?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="絕對安全。所有數據在傳輸和儲存時均被加密。我們使用業界標準安全實踐，基礎架構托管於企業級雲端服務提供商。我們絕不將您的數據出售給第三方，您對所有餐廳和顧客數據保有完整擁有權。">Absolutely. All data is encrypted in transit and at rest. We use industry-standard security practices and our infrastructure is hosted on enterprise-grade cloud providers. We never sell your data to third parties, and you retain full ownership of all your restaurant and customer data.</p></div>
+      </div>
+      <div class="nh-faq-item">
+        <button class="nh-faq-btn">
+          <span class="nh-faq-q" data-zh="可否管理多間分店？">Can I use Chuio across multiple restaurant locations?</span>
+          <svg class="nh-faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nh-faq-answer"><p data-zh="可以。Chuio 支援多分店管理。每個分店在您的帳戶下作為獨立實體計費，您可從統一的業主儀表板管理所有分店。如您經營多個場地，請聯絡我們商討團體價格。">Yes. Chuio supports multi-location management. Each location is billed as a separate unit under your account, and you can manage all locations from a unified owner dashboard. Contact us for group pricing if you operate multiple venues.</p></div>
+      </div>
+    </div>
+
+    <div class="nh-faq-cta" data-reveal>
+      <div class="nh-faq-cta-text">
+        <p data-zh="還有問題？">Still have questions?</p>
+        <small data-zh="我們的團隊隨時樂意協助 —— 歡迎聯絡，我們會盡快回覆您。">Our team is happy to help — reach out and we'll get back to you promptly.</small>
+      </div>
+      <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I+have+a+question&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer" class="nh-faq-cta-btn" data-zh="與我們討論">
+        Chat with us
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ FOOTER -->
+<footer class="nh-footer">
+  <div class="nh-footer-inner">
+    <div class="nh-footer-grid">
+      <div class="nh-footer-brand">
+        <img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="logo" />
+        <p data-zh="一站式餐廳營運系統。QR 點餐、廚房顯示系統、支付及數據分析 —— 全部整合於一個平台。">The all-in-one restaurant OS. QR ordering, kitchen display, payments, and analytics in one platform.</p>
+        <a href="https://apps.apple.com/hk/app/chuio/id6760214563" target="_blank" rel="noopener noreferrer" class="nh-footer-appstore">
+          <img src="https://chuio.io/uploads/website/App%20Store%20Download.png" alt="Download on the App Store" />
+        </a>
+      </div>
+      <div class="nh-footer-col">
+        <h4 data-zh="產品">Product</h4>
+        <ul>
+          <li><a href="#features" data-zh="QR 點餐">QR Ordering</a></li>
+          <li><a href="#features" data-zh="廚房顯示系統">Kitchen Display</a></li>
+          <li><a href="#features" data-zh="支付">Payments</a></li>
+          <li><a href="#features" data-zh="數據分析">Analytics</a></li>
+          <li><a href="#features" data-zh="菜單管理">Menu Management</a></li>
+          <li><a href="#features" data-zh="桌台管理">Table Management</a></li>
+        </ul>
+      </div>
+      <div class="nh-footer-col">
+        <h4 data-zh="公司">Company</h4>
+        <ul>
+          <li><a href="/home.html" data-zh="首頁">Home</a></li>
+          <li><a href="#how-it-works" data-zh="使用方法">How It Works</a></li>
+          <li><a href="#pricing" data-zh="價格">Pricing</a></li>
+          <li><a href="/servicepacks.html" data-zh="服務套裝">Service Packs</a></li>
+          <li><a href="/support" data-zh="支援">Support</a></li>
+        </ul>
+      </div>
+      <div class="nh-footer-col">
+        <h4 data-zh="支援">Support</h4>
+        <ul>
+          <li><a href="/support" data-zh="幫助中心">Help Centre</a></li>
+          <li><a href="/support" data-zh="快速上手">Getting Started</a></li>
+          <li><a href="https://api.whatsapp.com/send/?phone=85267455358&amp;text=Hi+Chuio%2C+I%27m+interested+in+your+plans&amp;type=phone_number&amp;app_absent=0" target="_blank" rel="noopener noreferrer" data-zh="聯絡銷售">Contact Sales</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="nh-footer-bottom">
+      <p class="nh-footer-copy" data-zh="© 2026 Chuio 版權所有。">© 2026 Chuio. All rights reserved.</p>
+      <div class="nh-footer-legal">
+        <a href="/privacy.html" data-zh="私隱政策">Privacy Policy</a>
+        <a href="/terms.html" data-zh="服務條款">Terms of Service</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════════════ DEMO MODAL -->
+<div id="nh-demo-modal" class="nh-modal-overlay" id="nh-modal-overlay" style="display:none;">
+  <div class="nh-modal">
+    <div class="nh-modal-top-bar"></div>
+    <button class="nh-modal-close" id="nh-modal-close" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="nh-modal-body">
+      <span class="nh-section-tag nh-tag-orange" data-zh="預約演示">Book a Demo</span>
+      <h2 data-zh="準備好迎接未來了嗎？">Ready for the Future?</h2>
+      <p class="sub" data-zh="成為首批體驗現代 QR 點餐的餐廳。立即加入候補名單，享有獨家搶先體驗 —— 完全免費。">Be among the first restaurants to experience modern QR ordering. Join our waitlist for exclusive early access — completely free.</p>
+      <form class="nh-modal-form" id="nh-demo-form">
+        <input type="text" id="demo-name" placeholder="Restaurant Name" data-zh-ph="餐廳名稱" required />
+        <input type="email" id="demo-email" placeholder="Email Address" data-zh-ph="電郵地址" required />
+        <input type="tel" id="demo-phone" placeholder="Phone Number" data-zh-ph="電話號碼" required />
+        <button type="submit" class="nh-modal-submit" data-zh="立即報名！">I'm Ready for Launch!</button>
+      </form>
+      <p class="nh-modal-note" data-zh="✓ 絕不濫發 &nbsp;•&nbsp; ✓ 永久免費 &nbsp;•&nbsp; ✓ 優先體驗測試版功能">✓ No spam &nbsp;•&nbsp; ✓ Free forever &nbsp;•&nbsp; ✓ Early access to beta features</p>
+      <p class="nh-modal-whatsapp" data-zh-html="或直接聯繫：<a href='https://api.whatsapp.com/send/?phone=85267455358&amp;text=Hi+Chuio%2C+I%27m+interested+in+joining+the+waitlist&amp;type=phone_number&amp;app_absent=0' target='_blank' rel='noopener noreferrer'>在 WhatsApp 上發訊息給我們</a>">Or connect directly: <a href="https://api.whatsapp.com/send/?phone=85267455358&text=Hi+Chuio%2C+I%27m+interested+in+joining+the+waitlist&type=phone_number&app_absent=0" target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a></p>
+    </div>
+  </div>
+</div>
+
+<script src="/chuio-i18n.js"></script>
+<script src="/newhome.js"></script>
 </body>
 </html>
-

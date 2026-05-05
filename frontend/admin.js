@@ -429,6 +429,25 @@ async function switchSection(sectionId) {
         console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
       }
       updateSectionHeader('admin.section-settings', 'edit-settings-header');
+    } else if (sectionId === "users") {
+      // Superadmin-only users & restaurants management
+      if (IS_SUPERADMIN || IS_ADMIN) {
+        var usersSection = document.getElementById("section-users");
+        if (usersSection && !usersSection.innerHTML.includes("users-tab-bar")) {
+          try {
+            var usersResponse = await fetch('/admin-users.html');
+            usersSection.innerHTML = await usersResponse.text();
+            reTranslateContent();
+          } catch (err) {
+            console.error("Error loading users HTML:", err);
+          }
+        }
+        if (typeof loadUsersManagement === 'function') {
+          await loadUsersManagement();
+        }
+        reTranslateContent();
+      }
+      updateSectionHeader('', '');
     }
 
     IS_EDIT_MODE = false;
@@ -623,6 +642,12 @@ function init() {
 }
 
 async function initializeSuperadmin() {
+  // Show superadmin-only nav buttons
+  var superadminElements = document.querySelectorAll('.superadmin-only');
+  for (var i = 0; i < superadminElements.length; i++) {
+    superadminElements[i].style.display = '';
+  }
+
   // Show the restaurant list in the admin dropdown for superadmin
   const restaurantList = document.getElementById("superadmin-restaurant-list");
   

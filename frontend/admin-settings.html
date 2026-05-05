@@ -69,6 +69,12 @@
       <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
     </div>
 
+    <!-- Service Requests Card -->
+    <div class="settings-card" onclick="showSettingsPage('service-requests')">
+      <h3 data-i18n="admin.service-requests">Service Requests</h3>
+      <p id="sr-items-preview" data-i18n="admin.service-requests-desc">Custom call-waiter request types</p>
+    </div>
+
     <!-- CRM Card -->
     <div class="settings-card" onclick="showSettingsPage('crm')">
       <h3 data-i18n="admin.crm">CRM</h3>
@@ -529,6 +535,73 @@
         <div id="variant-presets-list">
           <!-- Presets rendered here -->
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN: Service Requests Page -->
+  <div id="page-service-requests" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('service-requests')">&#8592; Back</button>
+      <h3 data-i18n="admin.service-requests">Service Requests</h3>
+      <button onclick="openSrItemModal(null)" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">+ Add</button>
+    </div>
+    <div class="settings-page-content">
+      <p style="font-size: 13px; color: var(--text-light); margin: 0 0 16px 0;" data-i18n="admin.sr-page-desc">Define the custom service request types customers can tap from the menu (e.g. "Extra Napkins", "Request Bill").</p>
+      <div id="sr-items-list">
+        <p style="text-align:center;color:#999;padding:24px;" data-i18n="admin.loading">Loading...</p>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- Service Request Item Modal -->
+  <div id="sr-item-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:420px;">
+      <div class="modal-header">
+        <h3 id="sr-modal-title" data-i18n="admin.sr-add-item">Add Service Request</h3>
+        <button class="modal-close" onclick="closeSrItemModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="sr-modal-error" style="display:none;background:#fef2f2;color:#dc2626;padding:8px 12px;border-radius:6px;font-size:13px;margin-bottom:12px;"></div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label data-i18n="admin.sr-request-type">Request Type (identifier) *</label>
+          <input type="text" id="sr-input-request-type" placeholder="e.g. extra_napkins" maxlength="60" />
+          <p style="font-size:11px;color:#9ca3af;margin-top:4px;" data-i18n="admin.sr-request-type-hint">Lowercase letters, numbers and underscores. Cannot be changed after creation.</p>
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label data-i18n="admin.sr-label-en">English Label *</label>
+          <input type="text" id="sr-input-label-en" placeholder="e.g. Extra Napkins" maxlength="80" />
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label data-i18n="admin.sr-label-zh">Chinese Label</label>
+          <input type="text" id="sr-input-label-zh" placeholder="e.g. 額外紙巾" maxlength="80" />
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label data-i18n="admin.sr-color">Color</label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="color" id="sr-input-color" value="#4f46e5" style="width:44px;height:36px;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:2px;" />
+            <span id="sr-color-preview" style="font-size:13px;color:#666;">#4f46e5</span>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px;">
+          <label style="display:flex;align-items:center;justify-content:space-between;font-weight:500;">
+            <span data-i18n="admin.sr-active">Active</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="sr-input-active" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </label>
+          <p style="font-size:12px;color:#9ca3af;margin-top:4px;" data-i18n="admin.sr-active-desc">Only active items appear in the customer menu.</p>
+        </div>
+
+        <button id="sr-save-btn" class="btn-primary" onclick="saveSrItem()" style="width:100%;" data-i18n="admin.save">Save</button>
       </div>
     </div>
   </div>

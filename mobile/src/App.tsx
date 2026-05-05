@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, View, Text, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TranslationProvider } from './contexts/TranslationContext';
+import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ToastProvider } from './components/ToastProvider';
 import { LoginScreen } from './screens/LoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
@@ -52,6 +53,7 @@ export default function App() {
   return (
     <TranslationProvider>
       <AuthProvider>
+        <SubscriptionProvider>
         <ToastProvider>
           {IS_DEV_BUILD && (
             <View style={{ backgroundColor: '#dc2626', paddingVertical: 2, alignItems: 'center' }}>
@@ -60,6 +62,7 @@ export default function App() {
           )}
           <RootNavigator />
         </ToastProvider>
+        </SubscriptionProvider>
       </AuthProvider>
     </TranslationProvider>
   );

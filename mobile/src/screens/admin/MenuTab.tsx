@@ -26,8 +26,10 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { apiClient, API_URL } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { addonService, Addon } from '../../services/addonService';
+import { useSubscription } from '../../contexts/SubscriptionContext';
+import { PremiumGateModal } from '../../components/PremiumGateModal';
 
 // ==================== INTERFACES ====================
 
@@ -503,6 +505,8 @@ function DraggableMenuItemGrid({
 export const MenuTab = forwardRef(
   ({ restaurantId, searchQuery }: { restaurantId: string; searchQuery?: string }, ref: React.Ref<MenuTabRef>) => {
     const { t, lang } = useTranslation();
+    const { canAccess } = useSubscription();
+    const [showPremiumModal, setShowPremiumModal] = useState(false);
     // ==================== STATE MANAGEMENT ====================
     
     // Data
@@ -636,9 +640,13 @@ export const MenuTab = forwardRef(
 
     useImperativeHandle(ref, () => ({
       toggleEditMode() {
+        if (!canAccess('item_availability')) {
+          setShowPremiumModal(true);
+          return;
+        }
         setShowAvailabilityToggles(prev => !prev);
       }
-    }), []);
+    }), [canAccess]);
 
     // ==================== API CALLS ====================
 
@@ -3523,6 +3531,12 @@ export const MenuTab = forwardRef(
           </View>
         </Modal>
 
+      <PremiumGateModal
+        visible={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        triggeredBy="item_availability"
+      />
+
       </View>
     );
   }
@@ -3542,13 +3556,14 @@ const styles = StyleSheet.create({
   },
 
   // Category Bar - ISOLATED CONTEXT (no flex growth)
+  // No fixed height here — normal mode is constrained by categoryScroll's height:48,
+  // and edit mode needs to expand to fit the draggable list.
   categoryBarWrapper: {
     flex: 0,
-    height: 48,
+    flexShrink: 0,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    flexShrink: 0,
   },
   categoryScroll: {
     backgroundColor: '#fff',

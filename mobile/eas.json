@@ -33,7 +33,8 @@
     "production": {
       "channel": "production",
       "ios": {
-        "resourceClass": "large"
+        "resourceClass": "large",
+        "image": "latest"
       },
       "android": {
         "buildType": "app-bundle",

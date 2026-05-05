@@ -14,12 +14,11 @@
   <meta property="og:url" content="https://chuio.io/privacy.html" />
   <meta property="og:image" content="https://chuio.io/uploads/chuio/V2/App%20Icon%20B%26W.png" />
   <link rel="canonical" href="https://chuio.io/privacy">
-  <link rel="stylesheet" href="language-switcher.css" />
-  <link rel="stylesheet" href="home.css" />
+  <link rel="stylesheet" href="/newhome.css" />
   <style>
     .policy-container {
       max-width: 900px;
-      margin: 60px auto;
+      margin: 100px auto 60px;
       padding: 20px;
       line-height: 1.8;
       color: #333;
@@ -57,26 +56,25 @@
     }
   </style>
 </head>
-<body>
-  <!-- NAVIGATION -->
-  <nav>
-    <div class="nav-container">
-      <a href="home.html" class="logo">
-        <img src="/uploads/chuio/V2/App%20Icon%20B%26W.png" alt="Chuio Logo" style="height: 80px;" />
-      </a>
-      <ul class="nav-links" id="navLinks">
-        <li><a href="home.html" data-i18n="nav.home">Home</a></li>
-        <li><a href="terms.html" data-i18n="nav.terms">Terms of Service</a></li>
-        <li><a href="home.html#pricing" data-i18n="nav.pricing">Pricing</a></li>
-        <li><a href="login.html" class="login-btn" data-i18n="nav.login">Login</a></li>
-      </ul>
-      <div class="nav-actions">
-        <button class="hamburger" id="hamburger" aria-label="Toggle menu">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-        <div data-language-picker></div>
+<body class="nh-body">
+  <nav class="nh-nav scrolled" id="nh-nav">
+    <div class="nh-nav-inner">
+      <a href="/home.html"><img src="/uploads/website/chuio-logo-nobg.png" alt="Chuio Restaurant OS" class="nh-nav-logo" /></a>
+      <div class="nh-nav-links">
+        <a href="/home.html" data-i18n="nav.home">Home</a>
+        <a href="/support" data-i18n="nav.help">Help Centre</a>
+        <a href="/home.html#pricing" data-i18n="nav.pricing">Pricing</a>
+      </div>
+      <div class="nh-nav-cta">
+        <a href="/login.html" class="nh-nav-login" data-i18n="nav.login">Log in</a>
+        <a href="/register.html" class="nh-nav-get-started" data-i18n="nav.get-started">Get Started</a>
+      </div>
+      <div class="nh-i18n-controls">
+        <div class="nh-lang-switch">
+          <button class="nh-ls-btn active" id="nh-ls-en" onclick="window.setLanguage && window.setLanguage('en')">EN</button>
+          <span class="nh-ls-sep">｜</span>
+          <button class="nh-ls-btn" id="nh-ls-zh" onclick="window.setLanguage && window.setLanguage('zh')">繁體</button>
+        </div>
       </div>
     </div>
   </nav>
@@ -174,23 +172,32 @@
     <p data-i18n="privacy.section9-text">We may update this Privacy Policy from time to time. We will notify you of significant changes via email or through our platform.</p>
   </div>
 
-  <!-- FOOTER -->
-  <footer style="background-color: #1a1a1a; color: #fff; padding: 40px 20px; margin-top: 60px;">
-    <div style="max-width: 1200px; margin: 0 auto;">
-      <p style="margin: 0 0 20px 0; font-size: 14px;" data-i18n="footer.copyright">&copy; 2026 Chuio. All rights reserved.</p>
-      <div style="font-size: 12px; color: #999; line-height: 1.8; border-top: 1px solid #333; padding-top: 15px;">
-        <p style="margin: 5px 0; font-weight: 600;" data-i18n="footer.contact-address">Business Address</p>
-        <p style="margin: 2px 0;">Flat G, 14/F Imperial Building</p>
-        <p style="margin: 2px 0;">58 Canton Road, Tsim Sha Tsui</p>
-        <p style="margin: 2px 0;">Hong Kong</p>
-        <p style="margin: 8px 0;"><span data-i18n="footer.contact-phone">Phone</span>: +852 63433995</p>
-        <p style="margin: 2px 0;"><span data-i18n="footer.contact-email">Email</span>: <a href="mailto:dta@chuio.io" style="color: #999; text-decoration: none;">dta@chuio.io</a></p>
+  <footer style="background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 32px 20px; margin-top: 60px;">
+    <div style="max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; color: #6b7280;">
+      <p style="margin: 0;">&copy; 2026 Chuio. All rights reserved.</p>
+      <div style="display: flex; gap: 20px;">
+        <a href="/privacy.html" style="color: #6b7280; text-decoration: none;">Privacy Policy</a>
+        <a href="/terms.html" style="color: #6b7280; text-decoration: none;">Terms of Service</a>
       </div>
     </div>
   </footer>
 
-  <script src="translations.js"></script>
-  <script src="language-switcher.js"></script>
-  <script src="mobile-menu.js"></script>
+  <script src="/translations.js"></script>
+  <script src="/language-switcher.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    function syncLangBtns(lang) {
+      var en = document.getElementById('nh-ls-en');
+      var zh = document.getElementById('nh-ls-zh');
+      if (!en || !zh) return;
+      if (lang === 'zh') { en.classList.remove('active'); zh.classList.add('active'); }
+      else { en.classList.add('active'); zh.classList.remove('active'); }
+    }
+    var lang = localStorage.getItem('language') || localStorage.getItem('chuio-lang') || 'en';
+    syncLangBtns(lang);
+    var origSet = window.setLanguage;
+    window.setLanguage = function(l) { if (origSet) origSet(l); syncLangBtns(l); };
+  });
+  </script>
 </body>
 </html>

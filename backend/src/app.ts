@@ -228,6 +228,26 @@ app.get("/reset-password", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "reset-password.html"));
 });
 
+app.get("/support", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "support/index.html"));
+});
+
+app.get("/support/", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "support/index.html"));
+});
+
+app.get("/privacy", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "privacy.html"));
+});
+
+app.get("/terms", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "terms.html"));
+});
+
+app.get("/careers", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "careers.html"));
+});
+
 /* ======================
    QR TOKEN ROUTE (LAST)
 ====================== */

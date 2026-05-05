@@ -14,7 +14,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from '../contexts/TranslationContext';
 import { useToast } from '../components/ToastProvider';
@@ -27,6 +27,8 @@ import { SettingsTab } from './admin/SettingsTab';
 import { BookingsTab, BookingsTabRef } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
 import { API_URL, apiClient } from '../services/apiClient';
+import { useSubscription, type PremiumFeatureKey } from '../contexts/SubscriptionContext';
+import { PremiumGateModal } from '../components/PremiumGateModal';
 
 type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
 
@@ -56,7 +58,15 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout, updateUser, switchRestaurant } = useAuth();
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { isPremium, canAccess, isInTrial, trialEndDate } = useSubscription();
+
+  // Days remaining in trial (null if not in trial)
+  const trialDaysLeft = isInTrial && trialEndDate
+    ? Math.max(0, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
   const [activeTab, setActiveTab] = useState<TabType>('tables');
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [premiumTrigger, setPremiumTrigger] = useState<PremiumFeatureKey | null>(null);
   const isTabletDevice = (Platform as any).isPad;
   const [sidebarOpen, setSidebarOpen] = useState(isTabletDevice);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -156,6 +166,25 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       return !flag || featureFlags[flag] !== false;
     });
   }, [visibleTabs, featureFlags]);
+
+  // Map tabs to premium feature keys
+  const TAB_PREMIUM_FEATURE: Partial<Record<TabType, PremiumFeatureKey>> = {
+    staff: 'staff_management',
+    reports: 'reports',
+    bookings: 'bookings',
+  };
+
+  const handleTabPress = (tab: TabType) => {
+    const featureKey = TAB_PREMIUM_FEATURE[tab];
+    if (featureKey && !canAccess(featureKey)) {
+      setPremiumTrigger(featureKey);
+      setShowPremiumModal(true);
+      return;
+    }
+    setActiveTab(tab);
+    setSearchQuery('');
+    if (!isTabletDevice) setSidebarOpen(false);
+  };
 
   // Clock In/Out handler
   const handleClockToggle = async () => {
@@ -517,6 +546,20 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Text style={styles.sidebarBrand}>chuio.io</Text>
             </View>
 
+            {/* Trial banner */}
+            {isInTrial && trialDaysLeft !== null && (
+              <TouchableOpacity
+                style={styles.trialBanner}
+                onPress={() => { setPremiumTrigger(null); setShowPremiumModal(true); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="star" size={11} color="#fbbf24" style={{ marginRight: 4 }} />
+                <Text style={styles.trialBannerText}>
+                  {trialDaysLeft === 0 ? 'Trial ends today' : `Trial: ${trialDaysLeft}d left`}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {/* Tab buttons — fill remaining space */}
             <ScrollView style={styles.sidebarTabsContainer} contentContainerStyle={{ flex: 1, justifyContent: 'space-evenly' }} showsVerticalScrollIndicator={false}>
               {filteredTabs.map(
@@ -532,17 +575,18 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                   };
                   const config = tabConfig[tab];
                   const iconSize = isTabletDevice ? 36 : 26;
+                  const isLocked = !!TAB_PREMIUM_FEATURE[tab] && !canAccess(TAB_PREMIUM_FEATURE[tab]!);
                   return (
                     <TouchableOpacity
                       key={tab}
                       style={[styles.sidebarTab, !isTabletDevice && styles.sidebarTabPhone, activeTab === tab && styles.sidebarTabActive]}
-                      onPress={() => { setActiveTab(tab); setSearchQuery(''); if (!isTabletDevice) setSidebarOpen(false); }}
+                      onPress={() => handleTabPress(tab)}
                     >
                       <View style={{ position: 'relative' }}>
                         <Ionicons 
                           name={config.icon as any} 
                           size={iconSize} 
-                          color={activeTab === tab ? '#fff' : 'rgba(255,255,255,0.55)'} 
+                          color={isLocked ? 'rgba(255,255,255,0.3)' : activeTab === tab ? '#fff' : 'rgba(255,255,255,0.55)'} 
                           style={isTabletDevice ? styles.sidebarIcon : styles.sidebarIconPhone}
                         />
                         {tab === 'orders' && unpaidOrderCount > 0 && (
@@ -550,8 +594,13 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                             <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{unpaidOrderCount > 99 ? '99+' : unpaidOrderCount}</Text>
                           </View>
                         )}
+                        {isLocked && (
+                          <View style={{ position: 'absolute', top: -4, right: -10, backgroundColor: '#f59e0b', borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 }}>
+                            <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 }}>PRO</Text>
+                          </View>
+                        )}
                       </View>
-                      <Text style={[styles.sidebarTabText, !isTabletDevice && styles.sidebarTabTextPhone, activeTab === tab && styles.sidebarTabTextActive]}>
+                      <Text style={[styles.sidebarTabText, !isTabletDevice && styles.sidebarTabTextPhone, activeTab === tab && styles.sidebarTabTextActive, isLocked && { color: 'rgba(255,255,255,0.3)' }]}>
                         {config.label}
                       </Text>
                     </TouchableOpacity>
@@ -659,6 +708,13 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Premium Gate Modal */}
+      <PremiumGateModal
+        visible={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        triggeredBy={premiumTrigger}
+      />
     </View>
   );
 };
@@ -901,6 +957,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
+  },
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251,191,36,0.18)',
+    borderRadius: 8,
+    marginHorizontal: 8,
+    marginBottom: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.35)',
+  },
+  trialBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fbbf24',
+    letterSpacing: 0.3,
   },
   sidebarTabsContainer: {
     flex: 1,

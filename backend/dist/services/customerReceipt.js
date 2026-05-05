@@ -87,7 +87,7 @@ class CustomerReceiptService {
             await this.emailTransporter.sendMail({
                 from: restaurantConfig.customer_email_from || process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_SMTP_USER,
                 to: receiptData.customerEmail,
-                subject: `Receipt from ${restaurantConfig.name}`,
+                subject: `${restaurantConfig.name} - Order Receipt`,
                 html,
             });
             // Store receipt record
@@ -115,6 +115,40 @@ class CustomerReceiptService {
                 err.message,
             ]);
             return this.formatReceipt(result.rows[0]);
+        }
+    }
+    /**
+     * Send email receipt directly (bypasses customer_receipt_enabled check).
+     * Used for the "Email Receipt" feature triggered by staff or post-payment prompt.
+     */
+    async sendEmailDirect(restaurantId, sessionId, customerEmail, receiptData) {
+        // Get restaurant name and language
+        const restaurantRes = await this.pool.query(`SELECT name, language_preference as language FROM restaurants WHERE id = $1`, [restaurantId]);
+        if (restaurantRes.rowCount === 0) {
+            throw new Error('Restaurant not found');
+        }
+        const restaurant = restaurantRes.rows[0];
+        if (!this.emailTransporter) {
+            throw new Error('Email not configured on server');
+        }
+        const html = this.generateReceiptHTML({ ...receiptData, customerEmail }, restaurant.language || 'en');
+        try {
+            await this.emailTransporter.sendMail({
+                from: 'support@chuio.io',
+                to: customerEmail,
+                subject: `${restaurant.name} - Order Receipt`,
+                html,
+            });
+            const result = await this.pool.query(`INSERT INTO customer_receipts (restaurant_id, session_id, customer_identifier, receipt_type, status)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *;`, [restaurantId, sessionId, customerEmail, 'email', 'sent']);
+            return this.formatReceipt(result.rows[0]);
+        }
+        catch (err) {
+            const result = await this.pool.query(`INSERT INTO customer_receipts (restaurant_id, session_id, customer_identifier, receipt_type, status, error_message)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *;`, [restaurantId, sessionId, customerEmail, 'email', 'failed', err.message]);
+            throw err;
         }
     }
     /**

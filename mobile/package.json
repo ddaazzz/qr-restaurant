@@ -1,6 +1,6 @@
 {
   "name": "qr-restaurant-ai-mobile",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "QR Restaurant AI - iOS/Android Native App",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -10,6 +10,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "env:prod": "cp .env.production .env.local && echo '✅ .env.local set to production (chuio.io). Archive in Xcode now.'",
+    "env:dev": "echo 'EXPO_PUBLIC_API_URL=https://dev.chuio.io\nEXPO_PUBLIC_APP_ENV=dev' > .env.local && echo '✅ .env.local restored to dev (dev.chuio.io).'",
     "eject": "expo eject",
     "test": "jest",
     "postinstall": "node scripts/apply-patches.js || true"
@@ -17,6 +19,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-picker/picker": "2.11.1",
+    "@react-native-vector-icons/ionicons": "^13.1.1",
     "@types/node-forge": "^1.3.14",
     "axios": "^1.7.0",
     "expo": "54.0.33",
@@ -42,6 +45,7 @@
     "react-native-qrcode-svg": "^6.3.0",
     "react-native-svg": "^15.15.4",
     "react-native-tcp-socket": "^6.4.1",
+    "react-native-vector-icons": "^10.3.0",
     "react-native-webview": "13.15.0",
     "socket.io-client": "^4.8.3",
     "typescript": "5.9.2"
@@ -50,6 +54,7 @@
     "@babel/core": "7.23.0",
     "@react-native-community/cli": "20.1.2",
     "@types/react": "19.1.0",
+    "@types/react-native-vector-icons": "^6.4.18",
     "babel-preset-expo": "54.0.10"
   },
   "private": true
