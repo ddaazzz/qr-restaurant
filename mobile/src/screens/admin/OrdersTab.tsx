@@ -424,7 +424,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const loadKpayTerminal = async () => {
       try {
         const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-terminal/active`);
-        if (res.data?.configured) {
+        if (res.data?.configured && res.data.terminal?.vendor_name === 'kpay') {
           setKpayTerminal(res.data.terminal);
         }
       } catch (err) {
@@ -1612,6 +1612,14 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       </Text>
                     </View>
                   )}
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#d1d5db' }}
+                      onPress={() => setShowPaymentModal(false)}
+                    >
+                      <Text style={{ fontWeight: '600', color: '#374151' }}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
                       style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}

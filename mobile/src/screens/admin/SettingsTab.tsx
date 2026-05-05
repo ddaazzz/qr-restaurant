@@ -48,6 +48,7 @@ interface RestaurantSettings {
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
+  order_pay_enabled?: boolean;
   feature_flags?: Record<string, any>;
 }
 
@@ -3443,6 +3444,26 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </TouchableOpacity>
               </View>
               <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.email-receipt-desc')}</Text>
+              <View style={[styles.settingItem, { marginTop: 12 }]}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.label}>Order & Pay (Pay Before Confirm)</Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>When enabled, diners must complete payment before their order is sent to the kitchen. When disabled, orders are confirmed immediately and payment is collected at the end of the session.</Text>
+                </View>
+                <TouchableOpacity
+                  style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.order_pay_enabled ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                  onPress={async () => {
+                    const newVal = !settings.order_pay_enabled;
+                    try {
+                      await apiClient.put(`/api/restaurants/${restaurantId}/settings`, { order_pay_enabled: newVal });
+                      setSettings({ ...settings, order_pay_enabled: newVal });
+                    } catch (err) {
+                      Alert.alert(t('common.error'), 'Failed to update Order & Pay setting.');
+                    }
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.order_pay_enabled ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
             </>
           )}
         </View>

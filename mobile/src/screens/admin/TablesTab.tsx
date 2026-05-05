@@ -466,11 +466,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         console.warn('Could not load service charge settings');
       }
 
-      // Load active payment terminal
+      // Load active payment terminal (prefer physical terminals; ignore payment-asia online)
       try {
         const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
-        const active = (termRes.data || []).find((t: any) => t.is_active);
-        setActivePaymentTerminal(active || null);
+        const physical = (termRes.data || []).find((t: any) =>
+          t.is_active && (t.vendor_name === 'kpay' || t.vendor_name === 'payment-asia-offline')
+        );
+        setActivePaymentTerminal(physical || null);
       } catch (e) {
         // non-critical
       }
@@ -2512,11 +2514,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
                   ]);
                   setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                  const activeT = (termRes.data || []).find((t: any) => t.is_active);
+                  const activeT = (termRes.data || []).find((t: any) =>
+                    t.is_active && (t.vendor_name === 'kpay' || t.vendor_name === 'payment-asia-offline')
+                  );
                   setActivePaymentTerminal(activeT || null);
                   if (activeT) setPaymentMethod(
                     activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' :
-                    activeT.vendor_name === 'payment-asia' ? 'payment-asia' :
                     activeT.vendor_name === 'kpay' ? 'kpay' : 'cash'
                   );
                   else setPaymentMethod('cash');
@@ -2609,8 +2612,6 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   { value: 'cash', label: t('admin.cash-label') },
                   ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
                     ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
-                    : activePaymentTerminal?.vendor_name === 'payment-asia'
-                    ? [{ value: 'payment-asia', label: t('admin.pa-terminal') }]
                     : activePaymentTerminal?.vendor_name === 'kpay'
                     ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
                     : [{ value: 'card', label: t('admin.card-label') }]),
@@ -3176,8 +3177,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
         {/* Booking Modal */}
         <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingModal} animationType="fade" transparent>
-          <View style={styles.modalOverlay}>
-            <ScrollView contentContainerStyle={styles.modalContent}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center' }]}>
+            <View style={[styles.modalContent, { borderRadius: 12, marginHorizontal: 24 }]}>
+            <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={styles.modalTitle}>{t('admin.book-table')}</Text>
 
               <Text style={styles.label}>{t('admin.guest-name')}</Text>
@@ -3239,6 +3241,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 </TouchableOpacity>
               </View>
             </ScrollView>
+            </View>
           </View>
         </Modal>
       </View>
@@ -3552,8 +3555,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             </Pressable>
           </Modal>
           <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showBookingModal} animationType="fade" transparent>
-            <View style={styles.modalOverlay}>
-              <ScrollView contentContainerStyle={styles.modalContent}>
+            <View style={[styles.modalOverlay, { justifyContent: 'center' }]}>
+              <View style={[styles.modalContent, { borderRadius: 12, marginHorizontal: 24 }]}>
+              <ScrollView keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>{t('admin.book-table')}</Text>
                 <Text style={styles.label}>{t('admin.guest-name')}</Text>
                 <TextInput style={styles.input} value={guestName} onChangeText={setGuestName} placeholder="John Smith" />
@@ -3574,6 +3578,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   </TouchableOpacity>
                 </View>
               </ScrollView>
+              </View>
             </View>
           </Modal>
         </View>
@@ -3778,11 +3783,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                       apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
                     ]);
                     setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                    const activeT = (termRes.data || []).find((t: any) => t.is_active);
+                    const activeT = (termRes.data || []).find((t: any) =>
+                      t.is_active && (t.vendor_name === 'kpay' || t.vendor_name === 'payment-asia-offline')
+                    );
                     setActivePaymentTerminal(activeT || null);
                     if (activeT) setPaymentMethod(
                       activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' :
-                      activeT.vendor_name === 'payment-asia' ? 'payment-asia' :
                       activeT.vendor_name === 'kpay' ? 'kpay' : 'cash'
                     );
                     else setPaymentMethod('cash');
@@ -3868,8 +3874,6 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     { value: 'cash', label: t('admin.cash-label') },
                     ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
                       ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
-                      : activePaymentTerminal?.vendor_name === 'payment-asia'
-                      ? [{ value: 'payment-asia', label: t('admin.pa-terminal') }]
                       : activePaymentTerminal?.vendor_name === 'kpay'
                       ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
                       : [{ value: 'card', label: t('admin.card-label') }]),
