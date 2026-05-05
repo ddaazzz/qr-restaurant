@@ -30,8 +30,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { Linking } from 'react-native';
 import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
-import { useSubscription, type PremiumFeatureKey } from '../../contexts/SubscriptionContext';
-import { PremiumGateModal } from '../../components/PremiumGateModal';
 
 interface RestaurantSettings {
   id: number;
@@ -217,9 +215,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const CRM_PAGE_SIZE = 30;
   const { t, lang, setLanguage } = useTranslation();
   const { user: currentUser, logout: authLogout } = useAuth();
-  const { canAccess } = useSubscription();
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [premiumTrigger, setPremiumTrigger] = useState<PremiumFeatureKey | null>(null);
   const isSuperadmin = currentUser?.role === 'superadmin';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1343,11 +1338,17 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           Alert.alert(t('common.error'), 'Only superadmins can create new terminals');
           return;
         }
-        const payload: any = {
-          terminal_ip: terminalForm.terminal_ip,
-          terminal_port: parseInt(terminalForm.terminal_port),
-          endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
-        };
+        const vendor = terminalForm.vendor_name;
+        const payload: any = vendor === 'payment-asia-offline'
+          ? {
+              terminal_ip: terminalForm.pa_offline_ip,
+              terminal_port: parseInt(terminalForm.pa_offline_port),
+            }
+          : {
+              terminal_ip: terminalForm.terminal_ip,
+              terminal_port: parseInt(terminalForm.terminal_port),
+              endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
+            };
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-updated'));
         await fetchPaymentTerminals();
@@ -1520,8 +1521,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       merchant_token: terminal.merchant_token || '',
       secret_code: '',
       environment: terminal.environment || (terminal.payment_gateway_env as 'sandbox' | 'production') || 'sandbox',
-      pa_offline_ip: terminal.vendor_name === 'payment-asia-offline' ? (terminal.terminal_ip || '') : '',
-      pa_offline_port: terminal.vendor_name === 'payment-asia-offline' ? (terminal.terminal_port?.toString() || '8080') : '8080',
+      pa_offline_ip: terminal.terminal_ip || '',
+      pa_offline_port: terminal.terminal_port?.toString() || '8080',
       pa_offline_api_key: '',
     });
     setTerminalTestResult(null);
@@ -2335,23 +2336,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   }
 
   // Settings card grid items
-  const settingsCards: { page: SettingsPage; iconName: string; label: string; description: string; premiumFeature?: PremiumFeatureKey }[] = [
+  const settingsCards: { page: SettingsPage; iconName: keyof typeof Ionicons.glyphMap; label: string; description: string }[] = [
     { page: 'profile', iconName: 'person-circle-outline', label: t('settings.my-profile'), description: currentUser?.role || t('settings.view-profile') },
     { page: 'language', iconName: 'globe-outline', label: t('admin.language') || 'Language', description: lang === 'en' ? 'English' : '中文' },
     { page: 'restaurant-info', iconName: 'storefront-outline', label: t('admin.restaurant-info') || 'Restaurant Info', description: settings?.name || '—' },
-    { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc'), premiumFeature: 'printer_management' },
-    { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }), premiumFeature: 'crm' },
+    { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
+    { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }) },
 
     { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
-    { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline', label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
-    { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline', label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
+    { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
+    { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
-    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }), premiumFeature: 'loyalty_coupons' },
+    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
-    ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline', label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
+    ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
   ];
 
   // Sub-page header
@@ -3881,38 +3882,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const renderMainPage = () => (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.cardGrid}>
-        {settingsCards.map((card) => {
-          const isLocked = !!card.premiumFeature && !canAccess(card.premiumFeature);
-          return (
-            <TouchableOpacity
-              key={card.page}
-              style={[styles.settingsCard, isLocked && { opacity: 0.55 }]}
-              onPress={() => {
-                if (isLocked) {
-                  setPremiumTrigger(card.premiumFeature!);
-                  setShowPremiumModal(true);
-                  return;
-                }
-                navigateToPage(card.page);
-              }}
-              activeOpacity={0.7}
-            >
-              {isLocked && (
-                <View style={{ position: 'absolute', top: 8, right: 8, zIndex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                  <View style={{ backgroundColor: '#f59e0b', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 }}>
-                    <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>PRO</Text>
-                  </View>
-                  <Ionicons name="lock-closed" size={11} color="#9ca3af" />
-                </View>
-              )}
-              <View style={styles.cardIconContainer}>
-                <Ionicons name={card.iconName as any} size={26} color={isLocked ? '#9ca3af' : '#4f46e5'} />
-              </View>
-              <Text style={[styles.cardLabel, isLocked && { color: '#6b7280' }]}>{card.label}</Text>
-              <Text style={styles.cardDescription}>{card.description}</Text>
-            </TouchableOpacity>
-          );
-        })}
+        {settingsCards.map((card) => (
+          <TouchableOpacity key={card.page} style={styles.settingsCard} onPress={() => navigateToPage(card.page)} activeOpacity={0.7}>
+            <View style={styles.cardIconContainer}>
+              <Ionicons name={card.iconName} size={26} color="#4f46e5" />
+            </View>
+            <Text style={styles.cardLabel}>{card.label}</Text>
+            <Text style={styles.cardDescription}>{card.description}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {error && (
@@ -5429,12 +5407,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           </View>
         </InputAccessoryView>
       )}
-
-      <PremiumGateModal
-        visible={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
-        triggeredBy={premiumTrigger}
-      />
 
     </View>
   );

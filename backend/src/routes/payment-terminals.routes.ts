@@ -259,6 +259,15 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
     const values: any[] = [];
     let paramCount = 1;
 
+    if (vendor_name !== undefined) {
+      const validVendors = ['kpay', 'payment-asia', 'payment-asia-offline', 'other'];
+      if (!validVendors.includes(vendor_name)) {
+        return res.status(400).json({ error: 'Invalid vendor_name' });
+      }
+      updates.push(`vendor_name = $${paramCount++}`);
+      values.push(vendor_name);
+    }
+
     if (app_id !== undefined) {
       updates.push(`app_id = $${paramCount++}`);
       values.push(app_id);
@@ -327,6 +336,14 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Payment terminal not found' });
+    }
+
+    // If vendor_name changed, sync restaurants.active_payment_vendor for this terminal
+    if (vendor_name !== undefined) {
+      await pool.query(
+        `UPDATE restaurants SET active_payment_vendor = $1 WHERE active_payment_terminal_id = $2`,
+        [vendor_name, terminalId]
+      );
     }
 
     res.json(result.rows[0]);
