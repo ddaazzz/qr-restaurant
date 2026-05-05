@@ -831,60 +831,6 @@ function loadBillFormatUI() {
 }
 
 /**
- * Save Bill Format settings to database
- */
-async function saveBillFormat() {
-  try {
-    const restaurantId = localStorage.getItem('restaurantId');
-    if (!restaurantId) {
-      alert('Restaurant ID not found');
-      return;
-    }
-
-    const billFontSize = getCurrentBillFontSize();
-    const billHeaderText = document.getElementById('bill-header-text').value || 'Thank You';
-    const billFooterText = document.getElementById('bill-footer-text').value || 'Follow us on social media';
-    const billBluetoothDevice = window.selectedBluetoothDevices ? window.selectedBluetoothDevices.bill : null;
-
-    // Get printer type from the config card dropdown
-    const printerTypeSelect = document.getElementById('printer-type-select-bill');
-    const billPrinterType = printerTypeSelect ? printerTypeSelect.value : window.currentPrinterSettings?.bill_printer_type || 'none';
-
-    // Format settings as JSONB object for database storage
-    const payload = {
-      type: 'Bill',
-      printer_type: billPrinterType,
-      bluetooth_device_id: billBluetoothDevice?.id || null,
-      bluetooth_device_name: billBluetoothDevice?.name || null,
-      settings: {
-        font_size: billFontSize,
-        header_text: billHeaderText,
-        footer_text: billFooterText
-      }
-    };
-
-    const response = await fetch(
-      `${API}/restaurants/${restaurantId}/printer-settings`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to save bill format');
-    }
-
-    window.currentPrinterSettings = await response.json();
-    alert('Bill Format saved successfully!');
-  } catch (err) {
-    console.error('[admin-printer.js] Failed to save bill format:', err);
-    alert('Failed to save: ' + err.message);
-  }
-}
-
-/**
  * Update Bill preview as user types (calls backend to ensure accuracy)
  */
 async function updateBillPreview() {
@@ -1557,11 +1503,12 @@ async function saveKitchenPrinterConfiguration() {
       return;
     }
 
-    for (const printer of window.kitchenPrinters) {
-      if (!printer.categories || printer.categories.length === 0) {
-        alert(`Printer "${printer.name}" must have at least one category assigned`);
-        return;
-      }
+    // Warn if any printer has no categories (not blocking — backend routes all items to category-less printers)
+    const printersWithoutCategories = window.kitchenPrinters.filter(p => !p.categories || p.categories.length === 0);
+    if (printersWithoutCategories.length > 0) {
+      const names = printersWithoutCategories.map(p => `"${p.name}"`).join(', ');
+      const proceed = confirm(`Printer(s) ${names} have no categories assigned — they will receive ALL order items.\n\nProceed with saving?`);
+      if (!proceed) return;
     }
 
     // Prepare printer data for storage in settings
