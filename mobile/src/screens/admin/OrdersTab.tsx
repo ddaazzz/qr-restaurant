@@ -259,7 +259,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [paymentModalOrderId, setPaymentModalOrderId] = useState<number | null>(null);
     const [paymentModalOrderNumber, setPaymentModalOrderNumber] = useState<number | null>(null);
     const [paymentModalTotal, setPaymentModalTotal] = useState(0);
-    const [paymentModalMethod, setPaymentModalMethod] = useState<'cash' | 'card' | 'kpay'>('cash');
+    const [paymentModalMethod, setPaymentModalMethod] = useState<'cash' | 'card' | 'kpay' | 'payment-asia-offline'>('cash');
 
     // KPay terminal payment processing state
     const [kpayProcessing, setKpayProcessing] = useState(false);
@@ -294,6 +294,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     // Payment terminal state for refund/void
     const [kpayTerminal, setKpayTerminal] = useState<any>(null);
+    const [paOfflineTerminal, setPaOfflineTerminal] = useState<any>(null);
     const [showKpayRefundModal, setShowKpayRefundModal] = useState(false);
     const [kpayRefundAmount, setKpayRefundAmount] = useState('');
     const [kpayManagerPassword, setKpayManagerPassword] = useState('');
@@ -428,6 +429,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         }
       } catch (err) {
         // No KPay terminal configured — that's fine
+      }
+      try {
+        const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
+        const paOff = (termRes.data || []).find((t: any) => t.vendor_name === 'payment-asia-offline' && t.is_active);
+        setPaOfflineTerminal(paOff || null);
+      } catch (err) {
+        // No PA offline terminal — that's fine
       }
     };
 
@@ -900,6 +908,15 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         return;
       }
 
+      if (paymentModalMethod === 'payment-asia-offline') {
+        if (!paOfflineTerminal) {
+          Alert.alert(t('orders.error'), 'No active PA Offline terminal found');
+          return;
+        }
+        await startPaOfflinePayment();
+        return;
+      }
+
       // Cash or Card (manual) — close bill immediately
       try {
         await apiClient.post(
@@ -1049,6 +1066,117 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayLogs([]);
     };
 
+    // === PA Offline Terminal Payment (Order Now) ===
+    const startPaOfflinePayment = async () => {
+      if (!paOfflineTerminal || !paymentModalSessionId) return;
+
+      setKpayProcessing(true);
+      setKpayStatusMsg('Initiating PA terminal…');
+      setKpayLogs([{ msg: '> Connecting to PA terminal…', color: '#ffd43b' }]);
+
+      const amountInCents = String(paymentModalTotal).padStart(12, '0');
+      const addLog = (msg: string, color: string = '#00ff00') => {
+        setKpayLogs(prev => [...prev, { msg, color }]);
+      };
+
+      try {
+        addLog(`> POST /payment-terminals/${paOfflineTerminal.id}/test`);
+        addLog(`> Amount: ${formatPrice(paymentModalTotal)}`);
+
+        const resp = await apiClient.post(
+          `/api/restaurants/${restaurantId}/payment-terminals/${paOfflineTerminal.id}/test`,
+          { payAmount: amountInCents, session_id: paymentModalSessionId },
+        );
+        const result = resp.data;
+
+        if (result.logs) result.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+
+        if (!result.initiated) {
+          setKpayStatusMsg('PA Terminal: Failed');
+          addLog(`> ❌ ${result.message || 'Failed to initiate'}`, '#ff6b6b');
+          setKpayProcessing(false);
+          return;
+        }
+
+        const outTradeNo = result.outTradeNo;
+        setKpayStatusMsg('Waiting for payment…');
+        addLog(`> PA order ID: ${outTradeNo}`, '#ffd43b');
+        addLog('> Present terminal to customer for QR scan…', '#ffd43b');
+
+        let attempts = 0;
+        const maxAttempts = 22;
+
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatusMsg('Timeout');
+            addLog('> TIMEOUT', '#ffd43b');
+            setKpayProcessing(false);
+            return;
+          }
+          attempts++;
+          addLog(`> Polling… (${attempts}/${maxAttempts})`);
+
+          try {
+            const qResp = await apiClient.get(
+              `/api/restaurants/${restaurantId}/payment-terminals/${paOfflineTerminal.id}/test-status`,
+              { params: { outTradeNo } },
+            );
+            const qData = qResp.data;
+            if (qData.logs) qData.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
+
+            if (qData.status === 'success') {
+              setKpayStatusMsg('Payment Confirmed ✅');
+              addLog('> ✅ Payment confirmed', '#51cf66');
+
+              await apiClient.post(
+                `/api/sessions/${paymentModalSessionId}/close-bill`,
+                {
+                  restaurantId: parseInt(restaurantId),
+                  payment_method: 'payment-asia-offline',
+                  amount_paid: paymentModalTotal,
+                  discount_applied: 0,
+                  service_charge: 0,
+                  notes: '',
+                  cp_vendor_ref: outTradeNo,
+                },
+              );
+              addLog('> ✅ Bill closed', '#51cf66');
+              setKpayProcessing(false);
+
+              setTimeout(() => {
+                setShowPaymentModal(false);
+                setKpayLogs([]);
+                showToast(t('orders.payment-confirmed'), 'success');
+                if (emailReceiptEnabled && paymentModalSessionId) {
+                  openEmailReceiptModal(paymentModalSessionId, selectedHistoryOrder?.customer_email || '');
+                }
+                loadOrdersAndSessions();
+              }, 2000);
+              return;
+            }
+
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatusMsg(qData.status === 'cancelled' ? 'Cancelled' : 'Failed');
+              addLog(`> ${qData.status}`, '#ff6b6b');
+              setKpayProcessing(false);
+              return;
+            }
+
+            kpayPollRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            addLog(`> Poll error: ${e.message}`, '#ffd43b');
+            kpayPollRef.current = setTimeout(poll, 3000);
+          }
+        };
+
+        kpayPollRef.current = setTimeout(poll, 2000);
+      } catch (err: any) {
+        addLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+        setKpayStatusMsg('PA Terminal: Failed');
+        setKpayProcessing(false);
+      }
+    };
+
     // === Manual Void/Refund (non-vendor orders) ===
     const handleVoidOrder = (orderId: number) => {
       Alert.alert(
@@ -1188,7 +1316,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             style: 'destructive',
             onPress: async () => {
               try {
-                // Find the active PA-Offline terminal
                 const termListRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
                 const paTerminal = (termListRes.data || []).find((t: any) => t.vendor_name === 'payment-asia-offline' && t.is_active);
                 if (!paTerminal) { Alert.alert(t('orders.error'), 'No active PA-Offline terminal found'); return; }
@@ -1229,7 +1356,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
       try {
         if (paRefundIsOffline) {
-          // PA-Offline: route through terminal via backend
           const termListRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
           const paTerminal = (termListRes.data || []).find((t: any) => t.vendor_name === 'payment-asia-offline' && t.is_active);
           if (!paTerminal) { Alert.alert(t('orders.error'), 'No active PA-Offline terminal found'); return; }
@@ -1238,7 +1364,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             { originOutTradeNo: paOrderId, refundAmount: paRefundAmount },
           );
         } else {
-          // PA Online: use PA gateway refund
           await apiClient.post(
             `/api/restaurants/${restaurantId}/payment-asia/refund`,
             { merchant_reference: paOrderId, amount: parseFloat(paRefundAmount) },
@@ -1441,19 +1566,29 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               ) : (
                 <>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>{t('orders.payment-method')}</Text>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: kpayTerminal && paymentModalMethod === 'kpay' ? 8 : 20 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: (kpayTerminal && paymentModalMethod === 'kpay') || (paOfflineTerminal && paymentModalMethod === 'payment-asia-offline') ? 8 : 20 }}>
                     <TouchableOpacity
                       style={{ flex: 1, backgroundColor: paymentModalMethod === 'cash' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'cash' ? '#3b82f6' : '#d1d5db' }}
                       onPress={() => setPaymentModalMethod('cash')}
                     >
                       <Text style={{ fontWeight: '600', color: paymentModalMethod === 'cash' ? '#fff' : '#374151' }}>{t('orders.cash')}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: paymentModalMethod === 'card' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'card' ? '#3b82f6' : '#d1d5db' }}
-                      onPress={() => setPaymentModalMethod('card')}
-                    >
-                      <Text style={{ fontWeight: '600', color: paymentModalMethod === 'card' ? '#fff' : '#374151' }}>{t('orders.card')}</Text>
-                    </TouchableOpacity>
+                    {!paOfflineTerminal && (
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: paymentModalMethod === 'card' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'card' ? '#3b82f6' : '#d1d5db' }}
+                        onPress={() => setPaymentModalMethod('card')}
+                      >
+                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'card' ? '#fff' : '#374151' }}>{t('orders.card')}</Text>
+                      </TouchableOpacity>
+                    )}
+                    {paOfflineTerminal && (
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: paymentModalMethod === 'payment-asia-offline' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'payment-asia-offline' ? '#3b82f6' : '#d1d5db' }}
+                        onPress={() => setPaymentModalMethod('payment-asia-offline')}
+                      >
+                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'payment-asia-offline' ? '#fff' : '#374151', fontSize: 12 }}>{t('admin.pa-terminal') || 'PA Terminal'}</Text>
+                      </TouchableOpacity>
+                    )}
                     {kpayTerminal && (
                       <TouchableOpacity
                         style={{ flex: 1, backgroundColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#d1d5db' }}
@@ -1467,6 +1602,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 16 }}>
                       <Text style={{ fontSize: 12, color: '#1d4ed8' }}>
                         {t('orders.kpay-terminal-msg').replace('{0}', kpayTerminal.terminal_ip || '')}
+                      </Text>
+                    </View>
+                  )}
+                  {paymentModalMethod === 'payment-asia-offline' && paOfflineTerminal && (
+                    <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 12, color: '#92400e' }}>
+                        Payment will be sent to PA terminal ({paOfflineTerminal.terminal_ip}:{paOfflineTerminal.terminal_port}). Tap Confirm to initiate.
                       </Text>
                     </View>
                   )}
