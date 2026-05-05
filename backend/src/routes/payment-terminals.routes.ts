@@ -240,8 +240,8 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
   const user = await verifyUser(req);
   if (!user) return res.status(403).json({ error: 'Admin access required' });
 
-  // Non-superadmins can only update connection details
-  const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path'];
+  // Non-superadmins can update connection details and vendor config for their own terminals
+  const adminAllowedFields = ['terminal_ip', 'terminal_port', 'endpoint_path', 'vendor_name', 'app_secret', 'app_id'];
   if (user.role !== 'superadmin') {
     const requestedFields = Object.keys(req.body);
     const disallowed = requestedFields.filter(f => !adminAllowedFields.includes(f));

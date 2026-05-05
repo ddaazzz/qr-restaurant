@@ -1341,10 +1341,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         const vendor = terminalForm.vendor_name;
         const payload: any = vendor === 'payment-asia-offline'
           ? {
+              vendor_name: vendor,
               terminal_ip: terminalForm.pa_offline_ip,
               terminal_port: parseInt(terminalForm.pa_offline_port),
+              ...(terminalForm.pa_offline_api_key ? { app_secret: terminalForm.pa_offline_api_key, app_id: terminalForm.pa_offline_api_key } : {}),
             }
           : {
+              vendor_name: vendor,
               terminal_ip: terminalForm.terminal_ip,
               terminal_port: parseInt(terminalForm.terminal_port),
               endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
@@ -4899,8 +4902,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </>
             )}
 
-            {/* Payment Asia (Offline) fields - superadmin only */}
-            {terminalForm.vendor_name === 'payment-asia-offline' && isSuperadmin && (
+            {/* Payment Asia (Offline) fields */}
+            {terminalForm.vendor_name === 'payment-asia-offline' && (
               <>
                 <View style={[styles.formGroup, { backgroundColor: '#fffbeb', borderRadius: 6, padding: 10, borderWidth: 1, borderColor: '#fcd34d' }]}>
                   <Text style={{ fontSize: 12, color: '#92400e' }}>
