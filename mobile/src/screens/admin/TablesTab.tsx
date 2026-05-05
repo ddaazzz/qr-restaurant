@@ -39,8 +39,6 @@ import TcpSocket from 'react-native-tcp-socket';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useSubscription } from '../../contexts/SubscriptionContext';
-import { PremiumGateModal } from '../../components/PremiumGateModal';
 
 /**
  * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.
@@ -216,8 +214,6 @@ const getTableTextColor = (bgColor: string) => {
 
 export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) => {
   const { t } = useTranslation();
-  const { canAccess } = useSubscription();
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -1339,6 +1335,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       return;
     }
 
+    // PA Online (web-based): treat as manual confirmation, record as payment-asia
+    if (paymentMethod === 'payment-asia') {
+      try {
+        await _doCloseBill(finalAmount, discountCents, 'payment-asia');
+      } catch (err: any) {
+        Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
+      }
+      return;
+    }
+
     // Cash / Card: direct close
     try {
       await _doCloseBill(finalAmount, discountCents, paymentMethod);
@@ -2320,7 +2326,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.gearMenuItem}
-                onPress={() => { if (!canAccess('bill_split')) { setShowPremiumModal(true); return; } splitBill(); }}
+                onPress={splitBill}
               >
                 <Text style={styles.gearMenuItemText}>{t('admin.split-bill')}</Text>
               </TouchableOpacity>
@@ -2508,11 +2514,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
                   const activeT = (termRes.data || []).find((t: any) => t.is_active);
                   setActivePaymentTerminal(activeT || null);
-                  if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
+                  if (activeT) setPaymentMethod(
+                    activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' :
+                    activeT.vendor_name === 'payment-asia' ? 'payment-asia' :
+                    activeT.vendor_name === 'kpay' ? 'kpay' : 'cash'
+                  );
                   else setPaymentMethod('cash');
-                } catch (e) {
-                  setCoupons([]);
-                }
+                } catch (e) { setCoupons([]); }
               }}
             >
               <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
@@ -2601,6 +2609,8 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   { value: 'cash', label: t('admin.cash-label') },
                   ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
                     ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
+                    : activePaymentTerminal?.vendor_name === 'payment-asia'
+                    ? [{ value: 'payment-asia', label: t('admin.pa-terminal') }]
                     : activePaymentTerminal?.vendor_name === 'kpay'
                     ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
                     : [{ value: 'card', label: t('admin.card-label') }]),
@@ -2629,7 +2639,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               {paymentMethod === 'kpay' && (
                 <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                   <Text style={{ fontSize: 13, color: '#1d4ed8' }}>
-                    Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{'\n'}Tap Close Bill to initiate — the terminal will prompt the customer.
+                    Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{' '}Tap Close Bill to initiate.
                   </Text>
                 </View>
               )}
@@ -2638,7 +2648,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               {paymentMethod === 'payment-asia-offline' && (
                 <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                   <Text style={{ fontSize: 13, color: '#92400e' }}>
-                    Process the payment on the physical PA terminal, then tap Close Bill to confirm.
+                    Tap Close Bill to send payment to the PA terminal. Wait for confirmation.
+                  </Text>
+                </View>
+              )}
+
+              {/* PA Online notice */}
+              {paymentMethod === 'payment-asia' && (
+                <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 13, color: '#92400e' }}>
+                    Confirm payment was collected via Payment Asia terminal.
                   </Text>
                 </View>
               )}
@@ -3594,7 +3613,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 <TouchableOpacity style={[styles.gearMenuItem, { backgroundColor: '#f97316' }]} onPress={testPrintBill}>
                   <Text style={styles.gearMenuItemText}>{t('admin.test-print')}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.gearMenuItem} onPress={() => { if (!canAccess('bill_split')) { setShowPremiumModal(true); return; } splitBill(); }}>
+                <TouchableOpacity style={styles.gearMenuItem} onPress={splitBill}>
                   <Text style={styles.gearMenuItemText}>{t('admin.split-bill')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.gearMenuItem, styles.gearMenuItemDelete]} onPress={() => { endSession(selectedSession.id); setShowSessionGearMenu(false); }}>
@@ -3761,7 +3780,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
                     const activeT = (termRes.data || []).find((t: any) => t.is_active);
                     setActivePaymentTerminal(activeT || null);
-                    if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
+                    if (activeT) setPaymentMethod(
+                      activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' :
+                      activeT.vendor_name === 'payment-asia' ? 'payment-asia' :
+                      activeT.vendor_name === 'kpay' ? 'kpay' : 'cash'
+                    );
                     else setPaymentMethod('cash');
                   } catch (e) { setCoupons([]); }
                 }}
@@ -3845,6 +3868,8 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     { value: 'cash', label: t('admin.cash-label') },
                     ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
                       ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
+                      : activePaymentTerminal?.vendor_name === 'payment-asia'
+                      ? [{ value: 'payment-asia', label: t('admin.pa-terminal') }]
                       : activePaymentTerminal?.vendor_name === 'kpay'
                       ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
                       : [{ value: 'card', label: t('admin.card-label') }]),
@@ -3858,7 +3883,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 {paymentMethod === 'kpay' && (
                   <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                     <Text style={{ fontSize: 13, color: '#1d4ed8' }}>
-                      Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{'\n'}Tap Close Bill to initiate — the terminal will prompt the customer.
+                      Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}. Tap Close Bill to initiate.
                     </Text>
                   </View>
                 )}
@@ -3866,7 +3891,15 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 {paymentMethod === 'payment-asia-offline' && (
                   <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                     <Text style={{ fontSize: 13, color: '#92400e' }}>
-                      Process the payment on the physical PA terminal, then tap Close Bill to confirm.
+                      Tap Close Bill to send payment to the PA terminal. Wait for confirmation.
+                    </Text>
+                  </View>
+                )}
+                {/* PA Online notice */}
+                {paymentMethod === 'payment-asia' && (
+                  <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 13, color: '#92400e' }}>
+                      Confirm payment was collected via Payment Asia terminal.
                     </Text>
                   </View>
                 )}
@@ -4440,12 +4473,6 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
           </View>
         </InputAccessoryView>
       )}
-
-      <PremiumGateModal
-        visible={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
-        triggeredBy="bill_split"
-      />
 
     </View>
   );
