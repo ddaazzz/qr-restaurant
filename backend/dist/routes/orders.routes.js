@@ -769,7 +769,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         o.status,
         (o.status = 'completed') AS payment_received,
         o.payment_method AS payment_method_online,
-        o.chuio_order_reference AS kpay_reference_id,
+        COALESCE(o.chuio_order_reference, (SELECT kt2.kpay_reference_id FROM kpay_transactions kt2 WHERE kt2.order_id = o.id ORDER BY kt2.created_at DESC LIMIT 1)) AS kpay_reference_id,
         o.payment_status,
         o.restaurant_id,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
@@ -782,7 +782,9 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         COALESCE(ts.discount_applied, 0) as discount_cents,
         COUNT(oi.id) as item_count,
         COALESCE(SUM(oi.price_cents * oi.quantity), 0) as subtotal_cents,
-        ROUND(COALESCE(SUM(oi.price_cents * oi.quantity), 0) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0)) as total_cents,
+        COALESCE(o.custom_amount_cents,
+          ROUND(COALESCE(SUM(oi.price_cents * oi.quantity), 0) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0))
+        ) as total_cents,
         COALESCE(array_agg(DISTINCT mi.name) FILTER (WHERE mi.name IS NOT NULL), '{}') AS item_names,
         COALESCE(array_agg(DISTINCT mc.name) FILTER (WHERE mc.name IS NOT NULL), '{}') AS category_names,
         u.name AS closed_by_staff_name,
@@ -797,10 +799,12 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         cpay.payment_vendor AS cp_vendor,
         cpay.payment_method AS cp_method,
         cpay.status AS cp_status,
-        cpay.vendor_reference AS cp_vendor_ref,
+        COALESCE(cpay.vendor_reference, (SELECT pat2.pa_order_id FROM pa_offline_transactions pat2 WHERE pat2.order_id = o.id ORDER BY pat2.created_at DESC LIMIT 1)) AS cp_vendor_ref,
         cpay.total_cents AS cp_total_cents,
         cpay.payment_gateway_env AS cp_env,
-        to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at
+        to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at,
+        o.void_vendor_ref,
+        o.refund_vendor_ref
       FROM orders o
       JOIN restaurants r ON r.id = o.restaurant_id
       LEFT JOIN table_sessions ts ON o.session_id = ts.id
@@ -818,7 +822,8 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         LIMIT 1
       ) cpay ON true
       WHERE o.restaurant_id = $1
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
+      AND COALESCE(o.is_split_parent, FALSE) = FALSE
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
       ORDER BY o.created_at DESC
       LIMIT $2`, [restaurantId, limitVal]);
         const orders = result.rows.map(order => ({
@@ -843,12 +848,13 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         o.restaurant_order_number,
         o.session_id,
         o.status,
+        o.custom_amount_cents,
         (o.status = 'completed') AS payment_received,
         o.payment_method AS payment_method_online,
-        o.chuio_order_reference AS kpay_reference_id,
+        COALESCE(o.chuio_order_reference, (SELECT kt2.kpay_reference_id FROM kpay_transactions kt2 WHERE kt2.order_id = o.id ORDER BY kt2.created_at DESC LIMIT 1)) AS kpay_reference_id,
         o.payment_status,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-        SUM(oi.price_cents * oi.quantity) as total_cents,
+        COALESCE(o.custom_amount_cents, SUM(oi.price_cents * oi.quantity)) as total_cents,
         COALESCE(ts.order_type, 'counter') AS order_type,
         ts.table_id,
         COALESCE(t.name, '') as table_name,
@@ -862,12 +868,14 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         cpay.payment_vendor AS cp_vendor,
         cpay.payment_method AS cp_method,
         cpay.status AS cp_status,
-        cpay.vendor_reference AS cp_vendor_ref,
+        COALESCE(cpay.vendor_reference, (SELECT pat2.pa_order_id FROM pa_offline_transactions pat2 WHERE pat2.order_id = o.id ORDER BY pat2.created_at DESC LIMIT 1)) AS cp_vendor_ref,
         cpay.total_cents AS cp_total_cents,
         cpay.payment_gateway_env AS cp_env,
         to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at,
         to_char(cpay.refunded_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_refunded_at,
-        cpay.refund_amount_cents AS cp_refund_amount_cents
+        cpay.refund_amount_cents AS cp_refund_amount_cents,
+        o.void_vendor_ref,
+        o.refund_vendor_ref
       FROM orders o
       LEFT JOIN table_sessions ts ON o.session_id = ts.id
       LEFT JOIN tables t ON ts.table_id = t.id
@@ -880,7 +888,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         LIMIT 1
       ) cpay ON true
       WHERE o.id = $1 AND o.restaurant_id = $2
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
       `, [orderId, restaurantId]);
         if (orderRes.rowCount === 0) {
             return res.status(404).json({ error: "Order not found" });
@@ -969,6 +977,46 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
     }
     catch (err) {
         console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+/**
+ * PATCH /restaurants/:restaurantId/orders/:orderId/payment-outcome
+ * Record the result of a device-direct void or refund (KPay / PA Offline).
+ * Called by the mobile after a successful direct terminal call so the DB
+ * stays in sync with what the terminal actually did.
+ * Body: { status: 'voided'|'refunded'|'partial_refund', void_vendor_ref?, refund_vendor_ref? }
+ */
+router.patch("/restaurants/:restaurantId/orders/:orderId/payment-outcome", async (req, res) => {
+    try {
+        const { restaurantId, orderId } = req.params;
+        const { status, void_vendor_ref, refund_vendor_ref } = req.body;
+        const validStatuses = ['voided', 'refunded', 'partial_refund'];
+        if (!status || !validStatuses.includes(status)) {
+            return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+        }
+        const user = await db_1.default.query(`SELECT o.id FROM orders o WHERE o.id = $1 AND o.restaurant_id = $2`, [orderId, restaurantId]);
+        if (user.rowCount === 0)
+            return res.status(404).json({ error: "Order not found" });
+        await db_1.default.query(`UPDATE orders
+       SET payment_status    = $1,
+           void_vendor_ref   = COALESCE($2, void_vendor_ref),
+           refund_vendor_ref = COALESCE($3, refund_vendor_ref)
+       WHERE id = $4 AND restaurant_id = $5`, [status, void_vendor_ref || null, refund_vendor_ref || null, orderId, restaurantId]);
+        // Keep chuio_payments and kpay_transactions in sync so the order list
+        // shows the correct status badge (effectiveStatus = cp_status || payment_status).
+        try {
+            await db_1.default.query(`UPDATE chuio_payments SET status = $1 WHERE order_id = $2`, [status, orderId]);
+        }
+        catch (_) { }
+        try {
+            await db_1.default.query(`UPDATE kpay_transactions SET status = $1 WHERE order_id = $2`, [status, orderId]);
+        }
+        catch (_) { }
+        res.json({ success: true, payment_status: status });
+    }
+    catch (err) {
+        console.error('[payment-outcome]', err);
         res.status(500).json({ error: "Internal server error" });
     }
 });
