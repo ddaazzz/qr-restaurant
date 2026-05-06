@@ -1183,16 +1183,42 @@ router.post("/sessions/:sessionId/split-bill/init", async (req, res) => {
     const service_charge_cents = Math.round(subtotal_cents * service_charge_percent / 100);
     const total_cents = subtotal_cents + service_charge_cents;
 
-    // Remove any previous split for this session
-    await client.query(`DELETE FROM split_bill_payments WHERE session_id = $1`, [sessionId]);
-
-    // Mark original orders as split-parent so they are hidden from order history
+    // Clean up any previous split:
+    // Delete split-created orders (no items) and reset original orders
     await client.query(
-      `UPDATE orders SET is_split_parent = TRUE WHERE session_id = $1 AND status <> 'cancelled'`,
+      `DELETE FROM orders
+       WHERE id IN (
+         SELECT order_id FROM split_bill_payments WHERE session_id = $1 AND order_id IS NOT NULL
+       )
+       AND NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = orders.id)`,
       [sessionId]
     );
+    await client.query(
+      `UPDATE orders SET custom_amount_cents = NULL, is_split_parent = FALSE
+       WHERE session_id = $1 AND (custom_amount_cents IS NOT NULL OR is_split_parent = TRUE)`,
+      [sessionId]
+    );
+    await client.query(`DELETE FROM split_bill_payments WHERE session_id = $1`, [sessionId]);
 
-    // Create one real order + one payment record per split portion
+    // Find the primary (first) order — reuse it as portion 1
+    const primaryRes = await client.query(
+      `SELECT id, restaurant_order_number FROM orders
+       WHERE session_id = $1 AND status <> 'cancelled'
+       ORDER BY id ASC LIMIT 1`,
+      [sessionId]
+    );
+    const primaryOrderId: number | null = primaryRes.rowCount! > 0 ? primaryRes.rows[0].id : null;
+    const primaryOrderNumber: number | null = primaryRes.rowCount! > 0 ? primaryRes.rows[0].restaurant_order_number : null;
+
+    // Hide any additional original orders from history (multi-order sessions)
+    if (primaryOrderId) {
+      await client.query(
+        `UPDATE orders SET is_split_parent = TRUE
+         WHERE session_id = $1 AND id <> $2 AND status <> 'cancelled' AND custom_amount_cents IS NULL`,
+        [sessionId, primaryOrderId]
+      );
+    }
+
     const perPerson = Math.floor(total_cents / split_count);
     const remainder = total_cents - perPerson * split_count;
 
@@ -1200,24 +1226,37 @@ router.post("/sessions/:sessionId/split-bill/init", async (req, res) => {
     for (let i = 1; i <= split_count; i++) {
       const amount = perPerson + (i === split_count ? remainder : 0);
 
-      // Create a real order so the portion gets its own order number and appears in history
-      const orderRes = await client.query(
-        `INSERT INTO orders (session_id, restaurant_id, status, custom_amount_cents, payment_method)
-         VALUES ($1, $2, 'pending', $3, 'cash')
-         RETURNING id, restaurant_order_number`,
-        [sessionId, restaurant_id, amount]
-      );
-      const newOrderId = orderRes.rows[0].id;
-      const newOrderNumber = orderRes.rows[0].restaurant_order_number;
+      let portionOrderId: number;
+      let portionOrderNumber: number;
+
+      if (i === 1 && primaryOrderId) {
+        // Reuse the original order as portion 1 — just update its split amount
+        await client.query(
+          `UPDATE orders SET custom_amount_cents = $1 WHERE id = $2`,
+          [amount, primaryOrderId]
+        );
+        portionOrderId = primaryOrderId;
+        portionOrderNumber = primaryOrderNumber!;
+      } else {
+        // Create a new order for portions 2, 3, …
+        const orderRes = await client.query(
+          `INSERT INTO orders (session_id, restaurant_id, status, custom_amount_cents, payment_method)
+           VALUES ($1, $2, 'pending', $3, 'cash')
+           RETURNING id, restaurant_order_number`,
+          [sessionId, restaurant_id, amount]
+        );
+        portionOrderId = orderRes.rows[0].id;
+        portionOrderNumber = orderRes.rows[0].restaurant_order_number;
+      }
 
       const r = await client.query(
         `INSERT INTO split_bill_payments
            (session_id, restaurant_id, split_index, split_count, amount_cents, service_charge, order_id, closed_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
          RETURNING *`,
-        [sessionId, restaurant_id, i, split_count, amount, service_charge_cents, newOrderId]
+        [sessionId, restaurant_id, i, split_count, amount, service_charge_cents, portionOrderId]
       );
-      splits.push({ ...r.rows[0], restaurant_order_number: newOrderNumber });
+      splits.push({ ...r.rows[0], restaurant_order_number: portionOrderNumber });
     }
 
     // Record split metadata on the session
