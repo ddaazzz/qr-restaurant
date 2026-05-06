@@ -436,13 +436,15 @@ export async function kpayVoid(
   appPrivateKey: string,
   outTradeNo: string,           // new unique order number for this void
   originOutTradeNo: string,     // the original sale's outTradeNo
-  encryptedManagerPassword: string,
+  encryptedManagerPassword?: string, // optional — if omitted, terminal prompts for manager password on-screen
 ): Promise<KPaySimpleResult> {
   const { terminalIp, terminalPort, appId } = config;
   const url = `http://${terminalIp}:${terminalPort}/v2/pos/sales/cancel`;
   const timestamp = Date.now().toString();
   const nonceStr = generateNonce();
-  const bodyJson = JSON.stringify({ outTradeNo, originOutTradeNo, managerPassword: encryptedManagerPassword });
+  const bodyFields: Record<string, string> = { outTradeNo, originOutTradeNo };
+  if (encryptedManagerPassword) bodyFields.managerPassword = encryptedManagerPassword;
+  const bodyJson = JSON.stringify(bodyFields);
   const canonical = buildCanonical('POST', '/v2/pos/sales/cancel', timestamp, nonceStr, bodyJson);
 
   let signature: string;

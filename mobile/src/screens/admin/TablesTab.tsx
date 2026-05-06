@@ -40,6 +40,7 @@ import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { kpaySign, kpaySale, kpayQuery, kpayClose, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 /**
  * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.
