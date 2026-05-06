@@ -268,6 +268,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [kpayStatusMsg, setKpayStatusMsg] = useState('');
     const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
     const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // PA Offline: current order ID and config, kept in refs so abort can access them
+    const paOfflineOrderIdRef = useRef<string | null>(null);
+    const paOfflineConfigRef = useRef<PATerminalConfig | null>(null);
 
     // Customer name prompt for To-Go orders
     const [showCustomerNameModal, setShowCustomerNameModal] = useState(false);
@@ -1062,10 +1065,27 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    const abortKpayPayment = () => {
+    const abortKpayPayment = async () => {
       if (kpayPollRef.current) {
         clearTimeout(kpayPollRef.current);
         kpayPollRef.current = null;
+      }
+      // If a PA Offline order is in progress, void it on the terminal so it's freed
+      const paOrderId = paOfflineOrderIdRef.current;
+      const paConfig = paOfflineConfigRef.current;
+      if (paOrderId && paConfig) {
+        setKpayStatusMsg('Cancelling on terminal…');
+        setKpayLogs(prev => [...prev, { msg: `> Voiding PA order ${paOrderId} on terminal…`, color: '#ffd43b' }]);
+        try {
+          const vr = await paOfflineVoidOrder(paConfig, paOrderId);
+          setKpayLogs(prev => [...prev, {
+            msg: vr.success ? '> ✅ Terminal order voided — terminal freed.' : `> ⚠️ Void failed: ${vr.message}`,
+            color: vr.success ? '#51cf66' : '#ffd43b',
+          }]);
+        } catch (e: any) {
+          setKpayLogs(prev => [...prev, { msg: `> Void error: ${e.message}`, color: '#ffd43b' }]);
+        }
+        paOfflineOrderIdRef.current = null;
       }
       setKpayProcessing(false);
       setKpayStatusMsg('');
@@ -1094,13 +1114,48 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           apiKey: term.app_secret,
         };
 
+        // Save config for abort handler
+        paOfflineConfigRef.current = paConfig;
+
+        // Void any lingering PA order before creating a new one.
+        // This covers: (1) previous abort that didn't clear the terminal,
+        // (2) "settle from history" re-attempt where an old order is still open.
+        const candidatesToVoid: string[] = [];
+        if (paOfflineOrderIdRef.current) candidatesToVoid.push(paOfflineOrderIdRef.current);
+        const dbRef = selectedHistoryOrder?.cp_vendor_ref;
+        if (dbRef && dbRef.startsWith('PA-') && dbRef !== paOfflineOrderIdRef.current) {
+          candidatesToVoid.push(dbRef);
+        }
+        for (const oldId of candidatesToVoid) {
+          addLog(`> Voiding previous PA order: ${oldId}…`, '#ffd43b');
+          try {
+            const vr = await paOfflineVoidOrder(paConfig, oldId);
+            addLog(vr.success ? `> Previous order voided ✅` : `> Void skipped: ${vr.message}`, vr.success ? '#51cf66' : '#ffd43b');
+          } catch { addLog(`> Could not void previous order (may have expired)`, '#ffd43b'); }
+        }
+        paOfflineOrderIdRef.current = null;
+
         const amountDollars = (paymentModalTotal / 100).toFixed(2);
         const orderId = `PA-${restaurantId}-${paOfflineTerminal.id}-${Date.now()}`;
+        paOfflineOrderIdRef.current = orderId;
 
         addLog(`> Connecting to PA terminal at ${paConfig.terminalIp}:${paConfig.terminalPort}…`);
         addLog(`> Amount: HKD ${amountDollars}`);
 
-        const createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+        let createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+
+        // If busy, try voiding one more time (e.g. terminal auto-closed but API still open)
+        if (!createResult.success) {
+          const busyMsg = (createResult.message || '').toLowerCase();
+          if (busyMsg.includes('busy') || busyMsg.includes('exist') || busyMsg.includes('pending')) {
+            addLog(`> Terminal busy — attempting auto-clear…`, '#ffd43b');
+            try { await paOfflineVoidOrder(paConfig, orderId); } catch {}
+            // Small delay, then retry
+            await new Promise(r => setTimeout(r, 1500));
+            createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+          }
+        }
+
         addLog(
           createResult.success
             ? `[PAOffline] ✅ Order created — id: ${orderId}`
@@ -1111,6 +1166,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         if (!createResult.success) {
           setKpayStatusMsg('PA Terminal: Failed');
           setKpayProcessing(false);
+          paOfflineOrderIdRef.current = null;
           return;
         }
 
@@ -1123,20 +1179,20 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         const poll = async () => {
           if (attempts >= maxAttempts) {
             setKpayStatusMsg('Timeout');
-            addLog('> TIMEOUT', '#ffd43b');
+            addLog('> TIMEOUT — no payment received. Use Cancel to free the terminal.', '#ffd43b');
             setKpayProcessing(false);
             return;
           }
           attempts++;
-          addLog(`> Polling… (${attempts}/${maxAttempts})`);
 
           try {
             const qData = await paOfflineQueryOrder(paConfig, orderId);
-            addLog(`  Status: ${qData.status}`);
+            addLog(`> Poll ${attempts}/${maxAttempts} — status: ${qData.status}${qData.raw?._paStatus !== undefined ? ` (raw=${qData.raw._paStatus})` : ''}`);
 
             if (qData.status === 'success') {
               setKpayStatusMsg('Payment Confirmed ✅');
               addLog('> ✅ Payment confirmed', '#51cf66');
+              paOfflineOrderIdRef.current = null;
 
               await apiClient.post(
                 `/api/sessions/${paymentModalSessionId}/close-bill`,
@@ -1167,11 +1223,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
             if (qData.status === 'cancelled' || qData.status === 'failed') {
               setKpayStatusMsg(qData.status === 'cancelled' ? 'Cancelled' : 'Failed');
-              addLog(`> ${qData.status}`, '#ff6b6b');
+              addLog(`> ${qData.status} — terminal ended the transaction.`, '#ff6b6b');
+              paOfflineOrderIdRef.current = null;
               setKpayProcessing(false);
               return;
             }
 
+            // Still pending — poll again
             kpayPollRef.current = setTimeout(poll, 3000);
           } catch (e: any) {
             addLog(`> Poll error: ${e.message}`, '#ffd43b');
@@ -1184,6 +1242,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         addLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
         setKpayStatusMsg('PA Terminal: Failed');
         setKpayProcessing(false);
+        paOfflineOrderIdRef.current = null;
       }
     };
 
@@ -1297,7 +1356,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     };
 
     const submitKpayRefund = async () => {
-      if (!selectedHistoryOrder || !kpayTerminal) return;
+      if (!selectedHistoryOrder) return;
+      if (!kpayTerminal) {
+        Alert.alert(t('orders.error'), t('orders.no-kpay-terminal'));
+        return;
+      }
       const originOutTradeNo = selectedHistoryOrder.kpay_reference_id;
       if (!originOutTradeNo || !kpayManagerPassword) {
         Alert.alert(t('orders.error'), t('orders.password-required'));

@@ -1341,15 +1341,38 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
         _addKPayLog(`> Connecting to PA terminal at ${paConfig.terminalIp}:${paConfig.terminalPort}…`);
 
+        // Void any lingering order from a previous failed/cancelled attempt
+        // before creating a new one (handles "terminal busy" re-open scenario).
+        if (kpayOutTradeNo) {
+          _addKPayLog(`> Voiding previous PA order: ${kpayOutTradeNo}…`, '#ffd43b');
+          try {
+            const vr = await paOfflineVoidOrder(paConfig, kpayOutTradeNo);
+            _addKPayLog(vr.success ? '> Previous order voided ✅' : `> Void skipped: ${vr.message}`, vr.success ? '#51cf66' : '#ffd43b');
+          } catch { _addKPayLog('> Could not void previous order (may have expired)', '#ffd43b'); }
+          setKpayOutTradeNo(null);
+        }
+
         // Cents → decimal dollars (PA Offline expects e.g. "10.50")
         const amountDollars = (finalAmt / 100).toFixed(2);
         const orderId = `PA-${restaurantId}-${activePaymentTerminal.id}-${Date.now()}`;
 
-        const createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+        let createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+
+        // If the terminal is still busy (previous order lingering), try once more after a void
+        if (!createResult.success) {
+          const busyMsg = (createResult.message || '').toLowerCase();
+          if (busyMsg.includes('busy') || busyMsg.includes('exist') || busyMsg.includes('pending')) {
+            _addKPayLog('> Terminal busy — attempting auto-clear…', '#ffd43b');
+            try { await paOfflineVoidOrder(paConfig, orderId); } catch {}
+            await new Promise(r => setTimeout(r, 1500));
+            createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+          }
+        }
+
         _addKPayLog(
           createResult.success
             ? `[PAOffline] ✅ Order created — id: ${orderId}`
-            : `[PAOffline] ❌ Order create failed: ${createResult.error}`,
+            : `[PAOffline] ❌ Order create failed: ${createResult.message}`,
           createResult.success ? '#51cf66' : '#ff6b6b',
         );
 
@@ -1373,11 +1396,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             return;
           }
           attempts++;
-          _addKPayLog(`> Polling… (${attempts}/${maxAttempts})`);
 
           try {
             const qData = await paOfflineQueryOrder(paConfig, orderId);
-            _addKPayLog(`  Status: ${qData.status}`);
+            _addKPayLog(`> Poll ${attempts}/${maxAttempts} — status: ${qData.status}${qData.raw?._paStatus !== undefined ? ` (raw=${qData.raw._paStatus})` : ''}`);
 
             if (qData.status === 'success') {
               setKpayStatus('success');
@@ -1396,7 +1418,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
             if (qData.status === 'cancelled' || qData.status === 'failed') {
               setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
-              _addKPayLog(`> Payment ${qData.status}.`, '#ff6b6b');
+              _addKPayLog(`> Payment ${qData.status} — terminal ended the transaction.`, '#ff6b6b');
               return;
             }
 

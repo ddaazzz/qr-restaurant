@@ -458,14 +458,16 @@ export async function paOfflineQueryOrder(
     let status: PATerminalStatus = 'pending';
     if (paStatus === '1') status = 'success';
     else if (paStatus === '2') status = 'failed';
-    else if (paStatus === '-1' || paStatus === '4') status = 'cancelled';
+    else if (paStatus === '-1' || paStatus === '3') status = 'cancelled';
+    // NOTE: status '4' is intentionally NOT mapped to cancelled — its meaning is
+    // ambiguous (some firmware uses it for "settled/completed"). Keep polling.
 
     return {
       success: true,
       status,
-      message: payload.message || `Status: ${status}`,
+      message: payload.message || `Status: ${status} (raw=${paStatus})`,
       tradeNo: orderId,
-      raw: payload,
+      raw: { ...payload, _paStatus: paStatus, _code: data.code },
     };
   } catch (err: any) {
     const msg = err.name === 'AbortError' ? 'Query timed out' : err.message;
