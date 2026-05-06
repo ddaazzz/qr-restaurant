@@ -1936,6 +1936,100 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         </Modal>
     );
 
+    // ============= KPAY REFUND MODAL (shown before terminal window — collect amount + password) =============
+    const kpayRefundModal = (
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showKpayRefundModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowKpayRefundModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+              Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
+            </Text>
+            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
+              keyboardType="numeric"
+              value={kpayRefundAmount}
+              onChangeText={setKpayRefundAmount}
+              placeholder={t('orders.full-refund')}
+            />
+            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+              secureTextEntry
+              value={kpayManagerPassword}
+              onChangeText={setKpayManagerPassword}
+              placeholder={t('orders.required-field')}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={() => setShowKpayRefundModal(false)}
+              >
+                <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={submitKpayRefund}
+              >
+                <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+
+    // ============= PA ONLINE REFUND MODAL =============
+    const paOnlineRefundModal = (
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showPaRefundModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowPaRefundModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
+              {t('orders.pa-refund')}
+            </Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+              Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
+            </Text>
+            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-dollar')}</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+              keyboardType="numeric"
+              value={paRefundAmount}
+              onChangeText={setPaRefundAmount}
+              placeholder="0.00"
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={() => setShowPaRefundModal(false)}
+              >
+                <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={submitPaRefund}
+              >
+                <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+
     if (loading && !showHistory) {
       return (
         <View style={styles.centerContainer}>
@@ -2654,14 +2748,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               </ScrollView>
             </View>
             {paymentModal}
+            {kpayRefundModal}
+            {paOnlineRefundModal}
             {emailReceiptModal}
-          </>
-        );
-      }
-
-      return (
-        <>
-          <View style={[styles.container, historyIsTablet && { flexDirection: 'row' }]}>
           <View style={{ flex: 1 }}>
           {/* Header with back button */}
           <View style={styles.historyHeader}>
@@ -3442,99 +3531,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
         {tablePickerModal}
 
-        {/* KPay Refund Modal */}
-        <Modal
-          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-          visible={showKpayRefundModal}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setShowKpayRefundModal(false)}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
-                keyboardType="numeric"
-                value={kpayRefundAmount}
-                onChangeText={setKpayRefundAmount}
-                placeholder={t('orders.full-refund')}
-              />
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-                secureTextEntry
-                value={kpayManagerPassword}
-                onChangeText={setKpayManagerPassword}
-                placeholder={t('orders.required-field')}
-              />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                  onPress={() => setShowKpayRefundModal(false)}
-                >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                  onPress={submitKpayRefund}
-                >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        {kpayRefundModal}
 
-        {/* Payment Asia Online Refund Modal */}
-        {(() => {
-          return (
-            <Modal
-              supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-              visible={showPaRefundModal}
-              animationType="fade"
-              transparent
-              onRequestClose={() => setShowPaRefundModal(false)}
-            >
-              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-                <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
-                    {t('orders.pa-refund')}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                    Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
-                  </Text>
-                  <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-dollar')}</Text>
-                  <TextInput
-                    style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-                    keyboardType="numeric"
-                    value={paRefundAmount}
-                    onChangeText={setPaRefundAmount}
-                    placeholder="0.00"
-                  />
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                      onPress={() => setShowPaRefundModal(false)}
-                    >
-                      <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                      onPress={submitPaRefund}
-                    >
-                      <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
-          );
-        })()}
+        {paOnlineRefundModal}
 
         {/* Order Now Payment Modal */}
         {paymentModal}
