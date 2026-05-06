@@ -1436,99 +1436,6 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       }
       return;
     }
-
-    // ── All other vendors: go through backend ──
-    try {
-      _addKPayLog('> Initiating payment…');
-      const resp = await apiClient.post(
-        `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test`,
-        {
-          payAmount: amountInCents,
-          tipsAmount: '000000000000',
-          payCurrency: '344',
-          session_id: selectedSession?.id ?? null,
-        },
-      );
-      const result = resp.data;
-
-      if (result.logs) {
-        result.logs.forEach((l: string) =>
-          _addKPayLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : l.includes('⚠️') ? '#ffd43b' : '#00ff00'),
-        );
-      }
-
-      if (!result.initiated) {
-        setKpayStatus('failed');
-        _addKPayLog('> ❌ Failed: ' + (result.message || 'Unknown error'), '#ff6b6b');
-        return;
-      }
-
-      setKpayOutTradeNo(result.outTradeNo);
-      setKpayStatus('waiting');
-      _addKPayLog(`> Initiated — outTradeNo: ${result.outTradeNo}`, '#ffd43b');
-      _addKPayLog('> Waiting for customer to tap / scan on terminal…', '#ffd43b');
-
-      // Poll for status
-      let attempts = 0;
-      const maxAttempts = 22;
-
-      const poll = async () => {
-        if (attempts >= maxAttempts) {
-          setKpayStatus('timeout');
-          _addKPayLog('> TIMEOUT — no response after 65s. Use Abort to free the terminal.', '#ffd43b');
-          return;
-        }
-        attempts++;
-        _addKPayLog(`> Polling… (${attempts}/${maxAttempts})`);
-
-        try {
-          const qResp = await apiClient.get(
-            `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test-status`,
-            { params: { outTradeNo: result.outTradeNo } },
-          );
-          const qData = qResp.data;
-          if (qData.logs) {
-            qData.logs.forEach((l: string) =>
-              _addKPayLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'),
-            );
-          }
-          _addKPayLog(`  Status: ${qData.status}  code: ${qData.code ?? '?'}`);
-
-          if (qData.status === 'success') {
-            setKpayStatus('success');
-            _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
-            try {
-              const vendor = activePaymentTerminal?.vendor_name || 'kpay';
-              if (kpaySplitPortionRef.current) {
-                await _doSplitPortionPay(kpaySplitPortionRef.current, vendor, result.outTradeNo);
-              } else {
-                await _doCloseBill(finalAmt, discountCts, vendor, result.outTradeNo);
-              }
-            } catch (closeErr: any) {
-              _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
-            }
-            return;
-          }
-
-          if (qData.status === 'cancelled' || qData.status === 'failed') {
-            setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
-            _addKPayLog(`> Payment ${qData.status}.`, '#ff6b6b');
-            return;
-          }
-
-          // Still pending — poll again in 3 s
-          kpayPollTimerRef.current = setTimeout(poll, 3000);
-        } catch (e: any) {
-          _addKPayLog(`  Poll error: ${e.message} — retrying…`, '#ffd43b');
-          kpayPollTimerRef.current = setTimeout(poll, 3000);
-        }
-      };
-
-      kpayPollTimerRef.current = setTimeout(poll, 2000);
-    } catch (err: any) {
-      setKpayStatus('failed');
-      _addKPayLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
-    }
   };
 
   const abortKPayPayment = async () => {
@@ -1564,17 +1471,6 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 _addKPayLog(
                   voidResult.success ? '> ✅ Order voided — terminal freed.' : `> ❌ Void failed: ${voidResult.message}`,
                   voidResult.success ? '#51cf66' : '#ff6b6b',
-                );
-              } else {
-                const r = await apiClient.post(
-                  `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/close-transaction`,
-                  { outTradeNo: kpayOutTradeNo },
-                );
-                const d = r.data;
-                if (d.logs) d.logs.forEach((l: string) => _addKPayLog(l, l.includes('✅') ? '#51cf66' : '#ffd43b'));
-                _addKPayLog(
-                  d.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${d.message || d.error}`,
-                  d.success ? '#51cf66' : '#ff6b6b',
                 );
               }
             } catch (e: any) {

@@ -202,15 +202,6 @@ class APIClient {
     }
   }
 
-  async closeSession(sessionId: string) {
-    try {
-      const response = await this.client.patch(`/api/sessions/${sessionId}/close`);
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
   // Order endpoints
   async createOrder(sessionId: string, items: any[]) {
     try {

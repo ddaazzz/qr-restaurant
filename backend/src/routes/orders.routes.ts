@@ -896,53 +896,6 @@ router.patch("/orders/:id/status", async (req, res) => {
   }
 });*/
 
-// Close a session - ✅ MULTI-RESTAURANT SUPPORT
-router.post("/sessions/:sessionId/close", async (req, res) => {
-    try {
-  const { sessionId } = req.params;
-  const { restaurantId } = req.body;
-
-  if (!restaurantId) {
-    return res.status(400).json({ error: "Restaurant ID is required" });
-  }
-
-  // Check if session exists, is open, and belongs to restaurant
-  const sessionResult = await pool.query(
-    `SELECT ts.id, t.restaurant_id FROM table_sessions ts
-     JOIN tables t ON t.id = ts.table_id
-     WHERE ts.id = $1 AND ts.ended_at IS NULL AND t.restaurant_id = $2`,
-    [sessionId, restaurantId]
-  );
-
-  if (sessionResult.rowCount === 0) {
-    return res.status(404).json({ error: "Session not found, already closed, or doesn't belong to this restaurant" });
-  }
-
-  // Close session
-  await pool.query(
-    "UPDATE table_sessions SET ended_at = NOW() WHERE id = $1",
-    [sessionId]
-  );
-
-  // Close all open orders
-  await pool.query(
-  `
-  UPDATE order_items
-  SET status = 'served'
-  WHERE order_id IN (
-    SELECT id FROM orders WHERE session_id = $1
-  )
-  `,
-  [sessionId]
-);
-
-  res.json({ message: "Session closed" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 // ✅ GET all orders for a restaurant (for history/reporting)
 router.get("/restaurants/:restaurantId/orders", async (req, res) => {
   try {

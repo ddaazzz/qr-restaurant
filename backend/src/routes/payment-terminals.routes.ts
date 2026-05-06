@@ -1456,54 +1456,6 @@ router.get('/restaurants/:restaurantId/pa-offline-transactions/:pa_order_id', as
 });
 
 /**
- * POST /api/restaurants/:restaurantId/payment-terminals/:terminalId/pa-offline/refund-query
- * Query the status of a PA-Offline refund.
- * Body: { pa_order_id }
- */
-router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/pa-offline/refund-query', async (req, res) => {
-  try {
-    const { restaurantId, terminalId } = req.params;
-    const { pa_order_id } = req.body;
-    if (!pa_order_id) return res.status(400).json({ error: 'pa_order_id is required' });
-
-    const termRes = await pool.query(
-      `SELECT app_secret, terminal_ip, terminal_port FROM payment_terminals WHERE id = $1 AND restaurant_id = $2`,
-      [terminalId, restaurantId],
-    );
-    if (termRes.rowCount === 0) return res.status(404).json({ success: false, error: 'Terminal not found' });
-    const tt = termRes.rows[0];
-
-    const queryResult = await callPAOfflineTerminal(
-      { terminal_ip: tt.terminal_ip, terminal_port: tt.terminal_port, app_secret: tt.app_secret },
-      'POST', '/order/refund/query',
-      { order_id: pa_order_id },
-    );
-
-    const success = queryResult.ok && queryResult.data?.code === '1000';
-    const payload = queryResult.data?.payload || {};
-    // refund status: '1'=completed, '0'=pending, '2'=failed
-    const refStatus = String(payload.status ?? '');
-    const mappedRefStatus = refStatus === '1' ? 'completed' : refStatus === '0' ? 'pending' : refStatus === '2' ? 'failed' : 'unknown';
-
-    return res.json({
-      success,
-      code: queryResult.data?.code || 'error',
-      status: mappedRefStatus,
-      message: queryResult.data?.message || '',
-      pa_order_id,
-      payload,
-      logs: [
-        `[PAOffline] → POST /order/refund/query  order_id=${pa_order_id}`,
-        `[PAOffline] ${success ? '✅' : '❌'} refund_status=${refStatus}  mapped=${mappedRefStatus}`,
-      ],
-    });
-  } catch (err: any) {
-    console.error('[PAOffline] Refund query error:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
  * GET /api/restaurants/:restaurantId/kpay-terminal/active
  * Returns the active physical terminal (KPay or PA-Offline) for frontend gating.
  * KPay is preferred when both are active; vendor_name is included in the response.

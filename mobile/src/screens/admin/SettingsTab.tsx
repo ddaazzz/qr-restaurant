@@ -1544,27 +1544,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         return;
       }
 
-      // Other vendors: call backend test endpoint
-      setTestingTerminal(true);
-      const response = await apiClient.post(
-        `/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}/test`
-      );
-      setTerminalTestResult(response.data);
-      if (response.data.success) {
-        Alert.alert(
-          t('settings.connection-success'),
-          t('settings.connected-to', { '0': terminalForm.vendor_name.toUpperCase(), '1': `${terminalForm.terminal_ip}:${terminalForm.terminal_port}` })
-        );
-      } else {
-        Alert.alert(
-          t('settings.connection-failed'),
-          response.data.error || response.data.message
-        );
-      }
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || t('settings.test-failed'));
-    } finally {
-      setTestingTerminal(false);
     }
   };
 
