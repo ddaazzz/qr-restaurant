@@ -2521,8 +2521,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   }}
                 >
                   <View>
-                    <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
-                      Portion {portion.split_index}
+                    <Text style={{ fontWeight: '600', fontSize: 12, color: '#6b7280' }}>
+                      Portion {portion.split_index} of {portion.split_count}
+                    </Text>
+                    <Text style={{ fontWeight: '700', fontSize: 14, color: '#1f2937' }}>
+                      {portion.restaurant_order_number ? `Order #${portion.restaurant_order_number}` : `Portion ${portion.split_index}`}
                     </Text>
                     <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
                       ${(portion.amount_cents / 100).toFixed(2)}
@@ -3025,7 +3028,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
               <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
-                Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+                {activeSplitPortion?.restaurant_order_number
+                  ? `Close Bill — Order #${activeSplitPortion.restaurant_order_number}`
+                  : `Pay Portion ${activeSplitPortion?.split_index} of ${activeSplitPortion?.split_count}`}
               </Text>
               <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
                 <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
@@ -3790,8 +3795,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     }}
                   >
                     <View>
-                      <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
-                        Portion {portion.split_index}
+                      <Text style={{ fontWeight: '600', fontSize: 12, color: '#6b7280' }}>
+                        Portion {portion.split_index} of {portion.split_count}
+                      </Text>
+                      <Text style={{ fontWeight: '700', fontSize: 14, color: '#1f2937' }}>
+                        {portion.restaurant_order_number ? `Order #${portion.restaurant_order_number}` : `Portion ${portion.split_index}`}
                       </Text>
                       <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
                         ${(portion.amount_cents / 100).toFixed(2)}

@@ -1186,21 +1186,38 @@ router.post("/sessions/:sessionId/split-bill/init", async (req, res) => {
     // Remove any previous split for this session
     await client.query(`DELETE FROM split_bill_payments WHERE session_id = $1`, [sessionId]);
 
-    // Create one record per split portion
+    // Mark original orders as split-parent so they are hidden from order history
+    await client.query(
+      `UPDATE orders SET is_split_parent = TRUE WHERE session_id = $1 AND status <> 'cancelled'`,
+      [sessionId]
+    );
+
+    // Create one real order + one payment record per split portion
     const perPerson = Math.floor(total_cents / split_count);
     const remainder = total_cents - perPerson * split_count;
 
     const splits: any[] = [];
     for (let i = 1; i <= split_count; i++) {
       const amount = perPerson + (i === split_count ? remainder : 0);
+
+      // Create a real order so the portion gets its own order number and appears in history
+      const orderRes = await client.query(
+        `INSERT INTO orders (session_id, restaurant_id, status, custom_amount_cents, payment_method)
+         VALUES ($1, $2, 'pending', $3, 'cash')
+         RETURNING id, restaurant_order_number`,
+        [sessionId, restaurant_id, amount]
+      );
+      const newOrderId = orderRes.rows[0].id;
+      const newOrderNumber = orderRes.rows[0].restaurant_order_number;
+
       const r = await client.query(
         `INSERT INTO split_bill_payments
-           (session_id, restaurant_id, split_index, split_count, amount_cents, service_charge)
-         VALUES ($1, $2, $3, $4, $5, $6)
+           (session_id, restaurant_id, split_index, split_count, amount_cents, service_charge, order_id, closed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
          RETURNING *`,
-        [sessionId, restaurant_id, i, split_count, amount, service_charge_cents]
+        [sessionId, restaurant_id, i, split_count, amount, service_charge_cents, newOrderId]
       );
-      splits.push(r.rows[0]);
+      splits.push({ ...r.rows[0], restaurant_order_number: newOrderNumber });
     }
 
     // Record split metadata on the session
@@ -1230,7 +1247,11 @@ router.get("/sessions/:sessionId/split-bill", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT * FROM split_bill_payments WHERE session_id = $1 ORDER BY split_index ASC`,
+      `SELECT sbp.*, o.restaurant_order_number
+       FROM split_bill_payments sbp
+       LEFT JOIN orders o ON o.id = sbp.order_id
+       WHERE sbp.session_id = $1
+       ORDER BY sbp.split_index ASC`,
       [sessionId]
     );
     res.json(result.rows);
@@ -1279,6 +1300,15 @@ router.post("/sessions/:sessionId/split-bill/:splitIndex/pay", async (req, res) 
       [payment_method, notes || null, closed_by_staff_id || null, split.id]
     );
 
+    // Mark the linked order as completed
+    if (split.order_id) {
+      await client.query(
+        `UPDATE orders SET status = 'completed', payment_method = $1, payment_status = 'paid'
+         WHERE id = $2`,
+        [payment_method, split.order_id]
+      );
+    }
+
     // Increment paid count on session
     await client.query(
       `UPDATE table_sessions SET split_bills_paid = COALESCE(split_bills_paid, 0) + 1 WHERE id = $1`,
@@ -1307,10 +1337,10 @@ router.post("/sessions/:sessionId/split-bill/:splitIndex/pay", async (req, res) 
          WHERE id = $3`,
         [payment_method, amountPaid, sessionId]
       );
+      // Mark split-parent orders as completed too (for any reports that scan all orders)
       await client.query(
-        `UPDATE orders
-         SET status = 'completed', payment_method = $1, payment_status = 'paid'
-         WHERE session_id = $2 AND status <> 'cancelled'`,
+        `UPDATE orders SET status = 'completed', payment_method = $1, payment_status = 'paid'
+         WHERE session_id = $2 AND is_split_parent = TRUE AND status <> 'cancelled'`,
         [payment_method, sessionId]
       );
       sessionClosed = true;
