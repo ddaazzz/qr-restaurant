@@ -1881,7 +1881,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     >
                       <Text style={{ fontWeight: '600', color: paymentModalMethod === 'cash' ? '#fff' : '#374151' }}>{t('orders.cash')}</Text>
                     </TouchableOpacity>
-                    {!paOfflineTerminal && (
+                    {!paOfflineTerminal && !kpayTerminal && (
                       <TouchableOpacity
                         style={{ flex: 1, backgroundColor: paymentModalMethod === 'card' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'card' ? '#3b82f6' : '#d1d5db' }}
                         onPress={() => setPaymentModalMethod('card')}

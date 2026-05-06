@@ -300,6 +300,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [serviceCharge, setServiceCharge] = useState(0);
   // Active payment terminal (for close bill modal)
   const [activePaymentTerminal, setActivePaymentTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  // Individual terminal state (one restaurant may have both)
+  const [kpayTerminal, setKpayTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  const [paOfflineTerminal, setPaOfflineTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
   // KPay terminal payment overlay
   const [showKPayModal, setShowKPayModal] = useState(false);
   const [kpayStatus, setKpayStatus] = useState<'initiating' | 'waiting' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'aborting'>('initiating');
@@ -478,8 +481,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       // Load active payment terminal
       try {
         const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
-        const active = (termRes.data || []).find((t: any) => t.is_active);
-        setActivePaymentTerminal(active || null);
+        const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
+        const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
+        setKpayTerminal(kpayT);
+        setPaOfflineTerminal(paOffT);
+        setActivePaymentTerminal(kpayT || paOffT || null);
       } catch (e) {
         // non-critical
       }
@@ -2376,13 +2382,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     // Load physical terminal so modal can show terminal payment options
     try {
       const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
-      const physical = (termRes.data || []).find((t: any) =>
-        t.is_active && (t.vendor_name === 'kpay' || t.vendor_name === 'payment-asia-offline')
-      );
-      setActivePaymentTerminal(physical || null);
-      if (physical) {
-        setSplitPayMethod(physical.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : 'kpay');
-      }
+      const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
+      const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
+      setKpayTerminal(kpayT);
+      setPaOfflineTerminal(paOffT);
+      setActivePaymentTerminal(kpayT || paOffT || null);
+      setSplitPayMethod('cash');
     } catch {
       // No terminal available — cash default is fine
     }
@@ -2726,10 +2731,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
                   ]);
                   setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                  const activeT = (termRes.data || []).find((t: any) => t.is_active);
-                  setActivePaymentTerminal(activeT || null);
-                  if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
-                  else setPaymentMethod('cash');
+                  const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
+                  const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
+                  setKpayTerminal(kpayT);
+                  setPaOfflineTerminal(paOffT);
+                  setActivePaymentTerminal(kpayT || paOffT || null);
+                  setPaymentMethod('cash');
                 } catch (e) {
                   setCoupons([]);
                 }
@@ -2819,11 +2826,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               <View style={styles.selectGroup}>
                 {([
                   { value: 'cash', label: t('admin.cash-label') },
-                  ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                    ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
-                    : activePaymentTerminal?.vendor_name === 'kpay'
-                    ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
-                    : [{ value: 'card', label: t('admin.card-label') }]),
+                  { value: 'card', label: t('admin.card-label') },
+                  ...(kpayTerminal ? [{ value: 'kpay', label: t('admin.kpay-terminal') }] : []),
+                  ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }] : []),
                 ] as { value: string; label: string }[]).map((method) => (
                   <TouchableOpacity
                     key={method.value}
@@ -2831,7 +2836,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                       styles.selectOption,
                       paymentMethod === method.value && styles.selectOptionActive,
                     ]}
-                    onPress={() => setPaymentMethod(method.value)}
+                    onPress={() => {
+                      setPaymentMethod(method.value);
+                      if (method.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                      else if (method.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                      else setActivePaymentTerminal(null);
+                    }}
                   >
                     <Text
                       style={[
@@ -3190,16 +3200,18 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 {[
                   { value: 'cash', label: 'Cash' },
                   { value: 'card', label: 'Card' },
-                  ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                    ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }]
-                    : activePaymentTerminal?.vendor_name === 'kpay'
-                    ? [{ value: 'kpay', label: 'KPay Terminal' }]
-                    : []),
+                  ...(kpayTerminal ? [{ value: 'kpay', label: 'KPay Terminal' }] : []),
+                  ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }] : []),
                 ].map(m => (
                   <TouchableOpacity
                     key={m.value}
                     style={{ flex: 1, minWidth: 80, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m.value ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m.value ? '#eff6ff' : '#fff' }}
-                    onPress={() => setSplitPayMethod(m.value)}
+                    onPress={() => {
+                      setSplitPayMethod(m.value);
+                      if (m.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                      else if (m.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                      else setActivePaymentTerminal(null);
+                    }}
                   >
                     <Text style={{ fontWeight: '600', color: splitPayMethod === m.value ? '#3b82f6' : '#374151' }}>{m.label}</Text>
                   </TouchableOpacity>
@@ -3999,10 +4011,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                       apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
                     ]);
                     setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                    const activeT = (termRes.data || []).find((t: any) => t.is_active);
-                    setActivePaymentTerminal(activeT || null);
-                    if (activeT) setPaymentMethod(activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' : activeT.vendor_name === 'kpay' ? 'kpay' : 'cash');
-                    else setPaymentMethod('cash');
+                    const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
+                    const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
+                    setKpayTerminal(kpayT);
+                    setPaOfflineTerminal(paOffT);
+                    setActivePaymentTerminal(kpayT || paOffT || null);
+                    setPaymentMethod('cash');
                   } catch (e) { setCoupons([]); }
                 }}
               >
@@ -4083,13 +4097,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 <View style={styles.selectGroup}>
                   {([
                     { value: 'cash', label: t('admin.cash-label') },
-                    ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                      ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
-                      : activePaymentTerminal?.vendor_name === 'kpay'
-                      ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
-                      : [{ value: 'card', label: t('admin.card-label') }]),
+                    { value: 'card', label: t('admin.card-label') },
+                    ...(kpayTerminal ? [{ value: 'kpay', label: t('admin.kpay-terminal') }] : []),
+                    ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }] : []),
                   ] as { value: string; label: string }[]).map((method) => (
-                    <TouchableOpacity key={method.value} style={[styles.selectOption, paymentMethod === method.value && styles.selectOptionActive]} onPress={() => setPaymentMethod(method.value)}>
+                    <TouchableOpacity key={method.value} style={[styles.selectOption, paymentMethod === method.value && styles.selectOptionActive]} onPress={() => {
+                      setPaymentMethod(method.value);
+                      if (method.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                      else if (method.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                      else setActivePaymentTerminal(null);
+                    }}>
                       <Text style={[styles.selectOptionText, paymentMethod === method.value && styles.selectOptionTextActive]}>{method.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -4576,16 +4593,18 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               {[
                 { value: 'cash', label: 'Cash' },
                 { value: 'card', label: 'Card' },
-                ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                  ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }]
-                  : activePaymentTerminal?.vendor_name === 'kpay'
-                  ? [{ value: 'kpay', label: 'KPay Terminal' }]
-                  : []),
+                ...(kpayTerminal ? [{ value: 'kpay', label: 'KPay Terminal' }] : []),
+                ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }] : []),
               ].map(m => (
                 <TouchableOpacity
                   key={m.value}
                   style={{ flex: 1, minWidth: 80, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m.value ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m.value ? '#eff6ff' : '#fff' }}
-                  onPress={() => setSplitPayMethod(m.value)}
+                  onPress={() => {
+                    setSplitPayMethod(m.value);
+                    if (m.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                    else if (m.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                    else setActivePaymentTerminal(null);
+                  }}
                 >
                   <Text style={{ fontWeight: '600', color: splitPayMethod === m.value ? '#3b82f6' : '#374151' }}>{m.label}</Text>
                 </TouchableOpacity>
