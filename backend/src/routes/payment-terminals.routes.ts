@@ -126,12 +126,7 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
     }
 
     const terminal = result.rows[0];
-    // Non-superadmins should not see secrets
-    if (user.role !== 'superadmin') {
-      terminal.app_secret = terminal.app_secret ? '••••••••' : '';
-      terminal.secret_code = terminal.secret_code ? '••••••••' : '';
-    }
-
+    // Secrets are visible to authenticated admins managing their own terminals
     res.json(terminal);
   } catch (err: any) {
     console.error('[PaymentTerminal] Error fetching terminal:', err);
@@ -280,14 +275,15 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
         values.push(merchant_token);
       }
     }
-    if (app_secret !== undefined) {
+    // Skip update if value is the masked placeholder or empty
+    if (app_secret !== undefined && app_secret !== '' && app_secret !== '••••••••') {
       updates.push(`app_secret = $${paramCount++}`);
       values.push(app_secret);
     }
-    if (secret_code !== undefined) {
+    if (secret_code !== undefined && secret_code !== '' && secret_code !== '••••••••') {
       updates.push(`secret_code = $${paramCount++}`);
       values.push(secret_code);
-      if (app_secret === undefined) {
+      if (app_secret === undefined || app_secret === '' || app_secret === '••••••••') {
         updates.push(`app_secret = $${paramCount++}`);
         values.push(secret_code);
       }
