@@ -109,6 +109,8 @@ interface Order {
   cp_completed_at?: string;
   cp_refunded_at?: string;
   cp_refund_amount_cents?: number;
+  void_vendor_ref?: string;
+  refund_vendor_ref?: string;
   payment_records?: PaymentRecord[];
 }
 
@@ -1332,6 +1334,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 const voidOutTradeNo = `VOID-${Date.now()}`;
                 const result = await kpayVoid(config, signResult.appPrivateKey, voidOutTradeNo, originOutTradeNo);
                 if (result.success) {
+                  // Record void reference on the order so history shows the link
+                  try {
+                    await apiClient.patch(
+                      `/api/restaurants/${restaurantId}/orders/${order.id}/payment-outcome`,
+                      { status: 'voided', void_vendor_ref: voidOutTradeNo }
+                    );
+                  } catch (_) {}
                   Alert.alert(t('orders.success'), t('orders.void-success'));
                   await reloadSelectedOrder(order.id);
                 } else {
@@ -1403,6 +1412,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         }
         const result = await kpayRefund(config, signResult.appPrivateKey, refundParams);
         if (result.success) {
+          // Record refund reference on the order
+          try {
+            await apiClient.patch(
+              `/api/restaurants/${restaurantId}/orders/${selectedHistoryOrder.id}/payment-outcome`,
+              { status: 'refunded', refund_vendor_ref: refundParams.outTradeNo }
+            );
+          } catch (_) {}
           setShowKpayRefundModal(false);
           Alert.alert(t('orders.success'), t('orders.refund-kpay-success'));
           await reloadSelectedOrder(selectedHistoryOrder.id);
@@ -1480,6 +1496,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 };
                 const result = await paOfflineVoidOrder(paConfig, paOrderId);
                 if (result.success) {
+                  // Record void ref so history links original payment → void
+                  try {
+                    await apiClient.patch(
+                      `/api/restaurants/${restaurantId}/orders/${order.id}/payment-outcome`,
+                      { status: 'voided', void_vendor_ref: paOrderId }
+                    );
+                  } catch (_) {}
                   Alert.alert(t('orders.success'), 'Void request sent to terminal.');
                   await reloadSelectedOrder(order.id);
                 } else {
@@ -1525,6 +1548,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         };
         const result = await paOfflineVoidOrder(paConfig, paOrderId);
         if (result.success) {
+          // Record refund ref so history links original payment → refund
+          try {
+            await apiClient.patch(
+              `/api/restaurants/${restaurantId}/orders/${selectedHistoryOrder.id}/payment-outcome`,
+              { status: 'refunded', refund_vendor_ref: paOrderId }
+            );
+          } catch (_) {}
           setShowPaRefundModal(false);
           Alert.alert(t('orders.success'), t('orders.refund-pa-success'));
           await reloadSelectedOrder(selectedHistoryOrder.id);
@@ -2101,6 +2131,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {selectedHistoryOrder.cp_refunded_at && (
                       <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>at {formatDate(selectedHistoryOrder.cp_refunded_at)}</Text>
                     )}
+                  </View>
+                )}
+
+                {/* Void transaction link */}
+                {selectedHistoryOrder.void_vendor_ref && (
+                  <View style={{ backgroundColor: '#fff7ed', borderRadius: 8, padding: 10, marginTop: 8, borderLeftWidth: 3, borderLeftColor: '#f97316' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#c2410c', marginBottom: 4 }}>⊘ Void Transaction</Text>
+                    <Text style={{ fontSize: 11, color: '#7c3aed', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.void_vendor_ref}</Text>
+                  </View>
+                )}
+
+                {/* Refund transaction link */}
+                {selectedHistoryOrder.refund_vendor_ref && (
+                  <View style={{ backgroundColor: '#fef2f2', borderRadius: 8, padding: 10, marginTop: 8, borderLeftWidth: 3, borderLeftColor: '#ef4444' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>↩ Refund Transaction</Text>
+                    <Text style={{ fontSize: 11, color: '#7c3aed', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.refund_vendor_ref}</Text>
                   </View>
                 )}
 

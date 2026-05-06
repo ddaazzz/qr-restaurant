@@ -996,7 +996,9 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         cpay.vendor_reference AS cp_vendor_ref,
         cpay.total_cents AS cp_total_cents,
         cpay.payment_gateway_env AS cp_env,
-        to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at
+        to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at,
+        o.void_vendor_ref,
+        o.refund_vendor_ref
       FROM orders o
       JOIN restaurants r ON r.id = o.restaurant_id
       LEFT JOIN table_sessions ts ON o.session_id = ts.id
@@ -1015,7 +1017,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
       ) cpay ON true
       WHERE o.restaurant_id = $1
       AND COALESCE(o.is_split_parent, FALSE) = FALSE
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, o.custom_amount_cents, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
       ORDER BY o.created_at DESC
       LIMIT $2`,
       [restaurantId, limitVal]
@@ -1071,7 +1073,9 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         cpay.payment_gateway_env AS cp_env,
         to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at,
         to_char(cpay.refunded_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_refunded_at,
-        cpay.refund_amount_cents AS cp_refund_amount_cents
+        cpay.refund_amount_cents AS cp_refund_amount_cents,
+        o.void_vendor_ref,
+        o.refund_vendor_ref
       FROM orders o
       LEFT JOIN table_sessions ts ON o.session_id = ts.id
       LEFT JOIN tables t ON ts.table_id = t.id
@@ -1084,7 +1088,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         LIMIT 1
       ) cpay ON true
       WHERE o.id = $1 AND o.restaurant_id = $2
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, o.custom_amount_cents, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
       `,
       [orderId, restaurantId]
     );
@@ -1187,6 +1191,45 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
     res.json(order);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * PATCH /restaurants/:restaurantId/orders/:orderId/payment-outcome
+ * Record the result of a device-direct void or refund (KPay / PA Offline).
+ * Called by the mobile after a successful direct terminal call so the DB
+ * stays in sync with what the terminal actually did.
+ * Body: { status: 'voided'|'refunded'|'partial_refund', void_vendor_ref?, refund_vendor_ref? }
+ */
+router.patch("/restaurants/:restaurantId/orders/:orderId/payment-outcome", async (req, res) => {
+  try {
+    const { restaurantId, orderId } = req.params;
+    const { status, void_vendor_ref, refund_vendor_ref } = req.body;
+
+    const validStatuses = ['voided', 'refunded', 'partial_refund'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const user = await pool.query(
+      `SELECT o.id FROM orders o WHERE o.id = $1 AND o.restaurant_id = $2`,
+      [orderId, restaurantId]
+    );
+    if (user.rowCount === 0) return res.status(404).json({ error: "Order not found" });
+
+    await pool.query(
+      `UPDATE orders
+       SET payment_status    = $1,
+           void_vendor_ref   = COALESCE($2, void_vendor_ref),
+           refund_vendor_ref = COALESCE($3, refund_vendor_ref)
+       WHERE id = $4 AND restaurant_id = $5`,
+      [status, void_vendor_ref || null, refund_vendor_ref || null, orderId, restaurantId]
+    );
+
+    res.json({ success: true, payment_status: status });
+  } catch (err) {
+    console.error('[payment-outcome]', err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
