@@ -312,6 +312,8 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   // Refs to carry KPay session state across poll callbacks (can't use state inside setTimeout)
   const kpayPrivateKeyRef = useRef<string | null>(null);
   const kpayConfigRef = useRef<KPayTerminalConfig | null>(null);
+  // Ref to carry PA Offline terminal config across poll callbacks
+  const paOfflineConfigRef = useRef<PATerminalConfig | null>(null);
 
   // Clean up KPay poll timer on unmount
   useEffect(() => {
@@ -1320,7 +1322,99 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       return;
     }
 
-    // ── All other vendors (PA Offline, etc.): go through backend ──
+    // ── PA Offline physical terminal: communicate directly from device (Render cannot reach LAN IPs) ──
+    if (activePaymentTerminal.vendor_name === 'payment-asia-offline') {
+      try {
+        _addKPayLog('> Fetching PA terminal config…');
+
+        const termRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}`,
+        );
+        const term = termRes.data;
+        const paConfig: PATerminalConfig = {
+          terminalIp: term.terminal_ip,
+          terminalPort: term.terminal_port,
+          apiKey: term.app_secret,
+        };
+        paOfflineConfigRef.current = paConfig;
+
+        _addKPayLog(`> Connecting to PA terminal at ${paConfig.terminalIp}:${paConfig.terminalPort}…`);
+
+        // Cents → decimal dollars (PA Offline expects e.g. "10.50")
+        const amountDollars = (finalAmt / 100).toFixed(2);
+        const orderId = `PA-${restaurantId}-${activePaymentTerminal.id}-${Date.now()}`;
+
+        const createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+        _addKPayLog(
+          createResult.success
+            ? `[PAOffline] ✅ Order created — id: ${orderId}`
+            : `[PAOffline] ❌ Order create failed: ${createResult.error}`,
+          createResult.success ? '#51cf66' : '#ff6b6b',
+        );
+
+        if (!createResult.success) {
+          setKpayStatus('failed');
+          _addKPayLog(`> ❌ Failed: ${createResult.message}`, '#ff6b6b');
+          return;
+        }
+
+        setKpayOutTradeNo(orderId);
+        setKpayStatus('waiting');
+        _addKPayLog('> Waiting for customer to scan QR on terminal…', '#ffd43b');
+
+        let attempts = 0;
+        const maxAttempts = 22;
+
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatus('timeout');
+            _addKPayLog('> TIMEOUT — no response after 65s. Use Abort to free the terminal.', '#ffd43b');
+            return;
+          }
+          attempts++;
+          _addKPayLog(`> Polling… (${attempts}/${maxAttempts})`);
+
+          try {
+            const qData = await paOfflineQueryOrder(paConfig, orderId);
+            _addKPayLog(`  Status: ${qData.status}`);
+
+            if (qData.status === 'success') {
+              setKpayStatus('success');
+              _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
+              try {
+                if (kpaySplitPortionRef.current) {
+                  await _doSplitPortionPay(kpaySplitPortionRef.current, 'payment-asia-offline', orderId);
+                } else {
+                  await _doCloseBill(finalAmt, discountCts, 'payment-asia-offline', orderId);
+                }
+              } catch (closeErr: any) {
+                _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
+              }
+              return;
+            }
+
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
+              _addKPayLog(`> Payment ${qData.status}.`, '#ff6b6b');
+              return;
+            }
+
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            _addKPayLog(`  Poll error: ${e.message} — retrying…`, '#ffd43b');
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          }
+        };
+
+        kpayPollTimerRef.current = setTimeout(poll, 2000);
+      } catch (err: any) {
+        setKpayStatus('failed');
+        _addKPayLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+      }
+      return;
+    }
+
+    // ── All other vendors: go through backend ──
     try {
       _addKPayLog('> Initiating payment…');
       const resp = await apiClient.post(
@@ -1441,6 +1535,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 _addKPayLog(
                   closeResult.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${closeResult.message}`,
                   closeResult.success ? '#51cf66' : '#ff6b6b',
+                );
+              } else if (activePaymentTerminal.vendor_name === 'payment-asia-offline' && paOfflineConfigRef.current) {
+                const voidResult = await paOfflineVoidOrder(paOfflineConfigRef.current, kpayOutTradeNo);
+                _addKPayLog(
+                  voidResult.success ? '> ✅ Order voided — terminal freed.' : `> ❌ Void failed: ${voidResult.message}`,
+                  voidResult.success ? '#51cf66' : '#ff6b6b',
                 );
               } else {
                 const r = await apiClient.post(
