@@ -1315,7 +1315,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         Alert.alert(t('orders.error'), t('orders.no-kpay-terminal'));
         return;
       }
-      const originOutTradeNo = order.kpay_reference_id;
+      const originOutTradeNo = order.kpay_reference_id || order.cp_vendor_ref;
       if (!originOutTradeNo) {
         Alert.alert(t('orders.error'), t('orders.no-kpay-ref'));
         return;
@@ -1444,8 +1444,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const submitKpayRefund = async () => {
       if (!selectedHistoryOrder || !kpayTerminal) return;
-      const originOutTradeNo = selectedHistoryOrder.kpay_reference_id;
-      if (!originOutTradeNo || !kpayManagerPassword) {
+      const originOutTradeNo = selectedHistoryOrder.kpay_reference_id || selectedHistoryOrder.cp_vendor_ref;
+      if (!originOutTradeNo) {
+        Alert.alert(t('orders.error'), t('orders.no-kpay-ref'));
+        return;
+      }
+      if (!kpayManagerPassword) {
         Alert.alert(t('orders.error'), t('orders.password-required'));
         return;
       }
@@ -1608,7 +1612,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const startPaOfflineRefundFlow = async (order: Order) => {
       const paOrderId = order.cp_vendor_ref || order.kpay_reference_id;
       if (!paOrderId) {
-        Alert.alert(t('orders.error'), 'No PA order reference found');
+        Alert.alert(t('orders.error'), t('orders.no-pa-ref'));
         return;
       }
       setKpayModalTitle('↩ PA Terminal Refund');
@@ -1949,7 +1953,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
             <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-              Ref: {selectedHistoryOrder?.kpay_reference_id || '—'}
+              Ref: {selectedHistoryOrder?.kpay_reference_id || selectedHistoryOrder?.cp_vendor_ref || '—'}
             </Text>
             <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
             <TextInput
