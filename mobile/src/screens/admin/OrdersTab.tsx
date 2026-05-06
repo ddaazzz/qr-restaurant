@@ -2322,7 +2322,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                 {/* Order Number */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ fontSize: 13, color: '#6b7280' }}>Order #</Text>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('admin.order-num-prefix')}</Text>
                   <Text style={{ fontSize: 13, color: '#1f2937', fontWeight: '600' }}>{selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id}</Text>
                 </View>
 
