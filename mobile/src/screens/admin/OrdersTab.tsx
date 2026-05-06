@@ -3288,51 +3288,56 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         </Modal>
 
         {/* Payment Asia Refund Modal (shared for PA Online and PA Offline) */}
-        <Modal
-          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-          visible={showPaRefundModal}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setShowPaRefundModal(false)}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
-                {resolveVendor(selectedHistoryOrder!) === 'payment-asia-offline' ? 'Refund — PA Terminal' : t('orders.pa-refund')}
-              </Text>
-              {resolveVendor(selectedHistoryOrder!) === 'payment-asia-offline' && (
-                <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, padding: 8, marginBottom: 12 }}>
-                  <Text style={{ fontSize: 11, color: '#166534' }}>Leave amount blank for a full refund (void).</Text>
+        {(() => {
+          const isPaOffline = !!selectedHistoryOrder && resolveVendor(selectedHistoryOrder) === 'payment-asia-offline';
+          return (
+            <Modal
+              supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+              visible={showPaRefundModal}
+              animationType="fade"
+              transparent
+              onRequestClose={() => setShowPaRefundModal(false)}
+            >
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+                <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
+                    {isPaOffline ? 'Refund — PA Terminal' : t('orders.pa-refund')}
+                  </Text>
+                  {isPaOffline && (
+                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, padding: 8, marginBottom: 12 }}>
+                      <Text style={{ fontSize: 11, color: '#166534' }}>Leave amount blank for a full refund (void).</Text>
+                    </View>
+                  )}
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+                    Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-dollar')}</Text>
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
+                    keyboardType="numeric"
+                    value={paRefundAmount}
+                    onChangeText={setPaRefundAmount}
+                    placeholder={isPaOffline ? '0.00 (blank = full)' : '0.00'}
+                  />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                      onPress={() => setShowPaRefundModal(false)}
+                    >
+                      <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                      onPress={isPaOffline ? submitPaOfflineRefund : submitPaRefund}
+                    >
+                      <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              )}
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-                Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-dollar')}</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-                keyboardType="numeric"
-                value={paRefundAmount}
-                onChangeText={setPaRefundAmount}
-                placeholder={resolveVendor(selectedHistoryOrder!) === 'payment-asia-offline' ? '0.00 (blank = full)' : '0.00'}
-              />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                  onPress={() => setShowPaRefundModal(false)}
-                >
-                  <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                  onPress={resolveVendor(selectedHistoryOrder!) === 'payment-asia-offline' ? submitPaOfflineRefund : submitPaRefund}
-                >
-                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
-                </TouchableOpacity>
               </View>
-            </View>
-          </View>
-        </Modal>
+            </Modal>
+          );
+        })()}
 
         {/* Order Now Payment Modal */}
         {paymentModal}
