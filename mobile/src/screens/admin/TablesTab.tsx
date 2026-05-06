@@ -4717,8 +4717,8 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
       {/* KPay Terminal Payment Overlay */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showKPayModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { width: '90%', maxWidth: 420 }]}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={[styles.modalContent, { width: '90%', maxWidth: 420, borderRadius: 12 }]}>
             {/* Header + status badge */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>KPay Terminal Payment</Text>

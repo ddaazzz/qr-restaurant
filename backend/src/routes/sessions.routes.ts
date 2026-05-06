@@ -794,6 +794,7 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     staff_id = null,
     restaurantId,
     kpay_reference_id = null,
+    cp_vendor_ref = null,       // PA Offline sends this; alias for kpay_reference_id
   } = req.body;
 
   if (!sessionId) {
@@ -880,17 +881,18 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     }
 
     // If PA Offline: mark transaction as completed in its own table
-    if (payment_method === 'payment-asia-offline' && kpay_reference_id) {
+    // Accept either kpay_reference_id or cp_vendor_ref (mobile sends cp_vendor_ref for PA Offline)
+    const paOfflineRef = (payment_method === 'payment-asia-offline') ? (cp_vendor_ref || kpay_reference_id) : null;
+    if (paOfflineRef) {
       await client.query(
         `UPDATE pa_offline_transactions
-         SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC',
-             chuio_order_reference = $1
-         WHERE pa_order_id = $2 AND restaurant_id = $3`,
-        [kpay_reference_id, kpay_reference_id, restaurantId]
+         SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC'
+         WHERE pa_order_id = $1 AND restaurant_id = $2`,
+        [paOfflineRef, restaurantId]
       );
       await client.query(
         `UPDATE orders SET chuio_order_reference = $1 WHERE session_id = $2`,
-        [kpay_reference_id, sessionId]
+        [paOfflineRef, sessionId]
       );
     }
 

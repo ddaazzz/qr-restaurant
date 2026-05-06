@@ -1015,22 +1015,28 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               setKpayStatusMsg(t('orders.kpay-paid'));
               addLog(`> ✅ ${t('orders.kpay-confirmed')}`, '#51cf66');
 
-              // Close the bill
-              await apiClient.post(
-                `/api/sessions/${paymentModalSessionId}/close-bill`,
-                {
-                  restaurantId: parseInt(restaurantId),
-                  payment_method: 'kpay',
-                  amount_paid: paymentModalTotal,
-                  discount_applied: 0,
-                  service_charge: 0,
-                  notes: '',
-                  kpay_reference_id: outTradeNo,
-                }
-              );
-              addLog(`> ✅ ${t('orders.bill-closed')}`, '#51cf66');
+              // Close the bill — wrap in own try-catch so billing errors don't
+              // get swallowed by the outer poll catch (which would restart polling).
+              try {
+                await apiClient.post(
+                  `/api/sessions/${paymentModalSessionId}/close-bill`,
+                  {
+                    restaurantId: parseInt(restaurantId),
+                    payment_method: 'kpay',
+                    amount_paid: paymentModalTotal,
+                    discount_applied: 0,
+                    service_charge: 0,
+                    notes: '',
+                    kpay_reference_id: outTradeNo,
+                  }
+                );
+                addLog(`> ✅ ${t('orders.bill-closed')}`, '#51cf66');
+              } catch (closeBillErr: any) {
+                addLog(`> ⚠️ Payment confirmed on terminal but failed to record: ${closeBillErr.message}`, '#ffd43b');
+              }
               setKpayProcessing(false);
-              
+
+              const orderIdToReload = paymentModalOrderId;
               // Auto-dismiss after 2 seconds
               setTimeout(() => {
                 setShowPaymentModal(false);
@@ -1039,7 +1045,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 if (emailReceiptEnabled && paymentModalSessionId) {
                   openEmailReceiptModal(paymentModalSessionId, selectedHistoryOrder?.customer_email || '');
                 }
-                loadOrdersAndSessions();
+                if (orderIdToReload) reloadSelectedOrder(orderIdToReload);
+                else loadOrdersAndSessions();
               }, 2000);
               return;
             }
@@ -1196,21 +1203,28 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               addLog('> ✅ Payment confirmed', '#51cf66');
               paOfflineOrderIdRef.current = null;
 
-              await apiClient.post(
-                `/api/sessions/${paymentModalSessionId}/close-bill`,
-                {
-                  restaurantId: parseInt(restaurantId),
-                  payment_method: 'payment-asia-offline',
-                  amount_paid: paymentModalTotal,
-                  discount_applied: 0,
-                  service_charge: 0,
-                  notes: '',
-                  cp_vendor_ref: orderId,
-                },
-              );
-              addLog('> ✅ Bill closed', '#51cf66');
+              // Wrap close-bill in its own try-catch so a billing error does NOT
+              // get caught by the outer poll catch (which would retry the poll loop).
+              try {
+                await apiClient.post(
+                  `/api/sessions/${paymentModalSessionId}/close-bill`,
+                  {
+                    restaurantId: parseInt(restaurantId),
+                    payment_method: 'payment-asia-offline',
+                    amount_paid: paymentModalTotal,
+                    discount_applied: 0,
+                    service_charge: 0,
+                    notes: '',
+                    cp_vendor_ref: orderId,
+                  },
+                );
+                addLog('> ✅ Bill closed', '#51cf66');
+              } catch (closeBillErr: any) {
+                addLog(`> ⚠️ Payment confirmed on terminal but failed to record: ${closeBillErr.message}`, '#ffd43b');
+              }
               setKpayProcessing(false);
 
+              const orderIdToReload = paymentModalOrderId;
               setTimeout(() => {
                 setShowPaymentModal(false);
                 setKpayLogs([]);
@@ -1218,7 +1232,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 if (emailReceiptEnabled && paymentModalSessionId) {
                   openEmailReceiptModal(paymentModalSessionId, selectedHistoryOrder?.customer_email || '');
                 }
-                loadOrdersAndSessions();
+                if (orderIdToReload) reloadSelectedOrder(orderIdToReload);
+                else loadOrdersAndSessions();
               }, 2000);
               return;
             }

@@ -1227,6 +1227,15 @@ router.patch("/restaurants/:restaurantId/orders/:orderId/payment-outcome", async
       [status, void_vendor_ref || null, refund_vendor_ref || null, orderId, restaurantId]
     );
 
+    // Keep chuio_payments and kpay_transactions in sync so the order list
+    // shows the correct status badge (effectiveStatus = cp_status || payment_status).
+    try {
+      await pool.query(`UPDATE chuio_payments SET status = $1 WHERE order_id = $2`, [status, orderId]);
+    } catch (_) {}
+    try {
+      await pool.query(`UPDATE kpay_transactions SET status = $1 WHERE order_id = $2`, [status, orderId]);
+    } catch (_) {}
+
     res.json({ success: true, payment_status: status });
   } catch (err) {
     console.error('[payment-outcome]', err);
