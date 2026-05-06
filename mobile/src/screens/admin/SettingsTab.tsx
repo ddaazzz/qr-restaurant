@@ -29,6 +29,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { Linking } from 'react-native';
 import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
+import { kpaySign } from '../../services/kpayDirectService';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
 
 interface RestaurantSettings {
@@ -1509,7 +1510,41 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         return;
       }
 
-      // KPay / other: call backend test endpoint
+      // KPay: test directly from device (Render cannot reach LAN IPs)
+      if (vendor === 'kpay') {
+        const ip = terminalForm.terminal_ip;
+        const port = parseInt(terminalForm.terminal_port);
+        const appId = terminalForm.app_id;
+        const appSecret = terminalForm.app_secret;
+        if (!ip || !port || !appId || !appSecret) {
+          Alert.alert(t('common.error'), 'Save terminal first (IP, port, App ID, and App Secret are required)');
+          return;
+        }
+        setTestingTerminal(true);
+        try {
+          const signResult = await kpaySign({ terminalIp: ip, terminalPort: port, appId, appSecret });
+          if (signResult.success) {
+            setTerminalTestResult({
+              success: true,
+              message: `✅ Connected to KPay terminal at ${ip}:${port}. Key exchange successful.`,
+            });
+            Alert.alert(t('settings.connection-success'), `Connected to KPay terminal at ${ip}:${port}`);
+          } else {
+            setTerminalTestResult({
+              success: false,
+              message: `❌ Cannot reach KPay terminal at ${ip}:${port}: ${signResult.error || signResult.message}`,
+            });
+            Alert.alert(t('settings.connection-failed'), signResult.error || signResult.message);
+          }
+        } catch (err: any) {
+          setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
+        } finally {
+          setTestingTerminal(false);
+        }
+        return;
+      }
+
+      // Other vendors: call backend test endpoint
       setTestingTerminal(true);
       const response = await apiClient.post(
         `/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}/test`

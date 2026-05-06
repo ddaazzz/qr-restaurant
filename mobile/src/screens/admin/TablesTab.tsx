@@ -39,6 +39,7 @@ import TcpSocket from 'react-native-tcp-socket';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { kpaySign, kpaySale, kpayQuery, kpayClose, KPayTerminalConfig } from '../../services/kpayDirectService';
 
 /**
  * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.
@@ -308,6 +309,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const kpayPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Ref to track if current KPay payment is for a split portion (vs regular close bill)
   const kpaySplitPortionRef = useRef<any>(null);
+  // Refs to carry KPay session state across poll callbacks (can't use state inside setTimeout)
+  const kpayPrivateKeyRef = useRef<string | null>(null);
+  const kpayConfigRef = useRef<KPayTerminalConfig | null>(null);
 
   // Clean up KPay poll timer on unmount
   useEffect(() => {
@@ -1202,6 +1206,121 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     if (!activePaymentTerminal) return;
     const amountInCents = String(finalAmt).padStart(12, '0');
 
+    // ── KPay: communicate with terminal DIRECTLY from device (Render cannot reach LAN IPs) ──
+    if (activePaymentTerminal.vendor_name === 'kpay') {
+      try {
+        _addKPayLog('> Fetching terminal config…');
+
+        // Fetch full config including app_secret (list endpoint omits secrets)
+        const termRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}`,
+        );
+        const term = termRes.data;
+        const kpayConfig: KPayTerminalConfig = {
+          terminalIp: term.terminal_ip,
+          terminalPort: term.terminal_port,
+          appId: term.app_id,
+          appSecret: term.app_secret,
+          endpointPath: term.endpoint_path || '/v2/pos/sign',
+        };
+        kpayConfigRef.current = kpayConfig;
+
+        _addKPayLog(`> Connecting to KPay terminal at ${kpayConfig.terminalIp}:${kpayConfig.terminalPort}…`);
+
+        // Step 1: Key exchange
+        const signResult = await kpaySign(kpayConfig);
+        _addKPayLog(
+          signResult.success
+            ? '[KPayDirectService] ✅ Key exchange successful'
+            : `[KPayDirectService] ❌ Key exchange failed: ${signResult.error}`,
+          signResult.success ? '#51cf66' : '#ff6b6b',
+        );
+
+        if (!signResult.success || !signResult.appPrivateKey) {
+          setKpayStatus('failed');
+          _addKPayLog(`> ❌ Failed: ${signResult.message}`, '#ff6b6b');
+          return;
+        }
+
+        kpayPrivateKeyRef.current = signResult.appPrivateKey;
+        const outTradeNo = `ORD-${restaurantId}-${activePaymentTerminal.id}-${Date.now()}`;
+
+        // Step 2: Initiate sale
+        const saleResult = await kpaySale(kpayConfig, signResult.appPrivateKey, outTradeNo, amountInCents);
+        _addKPayLog(
+          saleResult.success
+            ? '[KPayDirectService] ✅ Sale initiated'
+            : `[KPayDirectService] ❌ Sale failed: ${saleResult.error}`,
+          saleResult.success ? '#51cf66' : '#ff6b6b',
+        );
+
+        if (!saleResult.success) {
+          setKpayStatus('failed');
+          _addKPayLog(`> ❌ Failed: ${saleResult.message}`, '#ff6b6b');
+          return;
+        }
+
+        setKpayOutTradeNo(outTradeNo);
+        setKpayStatus('waiting');
+        _addKPayLog(`> Initiated — outTradeNo: ${outTradeNo}`, '#ffd43b');
+        _addKPayLog('> Waiting for customer to tap / scan on terminal…', '#ffd43b');
+
+        // Step 3: Poll status directly from device
+        let attempts = 0;
+        const maxAttempts = 22;
+
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatus('timeout');
+            _addKPayLog('> TIMEOUT — no response after 65s. Use Abort to free the terminal.', '#ffd43b');
+            return;
+          }
+          attempts++;
+          _addKPayLog(`> Polling… (${attempts}/${maxAttempts})`);
+
+          try {
+            const qData = await kpayQuery(kpayConfig, kpayPrivateKeyRef.current!, outTradeNo);
+            _addKPayLog(`  Status: ${qData.status}`);
+
+            if (qData.status === 'success') {
+              setKpayStatus('success');
+              _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
+              try {
+                const vendor = activePaymentTerminal?.vendor_name || 'kpay';
+                if (kpaySplitPortionRef.current) {
+                  await _doSplitPortionPay(kpaySplitPortionRef.current, vendor, outTradeNo);
+                } else {
+                  await _doCloseBill(finalAmt, discountCts, vendor, outTradeNo);
+                }
+              } catch (closeErr: any) {
+                _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
+              }
+              return;
+            }
+
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
+              _addKPayLog(`> Payment ${qData.status}.`, '#ff6b6b');
+              return;
+            }
+
+            // Still pending — poll again in 3 s
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            _addKPayLog(`  Poll error: ${e.message} — retrying…`, '#ffd43b');
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          }
+        };
+
+        kpayPollTimerRef.current = setTimeout(poll, 2000);
+      } catch (err: any) {
+        setKpayStatus('failed');
+        _addKPayLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+      }
+      return;
+    }
+
+    // ── All other vendors (PA Offline, etc.): go through backend ──
     try {
       _addKPayLog('> Initiating payment…');
       const resp = await apiClient.post(
@@ -1316,16 +1435,25 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             setKpayStatus('aborting');
             _addKPayLog('> Aborting — sending close-transaction to terminal…', '#ffd43b');
             try {
-              const r = await apiClient.post(
-                `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/close-transaction`,
-                { outTradeNo: kpayOutTradeNo },
-              );
-              const d = r.data;
-              if (d.logs) d.logs.forEach((l: string) => _addKPayLog(l, l.includes('✅') ? '#51cf66' : '#ffd43b'));
-              _addKPayLog(
-                d.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${d.message || d.error}`,
-                d.success ? '#51cf66' : '#ff6b6b',
-              );
+              // KPay: close directly from device (Render cannot reach LAN IP)
+              if (activePaymentTerminal.vendor_name === 'kpay' && kpayConfigRef.current && kpayPrivateKeyRef.current) {
+                const closeResult = await kpayClose(kpayConfigRef.current, kpayPrivateKeyRef.current, kpayOutTradeNo);
+                _addKPayLog(
+                  closeResult.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${closeResult.message}`,
+                  closeResult.success ? '#51cf66' : '#ff6b6b',
+                );
+              } else {
+                const r = await apiClient.post(
+                  `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/close-transaction`,
+                  { outTradeNo: kpayOutTradeNo },
+                );
+                const d = r.data;
+                if (d.logs) d.logs.forEach((l: string) => _addKPayLog(l, l.includes('✅') ? '#51cf66' : '#ffd43b'));
+                _addKPayLog(
+                  d.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${d.message || d.error}`,
+                  d.success ? '#51cf66' : '#ff6b6b',
+                );
+              }
             } catch (e: any) {
               _addKPayLog(`> Error: ${e.message}`, '#ff6b6b');
             }
