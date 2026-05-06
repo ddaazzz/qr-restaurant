@@ -306,7 +306,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [showKpayRefundModal, setShowKpayRefundModal] = useState(false);
     const [kpayRefundAmount, setKpayRefundAmount] = useState('');
     const [kpayManagerPassword, setKpayManagerPassword] = useState('');
-    const [kpayVoidLoading, setKpayVoidLoading] = useState(false);
     const [showPaRefundModal, setShowPaRefundModal] = useState(false);
     const [paRefundAmount, setPaRefundAmount] = useState('');
 
