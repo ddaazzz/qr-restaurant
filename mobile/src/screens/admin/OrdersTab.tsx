@@ -2925,6 +2925,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           )}
         </View>
         {paymentModal}
+        {kpayRefundModal}
+        {paOnlineRefundModal}
         {emailReceiptModal}
         </>
       );
