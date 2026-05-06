@@ -4642,7 +4642,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
-              Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+              {activeSplitPortion?.restaurant_order_number
+                ? `Close Bill — Order #${activeSplitPortion.restaurant_order_number}`
+                : `Pay Portion ${activeSplitPortion?.split_index} of ${activeSplitPortion?.split_count}`}
             </Text>
             <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
               <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
@@ -4651,14 +4653,22 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               </Text>
             </View>
             <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-              {['cash', 'card'].map(m => (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {[
+                { value: 'cash', label: 'Cash' },
+                { value: 'card', label: 'Card' },
+                ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
+                  ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }]
+                  : activePaymentTerminal?.vendor_name === 'kpay'
+                  ? [{ value: 'kpay', label: 'KPay Terminal' }]
+                  : []),
+              ].map(m => (
                 <TouchableOpacity
-                  key={m}
-                  style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m ? '#eff6ff' : '#fff' }}
-                  onPress={() => setSplitPayMethod(m)}
+                  key={m.value}
+                  style={{ flex: 1, minWidth: 80, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m.value ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m.value ? '#eff6ff' : '#fff' }}
+                  onPress={() => setSplitPayMethod(m.value)}
                 >
-                  <Text style={{ fontWeight: '600', color: splitPayMethod === m ? '#3b82f6' : '#374151' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                  <Text style={{ fontWeight: '600', color: splitPayMethod === m.value ? '#3b82f6' : '#374151' }}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
