@@ -504,3 +504,38 @@ export async function paOfflineVoidOrder(
     return { success: false, message: msg, tradeNo: orderId, error: msg };
   }
 }
+
+/**
+ * Refund a settled PA Offline terminal payment.
+ * Calls POST /order/refund — terminal processes the refund interactively.
+ * @param amountDollars  Optional decimal dollar amount for partial refund; omit for full refund.
+ */
+export async function paOfflineRefundOrder(
+  config: PATerminalConfig,
+  orderId: string,
+  amountDollars?: string,
+): Promise<PATerminalActionResult> {
+  try {
+    const body: Record<string, any> = { order_id: orderId };
+    if (amountDollars) body.amount = amountDollars;
+    const res = await fetchWithTimeout(`${paOfflineBaseUrl(config)}/order/refund`, {
+      method: 'POST',
+      headers: paOfflineHeaders(config),
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    const success = res.ok && data?.code === '1000';
+    return {
+      success,
+      message: data?.message || (success ? 'Refund successful' : 'Refund failed'),
+      tradeNo: orderId,
+      raw: data,
+    };
+  } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Refund timed out' : err.message;
+    return { success: false, message: msg, tradeNo: orderId, error: msg };
+  }
+}

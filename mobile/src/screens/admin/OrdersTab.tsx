@@ -5,8 +5,8 @@ import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { kpaySign, kpayVoid, kpayRefund, encryptManagerPassword, KPayTerminalConfig } from '../../services/kpayDirectService';
-import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
+import { kpaySign, kpayQuery, kpayVoid, kpayRefund, encryptManagerPassword, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, paOfflineRefundOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 interface MenuItem {
   id: number;
@@ -270,6 +270,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [kpayStatusMsg, setKpayStatusMsg] = useState('');
     const [kpayLogs, setKpayLogs] = useState<Array<{ msg: string; color: string }>>([]);
     const kpayPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [kpayModalTitle, setKpayModalTitle] = useState<string | null>(null);
     // PA Offline: current order ID and config, kept in refs so abort can access them
     const paOfflineOrderIdRef = useRef<string | null>(null);
     const paOfflineConfigRef = useRef<PATerminalConfig | null>(null);
@@ -1327,49 +1328,111 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {
             text: t('orders.void'),
             style: 'destructive',
-            onPress: async () => {
-              setKpayVoidLoading(true);
-              try {
-                // Fetch real terminal config (app_secret not masked)
-                const terminalRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}`);
-                const tc = terminalRes.data;
-                const config: KPayTerminalConfig = {
-                  terminalIp: tc.terminal_ip,
-                  terminalPort: tc.terminal_port,
-                  appId: tc.app_id,
-                  appSecret: tc.app_secret,
-                  endpointPath: tc.endpoint_path || '/v2/pos/sign',
-                };
-                // Key exchange to get appPrivateKey
-                const signResult = await kpaySign(config);
-                if (!signResult.success || !signResult.appPrivateKey) {
-                  Alert.alert(t('orders.void-failed'), signResult.error || signResult.message);
-                  return;
-                }
-                const voidOutTradeNo = `VOID-${Date.now()}`;
-                const result = await kpayVoid(config, signResult.appPrivateKey, voidOutTradeNo, originOutTradeNo);
-                if (result.success) {
-                  // Record void reference on the order so history shows the link
-                  try {
-                    await apiClient.patch(
-                      `/api/restaurants/${restaurantId}/orders/${order.id}/payment-outcome`,
-                      { status: 'voided', void_vendor_ref: voidOutTradeNo }
-                    );
-                  } catch (_) {}
-                  Alert.alert(t('orders.success'), t('orders.void-success'));
-                  await reloadSelectedOrder(order.id);
-                } else {
-                  Alert.alert(t('orders.void-failed'), result.error || result.message);
-                }
-              } catch (err: any) {
-                Alert.alert(t('orders.void-failed'), err.response?.data?.error || err.message);
-              } finally {
-                setKpayVoidLoading(false);
-              }
-            },
+            onPress: () => startKpayVoidFlow(order, originOutTradeNo),
           },
         ]
       );
+    };
+
+    const startKpayVoidFlow = async (order: Order, originOutTradeNo: string) => {
+      const voidOutTradeNo = `VOID-${Date.now()}`;
+      setKpayModalTitle('⊘ Void Transaction');
+      setPaymentModalTotal(order.total_cents);
+      setPaymentModalOrderNumber(order.restaurant_order_number || order.id);
+      setPaymentModalOrderId(order.id);
+      setPaymentModalSessionId(order.session_id || null);
+      setKpayProcessing(true);
+      setKpayLogs([]);
+      setKpayStatusMsg('');
+      setShowPaymentModal(true);
+
+      const addLog = (msg: string, color: string = '#00ff00') =>
+        setKpayLogs(prev => [...prev, { msg, color }]);
+
+      try {
+        setKpayStatusMsg('Signing in...');
+        addLog('> Signing in to KPay terminal...', '#ffd43b');
+        const terminalRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}`);
+        const tc = terminalRes.data;
+        const config: KPayTerminalConfig = {
+          terminalIp: tc.terminal_ip,
+          terminalPort: tc.terminal_port,
+          appId: tc.app_id,
+          appSecret: tc.app_secret,
+          endpointPath: tc.endpoint_path || '/v2/pos/sign',
+        };
+        const signResult = await kpaySign(config);
+        if (!signResult.success || !signResult.appPrivateKey) {
+          setKpayStatusMsg('Sign-in failed');
+          addLog(`> ❌ ${signResult.error || signResult.message}`, '#ff6b6b');
+          setKpayProcessing(false);
+          return;
+        }
+        addLog('> ✅ Signed in', '#51cf66');
+
+        setKpayStatusMsg('Sending void to terminal...');
+        addLog(`> Void ref: ${voidOutTradeNo}`, '#ffd43b');
+        addLog(`> Original: ${originOutTradeNo}`, '#ffd43b');
+        const voidResult = await kpayVoid(config, signResult.appPrivateKey, voidOutTradeNo, originOutTradeNo);
+        if (!voidResult.success) {
+          setKpayStatusMsg('Void failed');
+          addLog(`> ❌ ${voidResult.error || voidResult.message}`, '#ff6b6b');
+          setKpayProcessing(false);
+          return;
+        }
+        addLog('> ✅ Void initiated — confirm on terminal screen', '#51cf66');
+        setKpayStatusMsg('Waiting for confirmation...');
+        addLog('> Polling terminal for confirmation...', '#ffd43b');
+
+        let attempts = 0;
+        const maxAttempts = 40; // ~2 min
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatusMsg('Timeout — no confirmation');
+            addLog('> TIMEOUT — void may not have been confirmed', '#ffd43b');
+            setKpayProcessing(false);
+            return;
+          }
+          attempts++;
+          addLog(`> Poll ${attempts}/${maxAttempts}...`);
+          try {
+            const qData = await kpayQuery(config, signResult.appPrivateKey!, voidOutTradeNo);
+            if (qData.status === 'success') {
+              setKpayStatusMsg('Void confirmed ✅');
+              addLog('> ✅ Void confirmed by terminal!', '#51cf66');
+              setKpayProcessing(false);
+              try {
+                await apiClient.patch(
+                  `/api/restaurants/${restaurantId}/orders/${order.id}/payment-outcome`,
+                  { status: 'voided', void_vendor_ref: voidOutTradeNo }
+                );
+              } catch (_) {}
+              setTimeout(async () => {
+                setShowPaymentModal(false);
+                setKpayLogs([]);
+                setKpayModalTitle(null);
+                await reloadSelectedOrder(order.id);
+              }, 1500);
+              return;
+            }
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatusMsg(qData.status === 'cancelled' ? 'Void cancelled' : 'Void failed');
+              addLog(`> ${qData.status === 'cancelled' ? '⚠️ Void cancelled' : '❌ Void failed'}`, '#ff6b6b');
+              setKpayProcessing(false);
+              return;
+            }
+            kpayPollRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            addLog(`> Poll error: ${e.message}`, '#ffd43b');
+            kpayPollRef.current = setTimeout(poll, 3000);
+          }
+        };
+        kpayPollRef.current = setTimeout(poll, 2000);
+      } catch (err: any) {
+        addLog(`> ❌ ${err.message}`, '#ff6b6b');
+        setKpayStatusMsg('Error');
+        setKpayProcessing(false);
+      }
     };
 
     // === KPay Refund ===
@@ -1380,19 +1443,34 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     };
 
     const submitKpayRefund = async () => {
-      if (!selectedHistoryOrder) return;
-      if (!kpayTerminal) {
-        Alert.alert(t('orders.error'), t('orders.no-kpay-terminal'));
-        return;
-      }
+      if (!selectedHistoryOrder || !kpayTerminal) return;
       const originOutTradeNo = selectedHistoryOrder.kpay_reference_id;
       if (!originOutTradeNo || !kpayManagerPassword) {
         Alert.alert(t('orders.error'), t('orders.password-required'));
         return;
       }
-      setKpayVoidLoading(true);
+      // Close password/amount modal and open the terminal window
+      setShowKpayRefundModal(false);
+      const refOutTradeNo = `REF-${Date.now()}`;
+      setKpayModalTitle('↩ Refund Transaction');
+      setPaymentModalTotal(selectedHistoryOrder.total_cents);
+      setPaymentModalOrderNumber(selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id);
+      setPaymentModalOrderId(selectedHistoryOrder.id);
+      setPaymentModalSessionId(selectedHistoryOrder.session_id || null);
+      setKpayProcessing(true);
+      setKpayLogs([]);
+      setKpayStatusMsg('');
+      setShowPaymentModal(true);
+
+      const addLog = (msg: string, color: string = '#00ff00') =>
+        setKpayLogs(prev => [...prev, { msg, color }]);
+
+      // Capture mutable selectedHistoryOrder.id before async ops
+      const orderId = selectedHistoryOrder.id;
+
       try {
-        // Fetch real terminal config (app_secret not masked)
+        setKpayStatusMsg('Signing in...');
+        addLog('> Signing in to KPay terminal...', '#ffd43b');
         const terminalRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}`);
         const tc = terminalRes.data;
         const config: KPayTerminalConfig = {
@@ -1402,18 +1480,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           appSecret: tc.app_secret,
           endpointPath: tc.endpoint_path || '/v2/pos/sign',
         };
-        // Key exchange to get appPrivateKey + platformPublicKey
         const signResult = await kpaySign(config);
         if (!signResult.success || !signResult.appPrivateKey || !signResult.platformPublicKey) {
-          Alert.alert(t('orders.refund-failed'), signResult.error || signResult.message);
+          setKpayStatusMsg('Sign-in failed');
+          addLog(`> ❌ ${signResult.error || signResult.message}`, '#ff6b6b');
+          setKpayProcessing(false);
           return;
         }
-        // Encrypt manager password using platform public key
+        addLog('> ✅ Signed in', '#51cf66');
+
+        setKpayStatusMsg('Encrypting password...');
         const encryptedPw = encryptManagerPassword(signResult.platformPublicKey, kpayManagerPassword);
-        // KPay query details to get transactionNo/refNo for refund
+        addLog('> Password encrypted', '#ffd43b');
+
         const kpayTx = kpayTxDetails;
         const refundParams: any = {
-          outTradeNo: `REF-${Date.now()}`,
+          outTradeNo: refOutTradeNo,
           refundType: kpayTx?.payMethod === 1 ? 1 : 2, // 1=Card, 2=QR
           encryptedManagerPassword: encryptedPw,
         };
@@ -1421,29 +1503,71 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         if (kpayTx?.refNo) refundParams.refNo = kpayTx.refNo;
         if (kpayTx?.commitTime) refundParams.commitTime = kpayTx.commitTime;
         if (kpayRefundAmount) {
-          // Convert dollar amount to 12-digit zero-padded cents string
           const cents = Math.round(parseFloat(kpayRefundAmount) * 100);
           refundParams.refundAmount = cents.toString().padStart(12, '0');
         }
+
+        setKpayStatusMsg('Sending refund to terminal...');
+        addLog(`> Refund ref: ${refOutTradeNo}`, '#ffd43b');
         const result = await kpayRefund(config, signResult.appPrivateKey, refundParams);
-        if (result.success) {
-          // Record refund reference on the order
-          try {
-            await apiClient.patch(
-              `/api/restaurants/${restaurantId}/orders/${selectedHistoryOrder.id}/payment-outcome`,
-              { status: 'refunded', refund_vendor_ref: refundParams.outTradeNo }
-            );
-          } catch (_) {}
-          setShowKpayRefundModal(false);
-          Alert.alert(t('orders.success'), t('orders.refund-kpay-success'));
-          await reloadSelectedOrder(selectedHistoryOrder.id);
-        } else {
-          Alert.alert(t('orders.refund-failed'), result.error || result.message);
+        if (!result.success) {
+          setKpayStatusMsg('Refund failed');
+          addLog(`> ❌ ${result.error || result.message}`, '#ff6b6b');
+          setKpayProcessing(false);
+          return;
         }
+        addLog('> ✅ Refund initiated — confirm on terminal screen', '#51cf66');
+        setKpayStatusMsg('Waiting for confirmation...');
+        addLog('> Polling terminal for confirmation...', '#ffd43b');
+
+        let attempts = 0;
+        const maxAttempts = 40;
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatusMsg('Timeout — no confirmation');
+            addLog('> TIMEOUT', '#ffd43b');
+            setKpayProcessing(false);
+            return;
+          }
+          attempts++;
+          addLog(`> Poll ${attempts}/${maxAttempts}...`);
+          try {
+            const qData = await kpayQuery(config, signResult.appPrivateKey!, refOutTradeNo);
+            if (qData.status === 'success') {
+              setKpayStatusMsg('Refund confirmed ✅');
+              addLog('> ✅ Refund confirmed by terminal!', '#51cf66');
+              setKpayProcessing(false);
+              try {
+                await apiClient.patch(
+                  `/api/restaurants/${restaurantId}/orders/${orderId}/payment-outcome`,
+                  { status: 'refunded', refund_vendor_ref: refOutTradeNo }
+                );
+              } catch (_) {}
+              setTimeout(async () => {
+                setShowPaymentModal(false);
+                setKpayLogs([]);
+                setKpayModalTitle(null);
+                await reloadSelectedOrder(orderId);
+              }, 1500);
+              return;
+            }
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatusMsg(qData.status === 'cancelled' ? 'Refund cancelled' : 'Refund failed');
+              addLog(`> ${qData.status === 'cancelled' ? '⚠️ Refund cancelled' : '❌ Refund failed'}`, '#ff6b6b');
+              setKpayProcessing(false);
+              return;
+            }
+            kpayPollRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            addLog(`> Poll error: ${e.message}`, '#ffd43b');
+            kpayPollRef.current = setTimeout(poll, 3000);
+          }
+        };
+        kpayPollRef.current = setTimeout(poll, 2000);
       } catch (err: any) {
-        Alert.alert(t('orders.refund-failed'), err.response?.data?.error || err.message);
-      } finally {
-        setKpayVoidLoading(false);
+        addLog(`> ❌ ${err.message}`, '#ff6b6b');
+        setKpayStatusMsg('Error');
+        setKpayProcessing(false);
       }
     };
 
@@ -1479,79 +1603,37 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
-    // === PA Offline Void (direct from device) ===
-    const handlePaOfflineVoid = (order: Order) => {
+    // === PA Offline Refund (direct from device — POST /order/refund, then poll) ===
+    // NOTE: PA Offline has no void endpoint; only refund is supported.
+    const startPaOfflineRefundFlow = async (order: Order) => {
       const paOrderId = order.cp_vendor_ref || order.kpay_reference_id;
       if (!paOrderId) {
         Alert.alert(t('orders.error'), 'No PA order reference found');
         return;
       }
-      Alert.alert(
-        'Void PA Terminal Payment',
-        `Void transaction ${paOrderId}?\n\nOnly works for same-day, unsettled transactions.`,
-        [
-          { text: t('orders.cancel') },
-          {
-            text: 'Void',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
-                const paTerminal = (termRes.data || []).find((t: any) => t.vendor_name === 'payment-asia-offline' && t.is_active);
-                if (!paTerminal) {
-                  Alert.alert(t('orders.error'), 'No active PA Offline terminal found');
-                  return;
-                }
-                const termDetail = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}`);
-                const tc = termDetail.data;
-                const paConfig: PATerminalConfig = {
-                  terminalIp: tc.terminal_ip,
-                  terminalPort: tc.terminal_port,
-                  apiKey: tc.app_secret,
-                };
-                const result = await paOfflineVoidOrder(paConfig, paOrderId);
-                if (result.success) {
-                  // Record void ref so history links original payment → void
-                  try {
-                    await apiClient.patch(
-                      `/api/restaurants/${restaurantId}/orders/${order.id}/payment-outcome`,
-                      { status: 'voided', void_vendor_ref: paOrderId }
-                    );
-                  } catch (_) {}
-                  Alert.alert(t('orders.success'), 'Void request sent to terminal.');
-                  await reloadSelectedOrder(order.id);
-                } else {
-                  Alert.alert('Void Failed', result.error || result.message);
-                }
-              } catch (err: any) {
-                Alert.alert('Void Failed', err.response?.data?.error || err.message);
-              }
-            },
-          },
-        ],
-      );
-    };
+      setKpayModalTitle('↩ PA Terminal Refund');
+      setPaymentModalTotal(order.total_cents);
+      setPaymentModalOrderNumber(order.restaurant_order_number || order.id);
+      setPaymentModalOrderId(order.id);
+      setPaymentModalSessionId(order.session_id || null);
+      setKpayProcessing(true);
+      setKpayLogs([]);
+      setKpayStatusMsg('');
+      setShowPaymentModal(true);
 
-    // === PA Offline Refund (void on terminal) ===
-    const openPaOfflineRefund = () => {
-      if (!selectedHistoryOrder) return;
-      const totalDollars = ((selectedHistoryOrder.cp_total_cents || selectedHistoryOrder.total_cents || 0) / 100).toFixed(2);
-      setPaRefundAmount(totalDollars);
-      setShowPaRefundModal(true);
-    };
+      const addLog = (msg: string, color: string = '#00ff00') =>
+        setKpayLogs(prev => [...prev, { msg, color }]);
 
-    const submitPaOfflineRefund = async () => {
-      if (!selectedHistoryOrder) return;
-      const paOrderId = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
-      if (!paOrderId) {
-        Alert.alert(t('orders.error'), 'No PA order reference found');
-        return;
-      }
+      const orderId = order.id;
+
       try {
+        addLog('> Fetching PA Offline terminal config...', '#ffd43b');
         const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
         const paTerminal = (termRes.data || []).find((t: any) => t.vendor_name === 'payment-asia-offline' && t.is_active);
         if (!paTerminal) {
-          Alert.alert(t('orders.error'), 'No active PA Offline terminal found');
+          setKpayStatusMsg('No PA terminal');
+          addLog('> ❌ No active PA Offline terminal found', '#ff6b6b');
+          setKpayProcessing(false);
           return;
         }
         const termDetail = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}`);
@@ -1561,23 +1643,35 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           terminalPort: tc.terminal_port,
           apiKey: tc.app_secret,
         };
-        const result = await paOfflineVoidOrder(paConfig, paOrderId);
+
+        setKpayStatusMsg('Sending refund to terminal...');
+        addLog(`> POST /order/refund  order_id=${paOrderId}`, '#ffd43b');
+        const result = await paOfflineRefundOrder(paConfig, paOrderId);
         if (result.success) {
-          // Record refund ref so history links original payment → refund
+          setKpayStatusMsg('Refund confirmed ✅');
+          addLog('> ✅ Refund successful on terminal!', '#51cf66');
+          setKpayProcessing(false);
           try {
             await apiClient.patch(
-              `/api/restaurants/${restaurantId}/orders/${selectedHistoryOrder.id}/payment-outcome`,
+              `/api/restaurants/${restaurantId}/orders/${orderId}/payment-outcome`,
               { status: 'refunded', refund_vendor_ref: paOrderId }
             );
           } catch (_) {}
-          setShowPaRefundModal(false);
-          Alert.alert(t('orders.success'), t('orders.refund-pa-success'));
-          await reloadSelectedOrder(selectedHistoryOrder.id);
+          setTimeout(async () => {
+            setShowPaymentModal(false);
+            setKpayLogs([]);
+            setKpayModalTitle(null);
+            await reloadSelectedOrder(orderId);
+          }, 1500);
         } else {
-          Alert.alert(t('orders.refund-failed'), result.error || result.message);
+          setKpayStatusMsg('Refund failed');
+          addLog(`> ❌ ${result.error || result.message}`, '#ff6b6b');
+          setKpayProcessing(false);
         }
       } catch (err: any) {
-        Alert.alert(t('orders.refund-failed'), err.response?.data?.error || err.message);
+        addLog(`> ❌ ${err.message}`, '#ff6b6b');
+        setKpayStatusMsg('Error');
+        setKpayProcessing(false);
       }
     };
 
@@ -1709,12 +1803,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             if (!kpayProcessing) {
               setShowPaymentModal(false);
               setKpayLogs([]);
+              setKpayModalTitle(null);
             }
           }}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '85%', maxWidth: 440, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.collect-payment')}</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{kpayModalTitle || t('orders.collect-payment')}</Text>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
                 {t('orders.order-now')} {paymentModalOrderNumber ? `#${paymentModalOrderNumber}` : ''}
               </Text>
@@ -1759,6 +1854,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                           setShowPaymentModal(false);
                           setKpayLogs([]);
                           setKpayStatusMsg('');
+                          setKpayModalTitle(null);
                           loadOrdersAndSessions();
                         }}
                       >
@@ -2459,24 +2555,20 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             if (vendor === 'kpay' && kpayTerminal) {
               return (
                 <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                  {kpayVoidLoading ? (
-                    <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 8 }} />
-                  ) : (
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
-                        onPress={() => handleKpayVoid(selectedHistoryOrder)}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>{t('orders.void-btn')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
-                        onPress={openKpayRefund}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
+                      onPress={() => handleKpayVoid(selectedHistoryOrder)}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>{t('orders.void-btn')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                      onPress={openKpayRefund}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>{t('orders.refund-btn')}</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               );
             }
@@ -2497,22 +2589,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             if (vendor === 'payment-asia-offline') {
               return (
                 <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b' }}
-                      onPress={() => handlePaOfflineVoid(selectedHistoryOrder)}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400e' }}>Void</Text>
-                      <Text style={{ fontSize: 10, color: '#b45309', marginTop: 2 }}>Same-day only</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
-                      onPress={openPaOfflineRefund}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>Refund</Text>
-                      <Text style={{ fontSize: 10, color: '#b91c1c', marginTop: 2 }}>PA Terminal</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
+                    onPress={() => startPaOfflineRefundFlow(selectedHistoryOrder)}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>Refund</Text>
+                    <Text style={{ fontSize: 10, color: '#b91c1c', marginTop: 2 }}>PA Terminal</Text>
+                  </TouchableOpacity>
                 </View>
               );
             }
@@ -3397,23 +3480,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: kpayVoidLoading ? '#fca5a5' : '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
                   onPress={submitKpayRefund}
-                  disabled={kpayVoidLoading}
                 >
-                  {kpayVoidLoading
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
-                  }
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
 
-        {/* Payment Asia Refund Modal (shared for PA Online and PA Offline) */}
+        {/* Payment Asia Online Refund Modal */}
         {(() => {
-          const isPaOffline = !!selectedHistoryOrder && resolveVendor(selectedHistoryOrder) === 'payment-asia-offline';
           return (
             <Modal
               supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
@@ -3425,13 +3503,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
                 <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
                   <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
-                    {isPaOffline ? 'Refund — PA Terminal' : t('orders.pa-refund')}
+                    {t('orders.pa-refund')}
                   </Text>
-                  {isPaOffline && (
-                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, padding: 8, marginBottom: 12 }}>
-                      <Text style={{ fontSize: 11, color: '#166534' }}>Leave amount blank for a full refund (void).</Text>
-                    </View>
-                  )}
                   <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
                     Ref: {selectedHistoryOrder?.cp_vendor_ref || selectedHistoryOrder?.kpay_reference_id || '—'}
                   </Text>
@@ -3441,7 +3514,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     keyboardType="numeric"
                     value={paRefundAmount}
                     onChangeText={setPaRefundAmount}
-                    placeholder={isPaOffline ? '0.00 (blank = full)' : '0.00'}
+                    placeholder="0.00"
                   />
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
@@ -3452,7 +3525,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                      onPress={isPaOffline ? submitPaOfflineRefund : submitPaRefund}
+                      onPress={submitPaRefund}
                     >
                       <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
                     </TouchableOpacity>
