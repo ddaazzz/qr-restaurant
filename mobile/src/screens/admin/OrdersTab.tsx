@@ -2751,6 +2751,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             {kpayRefundModal}
             {paOnlineRefundModal}
             {emailReceiptModal}
+          </>
+        );
+      }
+
+      return (
+        <>
+          <View style={[styles.container, historyIsTablet && { flexDirection: 'row' }]}>
           <View style={{ flex: 1 }}>
           {/* Header with back button */}
           <View style={styles.historyHeader}>
