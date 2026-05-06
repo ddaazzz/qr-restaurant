@@ -2315,11 +2315,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   <Text style={{ fontSize: 13, color: '#1f2937' }}>{methodLabel}</Text>
                 </View>
 
+                {/* Order Number */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.order-num-label') || 'Order #'}</Text>
+                  <Text style={{ fontSize: 13, color: '#1f2937', fontWeight: '600' }}>{selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id}</Text>
+                </View>
+
                 {/* Vendor Reference */}
-                {selectedHistoryOrder.cp_vendor_ref && (
+                {(selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id) && (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                     <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.reference')}</Text>
-                    <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.cp_vendor_ref}</Text>
+                    <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }} numberOfLines={1} ellipsizeMode="middle">{selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id}</Text>
                   </View>
                 )}
 

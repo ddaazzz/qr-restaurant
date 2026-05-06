@@ -884,11 +884,28 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     // Accept either kpay_reference_id or cp_vendor_ref (mobile sends cp_vendor_ref for PA Offline)
     const paOfflineRef = (payment_method === 'payment-asia-offline') ? (cp_vendor_ref || kpay_reference_id) : null;
     if (paOfflineRef) {
+      // Resolve the order_id for this session so we can link it
+      const paOrderRes = await client.query(
+        `SELECT id FROM orders WHERE session_id = $1 AND restaurant_id = $2 ORDER BY created_at DESC LIMIT 1`,
+        [sessionId, restaurantId]
+      );
+      const paOrderId = paOrderRes.rows[0]?.id ?? null;
+
+      // Upsert so device-direct payments (that never went through /test endpoint) are also recorded
+      await client.query(
+        `INSERT INTO pa_offline_transactions
+           (restaurant_id, session_id, order_id, pa_order_id, amount_cents, status, completed_at)
+         VALUES ($1, $2, $3, $4, $5, 'completed', NOW() AT TIME ZONE 'UTC')
+         ON CONFLICT DO NOTHING`,
+        [restaurantId, sessionId, paOrderId, paOfflineRef, amount_paid || total]
+      );
+      // Also update if row already existed
       await client.query(
         `UPDATE pa_offline_transactions
-         SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC'
-         WHERE pa_order_id = $1 AND restaurant_id = $2`,
-        [paOfflineRef, restaurantId]
+         SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC',
+             order_id = COALESCE(order_id, $3), session_id = COALESCE(session_id, $2)
+         WHERE pa_order_id = $1 AND restaurant_id = $4`,
+        [paOfflineRef, sessionId, paOrderId, restaurantId]
       );
       await client.query(
         `UPDATE orders SET chuio_order_reference = $1 WHERE session_id = $2`,
