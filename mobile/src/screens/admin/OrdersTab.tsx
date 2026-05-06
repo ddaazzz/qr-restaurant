@@ -5,7 +5,7 @@ import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { kpaySign, kpayQuery, kpayVoid, kpayRefund, encryptManagerPassword, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, encryptManagerPassword, KPayTerminalConfig } from '../../services/kpayDirectService';
 import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, paOfflineRefundOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 interface MenuItem {
@@ -545,7 +545,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           const res = await apiClient.post(`/api/restaurants/${restaurantId}/payment-asia/query`, { merchant_reference: merchantRef });
           setPaTxDetails(res.data);
         } else if (vendor === 'payment-asia-offline') {
-          const res = await apiClient.get(`/api/restaurants/${restaurantId}/pa-offline-transactions/${ref}`);
+          const res = await apiClient.get(`/api/restaurants/${restaurantId}/pa-offline-transactions/${ref}?skip_live=1`);
           setPaOfflineTxDetails(res.data);
         }
       } catch (err) {
@@ -961,36 +961,50 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayStatusMsg(t('orders.kpay-initiating'));
       setKpayLogs([{ msg: `> ${t('orders.kpay-connecting')}`, color: '#ffd43b' }]);
 
-      const amountInCents = String(paymentModalTotal).padStart(12, '0');
-      const addLog = (msg: string, color: string = '#00ff00') => {
+      const addLog = (msg: string, color: string = '#00ff00') =>
         setKpayLogs(prev => [...prev, { msg, color }]);
-      };
+
+      const outTradeNo = `ORD-${restaurantId}-${paymentModalOrderId || 0}-${Date.now()}`;
+      const amountStr = String(paymentModalTotal).padStart(12, '0');
 
       try {
-        // Step 1: Initiate sale on terminal
-        addLog(`> POST /payment-terminals/${kpayTerminal.id}/test`);
-        addLog(`> Amount: ${formatPrice(paymentModalTotal)}`);
+        // Fetch terminal config (with unmasked keys)
+        const terminalRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}`);
+        const tc = terminalRes.data;
+        const config: KPayTerminalConfig = {
+          terminalIp: tc.terminal_ip,
+          terminalPort: tc.terminal_port,
+          appId: tc.app_id,
+          appSecret: tc.app_secret,
+          endpointPath: tc.endpoint_path || '/v2/pos/sign',
+        };
 
-        const resp = await apiClient.post(
-          `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test`,
-          { payAmount: amountInCents, tipsAmount: '000000000000', payCurrency: '344' }
-        );
-        const result = resp.data;
-
-        if (result.logs) result.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
-
-        if (!result.initiated) {
+        // Sign in directly from device
+        addLog('> Signing in to KPay terminal...', '#ffd43b');
+        const signResult = await kpaySign(config);
+        if (!signResult.success || !signResult.appPrivateKey) {
           setKpayStatusMsg(t('orders.kpay-failed'));
-          addLog(`> ❌ ${result.message || 'Failed to initiate'}`, '#ff6b6b');
+          addLog(`> ❌ ${signResult.error || signResult.message}`, '#ff6b6b');
+          setKpayProcessing(false);
           return;
         }
+        addLog('> ✅ Signed in', '#51cf66');
 
-        const outTradeNo = result.outTradeNo;
+        // Initiate sale directly from device
         setKpayStatusMsg(t('orders.kpay-waiting'));
         addLog(`> outTradeNo: ${outTradeNo}`, '#ffd43b');
+        addLog(`> Amount: ${formatPrice(paymentModalTotal)}`, '#ffd43b');
+        const saleResult = await kpaySale(config, signResult.appPrivateKey, outTradeNo, amountStr);
+        if (!saleResult.success) {
+          setKpayStatusMsg(t('orders.kpay-failed'));
+          addLog(`> ❌ ${saleResult.error || saleResult.message}`, '#ff6b6b');
+          setKpayProcessing(false);
+          return;
+        }
+        addLog(`> ✅ Sale initiated — present terminal to customer`, '#51cf66');
         addLog(`> ${t('orders.kpay-tap-scan')}`, '#ffd43b');
 
-        // Step 2: Poll for result
+        // Poll for result directly from device
         let attempts = 0;
         const maxAttempts = 22;
 
@@ -1005,19 +1019,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           addLog(`> Polling… (${attempts}/${maxAttempts})`);
 
           try {
-            const qResp = await apiClient.get(
-              `/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}/test-status`,
-              { params: { outTradeNo } }
-            );
-            const qData = qResp.data;
-            if (qData.logs) qData.logs.forEach((l: string) => addLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'));
-
+            const qData = await kpayQuery(config, signResult.appPrivateKey!, outTradeNo);
             if (qData.status === 'success') {
               setKpayStatusMsg(t('orders.kpay-paid'));
               addLog(`> ✅ ${t('orders.kpay-confirmed')}`, '#51cf66');
 
-              // Close the bill — wrap in own try-catch so billing errors don't
-              // get swallowed by the outer poll catch (which would restart polling).
               try {
                 await apiClient.post(
                   `/api/sessions/${paymentModalSessionId}/close-bill`,
@@ -1033,12 +1039,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 );
                 addLog(`> ✅ ${t('orders.bill-closed')}`, '#51cf66');
               } catch (closeBillErr: any) {
-                addLog(`> ⚠️ Payment confirmed on terminal but failed to record: ${closeBillErr.message}`, '#ffd43b');
+                addLog(`> ⚠️ Payment confirmed but failed to record: ${closeBillErr.message}`, '#ffd43b');
               }
               setKpayProcessing(false);
 
               const orderIdToReload = paymentModalOrderId;
-              // Auto-dismiss after 2 seconds
               setTimeout(() => {
                 setShowPaymentModal(false);
                 setKpayLogs([]);
@@ -1059,7 +1064,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               return;
             }
 
-            // Still pending — poll again
             kpayPollRef.current = setTimeout(poll, 3000);
           } catch (e: any) {
             addLog(`> Poll error: ${e.message}`, '#ffd43b');
@@ -1074,6 +1078,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         setKpayProcessing(false);
       }
     };
+
 
     const abortKpayPayment = async () => {
       if (kpayPollRef.current) {
@@ -2317,7 +2322,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
                 {/* Order Number */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ fontSize: 13, color: '#6b7280' }}>{t('orders.order-num-label') || 'Order #'}</Text>
+                  <Text style={{ fontSize: 13, color: '#6b7280' }}>Order #</Text>
                   <Text style={{ fontSize: 13, color: '#1f2937', fontWeight: '600' }}>{selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id}</Text>
                 </View>
 
