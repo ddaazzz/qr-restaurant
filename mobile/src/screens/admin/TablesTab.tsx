@@ -841,7 +841,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     }
 
     try {
-      await apiClient.patch(`/tables/${editingTableId}`, {
+      await apiClient.patch(`/api/tables/${editingTableId}`, {
         name: editingTableName,
         seat_count: parseInt(editingTableSeats),
         restaurantId: parseInt(restaurantId),
@@ -885,7 +885,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     }
 
     try {
-      await apiClient.patch(`/tables/${tableId}`, {
+      await apiClient.patch(`/api/tables/${tableId}`, {
         seat_count: parseInt(editingPaxValue),
         restaurantId: parseInt(restaurantId),
       });

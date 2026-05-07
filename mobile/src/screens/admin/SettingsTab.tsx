@@ -3614,7 +3614,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   onPress={async () => {
                     const newVal = !settings.show_item_status_to_diners;
                     try {
-                      await apiClient.put(`/api/restaurants/${restaurantId}/settings`, { show_item_status_to_diners: newVal });
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { show_item_status_to_diners: newVal });
                       setSettings({ ...settings, show_item_status_to_diners: newVal });
                     } catch (err) {
                       Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
