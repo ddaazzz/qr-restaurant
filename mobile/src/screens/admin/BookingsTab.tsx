@@ -974,6 +974,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                   <TextInput
                     style={styles.formInput}
                     placeholder={t('bookings.phone-placeholder')}
+                    keyboardType="phone-pad"
                     value={formData.phone}
                     onChangeText={(text) =>
                       setFormData({ ...formData, phone: text })
@@ -989,6 +990,8 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                   <TextInput
                     style={styles.formInput}
                     placeholder={t('bookings.email-placeholder')}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
                     value={formData.email}
                     onChangeText={(text) =>
                       setFormData({ ...formData, email: text })
