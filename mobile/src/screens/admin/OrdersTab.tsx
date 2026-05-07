@@ -2283,7 +2283,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           onRequestClose={() => setCartEditModal(null)}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '92%' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '92%', flex: 1 }}>
               {/* Close handle */}
               <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
                 <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
