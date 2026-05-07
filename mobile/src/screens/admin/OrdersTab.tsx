@@ -310,6 +310,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [kpayRefundAmount, setKpayRefundAmount] = useState('');
     const [showPaRefundModal, setShowPaRefundModal] = useState(false);
     const [paRefundAmount, setPaRefundAmount] = useState('');
+    const [showPaOfflineRefundModal, setShowPaOfflineRefundModal] = useState(false);
+    const [paOfflineRefundAmount, setPaOfflineRefundAmount] = useState('');
+    const [paOfflineRefundPin, setPaOfflineRefundPin] = useState('');
+    const [paOfflineRefundOrder, setPaOfflineRefundOrder] = useState<Order | null>(null);
 
     // Live transaction details
     const [kpayTxDetails, setKpayTxDetails] = useState<any>(null);
@@ -1662,7 +1666,27 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     // === PA Offline Refund (direct from device — POST /order/refund, then poll) ===
     // NOTE: PA Offline has no void endpoint; only refund is supported.
-    const startPaOfflineRefundFlow = async (order: Order) => {
+    const openPaOfflineRefundModal = (order: Order) => {
+      const totalDollars = ((order.total_cents || 0) / 100).toFixed(2);
+      setPaOfflineRefundAmount(totalDollars);
+      setPaOfflineRefundPin('');
+      setPaOfflineRefundOrder(order);
+      setShowPaOfflineRefundModal(true);
+    };
+
+    const submitPaOfflineRefund = () => {
+      if (!paOfflineRefundOrder) return;
+      const savedPin = paOfflineTerminal?.metadata?.refund_pin || '';
+      if (savedPin && paOfflineRefundPin !== savedPin) {
+        Alert.alert('Incorrect PIN', 'The refund PIN you entered is incorrect. Please try again.');
+        return;
+      }
+      setShowPaOfflineRefundModal(false);
+      const amount = paOfflineRefundAmount ? parseFloat(paOfflineRefundAmount).toFixed(2) : undefined;
+      startPaOfflineRefundFlow(paOfflineRefundOrder, amount);
+    };
+
+    const startPaOfflineRefundFlow = async (order: Order, refundAmountDollars?: string) => {
       const paOrderId = order.cp_vendor_ref || order.kpay_reference_id;
       if (!paOrderId) {
         Alert.alert(t('orders.error'), t('orders.no-pa-ref'));
@@ -1702,8 +1726,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         };
 
         setKpayStatusMsg('Sending refund to terminal...');
-        addLog(`> POST /order/refund  order_id=${paOrderId}`, '#ffd43b');
-        const result = await paOfflineRefundOrder(paConfig, paOrderId);
+        addLog(`> POST /order/refund  order_id=${paOrderId}${refundAmountDollars ? `  amount=${refundAmountDollars}` : ''}`, '#ffd43b');
+        const result = await paOfflineRefundOrder(paConfig, paOrderId, refundAmountDollars);
         if (result.success) {
           setKpayStatusMsg('Refund confirmed ✅');
           addLog('> ✅ Refund successful on terminal!', '#51cf66');
@@ -2006,7 +2030,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               value={kpayRefundAmount}
               onChangeText={setKpayRefundAmount}
               placeholder={t('orders.full-refund')}
@@ -2053,7 +2077,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-dollar')}</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               value={paRefundAmount}
               onChangeText={setPaRefundAmount}
               placeholder="0.00"
@@ -2084,6 +2108,64 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         </View>
       );
     }
+
+    // ============= PA OFFLINE REFUND MODAL =============
+    const paOfflineRefundModal = (
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showPaOfflineRefundModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowPaOfflineRefundModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>PA Terminal Refund</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+              Ref: {paOfflineRefundOrder?.cp_vendor_ref || paOfflineRefundOrder?.kpay_reference_id || '—'}
+            </Text>
+            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund Amount (HKD)</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
+              keyboardType="decimal-pad"
+              value={paOfflineRefundAmount}
+              onChangeText={setPaOfflineRefundAmount}
+              placeholder="Full refund"
+            />
+            {!!(paOfflineTerminal?.metadata?.refund_pin) && (
+              <>
+                <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund PIN</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
+                  keyboardType="number-pad"
+                  secureTextEntry
+                  value={paOfflineRefundPin}
+                  onChangeText={setPaOfflineRefundPin}
+                  placeholder="Enter PIN"
+                />
+              </>
+            )}
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+              The refund will be processed on the PA payment terminal.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={() => setShowPaOfflineRefundModal(false)}
+              >
+                <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={submitPaOfflineRefund}
+              >
+                <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-refund')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
 
     // ============= RENDER HISTORY ORDER DETAIL (shared by iPad panel + iPhone full-page) =============
     const renderHistoryOrderDetail = () => {
@@ -2753,7 +2835,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 12, paddingTop: 12 }}>
                   <TouchableOpacity
                     style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' }}
-                    onPress={() => startPaOfflineRefundFlow(selectedHistoryOrder)}
+                    onPress={() => openPaOfflineRefundModal(selectedHistoryOrder)}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: '#991b1b' }}>Refund</Text>
                     <Text style={{ fontSize: 10, color: '#b91c1c', marginTop: 2 }}>PA Terminal</Text>
@@ -2818,6 +2900,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             {paymentModal}
             {kpayRefundModal}
             {paOnlineRefundModal}
+            {paOfflineRefundModal}
             {emailReceiptModal}
           </>
         );
@@ -3003,6 +3086,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {paymentModal}
         {kpayRefundModal}
         {paOnlineRefundModal}
+        {paOfflineRefundModal}
         {emailReceiptModal}
         </>
       );
@@ -3612,6 +3696,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {kpayRefundModal}
 
         {paOnlineRefundModal}
+
+        {paOfflineRefundModal}
 
         {/* Order Now Payment Modal */}
         {paymentModal}
