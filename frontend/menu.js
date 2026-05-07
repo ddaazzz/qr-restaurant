@@ -27,6 +27,7 @@ let serviceChargePct = 0;
 let orderPollerStarted = false;
 let orderingInitialized = false;
 let orderPayEnabled = false;
+let paOrderLocked = false;
 let showItemStatusToDiners = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
@@ -1167,6 +1168,10 @@ function updateVariantCounter(itemId, variant) {
 }
 
 async function submitOrder() {
+  if (paOrderLocked) {
+    alert('Payment is complete — no new orders can be placed.');
+    return;
+  }
   const hasFood = cart.items.length > 0;
   const hasSr = hasSrCartItems();
   if (!hasFood && !hasSr) return;
@@ -1423,14 +1428,8 @@ function renderOrdersDrawer(orders, tableName) {
       const isHandledByPA = isPAPayment;                  // PA initiated (paid or processing)
 
       if (isHandledByPA) {
-        const payLabel = isCompleted ? '💳 Paid via Payment Asia' : '⏳ Payment Processing via Payment Asia';
-        const bg = isCompleted ? '#d1fae5' : '#fef3c7';
-        const border = isCompleted ? '#10b981' : '#f59e0b';
-        const color = isCompleted ? '#065f46' : '#92400e';
-        html += `<div style="margin:12px 0 0;padding:6px 10px;background:${bg};border-left:3px solid ${border};border-radius:0 4px 4px 0;font-size:12px;color:${color};font-weight:600;">📦 Order #${order.restaurant_order_number || order.order_id} — ${payLabel}</div>`;
         html += `<div style="opacity:0.65;">`;
       } else if (isPaid) {
-        html += `<div style="margin:12px 0 0;padding:6px 10px;background:#d1fae5;border-left:3px solid #10b981;border-radius:0 4px 4px 0;font-size:12px;color:#065f46;font-weight:600;">📦 Order #${order.restaurant_order_number || order.order_id} — ✅ Paid</div>`;
         html += `<div style="opacity:0.65;">`;
       } else if (oIdx > 0) {
         html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">Order #${order.restaurant_order_number || order.order_id} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">Unpaid</span></div>`;
@@ -1485,6 +1484,7 @@ function renderOrdersDrawer(orders, tableName) {
   const allPACompleted = orders.length > 0 && orders.every(o =>
     o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
   );
+  paOrderLocked = allPACompleted;
 
   html += `
     </div>
@@ -1522,9 +1522,9 @@ function renderOrdersDrawer(orders, tableName) {
     <div class="orders-actions">
       ${(() => {
         if (allPACompleted) {
-          return `<div style="text-align:center;padding:16px 0 8px;">
-            <p style="font-size:22px;margin:0 0 6px;">🎉</p>
-            <p style="font-size:16px;font-weight:600;color:#059669;margin:0 0 4px;">Thank you for dining with us!</p>
+          return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;text-align:center;">
+            <p style="font-size:28px;margin:0 0 8px;">🎉</p>
+            <p style="font-size:17px;font-weight:700;color:#059669;margin:0 0 6px;">Thank you for dining with us!</p>
             <p style="font-size:13px;color:#6b7280;margin:0;">Your payment is complete.</p>
           </div>`;
         }
@@ -1656,7 +1656,7 @@ function renderCartDrawer() {
           <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
         </div>
       </div>
-      <button class="btn-primary cart-submit" onclick="submitOrder()">${t('menu.confirm-order')}</button>
+      <button class="btn-primary cart-submit" ${paOrderLocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="submitOrder()">${t('menu.confirm-order')}</button>
     </div>
   `;
 

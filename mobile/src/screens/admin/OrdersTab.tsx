@@ -314,6 +314,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // History filter tab state
     const [historyFilter, setHistoryFilter] = useState<'all' | 'table' | 'pay-now' | 'to-go'>('all');
     const [historyTableFilter, setHistoryTableFilter] = useState<string>('');
+    const [showHistoryFilterModal, setShowHistoryFilterModal] = useState(false);
+    const [historyDateFilter, setHistoryDateFilter] = useState<'all' | 'today' | 'yesterday' | 'week'>('all');
+    const [historyPaymentStatusFilter, setHistoryPaymentStatusFilter] = useState<'all' | 'paid' | 'unpaid' | 'refunded' | 'voided'>('all');
+    const [historyPaymentMethodFilter, setHistoryPaymentMethodFilter] = useState<'all' | 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'cash' | 'card'>('all');
 
     // Payment terminal state for refund/void
     const [kpayTerminal, setKpayTerminal] = useState<any>(null);
@@ -322,8 +326,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const DEFAULT_PAYMENT_METHODS = [{ id: 'cash', label: 'Cash' }, { id: 'credit-card', label: 'Credit Card' }];
     const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
     const [showKpayRefundModal, setShowKpayRefundModal] = useState(false);
-    const [kpayRefundAmount, setKpayRefundAmount] = useState('');
     const [kpayRefundPassword, setKpayRefundPassword] = useState('');
+    const [kpayOperationType, setKpayOperationType] = useState<'sale' | 'void' | 'refund'>('sale');
     const [showPaRefundModal, setShowPaRefundModal] = useState(false);
     const [paRefundAmount, setPaRefundAmount] = useState('');
     const [showPaOfflineRefundModal, setShowPaOfflineRefundModal] = useState(false);
@@ -1132,6 +1136,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayProcessing(true);
       setKpayStatusMsg(t('orders.kpay-initiating'));
       setKpayLogs([{ msg: `> ${t('orders.kpay-connecting')}`, color: '#ffd43b' }]);
+      setKpayOperationType('sale');
 
       const addLog = (msg: string, color: string = '#00ff00') =>
         setKpayLogs(prev => [...prev, { msg, color }]);
@@ -1328,6 +1333,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayProcessing(true);
       setKpayStatusMsg('Initiating PA terminal…');
       setKpayLogs([{ msg: '> Connecting to PA terminal…', color: '#ffd43b' }]);
+      setKpayOperationType('sale');
 
       const addLog = (msg: string, color: string = '#00ff00') => {
         setKpayLogs(prev => [...prev, { msg, color }]);
@@ -1571,6 +1577,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayProcessing(true);
       setKpayLogs([]);
       setKpayStatusMsg('');
+      setKpayOperationType('void');
       setShowPaymentModal(true);
 
       const addLog = (msg: string, color: string = '#00ff00') =>
@@ -1667,7 +1674,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     // === KPay Refund ===
     const openKpayRefund = () => {
-      setKpayRefundAmount('');
       setKpayRefundPassword('');
       setShowKpayRefundModal(true);
     };
@@ -1694,6 +1700,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayProcessing(true);
       setKpayLogs([]);
       setKpayStatusMsg('');
+      setKpayOperationType('refund');
       setShowPaymentModal(true);
 
       const addLog = (msg: string, color: string = '#00ff00') =>
@@ -1748,11 +1755,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         if (qOriginal.transactionNo) { refundParams.transactionNo = qOriginal.transactionNo; addLog(`> transactionNo: ${qOriginal.transactionNo}`, '#ffd43b'); }
         if (qOriginal.refNo)         { refundParams.refNo = qOriginal.refNo;                 addLog(`> refNo: ${qOriginal.refNo}`, '#ffd43b'); }
         if (qOriginal.commitTime)    { refundParams.commitTime = qOriginal.commitTime; }
-        if (kpayRefundAmount) {
-          const cents = Math.round(parseFloat(kpayRefundAmount) * 100);
-          refundParams.refundAmount = cents.toString().padStart(12, '0');
-          addLog(`> Partial refund: ${kpayRefundAmount}`, '#ffd43b');
-        }
 
         setKpayStatusMsg('Sending refund to terminal...');
         addLog(`> Refund ref: ${refOutTradeNo}`, '#ffd43b');
@@ -1880,6 +1882,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setKpayProcessing(true);
       setKpayLogs([]);
       setKpayStatusMsg('');
+      setKpayOperationType('sale');
       setShowPaymentModal(true);
 
       const addLog = (msg: string, color: string = '#00ff00') =>
@@ -1964,12 +1967,41 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     // Compute filtered orders for history and unpaid counts
     const filteredHistoryOrders = orders.filter(order => {
+      // Order type filter
       if (historyFilter === 'table') {
         if (order.order_type !== 'table') return false;
         if (historyTableFilter && order.table_name && !order.table_name.toLowerCase().includes(historyTableFilter.toLowerCase())) return false;
+      } else if (historyFilter === 'pay-now') {
+        if (order.order_type !== 'counter' && order.order_type !== 'pay-now') return false;
+      } else if (historyFilter === 'to-go') {
+        if (order.order_type !== 'to-go') return false;
       }
-      if (historyFilter === 'pay-now') return order.order_type === 'counter' || order.order_type === 'pay-now';
-      if (historyFilter === 'to-go') return order.order_type === 'to-go';
+      // Date filter
+      if (historyDateFilter !== 'all') {
+        const orderDate = order.created_at ? new Date(order.created_at) : null;
+        if (!orderDate) return false;
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterdayStart = new Date(todayStart.getTime() - 86400000);
+        const weekStart = new Date(todayStart.getTime() - 6 * 86400000);
+        if (historyDateFilter === 'today' && orderDate < todayStart) return false;
+        if (historyDateFilter === 'yesterday' && (orderDate < yesterdayStart || orderDate >= todayStart)) return false;
+        if (historyDateFilter === 'week' && orderDate < weekStart) return false;
+      }
+      // Payment status filter
+      if (historyPaymentStatusFilter !== 'all') {
+        const badge = getPaymentBadge(order);
+        if (badge.label.toLowerCase() !== historyPaymentStatusFilter) return false;
+      }
+      // Payment method filter
+      if (historyPaymentMethodFilter !== 'all') {
+        const vendor = resolveVendor(order) || '';
+        if (historyPaymentMethodFilter === 'card') {
+          if (vendor !== 'card' && vendor !== 'credit-card') return false;
+        } else {
+          if (vendor !== historyPaymentMethodFilter) return false;
+        }
+      }
       return true;
     });
 
@@ -2072,7 +2104,22 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '85%', maxWidth: 440, padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{kpayModalTitle || t('orders.collect-payment')}</Text>
+              {/* Header row: title + X button */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 }}>
+                <Text style={{ flex: 1, fontSize: 18, fontWeight: '700', color: '#1f2937' }}>{kpayModalTitle || t('orders.collect-payment')}</Text>
+                <TouchableOpacity
+                  style={{ padding: 4, marginLeft: 8 }}
+                  onPress={() => {
+                    if (kpayPollRef.current) { clearTimeout(kpayPollRef.current); kpayPollRef.current = null; }
+                    setShowPaymentModal(false);
+                    setKpayLogs([]);
+                    setKpayStatusMsg('');
+                    setKpayModalTitle(null);
+                  }}
+                >
+                  <Ionicons name="close" size={22} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
               <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
                 {t('orders.order-now')} {paymentModalOrderNumber ? `#${paymentModalOrderNumber}` : ''}
               </Text>
@@ -2104,12 +2151,26 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   </ScrollView>
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                     {kpayProcessing ? (
-                      <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#fca5a5' }}
-                        onPress={abortKpayPayment}
-                      >
-                        <Text style={{ fontWeight: '600', color: '#dc2626' }}>{t('orders.abort')}</Text>
-                      </TouchableOpacity>
+                      kpayOperationType !== 'sale' ? (
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#fde68a' }}
+                          onPress={() => {
+                            if (kpayPollRef.current) { clearTimeout(kpayPollRef.current); kpayPollRef.current = null; }
+                            setKpayProcessing(false);
+                            setKpayLogs(prev => [...prev, { msg: '> Please check the terminal screen for the result.', color: '#94a3b8' }]);
+                            setKpayStatusMsg('Check Terminal');
+                          }}
+                        >
+                          <Text style={{ fontWeight: '600', color: '#92400e' }}>Check Terminal</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#fca5a5' }}
+                          onPress={abortKpayPayment}
+                        >
+                          <Text style={{ fontWeight: '600', color: '#dc2626' }}>{t('orders.abort')}</Text>
+                        </TouchableOpacity>
+                      )
                     ) : (
                       <TouchableOpacity
                         style={{ flex: 1, backgroundColor: '#d1fae5', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#6ee7b7' }}
@@ -2210,14 +2271,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
               Ref: {selectedHistoryOrder?.kpay_reference_id || selectedHistoryOrder?.cp_vendor_ref || '—'}
             </Text>
-            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.refund-amount-label')}</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
-              keyboardType="decimal-pad"
-              value={kpayRefundAmount}
-              onChangeText={setKpayRefundAmount}
-              placeholder={t('orders.full-refund')}
-            />
             <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Manager Password</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 4 }}
@@ -2247,6 +2300,81 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           </View>
         </View>
         </KeyboardAvoidingView>
+      </Modal>
+    );
+
+    // ============= HISTORY FILTER MODAL =============
+    const historyFilterModal = (
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showHistoryFilterModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowHistoryFilterModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, paddingBottom: 36 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#1f2937' }}>Filter Orders</Text>
+              <TouchableOpacity onPress={() => setShowHistoryFilterModal(false)}>
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            {/* Date */}
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Date</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {([{ key: 'all', label: 'All Time' }, { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: 'week', label: 'Last 7 Days' }] as const).map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: historyDateFilter === opt.key ? '#3b82f6' : '#f3f4f6', borderWidth: 1, borderColor: historyDateFilter === opt.key ? '#3b82f6' : '#e5e7eb' }}
+                  onPress={() => setHistoryDateFilter(opt.key)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: historyDateFilter === opt.key ? '#fff' : '#374151' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* Payment Status */}
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Status</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {([{ key: 'all', label: 'All' }, { key: 'paid', label: 'Paid' }, { key: 'unpaid', label: 'Unpaid' }, { key: 'refunded', label: 'Refunded' }, { key: 'voided', label: 'Voided' }] as const).map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: historyPaymentStatusFilter === opt.key ? '#3b82f6' : '#f3f4f6', borderWidth: 1, borderColor: historyPaymentStatusFilter === opt.key ? '#3b82f6' : '#e5e7eb' }}
+                  onPress={() => setHistoryPaymentStatusFilter(opt.key)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: historyPaymentStatusFilter === opt.key ? '#fff' : '#374151' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* Payment Method */}
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {([{ key: 'all', label: 'All' }, { key: 'kpay', label: 'KPay' }, { key: 'payment-asia', label: 'PA Online' }, { key: 'payment-asia-offline', label: 'PA Terminal' }, { key: 'cash', label: 'Cash' }, { key: 'card', label: 'Card' }] as const).map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: historyPaymentMethodFilter === opt.key ? '#3b82f6' : '#f3f4f6', borderWidth: 1, borderColor: historyPaymentMethodFilter === opt.key ? '#3b82f6' : '#e5e7eb' }}
+                  onPress={() => setHistoryPaymentMethodFilter(opt.key)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: historyPaymentMethodFilter === opt.key ? '#fff' : '#374151' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={() => { setHistoryDateFilter('all'); setHistoryPaymentStatusFilter('all'); setHistoryPaymentMethodFilter('all'); }}
+              >
+                <Text style={{ fontWeight: '600', color: '#374151' }}>Clear All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                onPress={() => setShowHistoryFilterModal(false)}
+              >
+                <Text style={{ fontWeight: '600', color: '#fff' }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     );
 
@@ -3367,6 +3495,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
             {paymentModal}
             {kpayRefundModal}
+            {historyFilterModal}
             {paOnlineRefundModal}
             {paOfflineRefundModal}
             {cartItemEditModal}
@@ -3388,7 +3517,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           </View>
 
           {/* Filter Tabs */}
-          <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, gap: 6 }}>
+          <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, gap: 6, alignItems: 'center' }}>
             {([
               { key: 'all' as const, label: t('orders.all-orders') },
               { key: 'table' as const, label: t('orders.table') },
@@ -3414,6 +3543,24 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 )}
               </TouchableOpacity>
             ))}
+            {/* Advanced filter button */}
+            <View style={{ flex: 1 }} />
+            {(() => {
+              const activeFilterCount = [historyDateFilter, historyPaymentStatusFilter, historyPaymentMethodFilter].filter(f => f !== 'all').length;
+              return (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: activeFilterCount > 0 ? '#3b82f6' : '#f3f4f6', borderWidth: 1, borderColor: activeFilterCount > 0 ? '#3b82f6' : '#d1d5db' }}
+                  onPress={() => setShowHistoryFilterModal(true)}
+                >
+                  <Ionicons name="filter" size={13} color={activeFilterCount > 0 ? '#fff' : '#374151'} />
+                  {activeFilterCount > 0 && (
+                    <View style={{ backgroundColor: '#fff', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 }}>
+                      <Text style={{ color: '#3b82f6', fontSize: 9, fontWeight: '700' }}>{activeFilterCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })()}
           </View>
 
           {/* Table number filter (when Table tab is active) */}
@@ -3554,6 +3701,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         </View>
         {paymentModal}
         {kpayRefundModal}
+        {historyFilterModal}
         {paOnlineRefundModal}
         {paOfflineRefundModal}
         {cartItemEditModal}
@@ -4155,6 +4303,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {tablePickerModal}
 
         {kpayRefundModal}
+
+        {historyFilterModal}
 
         {paOnlineRefundModal}
 

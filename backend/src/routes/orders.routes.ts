@@ -45,6 +45,15 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
 
     const restaurantId = sessionRes.rows[0].restaurant_id;
 
+    // Block ordering if session has a completed PA Online payment
+    const paPaidRes = await pool.query(
+      `SELECT id FROM orders WHERE session_id = $1 AND payment_method = 'payment-asia' AND status = 'completed' LIMIT 1`,
+      [sessionId]
+    );
+    if ((paPaidRes.rowCount ?? 0) > 0) {
+      return res.status(403).json({ error: 'Payment complete — ordering is closed for this session' });
+    }
+
     // ============================================================
     // SINGLE ORDER PER SESSION: Check if order already exists
     // ============================================================
