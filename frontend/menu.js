@@ -30,6 +30,11 @@ let orderPayEnabled = false;
 let showItemStatusToDiners = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
+let lastOrdersHash = null;         // diff-based rendering — only re-render when data changes
+let confirmationPollingActive = false; // true while awaiting PA payment confirmation after redirect
+let confirmationPollTimer = null;      // setInterval handle for fast confirmation polling
+let confirmationPollDeadline = 0;      // epoch ms after which we stop fast polling
+let idlePollTimer = null;              // setInterval handle for slow background polling
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
 
 async function fetchAndApplyPaymentSettings() {
@@ -396,23 +401,20 @@ async function initLanding() {
   // Show payment result banner if returning from Payment Asia
   const paymentStatus = urlParams.get('payment_status');
   if (paymentStatus) {
-    const ref = urlParams.get('ref') || '';
     const isSuccess = paymentStatus === 'success';
-    const banner = document.createElement('div');
-    banner.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:9999;padding:16px 20px;text-align:center;font-size:15px;font-weight:bold;color:white;background:${isSuccess ? '#16a34a' : '#dc2626'};box-shadow:0 2px 8px rgba(0,0,0,0.3);`;
-    banner.textContent = isSuccess ? '\u2705 Payment successful! Your order is confirmed.' : '\u274c Payment was not completed. Please try again or pay at the counter.';
-    document.body.prepend(banner);
     // Clean payment params from URL without reloading
-    history.replaceState({}, '', window.location.pathname);
-    setTimeout(() => banner.remove(), 6000);
-    // Auto-open orders drawer so the diner sees their paid order and can add more
-    if (isSuccess) {
-      startOrdering().then(() => {
-        fetch(`${API_BASE}/restaurants/${restaurantId}/payment-settings`)
-          .then(r => r.json()).then(s => { orderPayEnabled = s.order_pay_enabled === true; }).catch(() => {});
-        openOrdersDrawer();
-      });
-    }
+    history.replaceState({}, '', window.location.pathname + window.location.search.replace(/[?&]payment_status=[^&]*/g, '').replace(/^&/, '?'));
+    // Skip landing page — go straight to check orders
+    startOrdering().then(async () => {
+      await fetchAndApplyPaymentSettings();
+      openOrdersDrawer();
+      if (isSuccess) {
+        // Start fast confirmation polling — re-check every 2s for up to 30s until completed
+        startConfirmationPolling();
+      } else {
+        showPaymentReturnBanner(false);
+      }
+    });
   }
 
   // Initialize active language button for landing page
@@ -1278,7 +1280,7 @@ function onVariantChange(itemId, variantId, optionId, checked) {
   updateAddToCartButton(item);
 }
 
-async function loadOrderStatus() {
+async function loadOrderStatus({ forceRender = false } = {}) {
   if (!sessionId) {
     console.warn("❌ loadOrderStatus: No sessionId");
     return;
@@ -1297,18 +1299,83 @@ async function loadOrderStatus() {
 
     const data = await res.json();
     const orders = data.items || [];
-    renderOrdersDrawer(orders, tableName);
 
-    // If there's a pending PA order, fire a background payment-status check.
-    // The endpoint queries PA directly and updates the DB; the next poll will pick up the result.
+    // Only re-render the drawer when data has actually changed (avoids flicker)
+    const newHash = JSON.stringify(orders);
+    if (forceRender || newHash !== lastOrdersHash) {
+      lastOrdersHash = newHash;
+      renderOrdersDrawer(orders, tableName);
+    }
+
+    // If awaiting confirmation, check if any order is now completed
+    if (confirmationPollingActive) {
+      const allDone = orders.length > 0 && orders.every(
+        o => o.order_status === 'completed' || o.order_payment_method !== 'payment-asia'
+      );
+      const anyPACompleted = orders.some(
+        o => o.order_payment_method === 'payment-asia' && o.order_status === 'completed'
+      );
+      if (anyPACompleted) {
+        stopConfirmationPolling();
+        showPaymentReturnBanner(true);
+        return;
+      }
+      // Deadline expired without confirmation
+      if (Date.now() > confirmationPollDeadline) {
+        stopConfirmationPolling();
+        return;
+      }
+    }
+
+    // If there's a pending PA order, fire a background payment-status sync
+    // so the backend resolves webhook delays; next poll will pick up the result.
     const pendingPA = orders.find(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
     if (pendingPA) {
       fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${pendingPA.order_id}/payment-status`)
-        .catch(() => {}); // fire-and-forget; errors silently ignored
+        .catch(() => {}); // fire-and-forget
     }
   } catch (error) {
     console.error("❌ Error loading orders:", error);
   }
+}
+
+/** Start fast 2-second polling for up to 30 seconds to confirm PA payment. */
+function startConfirmationPolling() {
+  if (confirmationPollingActive) return;
+  confirmationPollingActive = true;
+  confirmationPollDeadline = Date.now() + 30_000;
+  // Show a subtle "Confirming payment…" indicator inside the drawer
+  const el = document.getElementById('orders-drawer-content');
+  if (el) {
+    const bar = document.createElement('div');
+    bar.id = 'payment-confirming-bar';
+    bar.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:13px;color:#92400e;text-align:center;';
+    bar.textContent = '⏳ Confirming your payment…';
+    el.prepend(bar);
+  }
+  loadOrderStatus({ forceRender: false }); // immediate check
+  confirmationPollTimer = setInterval(() => loadOrderStatus({ forceRender: false }), 2000);
+}
+
+/** Stop fast confirmation polling and remove the confirming bar. */
+function stopConfirmationPolling() {
+  confirmationPollingActive = false;
+  if (confirmationPollTimer) { clearInterval(confirmationPollTimer); confirmationPollTimer = null; }
+  const bar = document.getElementById('payment-confirming-bar');
+  if (bar) bar.remove();
+}
+
+/** Show a sticky banner after returning from the PA gateway. */
+function showPaymentReturnBanner(isSuccess) {
+  const existing = document.getElementById('payment-return-banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'payment-return-banner';
+  banner.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:9999;padding:14px 20px;text-align:center;font-size:15px;font-weight:bold;color:white;background:${isSuccess ? '#16a34a' : '#dc2626'};box-shadow:0 2px 8px rgba(0,0,0,0.3);cursor:pointer;`;
+  banner.textContent = isSuccess ? '✅ Payment confirmed! Your order is all set.' : '❌ Payment was not completed. Please try again or pay at the counter.';
+  banner.onclick = () => banner.remove();
+  document.body.prepend(banner);
+  if (isSuccess) setTimeout(() => banner.remove(), 8000);
 }
 
 async function cancelPAPayment(orderId) {
@@ -1319,7 +1386,8 @@ async function cancelPAPayment(orderId) {
       { method: 'POST' }
     );
     if (res.ok) {
-      loadOrderStatus();
+      lastOrdersHash = null; // invalidate cache so cancel re-renders
+      loadOrderStatus({ forceRender: true });
     } else {
       alert('Could not cancel payment. Please ask staff for assistance.');
     }
@@ -1769,8 +1837,8 @@ function openOrdersDrawer() {
   setHeaderOrdersMode(true, false);
   setCartBarVisible(false);
 
-  // 🔥 render immediately using latest polled data
-  loadOrderStatus();
+  // Force a fresh render when the drawer opens
+  loadOrderStatus({ forceRender: true });
 }
 
 
@@ -1817,8 +1885,10 @@ function startOrderPolling() {
   if (orderPollerStarted) return;
   orderPollerStarted = true;
 
-  loadOrderStatus(); // immediate
-  setInterval(loadOrderStatus, 5000);
+  loadOrderStatus({ forceRender: true }); // immediate first load
+  // Slow idle poll every 30s — just keeps orders in sync without constant flicker.
+  // Fast confirmation polling (2s) is started separately after PA redirect.
+  idlePollTimer = setInterval(() => loadOrderStatus(), 30_000);
 }
 
 // ============= COUPON FUNCTIONS =============
@@ -1857,7 +1927,8 @@ async function applyCouponToSession(sessionId, couponCode) {
       };
       displayEl.innerHTML = `<div class="coupon-applied">${t('menu.coupon-applied').replace('{0}', '-$' + (data.discount_applied_cents/100).toFixed(2))}</div>`;
       // Refresh orders drawer to show updated total
-      loadOrderStatus();
+      lastOrdersHash = null;
+      loadOrderStatus({ forceRender: true });
     } else {
       displayEl.innerHTML = `<div class="coupon-error">${t('menu.coupon-error').replace('{0}', data.error)}</div>`;
     }
@@ -1876,7 +1947,8 @@ async function removeCouponFromSession(sid) {
     
     if (response.ok) {
       appliedCoupon = null;
-      loadOrderStatus();
+      lastOrdersHash = null;
+      loadOrderStatus({ forceRender: true });
     }
   } catch (error) {
     console.error("Error removing coupon:", error);
@@ -2193,7 +2265,8 @@ function showPaymentPageBack() {
   paymentPageActive = false;
   setHeaderOrdersMode(true, false); // back to Check Orders header
   setCartBarVisible(false);         // still in orders view, not menu
-  loadOrderStatus();
+  lastOrdersHash = null;
+  loadOrderStatus({ forceRender: true });
 }
 
 async function submitPaymentInline(orderId, totalCents) {
