@@ -408,7 +408,7 @@ async function initLanding() {
     // Auto-open orders drawer so the diner sees their paid order and can add more
     if (isSuccess) {
       startOrdering().then(() => {
-        fetch(`${API_BASE}/restaurants/${restaurantId}/settings/payment`)
+        fetch(`${API_BASE}/restaurants/${restaurantId}/payment-settings`)
           .then(r => r.json()).then(s => { orderPayEnabled = s.order_pay_enabled === true; }).catch(() => {});
         openOrdersDrawer();
       });

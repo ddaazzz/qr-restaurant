@@ -8,6 +8,7 @@ import { STAFF_ACTIONS } from "../constants/staffActions";
 import { upload, uploadDocuments } from "../config/upload";
 import { isR2Configured, uploadToR2 } from "../config/storage";
 import { sendVerificationCode, sendPasswordResetEmail } from "../services/emailService";
+import { sendTelegramNotification } from "../services/telegramService";
 
 const router = Router();
 // POST /api/auth/login
@@ -2171,6 +2172,32 @@ router.patch("/manage/payment-terminal-applications/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to update payment terminal application:", err);
     res.status(500).json({ error: "Failed to update application" });
+  }
+});
+
+// POST /api/contact-demo — public demo request form from landing page
+router.post("/contact-demo", async (req, res) => {
+  const { name, phone, email, restaurant, message } = req.body;
+
+  if (!name || !phone) {
+    return res.status(400).json({ error: "name and phone are required" });
+  }
+
+  try {
+    await sendTelegramNotification({
+      title: "New Demo Request",
+      message: `${name} (${phone}) is requesting a demo`,
+      details: {
+        ...(email && { Email: email }),
+        ...(restaurant && { Restaurant: restaurant }),
+        ...(message && { Message: message }),
+      },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("[contact-demo]", err);
+    // Still return success to the user — don't expose internal errors
+    res.json({ success: true });
   }
 });
 

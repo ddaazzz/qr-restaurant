@@ -702,7 +702,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const syncCrmFromBookings = async () => {
     try {
       setCrmSyncing(true);
-      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/sync-from-bookings`);
+      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/import-from-bookings`);
       const { inserted, total } = res.data;
       setCrmCount(total);
       Alert.alert(t('common.success'), t('admin.crm-sync-complete', { inserted: inserted.toString(), total: total.toString() }));

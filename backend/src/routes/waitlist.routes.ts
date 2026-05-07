@@ -241,7 +241,7 @@ function escapeHtml(unsafe: string): string {
 }
 
 // POST /api/waitlist - Submit to waitlist
-router.post("/api/waitlist", async (req: Request, res: Response) => {
+router.post("/waitlist", async (req: Request, res: Response) => {
   try {
     const { restaurantName, email, phone, message } = req.body as WaitlistSubmission;
 
