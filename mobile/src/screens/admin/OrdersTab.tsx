@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput, SafeAreaView } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { apiClient, API_URL } from '../../services/apiClient';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
@@ -234,6 +235,16 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // Cart state
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartEditMode, setCartEditMode] = useState(false);
+    // Cart item edit modal
+    const [cartEditModal, setCartEditModal] = useState<{ item: CartItem; idx: number } | null>(null);
+    const [cartEditVariantSelections, setCartEditVariantSelections] = useState<{ [variantId: number]: number | number[] }>({});
+    const [cartEditAddons, setCartEditAddons] = useState<SelectedAddon[]>([]);
+    const [cartEditVariants, setCartEditVariants] = useState<Variant[]>([]);
+    const [cartEditItemAddons, setCartEditItemAddons] = useState<Addon[]>([]);
+    const [cartEditAddonVariantModal, setCartEditAddonVariantModal] = useState<{ addon: Addon; variants: Variant[] } | null>(null);
+    const [cartEditAddonVariantSelections, setCartEditAddonVariantSelections] = useState<{ [variantId: number]: number | number[] }>({});
+    const [showCartQtyNumpad, setShowCartQtyNumpad] = useState(false);
+    const [cartQtyNumpadInput, setCartQtyNumpadInput] = useState('1');
     const [phoneView, setPhoneView] = useState<'menu' | 'variant' | 'cart'>('menu');
     const [orderType, setOrderType] = useState<'table' | 'pay-now' | 'to-go' | null>(null);
     const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -838,6 +849,109 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setCart(prevCart =>
         prevCart.map((item, i) => i === index ? { ...item, notes } : item)
       );
+    };
+
+    // Open the cart item edit modal — loads variants & addons then pre-fills selections
+    const openCartEditModal = async (item: CartItem, idx: number) => {
+      try {
+        const [variantRes, addonRes] = await Promise.all([
+          apiClient.get(`/api/menu-items/${item.id}/variants`),
+          item.is_meal_combo
+            ? apiClient.get(`/api/restaurants/${restaurantId}/menu-items/${item.id}/addons`)
+            : Promise.resolve({ data: [] }),
+        ]);
+        const variants: Variant[] = variantRes.data || [];
+        const addons: Addon[] = addonRes.data || [];
+
+        // Pre-fill variant selections from current cart item
+        const prefillVariants: { [variantId: number]: number | number[] } = {};
+        if (item.variants) {
+          item.variants.forEach(sv => {
+            const variant = variants.find(v => v.id === sv.variantId);
+            if (!variant) return;
+            const isSingle = variant.min_select === 1 && variant.max_select === 1;
+            if (isSingle) {
+              prefillVariants[sv.variantId] = sv.optionId;
+            } else {
+              const cur = Array.isArray(prefillVariants[sv.variantId]) ? [...(prefillVariants[sv.variantId] as number[])] : [];
+              cur.push(sv.optionId);
+              prefillVariants[sv.variantId] = cur;
+            }
+          });
+        }
+
+        setCartEditVariants(variants);
+        setCartEditItemAddons(addons);
+        setCartEditVariantSelections(prefillVariants);
+        setCartEditAddons(item.addons ? [...item.addons] : []);
+        setCartEditAddonVariantModal(null);
+        setCartEditAddonVariantSelections({});
+        setCartQtyNumpadInput(String(item.quantity));
+        setShowCartQtyNumpad(false);
+        setCartEditModal({ item, idx });
+      } catch (err) {
+        // If we can't load variants (network error), still open with just qty/notes
+        setCartEditVariants([]);
+        setCartEditItemAddons([]);
+        setCartEditVariantSelections({});
+        setCartEditAddons(item.addons ? [...item.addons] : []);
+        setCartEditAddonVariantModal(null);
+        setCartQtyNumpadInput(String(item.quantity));
+        setShowCartQtyNumpad(false);
+        setCartEditModal({ item, idx });
+      }
+    };
+
+    // Save edits back to cart
+    const saveCartEdit = () => {
+      if (!cartEditModal) return;
+      const { idx } = cartEditModal;
+      const newQty = Math.max(1, parseInt(cartQtyNumpadInput) || 1);
+
+      // Build updated variant list
+      const updatedVariants: SelectedVariant[] = [];
+      Object.entries(cartEditVariantSelections).forEach(([variantId, optionIds]) => {
+        const variant = cartEditVariants.find(v => v.id === parseInt(variantId));
+        if (variant) {
+          const optionIdArray = Array.isArray(optionIds) ? optionIds : [optionIds];
+          optionIdArray.forEach(optionId => {
+            const option = variant.options.find(o => o.id === optionId);
+            if (option) {
+              updatedVariants.push({ variantId: variant.id, variantName: variant.name, optionId: option.id, optionName: option.name });
+            }
+          });
+        }
+      });
+
+      setCart(prevCart =>
+        prevCart.map((item, i) =>
+          i === idx
+            ? { ...item, quantity: newQty, variants: updatedVariants, addons: cartEditAddons, notes: cartEditModal.item.notes }
+            : item
+        )
+      );
+      setCartEditModal(null);
+    };
+
+    // Toggle addon inside cart edit modal
+    const toggleCartEditAddon = async (addon: Addon) => {
+      const existing = cartEditAddons.find(a => a.addon_id === addon.id);
+      if (existing) {
+        setCartEditAddons(prev => prev.filter(a => a.addon_id !== addon.id));
+        return;
+      }
+      try {
+        const res = await apiClient.get(`/api/menu-items/${addon.addon_item_id}/variants`);
+        const variants = res.data || [];
+        if (variants.length > 0) {
+          setCartEditAddonVariantModal({ addon, variants });
+          setCartEditAddonVariantSelections({});
+        } else {
+          setCartEditAddons(prev => [...prev, { addon_id: addon.id, addon_item_id: addon.addon_item_id, addon_item_name: addon.addon_item_name, addon_discount_price_cents: addon.addon_discount_price_cents, quantity: 1 }]);
+        }
+      } catch {
+        setCartEditAddons(prev => [...prev, { addon_id: addon.id, addon_item_id: addon.addon_item_id, addon_item_name: addon.addon_item_name, addon_discount_price_cents: addon.addon_discount_price_cents, quantity: 1 }]);
+      }
     };
 
     const handleSubmitOrder = async () => {
@@ -2109,6 +2223,285 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       );
     }
 
+    // ============= CART ITEM EDIT MODAL =============
+    const cartItemEditModal = cartEditModal ? (() => {
+      const { item, idx } = cartEditModal;
+      const itemName = lang === 'zh' && item.name_zh ? item.name_zh : item.name;
+      const numpadKeys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
+      return (
+        <Modal
+          supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+          visible={true}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setCartEditModal(null)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '92%' }}>
+              {/* Close handle */}
+              <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
+              </View>
+              <TouchableOpacity style={{ position: 'absolute', top: 14, right: 16, zIndex: 10, padding: 4 }} onPress={() => setCartEditModal(null)}>
+                <Text style={{ fontSize: 22, color: '#6b7280', fontWeight: '600' }}>✕</Text>
+              </TouchableOpacity>
+
+              <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+                {/* Image */}
+                {item.image_url && item.image_url.trim() ? (
+                  <Image source={{ uri: getFullImageUrl(item.image_url)! }} style={{ width: '100%', height: 180, borderTopLeftRadius: 20, borderTopRightRadius: 20 }} resizeMode="cover" />
+                ) : null}
+
+                {/* Item name + description */}
+                <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937', marginBottom: 4 }}>{itemName}</Text>
+                  {item.description ? (
+                    <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>{item.description}</Text>
+                  ) : null}
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#10b981' }}>{formatPrice(item.price_cents || 0)}</Text>
+                </View>
+
+                <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 20, marginVertical: 12 }} />
+
+                {/* QUANTITY SECTION */}
+                <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Quantity</Text>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14 }}
+                    onPress={() => setShowCartQtyNumpad(v => !v)}
+                  >
+                    <Text style={{ fontSize: 28, fontWeight: '800', color: '#1f2937' }}>×{cartQtyNumpadInput || '1'}</Text>
+                    <Ionicons name={showCartQtyNumpad ? 'chevron-up' : 'chevron-down'} size={18} color="#6b7280" />
+                  </TouchableOpacity>
+                  {showCartQtyNumpad && (
+                    <View style={{ marginTop: 10, backgroundColor: '#f9fafb', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', padding: 8 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                        {numpadKeys.map((key, ki) => (
+                          <TouchableOpacity
+                            key={ki}
+                            style={{ width: '33.33%', paddingVertical: 14, alignItems: 'center' }}
+                            onPress={() => {
+                              if (key === '⌫') {
+                                setCartQtyNumpadInput(v => v.length > 1 ? v.slice(0, -1) : '');
+                              } else if (key === '') {
+                                // blank key — do nothing
+                              } else {
+                                setCartQtyNumpadInput(v => {
+                                  const next = (v === '0' || v === '') ? key : v + key;
+                                  return next.length > 3 ? v : next;
+                                });
+                              }
+                            }}
+                          >
+                            <Text style={{ fontSize: 22, fontWeight: key === '⌫' ? '400' : '700', color: key === '' ? 'transparent' : '#1f2937' }}>{key}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                {/* VARIANT SECTION */}
+                {cartEditVariants.length > 0 && (
+                  <>
+                    <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 20, marginBottom: 12 }} />
+                    <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+                      <Text style={styles.variantSectionTitle}>{t('orders.select-options') || 'SELECT OPTIONS'}</Text>
+                      {cartEditVariants.map((variant) => (
+                        <View key={variant.id} style={styles.variantGroup}>
+                          <View style={styles.variantGroupHeader}>
+                            <Text style={styles.variantGroupName}>
+                              {variant.name}
+                              {variant.required && <Text style={{ color: '#ef4444' }}> *</Text>}
+                            </Text>
+                          </View>
+                          <View style={styles.variantOptionsGrid}>
+                            {variant.min_select === 1 && variant.max_select === 1 ? (
+                              variant.options.map((option) => (
+                                <TouchableOpacity
+                                  key={option.id}
+                                  style={styles.variantOption}
+                                  onPress={() => setCartEditVariantSelections(prev => ({ ...prev, [variant.id]: option.id }))}
+                                >
+                                  <View style={[styles.radioButton, cartEditVariantSelections[variant.id] === option.id && styles.radioButtonSelected]} />
+                                  <View style={styles.variantOptionContent}>
+                                    <Text style={styles.variantOptionName}>{option.name}</Text>
+                                    {option.price_cents !== 0 && <Text style={styles.variantOptionPrice}>{option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}</Text>}
+                                  </View>
+                                </TouchableOpacity>
+                              ))
+                            ) : (
+                              variant.options.map((option) => {
+                                const sel = Array.isArray(cartEditVariantSelections[variant.id])
+                                  ? (cartEditVariantSelections[variant.id] as number[]).includes(option.id) : false;
+                                return (
+                                  <TouchableOpacity
+                                    key={option.id}
+                                    style={styles.variantOption}
+                                    onPress={() => {
+                                      setCartEditVariantSelections(prev => {
+                                        const cur = Array.isArray(prev[variant.id]) ? [...(prev[variant.id] as number[])] : [];
+                                        if (cur.includes(option.id)) cur.splice(cur.indexOf(option.id), 1);
+                                        else cur.push(option.id);
+                                        return { ...prev, [variant.id]: cur };
+                                      });
+                                    }}
+                                  >
+                                    <View style={[styles.checkbox, sel && styles.checkboxSelected]} />
+                                    <View style={styles.variantOptionContent}>
+                                      <Text style={styles.variantOptionName}>{option.name}</Text>
+                                      {option.price_cents !== 0 && <Text style={styles.variantOptionPrice}>{option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}</Text>}
+                                    </View>
+                                  </TouchableOpacity>
+                                );
+                              })
+                            )}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {/* COMBO / ADDON SECTION */}
+                {cartEditItemAddons.length > 0 && (
+                  <>
+                    <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 20, marginBottom: 12 }} />
+                    <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+                      <Text style={styles.variantSectionTitle}>{t('orders.add-ons') || 'ADD-ONS'}</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+                        {cartEditItemAddons.map((addon) => {
+                          const isSelected = cartEditAddons.some(a => a.addon_id === addon.id);
+                          const discountPct = addon.regular_price_cents > 0
+                            ? Math.round(((addon.regular_price_cents - addon.addon_discount_price_cents) / addon.regular_price_cents) * 100)
+                            : 0;
+                          return (
+                            <TouchableOpacity
+                              key={addon.id}
+                              onPress={() => toggleCartEditAddon(addon)}
+                              style={{ width: 110, borderRadius: 10, borderWidth: 2, borderColor: isSelected ? '#667eea' : '#e5e7eb', backgroundColor: isSelected ? '#f0f0ff' : '#fff', overflow: 'hidden' }}
+                            >
+                              {addon.addon_item_image ? (
+                                <Image source={{ uri: getFullImageUrl(addon.addon_item_image)! }} style={{ width: '100%', height: 70, borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />
+                              ) : (
+                                <View style={{ width: '100%', height: 70, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Ionicons name="fast-food-outline" size={28} color="#d1d5db" />
+                                </View>
+                              )}
+                              {isSelected && (
+                                <View style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>
+                                </View>
+                              )}
+                              <View style={{ padding: 6 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: '#1f2937' }} numberOfLines={2}>{addon.addon_item_name}</Text>
+                                <Text style={{ fontSize: 11, color: '#667eea', fontWeight: '600', marginTop: 2 }}>{formatPrice(addon.addon_discount_price_cents)}</Text>
+                                {discountPct > 0 && <Text style={{ fontSize: 9, color: '#ef4444', marginTop: 1 }}>-{discountPct}% off</Text>}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      {/* Addon variant sub-modal inside cart edit */}
+                      {cartEditAddonVariantModal && (
+                        <View style={{ marginTop: 12, padding: 12, backgroundColor: '#f9fafb', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 8 }}>
+                            {cartEditAddonVariantModal.addon.addon_item_name} — {t('orders.select-options') || 'Select Options'}
+                          </Text>
+                          {cartEditAddonVariantModal.variants.map((variant) => (
+                            <View key={variant.id} style={{ marginBottom: 8 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>{variant.name}{variant.required && <Text style={{ color: '#ef4444' }}> *</Text>}</Text>
+                              {variant.min_select === 1 && variant.max_select === 1 ? (
+                                variant.options.map((option) => (
+                                  <TouchableOpacity key={option.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
+                                    onPress={() => setCartEditAddonVariantSelections(prev => ({ ...prev, [variant.id]: option.id }))}>
+                                    <View style={[styles.radioButton, cartEditAddonVariantSelections[variant.id] === option.id && styles.radioButtonSelected]} />
+                                    <Text style={{ fontSize: 12, marginLeft: 8 }}>{option.name}</Text>
+                                    {option.price_cents !== 0 && <Text style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>{option.price_cents > 0 ? '+' : ''}{formatPrice(option.price_cents)}</Text>}
+                                  </TouchableOpacity>
+                                ))
+                              ) : (
+                                variant.options.map((option) => {
+                                  const sel = Array.isArray(cartEditAddonVariantSelections[variant.id])
+                                    ? (cartEditAddonVariantSelections[variant.id] as number[]).includes(option.id) : false;
+                                  return (
+                                    <TouchableOpacity key={option.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
+                                      onPress={() => {
+                                        setCartEditAddonVariantSelections(prev => {
+                                          const cur = Array.isArray(prev[variant.id]) ? [...(prev[variant.id] as number[])] : [];
+                                          if (cur.includes(option.id)) cur.splice(cur.indexOf(option.id), 1); else cur.push(option.id);
+                                          return { ...prev, [variant.id]: cur };
+                                        });
+                                      }}>
+                                      <View style={[styles.checkbox, sel && styles.checkboxSelected]} />
+                                      <Text style={{ fontSize: 12, marginLeft: 8 }}>{option.name}</Text>
+                                    </TouchableOpacity>
+                                  );
+                                })
+                              )}
+                            </View>
+                          ))}
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            <TouchableOpacity style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 10, alignItems: 'center' }} onPress={() => setCartEditAddonVariantModal(null)}>
+                              <Text style={{ fontWeight: '600', color: '#374151' }}>{t('orders.cancel')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{ flex: 1, backgroundColor: '#667eea', borderRadius: 8, padding: 10, alignItems: 'center' }}
+                              onPress={() => {
+                                const addon = cartEditAddonVariantModal.addon;
+                                setCartEditAddons(prev => [...prev, {
+                                  addon_id: addon.id, addon_item_id: addon.addon_item_id,
+                                  addon_item_name: addon.addon_item_name,
+                                  addon_discount_price_cents: addon.addon_discount_price_cents, quantity: 1,
+                                }]);
+                                setCartEditAddonVariantModal(null);
+                              }}
+                            >
+                              <Text style={{ fontWeight: '600', color: '#fff' }}>Add</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </>
+                )}
+
+                {/* COMMENTS SECTION */}
+                <View style={{ height: 1, backgroundColor: '#e5e7eb', marginHorizontal: 20, marginBottom: 12 }} />
+                <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Comments</Text>
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 12, fontSize: 14, color: '#374151', backgroundColor: '#fafafa', minHeight: 72, textAlignVertical: 'top' }}
+                    placeholder={t('orders.add-remarks')}
+                    placeholderTextColor="#9ca3af"
+                    value={cartEditModal.item.notes || ''}
+                    onChangeText={(text) => setCartEditModal(prev => prev ? { ...prev, item: { ...prev.item, notes: text } } : null)}
+                    multiline
+                  />
+                </View>
+              </ScrollView>
+
+              {/* Footer buttons */}
+              <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#fee2e2', borderRadius: 10, padding: 14, alignItems: 'center' }}
+                  onPress={() => { handleRemoveFromCart(idx); setCartEditModal(null); }}
+                >
+                  <Text style={{ fontWeight: '700', color: '#dc2626', fontSize: 14 }}>Remove Item</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, backgroundColor: '#2c3e50', borderRadius: 10, padding: 14, alignItems: 'center' }}
+                  onPress={saveCartEdit}
+                >
+                  <Text style={{ fontWeight: '700', color: '#fff', fontSize: 14 }}>Update Cart</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      );
+    })() : null;
+
     // ============= PA OFFLINE REFUND MODAL =============
     const paOfflineRefundModal = (
       <Modal
@@ -2901,6 +3294,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             {kpayRefundModal}
             {paOnlineRefundModal}
             {paOfflineRefundModal}
+            {cartItemEditModal}
             {emailReceiptModal}
           </>
         );
@@ -3087,6 +3481,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {kpayRefundModal}
         {paOnlineRefundModal}
         {paOfflineRefundModal}
+        {cartItemEditModal}
         {emailReceiptModal}
         </>
       );
@@ -3303,14 +3698,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           <View style={styles.cartHeader}>
             <Text style={styles.cartHeaderTitle}>{t('orders.cart')}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {cart.length > 0 && (
-                <TouchableOpacity onPress={() => setCartEditMode(!cartEditMode)} style={[styles.cartEditToggle, cartEditMode && { backgroundColor: '#667eea' }]}>
-                  <Ionicons name="pencil" size={14} color={cartEditMode ? '#fff' : '#667eea'} />
-                  <Text style={[styles.cartEditToggleText, cartEditMode && styles.cartEditToggleTextActive]}>
-                    {cartEditMode ? t('orders.done') : t('orders.edit')}
-                  </Text>
-                </TouchableOpacity>
-              )}
               <TouchableOpacity onPress={() => { setCart([]); setCartEditMode(false); }}>
                 <Text style={styles.cartClearBtn}>{t('orders.clear')}</Text>
               </TouchableOpacity>
@@ -3324,57 +3711,54 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           ) : (
             <View style={styles.cartItemsList}>
               {cart.map((item, idx) => (
-                <View key={idx} style={styles.cartItemRow}>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={styles.cartItemPreviewText} numberOfLines={1}>{(lang === 'zh' && item.name_zh ? item.name_zh : item.name)} x{item.quantity}</Text>
-                      <Text style={styles.cartItemPriceText}>{formatPrice(item.price_cents * item.quantity)}</Text>
-                    </View>
-                    {item.variants && item.variants.length > 0 && (
-                      <View style={{ marginTop: 2 }}>
-                        {item.variants.map((v, vi) => (
-                          <Text key={vi} style={styles.cartItemVariantText} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
-                        ))}
-                      </View>
-                    )}
-                    {item.addons && item.addons.length > 0 && (
-                      <View style={{ marginTop: 2 }}>
-                        {item.addons.map((a, ai) => (
-                          <Text key={ai} style={{ fontSize: 11, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
-                        ))}
-                      </View>
-                    )}
-                    {cartEditMode && (
-                      <View style={styles.cartEditControls}>
-                        <View style={styles.cartQtyRow}>
-                          <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity - 1)}>
-                            <Text style={styles.cartQtyBtnText}>−</Text>
-                          </TouchableOpacity>
-                          <Text style={styles.cartQtyValue}>{item.quantity}</Text>
-                          <TouchableOpacity style={styles.cartQtyBtn} onPress={() => handleUpdateQuantity(idx, item.quantity + 1)}>
-                            <Text style={styles.cartQtyBtnText}>+</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity style={styles.cartRemoveBtn} onPress={() => handleRemoveFromCart(idx)}>
-                            <Text style={{ fontSize: 16 }}>🗑</Text>
-                          </TouchableOpacity>
-                        </View>
-                        <TextInput
-                          style={styles.cartRemarksInput}
-                          placeholder={t('orders.add-remarks')}
-                          placeholderTextColor="#9ca3af"
-                          value={item.notes || ''}
-                          onChangeText={(text) => handleUpdateNotes(idx, text)}
-                          multiline
-                        />
-                      </View>
-                    )}
-                  </View>
-                  {!cartEditMode && (
-                    <TouchableOpacity onPress={() => handleRemoveFromCart(idx)} style={{ paddingLeft: 6 }}>
-                      <Text style={styles.removeItemBtn}>✕</Text>
+                <Swipeable
+                  key={idx}
+                  renderRightActions={() => (
+                    <TouchableOpacity
+                      style={styles.cartSwipeDelete}
+                      onPress={() => handleRemoveFromCart(idx)}
+                    >
+                      <Ionicons name="trash-outline" size={22} color="#fff" />
+                      <Text style={styles.cartSwipeDeleteText}>Remove</Text>
                     </TouchableOpacity>
                   )}
-                </View>
+                  rightThreshold={40}
+                  overshootRight={false}
+                >
+                  <TouchableOpacity
+                    style={styles.cartItemRow}
+                    onPress={() => openCartEditModal(item, idx)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.cartItemPreviewText} numberOfLines={1}>
+                          {(lang === 'zh' && item.name_zh ? item.name_zh : item.name)}
+                          <Text style={styles.cartItemQtyBadge}>  ×{item.quantity}</Text>
+                        </Text>
+                        <Text style={styles.cartItemPriceText}>{formatPrice(item.price_cents * item.quantity)}</Text>
+                      </View>
+                      {item.variants && item.variants.length > 0 && (
+                        <View style={{ marginTop: 3 }}>
+                          {item.variants.map((v, vi) => (
+                            <Text key={vi} style={styles.cartItemVariantText} numberOfLines={1}>{v.variantName}: {v.optionName}</Text>
+                          ))}
+                        </View>
+                      )}
+                      {item.addons && item.addons.length > 0 && (
+                        <View style={{ marginTop: 3 }}>
+                          {item.addons.map((a, ai) => (
+                            <Text key={ai} style={{ fontSize: 12, color: '#667eea' }} numberOfLines={1}>+ {a.addon_item_name} ({formatPrice(a.addon_discount_price_cents)})</Text>
+                          ))}
+                        </View>
+                      )}
+                      {item.notes ? (
+                        <Text style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic', marginTop: 2 }} numberOfLines={1}>"{item.notes}"</Text>
+                      ) : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#d1d5db" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
+                </Swipeable>
               ))}
             </View>
           )}
@@ -3538,6 +3922,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {paymentModal}
           {emailReceiptModal}
           {tablePickerModal}
+          {cartItemEditModal}
         </>
       );
     }
@@ -3560,6 +3945,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           {paymentModal}
           {emailReceiptModal}
           {tablePickerModal}
+          {cartItemEditModal}
         </>
       );
     }
@@ -3698,6 +4084,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         {paOnlineRefundModal}
 
         {paOfflineRefundModal}
+
+        {cartItemEditModal}
 
         {/* Order Now Payment Modal */}
         {paymentModal}
@@ -4102,22 +4490,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cartItemsList: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    marginBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
   },
   cartItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    backgroundColor: '#fafafa',
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-    borderRadius: 4,
-    marginBottom: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  cartSwipeDelete: {
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    flexDirection: 'column',
+    gap: 4,
+  },
+  cartSwipeDeleteText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   orderTypeButtonsVertical: {
     flexDirection: 'column',
@@ -4141,9 +4539,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cartItemPreviewText: {
-    fontSize: 12,
-    color: '#374151',
+    fontSize: 15,
+    color: '#1f2937',
+    fontWeight: '600',
     flex: 1,
+  },
+  cartItemQtyBadge: {
+    fontSize: 15,
+    color: '#667eea',
+    fontWeight: '700',
   },
   removeItemBtn: {
     fontSize: 14,
@@ -4151,15 +4555,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   cartItemVariantText: {
-    fontSize: 10,
-    color: '#999',
-    fontStyle: 'italic',
-    marginTop: 1,
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
   },
   cartItemPriceText: {
-    fontSize: 12,
+    fontSize: 15,
     color: '#2C3E50',
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   sectionLabel: {
