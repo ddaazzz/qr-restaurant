@@ -49,6 +49,12 @@ interface SubscriptionContextType {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
+export const useSubscription = (): SubscriptionContextType => {
+  const ctx = useContext(SubscriptionContext);
+  if (!ctx) throw new Error('useSubscription must be used within a SubscriptionProvider');
+  return ctx;
+};
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------

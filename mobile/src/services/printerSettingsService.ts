@@ -30,10 +30,19 @@ export interface PrinterRow {
     header_text?: string;
     footer_text?: string;
     auto_print?: boolean;
-    printers?: KitchenPrinter[];     // NEW: Kitchen multi-printer array
+    printers?: KitchenPrinter[] | QRPrinter[] | BillPrinter[];  // Multi-printer array (type depends on printer row type)
   };
   created_at?: string;
   updated_at?: string;
+}
+
+export interface QRPrinter {
+  id: string;
+  name: string;
+  type: 'network' | 'bluetooth';
+  host?: string;
+  bluetoothDevice?: string;
+  tables: 'all' | number[];          // 'all' or specific table IDs
 }
 
 export interface KitchenPrinter {
@@ -51,8 +60,8 @@ export interface BillPrinter {
   type: 'network' | 'bluetooth';
   host?: string;
   bluetoothDevice?: string;
-  tableCategoryIds: number[];        // Table section IDs (empty = all tables)
-  orderTypes: string[];              // 'dine-in' | 'order-now' | 'to-go' | 'all'
+  tables: 'all' | number[];          // 'all' or specific table IDs
+  order_types: string[];             // 'dine-in' | 'order-now' | 'to-go' | 'all'
 }
 
 export interface PrinterProfile {
@@ -98,6 +107,9 @@ export interface BackendPrinterSettings {
   bill_bluetooth_device_id?: string;
   bill_bluetooth_device_name?: string;
   bill_auto_print?: boolean;
+  bill_font_size?: string;
+  bill_header_text?: string;
+  bill_footer_text?: string;
   bill_paper_width?: string;
   bill_show_phone?: boolean;
   bill_show_address?: boolean;
@@ -113,6 +125,7 @@ export interface BackendPrinterSettings {
   kitchen_bluetooth_device_id?: string;
   kitchen_bluetooth_device_name?: string;
   kitchen_auto_print?: boolean;
+  qr_printers?: QRPrinter[];            // Array of QR printers with table routing
   kitchen_printers?: KitchenPrinter[];  // Array of kitchen printers with category routing
   
   // Bill Printer Configuration (multi-printer support)
@@ -147,11 +160,12 @@ class PrinterSettingsService {
       const prefix = `${type}_`;
 
       // Map unified fields to per-type prefixed fields
-      if (row.printer_type) flat[`${prefix}printer_type` as keyof BackendPrinterSettings] = row.printer_type;
-      if (row.printer_host) flat[`${prefix}printer_host` as keyof BackendPrinterSettings] = row.printer_host;
-      if (row.printer_port) flat[`${prefix}printer_port` as keyof BackendPrinterSettings] = row.printer_port;
-      if (row.bluetooth_device_id) flat[`${prefix}bluetooth_device_id` as keyof BackendPrinterSettings] = row.bluetooth_device_id;
-      if (row.bluetooth_device_name) flat[`${prefix}bluetooth_device_name` as keyof BackendPrinterSettings] = row.bluetooth_device_name;
+      const flatAny = flat as unknown as Record<string, unknown>;
+      if (row.printer_type) flatAny[`${prefix}printer_type`] = row.printer_type;
+      if (row.printer_host) flatAny[`${prefix}printer_host`] = row.printer_host;
+      if (row.printer_port) flatAny[`${prefix}printer_port`] = row.printer_port;
+      if (row.bluetooth_device_id) flatAny[`${prefix}bluetooth_device_id`] = row.bluetooth_device_id;
+      if (row.bluetooth_device_name) flatAny[`${prefix}bluetooth_device_name`] = row.bluetooth_device_name;
 
       // Extract settings (format-specific configuration)
       if (row.settings) {
@@ -160,20 +174,24 @@ class PrinterSettingsService {
           if (row.settings.text_below) flat.qr_text_below = row.settings.text_below;
           if (row.settings.code_size) flat.qr_code_size = row.settings.code_size;
           if (typeof row.settings.auto_print === 'boolean') flat.qr_auto_print = row.settings.auto_print;
+          // Extract multi-QR-printer array (web admin saves as settings.printers)
+          if (Array.isArray(row.settings.printers) && row.settings.printers.length > 0) {
+            flat.qr_printers = row.settings.printers as unknown as QRPrinter[];
+          }
         } else if (row.type === 'Bill') {
           if (row.settings.font_size) flat.bill_font_size = row.settings.font_size;
           if (row.settings.header_text) flat.bill_header_text = row.settings.header_text;
           if (row.settings.footer_text) flat.bill_footer_text = row.settings.footer_text;
           if (typeof row.settings.auto_print === 'boolean') flat.bill_auto_print = row.settings.auto_print;
-          // Extract multi-bill-printer array
-          if (Array.isArray(row.settings.bill_printers) && row.settings.bill_printers.length > 0) {
-            flat.bill_printers = row.settings.bill_printers;
+          // Extract multi-bill-printer array (web admin saves as settings.printers)
+          if (Array.isArray(row.settings.printers) && row.settings.printers.length > 0) {
+            flat.bill_printers = row.settings.printers as unknown as BillPrinter[];
           }
         } else if (row.type === 'Kitchen') {
           if (typeof row.settings.auto_print === 'boolean') flat.kitchen_auto_print = row.settings.auto_print;
           // CRITICAL: Extract multi-printer array
           if (Array.isArray(row.settings.printers) && row.settings.printers.length > 0) {
-            flat.kitchen_printers = row.settings.printers;
+            flat.kitchen_printers = row.settings.printers as unknown as KitchenPrinter[];
           }
         }
       }
@@ -306,11 +324,32 @@ class PrinterSettingsService {
   }
 
   /**
+   * NEW: Get QR printers array with table routing info
+   */
+  async getQrPrinters(restaurantId: string): Promise<QRPrinter[]> {
+    const settings = await this.getPrinterSettings(restaurantId);
+    return settings.qr_printers || [];
+  }
+
+  /**
    * NEW: Get bill printers array with routing info
    */
   async getBillPrinters(restaurantId: string): Promise<BillPrinter[]> {
     const settings = await this.getPrinterSettings(restaurantId);
     return settings.bill_printers || [];
+  }
+
+  /**
+   * Save multi-QR-printer configuration
+   * Encodes all QR printers in the QR row's settings.printers JSONB
+   */
+  async saveQrPrinters(restaurantId: string, printers: QRPrinter[], autoPrint: boolean): Promise<void> {
+    await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
+      type: 'QR',
+      printer_type: 'none',
+      settings: { printers, auto_print: autoPrint },
+    });
+    this.invalidateCache(restaurantId);
   }
 
   /**
@@ -328,28 +367,22 @@ class PrinterSettingsService {
 
   /**
    * Save multi-bill-printer configuration
-   * Encodes all bill printers in the Bill row's settings.bill_printers JSONB
+   * Encodes all bill printers in the Bill row's settings.printers JSONB (matching web admin format)
    */
   async saveBillPrinters(restaurantId: string, printers: BillPrinter[], autoPrint: boolean): Promise<void> {
     await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
       type: 'Bill',
       printer_type: 'none',
-      settings: { bill_printers: printers, auto_print: autoPrint },
+      settings: { printers, auto_print: autoPrint },
     });
     this.invalidateCache(restaurantId);
   }
 
   /**
-   * Get saved printer profiles for a restaurant
+   * Get saved printer profiles — stubbed, printer_profiles table is not used
    */
-  async getPrinterProfiles(restaurantId: string): Promise<PrinterProfile[]> {
-    try {
-      const response = await apiClient.get(`/api/restaurants/${restaurantId}/printer-profiles`);
-      return Array.isArray(response.data) ? response.data : [];
-    } catch (err) {
-      console.error('[PrinterSettings] Failed to fetch printer profiles:', err);
-      return [];
-    }
+  async getPrinterProfiles(_restaurantId: string): Promise<PrinterProfile[]> {
+    return [];
   }
 
   /**

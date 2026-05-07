@@ -6,7 +6,7 @@ import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, kpayQueryDirect, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, kpayClose, kpayQueryDirect, KPayTerminalConfig } from '../../services/kpayDirectService';
 import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, paOfflineRefundOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 interface MenuItem {
@@ -285,6 +285,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // PA Offline: current order ID and config, kept in refs so abort can access them
     const paOfflineOrderIdRef = useRef<string | null>(null);
     const paOfflineConfigRef = useRef<PATerminalConfig | null>(null);
+    // KPay: current trade number, config and private key for abort/close
+    const kpayCurrentTradeNoRef = useRef<string | null>(null);
+    const kpayConfigRef = useRef<KPayTerminalConfig | null>(null);
+    const kpayPrivateKeyRef = useRef<string | null>(null);
 
     // Customer name prompt for To-Go orders
     const [showCustomerNameModal, setShowCustomerNameModal] = useState(false);
@@ -324,7 +328,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [showPaOfflineRefundModal, setShowPaOfflineRefundModal] = useState(false);
     const [paOfflineRefundAmount, setPaOfflineRefundAmount] = useState('');
     const [paOfflineRefundPin, setPaOfflineRefundPin] = useState('');
-    const [paOfflineRefundOrder, setPaOfflineRefundOrder] = useState<Order | null>(null);
+    const [paOfflineRefundTarget, setPaOfflineRefundTarget] = useState<Order | null>(null);
 
     // Live transaction details
     const [kpayTxDetails, setKpayTxDetails] = useState<any>(null);
@@ -1157,6 +1161,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           return;
         }
         addLog('> ✅ Signed in', '#51cf66');
+        // Save for abort handler
+        kpayConfigRef.current = config;
+        kpayPrivateKeyRef.current = signResult.appPrivateKey;
+        kpayCurrentTradeNoRef.current = outTradeNo;
 
         // Initiate sale directly from device
         setKpayStatusMsg(t('orders.kpay-waiting'));
@@ -1180,6 +1188,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           if (attempts >= maxAttempts) {
             setKpayStatusMsg(t('orders.kpay-timeout'));
             addLog('> TIMEOUT', '#ffd43b');
+            // Try to close the transaction on the terminal to return it to idle
+            addLog('> Sending close transaction to terminal...', '#ffd43b');
+            try {
+              const closeRes = await kpayClose(config, signResult.appPrivateKey!, outTradeNo);
+              addLog(closeRes.success ? '> ✅ Terminal freed' : `> ⚠️ Close: ${closeRes.error || closeRes.message}`, closeRes.success ? '#51cf66' : '#ffd43b');
+            } catch (_) {}
             setKpayProcessing(false);
             return;
           }
@@ -1253,6 +1267,28 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         clearTimeout(kpayPollRef.current);
         kpayPollRef.current = null;
       }
+
+      // If KPay sale/void/refund is in progress, send close transaction to return terminal to idle
+      const kpayTradeNo = kpayCurrentTradeNoRef.current;
+      const kpayCfg = kpayConfigRef.current;
+      const kpayKey = kpayPrivateKeyRef.current;
+      if (kpayTradeNo && kpayCfg && kpayKey) {
+        setKpayStatusMsg('Closing transaction on terminal…');
+        setKpayLogs(prev => [...prev, { msg: `> Sending close to terminal (${kpayTradeNo})…`, color: '#ffd43b' }]);
+        try {
+          const cr = await kpayClose(kpayCfg, kpayKey, kpayTradeNo);
+          setKpayLogs(prev => [...prev, {
+            msg: cr.success ? '> ✅ Terminal freed.' : `> ⚠️ Close: ${cr.error || cr.message}`,
+            color: cr.success ? '#51cf66' : '#ffd43b',
+          }]);
+        } catch (e: any) {
+          setKpayLogs(prev => [...prev, { msg: `> Close error: ${e.message}`, color: '#ffd43b' }]);
+        }
+        kpayCurrentTradeNoRef.current = null;
+        kpayConfigRef.current = null;
+        kpayPrivateKeyRef.current = null;
+      }
+
       // If a PA Offline order is in progress, void it on the terminal so it's freed
       const paOrderId = paOfflineOrderIdRef.current;
       const paConfig = paOfflineConfigRef.current;
@@ -1270,9 +1306,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         }
         paOfflineOrderIdRef.current = null;
       }
+
       setKpayProcessing(false);
-      setKpayStatusMsg('');
+      // Close the modal entirely instead of showing payment method selection
+      setShowPaymentModal(false);
       setKpayLogs([]);
+      setKpayStatusMsg('');
+      setKpayModalTitle(null);
     };
 
     // === PA Offline Terminal Payment (direct from device) ===
@@ -1542,6 +1582,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           return;
         }
         addLog('> ✅ Signed in', '#51cf66');
+        kpayConfigRef.current = config;
+        kpayPrivateKeyRef.current = signResult.appPrivateKey;
+        kpayCurrentTradeNoRef.current = voidOutTradeNo;
 
         setKpayStatusMsg('Sending void to terminal...');
         addLog(`> Void ref: ${voidOutTradeNo}`, '#ffd43b');
@@ -1659,6 +1702,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           return;
         }
         addLog('> ✅ Signed in', '#51cf66');
+        kpayConfigRef.current = config;
+        kpayPrivateKeyRef.current = signResult.appPrivateKey;
+        kpayCurrentTradeNoRef.current = refOutTradeNo;
 
         // Query original transaction to get live payMethod / transactionNo / refNo
         setKpayStatusMsg('Querying original transaction...');
@@ -1784,12 +1830,12 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       const totalDollars = ((order.total_cents || 0) / 100).toFixed(2);
       setPaOfflineRefundAmount(totalDollars);
       setPaOfflineRefundPin('');
-      setPaOfflineRefundOrder(order);
+      setPaOfflineRefundTarget(order);
       setShowPaOfflineRefundModal(true);
     };
 
     const submitPaOfflineRefund = () => {
-      if (!paOfflineRefundOrder) return;
+      if (!paOfflineRefundTarget) return;
       const savedPin = paOfflineTerminal?.metadata?.refund_pin || '';
       if (savedPin && paOfflineRefundPin !== savedPin) {
         Alert.alert('Incorrect PIN', 'The refund PIN you entered is incorrect. Please try again.');
@@ -1797,7 +1843,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
       setShowPaOfflineRefundModal(false);
       const amount = paOfflineRefundAmount ? parseFloat(paOfflineRefundAmount).toFixed(2) : undefined;
-      startPaOfflineRefundFlow(paOfflineRefundOrder, amount);
+      startPaOfflineRefundFlow(paOfflineRefundTarget, amount);
     };
 
     const startPaOfflineRefundFlow = async (order: Order, refundAmountDollars?: string) => {
@@ -2515,7 +2561,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>PA Terminal Refund</Text>
             <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-              Ref: {paOfflineRefundOrder?.cp_vendor_ref || paOfflineRefundOrder?.kpay_reference_id || '—'}
+              Ref: {paOfflineRefundTarget?.cp_vendor_ref || paOfflineRefundTarget?.kpay_reference_id || '—'}
             </Text>
             <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund Amount (HKD)</Text>
             <TextInput

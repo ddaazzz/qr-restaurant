@@ -51,100 +51,102 @@
     </div>
 
     <div style="padding: 20px; width: 100%; box-sizing: border-box;">
-    <div id="printer-config-card" style="margin-bottom: 24px;"></div>
-
     <!-- QR Code Format Section (Only for QR Type) -->
     <div id="qr-format-section" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 30px; display: none;">
-      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-qr-format">📋 QR Code Format</h3>
-      
-      <div class="printer-two-col">
-        <!-- Form Fields -->
-        <div>
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-qr-size">QR Code Size</label>
-            <div style="display: flex; gap: 8px;">
-              <button id="qr-size-small" onclick="setQRCodeSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-small">Small</button>
-              <button id="qr-size-medium" onclick="setQRCodeSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-medium">Medium</button>
-              <button id="qr-size-large" onclick="setQRCodeSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-large">Large</button>
-            </div>
-          </div>
+      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-qr-format">📋 QR Code Printers</h3>
 
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-text-above">Text Above QR Code</label>
-            <input oninput="updateLivePreview()" id="qr-text-above" type="text" placeholder="e.g., Scan to Order" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
-          </div>
+      <!-- Multi-printer list (rendered by admin-printer-qr.js) -->
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;">📍 QR Code Printers</label>
+        <div id="qr-printers-list" style="margin-bottom: 16px;"></div>
+        <button onclick="addQRPrinter()" id="add-qr-printer-btn" class="btn-secondary"
+          style="width: 100%; padding: 10px; margin-bottom: 16px;">+ Add Printer</button>
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">Each printer can be routed to specific tables or all tables.</p>
+      </div>
 
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-text-below">Text Below QR Code</label>
-            <input oninput="updateLivePreview()" id="qr-text-below" type="text" placeholder="e.g., Let us know how we did!" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
-          </div>
-        </div>
-
-        <!-- Preview -->
-        <div>
-          <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-preview">📄 Preview</label>
-          <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
-            <div style="text-align: left; margin: 8px 0; font-size: 11px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span style="font-weight: bold; min-width: 60px;">Table:</span>
-                <span>T02</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span style="font-weight: bold; min-width: 60px;">Pax:</span>
-                <span>4</span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="font-weight: bold; min-width: 60px;">Started:</span>
-                <span>2026-03-18 8:30 PM</span>
+      <!-- QR Format settings -->
+      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 8px;">
+        <h4 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 600; color: #1f2937;">QR Receipt Format</h4>
+        <div class="printer-two-col">
+          <div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-qr-size">QR Code Size</label>
+              <div style="display: flex; gap: 8px;">
+                <button id="qr-size-small" onclick="setQRCodeSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-small">Small</button>
+                <button id="qr-size-medium" onclick="setQRCodeSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-medium">Medium</button>
+                <button id="qr-size-large" onclick="setQRCodeSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-large">Large</button>
               </div>
             </div>
-
-            <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-
-            <p id="qr-preview-above" style="font-weight: bold; font-size: 12px; margin: 8px 0; color: #1f2937;">Scan to Order</p>
-
-            <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-
-            <div id="qr-preview-box" style="width: 100px; height: 100px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; margin: 12px auto; display: flex; align-items: center; justify-content: center; font-size: 10px;">
-              <p style="color: #999; margin: 0;">QR Code</p>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-text-above">Text Above QR Code</label>
+              <input oninput="updateLivePreview()" id="qr-text-above" type="text" placeholder="e.g., Scan to Order" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
             </div>
-
-            <p id="qr-preview-below" style="margin: 8px 0 4px 0; font-size: 10px; color: #6b7280;">Let us know how we did!</p>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-text-below">Text Below QR Code</label>
+              <input oninput="updateLivePreview()" id="qr-text-below" type="text" placeholder="e.g., Let us know how we did!" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            </div>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-preview">📄 Preview</label>
+            <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
+              <div style="text-align: left; margin: 8px 0; font-size: 11px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="font-weight: bold; min-width: 60px;">Table:</span><span>T02</span></div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="font-weight: bold; min-width: 60px;">Pax:</span><span>4</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="font-weight: bold; min-width: 60px;">Started:</span><span>2026-03-18 8:30 PM</span></div>
+              </div>
+              <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
+              <p id="qr-preview-above" style="font-weight: bold; font-size: 12px; margin: 8px 0; color: #1f2937;">Scan to Order</p>
+              <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
+              <div id="qr-preview-box" style="width: 100px; height: 100px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; margin: 12px auto; display: flex; align-items: center; justify-content: center; font-size: 10px;"><p style="color: #999; margin: 0;">QR Code</p></div>
+              <p id="qr-preview-below" style="margin: 8px 0 4px 0; font-size: 10px; color: #6b7280;">Let us know how we did!</p>
+            </div>
           </div>
         </div>
       </div>
+
+      <button onclick="saveQRPrinterConfiguration()" class="btn-primary"
+        style="width: 100%; padding: 12px; font-weight: 600; margin-top: 20px;" data-i18n="admin.printer-save-qr">✓ Save QR Printers</button>
     </div>
 
     <!-- Bill Receipt Format Section (Only for Bill Type) -->
     <div id="bill-format-section" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 30px; display: none;">
-      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-bill-format">🧾 Bill Receipt Format</h3>
-      
-      <div class="printer-two-col">
-        <!-- Form Fields -->
-        <div>
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-font-size">Font Size</label>
-            <div style="display: flex; gap: 8px;">
-              <button id="bill-font-small" onclick="setBillFontSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-small">Small</button>
-              <button id="bill-font-medium" onclick="setBillFontSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-medium">Medium</button>
-              <button id="bill-font-large" onclick="setBillFontSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-large">Large</button>
+      <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-bill-format">🧾 Bill Receipt Printers</h3>
+
+      <!-- Multi-printer list (rendered by admin-printer-bill.js) -->
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;">📍 Bill Printers</label>
+        <div id="bill-printers-list" style="margin-bottom: 16px;"></div>
+        <button onclick="addBillPrinter()" id="add-bill-printer-btn" class="btn-secondary"
+          style="width: 100%; padding: 10px; margin-bottom: 16px;">+ Add Printer</button>
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">Each printer can be routed by table and order type (Dine In / Order Now / To-Go).</p>
+      </div>
+
+      <!-- Bill Format settings -->
+      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 8px;">
+        <h4 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 600; color: #1f2937;">Bill Receipt Format</h4>
+        <div class="printer-two-col">
+          <div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-font-size">Font Size</label>
+              <div style="display: flex; gap: 8px;">
+                <button id="bill-font-small" onclick="setBillFontSize('small')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-small">Small</button>
+                <button id="bill-font-medium" onclick="setBillFontSize('medium')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-medium">Medium</button>
+                <button id="bill-font-large" onclick="setBillFontSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-large">Large</button>
+              </div>
+              <div id="bill-font-display" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
             </div>
-            <div id="bill-font-display" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-header-text">Header Text</label>
+              <input oninput="updateBillPreview()" id="bill-header-text" type="text" placeholder="e.g., Thank You" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-footer-text">Footer Text</label>
+              <input oninput="updateBillPreview()" id="bill-footer-text" type="text" placeholder="e.g., Follow us on social media" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            </div>
           </div>
 
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-header-text">Header Text</label>
-            <input oninput="updateBillPreview()" id="bill-header-text" type="text" placeholder="e.g., Thank You" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
-          </div>
-
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-footer-text">Footer Text</label>
-            <input oninput="updateBillPreview()" id="bill-footer-text" type="text" placeholder="e.g., Follow us on social media" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
-          </div>
-        </div>
-
-        <!-- Bill Preview -->
-        <div>
+          <!-- Bill Preview -->
+          <div>
           <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-preview">📄 Preview</label>
           <div id="bill-preview-container" style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; font-family: monospace; font-size: 11px; line-height: 1.6;">
             <div style="border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; text-align: center;">
@@ -199,6 +201,9 @@
           </div>
         </div>
       </div>
+
+      <button onclick="saveBillPrinterConfiguration()" class="btn-primary"
+        style="width: 100%; padding: 12px; font-weight: 600; margin-top: 20px;" data-i18n="admin.printer-save-bill">✓ Save Bill Printers</button>
     </div>
 
     <!-- Kitchen Order Format Section (Only for Kitchen Type) -->

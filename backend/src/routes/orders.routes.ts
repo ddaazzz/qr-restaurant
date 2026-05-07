@@ -1233,7 +1233,7 @@ router.post("/restaurants/:restaurantId/orders/:orderId/void", async (req, res) 
 router.post("/restaurants/:restaurantId/orders/:orderId/refund", async (req, res) => {
   try {
     const { restaurantId, orderId } = req.params;
-    const { refund_amount_cents } = req.body;
+    const { refund_amount_cents } = req.body || {};
     const orderRes = await pool.query(
       `SELECT o.id, o.payment_method, o.payment_status
        FROM orders o
