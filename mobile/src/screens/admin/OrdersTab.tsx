@@ -2271,7 +2271,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             const vendor = resolveVendor(selectedHistoryOrder);
             const effectiveStatus = selectedHistoryOrder.cp_status || selectedHistoryOrder.payment_status || (selectedHistoryOrder.payment_received ? 'completed' : selectedHistoryOrder.status || null);
             const methodLabel = (() => { const raw = getPaymentMethodLabel(selectedHistoryOrder); const map: Record<string, string> = { 'Credit Card': t('orders.credit-card'), 'Cash': t('orders.cash'), 'Terminal': t('orders.terminal') }; return map[raw] || raw; })();
-            const vendorLabel = (() => { if (vendor) { const raw = getVendorLabel(vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; } return selectedHistoryOrder.payment_received ? t('orders.cash') : null; })();
+            const vendorLabel = (() => { if (vendor) { const raw = getVendorLabel(vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'PA Terminal': t('admin.pa-terminal'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; } return selectedHistoryOrder.payment_received ? t('orders.cash') : null; })();
 
             const statusBadge = (status: string | null) => {
               if (!status) return null;
@@ -2602,7 +2602,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 <View key={record.id || idx} style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                     <Text style={{ fontSize: 12, fontWeight: '600', color: getVendorColor(record.payment_vendor) }}>
-                      {(() => { const raw = getVendorLabel(record.payment_vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; })()}
+                      {(() => { const raw = getVendorLabel(record.payment_vendor); const map: Record<string, string> = { 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'), 'PA Terminal': t('admin.pa-terminal'), 'Cash': t('orders.cash'), 'Card': t('orders.card') }; return map[raw] || raw; })()}
                     </Text>
                     <View style={{ backgroundColor: record.status === 'completed' ? '#d1fae5' : record.status === 'failed' ? '#fee2e2' : '#fef3c7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
                       <Text style={{ fontSize: 10, fontWeight: '600', color: record.status === 'completed' ? '#065f46' : record.status === 'failed' ? '#991b1b' : '#92400e' }}>
@@ -2849,6 +2849,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               };
               const vendorLabelMap: Record<string, string> = {
                 'KPay Terminal': t('orders.kpay-terminal'), 'Payment Asia': t('orders.payment-asia'),
+                'PA Terminal': t('admin.pa-terminal'),
                 'Cash': t('orders.cash'), 'Card': t('orders.card'),
               };
               const methodLabelMap: Record<string, string> = {
@@ -3651,6 +3652,7 @@ const getVendorLabel = (vendor?: string) => {
   const map: Record<string, string> = {
     kpay: 'KPay Terminal',
     'payment-asia': 'Payment Asia',
+    'payment-asia-offline': 'PA Terminal',
     cash: 'Cash',
     card: 'Card',
   };
@@ -3662,6 +3664,7 @@ const getVendorColor = (vendor?: string) => {
   const map: Record<string, string> = {
     kpay: '#1a73e8',
     'payment-asia': '#7c3aed',
+    'payment-asia-offline': '#16a34a',
     cash: '#059669',
     card: '#2563eb',
   };

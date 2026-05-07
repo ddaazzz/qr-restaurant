@@ -687,11 +687,8 @@ async function submitTableOrder() {
   }
   
   try {
-    // Only reuse an existing session when editing a specific existing order.
-    // For fresh table orders EDITING_EXISTING_SESSION_ID may be stale (from a
-    // previously viewed completed order), so we must ignore it.
-    const effectiveSessionId = EDITING_EXISTING_ORDER_ID ? (EDITING_EXISTING_SESSION_ID || undefined) : undefined;
-    await createOrder(tableId ? parseInt(tableId) : null, effectiveSessionId);
+    // Create order for the selected table (reuse session if editing)
+    await createOrder(tableId ? parseInt(tableId) : null, EDITING_EXISTING_SESSION_ID || undefined);
     
     // Clear cart and edit state
     ORDERS_CART = [];
@@ -1004,7 +1001,7 @@ async function createOrder(tableId, sessionId) {
   
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.error || errorData.message || 'Failed to create order');
+    throw new Error(errorData.message || 'Failed to create order');
   }
   
   return res.json();
@@ -1344,10 +1341,10 @@ async function selectOrderFromHistory(orderId) {
       loadPaymentAsiaOrderDetails(order.id, order.kpay_reference_id, order.payment_network);
     }
 
-    // If PA-Offline terminal payment, load transaction details asynchronously
-    const _paOfflineRef = order.cp_vendor_ref || order.kpay_reference_id;
-    if (order.payment_method_online === 'payment-asia-offline' && _paOfflineRef) {
-      loadPAOfflineOrderDetails(order.id, _paOfflineRef);
+    // If PA Offline payment, load transaction details asynchronously
+    if (order.payment_method_online === 'payment-asia-offline') {
+      const paRef = order.cp_vendor_ref || order.kpay_reference_id;
+      if (paRef) loadPaOfflineOrderDetails(order.id, paRef);
     }
 
     // Track that we're viewing a historical order
@@ -1424,22 +1421,15 @@ function displayOrderDetails(order) {
   
   let itemsTotal = 0;
   if (order.items && order.items.length > 0) {
-    const itemStatusLabels = { pending: t('kitchen.pending') || 'Pending', preparing: t('kitchen.preparing') || 'Preparing', served: t('admin.served') || 'Served', completed: t('admin.served') || 'Served' };
-    const itemStatusColors = { pending: '#f59e0b', preparing: '#3b82f6', served: '#10b981', completed: '#10b981' };
     order.items.forEach(item => {
       itemsTotal += item.item_total_cents || 0;
-      const statusLabel = itemStatusLabels[item.status] || item.status || '';
-      const statusColor = itemStatusColors[item.status] || '#9ca3af';
       html += `
         <div style="padding: 12px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #667eea;">
-          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: ${(item.variants || item.status) ? '6px' : '0'};">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: ${item.variants ? '6px' : '0'};">
             <div style="flex: 1;">
               <div style="font-weight: 600; color: #333; font-size: 13px;">${item.menu_item_name} × ${item.quantity}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              ${statusLabel ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${statusColor}20;color:${statusColor};white-space:nowrap;">${statusLabel}</span>` : ''}
-              <div style="font-weight: 600; color: #667eea; font-size: 13px;white-space:nowrap;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
-            </div>
+            <div style="font-weight: 600; color: #667eea; font-size: 13px; margin-left: 8px;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
           </div>
           ${item.variants ? `<div style="font-size: 11px; color: #999;">${item.variants}</div>` : ''}
           ${item.addons && item.addons.length > 0 ? item.addons.map(a => `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">+ ${a.menu_item_name} ×${a.quantity} ($${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)})</div>`).join('') : ''}
@@ -1453,8 +1443,7 @@ function displayOrderDetails(order) {
   html += `</div></div>`;
   
   // Order Summary
-  const serviceChargePercent = window.serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 10);
-  const serviceCharge = Math.round(itemsTotal * serviceChargePercent / 100);
+  const serviceCharge = Math.round(itemsTotal * 0.1);
   const grandTotal = itemsTotal + serviceCharge;
   
   html += `
@@ -1467,7 +1456,7 @@ function displayOrderDetails(order) {
       </div>
       
       <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; font-size: 13px;">
-        <div style="color: #666;">Service Charge (${serviceChargePercent}%)</div>
+        <div style="color: #666;">Service Charge (10%)</div>
         <div style="color: #333; font-weight: 500;">$${(serviceCharge / 100).toFixed(2)}</div>
       </div>
       
@@ -1498,14 +1487,15 @@ function displayOrderDetails(order) {
   const _cpVendorLabels    = { 'kpay':'KPay Terminal', 'payment-asia':'Payment Asia', 'payment-asia-offline':'PA Terminal', 'cash':'Cash', 'card':'Card Terminal' };
   const _cpVendorColors    = { 'kpay':'#667eea', 'payment-asia':'#f59e0b', 'payment-asia-offline':'#16a34a', 'cash':'#10b981', 'card':'#6b7280' };
 
-  const payVendorLabel = _cpVendorLabels[order.cp_vendor] || (paymentMethod === 'kpay' ? 'KPay Terminal' : paymentMethod === 'payment-asia' ? 'Payment Asia' : '');
-  const payVendorColor = _cpVendorColors[order.cp_vendor] || (paymentMethod === 'kpay' ? '#667eea' : '#f59e0b');
+  const payVendorLabel = _cpVendorLabels[order.cp_vendor] || (paymentMethod === 'kpay' ? 'KPay Terminal' : paymentMethod === 'payment-asia' ? 'Payment Asia' : paymentMethod === 'payment-asia-offline' ? 'PA Terminal' : '');
+  const payVendorColor = _cpVendorColors[order.cp_vendor] || (paymentMethod === 'kpay' ? '#667eea' : paymentMethod === 'payment-asia-offline' ? '#16a34a' : '#f59e0b');
   const payMethodLabel = order.cp_method
     ? order.cp_method
     : paymentMethod === 'kpay'
       ? (_kpayDetailMethods[order.kpay_pay_method] || 'Terminal')
       : paymentMethod === 'payment-asia'
         ? (_paDetailNetworks[order.payment_network] || order.payment_network || 'Online')
+        : paymentMethod === 'payment-asia-offline' ? 'PA Terminal'
         : paymentMethod === 'card' ? 'Credit Card' : 'Cash';
 
   if (order.payment_received === true) {
@@ -1547,7 +1537,7 @@ function displayOrderDetails(order) {
           ${order.cp_refunded_at ? `<div style="color:#b91c1c; margin-top:2px;">Refunded at ${new Date(order.cp_refunded_at).toLocaleString()}</div>` : ''}
         </div>` : ''}
 
-        ${paymentMethod !== 'kpay' && paymentMethod !== 'payment-asia' && paymentMethod !== 'payment-asia-offline' && (!effectivePaymentStatus || effectivePaymentStatus === 'completed' || effectivePaymentStatus === 'paid') ? `
+        ${paymentMethod !== 'kpay' && paymentMethod !== 'payment-asia' && (!effectivePaymentStatus || effectivePaymentStatus === 'completed' || effectivePaymentStatus === 'paid') ? `
         <div style="display:flex; gap:8px; margin-top:8px;" id="non-kpay-actions-${order.id}">
           <button onclick="orderVoid(${order.id})" style="padding:5px 12px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Void</button>
           <button onclick="orderRefund(${order.id})" style="padding:5px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Refund</button>
@@ -1572,10 +1562,9 @@ function displayOrderDetails(order) {
 
         ${paymentMethod === 'payment-asia-offline' && (order.cp_vendor_ref || order.kpay_reference_id) ? `
         <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px; font-size:12px; color:#166534; margin-top:8px;">
-          <div style="font-weight:600; margin-bottom:6px;">PA Terminal Transaction</div>
+          <div style="font-weight:600; margin-bottom:6px;">PA Terminal Transaction Details</div>
           <div style="margin-bottom:4px; font-size:11px; color:#166534;">Order Ref: <code style="font-family:monospace;font-size:11px;">${order.cp_vendor_ref || order.kpay_reference_id}</code></div>
-          <div id="pa-offline-txn-detail-${order.id}" style="margin-top:6px; color:#374151;">Loading transaction details…</div>
-          <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;" id="pa-offline-txn-actions-${order.id}"></div>
+          <div id="pa-offline-txn-detail-${order.id}" style="margin-top:6px; color:#166534;">Loading transaction details…</div>
         </div>` : ''}
       </div>
     `;
@@ -2026,158 +2015,45 @@ async function submitPaymentAsiaRefund(merchantReference, orderId) {
   }
 }
 
-// ─── PA Terminal (Offline) order-history helpers ──────────────────────────────
+// ─── PA Offline order-history helpers ────────────────────────────────────────
 
-let _historyPAOfflineTxn = null;
-
-async function loadPAOfflineOrderDetails(orderId, paOrderId) {
-  const detailDiv  = document.getElementById(`pa-offline-txn-detail-${orderId}`);
-  const actionsDiv = document.getElementById(`pa-offline-txn-actions-${orderId}`);
+async function loadPaOfflineOrderDetails(orderId, paOrderId) {
+  const detailDiv = document.getElementById(`pa-offline-txn-detail-${orderId}`);
   if (!detailDiv) return;
 
   try {
-    const resp = await fetch(`${API}/restaurants/${restaurantId}/pa-offline-transactions/${encodeURIComponent(paOrderId)}`);
+    const resp = await fetch(`${API}/restaurants/${restaurantId}/pa-offline-transactions/${encodeURIComponent(paOrderId)}?skip_live=1`);
     if (!resp.ok) { detailDiv.textContent = 'Could not load PA Terminal details.'; return; }
-    const txn = await resp.json();
-    _historyPAOfflineTxn = txn;
-
-    const fmtTime = ts => {
-      if (!ts) return null;
-      const n = Number(ts);
-      return isNaN(n) ? String(ts) : new Date(n * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-    };
+    const tx = await resp.json();
 
     const paStatusLabels = {
       completed: 'Completed ✓', voided: 'Voided', refunded: 'Refunded',
       partial_refund: 'Partial Refund', failed: 'Failed', cancelled: 'Cancelled', pending: 'Pending',
     };
-    const paStatusColors = {
-      completed: '#10b981', voided: '#f59e0b', refunded: '#ef4444',
-      partial_refund: '#f59e0b', failed: '#ef4444', cancelled: '#6b7280', pending: '#64748b',
+    const txStatus = tx.status || '';
+    const statusColor = txStatus === 'completed' ? '#16a34a' : txStatus === 'failed' || txStatus === 'refunded' ? '#ef4444' : txStatus === 'voided' ? '#b45309' : '#64748b';
+
+    const fmtTime = ts => {
+      if (!ts) return null;
+      const n = Number(ts);
+      if (!isNaN(n) && n > 1000000000) return new Date(n * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      return String(ts);
     };
-    const txStatus      = txn.live_pa_status || txn.status || '';
-    const txStatusLabel = paStatusLabels[txStatus] || txStatus || '—';
-    const txStatusColor = paStatusColors[txStatus] || '#374151';
-    const amountHKD     = txn.amount_cents ? (txn.amount_cents / 100).toFixed(2) : '—';
 
-    detailDiv.innerHTML = `
-      <div style="line-height:1.9; font-size:12px; color:#1f2937;">
-        <div>Amount: <strong>${txn.currency || 'HKD'} ${amountHKD}</strong></div>
-        <div>Status: <strong style="color:${txStatusColor};">${txStatusLabel}</strong>${txn.live_pa_status ? ' <span style="font-size:10px; background:#dcfce7; color:#166534; border-radius:3px; padding:1px 5px;">live</span>' : ''}</div>
-        ${txn.payment_method     ? `<div>Method: <strong>${txn.payment_method}</strong></div>` : ''}
-        ${txn.provider           ? `<div>Provider: ${txn.provider}</div>` : ''}
-        ${txn.provider_reference ? `<div>Provider Ref: <code style="font-family:monospace;font-size:11px;">${txn.provider_reference}</code></div>` : ''}
-        ${txn.request_reference  ? `<div>Request Ref: <code style="font-family:monospace;font-size:11px;">${txn.request_reference}</code></div>` : ''}
-        ${fmtTime(txn.pa_created_time)   ? `<div>Created: ${fmtTime(txn.pa_created_time)}</div>` : ''}
-        ${fmtTime(txn.pa_completed_time) ? `<div>Completed: ${fmtTime(txn.pa_completed_time)}</div>` : ''}
-      </div>
-    `;
+    let html = `<div style="line-height:1.9; font-size:12px;">`;
+    html += `<div>Status: <strong style="color:${statusColor};">${paStatusLabels[txStatus] || txStatus || '—'}</strong></div>`;
+    if (tx.amount_cents) html += `<div>Amount: <strong>${tx.currency || 'HKD'} ${(tx.amount_cents / 100).toFixed(2)}</strong></div>`;
+    if (tx.payment_method) html += `<div>Method: <strong>${tx.payment_method}</strong></div>`;
+    if (tx.provider) html += `<div>Provider: <strong>${tx.provider}</strong></div>`;
+    if (tx.provider_reference) html += `<div>Provider Ref: <code style="font-family:monospace;font-size:11px;">${tx.provider_reference}</code></div>`;
+    if (tx.request_reference) html += `<div>Request Ref: <code style="font-family:monospace;font-size:11px;">${tx.request_reference}</code></div>`;
+    if (fmtTime(tx.pa_created_time)) html += `<div>Created: ${fmtTime(tx.pa_created_time)}</div>`;
+    if (fmtTime(tx.pa_completed_time)) html += `<div>Completed: ${fmtTime(tx.pa_completed_time)}</div>`;
+    html += `</div>`;
 
-    if (!actionsDiv) return;
-    actionsDiv.innerHTML = '';
-
-    if (txStatus === 'completed' || txStatus === 'pending') {
-      const voidBtn = document.createElement('button');
-      voidBtn.textContent = 'Void';
-      voidBtn.title = 'Only works for same-day, unsettled transactions';
-      voidBtn.style.cssText = 'padding:6px 14px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;';
-      voidBtn.onclick = () => historyPAOfflineVoid(orderId, paOrderId);
-      actionsDiv.appendChild(voidBtn);
-    }
-    if (txStatus === 'completed') {
-      const refundBtn = document.createElement('button');
-      refundBtn.textContent = '↩ Refund';
-      refundBtn.style.cssText = 'padding:6px 14px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;';
-      refundBtn.onclick = () => openPAOfflineRefund(orderId, paOrderId, txn.amount_cents ? txn.amount_cents / 100 : 0);
-      actionsDiv.appendChild(refundBtn);
-    }
+    detailDiv.innerHTML = html;
   } catch (e) {
     if (detailDiv) detailDiv.textContent = `Error: ${e.message}`;
-  }
-}
-
-async function historyPAOfflineVoid(orderId, paOrderId) {
-  if (!confirm(`Void PA Terminal transaction?\nOrder Ref: ${paOrderId}\n\nOnly works for same-day, unsettled transactions.`)) return;
-  try {
-    const tResp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`);
-    const terminals = await tResp.json();
-    const paTerminal = (terminals || []).find(t => t.vendor_name === 'payment-asia-offline' && t.is_active);
-    if (!paTerminal) { alert('No active PA-Offline terminal found.'); return; }
-
-    const resp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/cancel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outTradeNo: `VOID-${Date.now()}`, originOutTradeNo: paOrderId }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { alert(`Void failed: ${data.error || resp.statusText}`); return; }
-    alert('Void request sent to PA terminal.');
-    selectOrderFromHistory(orderId);
-  } catch (e) {
-    alert(`Void failed: ${e.message}`);
-  }
-}
-
-function openPAOfflineRefund(orderId, paOrderId, saleAmount) {
-  document.getElementById('pa-offline-refund-overlay')?.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'pa-offline-refund-overlay';
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal-content" style="width:380px; max-width:95vw;">
-      <h3 style="margin:0 0 14px 0;">↩ Refund — PA Terminal</h3>
-      <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px; font-size:12px; margin-bottom:14px; line-height:1.8;">
-        <div><b>Order Ref:</b><br><code style="font-family:monospace;font-size:11px;">${paOrderId}</code></div>
-        <div><b>Original Amount:</b> HKD ${saleAmount.toFixed(2)}</div>
-      </div>
-      <p style="font-size:12px; color:#6b7280; margin:0 0 12px 0;">Leave amount blank or enter full amount for a full refund.</p>
-      <label style="display:block; margin-bottom:14px; font-size:13px;">
-        <span style="font-weight:600; display:block; margin-bottom:4px;">Refund Amount (HKD)</span>
-        <input id="pa-offline-refund-amount" type="number" step="0.01" min="0.01" value="${saleAmount.toFixed(2)}"
-          style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:13px;"/>
-      </label>
-      <div id="pa-offline-refund-error" style="color:#dc2626; font-size:12px; margin-bottom:8px; display:none;"></div>
-      <div class="modal-button-group">
-        <button onclick="document.getElementById('pa-offline-refund-overlay').remove()" class="modal-cancel-btn">Cancel</button>
-        <button onclick="submitPAOfflineRefund('${paOrderId}', ${orderId})" class="modal-btn-primary" style="background:#dc2626;">Submit Refund</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-}
-
-async function submitPAOfflineRefund(paOrderId, orderId) {
-  const amountInput = document.getElementById('pa-offline-refund-amount');
-  const errorDiv    = document.getElementById('pa-offline-refund-error');
-  const amount = parseFloat(amountInput?.value || '0');
-  if (!amount || amount <= 0) {
-    errorDiv.textContent = 'Please enter a valid refund amount.';
-    errorDiv.style.display = 'block';
-    return;
-  }
-  errorDiv.style.display = 'none';
-
-  try {
-    const tResp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`);
-    const terminals = await tResp.json();
-    const paTerminal = (terminals || []).find(t => t.vendor_name === 'payment-asia-offline' && t.is_active);
-    if (!paTerminal) { errorDiv.textContent = 'No active PA-Offline terminal found.'; errorDiv.style.display = 'block'; return; }
-
-    const resp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/refund`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ originOutTradeNo: paOrderId, refundAmount: amount.toFixed(2) }),
-    });
-    const data = await resp.json();
-    document.getElementById('pa-offline-refund-overlay')?.remove();
-
-    if (!resp.ok) { alert(`Refund failed: ${data.error || resp.statusText}`); return; }
-    alert(`✅ Refund request sent to PA terminal.\n\nOrder Ref: ${paOrderId}`);
-    selectOrderFromHistory(orderId);
-  } catch (e) {
-    document.getElementById('pa-offline-refund-overlay')?.remove();
-    alert(`Refund failed: ${e.message}`);
   }
 }
 
