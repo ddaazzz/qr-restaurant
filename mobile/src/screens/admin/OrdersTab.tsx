@@ -6,7 +6,7 @@ import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, kpayClose, kpayQueryDirect, encryptManagerPassword, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, kpayClose, kpayQueryDirect, KPayTerminalConfig } from '../../services/kpayDirectService';
 import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, paOfflineRefundOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 interface MenuItem {
@@ -1717,18 +1717,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           outTradeNo: refOutTradeNo,
           refundType: livePayMethod === 1 ? 1 : 2, // 1=Card, 2=QR/mobile
         };
-        // Manager password is required for KPay refunds (code=20018 if missing)
-        const managerPwd = tc.metadata?.manager_password;
-        if (managerPwd && signResult.platformPublicKey) {
-          try {
-            refundParams.encryptedManagerPassword = encryptManagerPassword(signResult.platformPublicKey, managerPwd);
-            addLog('> Manager password encrypted', '#ffd43b');
-          } catch (encErr: any) {
-            addLog(`> ⚠️ Password encrypt failed: ${encErr.message}`, '#ffd43b');
-          }
-        } else {
-          addLog('> ⚠️ No manager password configured — set it in Settings → Payment Methods', '#ffd43b');
-        }
+        // Manager password NOT sent — terminal prompts on-screen
+        addLog('> Manager password will be entered on terminal screen', '#ffd43b');
         if (qOriginal.transactionNo) { refundParams.transactionNo = qOriginal.transactionNo; addLog(`> transactionNo: ${qOriginal.transactionNo}`, '#ffd43b'); }
         if (qOriginal.refNo)         { refundParams.refNo = qOriginal.refNo;                 addLog(`> refNo: ${qOriginal.refNo}`, '#ffd43b'); }
         if (qOriginal.commitTime)    { refundParams.commitTime = qOriginal.commitTime; }
@@ -1846,15 +1836,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
     const submitPaOfflineRefund = () => {
       if (!paOfflineRefundTarget) return;
-      const savedPin = paOfflineTerminal?.metadata?.refund_pin || '';
-      if (!savedPin) {
-        Alert.alert('Refund PIN Required', 'No Refund PIN is configured for this terminal. Please set a Refund PIN in Settings → Payment Methods before processing refunds.');
-        return;
-      }
-      if (paOfflineRefundPin !== savedPin) {
-        Alert.alert('Incorrect PIN', 'The refund PIN you entered is incorrect. Please try again.');
-        return;
-      }
       setShowPaOfflineRefundModal(false);
       const amount = paOfflineRefundAmount ? parseFloat(paOfflineRefundAmount).toFixed(2) : undefined;
       startPaOfflineRefundFlow(paOfflineRefundTarget, amount);
@@ -2597,21 +2578,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               onChangeText={setPaOfflineRefundAmount}
               placeholder="Full refund"
             />
-            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund PIN</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 4 }}
-              keyboardType="number-pad"
-              secureTextEntry
-              value={paOfflineRefundPin}
-              onChangeText={setPaOfflineRefundPin}
-              placeholder="Enter PIN to confirm"
-            />
-            {!paOfflineTerminal?.metadata?.refund_pin && (
-              <Text style={{ fontSize: 11, color: '#ef4444', marginBottom: 12 }}>⚠ No PIN configured — set one in Settings → Payment Methods</Text>
-            )}
-            {!!paOfflineTerminal?.metadata?.refund_pin && (
-              <Text style={{ fontSize: 11, color: '#6b7280', marginBottom: 12 }}>Enter the Refund PIN configured for this terminal.</Text>
-            )}
             <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
               The refund will be processed on the PA payment terminal.
             </Text>

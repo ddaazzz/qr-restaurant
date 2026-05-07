@@ -440,7 +440,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     pa_offline_port: '8080',
     pa_offline_api_key: '',
     pa_offline_refund_pin: '', // optional app-level PIN required before processing refund
-    kpay_manager_password: '', // manager password for KPay refund (encrypted on send)
   });
   const [testingTerminal, setTestingTerminal] = useState(false);
   const [terminalTestResult, setTerminalTestResult] = useState<any>(null);
@@ -1389,10 +1388,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           terminal_port: parseInt(terminalForm.terminal_port),
           endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
         };
-        // Allow non-superadmins to save the refund PIN for PA offline terminals
-        if (terminalForm.vendor_name === 'payment-asia-offline') {
-          payload.metadata = { refund_pin: terminalForm.pa_offline_refund_pin || '' };
-        }
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-updated'));
         await fetchPaymentTerminals();
@@ -1440,8 +1435,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         payload.terminal_ip = terminalForm.terminal_ip;
         payload.terminal_port = parseInt(terminalForm.terminal_port);
         payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
-        // Store manager password in metadata for KPay refunds
-        payload.metadata = { manager_password: terminalForm.kpay_manager_password || '' };
       }
 
       if (editingTerminalId) {
@@ -1597,7 +1590,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       pa_offline_port: t.vendor_name === 'payment-asia-offline' ? (t.terminal_port?.toString() || '8080') : '8080',
       pa_offline_api_key: t.vendor_name === 'payment-asia-offline' ? (t.app_secret || '') : '',
       pa_offline_refund_pin: t.vendor_name === 'payment-asia-offline' ? (t.metadata?.refund_pin || '') : '',
-      kpay_manager_password: t.vendor_name === 'kpay' ? (t.metadata?.manager_password || '') : '',
     });
   };
 
@@ -1617,7 +1609,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       pa_offline_port: '8080',
       pa_offline_api_key: '',
       pa_offline_refund_pin: '',
-      kpay_manager_password: '',
     });
     setTerminalTestResult(null);
   };
@@ -5062,20 +5053,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     placeholder="e.g., /v2/pos/sign"
                   />
                 </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Manager Password (for Refunds)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={terminalForm.kpay_manager_password}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, kpay_manager_password: text })}
-                    placeholder="KPay terminal manager password"
-                    secureTextEntry
-                  />
-                  <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-                    Required for refunds. Encrypted before sending to the terminal.
-                  </Text>
-                </View>
               </>
             )}
 
@@ -5175,24 +5152,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   />
                 </View>
               </>
-            )}
-
-            {/* PA Offline Refund PIN — visible to ALL admins (not just superadmin) */}
-            {terminalForm.vendor_name === 'payment-asia-offline' && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Refund PIN</Text>
-                <TextInput
-                  style={styles.input}
-                  value={terminalForm.pa_offline_refund_pin}
-                  onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_refund_pin: text })}
-                  placeholder="Set a PIN admins must enter before refunding"
-                  secureTextEntry
-                  keyboardType="number-pad"
-                />
-                <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-                  Admin must enter this PIN before processing any refund on this terminal.
-                </Text>
-              </View>
             )}
 
             {/* Test Result */}
