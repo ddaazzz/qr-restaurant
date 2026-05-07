@@ -244,7 +244,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [crmError, setCrmError] = useState<string | null>(null);
   const [crmOrderDetail, setCrmOrderDetail] = useState<any | null>(null);
   const [crmOrderDetailLoading, setCrmOrderDetailLoading] = useState(false);
-  const [crmSyncing, setCrmSyncing] = useState(false);
   const [showCrmEditModal, setShowCrmEditModal] = useState(false);
   const [crmEditName, setCrmEditName] = useState('');
   const [crmEditPhone, setCrmEditPhone] = useState('');
@@ -696,21 +695,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     } catch (err: any) {
       console.warn('[Settings] Failed to fetch addon presets (non-critical):', err.message);
       setAddonPresets([]);
-    }
-  };
-
-  const syncCrmFromBookings = async () => {
-    try {
-      setCrmSyncing(true);
-      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/import-from-bookings`);
-      const { inserted, total } = res.data;
-      setCrmCount(total);
-      Alert.alert(t('common.success'), t('admin.crm-sync-complete', { inserted: inserted.toString(), total: total.toString() }));
-      fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.response?.data?.error || t('admin.crm-sync-failed'));
-    } finally {
-      setCrmSyncing(false);
     }
   };
 
@@ -2762,20 +2746,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>{t('admin.crm-customers') || 'Customers'}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={styles.label}>
-                        {crmSearchTerm
-                          ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
-                          : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.btn, styles.btnSecondary, { paddingVertical: 4, paddingHorizontal: 10, opacity: crmSyncing ? 0.6 : 1 }]}
-                        disabled={crmSyncing}
-                        onPress={syncCrmFromBookings}
-                      >
-                        <Text style={[styles.crmLoadMoreText, { fontSize: 11 }]}>{crmSyncing ? 'Syncing...' : t('admin.crm-import-bookings') || 'Sync Bookings'}</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <Text style={styles.label}>
+                      {crmSearchTerm
+                        ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
+                        : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
+                    </Text>
                   </View>
 
                   <TextInput
@@ -2822,7 +2797,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     </View>
                   ) : crmCustomers.length === 0 ? (
                     <Text style={styles.emptyText}>
-                      {crmSearchTerm ? t('admin.crm-no-results') || 'No customers matched your search.' : t('admin.crm-empty') || 'No customers yet. Import bookings to get started.'}
+                      {crmSearchTerm ? t('admin.crm-no-results') || 'No customers matched your search.' : t('admin.crm-empty') || 'No customers yet. Customers are added automatically when bookings are made or bills are closed.'}
                     </Text>
                   ) : (
                     <View style={styles.crmListWrap}>

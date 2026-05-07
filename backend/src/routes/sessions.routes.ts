@@ -3,6 +3,7 @@ import pool from "../config/db";
 import crypto from "crypto";
 import { getCustomerReceiptService } from "../services/customerReceipt";
 import * as paymentTerminalService from "../services/paymentTerminalService";
+import { upsertCrmCustomer } from "../utils/upsertCrmCustomer";
 
 const router = Router();
 
@@ -780,6 +781,60 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    // Fire-and-forget: upsert CRM customer and refresh their stats from this session
+    pool.query(
+      `SELECT customer_name, customer_phone, customer_email, restaurant_id
+       FROM table_sessions WHERE id = $1`,
+      [sessionId]
+    ).then(async (sessionCustomer) => {
+      const sc = sessionCustomer.rows[0];
+      if (!sc || !sc.customer_name) return;
+
+      // Ensure the customer record exists
+      await upsertCrmCustomer({
+        restaurantId: sc.restaurant_id,
+        name:  sc.customer_name,
+        phone: sc.customer_phone,
+        email: sc.customer_email,
+      });
+
+      // Refresh total_visits, total_spent_cents and last_visit_at for this customer
+      await pool.query(
+        `UPDATE crm_customers c
+         SET
+           total_visits       = sub.visit_count,
+           total_spent_cents  = sub.spent_cents,
+           last_visit_at      = sub.last_visit,
+           updated_at         = NOW()
+         FROM (
+           SELECT
+             cc.id AS customer_id,
+             COUNT(DISTINCT ts2.id)::int AS visit_count,
+             COALESCE(SUM(oi.price_cents * oi.quantity) FILTER (WHERE oi.removed = false), 0) AS spent_cents,
+             MAX(ts2.ended_at) AS last_visit
+           FROM crm_customers cc
+           JOIN table_sessions ts2 ON ts2.restaurant_id = cc.restaurant_id
+             AND ts2.ended_at IS NOT NULL
+             AND (
+               (ts2.customer_phone IS NOT NULL AND ts2.customer_phone <> '' AND ts2.customer_phone = cc.phone)
+               OR (ts2.customer_name IS NOT NULL AND ts2.customer_name = cc.name AND (cc.phone IS NULL OR cc.phone = ''))
+             )
+           JOIN orders o ON o.session_id = ts2.id AND o.restaurant_id = cc.restaurant_id
+           LEFT JOIN order_items oi ON oi.order_id = o.id
+           WHERE cc.restaurant_id = $1
+             AND (
+               (cc.phone IS NOT NULL AND cc.phone = $2)
+               OR (cc.name = $3 AND (cc.phone IS NULL OR cc.phone = ''))
+             )
+           GROUP BY cc.id
+         ) sub
+         WHERE c.id = sub.customer_id`,
+        [sc.restaurant_id, sc.customer_phone || null, sc.customer_name]
+      );
+    }).catch((err) => {
+      console.warn("[CRM] close-bill stats update failed silently:", err.message);
+    });
 
     // Success response
     res.json({
