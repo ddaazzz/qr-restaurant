@@ -6,7 +6,7 @@ import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, kpayClose, kpayQueryDirect, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, kpayClose, kpayQueryDirect, encryptManagerPassword, KPayTerminalConfig } from '../../services/kpayDirectService';
 import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, paOfflineRefundOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 interface MenuItem {
@@ -1717,8 +1717,18 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           outTradeNo: refOutTradeNo,
           refundType: livePayMethod === 1 ? 1 : 2, // 1=Card, 2=QR/mobile
         };
-        // Manager password NOT sent — terminal prompts on-screen
-        addLog('> Manager password will be entered on terminal screen', '#ffd43b');
+        // Manager password is required for KPay refunds (code=20018 if missing)
+        const managerPwd = tc.metadata?.manager_password;
+        if (managerPwd && signResult.platformPublicKey) {
+          try {
+            refundParams.encryptedManagerPassword = encryptManagerPassword(signResult.platformPublicKey, managerPwd);
+            addLog('> Manager password encrypted', '#ffd43b');
+          } catch (encErr: any) {
+            addLog(`> ⚠️ Password encrypt failed: ${encErr.message}`, '#ffd43b');
+          }
+        } else {
+          addLog('> ⚠️ No manager password configured — set it in Settings → Payment Methods', '#ffd43b');
+        }
         if (qOriginal.transactionNo) { refundParams.transactionNo = qOriginal.transactionNo; addLog(`> transactionNo: ${qOriginal.transactionNo}`, '#ffd43b'); }
         if (qOriginal.refNo)         { refundParams.refNo = qOriginal.refNo;                 addLog(`> refNo: ${qOriginal.refNo}`, '#ffd43b'); }
         if (qOriginal.commitTime)    { refundParams.commitTime = qOriginal.commitTime; }
