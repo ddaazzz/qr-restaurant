@@ -439,7 +439,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     pa_offline_ip: '',
     pa_offline_port: '8080',
     pa_offline_api_key: '',
-    pa_offline_refund_pin: '', // optional app-level PIN required before processing refund
   });
   const [testingTerminal, setTestingTerminal] = useState(false);
   const [terminalTestResult, setTerminalTestResult] = useState<any>(null);
@@ -1427,8 +1426,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         payload.terminal_port = parseInt(terminalForm.pa_offline_port);
         payload.app_secret = terminalForm.pa_offline_api_key;
         payload.app_id = terminalForm.pa_offline_api_key;
-        // Store refund PIN in metadata (empty string = no PIN required)
-        payload.metadata = { refund_pin: terminalForm.pa_offline_refund_pin || '' };
       } else {
         payload.app_id = terminalForm.app_id;
         payload.app_secret = terminalForm.app_secret;
@@ -1589,7 +1586,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       pa_offline_ip: t.vendor_name === 'payment-asia-offline' ? (t.terminal_ip || '') : '',
       pa_offline_port: t.vendor_name === 'payment-asia-offline' ? (t.terminal_port?.toString() || '8080') : '8080',
       pa_offline_api_key: t.vendor_name === 'payment-asia-offline' ? (t.app_secret || '') : '',
-      pa_offline_refund_pin: t.vendor_name === 'payment-asia-offline' ? (t.metadata?.refund_pin || '') : '',
     });
   };
 
@@ -1608,7 +1604,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       pa_offline_ip: '',
       pa_offline_port: '8080',
       pa_offline_api_key: '',
-      pa_offline_refund_pin: '',
     });
     setTerminalTestResult(null);
   };
@@ -5150,21 +5145,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     placeholder="Enter API Key"
                     secureTextEntry
                   />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Refund PIN (optional)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={terminalForm.pa_offline_refund_pin}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_refund_pin: text })}
-                    placeholder="Leave empty for no PIN"
-                    secureTextEntry
-                    keyboardType="number-pad"
-                  />
-                  <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-                    If set, admin must enter this PIN in the app before a refund is sent to the terminal.
-                  </Text>
                 </View>
               </>
             )}

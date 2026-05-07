@@ -327,7 +327,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [paRefundAmount, setPaRefundAmount] = useState('');
     const [showPaOfflineRefundModal, setShowPaOfflineRefundModal] = useState(false);
     const [paOfflineRefundAmount, setPaOfflineRefundAmount] = useState('');
-    const [paOfflineRefundPin, setPaOfflineRefundPin] = useState('');
     const [paOfflineRefundTarget, setPaOfflineRefundTarget] = useState<Order | null>(null);
 
     // Live transaction details
@@ -1829,7 +1828,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const openPaOfflineRefundModal = (order: Order) => {
       const totalDollars = ((order.total_cents || 0) / 100).toFixed(2);
       setPaOfflineRefundAmount(totalDollars);
-      setPaOfflineRefundPin('');
       setPaOfflineRefundTarget(order);
       setShowPaOfflineRefundModal(true);
     };
