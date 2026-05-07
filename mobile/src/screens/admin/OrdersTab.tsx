@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput, SafeAreaView, KeyboardAvoidingView } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { apiClient, API_URL } from '../../services/apiClient';
 import { printerSettingsService } from '../../services/printerSettingsService';
@@ -1717,7 +1717,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           outTradeNo: refOutTradeNo,
           refundType: livePayMethod === 1 ? 1 : 2, // 1=Card, 2=QR/mobile
         };
-        // Manager password NOT sent — terminal will prompt on-screen (same as void, safer physical auth)
+        // Manager password NOT sent — terminal prompts on-screen
         addLog('> Manager password will be entered on terminal screen', '#ffd43b');
         if (qOriginal.transactionNo) { refundParams.transactionNo = qOriginal.transactionNo; addLog(`> transactionNo: ${qOriginal.transactionNo}`, '#ffd43b'); }
         if (qOriginal.refNo)         { refundParams.refNo = qOriginal.refNo;                 addLog(`> refNo: ${qOriginal.refNo}`, '#ffd43b'); }
@@ -1837,7 +1837,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const submitPaOfflineRefund = () => {
       if (!paOfflineRefundTarget) return;
       const savedPin = paOfflineTerminal?.metadata?.refund_pin || '';
-      if (savedPin && paOfflineRefundPin !== savedPin) {
+      if (!savedPin) {
+        Alert.alert('Refund PIN Required', 'No Refund PIN is configured for this terminal. Please set a Refund PIN in Settings → Payment Methods before processing refunds.');
+        return;
+      }
+      if (paOfflineRefundPin !== savedPin) {
         Alert.alert('Incorrect PIN', 'The refund PIN you entered is incorrect. Please try again.');
         return;
       }
@@ -2283,6 +2287,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           onRequestClose={() => setCartEditModal(null)}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ justifyContent: 'flex-end' }}
+          >
             <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '92%', flex: 1 }}>
               {/* Close handle */}
               <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
@@ -2543,8 +2551,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-        </Modal>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
       );
     })() : null;
 
@@ -2571,18 +2580,20 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               onChangeText={setPaOfflineRefundAmount}
               placeholder="Full refund"
             />
-            {!!(paOfflineTerminal?.metadata?.refund_pin) && (
-              <>
-                <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund PIN</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 12 }}
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  value={paOfflineRefundPin}
-                  onChangeText={setPaOfflineRefundPin}
-                  placeholder="Enter PIN"
-                />
-              </>
+            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>Refund PIN</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 4 }}
+              keyboardType="number-pad"
+              secureTextEntry
+              value={paOfflineRefundPin}
+              onChangeText={setPaOfflineRefundPin}
+              placeholder="Enter PIN to confirm"
+            />
+            {!paOfflineTerminal?.metadata?.refund_pin && (
+              <Text style={{ fontSize: 11, color: '#ef4444', marginBottom: 12 }}>⚠ No PIN configured — set one in Settings → Payment Methods</Text>
+            )}
+            {!!paOfflineTerminal?.metadata?.refund_pin && (
+              <Text style={{ fontSize: 11, color: '#6b7280', marginBottom: 12 }}>Enter the Refund PIN configured for this terminal.</Text>
             )}
             <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
               The refund will be processed on the PA payment terminal.
