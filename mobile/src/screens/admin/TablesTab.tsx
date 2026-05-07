@@ -2384,20 +2384,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
   const openSplitPayModal = async (portion: any) => {
     setActiveSplitPortion(portion);
-    setSplitPayMethod('cash');
+    setSplitPayMethod(customPaymentMethods[0]?.id || 'cash');
+    setActivePaymentTerminal(null);
     setShowSplitPayModal(true);
-    // Load physical terminal so modal can show terminal payment options
-    try {
-      const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
-      const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
-      const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
-      setKpayTerminal(kpayT);
-      setPaOfflineTerminal(paOffT);
-      setActivePaymentTerminal(kpayT || paOffT || null);
-      setSplitPayMethod('cash');
-    } catch {
-      // No terminal available — cash default is fine
-    }
   };
 
   const confirmSplitPay = async () => {

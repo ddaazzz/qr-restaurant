@@ -1467,96 +1467,93 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   const testPaymentTerminal = async () => {
-    try {
-      if (!editingTerminalId) {
-        Alert.alert(t('common.error'), t('settings.save-first'));
+    if (!editingTerminalId) {
+      Alert.alert(t('common.error'), t('settings.save-first'));
+      return;
+    }
+
+    const vendor = terminalForm.vendor_name;
+
+    // PA Online: open payment-test.html in Safari — the browser handles form submission
+    if (vendor === 'payment-asia') {
+      const baseUrl = apiClient.getCurrentBaseUrl();
+      const testUrl = `${baseUrl}/payment-test.html?terminalId=${editingTerminalId}&restaurantId=${restaurantId}`;
+      try {
+        await Linking.openURL(testUrl);
+        setTerminalTestResult({
+          success: true,
+          message: 'Sandbox payment test opened in browser. Complete the payment to verify.',
+        });
+      } catch {
+        Alert.alert(t('common.error'), 'Could not open browser. Please open: ' + testUrl);
+      }
+      return;
+    }
+
+    // PA Offline: ping + sign directly from device over LAN (Render cannot reach LAN IPs)
+    if (vendor === 'payment-asia-offline') {
+      const ip = terminalForm.pa_offline_ip;
+      const port = parseInt(terminalForm.pa_offline_port);
+      const apiKey = terminalForm.pa_offline_api_key;
+      if (!ip || !port || !apiKey) {
+        Alert.alert(t('common.error'), 'Save terminal first before testing');
         return;
       }
+      setTestingTerminal(true);
+      try {
+        const pingResult = await paTerminalPing({ terminalIp: ip, terminalPort: port, apiKey });
+        if (pingResult.success) {
+          const signResult = await paTerminalSign({ terminalIp: ip, terminalPort: port, apiKey });
+          const msg = signResult.success
+            ? `✅ Connected to PA terminal at ${ip}:${port}. Sign handshake OK.`
+            : `✅ Ping OK, but sign step failed: ${signResult.message}`;
+          setTerminalTestResult({ success: signResult.success || pingResult.success, message: msg });
+        } else {
+          setTerminalTestResult({ success: false, message: `❌ Cannot reach terminal at ${ip}:${port}. Check IP, port and network.` });
+        }
+      } catch (err: any) {
+        setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
+      } finally {
+        setTestingTerminal(false);
+      }
+      return;
+    }
 
-      const vendor = terminalForm.vendor_name;
-
-      // PA Online: open payment-test.html in Safari — the browser handles form submission
-      if (vendor === 'payment-asia') {
-        const baseUrl = apiClient.getCurrentBaseUrl();
-        const testUrl = `${baseUrl}/payment-test.html?terminalId=${editingTerminalId}&restaurantId=${restaurantId}`;
-        try {
-          await Linking.openURL(testUrl);
+    // KPay: key-exchange test directly from device (Render cannot reach LAN IPs)
+    if (vendor === 'kpay') {
+      const ip = terminalForm.terminal_ip;
+      const port = parseInt(terminalForm.terminal_port);
+      const appId = terminalForm.app_id;
+      const appSecret = terminalForm.app_secret;
+      if (!ip || !port || !appId || !appSecret) {
+        Alert.alert(t('common.error'), 'Save terminal first (IP, port, App ID, and App Secret are required)');
+        return;
+      }
+      setTestingTerminal(true);
+      try {
+        const signResult = await kpaySign({ terminalIp: ip, terminalPort: port, appId, appSecret });
+        if (signResult.success) {
           setTerminalTestResult({
             success: true,
-            message: 'Sandbox payment test opened in browser. Complete the payment to verify.',
+            message: `✅ Connected to KPay terminal at ${ip}:${port}. Key exchange successful.`,
           });
-        } catch {
-          Alert.alert(t('common.error'), 'Could not open browser. Please open: ' + testUrl);
+          Alert.alert(t('settings.connection-success'), `Connected to KPay terminal at ${ip}:${port}`);
+        } else {
+          setTerminalTestResult({
+            success: false,
+            message: `❌ Cannot reach KPay terminal at ${ip}:${port}: ${signResult.error || signResult.message}`,
+          });
+          Alert.alert(t('settings.connection-failed'), signResult.error || signResult.message);
         }
-        return;
+      } catch (err: any) {
+        setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
+      } finally {
+        setTestingTerminal(false);
       }
-
-      // PA Offline: ping the terminal directly over LAN
-      if (vendor === 'payment-asia-offline') {
-        const ip = terminalForm.pa_offline_ip;
-        const port = parseInt(terminalForm.pa_offline_port);
-        const apiKey = terminalForm.pa_offline_api_key;
-        if (!ip || !port || !apiKey) {
-          Alert.alert(t('common.error'), 'Save terminal first before testing');
-          return;
-        }
-        setTestingTerminal(true);
-        try {
-          const pingResult = await paTerminalPing({ terminalIp: ip, terminalPort: port, apiKey });
-          if (pingResult.success) {
-            const signResult = await paTerminalSign({ terminalIp: ip, terminalPort: port, apiKey });
-            const msg = signResult.success
-              ? `✅ Connected to PA terminal at ${ip}:${port}. Sign handshake OK.`
-              : `✅ Ping OK, but sign step failed: ${signResult.message}`;
-            setTerminalTestResult({ success: signResult.success || pingResult.success, message: msg });
-          } else {
-            setTerminalTestResult({ success: false, message: `❌ Cannot reach terminal at ${ip}:${port}. Check IP, port and network.` });
-          }
-        } catch (err: any) {
-          setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
-        } finally {
-          setTestingTerminal(false);
-        }
-        return;
-      }
-
-      // KPay: test directly from device (Render cannot reach LAN IPs)
-      if (vendor === 'kpay') {
-        const ip = terminalForm.terminal_ip;
-        const port = parseInt(terminalForm.terminal_port);
-        const appId = terminalForm.app_id;
-        const appSecret = terminalForm.app_secret;
-        if (!ip || !port || !appId || !appSecret) {
-          Alert.alert(t('common.error'), 'Save terminal first (IP, port, App ID, and App Secret are required)');
-          return;
-        }
-        setTestingTerminal(true);
-        try {
-          const signResult = await kpaySign({ terminalIp: ip, terminalPort: port, appId, appSecret });
-          if (signResult.success) {
-            setTerminalTestResult({
-              success: true,
-              message: `✅ Connected to KPay terminal at ${ip}:${port}. Key exchange successful.`,
-            });
-            Alert.alert(t('settings.connection-success'), `Connected to KPay terminal at ${ip}:${port}`);
-          } else {
-            setTerminalTestResult({
-              success: false,
-              message: `❌ Cannot reach KPay terminal at ${ip}:${port}: ${signResult.error || signResult.message}`,
-            });
-            Alert.alert(t('settings.connection-failed'), signResult.error || signResult.message);
-          }
-        } catch (err: any) {
-          setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
-        } finally {
-          setTestingTerminal(false);
-        }
-        return;
-      }
-
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.test-failed'));
+      return;
     }
+
+    Alert.alert(t('common.error'), `No test available for vendor: ${vendor}`);
   };
 
   const deletePaymentTerminal = async (terminalId: number) => {
