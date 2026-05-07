@@ -5151,6 +5151,21 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     secureTextEntry
                   />
                 </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Refund PIN (optional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={terminalForm.pa_offline_refund_pin}
+                    onChangeText={(text) => setTerminalForm({ ...terminalForm, pa_offline_refund_pin: text })}
+                    placeholder="Leave empty for no PIN"
+                    secureTextEntry
+                    keyboardType="number-pad"
+                  />
+                  <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                    If set, admin must enter this PIN in the app before a refund is sent to the terminal.
+                  </Text>
+                </View>
               </>
             )}
 
