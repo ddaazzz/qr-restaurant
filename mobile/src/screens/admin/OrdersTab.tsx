@@ -5,7 +5,7 @@ import { printerSettingsService } from '../../services/printerSettingsService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, encryptManagerPassword, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { kpaySign, kpayQuery, kpaySale, kpayVoid, kpayRefund, kpayQueryDirect, KPayTerminalConfig } from '../../services/kpayDirectService';
 import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, paOfflineRefundOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 interface MenuItem {
@@ -308,7 +308,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
     const [showKpayRefundModal, setShowKpayRefundModal] = useState(false);
     const [kpayRefundAmount, setKpayRefundAmount] = useState('');
-    const [kpayManagerPassword, setKpayManagerPassword] = useState('');
     const [showPaRefundModal, setShowPaRefundModal] = useState(false);
     const [paRefundAmount, setPaRefundAmount] = useState('');
 
@@ -546,8 +545,51 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       setTxLoading(true);
       try {
         if (vendor === 'kpay') {
-          const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
-          setKpayTxDetails(res.data);
+          // Try backend first — has DB status for voided/refunded orders
+          let details: any = null;
+          try {
+            const res = await apiClient.get(`/api/restaurants/${restaurantId}/kpay-transactions/${ref}`);
+            details = res.data;
+          } catch (_) {
+            // 404 = mobile-initiated order (no kpay_transactions row) — fall through to direct query
+          }
+
+          // If backend has no live data (Render can't reach LAN terminal), query directly from device
+          if (kpayTerminal && (!details || !details.transactionNo)) {
+            try {
+              const terminalRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${kpayTerminal.id}`);
+              const tc = terminalRes.data;
+              const config: KPayTerminalConfig = {
+                terminalIp: tc.terminal_ip,
+                terminalPort: tc.terminal_port,
+                appId: tc.app_id,
+                appSecret: tc.app_secret,
+                endpointPath: tc.endpoint_path || '/v2/pos/sign',
+              };
+              const live = await kpayQueryDirect(config, ref);
+              if (live.success) {
+                details = {
+                  ...(details || {}),
+                  outTradeNo: live.outTradeNo || ref,
+                  payAmount: live.payAmount,
+                  payCurrency: live.payCurrency,
+                  transactionNo: live.transactionNo,
+                  refNo: live.refNo,
+                  commitTime: live.commitTime,
+                  payMethod: live.payMethod,
+                  payResult: live.payResult,
+                  // Keep DB voided/refunded status; otherwise use live result
+                  status: (details?.status === 'voided' || details?.status === 'refunded')
+                    ? details.status
+                    : (live.payResult === 2 ? 'completed' : details?.status || live.status.toLowerCase()),
+                };
+              }
+            } catch (_) {
+              // Direct query failed (terminal off/unreachable) — show DB data if available
+            }
+          }
+
+          if (details) setKpayTxDetails(details);
         } else if (vendor === 'payment-asia') {
           const merchantRef = order.cp_vendor_ref || ref;
           const res = await apiClient.post(`/api/restaurants/${restaurantId}/payment-asia/query`, { merchant_reference: merchantRef });
@@ -1451,7 +1493,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // === KPay Refund ===
     const openKpayRefund = () => {
       setKpayRefundAmount('');
-      setKpayManagerPassword('');
       setShowKpayRefundModal(true);
     };
 
@@ -1462,11 +1503,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         Alert.alert(t('orders.error'), t('orders.no-kpay-ref'));
         return;
       }
-      if (!kpayManagerPassword) {
-        Alert.alert(t('orders.error'), t('orders.password-required'));
-        return;
-      }
-      // Close password/amount modal and open the terminal window
+      // Close amount modal and open the terminal window
       setShowKpayRefundModal(false);
       const refOutTradeNo = `REF-${Date.now()}`;
       setKpayModalTitle('↩ Refund Transaction');
@@ -1482,7 +1519,6 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       const addLog = (msg: string, color: string = '#00ff00') =>
         setKpayLogs(prev => [...prev, { msg, color }]);
 
-      // Capture mutable selectedHistoryOrder.id before async ops
       const orderId = selectedHistoryOrder.id;
 
       try {
@@ -1498,7 +1534,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           endpointPath: tc.endpoint_path || '/v2/pos/sign',
         };
         const signResult = await kpaySign(config);
-        if (!signResult.success || !signResult.appPrivateKey || !signResult.platformPublicKey) {
+        if (!signResult.success || !signResult.appPrivateKey) {
           setKpayStatusMsg('Sign-in failed');
           addLog(`> ❌ ${signResult.error || signResult.message}`, '#ff6b6b');
           setKpayProcessing(false);
@@ -1506,22 +1542,26 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         }
         addLog('> ✅ Signed in', '#51cf66');
 
-        setKpayStatusMsg('Encrypting password...');
-        const encryptedPw = encryptManagerPassword(signResult.platformPublicKey, kpayManagerPassword);
-        addLog('> Password encrypted', '#ffd43b');
+        // Query original transaction to get live payMethod / transactionNo / refNo
+        setKpayStatusMsg('Querying original transaction...');
+        addLog(`> Querying: ${originOutTradeNo}`, '#ffd43b');
+        const qOriginal = await kpayQuery(config, signResult.appPrivateKey, originOutTradeNo);
+        const livePayMethod = qOriginal.raw?.payMethod ?? kpayTxDetails?.payMethod;
+        addLog(`> payMethod: ${livePayMethod === 1 ? 'Card (1)' : livePayMethod != null ? `QR/Mobile (${livePayMethod})` : 'unknown — defaulting to QR'}`, '#ffd43b');
 
-        const kpayTx = kpayTxDetails;
         const refundParams: any = {
           outTradeNo: refOutTradeNo,
-          refundType: kpayTx?.payMethod === 1 ? 1 : 2, // 1=Card, 2=QR
-          encryptedManagerPassword: encryptedPw,
+          refundType: livePayMethod === 1 ? 1 : 2, // 1=Card, 2=QR/mobile
         };
-        if (kpayTx?.transactionNo) refundParams.transactionNo = kpayTx.transactionNo;
-        if (kpayTx?.refNo) refundParams.refNo = kpayTx.refNo;
-        if (kpayTx?.commitTime) refundParams.commitTime = kpayTx.commitTime;
+        // Manager password NOT sent — terminal will prompt on-screen (same as void, safer physical auth)
+        addLog('> Manager password will be entered on terminal screen', '#ffd43b');
+        if (qOriginal.transactionNo) { refundParams.transactionNo = qOriginal.transactionNo; addLog(`> transactionNo: ${qOriginal.transactionNo}`, '#ffd43b'); }
+        if (qOriginal.refNo)         { refundParams.refNo = qOriginal.refNo;                 addLog(`> refNo: ${qOriginal.refNo}`, '#ffd43b'); }
+        if (qOriginal.commitTime)    { refundParams.commitTime = qOriginal.commitTime; }
         if (kpayRefundAmount) {
           const cents = Math.round(parseFloat(kpayRefundAmount) * 100);
           refundParams.refundAmount = cents.toString().padStart(12, '0');
+          addLog(`> Partial refund: ${kpayRefundAmount}`, '#ffd43b');
         }
 
         setKpayStatusMsg('Sending refund to terminal...');
@@ -1533,7 +1573,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           setKpayProcessing(false);
           return;
         }
-        addLog('> ✅ Refund initiated — confirm on terminal screen', '#51cf66');
+        addLog('> ✅ Refund initiated — enter password on terminal screen if prompted', '#51cf66');
         setKpayStatusMsg('Waiting for confirmation...');
         addLog('> Polling terminal for confirmation...', '#ffd43b');
 
@@ -1971,14 +2011,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               onChangeText={setKpayRefundAmount}
               placeholder={t('orders.full-refund')}
             />
-            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>{t('orders.manager-password')}</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 }}
-              secureTextEntry
-              value={kpayManagerPassword}
-              onChangeText={setKpayManagerPassword}
-              placeholder={t('orders.required-field')}
-            />
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+              Manager password will be entered on the payment terminal screen.
+            </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
                 style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: 8, padding: 12, alignItems: 'center' }}
@@ -2446,6 +2481,21 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                     {kpayTxDetails.refund_amount_cents > 0 && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text style={{ fontSize: 12, color: '#ef4444' }}>{t('orders.refunded-label')}</Text>
+                        <Text style={{ fontSize: 12, color: '#ef4444' }}>
+                          {((kpayTxDetails.refund_amount_cents || 0) / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedHistoryOrder.void_vendor_ref && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Void Ref</Text>
+                        <Text style={{ fontSize: 11, color: '#ef4444', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.void_vendor_ref}</Text>
+                      </View>
+                    )}
+                    {selectedHistoryOrder.refund_vendor_ref && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Refund Ref</Text>
+                        <Text style={{ fontSize: 11, color: '#ef4444', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{selectedHistoryOrder.refund_vendor_ref}</Text>
                       </View>
                     )}
                   </>

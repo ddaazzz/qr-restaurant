@@ -474,7 +474,7 @@ export async function kpayVoid(
 export interface KPayRefundParams {
   outTradeNo: string;           // new unique order number for this refund
   refundType: 1 | 2;           // 1=Card, 2=QR
-  encryptedManagerPassword: string;
+  encryptedManagerPassword?: string; // optional — if omitted, terminal prompts for password on-screen
   // QR refund (refundType=2):
   transactionNo?: string;
   // Card refund (refundType=1):
@@ -501,8 +501,9 @@ export async function kpayRefund(
   const body: Record<string, any> = {
     outTradeNo: params.outTradeNo,
     refundType: params.refundType,
-    managerPassword: params.encryptedManagerPassword,
   };
+  // Only include managerPassword if provided; otherwise terminal prompts on-screen
+  if (params.encryptedManagerPassword) body.managerPassword = params.encryptedManagerPassword;
   if (params.transactionNo) body.transactionNo = params.transactionNo;
   if (params.refNo) body.refNo = params.refNo;
   if (params.commitTime) body.commitTime = params.commitTime;
