@@ -752,13 +752,26 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
          ON CONFLICT DO NOTHING`,
         [restaurantId, sessionId, paOrderId, paOfflineRef, amount_paid || total]
       );
-      // Also update if row already existed
+      const paDet = (req.body.pa_terminal_details as any) || {};
+      // Also update if row already existed (and capture payment details sent from device)
       await client.query(
         `UPDATE pa_offline_transactions
          SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC',
-             order_id = COALESCE(order_id, $3), session_id = COALESCE(session_id, $2)
+             order_id = COALESCE(order_id, $3), session_id = COALESCE(session_id, $2),
+             payment_method = COALESCE($5, payment_method),
+             provider = COALESCE($6, provider),
+             provider_reference = COALESCE($7, provider_reference),
+             request_reference = COALESCE($8, request_reference),
+             pa_created_time = COALESCE($9::bigint, pa_created_time),
+             pa_completed_time = COALESCE($10::bigint, pa_completed_time)
          WHERE pa_order_id = $1 AND restaurant_id = $4`,
-        [paOfflineRef, sessionId, paOrderId, restaurantId]
+        [paOfflineRef, sessionId, paOrderId, restaurantId,
+         paDet.payment_method || null,
+         paDet.provider || null,
+         paDet.provider_reference || null,
+         paDet.request_reference || null,
+         paDet.pa_created_time || null,
+         paDet.pa_completed_time || null]
       );
       await client.query(
         `UPDATE orders SET chuio_order_reference = $1 WHERE session_id = $2`,

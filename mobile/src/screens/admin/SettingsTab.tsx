@@ -439,8 +439,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     pa_offline_ip: '',
     pa_offline_port: '8080',
     pa_offline_api_key: '',
-    // KPay manager password for refunds
-    kpay_manager_password: '',
   });
   const [testingTerminal, setTestingTerminal] = useState(false);
   const [terminalTestResult, setTerminalTestResult] = useState<any>(null);
@@ -1434,7 +1432,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         payload.terminal_ip = terminalForm.terminal_ip;
         payload.terminal_port = parseInt(terminalForm.terminal_port);
         payload.endpoint_path = terminalForm.endpoint_path || '/v2/pos/sign';
-        payload.metadata = { manager_password: terminalForm.kpay_manager_password || '' };
       }
 
       if (editingTerminalId) {
@@ -1589,7 +1586,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       pa_offline_ip: t.vendor_name === 'payment-asia-offline' ? (t.terminal_ip || '') : '',
       pa_offline_port: t.vendor_name === 'payment-asia-offline' ? (t.terminal_port?.toString() || '8080') : '8080',
       pa_offline_api_key: t.vendor_name === 'payment-asia-offline' ? (t.app_secret || '') : '',
-      kpay_manager_password: t.vendor_name === 'kpay' ? (t.metadata?.manager_password || '') : '',
     });
   };
 
@@ -1608,7 +1604,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       pa_offline_ip: '',
       pa_offline_port: '8080',
       pa_offline_api_key: '',
-      kpay_manager_password: '',
     });
     setTerminalTestResult(null);
   };
@@ -5054,19 +5049,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   />
                 </View>
 
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Manager Password</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={terminalForm.kpay_manager_password}
-                    onChangeText={(text) => setTerminalForm({ ...terminalForm, kpay_manager_password: text })}
-                    placeholder="KPay terminal manager password"
-                    secureTextEntry
-                  />
-                  <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-                    Required for refunds — encrypted before sending to the terminal.
-                  </Text>
-                </View>
               </>
             )}
 

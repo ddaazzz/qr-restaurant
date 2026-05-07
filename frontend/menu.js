@@ -1482,6 +1482,9 @@ function renderOrdersDrawer(orders, tableName) {
   serviceCharge = subtotal/100 * serviceChargePct;
   const discountCents = appliedCoupon ? appliedCoupon.discount_cents : 0;
   const total = subtotal + serviceCharge - discountCents;
+  const allPACompleted = orders.length > 0 && orders.every(o =>
+    o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
+  );
 
   html += `
     </div>
@@ -1506,7 +1509,7 @@ function renderOrdersDrawer(orders, tableName) {
         <strong id="orders-total-display">$${(total / 100).toFixed(2)}</strong>
       </div>
     </div>
-    <div class="coupon-section">
+    ${allPACompleted ? '' : `<div class="coupon-section">
       <div class="coupon-row">
         <span class="coupon-label">${t('menu.coupon-code') || 'Coupon Code'}</span>
         <div class="coupon-input-group">
@@ -1515,25 +1518,26 @@ function renderOrdersDrawer(orders, tableName) {
         </div>
       </div>
       <div id="orders-coupon-display">${appliedCoupon ? `<div class="coupon-applied">${t('menu.coupon-applied').replace('{0}', '-$' + (appliedCoupon.discount_cents/100).toFixed(2))}</div>` : ''}</div>
-    </div>
+    </div>`}
     <div class="orders-actions">
       ${(() => {
+        if (allPACompleted) {
+          return `<div style="text-align:center;padding:16px 0 8px;">
+            <p style="font-size:22px;margin:0 0 6px;">🎉</p>
+            <p style="font-size:16px;font-weight:600;color:#059669;margin:0 0 4px;">Thank you for dining with us!</p>
+            <p style="font-size:13px;color:#6b7280;margin:0;">Your payment is complete.</p>
+          </div>`;
+        }
         // Exclude orders where PA payment was already initiated (payment_method = 'payment-asia')
         const unpaidNonPAOrder = orders.filter(o =>
           o.order_status !== 'completed' && o.order_payment_method !== 'payment-asia'
         ).slice(-1)[0];
-        const allPACompleted = orders.length > 0 && orders.every(o =>
-          o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
-        );
         // PA orders that are genuinely in-flight (not failed — backend clears payment_method on failure)
         const hasPendingPAOrder = orders.some(o =>
           o.order_payment_method === 'payment-asia' && o.order_status !== 'completed'
         );
         if (orderPayEnabled && unpaidNonPAOrder) {
           return `<button class="btn-primary" onclick="showPaymentPage(${unpaidNonPAOrder.order_id})">Pay Now</button>`;
-        }
-        if (allPACompleted) {
-          return `<button class="btn-primary" style="background:#059669;" onclick="endSessionFromMenu()">✅ End Session</button>`;
         }
         if (hasPendingPAOrder) {
           // PA initiated but webhook not yet confirmed — prevent double-pay
@@ -1547,7 +1551,7 @@ function renderOrdersDrawer(orders, tableName) {
         }
         return `<button class="btn-primary" id="close-bill-btn" onclick="closeBill()">${t('menu.close-bill')}</button>`;
       })()}
-      <button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>
+      ${allPACompleted ? '' : `<button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>`}
     </div>
     </div>
   `;
