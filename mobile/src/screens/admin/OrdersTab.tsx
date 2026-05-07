@@ -2008,6 +2008,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         transparent
         onRequestClose={() => { if (!emailReceiptSending) { setShowEmailReceiptModal(false); } }}
       >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '85%', maxWidth: 400, padding: 20 }}>
             <Text style={{ fontSize: 17, fontWeight: '700', color: '#1f2937', marginBottom: 6 }}>📧 {t('orders.email-receipt-title')}</Text>
@@ -2044,6 +2045,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
 
@@ -2195,6 +2197,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         transparent
         onRequestClose={() => setShowKpayRefundModal(false)}
       >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('orders.kpay-refund')}</Text>
@@ -2210,7 +2213,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               placeholder={t('orders.full-refund')}
             />
             <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-              Manager password will be entered on the payment terminal screen.
+              Manager password will be sent automatically from terminal settings.
             </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
@@ -2228,6 +2231,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
 
@@ -2240,6 +2244,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         transparent
         onRequestClose={() => setShowPaRefundModal(false)}
       >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
@@ -2272,6 +2277,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
 
@@ -2296,11 +2302,11 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           transparent
           onRequestClose={() => setCartEditModal(null)}
         >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ justifyContent: 'flex-end' }}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
           >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
             <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '92%', flex: 1 }}>
               {/* Close handle */}
               <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
@@ -2561,9 +2567,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
           </KeyboardAvoidingView>
-        </View>
-      </Modal>
+        </Modal>
       );
     })() : null;
 
@@ -2576,6 +2582,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
         transparent
         onRequestClose={() => setShowPaOfflineRefundModal(false)}
       >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, width: '80%', maxWidth: 400, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>PA Terminal Refund</Text>
@@ -2624,6 +2631,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
 
