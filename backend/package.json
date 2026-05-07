@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "npx ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
+    "postinstall": "npm run build",
     "start": "node dist/server.js"
   },
   "keywords": [],

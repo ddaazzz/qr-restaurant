@@ -877,7 +877,95 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       bluetoothDeviceName: printerConfig.bluetooth_device_name,
     });
 
-    // Check if printer is configured
+    // Multi-printer routing: if settings.printers array exists, use it
+    const qrSettings = printerConfig.settings as any;
+    const multiPrinters = qrSettings?.printers;
+    if (Array.isArray(multiPrinters) && multiPrinters.length > 0) {
+      console.log('[PrintQR] Multi-printer mode:', multiPrinters.length, 'configured printers');
+
+      const matchingPrinters = multiPrinters.filter((p: any) =>
+        p.tables === 'all' || (Array.isArray(p.tables) && p.tables.map(Number).includes(Number(tableId)))
+      );
+      console.log('[PrintQR] Matching printers for tableId', tableId, ':', matchingPrinters.length);
+
+      if (matchingPrinters.length === 0) {
+        return res.json({ success: true, message: 'No printers configured for this table' });
+      }
+
+      const textAboveQR = qrSettings?.text_above || 'Scan to Order';
+      const textBelowQR = qrSettings?.text_below || '';
+
+      let pax: number | undefined;
+      let startedTime = new Date().toLocaleString();
+      if (sessionId) {
+        const sessionResult = await pool.query(
+          `SELECT ts.started_at, ts.pax FROM table_sessions ts WHERE ts.id = $1`,
+          [sessionId]
+        );
+        if ((sessionResult.rowCount ?? 0) > 0) {
+          const row = sessionResult.rows[0];
+          if (row.started_at) startedTime = new Date(row.started_at).toLocaleString();
+          if (row.pax) pax = row.pax;
+        }
+      }
+
+      const receiptData: ReceiptData = {
+        restaurantName,
+        tableName,
+        ...(pax && { pax }),
+        qrToken,
+        startedTime,
+        printerPaperWidth: 80,
+        qrTextAbove: textAboveQR,
+        qrTextBelow: textBelowQR,
+      };
+      const escpos = generateESCPOS(receiptData);
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+      const escposArray = Array.from(escpos);
+
+      const bluetoothPayloads: any[] = [];
+      const networkResults: any[] = [];
+
+      for (const printer of matchingPrinters) {
+        if (printer.type === 'network' && printer.host) {
+          const port = printer.port || 9100;
+          try {
+            await sendToNetworkPrinter(printer.host, port, Buffer.from(escpos));
+            networkResults.push({ printer: printer.name, host: printer.host, success: true });
+            console.log(`[PrintQR] Multi: printed to network printer "${printer.name}" at ${printer.host}`);
+          } catch (tcpErr: any) {
+            console.log(`[PrintQR] Multi: TCP failed for "${printer.name}":`, tcpErr.message);
+            networkResults.push({ printer: printer.name, host: printer.host, success: false, escposBase64, port });
+          }
+        } else if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+          bluetoothPayloads.push({
+            printerConfig: {
+              bluetoothDeviceId: printer.bluetoothDevice,
+              bluetoothDeviceName: printer.bluetoothDevice,
+            },
+            data: {
+              type: 'qr',
+              escposBase64,
+              escposArray,
+              restaurantName,
+              tableName,
+              qrToken,
+              startedTime,
+            }
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        ...(bluetoothPayloads.length > 0 && { bluetoothPayload: bluetoothPayloads[0] }),
+        bluetoothPayloads,
+        networkResults,
+        jobId: `qr-${tableId}-${Date.now()}`,
+      });
+    }
+
+    // Check if printer is configured (single-printer fallback)
     if (!printerConfig.printer_type || printerConfig.printer_type === 'none') {
       console.log('[PrintQR] No printer configured, returning error');
       return res.status(400).json({ error: "No QR printer configured. Please set up a printer in settings." });
@@ -1139,7 +1227,104 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
       bluetoothDeviceName: printerConfig.bluetooth_device_name,
     });
 
-    // Build print payload
+    // Multi-printer routing: if settings.printers array exists, use it
+    const billSettingsRaw = printerConfig.settings as any;
+    const billMultiPrinters = billSettingsRaw?.printers;
+    if (Array.isArray(billMultiPrinters) && billMultiPrinters.length > 0) {
+      console.log('[PrintBill] Multi-printer mode:', billMultiPrinters.length, 'configured printers');
+
+      // Resolve tableId from session if not provided in billData
+      let billTableId: number | null = billData.tableId ? Number(billData.tableId) : null;
+      const billOrderType: string = billData.orderType || 'table';
+
+      if (!billTableId) {
+        const sessionTableResult = await pool.query(
+          `SELECT table_id FROM table_sessions WHERE id = $1`,
+          [sessionId]
+        );
+        if ((sessionTableResult.rowCount ?? 0) > 0) {
+          billTableId = sessionTableResult.rows[0].table_id;
+        }
+      }
+
+      const matchingBillPrinters = billMultiPrinters.filter((p: any) => {
+        const tablesMatch = p.tables === 'all' || (Array.isArray(p.tables) && billTableId && p.tables.map(Number).includes(billTableId));
+        const orderTypeMatch = !Array.isArray(p.order_types) || p.order_types.includes(billOrderType);
+        return tablesMatch && orderTypeMatch;
+      });
+      console.log('[PrintBill] Matching printers for tableId', billTableId, 'orderType', billOrderType, ':', matchingBillPrinters.length);
+
+      if (matchingBillPrinters.length === 0) {
+        return res.json({ success: true, message: 'No bill printers configured for this table/order type' });
+      }
+
+      // Extract bill format from settings
+      const bs = billSettingsRaw || {};
+      const mBillHeaderText = bs.header_text || 'Thank You';
+      const mBillFooterText = bs.footer_text || '';
+      const mBillFontSize: 'small' | 'medium' | 'large' = (bs.font_size === 'small' || bs.font_size === 'large') ? bs.font_size : 'medium';
+
+      const billReceiptData: ReceiptData = {
+        restaurantName,
+        restaurantAddress,
+        restaurantPhone,
+        orderNumber: String(sessionId),
+        tableNumber: billData.table || 'Receipt',
+        pax: billData.pax,
+        items: billData.items || [],
+        subtotal: billData.subtotal,
+        serviceCharge: billData.serviceCharge,
+        tax: billData.tax,
+        total: billData.total,
+        timestamp: new Date().toLocaleString(),
+        printerPaperWidth: 80,
+        billHeaderText: mBillHeaderText,
+        billFooterText: mBillFooterText,
+        billFontSize: mBillFontSize,
+      };
+      const billEscpos = generateESCPOS(billReceiptData);
+      const billEscposBase64 = Buffer.from(billEscpos).toString('base64');
+      const billEscposArray = Array.from(billEscpos);
+
+      const billBluetoothPayloads: any[] = [];
+      const billNetworkResults: any[] = [];
+
+      for (const printer of matchingBillPrinters) {
+        if (printer.type === 'network' && printer.host) {
+          const port = printer.port || 9100;
+          try {
+            await sendToNetworkPrinter(printer.host, port, Buffer.from(billEscpos));
+            billNetworkResults.push({ printer: printer.name, host: printer.host, success: true });
+            console.log(`[PrintBill] Multi: printed to network printer "${printer.name}" at ${printer.host}`);
+          } catch (tcpErr: any) {
+            console.log(`[PrintBill] Multi: TCP failed for "${printer.name}":`, tcpErr.message);
+            billNetworkResults.push({ printer: printer.name, host: printer.host, success: false, escposBase64: billEscposBase64, port });
+          }
+        } else if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+          billBluetoothPayloads.push({
+            printerConfig: {
+              bluetoothDeviceId: printer.bluetoothDevice,
+              bluetoothDeviceName: printer.bluetoothDevice,
+            },
+            data: {
+              type: 'bill',
+              escposBase64: billEscposBase64,
+              escposArray: billEscposArray,
+            }
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        ...(billBluetoothPayloads.length > 0 && { bluetoothPayload: billBluetoothPayloads[0] }),
+        bluetoothPayloads: billBluetoothPayloads,
+        networkResults: billNetworkResults,
+        jobId: `bill-${sessionId}-${Date.now()}`,
+      });
+    }
+
+    // Build print payload (single-printer fallback)
     const payload = {
       orderNumber: String(sessionId),
       tableNumber: billData.table || "Receipt",

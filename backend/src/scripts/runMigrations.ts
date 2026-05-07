@@ -87,12 +87,19 @@ async function runMigration(migration: Migration): Promise<boolean> {
     
     console.log(`⏳ Running migration: ${migration.name}`);
     
-    // Split the migration into individual statements
-    // Handle multiple statements separated by semicolons
+    // Split the migration into individual statements.
+    // First strip all single-line comments (handles -- inside comment lines AND inline),
+    // then split on ; so semicolons inside comments don't break statement boundaries.
     const statements = migration.content
+      .split('\n')
+      .map(line => {
+        const idx = line.indexOf('--');
+        return idx >= 0 ? line.slice(0, idx) : line;
+      })
+      .join('\n')
       .split(';')
       .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+      .filter(s => s.length > 0);
 
     // Execute each statement
     for (const statement of statements) {
