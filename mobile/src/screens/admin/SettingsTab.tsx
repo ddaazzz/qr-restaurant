@@ -226,6 +226,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
+  const DEFAULT_PAYMENT_METHODS = [{ id: 'cash', label: 'Cash' }, { id: 'credit-card', label: 'Credit Card' }];
+  const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
+  const [newMethodLabel, setNewMethodLabel] = useState('');
+  const [savingPaymentMethods, setSavingPaymentMethods] = useState(false);
   const [crmCount, setCrmCount] = useState<number | null>(null);
   const [crmCustomers, setCrmCustomers] = useState<CrmCustomer[]>([]);
   const [crmLoading, setCrmLoading] = useState(false);
@@ -289,7 +293,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-methods' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests';
 
   interface SRItem {
     id: number;
@@ -543,6 +547,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setPrinterSettings(flatSettings);
       setFormData(settingsRes.data);
       setPrinterFormData(flatSettings);
+
+      // Load custom payment methods from feature_flags
+      const savedMethods = settingsRes.data?.feature_flags?.custom_payment_methods;
+      if (Array.isArray(savedMethods) && savedMethods.length > 0) {
+        setCustomPaymentMethods(savedMethods);
+      }
 
       // Populate multi-printer lists from flat settings
       if (Array.isArray(flatSettings.qr_printers)) {
@@ -2288,7 +2298,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
     { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }) },
 
-    { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
+    { page: 'payment-methods', iconName: 'card-outline', label: 'Payment Methods', description: customPaymentMethods.length + ' method' + (customPaymentMethods.length !== 1 ? 's' : '') + (paymentTerminals.length > 0 ? ', ' + paymentTerminals.length + ' terminal' + (paymentTerminals.length !== 1 ? 's' : '') : '') },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
     { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
@@ -3189,6 +3199,182 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </TouchableOpacity>
             </View>
           )}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  // Save custom payment methods to feature_flags
+  const saveCustomPaymentMethods = async (methods: Array<{id: string, label: string}>) => {
+    setSavingPaymentMethods(true);
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, {
+        feature_flags: { custom_payment_methods: methods },
+      });
+      setCustomPaymentMethods(methods);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to save payment methods');
+    } finally {
+      setSavingPaymentMethods(false);
+    }
+  };
+
+  // Payment Methods page (admin-facing)
+  const renderPaymentMethodsPage = () => {
+    const addMethod = () => {
+      const label = newMethodLabel.trim();
+      if (!label) return;
+      const id = 'custom-' + label.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now();
+      const updated = [...customPaymentMethods, { id, label }];
+      setNewMethodLabel('');
+      saveCustomPaymentMethods(updated);
+    };
+
+    const removeMethod = (id: string) => {
+      Alert.alert('Remove Payment Method', `Remove "${customPaymentMethods.find(m => m.id === id)?.label}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => saveCustomPaymentMethods(customPaymentMethods.filter(m => m.id !== id)) },
+      ]);
+    };
+
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader('Payment Methods')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+
+          {/* Custom payment methods */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Checkout Payment Methods</Text>
+            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+              These methods appear as options when closing a bill. Cash and Credit Card are the defaults.
+            </Text>
+            {customPaymentMethods.map((method) => (
+              <View key={method.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', padding: 12, marginBottom: 8 }}>
+                <Ionicons name="card-outline" size={18} color="#6b7280" style={{ marginRight: 10 }} />
+                <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: '#1f2937' }}>{method.label}</Text>
+                <TouchableOpacity onPress={() => removeMethod(method.id)} style={{ padding: 4 }}>
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="New method (e.g. Alipay, WeChat Pay)"
+                placeholderTextColor="#9ca3af"
+                value={newMethodLabel}
+                onChangeText={setNewMethodLabel}
+                onSubmitEditing={addMethod}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, { paddingHorizontal: 16, opacity: savingPaymentMethods ? 0.6 : 1 }]}
+                onPress={addMethod}
+                disabled={savingPaymentMethods || !newMethodLabel.trim()}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Online Payment (Self-Checkout) */}
+          <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Ionicons name="globe-outline" size={20} color="#1d4ed8" />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1e3a8a', marginLeft: 8 }}>Online Payment (Self-Checkout)</Text>
+            </View>
+            <Text style={{ fontSize: 13, color: '#1e40af', lineHeight: 20, marginBottom: 12 }}>
+              Let customers pay directly from their phone by scanning a QR code — no staff interaction needed. This is a premium feature.
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#25D366', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}
+              onPress={() => Linking.openURL('https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20Online%20Payment%20(Self-Checkout)%20for%20my%20restaurant')}
+            >
+              <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13, marginLeft: 6 }}>Contact Us on WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Payment Terminals section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Payment Terminals</Text>
+              {isSuperadmin && (
+                <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => { resetTerminalForm(); setShowPaymentTerminalModal(true); }}>
+                  <Text style={styles.btnSmallText}>{t('settings.add-terminal')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {paymentTerminals.length === 0 ? (
+              isSuperadmin ? (
+                <Text style={styles.emptyText}>{t('settings.no-terminals')}</Text>
+              ) : (
+                <View style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 8, padding: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <Ionicons name="lock-closed" size={16} color="#d97706" />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#92400e', marginLeft: 6 }}>{t('admin.terminal-paid-feature')}</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#92400e', lineHeight: 18 }}>{t('admin.terminal-paid-desc')}</Text>
+                </View>
+              )
+            ) : (
+              <FlatList
+                data={paymentTerminals}
+                renderItem={({ item: terminal }) => (
+                  <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
+                        {terminal.is_active && (
+                          <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                      {terminal.last_tested_at && <Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>}
+                      {terminal.last_error_message && <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>}
+                    </View>
+                    <View style={{ marginLeft: 12, justifyContent: 'space-around' }}>
+                      <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => editPaymentTerminal(terminal)}>
+                        <Ionicons name="create-outline" size={14} color="#fff" />
+                      </TouchableOpacity>
+                      {isSuperadmin && (
+                        <TouchableOpacity style={[styles.btn, styles.btnSmall, { backgroundColor: '#ef4444', marginTop: 4 }]} onPress={() => deletePaymentTerminal(terminal.id)}>
+                          <Ionicons name="trash-outline" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+                scrollEnabled={false}
+              />
+            )}
+
+            {/* Application form for non-superadmins without terminals */}
+            {!isSuperadmin && paymentTerminals.length === 0 && (
+              <>
+                {existingApplications.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.sectionTitle}>{t('admin.terminal-app-history')}</Text>
+                    {existingApplications.map((app: any) => (
+                      <View key={app.id} style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{app.company_name}</Text>
+                          <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, backgroundColor: app.status === 'approved' ? '#dcfce7' : app.status === 'rejected' ? '#fef2f2' : '#fef3c7' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: app.status === 'approved' ? '#166534' : app.status === 'rejected' ? '#991b1b' : '#92400e' }}>{app.status.toUpperCase()}</Text>
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('admin.terminal-app-submitted-at')}: {new Date(app.submitted_at).toLocaleDateString()}</Text>
+                        {app.admin_notes && <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{t('admin.terminal-app-notes')}: {app.admin_notes}</Text>}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </View>
         </ScrollView>
       </View>
     );
@@ -4381,6 +4567,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'restaurant-info': return renderRestaurantInfoPage();
       case 'printer': return renderPrinterPage();
       case 'crm': return renderCrmPage();
+      case 'payment-methods': return renderPaymentMethodsPage();
       case 'payment-terminals': return renderPaymentTerminalsPage();
       case 'qr-settings': return renderQRSettingsPage();
       case 'staff-links': return renderStaffLinksPage();

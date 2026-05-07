@@ -303,6 +303,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   // Individual terminal state (one restaurant may have both)
   const [kpayTerminal, setKpayTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
   const [paOfflineTerminal, setPaOfflineTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  // Custom payment methods configured by admin
+  const DEFAULT_PAYMENT_METHODS = [{ id: 'cash', label: 'Cash' }, { id: 'credit-card', label: 'Credit Card' }];
+  const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
   // KPay terminal payment overlay
   const [showKPayModal, setShowKPayModal] = useState(false);
   const [kpayStatus, setKpayStatus] = useState<'initiating' | 'waiting' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'aborting'>('initiating');
@@ -473,6 +476,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         }
         if (settingsRes.data?.qr_mode) {
           setQrMode(settingsRes.data.qr_mode);
+        }
+        const savedMethods = settingsRes.data?.feature_flags?.custom_payment_methods;
+        if (Array.isArray(savedMethods) && savedMethods.length > 0) {
+          setCustomPaymentMethods(savedMethods);
         }
       } catch (e) {
         console.warn('Could not load service charge settings');
@@ -2825,8 +2832,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               <Text style={styles.label}>{t('admin.payment-method')}</Text>
               <View style={styles.selectGroup}>
                 {([
-                  { value: 'cash', label: t('admin.cash-label') },
-                  { value: 'card', label: t('admin.card-label') },
+                  ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
                   ...(kpayTerminal ? [{ value: 'kpay', label: t('admin.kpay-terminal') }] : []),
                   ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }] : []),
                 ] as { value: string; label: string }[]).map((method) => (
@@ -3198,8 +3204,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
                 {[
-                  { value: 'cash', label: 'Cash' },
-                  { value: 'card', label: 'Card' },
+                  ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
                   ...(kpayTerminal ? [{ value: 'kpay', label: 'KPay Terminal' }] : []),
                   ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }] : []),
                 ].map(m => (
@@ -4096,8 +4101,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 <Text style={styles.label}>{t('admin.payment-method')}</Text>
                 <View style={styles.selectGroup}>
                   {([
-                    { value: 'cash', label: t('admin.cash-label') },
-                    { value: 'card', label: t('admin.card-label') },
+                    ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
                     ...(kpayTerminal ? [{ value: 'kpay', label: t('admin.kpay-terminal') }] : []),
                     ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }] : []),
                   ] as { value: string; label: string }[]).map((method) => (
@@ -4591,8 +4595,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
               {[
-                { value: 'cash', label: 'Cash' },
-                { value: 'card', label: 'Card' },
+                ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
                 ...(kpayTerminal ? [{ value: 'kpay', label: 'KPay Terminal' }] : []),
                 ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }] : []),
               ].map(m => (

@@ -263,7 +263,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [paymentModalOrderId, setPaymentModalOrderId] = useState<number | null>(null);
     const [paymentModalOrderNumber, setPaymentModalOrderNumber] = useState<number | null>(null);
     const [paymentModalTotal, setPaymentModalTotal] = useState(0);
-    const [paymentModalMethod, setPaymentModalMethod] = useState<'cash' | 'card' | 'kpay' | 'payment-asia-offline'>('cash');
+    const [paymentModalMethod, setPaymentModalMethod] = useState<string>('cash');
 
     // KPay terminal payment processing state
     const [kpayProcessing, setKpayProcessing] = useState(false);
@@ -303,6 +303,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // Payment terminal state for refund/void
     const [kpayTerminal, setKpayTerminal] = useState<any>(null);
     const [paOfflineTerminal, setPaOfflineTerminal] = useState<any>(null);
+    // Custom payment methods configured by admin
+    const DEFAULT_PAYMENT_METHODS = [{ id: 'cash', label: 'Cash' }, { id: 'credit-card', label: 'Credit Card' }];
+    const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
     const [showKpayRefundModal, setShowKpayRefundModal] = useState(false);
     const [kpayRefundAmount, setKpayRefundAmount] = useState('');
     const [kpayManagerPassword, setKpayManagerPassword] = useState('');
@@ -420,7 +423,13 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       loadKpayTerminal();
       // Load email receipt setting
       apiClient.get(`/api/restaurants/${restaurantId}/settings`)
-        .then(res => setEmailReceiptEnabled(!!res.data?.feature_flags?.email_receipt_enabled))
+        .then(res => {
+          setEmailReceiptEnabled(!!res.data?.feature_flags?.email_receipt_enabled);
+          const savedMethods = res.data?.feature_flags?.custom_payment_methods;
+          if (Array.isArray(savedMethods) && savedMethods.length > 0) {
+            setCustomPaymentMethods(savedMethods);
+          }
+        })
         .catch(() => {});
     }, [restaurantId]);
 
@@ -862,7 +871,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             setPaymentModalOrderId(sessionOrders[0]?.id || null);
             setPaymentModalOrderNumber(sessionOrders[0]?.restaurant_order_number || sessionOrders[0]?.id || null);
             setPaymentModalTotal(totalCents);
-            setPaymentModalMethod('cash');
+            setPaymentModalMethod(customPaymentMethods[0]?.id || 'cash');
             setShowPaymentModal(true);
           }
         } else if (orderType === 'to-go') {
@@ -1874,35 +1883,30 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               ) : (
                 <>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>{t('orders.payment-method')}</Text>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: (kpayTerminal && paymentModalMethod === 'kpay') || (paOfflineTerminal && paymentModalMethod === 'payment-asia-offline') ? 8 : 20 }}>
-                    <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: paymentModalMethod === 'cash' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'cash' ? '#3b82f6' : '#d1d5db' }}
-                      onPress={() => setPaymentModalMethod('cash')}
-                    >
-                      <Text style={{ fontWeight: '600', color: paymentModalMethod === 'cash' ? '#fff' : '#374151' }}>{t('orders.cash')}</Text>
-                    </TouchableOpacity>
-                    {!paOfflineTerminal && !kpayTerminal && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: (kpayTerminal && paymentModalMethod === 'kpay') || (paOfflineTerminal && paymentModalMethod === 'payment-asia-offline') ? 8 : 20 }}>
+                    {customPaymentMethods.map((method) => (
                       <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: paymentModalMethod === 'card' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'card' ? '#3b82f6' : '#d1d5db' }}
-                        onPress={() => setPaymentModalMethod('card')}
+                        key={method.id}
+                        style={{ flex: 1, minWidth: 80, backgroundColor: paymentModalMethod === method.id ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === method.id ? '#3b82f6' : '#d1d5db' }}
+                        onPress={() => setPaymentModalMethod(method.id)}
                       >
-                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'card' ? '#fff' : '#374151' }}>{t('orders.card')}</Text>
+                        <Text style={{ fontWeight: '600', color: paymentModalMethod === method.id ? '#fff' : '#374151', fontSize: 12 }}>{method.label}</Text>
                       </TouchableOpacity>
-                    )}
+                    ))}
                     {kpayTerminal && (
                       <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#d1d5db' }}
+                        style={{ flex: 1, minWidth: 80, backgroundColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'kpay' ? '#3b82f6' : '#d1d5db' }}
                         onPress={() => setPaymentModalMethod('kpay')}
                       >
-                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'kpay' ? '#fff' : '#374151', fontSize: 12 }}>{t('orders.terminal')}</Text>
+                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'kpay' ? '#fff' : '#374151', fontSize: 12 }}>KPay Terminal</Text>
                       </TouchableOpacity>
                     )}
                     {paOfflineTerminal && (
                       <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: paymentModalMethod === 'payment-asia-offline' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'payment-asia-offline' ? '#3b82f6' : '#d1d5db' }}
+                        style={{ flex: 1, minWidth: 80, backgroundColor: paymentModalMethod === 'payment-asia-offline' ? '#3b82f6' : '#f3f4f6', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: paymentModalMethod === 'payment-asia-offline' ? '#3b82f6' : '#d1d5db' }}
                         onPress={() => setPaymentModalMethod('payment-asia-offline')}
                       >
-                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'payment-asia-offline' ? '#fff' : '#374151', fontSize: 12 }}>{t('admin.pa-terminal') || 'PA Terminal'}</Text>
+                        <Text style={{ fontWeight: '600', color: paymentModalMethod === 'payment-asia-offline' ? '#fff' : '#374151', fontSize: 12 }}>PA Terminal</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -2640,7 +2644,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                         setPaymentModalOrderId(selectedHistoryOrder.id);
                         setPaymentModalOrderNumber(selectedHistoryOrder.restaurant_order_number || selectedHistoryOrder.id);
                         setPaymentModalTotal(selectedHistoryOrder.total_cents);
-                        setPaymentModalMethod('cash');
+                        setPaymentModalMethod(customPaymentMethods[0]?.id || 'cash');
                         setShowPaymentModal(true);
                       }
                     }}
