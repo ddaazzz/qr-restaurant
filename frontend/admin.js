@@ -429,6 +429,21 @@ async function switchSection(sectionId) {
         console.log("❌ User does not have access to settings (need admin/superadmin or staff feature 5)");
       }
       updateSectionHeader('admin.section-settings', 'edit-settings-header');
+    } else if (sectionId === "users") {
+      var usersSection = document.getElementById("section-users");
+      if (usersSection && !usersSection.innerHTML.includes("users-container")) {
+        try {
+          var usersResponse = await fetch('/admin-users.html');
+          usersSection.innerHTML = await usersResponse.text();
+          reTranslateContent();
+        } catch (err) {
+          console.error("Error loading users HTML:", err);
+        }
+      }
+      if (typeof loadUsersManagement === 'function') {
+        await loadUsersManagement();
+      }
+      updateSectionHeader('admin.users-restaurants', null);
     }
 
     IS_EDIT_MODE = false;

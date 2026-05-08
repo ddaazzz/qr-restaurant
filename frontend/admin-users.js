@@ -42,7 +42,7 @@ async function loadUsersManagement() {
 // ============= USERS TAB =============
 
 function renderUsersList() {
-  var container = document.getElementById('users-list');
+  var container = document.querySelector('#section-users #users-list') || document.getElementById('users-list');
   if (!container) return;
 
   if (!usersData.length) {
@@ -136,7 +136,7 @@ function getSubscriptionSummaryText(r) {
 // ============= RESTAURANTS TAB =============
 
 function renderRestaurantsList() {
-  var container = document.getElementById('restaurants-list');
+  var container = document.querySelector('#section-users #restaurants-list') || document.getElementById('restaurants-list');
   if (!container) return;
 
   if (!restaurantsData.length) {
@@ -637,12 +637,6 @@ async function openRestaurantDetail(restId) {
     bodyHtml += '</div>';
   }
 
-  // --- Payment Terminal Applications ---
-  bodyHtml += '<div class="detail-section">';
-  bodyHtml += '<h4 class="detail-section-title">Payment Terminal Applications</h4>';
-  bodyHtml += '<div id="restaurant-detail-applications"><p style="color: #9ca3af; text-align: center;">Loading...</p></div>';
-  bodyHtml += '</div>';
-
   document.getElementById('restaurant-detail-body').innerHTML = bodyHtml;
   modal.style.display = 'flex';
 
@@ -689,20 +683,6 @@ async function openRestaurantDetail(restId) {
     }
   }
 
-  // Fetch applications
-  try {
-    var res = await fetch(`${API}/restaurants/${restId}/payment-terminal-applications`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      var apps = await res.json();
-      renderRestaurantApplications(apps);
-    } else {
-      document.getElementById('restaurant-detail-applications').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load applications</p>';
-    }
-  } catch (err) {
-    document.getElementById('restaurant-detail-applications').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load applications</p>';
-  }
 }
 
 // ============= FEATURE FLAG TOGGLE =============

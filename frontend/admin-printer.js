@@ -37,6 +37,12 @@ async function checkKPayPrinterVisibility() {
     if (response.ok) {
       const terminals = await response.json();
       const hasActiveKpay = Array.isArray(terminals) && terminals.some(t => t.vendor_name === 'kpay' && t.is_active);
+      // Show/hide the KPay section in the new iOS-style main view
+      const kpaySection = document.getElementById('kpay-printer-section');
+      if (kpaySection) {
+        kpaySection.style.display = hasActiveKpay ? '' : 'none';
+      }
+      // Legacy card support
       const kpayCard = document.getElementById('kpay-printer-card');
       if (kpayCard) {
         kpayCard.style.display = hasActiveKpay ? '' : 'none';
@@ -238,6 +244,23 @@ function updateStatusCards() {
     kpayEl.innerHTML = hasKpay ? 'Configured' : 'Not configured';
     kpayEl.style.background = hasKpay ? '#dcfce7' : '#f3f4f6';
     kpayEl.style.color = hasKpay ? '#166534' : '#666';
+  }
+
+  // KPay current printer summary (new iOS-style main view)
+  const kpayCurrentEl = document.getElementById('kpay-current-printer');
+  if (kpayCurrentEl) {
+    const kpayType = settings.kpay_printer_type;
+    const kpayBT = settings.kpay_bluetooth_device_name;
+    const kpayHost = settings.kpay_printer_host;
+    if (!kpayType || kpayType === 'none') {
+      kpayCurrentEl.innerHTML = '<p style="font-size:12px;color:#9ca3af;margin:0 0 4px 0;">No printer configured.</p>';
+    } else if (kpayBT) {
+      kpayCurrentEl.innerHTML = `<p style="font-size:12px;color:#059669;margin:0 0 4px 0;">✓ ${kpayBT}</p>`;
+    } else if (kpayHost) {
+      kpayCurrentEl.innerHTML = `<p style="font-size:12px;color:#6b7280;margin:0 0 4px 0;">${kpayHost}:${settings.kpay_printer_port || 9100}</p>`;
+    } else {
+      kpayCurrentEl.innerHTML = '<p style="font-size:12px;color:#6b7280;margin:0 0 4px 0;">Configured</p>';
+    }
   }
 }
 

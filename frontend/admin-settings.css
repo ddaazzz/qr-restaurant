@@ -341,6 +341,18 @@
   color: var(--text-dark);
 }
 
+.layout-radio-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-bottom: 0 !important;
+  font-weight: normal !important;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 .form-group input[type="text"],
 .form-group input[type="url"],
 .form-group input[type="password"],
