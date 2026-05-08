@@ -45,6 +45,13 @@ async function initializeSettings() {
     console.error("Failed to initialize settings:", err);
   }
 
+  // Show admin-only settings cards (dynamically loaded HTML missed the login-time pass)
+  if (IS_ADMIN || IS_SUPERADMIN) {
+    document.querySelectorAll('#section-settings .admin-only').forEach(function(el) {
+      el.classList.add('admin-visible');
+    });
+  }
+
   // Load CRM count preview for the settings card
   loadCrmCountPreview();
 
@@ -160,6 +167,9 @@ async function openSettingsModal(modalName) {
         break;
       case 'coupons':
         await loadCouponsModal();
+        break;
+      case 'payment-methods':
+        await loadPaymentMethodsPage();
         break;
       case 'payment-terminals':
         await loadPaymentTerminals();
@@ -1662,6 +1672,130 @@ async function saveBillFormat() {
 
 let PAYMENT_TERMINALS_CACHE = [];
 let EDITING_TERMINAL_ID = null;
+
+// ========== PAYMENT METHODS PAGE ==========
+async function loadPaymentMethodsPage() {
+  const settings = ADMIN_SETTINGS_CACHE || {};
+  const flags = settings.feature_flags || {};
+  const customMethods = Array.isArray(flags.custom_payment_methods) ? flags.custom_payment_methods : [];
+
+  renderCustomPaymentMethodsList(customMethods);
+
+  // Show add-terminal button for superadmin
+  const addBtn = document.getElementById('pm-terminal-add-btn');
+  if (addBtn && IS_SUPERADMIN) {
+    addBtn.style.display = '';
+  }
+
+  // Load terminals inline
+  await loadPaymentMethodsTerminals();
+}
+
+function renderCustomPaymentMethodsList(methods) {
+  const list = document.getElementById('custom-payment-methods-list');
+  if (!list) return;
+  if (methods.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  list.innerHTML = methods.map(function(m) {
+    return '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">' +
+      '<span style="font-size:18px;margin-right:6px;">💳</span>' +
+      '<span style="flex:1;font-size:15px;font-weight:600;color:#1f2937;">' + escapeHtml(m.label) + '</span>' +
+      '<button onclick="removeCustomPaymentMethod(\'' + escapeHtml(m.id) + '\')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:18px;padding:4px;" title="Remove">🗑️</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function addCustomPaymentMethod() {
+  const input = document.getElementById('new-payment-method-input');
+  if (!input) return;
+  const label = input.value.trim();
+  if (!label) return;
+
+  const id = 'custom-' + label.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now();
+  const settings = ADMIN_SETTINGS_CACHE || {};
+  const flags = settings.feature_flags || {};
+  const current = Array.isArray(flags.custom_payment_methods) ? flags.custom_payment_methods : [];
+  const updated = [...current, { id, label }];
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: { custom_payment_methods: updated } })
+    });
+    if (!res.ok) throw new Error('Failed to save');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { custom_payment_methods: updated });
+    input.value = '';
+    renderCustomPaymentMethodsList(updated);
+  } catch (err) {
+    alert('Failed to add payment method: ' + err.message);
+  }
+}
+
+async function removeCustomPaymentMethod(id) {
+  if (!confirm('Remove this payment method?')) return;
+  const settings = ADMIN_SETTINGS_CACHE || {};
+  const flags = settings.feature_flags || {};
+  const current = Array.isArray(flags.custom_payment_methods) ? flags.custom_payment_methods : [];
+  const updated = current.filter(function(m) { return m.id !== id; });
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: { custom_payment_methods: updated } })
+    });
+    if (!res.ok) throw new Error('Failed to save');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { custom_payment_methods: updated });
+    renderCustomPaymentMethodsList(updated);
+  } catch (err) {
+    alert('Failed to remove payment method: ' + err.message);
+  }
+}
+
+async function loadPaymentMethodsTerminals() {
+  const listEl = document.getElementById('pm-terminals-list');
+  const noTerminalEl = document.getElementById('pm-no-terminal-admin');
+  if (!listEl) return;
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load terminals');
+    const terminals = await res.json();
+    PAYMENT_TERMINALS_CACHE = terminals;
+
+    if (terminals.length === 0) {
+      listEl.innerHTML = '';
+      if (noTerminalEl) noTerminalEl.style.display = IS_SUPERADMIN ? 'none' : '';
+      if (IS_SUPERADMIN) {
+        listEl.innerHTML = '<p style="color:#6b7280;font-size:14px;" data-i18n="settings.no-terminals">No terminals configured yet.</p>';
+      }
+      return;
+    }
+
+    if (noTerminalEl) noTerminalEl.style.display = 'none';
+    listEl.innerHTML = terminals.map(function(t) {
+      return '<div style="background:#fff;border:1px solid ' + (t.is_active ? '#6366f1' : '#e5e7eb') + ';border-radius:8px;padding:12px;margin-bottom:8px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="font-weight:700;font-size:14px;color:#1f2937;">' + escapeHtml((t.vendor_name || '').toUpperCase()) + '</span>' +
+        (t.is_active ? '<span style="background:#6366f1;color:#fff;font-size:11px;padding:2px 8px;border-radius:12px;">Active</span>' : '') +
+        '</div>' +
+        '<p style="color:#6b7280;font-size:13px;margin:4px 0 0;">' + escapeHtml(t.terminal_id || '') + '</p>' +
+        '</div>';
+    }).join('');
+  } catch (err) {
+    listEl.innerHTML = '<p style="color:#ef4444;font-size:14px;">Failed to load terminals.</p>';
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 async function loadPaymentTerminals() {
   try {

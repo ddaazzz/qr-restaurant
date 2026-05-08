@@ -63,10 +63,10 @@
       <p data-i18n="admin.manage-presets">Manage preset addon and variant lists</p>
     </div>
 
-    <!-- Payment Terminals Card -->
-    <div class="settings-card" onclick="showSettingsPage('payment-terminals')">
-      <h3 data-i18n="admin.payment-terminals">Payment Terminals</h3>
-      <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
+    <!-- Payment Methods Card -->
+    <div class="settings-card" onclick="showSettingsPage('payment-methods')">
+      <h3 data-i18n="admin.payment-methods">Payment Methods</h3>
+      <p id="payment-methods-preview" data-i18n="admin.payment-methods-desc">Checkout methods &amp; terminals</p>
     </div>
 
     <!-- Service Requests Card -->
@@ -86,6 +86,7 @@
       <h3 data-i18n="admin.users-restaurants">Users & Restaurants</h3>
       <p data-i18n="admin.manage-users-restaurants">Manage users and restaurants</p>
     </div>
+
   </div>
 
   <!-- HIDDEN: Preferences Modal -->
@@ -604,6 +605,72 @@
         <button id="sr-save-btn" class="btn-primary" onclick="saveSrItem()" style="width:100%;" data-i18n="admin.save">Save</button>
       </div>
     </div>
+  </div>
+
+  <!-- HIDDEN: Payment Methods Page -->
+  <div id="page-payment-methods" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('payment-methods')" data-i18n="admin.back">&#8592; Back</button>
+      <h3 data-i18n="admin.payment-methods">Payment Methods</h3>
+    </div>
+    <div class="settings-page-content">
+
+      <!-- Checkout Payment Methods -->
+      <div class="settings-section" style="margin-bottom: 24px;">
+        <h4 data-i18n="admin.checkout-payment-methods" style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">Checkout Payment Methods</h4>
+        <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;" data-i18n="admin.checkout-payment-methods-desc">These methods appear as options when closing a bill. Cash and Credit Card are the defaults.</p>
+
+        <!-- Default (non-removable) methods -->
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10;">
+          <span style="font-size: 18px; margin-right: 10px;">💵</span>
+          <span style="flex: 1; font-size: 15px; font-weight: 600; color: #1f2937;" data-i18n="admin.cash">Cash</span>
+          <span style="font-size: 12px; color: #9ca3af;" data-i18n="admin.default">Default</span>
+        </div>
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10;">
+          <span style="font-size: 18px; margin-right: 10px;">💳</span>
+          <span style="flex: 1; font-size: 15px; font-weight: 600; color: #1f2937;" data-i18n="admin.credit-card">Credit Card</span>
+          <span style="font-size: 12px; color: #9ca3af;" data-i18n="admin.default">Default</span>
+        </div>
+
+        <!-- Custom methods list -->
+        <div id="custom-payment-methods-list"></div>
+
+        <!-- Add new method -->
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <input type="text" id="new-payment-method-input" placeholder="New method (e.g. Alipay, WeChat Pay)" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;" onkeydown="if(event.key==='Enter') addCustomPaymentMethod();" data-i18n-placeholder="admin.new-method-placeholder" />
+          <button class="btn-primary" onclick="addCustomPaymentMethod()" style="padding: 10px 16px; white-space: nowrap;" data-i18n="admin.add">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Online Payment (Self-Checkout) info -->
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 18px; margin-right: 8px;">🌐</span>
+          <span style="font-size: 15px; font-weight: 700; color: #1e3a8a;" data-i18n="admin.online-payment-title">Online Payment (Self-Checkout)</span>
+        </div>
+        <p style="font-size: 13px; color: #1e40af; line-height: 1.5; margin-bottom: 12px;" data-i18n="admin.online-payment-desc">Let customers pay directly from their phone by scanning a QR code — no staff interaction needed. This is a premium feature.</p>
+        <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20Online%20Payment%20(Self-Checkout)%20for%20my%20restaurant" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: #25D366; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 13px; text-decoration: none;" data-i18n="admin.contact-whatsapp">
+          <span>📱</span> Contact Us on WhatsApp
+        </a>
+      </div>
+
+      <!-- Payment Terminals -->
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 data-i18n="admin.payment-terminals" style="font-size: 15px; font-weight: 700; margin: 0;">Payment Terminals</h4>
+          <button id="pm-terminal-add-btn" class="btn-primary superadmin-only" onclick="showSettingsPage('payment-terminals'); setTimeout(function(){ document.getElementById('terminal-add-btn') && document.getElementById('terminal-add-btn').click(); }, 300);" style="padding: 6px 12px; font-size: 13px; display: none;" data-i18n="admin.add-terminal">+ Add Terminal</button>
+        </div>
+        <div id="pm-terminals-list">
+          <p style="color: #6b7280; font-size: 14px;" data-i18n="admin.loading">Loading...</p>
+        </div>
+        <div id="pm-no-terminal-admin" style="display: none; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px;">
+          <p style="font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 4px;" data-i18n="admin.terminal-paid-feature">Payment terminals are a paid feature</p>
+          <p style="font-size: 12px; color: #92400e;" data-i18n="admin.terminal-paid-desc">Contact us to enable payment terminal integration for your restaurant.</p>
+        </div>
+      </div>
+    </div>
+  </div>
   </div>
 
   <!-- HIDDEN: Payment Terminals Modal -->
