@@ -1230,9 +1230,9 @@ router.get('/restaurants/:restaurantId/pa-online-details', async (req, res) => {
       [merchantRef, restaurantId]
     );
 
-    // ---- 2. chuio_payments lookup — try by chuio_order_reference, then by vendor_reference ----
+    // ---- 2. chuio_payments lookup — try by order_reference, then by vendor_reference ----
     let opRes = await pool.query(
-      `SELECT cp.id, cp.payment_status, cp.total_cents, cp.currency_code,
+      `SELECT cp.id, cp.status, cp.total_cents, cp.currency_code,
               cp.vendor_reference, cp.payment_method, cp.completed_at, cp.refunded_at,
               cp.refund_amount_cents, cp.order_reference AS chuio_order_reference,
               cp.payment_gateway_env, cp.order_id
@@ -1283,8 +1283,8 @@ router.get('/restaurants/:restaurantId/pa-online-details', async (req, res) => {
       const completedSale = liveRecords.find((r: any) => isSaleRecord(r) && String(r.status) === '1');
       if (completedSale && dbPayment) {
         await pool.query(
-          `UPDATE chuio_payments SET payment_status = 'completed', completed_at = COALESCE(completed_at, NOW()), updated_at = NOW()
-           WHERE id = $1 AND payment_status NOT IN ('completed','refunded')`,
+          `UPDATE chuio_payments SET status = 'completed', completed_at = COALESCE(completed_at, NOW())
+           WHERE id = $1 AND status NOT IN ('completed','refunded')`,
           [dbPayment.id]
         );
         if (dbPayment.order_id) {
