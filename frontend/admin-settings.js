@@ -1698,11 +1698,13 @@ function renderCustomPaymentMethodsList(methods) {
     list.innerHTML = '';
     return;
   }
+  var cardSvg = '<svg style="width:18px;height:18px;flex-shrink:0;color:#6b7280;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg>';
+  var trashSvg = '<svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
   list.innerHTML = methods.map(function(m) {
     return '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">' +
-      '<span style="font-size:18px;margin-right:6px;">💳</span>' +
+      cardSvg +
       '<span style="flex:1;font-size:15px;font-weight:600;color:#1f2937;">' + escapeHtml(m.label) + '</span>' +
-      '<button onclick="removeCustomPaymentMethod(\'' + escapeHtml(m.id) + '\')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:18px;padding:4px;" title="Remove">🗑️</button>' +
+      '<button onclick="removeCustomPaymentMethod(\'' + escapeHtml(m.id) + '\')" style="background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;" title="Remove">' + trashSvg + '</button>' +
       '</div>';
   }).join('');
 }

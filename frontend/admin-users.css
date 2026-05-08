@@ -4,31 +4,29 @@
 .users-tab-bar {
   display: flex;
   gap: 8px;
-  margin-bottom: 20px;
-  border-bottom: 2px solid var(--border-color);
-  padding-bottom: 0;
 }
 
 .users-tab-btn {
-  padding: 10px 20px;
-  border: none;
-  background: none;
+  flex: 1;
+  padding: 10px;
+  border: 2px solid var(--primary-color, #4a90e2);
+  background: white;
+  color: var(--primary-color, #4a90e2);
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
   font-weight: 600;
-  color: var(--text-light);
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
+  font-size: 14px;
   transition: all 0.2s ease;
 }
 
 .users-tab-btn:hover {
-  color: var(--text-dark);
+  background: #f0f4ff;
 }
 
 .users-tab-btn.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
+  background: var(--primary-color, #4a90e2);
+  color: white;
+  border-color: var(--primary-color, #4a90e2);
 }
 
 /* Users list */

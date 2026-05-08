@@ -483,15 +483,15 @@
         <div class="settings-section">
           <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--text-main);" data-i18n="admin.menu-settings-customer-menu">Customer Menu</h4>
 
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 8px;" data-i18n="admin.menu-layout">Menu Layout</label>
-            <div class="layout-options" style="display: flex; gap: 20px;">
-              <label class="layout-radio-label">
-                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1)">
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 14px; font-weight: 600; color: var(--text-dark); margin-bottom: 10px;" data-i18n="admin.menu-layout">Menu Layout</div>
+            <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <label style="display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; margin: 0; white-space: nowrap;">
+                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1)" style="margin: 0; cursor: pointer; accent-color: var(--primary-color); width: 16px; height: 16px; flex-shrink: 0;">
                 <span data-i18n="admin.single-column">Single Column</span>
               </label>
-              <label class="layout-radio-label">
-                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2)">
+              <label style="display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; margin: 0; white-space: nowrap;">
+                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2)" style="margin: 0; cursor: pointer; accent-color: var(--primary-color); width: 16px; height: 16px; flex-shrink: 0;">
                 <span data-i18n="admin.two-column">Two Columns</span>
               </label>
             </div>
@@ -622,13 +622,13 @@
         <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;" data-i18n="admin.checkout-payment-methods-desc">These methods appear as options when closing a bill. Cash and Credit Card are the defaults.</p>
 
         <!-- Default (non-removable) methods -->
-        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10;">
-          <span style="font-size: 18px; margin-right: 10px;">💵</span>
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+          <svg style="width:20px;height:20px;flex-shrink:0;color:#6b7280;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
           <span style="flex: 1; font-size: 15px; font-weight: 600; color: #1f2937;" data-i18n="admin.cash">Cash</span>
           <span style="font-size: 12px; color: #9ca3af;" data-i18n="admin.default">Default</span>
         </div>
-        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10;">
-          <span style="font-size: 18px; margin-right: 10px;">💳</span>
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+          <svg style="width:20px;height:20px;flex-shrink:0;color:#6b7280;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg>
           <span style="flex: 1; font-size: 15px; font-weight: 600; color: #1f2937;" data-i18n="admin.credit-card">Credit Card</span>
           <span style="font-size: 12px; color: #9ca3af;" data-i18n="admin.default">Default</span>
         </div>
@@ -646,13 +646,11 @@
       <!-- Online Payment (Self-Checkout) info -->
       <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin-bottom: 24px;">
         <div style="display: flex; align-items: center; margin-bottom: 8px;">
-          <span style="font-size: 18px; margin-right: 8px;">🌐</span>
+          <svg style="width:20px;height:20px;flex-shrink:0;color:#1d4ed8;margin-right:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           <span style="font-size: 15px; font-weight: 700; color: #1e3a8a;" data-i18n="admin.online-payment-title">Online Payment (Self-Checkout)</span>
         </div>
         <p style="font-size: 13px; color: #1e40af; line-height: 1.5; margin-bottom: 12px;" data-i18n="admin.online-payment-desc">Let customers pay directly from their phone by scanning a QR code — no staff interaction needed. This is a premium feature.</p>
-        <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20Online%20Payment%20(Self-Checkout)%20for%20my%20restaurant" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: #25D366; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 13px; text-decoration: none;" data-i18n="admin.contact-whatsapp">
-          <span>📱</span> Contact Us on WhatsApp
-        </a>
+        <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20Online%20Payment%20(Self-Checkout)%20for%20my%20restaurant" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: #25D366; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 13px; text-decoration: none;" data-i18n="admin.contact-whatsapp">Contact Us on WhatsApp</a>
       </div>
 
       <!-- Payment Terminals -->
@@ -945,9 +943,9 @@
     </div>
     <div class="settings-page-content">
       <!-- Tab buttons -->
-      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-        <button class="users-tab-btn active" data-tab="users" onclick="switchUsersTab('users')" style="flex: 1; padding: 10px; border: 2px solid #4a90e2; background: #4a90e2; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;" data-i18n="admin.users">Users</button>
-        <button class="users-tab-btn" data-tab="restaurants" onclick="switchUsersTab('restaurants')" style="flex: 1; padding: 10px; border: 2px solid #4a90e2; background: white; color: #4a90e2; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;" data-i18n="admin.restaurants">Restaurants</button>
+      <div class="users-tab-bar" style="margin-bottom: 16px;">
+        <button class="users-tab-btn active" data-tab="users" onclick="switchUsersTab('users')" data-i18n="admin.users">Users</button>
+        <button class="users-tab-btn" data-tab="restaurants" onclick="switchUsersTab('restaurants')" data-i18n="admin.restaurants">Restaurants</button>
       </div>
 
       <!-- Users tab -->
