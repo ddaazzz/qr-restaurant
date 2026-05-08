@@ -324,6 +324,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     // Payment terminal state for refund/void
     const [kpayTerminal, setKpayTerminal] = useState<any>(null);
     const [paOfflineTerminal, setPaOfflineTerminal] = useState<any>(null);
+    const [paOnlineEnabled, setPaOnlineEnabled] = useState(false);
     // Custom payment methods configured by admin
     const DEFAULT_PAYMENT_METHODS = [{ id: 'cash', label: 'Cash' }, { id: 'credit-card', label: 'Credit Card' }];
     const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
@@ -453,6 +454,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           if (Array.isArray(savedMethods) && savedMethods.length > 0) {
             setCustomPaymentMethods(savedMethods);
           }
+          setPaOnlineEnabled(res.data?.active_payment_vendor === 'payment-asia');
         })
         .catch(() => {});
     }, [restaurantId]);
@@ -2382,18 +2384,27 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                 </TouchableOpacity>
               ))}
             </View>
-            {/* Payment Method */}
+            {/* Payment Method — only show chips for methods activated for this restaurant */}
             <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-              {([{ key: 'all', label: 'All' }, { key: 'kpay', label: 'KPay' }, { key: 'payment-asia', label: 'PA Online' }, { key: 'payment-asia-offline', label: 'PA Terminal' }, { key: 'cash', label: 'Cash' }, { key: 'card', label: 'Card' }] as const).map(opt => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: historyPaymentMethodFilter === opt.key ? '#3b82f6' : '#f3f4f6', borderWidth: 1, borderColor: historyPaymentMethodFilter === opt.key ? '#3b82f6' : '#e5e7eb' }}
-                  onPress={() => setHistoryPaymentMethodFilter(opt.key)}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: historyPaymentMethodFilter === opt.key ? '#fff' : '#374151' }}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
+              {([
+                { key: 'all', label: 'All', visible: true },
+                { key: 'cash', label: 'Cash', visible: customPaymentMethods.some(m => m.id === 'cash') },
+                { key: 'card', label: 'Card', visible: customPaymentMethods.some(m => m.id === 'credit-card' || m.id === 'card') },
+                { key: 'kpay', label: 'KPay', visible: !!kpayTerminal },
+                { key: 'payment-asia', label: 'PA Online', visible: paOnlineEnabled },
+                { key: 'payment-asia-offline', label: 'PA Terminal', visible: !!paOfflineTerminal },
+              ] as Array<{ key: typeof historyPaymentMethodFilter; label: string; visible: boolean }>)
+                .filter(opt => opt.visible)
+                .map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: historyPaymentMethodFilter === opt.key ? '#3b82f6' : '#f3f4f6', borderWidth: 1, borderColor: historyPaymentMethodFilter === opt.key ? '#3b82f6' : '#e5e7eb' }}
+                    onPress={() => setHistoryPaymentMethodFilter(opt.key)}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: historyPaymentMethodFilter === opt.key ? '#fff' : '#374151' }}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
