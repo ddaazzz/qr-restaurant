@@ -112,6 +112,7 @@ interface Order {
   cp_refund_amount_cents?: number;
   void_vendor_ref?: string;
   refund_vendor_ref?: string;
+  chuio_order_reference?: string;
   payment_records?: PaymentRecord[];
 }
 
@@ -618,8 +619,8 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
           if (details) setKpayTxDetails(details);
         } else if (vendor === 'payment-asia') {
-          const merchantRef = order.cp_vendor_ref || ref;
-          const res = await apiClient.post(`/api/restaurants/${restaurantId}/payment-asia/query`, { merchant_reference: merchantRef });
+          const merchantRef = order.cp_vendor_ref || order.chuio_order_reference || ref;
+          const res = await apiClient.get(`/api/restaurants/${restaurantId}/pa-online-details?merchant_reference=${encodeURIComponent(merchantRef)}`);
           setPaTxDetails(res.data);
         } else if (vendor === 'payment-asia-offline') {
           const res = await apiClient.get(`/api/restaurants/${restaurantId}/pa-offline-transactions/${ref}?skip_live=1`);
@@ -2024,10 +2025,10 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     });
 
     const unpaidCounts = {
-      all: orders.filter(isOrderUnpaid).length,
-      table: orders.filter(o => o.order_type === 'table' && isOrderUnpaid(o)).length,
-      'pay-now': orders.filter(o => (o.order_type === 'counter' || o.order_type === 'pay-now') && isOrderUnpaid(o)).length,
-      'to-go': orders.filter(o => o.order_type === 'to-go' && isOrderUnpaid(o)).length,
+      all: filteredHistoryOrders.filter(isOrderUnpaid).length,
+      table: filteredHistoryOrders.filter(o => o.order_type === 'table' && isOrderUnpaid(o)).length,
+      'pay-now': filteredHistoryOrders.filter(o => (o.order_type === 'counter' || o.order_type === 'pay-now') && isOrderUnpaid(o)).length,
+      'to-go': filteredHistoryOrders.filter(o => o.order_type === 'to-go' && isOrderUnpaid(o)).length,
     };
 
     const filteredMenuItems = menuItems.filter(item => {
@@ -2336,7 +2337,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             {/* Date */}
             <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Date</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-              {([{ key: 'all', label: 'All Time' }, { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: 'week', label: 'Last 7 Days' }, { key: 'custom', label: 'Custom…' }] as const).map(opt => (
+              {([{ key: 'all', label: 'All Time' }, { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: 'week', label: 'Last 7 Days' }, { key: 'custom', label: 'Custom Date Range' }] as const).map(opt => (
                 <TouchableOpacity
                   key={opt.key}
                   style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: historyDateFilter === opt.key ? '#3b82f6' : '#f3f4f6', borderWidth: 1, borderColor: historyDateFilter === opt.key ? '#3b82f6' : '#e5e7eb' }}
@@ -3229,60 +3230,96 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             );
           })()}
 
-          {/* Payment Asia Transaction Details */}
+          {/* Payment Asia Online Transaction Details */}
           {(() => {
             const vendor = resolveVendor(selectedHistoryOrder);
             if (vendor !== 'payment-asia') return null;
-            const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.kpay_reference_id;
+            const merchantRef = selectedHistoryOrder.cp_vendor_ref || selectedHistoryOrder.chuio_order_reference || selectedHistoryOrder.kpay_reference_id;
             if (!merchantRef) return null;
+
+            // Merge DB + live data into a single display object
+            const dbTx: any[] = paTxDetails?.db?.transactions || [];
+            const dbPayment: any = paTxDetails?.db?.payment || null;
+            const liveRecords: any[] = paTxDetails?.live || [];
+            const liveError: string | null = paTxDetails?.liveError || null;
+
+            // Best-effort: use live if available, fall back to DB
+            const primaryTx = dbTx[0] || null;
+            const PA_STATUS_DISPLAY: Record<string, string> = {
+              pending: 'Pending', approved: 'Completed', completed: 'Completed',
+              failed: 'Failed', cancelled: 'Cancelled', refunded: 'Refunded',
+              '1': 'Completed', '2': 'Pending', '3': 'Failed', '4': 'Processing',
+            };
+
+            // Prefer live record for amount/status; fall back to DB tx, then DB payment
+            const liveSale = liveRecords.find((r: any) => String(r.type) === '1' || String(r.type).toLowerCase() === 'sale') || liveRecords[0];
+            const displayStatus = (() => {
+              if (liveSale?.status) return PA_STATUS_DISPLAY[String(liveSale.status)] || String(liveSale.status);
+              if (primaryTx?.status) return PA_STATUS_DISPLAY[primaryTx.status] || primaryTx.status;
+              if (dbPayment?.payment_status) return PA_STATUS_DISPLAY[dbPayment.payment_status] || dbPayment.payment_status;
+              return '—';
+            })();
+            const displayAmount = (() => {
+              if (liveSale?.amount) return `${liveSale.currency || 'HKD'} ${liveSale.amount}`;
+              if (primaryTx?.amount_cents) return `${primaryTx.currency_code || 'HKD'} ${(primaryTx.amount_cents / 100).toFixed(2)}`;
+              if (dbPayment?.total_cents) return `${dbPayment.currency_code || 'HKD'} ${(dbPayment.total_cents / 100).toFixed(2)}`;
+              return '—';
+            })();
+            const displayMethod = (() => {
+              const net = selectedHistoryOrder.payment_network || primaryTx?.network || primaryTx?.payment_method || dbPayment?.payment_method;
+              const MAP: Record<string, string> = { Alipay: 'Alipay', WeChat: 'WeChat Pay', Wechat: 'WeChat Pay', CreditCard: 'Credit Card', FPS: 'FPS', Fps: 'FPS', Octopus: 'Octopus', CUP: 'UnionPay', visa: 'Visa', mastercard: 'Mastercard' };
+              return net ? (MAP[net] || net) : null;
+            })();
+            const displayRef = liveSale?.request_reference || primaryTx?.transaction_id || dbPayment?.vendor_reference || null;
+            const displayMerchantRef = merchantRef;
+            const displayCreated = primaryTx?.created_at || dbPayment?.created_at || selectedHistoryOrder.created_at;
+            const displayCompleted = primaryTx?.approved_at || dbPayment?.completed_at || (liveSale?.completed_time ? new Date(Number(liveSale.completed_time) * 1000).toISOString() : null);
+            const displayRefunded = primaryTx?.refunded_at || dbPayment?.refunded_at;
+            const displayRefundAmt = primaryTx?.refund_amount_cents || dbPayment?.refund_amount_cents;
+            const displayEnv = primaryTx?.payment_gateway_env || dbPayment?.payment_gateway_env;
+
+            const hasAnyData = primaryTx || dbPayment || liveSale;
+
+            const Row = ({ label, value, mono }: { label: string; value: string; mono?: boolean }) => (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>{label}</Text>
+                <Text style={{ fontSize: 12, color: '#1f2937', fontFamily: mono ? (Platform.OS === 'ios' ? 'Menlo' : 'monospace') : undefined, maxWidth: '60%', textAlign: 'right' }}>{value}</Text>
+              </View>
+            );
 
             return (
               <View style={{ backgroundColor: '#fefce8', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#fde68a' }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 8 }}>{t('orders.pa-details')}</Text>
-                {txLoading && <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 8 }} />}
-                {paTxDetails?.records?.map((rec: any, idx: number) => {
-                  const isSale = rec.type === '1' || rec.type === 'Sale';
-                  return (
-                    <View key={idx} style={{ marginBottom: idx < (paTxDetails.records.length - 1) ? 8 : 0 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>
-                        {isSale ? t('orders.sale') : t('orders.record-num').replace('{0}', String(idx + 1))}
-                      </Text>
-                      {selectedHistoryOrder.payment_network && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.method')}</Text>
-                        </View>
-                      )}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.amount')}</Text>
-                        <Text style={{ fontSize: 12, color: '#1f2937' }}>{rec.currency || 'HKD'} {rec.amount}</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.status')}</Text>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#1f2937' }}>{PA_STATUS_MAP[rec.status] || rec.status}</Text>
-                      </View>
-                      {rec.request_reference && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.request-ref')}</Text>
-                          <Text style={{ fontSize: 11, color: '#1f2937', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{rec.request_reference}</Text>
-                        </View>
-                      )}
-                      {rec.created_time && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.created')}</Text>
-                          <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.created_time) * 1000).toLocaleString()}</Text>
-                        </View>
-                      )}
-                      {rec.completed_time && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('orders.completed')}</Text>
-                          <Text style={{ fontSize: 12, color: '#1f2937' }}>{new Date(Number(rec.completed_time) * 1000).toLocaleString()}</Text>
-                        </View>
-                      )}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400e' }}>{t('orders.pa-details')}</Text>
+                  {displayEnv === 'sandbox' && (
+                    <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#92400e' }}>SANDBOX</Text>
                     </View>
-                  );
-                })}
-                {paTxDetails && !paTxDetails.records?.length && (
-                  <Text style={{ fontSize: 12, color: '#9ca3af' }}>{t('orders.no-records')}</Text>
+                  )}
+                </View>
+                {txLoading && <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 8 }} />}
+                {!txLoading && !hasAnyData && (
+                  <Text style={{ fontSize: 12, color: '#9ca3af' }}>No transaction records found.</Text>
+                )}
+                {hasAnyData && (
+                  <>
+                    <Row label="Amount" value={displayAmount} />
+                    <Row label="Status" value={displayStatus} />
+                    {displayMethod && <Row label="Method" value={displayMethod} />}
+                    <Row label="Merchant Ref" value={displayMerchantRef} mono />
+                    {displayRef && <Row label="Transaction Ref" value={displayRef} mono />}
+                    {displayCreated && <Row label="Created" value={new Date(displayCreated).toLocaleString()} />}
+                    {displayCompleted && <Row label="Completed" value={new Date(displayCompleted).toLocaleString()} />}
+                    {displayRefunded && <Row label="Refunded At" value={new Date(displayRefunded).toLocaleString()} />}
+                    {displayRefundAmt && displayRefundAmt > 0 && (
+                      <Row label="Refund Amount" value={`HKD ${(displayRefundAmt / 100).toFixed(2)}`} />
+                    )}
+                  </>
+                )}
+                {liveError && (
+                  <Text style={{ fontSize: 10, color: '#d97706', marginTop: 6 }}>
+                    Live query unavailable — showing recorded data. ({liveError})
+                  </Text>
                 )}
               </View>
             );
@@ -3579,7 +3616,16 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   flexDirection: 'row', alignItems: 'center', gap: 4,
                   borderWidth: 1, borderColor: historyFilter === tab.key ? '#3b82f6' : '#e5e7eb',
                 }}
-                onPress={() => { setHistoryFilter(tab.key); setHistoryTableFilter(''); }}
+                onPress={() => {
+                  setHistoryFilter(tab.key);
+                  setHistoryTableFilter('');
+                  // Reset all filters when switching tabs
+                  setHistoryDateFilter('all');
+                  setHistoryDateFrom('');
+                  setHistoryDateTo('');
+                  setHistoryPaymentStatusFilter('all');
+                  setHistoryPaymentMethodFilter('all');
+                }}
               >
                 <Text style={{ fontSize: 13, fontWeight: '600', color: historyFilter === tab.key ? '#fff' : '#374151' }}>
                   {tab.label}

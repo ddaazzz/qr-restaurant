@@ -1205,6 +1205,88 @@ async function initPaymentAsiaForRestaurant(restaurantId: string, terminalId?: s
 }
 
 /**
+ * GET /api/restaurants/:restaurantId/pa-online-details
+ * DB-first PA Online transaction details for a given merchant_reference.
+ * Query: ?merchant_reference=XXX
+ * Returns: { db, live, synced }  — db always populated from our tables; live from PA API when available.
+ */
+router.get('/restaurants/:restaurantId/pa-online-details', async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const merchantRef = String(req.query.merchant_reference || '');
+    if (!merchantRef) return res.status(400).json({ error: 'merchant_reference query param is required' });
+
+    // ---- 1. DB lookup (always reliable) ----
+    const patRes = await pool.query(
+      `SELECT
+         id, merchant_reference, transaction_id, amount_cents, currency_code,
+         status, payment_method, transaction_type,
+         network, refund_reference, refund_amount_cents,
+         created_at, approved_at, failed_at, refunded_at,
+         error_message, payment_gateway_env, response_data
+       FROM payment_asia_transactions
+       WHERE merchant_reference = $1 AND restaurant_id = $2
+       ORDER BY created_at DESC`,
+      [merchantRef, restaurantId]
+    );
+
+    // Also grab order_payments row for extra detail (amount, status, vendor_reference, completed_at)
+    const opRes = await pool.query(
+      `SELECT op.id, op.payment_status, op.total_cents, op.currency_code,
+              op.vendor_reference, op.payment_method, op.completed_at, op.refunded_at,
+              op.refund_amount_cents, op.chuio_order_reference, op.payment_gateway_env
+       FROM order_payments op
+       WHERE op.chuio_order_reference = $1 AND op.restaurant_id = $2
+       ORDER BY op.created_at DESC
+       LIMIT 1`,
+      [merchantRef, restaurantId]
+    );
+
+    const dbTx = patRes.rows;
+    const dbPayment = opRes.rows[0] || null;
+
+    // ---- 2. Live PA API (best-effort, enriches data) ----
+    let liveRecords: any[] = [];
+    let liveError: string | null = null;
+    let synced = false;
+    try {
+      await initPaymentAsiaForRestaurant(restaurantId);
+      liveRecords = await paymentAsiaService.queryPayment(merchantRef);
+
+      // Sync order status from live data if a completed sale is found
+      const isSaleRecord = (r: any) => { const t = String(r.type); return t === '1' || t.toLowerCase() === 'sale'; };
+      const completedSale = liveRecords.find((r: any) => isSaleRecord(r) && String(r.status) === '1');
+      if (completedSale && dbPayment) {
+        await pool.query(
+          `UPDATE order_payments SET payment_status = 'completed', completed_at = COALESCE(completed_at, NOW()), updated_at = NOW()
+           WHERE id = $1 AND payment_status NOT IN ('completed','refunded')`,
+          [dbPayment.id]
+        );
+        const ordRes = await pool.query(
+          `SELECT order_id FROM order_payments WHERE id = $1`, [dbPayment.id]
+        );
+        if (ordRes.rows[0]?.order_id) {
+          await pool.query(
+            `UPDATE orders SET status = 'completed', payment_method = COALESCE(NULLIF(payment_method,''),'payment-asia')
+             WHERE id = $1 AND restaurant_id = $2 AND status IN ('pending','processing','payment_processing')`,
+            [ordRes.rows[0].order_id, restaurantId]
+          );
+        }
+        synced = true;
+      }
+    } catch (liveErr: any) {
+      liveError = liveErr.message;
+      console.warn('[PA Online Details] Live query failed (using DB only):', liveError);
+    }
+
+    return res.json({ success: true, db: { transactions: dbTx, payment: dbPayment }, live: liveRecords, liveError, synced });
+  } catch (err: any) {
+    console.error('[PA Online Details] Error:', err);
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/restaurants/:restaurantId/payment-asia/query
  * Query transaction records for a given merchant_reference.
  * Body: { merchant_reference: string }
