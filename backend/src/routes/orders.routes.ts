@@ -1039,9 +1039,26 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         cpay.refund_amount_cents AS cp_refund_amount_cents,
         o.void_vendor_ref,
         o.refund_vendor_ref,
-        o.chuio_order_reference,
         o.chuio_order_reference
       FROM orders o
+      LEFT JOIN table_sessions ts ON o.session_id = ts.id
+      LEFT JOIN tables t ON ts.table_id = t.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
+      LEFT JOIN LATERAL (
+        SELECT payment_vendor, payment_method, status, vendor_reference, total_cents,
+               payment_gateway_env, completed_at, refunded_at, refund_amount_cents
+        FROM chuio_payments
+        WHERE order_id = o.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) cpay ON true
+      WHERE o.id = $1 AND o.restaurant_id = $2
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.custom_amount_cents,
+               o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at,
+               o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name,
+               ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method,
+               cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env,
+               cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
       `,
       [orderId, restaurantId]
     );
