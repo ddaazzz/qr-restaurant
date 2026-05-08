@@ -39,6 +39,12 @@ interface Restaurant {
   service_charge_percent: number | null;
   language_preference: string | null;
   user_count: number;
+  subscription_tier?: string | null;
+  subscription_trial_end?: string | null;
+  subscription_plan?: string | null;
+  subscription_start_date?: string | null;
+  subscription_end_date?: string | null;
+  admin_email?: string | null;
 }
 
 type Tab = 'users' | 'restaurants';
@@ -96,6 +102,15 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [restaurantFeatureFlags, setRestaurantFeatureFlags] = useState<Record<string, boolean>>({});
   const [loadingFlags, setLoadingFlags] = useState(false);
+  const [savingDetail, setSavingDetail] = useState(false);
+  const [detailForm, setDetailForm] = useState({ name: '', address: '', phone: '', timezone: 'Asia/Hong_Kong', service_charge_percent: '10', language_preference: 'en' });
+  const [detailSubTier, setDetailSubTier] = useState('free');
+  const [detailTrialEnd, setDetailTrialEnd] = useState('');
+  const [detailSubPlan, setDetailSubPlan] = useState('monthly');
+  const [detailSubStart, setDetailSubStart] = useState('');
+  const [detailSubEnd, setDetailSubEnd] = useState('');
+  const [showDetailTzPicker, setShowDetailTzPicker] = useState(false);
+  const [detailTzSearch, setDetailTzSearch] = useState('');
 
   const fetchData = useCallback(async () => {
     setFetchError(null);
@@ -309,6 +324,19 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
 
   const openRestaurantDetail = async (r: Restaurant) => {
     setSelectedRestaurant(r);
+    setDetailForm({
+      name: r.name || '',
+      address: r.address || '',
+      phone: r.phone || '',
+      timezone: r.timezone || 'Asia/Hong_Kong',
+      service_charge_percent: r.service_charge_percent != null ? String(r.service_charge_percent) : '10',
+      language_preference: r.language_preference || 'en',
+    });
+    setDetailSubTier(r.subscription_tier || 'free');
+    setDetailTrialEnd(r.subscription_trial_end ? r.subscription_trial_end.split('T')[0] : '');
+    setDetailSubPlan(r.subscription_plan || 'monthly');
+    setDetailSubStart(r.subscription_start_date ? r.subscription_start_date.split('T')[0] : '');
+    setDetailSubEnd(r.subscription_end_date ? r.subscription_end_date.split('T')[0] : '');
     setRestaurantFeatureFlags({});
     setLoadingApplications(true);
     setLoadingFlags(true);
@@ -325,6 +353,43 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
     } finally {
       setLoadingApplications(false);
       setLoadingFlags(false);
+    }
+  };
+
+  const handleSaveDetail = async () => {
+    if (!selectedRestaurant) return;
+    if (!detailForm.name.trim()) {
+      Alert.alert('Error', 'Restaurant name is required');
+      return;
+    }
+    setSavingDetail(true);
+    try {
+      await apiClient.updateRestaurant(selectedRestaurant.id, {
+        name: detailForm.name.trim(),
+        address: detailForm.address.trim() || undefined,
+        phone: detailForm.phone.trim() || undefined,
+        timezone: detailForm.timezone,
+        service_charge_percent: parseFloat(detailForm.service_charge_percent) || 0,
+        language_preference: detailForm.language_preference,
+      });
+      if (isSuperadmin) {
+        const subBody: Record<string, any> = { tier: detailSubTier };
+        if (detailSubTier === 'trial' && detailTrialEnd) subBody.trial_end_date = detailTrialEnd;
+        if (detailSubTier === 'premium') {
+          subBody.plan = detailSubPlan;
+          if (detailSubStart) subBody.start_date = detailSubStart;
+          if (detailSubEnd) subBody.end_date = detailSubEnd;
+        }
+        await apiClient.postSubscription(selectedRestaurant.id, subBody);
+      }
+      setSelectedRestaurant(null);
+      setRestaurantApplications([]);
+      setRestaurantFeatureFlags({});
+      await fetchData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to save');
+    } finally {
+      setSavingDetail(false);
     }
   };
 
@@ -399,35 +464,42 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
   };
 
   // ---- Render restaurant card ----
-  const renderRestaurantCard = ({ item: r }: { item: Restaurant }) => (
-    <TouchableOpacity style={s.card} onPress={() => openRestaurantDetail(r)} activeOpacity={0.7}>
-      <View style={s.cardHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.cardName}>{r.name}</Text>
-          {r.address && <Text style={s.cardSub}>{r.address}</Text>}
-          {r.phone && <Text style={s.cardSub}>{r.phone}</Text>}
-          <View style={s.restaurantMeta}>
-            <Text style={s.metaChip}>{r.user_count} users</Text>
-            {r.timezone && <Text style={s.metaChip}>{r.timezone}</Text>}
-            {r.service_charge_percent != null && (
-              <Text style={s.metaChip}>{r.service_charge_percent}% SC</Text>
-            )}
+  const renderRestaurantCard = ({ item: r }: { item: Restaurant }) => {
+    const tier = r.subscription_tier || 'free';
+    const tierColors = tier === 'premium'
+      ? { bg: '#dcfce7', text: '#166534', border: '#22c55e' }
+      : tier === 'trial'
+      ? { bg: '#fef3c7', text: '#92400e', border: '#f59e0b' }
+      : tier === 'expired'
+      ? { bg: '#fee2e2', text: '#991b1b', border: '#ef4444' }
+      : { bg: '#f3f4f6', text: '#6b7280', border: '#d1d5db' };
+    return (
+      <TouchableOpacity style={s.card} onPress={() => openRestaurantDetail(r)} activeOpacity={0.7}>
+        <View style={s.cardHeader}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+              <Text style={s.cardName}>{r.name}</Text>
+              {isSuperadmin && (
+                <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: tierColors.bg, borderWidth: 1, borderColor: tierColors.border }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: tierColors.text }}>{tier.toUpperCase()}</Text>
+                </View>
+              )}
+            </View>
+            {r.address && <Text style={s.cardSub}>{r.address}</Text>}
+            {r.phone && <Text style={s.cardSub}>{r.phone}</Text>}
+            <View style={s.restaurantMeta}>
+              <Text style={s.metaChip}>{r.user_count} users</Text>
+              {r.timezone && <Text style={s.metaChip}>{r.timezone}</Text>}
+              {r.service_charge_percent != null && (
+                <Text style={s.metaChip}>{r.service_charge_percent}% SC</Text>
+              )}
+            </View>
           </View>
-        </View>
-        <View style={s.cardActions}>
-          <TouchableOpacity style={s.iconBtn} onPress={(e) => { e.stopPropagation(); openEditRestaurant(r); }}>
-            <Ionicons name="pencil" size={18} color="#3b82f6" />
-          </TouchableOpacity>
-          {isSuperadmin && (
-            <TouchableOpacity style={s.iconBtn} onPress={(e) => { e.stopPropagation(); handleDeleteRestaurant(r); }}>
-              <Ionicons name="trash" size={18} color="#ef4444" />
-            </TouchableOpacity>
-          )}
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" style={{ marginLeft: 4 }} />
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   // ---- Role needs PIN or email/password ----
   const needsPin = userForm.role === 'staff' || userForm.role === 'kitchen';
@@ -830,7 +902,7 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
       {/* ========== Restaurant Detail Modal ========== */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={!!selectedRestaurant} transparent animationType="fade">
         <View style={[s.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-          <View style={[s.modalContent, { maxWidth: 600, width: '90%', maxHeight: '80%', borderRadius: 16 }]}>
+          <View style={[s.modalContent, { maxWidth: 600, width: '90%', maxHeight: '88%', borderRadius: 16 }]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{selectedRestaurant?.name || 'Restaurant Details'}</Text>
               <TouchableOpacity onPress={() => { setSelectedRestaurant(null); setRestaurantApplications([]); setRestaurantFeatureFlags({}); }}>
@@ -838,43 +910,86 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={s.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
-              {/* Restaurant Info */}
-              <View style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 16 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Restaurant Information</Text>
-                {selectedRestaurant?.address && (
-                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Address:</Text>
-                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.address}</Text>
-                  </View>
-                )}
-                {selectedRestaurant?.phone && (
-                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Phone:</Text>
-                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.phone}</Text>
-                  </View>
-                )}
-                {selectedRestaurant?.timezone && (
-                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Timezone:</Text>
-                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.timezone}</Text>
-                  </View>
-                )}
-                {selectedRestaurant?.service_charge_percent != null && (
-                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Service:</Text>
-                    <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant.service_charge_percent}%</Text>
-                  </View>
-                )}
-                <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280', width: 80 }}>Users:</Text>
-                  <Text style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>{selectedRestaurant?.user_count || 0}</Text>
-                </View>
+            <ScrollView style={s.modalBody} contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
+              {/* Restaurant Info — inline editable */}
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 12 }}>Restaurant Information</Text>
+              <Text style={s.label}>Restaurant Name *</Text>
+              <TextInput style={s.input} value={detailForm.name} onChangeText={(t) => setDetailForm({ ...detailForm, name: t })} placeholder="Restaurant name" placeholderTextColor="#9ca3af" />
+              <Text style={s.label}>Address</Text>
+              <TextInput style={s.input} value={detailForm.address} onChangeText={(t) => setDetailForm({ ...detailForm, address: t })} placeholder="123 Main St" placeholderTextColor="#9ca3af" />
+              <Text style={s.label}>Phone</Text>
+              <TextInput style={s.input} value={detailForm.phone} onChangeText={(t) => setDetailForm({ ...detailForm, phone: t })} placeholder="+852 1234 5678" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
+              <Text style={s.label}>Service Charge (%)</Text>
+              <TextInput style={s.input} value={detailForm.service_charge_percent} onChangeText={(t) => setDetailForm({ ...detailForm, service_charge_percent: t })} placeholder="10" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" />
+              <Text style={s.label}>Language</Text>
+              <View style={s.roleRow}>
+                {[{ value: 'en', label: 'English' }, { value: 'zh', label: '中文' }].map((opt) => (
+                  <TouchableOpacity key={opt.value} style={[s.roleChip, detailForm.language_preference === opt.value && s.roleChipActive]} onPress={() => setDetailForm({ ...detailForm, language_preference: opt.value })}>
+                    <Text style={[s.roleChipText, detailForm.language_preference === opt.value && s.roleChipTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
+              <Text style={s.label}>Timezone</Text>
+              <TouchableOpacity style={[s.roleChip, s.roleChipActive, { alignSelf: 'flex-start', paddingHorizontal: 16, marginBottom: 16 }]} onPress={() => { setDetailTzSearch(''); setShowDetailTzPicker(true); }}>
+                <Text style={[s.roleChipText, s.roleChipTextActive]}>{TIMEZONE_OPTIONS.find(o => o.value === detailForm.timezone)?.label || detailForm.timezone}</Text>
+              </TouchableOpacity>
+              <Modal visible={showDetailTzPicker} transparent animationType="slide">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                  <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70%' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Select Timezone</Text>
+                      <TouchableOpacity onPress={() => setShowDetailTzPicker(false)}><Text style={{ fontSize: 16, color: '#6b7280' }}>✕</Text></TouchableOpacity>
+                    </View>
+                    <TextInput style={{ margin: 12, padding: 10, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, fontSize: 14 }} placeholder="Search timezones..." value={detailTzSearch} onChangeText={setDetailTzSearch} autoFocus />
+                    <FlatList data={TIMEZONE_OPTIONS.filter(o => o.label.toLowerCase().includes(detailTzSearch.toLowerCase()) || o.value.toLowerCase().includes(detailTzSearch.toLowerCase()))} keyExtractor={item => item.value} renderItem={({ item }) => (
+                      <TouchableOpacity style={{ padding: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: item.value === detailForm.timezone ? '#eff6ff' : '#fff' }} onPress={() => { setDetailForm({ ...detailForm, timezone: item.value }); setShowDetailTzPicker(false); }}>
+                        <Text style={{ fontSize: 14, color: item.value === detailForm.timezone ? '#2563eb' : '#1f2937', fontWeight: item.value === detailForm.timezone ? '600' : '400' }}>{item.label}</Text>
+                      </TouchableOpacity>
+                    )} keyboardShouldPersistTaps="handled" />
+                  </View>
+                </View>
+              </Modal>
+
+              {/* Subscription section — superadmin only */}
+              {isSuperadmin && (
+                <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginTop: 4, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 12 }}>Subscription &amp; Plan</Text>
+                  <Text style={s.label}>Tier</Text>
+                  <View style={s.roleRow}>
+                    {['free', 'trial', 'premium', 'expired'].map((t) => (
+                      <TouchableOpacity key={t} style={[s.roleChip, detailSubTier === t && s.roleChipActive]} onPress={() => setDetailSubTier(t)}>
+                        <Text style={[s.roleChipText, detailSubTier === t && s.roleChipTextActive]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {detailSubTier === 'trial' && (
+                    <>
+                      <Text style={s.label}>Trial End Date (YYYY-MM-DD)</Text>
+                      <TextInput style={s.input} value={detailTrialEnd} onChangeText={setDetailTrialEnd} placeholder="2025-12-31" placeholderTextColor="#9ca3af" />
+                    </>
+                  )}
+                  {detailSubTier === 'premium' && (
+                    <>
+                      <Text style={s.label}>Plan</Text>
+                      <View style={s.roleRow}>
+                        {[{ value: 'monthly', label: 'Monthly' }, { value: 'annually', label: 'Annually' }].map((opt) => (
+                          <TouchableOpacity key={opt.value} style={[s.roleChip, detailSubPlan === opt.value && s.roleChipActive]} onPress={() => setDetailSubPlan(opt.value)}>
+                            <Text style={[s.roleChipText, detailSubPlan === opt.value && s.roleChipTextActive]}>{opt.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <Text style={s.label}>Start Date (YYYY-MM-DD)</Text>
+                      <TextInput style={s.input} value={detailSubStart} onChangeText={setDetailSubStart} placeholder="2025-01-01" placeholderTextColor="#9ca3af" />
+                      <Text style={s.label}>End Date (YYYY-MM-DD)</Text>
+                      <TextInput style={s.input} value={detailSubEnd} onChangeText={setDetailSubEnd} placeholder="2025-12-31" placeholderTextColor="#9ca3af" />
+                    </>
+                  )}
+                </View>
+              )}
 
               {/* Premium Features (Feature Flags) — superadmin only */}
               {isSuperadmin && (
-                <View style={{ marginBottom: 16 }}>
+                <View style={{ marginBottom: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16 }}>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>Premium Features</Text>
                   <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Disabled modules are hidden from all users of this restaurant.</Text>
                   {loadingFlags ? (
@@ -909,7 +1024,7 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
               )}
 
               {/* Payment Terminal Applications */}
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 10 }}>Payment Terminal Applications</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginBottom: 10, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16 }}>Payment Terminal Applications</Text>
               {loadingApplications ? (
                 <ActivityIndicator size="small" color="#4f46e5" style={{ paddingVertical: 20 }} />
               ) : restaurantApplications.length === 0 ? (
@@ -981,6 +1096,46 @@ export const UsersTab = ({ onBack }: { onBack: () => void }) => {
                 ))
               )}
             </ScrollView>
+
+            {/* Detail modal footer */}
+            <View style={s.modalFooter}>
+              {isSuperadmin && (
+                <TouchableOpacity
+                  style={[s.cancelBtn, { borderColor: '#ef4444' }]}
+                  onPress={() => {
+                    if (!selectedRestaurant) return;
+                    Alert.alert(
+                      'Delete Restaurant',
+                      `Delete "${selectedRestaurant.name}"? All users must be removed first.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: async () => {
+                          try {
+                            await apiClient.deleteRestaurant(selectedRestaurant.id);
+                            setSelectedRestaurant(null);
+                            setRestaurantApplications([]);
+                            setRestaurantFeatureFlags({});
+                            await fetchData();
+                          } catch (err: any) {
+                            Alert.alert('Error', err.message || 'Failed to delete');
+                          }
+                        }},
+                      ]
+                    );
+                  }}
+                  disabled={savingDetail}
+                >
+                  <Text style={[s.cancelBtnText, { color: '#ef4444' }]}>Delete</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[s.saveBtn, { flex: 1 }, savingDetail && { opacity: 0.5 }]}
+                onPress={handleSaveDetail}
+                disabled={savingDetail}
+              >
+                {savingDetail ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>Save Changes</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

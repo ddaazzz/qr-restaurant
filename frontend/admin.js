@@ -412,7 +412,7 @@ async function switchSection(sectionId) {
         var settingsSection = document.getElementById("section-settings");
         if (settingsSection && !settingsSection.innerHTML.includes("settings-cards-grid")) {
           try {
-            var settingsResponse = await fetch('/admin-settings.html?v=20260518a');
+            var settingsResponse = await fetch('/admin-settings.html?v=20260518b');
             settingsSection.innerHTML = await settingsResponse.text();
             reTranslateContent();
           } catch (err) {

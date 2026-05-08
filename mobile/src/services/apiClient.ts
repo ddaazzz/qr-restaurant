@@ -642,6 +642,15 @@ class APIClient {
     }
   }
 
+  async postSubscription(restaurantId: number, data: { tier: string; trial_end_date?: string; plan?: string; start_date?: string; end_date?: string }): Promise<any> {
+    try {
+      const response = await this.client.post(`/api/restaurants/${restaurantId}/subscription`, data);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // Upload image (logo/background)
   async uploadImage(uri: string, type: 'logo' | 'background'): Promise<string> {
     try {
