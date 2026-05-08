@@ -351,6 +351,20 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     }), []);
 
+    // Reset all history filters whenever the Order History view is opened
+    useEffect(() => {
+      if (showHistory) {
+        setHistoryFilter('all');
+        setHistoryTableFilter('');
+        setHistoryDateFilter('all');
+        setHistoryDateFrom('');
+        setHistoryDateTo('');
+        setHistoryPaymentStatusFilter('all');
+        setHistoryPaymentMethodFilter('all');
+        setSelectedHistoryOrder(null);
+      }
+    }, [showHistory]);
+
     // Handle selectedTableOnInit from Tables tab
     useEffect(() => {
       if (selectedTableOnInit) {
@@ -619,7 +633,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
 
           if (details) setKpayTxDetails(details);
         } else if (vendor === 'payment-asia') {
-          const merchantRef = order.cp_vendor_ref || order.chuio_order_reference || ref;
+          // kpay_reference_id holds chuio_order_reference for PA Online orders
+          // (backend aliases COALESCE(o.chuio_order_reference,...) AS kpay_reference_id)
+          const merchantRef = order.kpay_reference_id || order.chuio_order_reference || order.cp_vendor_ref || ref;
           const res = await apiClient.get(`/api/restaurants/${restaurantId}/pa-online-details?merchant_reference=${encodeURIComponent(merchantRef)}`);
           setPaTxDetails(res.data);
         } else if (vendor === 'payment-asia-offline') {
