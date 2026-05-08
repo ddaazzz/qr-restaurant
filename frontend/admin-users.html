@@ -153,3 +153,54 @@
     </div>
   </div>
 </div>
+
+<!-- Subscription Edit Modal -->
+<div id="subscription-modal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeSubscriptionModal()">
+  <div class="modal-box" style="max-width: 420px; width: 90%;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+      <h3 id="sub-modal-title" style="margin: 0; font-size: 18px;">Subscription</h3>
+      <button onclick="closeSubscriptionModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #9ca3af;">✕</button>
+    </div>
+    <div id="sub-save-error" style="display: none; background: #fee2e2; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px;"></div>
+
+    <div style="margin-bottom: 14px;">
+      <label style="display: block; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 6px;">Tier</label>
+      <select id="sub-tier" class="modal-input" style="width: 100%; box-sizing: border-box;" onchange="updateSubscriptionModalVisibility()">
+        <option value="trial">Trial</option>
+        <option value="premium">Premium (Paid)</option>
+        <option value="free">Free</option>
+        <option value="expired">Expired</option>
+      </select>
+    </div>
+
+    <div id="sub-trial-section">
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 6px;">Trial End Date</label>
+        <input type="date" id="sub-trial-end" class="modal-input" style="width: 100%; box-sizing: border-box;">
+      </div>
+    </div>
+
+    <div id="sub-premium-section" style="display: none;">
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 6px;">Plan</label>
+        <select id="sub-plan" class="modal-input" style="width: 100%; box-sizing: border-box;">
+          <option value="monthly">Monthly</option>
+          <option value="annually">Annually</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 6px;">Start Date</label>
+        <input type="date" id="sub-start-date" class="modal-input" style="width: 100%; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 6px;">End Date</label>
+        <input type="date" id="sub-end-date" class="modal-input" style="width: 100%; box-sizing: border-box;">
+      </div>
+    </div>
+
+    <div class="modal-button-group" style="display: flex; gap: 10px; margin-top: 20px;">
+      <button onclick="closeSubscriptionModal()" class="modal-cancel-btn" style="flex: 1;">Cancel</button>
+      <button onclick="saveSubscription()" class="modal-btn-primary" style="flex: 1;">Save</button>
+    </div>
+  </div>
+</div>

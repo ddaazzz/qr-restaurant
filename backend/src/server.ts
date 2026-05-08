@@ -14,6 +14,7 @@ import { sessionNotifier } from "./services/sessionNotifier";
 import { orderNotifier } from "./services/orderNotifier";
 import { webSocketServer } from "./services/websocket";
 import { kitchenAutoPrintService } from "./services/kitchenAutoPrintService";
+import { sendTrialExpiryNotifications } from "./services/telegramService";
 
 const PORT = Number(process.env.PORT) || 10000;
 
@@ -92,6 +93,18 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       } catch (err: any) {
         console.warn(`⚠️  Printer queue initialization failed: ${err.message}`);
       }
+
+      // Start daily trial expiry checker
+      const runTrialExpiryCheckHttps = async () => {
+        try {
+          await sendTrialExpiryNotifications(pool);
+          console.log(`✅ Trial expiry check completed`);
+        } catch (err: any) {
+          console.warn(`⚠️  Trial expiry check failed: ${err.message}`);
+        }
+      };
+      runTrialExpiryCheckHttps();
+      setInterval(runTrialExpiryCheckHttps, 24 * 60 * 60 * 1000);
     });
   } catch (err) {
     console.error("❌ Failed to initialize HTTPS:", err);
@@ -143,6 +156,18 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     } catch (err: any) {
       console.warn(`⚠️  Printer queue initialization failed: ${err.message}`);
     }
+
+    // Start daily trial expiry checker (runs once at startup, then every 24h)
+    const runTrialExpiryCheck = async () => {
+      try {
+        await sendTrialExpiryNotifications(pool);
+        console.log(`✅ Trial expiry check completed`);
+      } catch (err: any) {
+        console.warn(`⚠️  Trial expiry check failed: ${err.message}`);
+      }
+    };
+    runTrialExpiryCheck();
+    setInterval(runTrialExpiryCheck, 24 * 60 * 60 * 1000);
   });
 }
 

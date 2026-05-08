@@ -81,6 +81,58 @@ function renderUsersList() {
   container.innerHTML = html;
 }
 
+// ============= SUBSCRIPTION HELPERS =============
+
+function getSubscriptionBadge(r) {
+  var tier = r.subscription_tier || 'free';
+  var now = new Date();
+
+  if (tier === 'premium') {
+    var endDate = r.subscription_end_date ? new Date(r.subscription_end_date) : null;
+    var plan = r.subscription_plan ? (r.subscription_plan === 'annually' ? '/yr' : '/mo') : '';
+    if (endDate && endDate < now) {
+      return '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">PAID EXPIRED</span>';
+    }
+    return '<span style="background:#d1fae5;color:#059669;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">PAID' + plan + '</span>';
+  }
+  if (tier === 'trial') {
+    var trialEnd = r.subscription_trial_end ? new Date(r.subscription_trial_end) : null;
+    if (!trialEnd || trialEnd < now) {
+      return '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">TRIAL EXPIRED</span>';
+    }
+    var daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+    var color = daysLeft <= 3 ? '#dc2626' : daysLeft <= 7 ? '#d97706' : '#0284c7';
+    var bg = daysLeft <= 3 ? '#fee2e2' : daysLeft <= 7 ? '#fef3c7' : '#dbeafe';
+    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">TRIAL · ' + daysLeft + 'd left</span>';
+  }
+  if (tier === 'expired') {
+    return '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">EXPIRED</span>';
+  }
+  // free
+  return '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">FREE</span>';
+}
+
+function getSubscriptionSummaryText(r) {
+  var tier = r.subscription_tier || 'free';
+  var now = new Date();
+  var lines = [];
+
+  if (tier === 'trial') {
+    var trialEnd = r.subscription_trial_end ? new Date(r.subscription_trial_end) : null;
+    if (trialEnd) {
+      var daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+      lines.push('Trial ends: ' + trialEnd.toLocaleDateString('en-HK', { year: 'numeric', month: 'short', day: 'numeric' }) + (daysLeft > 0 ? ' (' + daysLeft + 'd left)' : ' (expired)'));
+    }
+  } else if (tier === 'premium') {
+    if (r.subscription_start_date) lines.push('Paid since: ' + new Date(r.subscription_start_date).toLocaleDateString('en-HK', { year: 'numeric', month: 'short', day: 'numeric' }));
+    if (r.subscription_end_date) lines.push('Renews: ' + new Date(r.subscription_end_date).toLocaleDateString('en-HK', { year: 'numeric', month: 'short', day: 'numeric' }));
+    if (r.subscription_plan) lines.push('Plan: ' + r.subscription_plan);
+  }
+  return lines.join(' · ');
+}
+
+
+
 // ============= RESTAURANTS TAB =============
 
 function renderRestaurantsList() {
@@ -104,10 +156,14 @@ function renderRestaurantsList() {
     } else {
       html += '      <span class="deploy-badge deploy-badge-standard">STANDARD</span>';
     }
+    html += '      ' + getSubscriptionBadge(r);
     html += '    </div>';
     html += '    <div class="user-card-meta">';
     if (r.address) html += '<span>📍 ' + escapeHtml(r.address) + '</span>';
     if (r.phone) html += '<span>📞 ' + escapeHtml(r.phone) + '</span>';
+    if (r.admin_email) html += '<span>📧 ' + escapeHtml(r.admin_email) + '</span>';
+    var subText = getSubscriptionSummaryText(r);
+    if (subText) html += '<span style="color:#6b7280;">📅 ' + escapeHtml(subText) + '</span>';
     html += '    </div>';
     html += '    <div class="restaurant-meta">';
     html += '      <span class="meta-chip">👥 ' + (r.user_count || 0) + ' users</span>';
@@ -123,6 +179,7 @@ function renderRestaurantsList() {
     html += '  <div class="user-card-actions">';
     html += '    <button class="btn-edit" onclick="event.stopPropagation(); openRestaurantModal(' + r.id + ')">✏️ Edit</button>';
     if (IS_SUPERADMIN) {
+      html += '    <button onclick="event.stopPropagation(); openSubscriptionModal(' + r.id + ')" style="background:#f59e0b;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">💳 Plan</button>';
       html += '    <button class="btn-delete-user" onclick="event.stopPropagation(); deleteRestaurant(' + r.id + ', \'' + escapeHtml(r.name) + '\')">🗑️</button>';
     }
     html += '    <span style="color: #9ca3af; font-size: 18px; margin-left: 4px;">›</span>';
@@ -466,6 +523,75 @@ function showRestaurantError(msg) {
   if (errorEl) {
     errorEl.textContent = msg;
     errorEl.style.display = 'block';
+  }
+}
+
+// ============= SUBSCRIPTION MODAL =============
+
+var subscriptionModalRestId = null;
+
+function openSubscriptionModal(restId) {
+  var r = restaurantsData.find(function(x) { return x.id === restId; });
+  if (!r) return;
+  subscriptionModalRestId = restId;
+
+  document.getElementById('sub-modal-title').textContent = 'Subscription: ' + r.name;
+  document.getElementById('sub-tier').value = r.subscription_tier || 'free';
+  document.getElementById('sub-plan').value = r.subscription_plan || 'monthly';
+  document.getElementById('sub-trial-end').value = r.subscription_trial_end ? r.subscription_trial_end.split('T')[0] : '';
+  document.getElementById('sub-start-date').value = r.subscription_start_date ? r.subscription_start_date.split('T')[0] : '';
+  document.getElementById('sub-end-date').value = r.subscription_end_date ? r.subscription_end_date.split('T')[0] : '';
+
+  updateSubscriptionModalVisibility();
+  document.getElementById('subscription-modal').style.display = 'flex';
+  document.getElementById('sub-save-error').style.display = 'none';
+}
+
+function updateSubscriptionModalVisibility() {
+  var tier = document.getElementById('sub-tier').value;
+  document.getElementById('sub-trial-section').style.display = tier === 'trial' ? 'block' : 'none';
+  document.getElementById('sub-premium-section').style.display = tier === 'premium' ? 'block' : 'none';
+}
+
+function closeSubscriptionModal() {
+  document.getElementById('subscription-modal').style.display = 'none';
+  subscriptionModalRestId = null;
+}
+
+async function saveSubscription() {
+  if (!subscriptionModalRestId) return;
+  var tier = document.getElementById('sub-tier').value;
+  var body = { tier: tier };
+
+  if (tier === 'trial') {
+    var trialEnd = document.getElementById('sub-trial-end').value;
+    if (trialEnd) body.trial_end_date = trialEnd;
+  } else if (tier === 'premium') {
+    body.plan = document.getElementById('sub-plan').value;
+    var startDate = document.getElementById('sub-start-date').value;
+    var endDate = document.getElementById('sub-end-date').value;
+    if (startDate) body.start_date = startDate;
+    if (endDate) body.end_date = endDate;
+  }
+
+  var errEl = document.getElementById('sub-save-error');
+  try {
+    var res = await fetch(API + '/restaurants/' + subscriptionModalRestId + '/subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Failed to save subscription';
+      errEl.style.display = 'block';
+      return;
+    }
+    closeSubscriptionModal();
+    await loadUsersManagement();
+  } catch (err) {
+    errEl.textContent = err.message || 'Network error';
+    errEl.style.display = 'block';
   }
 }
 

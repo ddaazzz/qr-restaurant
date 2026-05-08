@@ -870,10 +870,10 @@ router.post("/auth/register", async (req, res) => {
     try {
       await client.query("BEGIN");
 
-      // Create restaurant
+      // Create restaurant with 30-day free trial
       const restaurantResult = await client.query(
-        `INSERT INTO restaurants (name, address, phone, service_charge_percent, language_preference, timezone)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name`,
+        `INSERT INTO restaurants (name, address, phone, service_charge_percent, language_preference, timezone, subscription_tier, subscription_trial_end)
+         VALUES ($1, $2, $3, $4, $5, $6, 'trial', NOW() + INTERVAL '30 days') RETURNING id, name`,
         [
           restaurant_name,
           address || null,
@@ -1036,10 +1036,10 @@ router.post("/auth/register-email", async (req, res) => {
     try {
       await client.query("BEGIN");
 
-      // Create restaurant
+      // Create restaurant with 30-day free trial
       const restaurantResult = await client.query(
-        `INSERT INTO restaurants (name, address, phone, country, service_charge_percent, language_preference, timezone)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name`,
+        `INSERT INTO restaurants (name, address, phone, country, service_charge_percent, language_preference, timezone, subscription_tier, subscription_trial_end)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'trial', NOW() + INTERVAL '30 days') RETURNING id, name`,
         [restaurant_name, address || null, phone || null, country || null, service_charge_percent != null ? service_charge_percent : 0, language_preference || "en", timezone || "UTC"]
       );
 
@@ -1609,14 +1609,21 @@ router.get("/manage/restaurants", async (req, res) => {
     if (caller.role === "superadmin") {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.api_base_url,
-                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+                r.is_customized, r.app_version, r.api_base_url, r.custom_branch,
+                r.subscription_tier, r.subscription_trial_end,
+                r.subscription_plan, r.subscription_start_date, r.subscription_end_date,
+                r.created_at,
+                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count,
+                (SELECT u.email FROM users u WHERE u.restaurant_id = r.id AND u.role = 'admin' LIMIT 1) as admin_email
          FROM restaurants r ORDER BY r.id`
       );
     } else {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.api_base_url,
+                r.is_customized, r.app_version, r.api_base_url, r.custom_branch,
+                r.subscription_tier, r.subscription_trial_end,
+                r.subscription_plan, r.subscription_start_date, r.subscription_end_date,
+                r.created_at,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r WHERE r.id = $1`,
         [caller.restaurant_id]
@@ -1641,9 +1648,9 @@ router.post("/manage/restaurants", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO restaurants (name, address, phone, timezone, service_charge_percent, language_preference)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference`,
+      `INSERT INTO restaurants (name, address, phone, timezone, service_charge_percent, language_preference, subscription_tier, subscription_trial_end)
+       VALUES ($1, $2, $3, $4, $5, $6, 'trial', NOW() + INTERVAL '30 days')
+       RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, subscription_tier, subscription_trial_end`,
       [name, address || null, phone || null, timezone || "UTC", service_charge_percent || 0, language_preference || "en"]
     );
     res.status(201).json({ restaurant: result.rows[0], success: true });

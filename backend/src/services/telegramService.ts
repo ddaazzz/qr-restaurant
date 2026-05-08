@@ -92,6 +92,7 @@ export const sendRestaurantCreationNotification = async (restaurantData: {
   phone?: string;
   country?: string;
   email?: string;
+  trialEndDate?: string;
 }): Promise<void> => {
   const details: Record<string, string | number> = {
     "Restaurant Name": restaurantData.restaurantName,
@@ -109,6 +110,9 @@ export const sendRestaurantCreationNotification = async (restaurantData: {
   if (restaurantData.email) {
     details["Created By"] = restaurantData.email;
   }
+  if (restaurantData.trialEndDate) {
+    details["Trial Ends"] = new Date(restaurantData.trialEndDate).toLocaleDateString('en-HK', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
 
   details["Timestamp"] = new Date().toLocaleString();
 
@@ -117,4 +121,74 @@ export const sendRestaurantCreationNotification = async (restaurantData: {
     message: "A new restaurant has been created",
     details,
   });
+};
+
+/**
+ * Send trial expiry warnings to Telegram
+ * Called by the daily scheduler
+ */
+export const sendTrialExpiryNotifications = async (pool: any): Promise<void> => {
+  const thresholds = [
+    { days: 14, label: "⚠️ 2 Weeks Left" },
+    { days: 7,  label: "🔔 1 Week Left" },
+    { days: 2,  label: "🚨 2 Days Left" },
+    { days: 1,  label: "🆘 1 Day Left" },
+  ];
+
+  for (const { days, label } of thresholds) {
+    // Find restaurants whose trial_end is within [days-1, days] days from now
+    const result = await pool.query(
+      `SELECT r.id, r.name, r.subscription_trial_end,
+              (SELECT u.email FROM users u WHERE u.restaurant_id = r.id AND u.role = 'admin' LIMIT 1) as admin_email
+       FROM restaurants r
+       WHERE r.subscription_tier = 'trial'
+         AND r.subscription_trial_end IS NOT NULL
+         AND r.subscription_trial_end >= NOW() + INTERVAL '${days - 1} days'
+         AND r.subscription_trial_end <  NOW() + INTERVAL '${days} days'`
+    );
+
+    for (const row of result.rows) {
+      const trialEnd = new Date(row.subscription_trial_end).toLocaleDateString('en-HK', {
+        year: 'numeric', month: 'short', day: 'numeric',
+      });
+      await sendTelegramNotification({
+        title: `${label} on Free Trial`,
+        message: `Restaurant <b>${row.name}</b> (ID: ${row.id}) free trial expires on <b>${trialEnd}</b>.`,
+        details: {
+          "Admin Email": row.admin_email || "N/A",
+          "Trial Expires": trialEnd,
+        },
+      });
+    }
+  }
+
+  // Also notify for restaurants whose trial JUST expired (within the last 24h)
+  const expiredResult = await pool.query(
+    `SELECT r.id, r.name, r.subscription_trial_end,
+            (SELECT u.email FROM users u WHERE u.restaurant_id = r.id AND u.role = 'admin' LIMIT 1) as admin_email
+     FROM restaurants r
+     WHERE r.subscription_tier = 'trial'
+       AND r.subscription_trial_end IS NOT NULL
+       AND r.subscription_trial_end < NOW()
+       AND r.subscription_trial_end >= NOW() - INTERVAL '1 day'`
+  );
+
+  for (const row of expiredResult.rows) {
+    const trialEnd = new Date(row.subscription_trial_end).toLocaleDateString('en-HK', {
+      year: 'numeric', month: 'short', day: 'numeric',
+    });
+    // Auto-update tier to expired
+    await pool.query(
+      `UPDATE restaurants SET subscription_tier = 'expired' WHERE id = $1 AND subscription_tier = 'trial'`,
+      [row.id]
+    );
+    await sendTelegramNotification({
+      title: "❌ Trial Expired",
+      message: `Restaurant <b>${row.name}</b> (ID: ${row.id}) free trial has expired.`,
+      details: {
+        "Admin Email": row.admin_email || "N/A",
+        "Expired On": trialEnd,
+      },
+    });
+  }
 };
