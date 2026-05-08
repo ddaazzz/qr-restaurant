@@ -1609,7 +1609,7 @@ router.get("/manage/restaurants", async (req, res) => {
     if (caller.role === "superadmin") {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.api_base_url, r.custom_branch,
+                r.is_customized, r.app_version, r.api_base_url,
                 r.subscription_tier, r.subscription_trial_end,
                 r.subscription_plan, r.subscription_start_date, r.subscription_end_date,
                 r.created_at,
@@ -1620,7 +1620,7 @@ router.get("/manage/restaurants", async (req, res) => {
     } else {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
-                r.is_customized, r.app_version, r.api_base_url, r.custom_branch,
+                r.is_customized, r.app_version, r.api_base_url,
                 r.subscription_tier, r.subscription_trial_end,
                 r.subscription_plan, r.subscription_start_date, r.subscription_end_date,
                 r.created_at,
@@ -1672,10 +1672,10 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     return res.status(403).json({ error: "Cannot edit another restaurant" });
   }
 
-  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url } = req.body;
+  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, api_base_url } = req.body;
 
   // Only superadmin can change customization fields
-  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || render_service_id !== undefined || api_base_url !== undefined)) {
+  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || api_base_url !== undefined)) {
     return res.status(403).json({ error: "Only superadmin can change customization settings" });
   }
 
@@ -1692,14 +1692,12 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (language_preference !== undefined) { updates.push(`language_preference = $${i++}`); params.push(language_preference); }
     if (is_customized !== undefined) { updates.push(`is_customized = $${i++}`); params.push(is_customized); }
     if (app_version !== undefined) { updates.push(`app_version = $${i++}`); params.push(app_version); }
-    if (custom_branch !== undefined) { updates.push(`custom_branch = $${i++}`); params.push(custom_branch); }
-    if (render_service_id !== undefined) { updates.push(`render_service_id = $${i++}`); params.push(render_service_id); }
     if (api_base_url !== undefined) { updates.push(`api_base_url = $${i++}`); params.push(api_base_url); }
 
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
     params.push(restaurantId);
-    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
+    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, api_base_url`;
     const result = await pool.query(query, params);
 
     if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
@@ -1747,7 +1745,7 @@ router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req
   const { enable } = req.body;
 
   try {
-    const restResult = await pool.query("SELECT id, name, is_customized, custom_branch, render_service_id FROM restaurants WHERE id = $1", [restaurantId]);
+    const restResult = await pool.query("SELECT id, name, is_customized FROM restaurants WHERE id = $1", [restaurantId]);
     if (!restResult.rows.length) return res.status(404).json({ error: "Restaurant not found" });
 
     const restaurant = restResult.rows[0];
