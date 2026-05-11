@@ -8,7 +8,7 @@
   <!-- Translations -->
   <script src="/translations.js"></script>
   <!-- Landing styles -->
-  <link rel="stylesheet" href="/landing.css" />
+  <link rel="stylesheet" href="/landing.css?v=20260513a" />
   <!-- Language Switcher Styles -->
   <link rel="stylesheet" href="/language-switcher.css" />
   <!-- Menu styles -->
@@ -20,22 +20,82 @@
 
   <!-- ================= LANDING PAGE ================= -->
   <div id="landing-page" class="landing">
-    <!-- Language Switcher -->
-    <div class="language-switcher-landing">
-      <button class="lang-btn lang-btn-en" onclick="setLanguageFromMenu('en')" data-lang="en" title="English">EN</button>
-      <button class="lang-btn lang-btn-zh" onclick="setLanguageFromMenu('zh')" data-lang="zh" title="中文">中</button>
+
+    <!-- ── HERO SECTION ─────────────────────────────── -->
+    <div id="landing-hero" class="landing-hero">
+      <!-- Top bar: language switcher -->
+      <div class="landing-hero-top">
+        <div class="language-switcher-landing">
+          <button class="lang-btn lang-btn-en" onclick="setLanguageFromMenu('en')" data-lang="en" title="English">EN</button>
+          <button class="lang-btn lang-btn-zh" onclick="setLanguageFromMenu('zh')" data-lang="zh" title="中文">中</button>
+        </div>
+      </div>
+
+      <!-- Bottom of hero: logo + name + badge -->
+      <div class="landing-hero-bottom">
+        <img id="logo" class="landing-logo" />
+        <h2 id="restaurantName"></h2>
+        <p id="address"></p>
+        <div id="xish-hero-badge" class="xish-hero-badge" style="display:none">✦ XISH Partner</div>
+      </div>
     </div>
 
-    <img id="logo" class="landing-logo" />
-    <h2 id="restaurantName"></h2>
+    <!-- ── BOTTOM CARD ───────────────────────────────── -->
+    <div id="landing-card" class="landing-card">
 
-    <p id="tableInfo"></p>
-    <p id="address"></p>
-    <p id="phone"></p>
+      <!-- XISH member bar (shown when member is logged in) -->
+      <div id="xish-member-bar" class="xish-member-bar-card" style="display:none"></div>
 
-    <button id="start-order-btn" data-i18n="menu.start-ordering">Start Ordering</button>
-    <button id="check-orders-btn" data-i18n="menu.check-orders">Check Orders</button>
-  </div>
+      <!-- Primary actions: Dine In + Pick Up -->
+      <div class="landing-action-row">
+        <button id="dine-in-btn" class="landing-action-btn">
+          <span class="action-emoji">🍽</span>
+          <span class="action-label-main">堂食</span>
+          <span class="action-label-sub">DINE IN</span>
+        </button>
+        <button id="togo-btn" class="landing-action-btn">
+          <span class="action-emoji">🥡</span>
+          <span class="action-label-main">自提</span>
+          <span class="action-label-sub">PICK UP</span>
+        </button>
+      </div>
+
+      <!-- Transaction Record (secondary) -->
+      <button id="check-orders-btn" class="landing-secondary-btn">
+        <span class="secondary-icon">📋</span>
+        <span data-i18n="menu.check-orders">Transaction Record</span>
+      </button>
+
+      <!-- XISH loyalty section (revealed by JS when xish_enabled) -->
+      <div id="xish-landing-section" class="xish-landing-section" style="display:none">
+        <div class="xish-section-divider">
+          <span class="xish-divider-line"></span>
+          <span class="xish-divider-label">✦ XISH Membership</span>
+          <span class="xish-divider-line"></span>
+        </div>
+        <div class="xish-action-row">
+          <button class="xish-action-btn" id="my-points-btn" onclick="openXishTab('points')">
+            <span class="xish-act-icon">⭐</span>
+            <span class="xish-act-label">My Points</span>
+          </button>
+          <button class="xish-action-btn" id="coupons-btn" onclick="openXishTab('coupons')">
+            <span class="xish-act-icon">🎟</span>
+            <span class="xish-act-label">Coupons</span>
+          </button>
+          <button class="xish-action-btn" id="gift-cards-btn" onclick="openXishTab('gifts')">
+            <span class="xish-act-icon">🎁</span>
+            <span class="xish-act-label">Gift Cards</span>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /.landing-card -->
+
+    <!-- Hidden data elements still written to by JS -->
+    <p id="tableInfo" style="display:none"></p>
+    <p id="phone"     style="display:none"></p>
+
+  </div><!-- /#landing-page -->
 
   <!-- ================= MENU APP (HIDDEN INITIALLY) ================= -->
   <div id="app" style="display:none;">
@@ -114,7 +174,7 @@
 </div><!-- #phone-frame -->
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="/menu.js?v=20260512d" defer></script>
+  <script src="/menu.js?v=20260513a" defer></script>
 
 </body>
 </html>

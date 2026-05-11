@@ -328,4 +328,45 @@ router.get("/xish/members/:memberId/wallet-token", async (req, res) => {
   }
 });
 
+// ─── GET /api/xish/tiers/:restaurantId ───────────────────────────────────────
+// Public — returns tier thresholds so the menu can render a progress bar.
+router.get("/xish/tiers/:restaurantId", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const result = await pool.query(
+      `SELECT tier, points_threshold, discount_percent
+       FROM xish_tier_settings
+       WHERE restaurant_id = $1 AND is_active = true
+       ORDER BY points_threshold ASC`,
+      [restaurantId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[XISH tiers]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── GET /api/xish/gift-catalog/:restaurantId ────────────────────────────────
+// Public — returns active gift rewards catalog for this restaurant.
+router.get("/xish/gift-catalog/:restaurantId", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const result = await pool.query(
+      `SELECT id, item_name, quantity, redemption_start, redemption_end, is_active
+       FROM xish_gift_settings
+       WHERE restaurant_id = $1
+         AND is_active = true
+         AND (redemption_start IS NULL OR redemption_start <= NOW())
+         AND (redemption_end IS NULL OR redemption_end > NOW())
+       ORDER BY id ASC`,
+      [restaurantId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[XISH gift catalog]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

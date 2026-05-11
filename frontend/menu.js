@@ -357,9 +357,8 @@ async function _applySessionToLanding(session, isOrderNow) {
   }
   
   // 🔥 Populate landing page
-  const logoEl = document.getElementById("logo")
-  if (logoEl){
-    // Use session.logo_url if available, fallback to placeholder
+  const logoEl = document.getElementById("logo");
+  if (logoEl) {
     const logoUrl = session.logo_url;
     if (logoUrl) {
       logoEl.src = logoUrl;
@@ -369,26 +368,17 @@ async function _applySessionToLanding(session, isOrderNow) {
     }
   }
 
-  // 🔥 Apply background image with dark overlay (LANDING PAGE ONLY)
-  const landingPage = document.getElementById("landing-page");
-  if (session.background_url) {
-    landingPage.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('${session.background_url}')`;
-    landingPage.style.backgroundSize = "430px 100vh";
-    landingPage.style.backgroundPosition = "center";
-    landingPage.style.backgroundAttachment = "fixed";
-    landingPage.style.backgroundRepeat = "no-repeat";
-    landingPage.classList.remove("no-background");
-  } else {
-    // No background: apply black text class for visibility
-    landingPage.classList.add("no-background");
+  // Apply background image to hero section
+  const landingHero = document.getElementById("landing-hero");
+  if (session.background_url && landingHero) {
+    landingHero.style.backgroundImage = `url('${session.background_url}')`;
+    landingHero.style.backgroundSize = 'cover';
+    landingHero.style.backgroundPosition = 'center';
   }
 
-  // Store cleanup function to reset background when leaving menu
+  // Store cleanup function
   window.resetMenuBackground = function() {
-    if (landingPage) {
-      landingPage.style.backgroundImage = "none";
-      landingPage.style.backgroundColor = "#ffffff";
-    }
+    if (landingHero) landingHero.style.backgroundImage = "";
     document.body.style.backgroundImage = "none";
     document.body.style.backgroundColor = "#ffffff";
   };
@@ -397,51 +387,43 @@ async function _applySessionToLanding(session, isOrderNow) {
   if (nameEl){
     nameEl.textContent = session.restaurant_name;
   }
-  const tableNameEl = document.getElementById("tableInfo")
-  if (tableNameEl){
-    if (isOrderNow) {
-      tableNameEl.textContent = t('menu.to-go-order') || 'To-Go Order';
-    } else {
-      tableNameEl.textContent = `${session.table_name} • ${t('menu.pax-label')} ${session.pax != null ? session.pax : "-"}`;
-    }
-  }
-  const addressEl = document.getElementById("address")
-  if (addressEl){
-    addressEl.textContent = session.address || "";
-  }
-  const phoneEl = document.getElementById("phone")
-  if (phoneEl){
-    phoneEl.textContent = session.phone || "";
-  }
+  const nameEl = document.getElementById("restaurantName");
+  if (nameEl) nameEl.textContent = session.restaurant_name;
 
-  // buttons
+  const addressEl = document.getElementById("address");
+  if (addressEl) addressEl.textContent = session.address || "";
+
+  // Wire Dine In and Pick Up buttons
+  const dineInBtn = document.getElementById("dine-in-btn");
+  const togoBtn   = document.getElementById("togo-btn");
+  const checkBtn  = document.getElementById("check-orders-btn");
+
   if (isOrderNow) {
-    const startBtn = document.getElementById("start-order-btn");
-    if (startBtn) startBtn.textContent = t('menu.start-togo-order') || 'Start To-Go Order';
-    document.getElementById("start-order-btn").onclick = startOrdering;
-    // Hide "check orders" for order-now — not applicable until order placed
-    const checkBtn = document.getElementById("check-orders-btn");
-    if (checkBtn) checkBtn.style.display = 'none';
+    if (dineInBtn) dineInBtn.onclick = () => { orderType = 'dine-in';   startOrdering(); };
+    if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
+    if (checkBtn)  checkBtn.style.display = 'none';
   } else {
-    document.getElementById("start-order-btn").onclick = startOrdering;
-    document.getElementById("check-orders-btn").onclick = () => {
-      startOrdering();
-      openOrdersDrawer();
-    };
+    // Table QR — relabel Dine In button as "Order"
+    if (dineInBtn) {
+      const mainLabel = dineInBtn.querySelector('.action-label-main');
+      const subLabel  = dineInBtn.querySelector('.action-label-sub');
+      if (mainLabel) mainLabel.textContent = '點餐';
+      if (subLabel)  subLabel.textContent  = 'ORDER';
+      dineInBtn.onclick = () => { orderType = 'dine-in'; startOrdering(); };
+    }
+    if (togoBtn)  togoBtn.onclick  = () => { orderType = 'takeaway'; startOrdering(); };
+    if (checkBtn) checkBtn.onclick = () => { startOrdering(); openOrdersDrawer(); };
   }
 
   // Show payment result banner if returning from Payment Asia
   const paymentStatus = urlParams.get('payment_status');
   if (paymentStatus) {
     const isSuccess = paymentStatus === 'success';
-    // Clean payment params from URL without reloading
     history.replaceState({}, '', window.location.pathname + window.location.search.replace(/[?&]payment_status=[^&]*/g, '').replace(/^&/, '?'));
-    // Skip landing page — go straight to check orders
     startOrdering().then(async () => {
       await fetchAndApplyPaymentSettings();
       openOrdersDrawer();
       if (isSuccess) {
-        // Start fast confirmation polling — re-check every 2s for up to 30s until completed
         startConfirmationPolling();
       } else {
         showPaymentReturnBanner(false);
@@ -456,11 +438,6 @@ async function _applySessionToLanding(session, isOrderNow) {
   // Phase 5+6: XISH mode detection
   if (session.xish_enabled || (session.feature_flags && session.feature_flags.xish)) {
     await initXishMode(session);
-  }
-
-  // Order-now: inject dine-in / take-away selector on the landing page
-  if (isOrderNow) {
-    injectOrderTypeSelector();
   }
 }
 
@@ -2595,77 +2572,57 @@ async function initXishMode(session) {
   decorateLandingXish(session);
 }
 
-// Order type chosen on landing page: 'takeaway' | 'dine-in'
-let orderType = 'takeaway'; // default for order-now
 
-function injectOrderTypeSelector() {
-  const startBtn = document.getElementById('start-order-btn');
-  if (!startBtn || document.getElementById('order-type-selector')) return;
+// Order type: 'takeaway' | 'dine-in'
+let orderType = 'takeaway';
 
-  const sel = document.createElement('div');
-  sel.id = 'order-type-selector';
-  sel.className = 'order-type-selector';
-  sel.innerHTML = `
-    <div class="order-type-label">Order type</div>
-    <div class="order-type-btns">
-      <button class="order-type-btn active" data-type="takeaway" onclick="setOrderType('takeaway', this)">🥡 Take Away</button>
-      <button class="order-type-btn" data-type="dine-in" onclick="setOrderType('dine-in', this)">🍽 Dine In</button>
-    </div>
-  `;
-  startBtn.parentNode.insertBefore(sel, startBtn);
-}
-
-window.setOrderType = function(type, btn) {
-  orderType = type;
-  document.querySelectorAll('.order-type-btn').forEach(b => b.classList.toggle('active', b === btn));
-};
+// Active XISH panel tab
+let xishActiveTab = 'points';
 
 function decorateLandingXish(session) {
+  // Show XISH hero badge
+  const heroBadge = document.getElementById('xish-hero-badge');
+  if (heroBadge) heroBadge.style.display = 'inline-flex';
 
-  // Inject XISH partner badge above restaurant name
-  const nameEl = document.getElementById('restaurantName');
-  if (nameEl && !document.getElementById('xish-partner-badge')) {
-    const badge = document.createElement('div');
-    badge.id = 'xish-partner-badge';
-    badge.className = 'xish-partner-badge';
-    badge.innerHTML = '<span class="xish-x">✦</span> XISH Partner';
-    nameEl.parentNode.insertBefore(badge, nameEl);
+  // Show the XISH loyalty section
+  const xishSection = document.getElementById('xish-landing-section');
+  if (xishSection) xishSection.style.display = 'flex';
+
+  // Show / update member bar in the card
+  const memberBarEl = document.getElementById('xish-member-bar');
+  if (memberBarEl) {
+    if (xishMember) {
+      const tierEmoji = { platinum: '💫', gold: '🌟', silver: '🤍', basic: '⭐' }[xishMember.tier] || '⭐';
+      const tierLabel = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
+      const activeCoupons = xishMember.active_coupons || 0;
+      memberBarEl.innerHTML = `
+        <div class="xish-mbc-left">
+          <span class="xish-mbc-tier">${tierEmoji} ${tierLabel}</span>
+          <span class="xish-mbc-name">${escXish(xishMember.name || 'Member')}</span>
+          <span class="xish-mbc-sub">${escXish(xishMember.xish_id || '')}</span>
+        </div>
+        <div class="xish-mbc-right">
+          <div class="xish-mbc-pts">${(xishMember.points_balance || 0).toLocaleString()}</div>
+          <div class="xish-mbc-pts-label">POINTS</div>
+        </div>
+      `;
+      memberBarEl.style.display = 'flex';
+      memberBarEl.onclick = () => openXishTab('points');
+
+      // Attach coupon count badge to Coupons button
+      if (activeCoupons > 0) {
+        const couponsBtn = document.getElementById('coupons-btn');
+        if (couponsBtn && !couponsBtn.querySelector('.xish-btn-badge')) {
+          const pip = document.createElement('span');
+          pip.className = 'xish-btn-badge';
+          pip.textContent = activeCoupons;
+          couponsBtn.appendChild(pip);
+        }
+      }
+    }
   }
 
-  // Show member status bar if logged in
-  if (xishMember && !document.getElementById('xish-member-bar')) {
-    const tierEmoji = { platinum: '💫', gold: '🌟', silver: '🤍', basic: '⭐' }[xishMember.tier] || '⭐';
-    const bar = document.createElement('div');
-    bar.id = 'xish-member-bar';
-    bar.className = 'xish-member-bar';
-    const couponsBadge = (xishMember.active_coupons > 0)
-      ? `<span class="xish-coupons-pip">${xishMember.active_coupons} reward${xishMember.active_coupons > 1 ? 's' : ''}</span>`
-      : '';
-    bar.innerHTML = `
-      <div class="xish-member-bar-info">
-        <span class="xish-tier-pip ${xishMember.tier}">${tierEmoji} ${(xishMember.tier||'basic').charAt(0).toUpperCase()+(xishMember.tier||'basic').slice(1)}</span>
-        <span class="xish-member-name">${escXish(xishMember.name || 'Member')}</span>
-        ${couponsBadge}
-      </div>
-      <div class="xish-member-bar-pts">${(xishMember.points_balance || 0).toLocaleString()} pts</div>
-    `;
-    bar.onclick = window.openXishPanel;
-    const startBtn = document.getElementById('start-order-btn');
-    if (startBtn) startBtn.parentNode.insertBefore(bar, startBtn);
-  }
-
-  // Add XISH Rewards button (third button after "Check Orders")
-  const checkOrdersBtn = document.getElementById('check-orders-btn');
-  if (checkOrdersBtn && !document.getElementById('xish-rewards-btn')) {
-    const xishBtn = document.createElement('button');
-    xishBtn.id = 'xish-rewards-btn';
-    xishBtn.className = 'xish-rewards-btn';
-    xishBtn.innerHTML = '✦ XISH Rewards';
-    xishBtn.onclick = window.openXishPanel;
-    checkOrdersBtn.parentNode.insertBefore(xishBtn, checkOrdersBtn.nextSibling);
-  }
-
-  // Inject XISH panel into DOM
+  // Inject XISH panel into DOM (hidden)
   if (!document.getElementById('xish-panel-overlay')) {
     injectXishPanel();
   }
@@ -2680,22 +2637,57 @@ function injectXishPanel() {
   overlay.innerHTML = `
     <div id="xish-panel" class="xish-panel">
       <div class="xish-panel-header">
-        <div class="xish-panel-logo"><span class="xish-x">X</span>ISH Loyalty</div>
+        <div class="xish-panel-logo"><span class="xish-x">✦</span> XISH Loyalty</div>
         <button class="xish-panel-close" onclick="closeXishPanel()">✕</button>
+      </div>
+      <div class="xish-panel-tabs" id="xish-panel-tabs">
+        <button class="xish-tab-btn active" data-tab="points" onclick="switchXishTab('points')">⭐ Points</button>
+        <button class="xish-tab-btn" data-tab="coupons" onclick="switchXishTab('coupons')">🎟 Coupons</button>
+        <button class="xish-tab-btn" data-tab="gifts" onclick="switchXishTab('gifts')">🎁 Gifts</button>
       </div>
       <div class="xish-panel-body" id="xish-panel-body">
         <div class="xish-loading-text">Loading…</div>
+      </div>
+      <div class="xish-panel-footer" id="xish-panel-footer" style="display:none">
+        <button class="xish-btn-outline" onclick="xishLogout()">Sign Out</button>
       </div>
     </div>
   `;
   frame.appendChild(overlay);
 }
 
-window.openXishPanel = async function () {
-  const overlay = document.getElementById('xish-panel-overlay');
-  if (!overlay) { injectXishPanel(); }
+window.openXishTab = async function (tab) {
+  xishActiveTab = tab || 'points';
+  if (!xishMember) {
+    if (!document.getElementById('xish-panel-overlay')) injectXishPanel();
+    document.getElementById('xish-panel-overlay').style.display = 'flex';
+    const tabs = document.getElementById('xish-panel-tabs');
+    if (tabs) tabs.style.display = 'none';
+    const footer = document.getElementById('xish-panel-footer');
+    if (footer) footer.style.display = 'none';
+    await renderXishGuestPanel();
+    return;
+  }
+  if (!document.getElementById('xish-panel-overlay')) injectXishPanel();
+  const tabs = document.getElementById('xish-panel-tabs');
+  if (tabs) tabs.style.display = 'flex';
   document.getElementById('xish-panel-overlay').style.display = 'flex';
-  await renderXishPanel();
+  document.querySelectorAll('.xish-tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === xishActiveTab);
+  });
+  await renderXishTabContent(xishActiveTab);
+};
+
+window.openXishPanel = async function () {
+  await window.openXishTab(xishActiveTab);
+};
+
+window.switchXishTab = async function (tab) {
+  xishActiveTab = tab;
+  document.querySelectorAll('.xish-tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  await renderXishTabContent(tab);
 };
 
 window.closeXishPanel = function () {
@@ -2703,103 +2695,215 @@ window.closeXishPanel = function () {
   if (overlay) overlay.style.display = 'none';
 };
 
-async function renderXishPanel() {
+async function renderXishGuestPanel() {
   const body = document.getElementById('xish-panel-body');
   if (!body) return;
-
-  if (!xishMember) {
-    body.innerHTML = `
-      <div class="xish-panel-guest">
-        <div class="xish-join-hero">
-          <div class="xish-join-icon">✦</div>
-          <div class="xish-join-title">Member Rewards</div>
-          <div class="xish-join-sub">Join XISH to earn points,<br/>unlock tier discounts &amp; free gifts</div>
-          <a href="/xish" target="_blank" class="xish-btn-gold xish-join-cta" style="margin-top:18px;display:block;text-align:center;padding:12px;border-radius:8px;font-weight:600;text-decoration:none;">Learn more about XISH</a>
-        </div>
-        <div class="xish-blurred-section">
-          <div class="xish-section-title">🎁 Your Rewards</div>
-          <div class="xish-blur-wrap">
-            <div class="xish-blur-items">
-              <div class="xish-blur-item"></div>
-              <div class="xish-blur-item"></div>
-              <div class="xish-blur-item"></div>
-            </div>
-            <div class="xish-blur-overlay">Log in to unlock rewards</div>
+  const joinUrl = `/xish?restaurant_id=${restaurantId || ''}`;
+  body.innerHTML = `
+    <div class="xish-panel-guest">
+      <div class="xish-join-hero">
+        <div class="xish-join-icon">✦</div>
+        <div class="xish-join-title">XISH Member Rewards</div>
+        <div class="xish-join-sub">Join to earn points on every order,<br/>unlock tier discounts &amp; free gifts</div>
+        <a href="${joinUrl}" target="_blank" class="xish-btn-gold" style="margin-top:18px">Add XISH Card to Wallet</a>
+      </div>
+      <div class="xish-blurred-section" style="margin-top:20px">
+        <div class="xish-section-title">🎁 Member Rewards</div>
+        <div class="xish-blur-wrap">
+          <div class="xish-blur-items">
+            <div class="xish-blur-item"></div>
+            <div class="xish-blur-item"></div>
+            <div class="xish-blur-item"></div>
           </div>
+          <div class="xish-blur-overlay">Log in to unlock rewards</div>
         </div>
       </div>
-    `;
-    return;
-  }
+    </div>
+  `;
+}
 
-  // Member logged in
+let _xishMemberDetail = null;
+
+async function getXishMemberDetail() {
+  if (_xishMemberDetail) return _xishMemberDetail;
+  try {
+    const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
+      headers: xishToken ? { 'Authorization': 'Bearer ' + xishToken } : {},
+    });
+    if (!r.ok) return null;
+    _xishMemberDetail = await r.json();
+    return _xishMemberDetail;
+  } catch { return null; }
+}
+
+async function renderXishTabContent(tab) {
+  const body = document.getElementById('xish-panel-body');
+  const footer = document.getElementById('xish-panel-footer');
+  if (!body) return;
+  body.innerHTML = '<div class="xish-loading-text">Loading…</div>';
+  if (footer) footer.style.display = 'none';
+  if (tab === 'points') {
+    await renderXishPointsTab(body);
+    if (footer) footer.style.display = 'block';
+  } else if (tab === 'coupons') {
+    await renderXishCouponsTab(body);
+  } else if (tab === 'gifts') {
+    await renderXishGiftsTab(body);
+  }
+}
+
+async function renderXishPointsTab(body) {
   const tierEmoji = { platinum: '💫', gold: '🌟', silver: '🤍', basic: '⭐' }[xishMember.tier] || '⭐';
   const tierLabel = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
   const discountHtml = (xishMember.discount_percent > 0)
-    ? `<div class="xish-discount-active">${xishMember.discount_percent}% member discount applied to your order ✓</div>`
+    ? `<div class="xish-discount-active">${xishMember.discount_percent}% member discount active ✓</div>`
     : '';
-
   body.innerHTML = `
     <div class="xish-member-hero">
       <div class="xish-tier-badge-large ${xishMember.tier}">${tierEmoji} ${tierLabel}</div>
-      <div class="xish-member-greeting">Welcome, ${escXish(xishMember.name || 'Member')}</div>
+      <div class="xish-member-greeting">${escXish(xishMember.name || 'Member')}</div>
       <div class="xish-points-row">
         <div class="xish-pts-label">POINTS BALANCE</div>
         <div class="xish-pts-value">${(xishMember.points_balance || 0).toLocaleString()}</div>
       </div>
       ${discountHtml}
       <div class="xish-xish-id">ID: ${escXish(xishMember.xish_id || '—')}</div>
+      <div class="xish-progress-wrap" id="xish-progress-wrap">
+        <div class="xish-progress-label">
+          <span>Progress to next tier</span><span id="xish-progress-text">—</span>
+        </div>
+        <div class="xish-progress-bar-bg">
+          <div class="xish-progress-bar-fill" id="xish-progress-fill" style="width:0%"></div>
+        </div>
+      </div>
     </div>
     <div class="xish-panel-section">
-      <div class="xish-section-title">🎁 Your Rewards</div>
-      <div id="xish-rewards-list" class="xish-loading-text">Loading…</div>
-    </div>
-    <div class="xish-panel-footer">
-      <button class="xish-btn-outline" onclick="xishLogout()">Sign Out</button>
+      <div class="xish-section-title">📋 Recent Points History</div>
+      <div id="xish-history-list" class="xish-loading-text">Loading history…</div>
     </div>
   `;
+  const [detail, tiersRes] = await Promise.all([
+    getXishMemberDetail(),
+    fetch(`${API_BASE}/xish/tiers/${xishMember.restaurant_id || restaurantId}`).then(r => r.ok ? r.json() : []).catch(() => []),
+  ]);
+  const progressFill = document.getElementById('xish-progress-fill');
+  const progressText = document.getElementById('xish-progress-text');
+  if (tiersRes && tiersRes.length > 0 && progressFill && progressText) {
+    const pts = xishMember.points_balance || 0;
+    const sorted = tiersRes.sort((a, b) => a.points_threshold - b.points_threshold);
+    const nextTier = sorted.find(t => t.points_threshold > pts);
+    const currentTierData = sorted.filter(t => t.points_threshold <= pts).pop();
+    if (nextTier) {
+      const base = currentTierData ? currentTierData.points_threshold : 0;
+      const pct = Math.min(100, ((pts - base) / (nextTier.points_threshold - base)) * 100);
+      progressFill.style.width = pct.toFixed(1) + '%';
+      progressText.textContent = `${(nextTier.points_threshold - pts).toLocaleString()} pts to ${nextTier.tier.charAt(0).toUpperCase() + nextTier.tier.slice(1)}`;
+    } else {
+      progressFill.style.width = '100%';
+      progressText.textContent = 'Max tier reached 🏆';
+    }
+  }
+  const historyEl = document.getElementById('xish-history-list');
+  if (!historyEl) return;
+  const history = (detail && detail.point_history) ? detail.point_history.slice(0, 20) : [];
+  if (!history.length) {
+    historyEl.innerHTML = '<div class="xish-empty-rewards">No transactions yet. Start ordering to earn points!</div>';
+    return;
+  }
+  historyEl.innerHTML = history.map(row => {
+    const pts = row.points_delta || row.points_awarded || 0;
+    const isPos = pts >= 0;
+    const date = new Date(row.created_at).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' });
+    return `
+      <div class="xish-point-row">
+        <div>
+          <div class="xish-point-desc">${escXish(row.restaurant_name || 'Order')}</div>
+          <div class="xish-point-meta">${date}</div>
+        </div>
+        <div class="xish-point-val ${isPos ? 'positive' : 'negative'}">${isPos ? '+' : ''}${pts}</div>
+      </div>`;
+  }).join('');
+}
 
-  // Load member rewards
+async function renderXishCouponsTab(body) {
+  const detail = await getXishMemberDetail();
+  const allCoupons = detail ? (detail.gift_coupons || []) : [];
+  const active = allCoupons.filter(c => c.qty_remaining > 0);
+  const used   = allCoupons.filter(c => c.qty_remaining <= 0);
+  if (!allCoupons.length) {
+    body.innerHTML = `
+      <div class="xish-panel-section">
+        <div class="xish-empty-rewards">🎟 No coupons yet.<br/>Earn points and level up your tier to unlock gift rewards!</div>
+      </div>`;
+    return;
+  }
+  const renderCoupon = (c, faded) => {
+    const expiry = c.valid_until
+      ? `Expires ${new Date(c.valid_until).toLocaleDateString('en-HK', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      : 'No expiry';
+    return `
+      <div class="xish-coupon-card" style="${faded ? 'opacity:0.45' : ''}">
+        <span class="xish-coupon-icon">🎁</span>
+        <div>
+          <div class="xish-coupon-name">${escXish(c.item_reward || c.item_name || 'Gift Reward')}</div>
+          <div class="xish-coupon-meta">Qty remaining: ${c.qty_remaining}</div>
+          <div class="xish-coupon-expiry">${expiry}</div>
+        </div>
+      </div>`;
+  };
+  body.innerHTML = `
+    <div class="xish-panel-section">
+      <div class="xish-section-title">🎟 Active Coupons (${active.length})</div>
+      ${active.length ? active.map(c => renderCoupon(c, false)).join('') : '<div class="xish-empty-rewards">No active coupons</div>'}
+    </div>
+    ${used.length ? `
+    <div class="xish-panel-section">
+      <div class="xish-section-title">Used / Expired</div>
+      ${used.map(c => renderCoupon(c, true)).join('')}
+    </div>` : ''}
+  `;
+}
+
+async function renderXishGiftsTab(body) {
   try {
-    const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
-      headers: xishToken ? { 'Authorization': 'Bearer ' + xishToken } : {},
-    });
-    const data = await r.json();
-    const list = document.getElementById('xish-rewards-list');
-    if (!list) return;
-
-    const activeCoupons = (data.gift_coupons || []).filter(c => c.qty_remaining > 0);
-    const cards = (data.loyalty_cards || []).filter(c => c.is_active);
-
-    if (!activeCoupons.length && !cards.length) {
-      list.innerHTML = `<div class="xish-empty-rewards">No active rewards yet — keep dining to earn points and unlock gifts!</div>`;
+    const targetRestaurantId = (xishMember && xishMember.restaurant_id) || restaurantId;
+    const [catalogRes, detail] = await Promise.all([
+      fetch(`${API_BASE}/xish/gift-catalog/${targetRestaurantId}`).then(r => r.ok ? r.json() : []).catch(() => []),
+      getXishMemberDetail(),
+    ]);
+    const ownedIds = new Set(((detail && detail.gift_coupons) || []).map(c => c.gift_setting_id).filter(Boolean));
+    if (!catalogRes.length) {
+      body.innerHTML = `
+        <div class="xish-panel-section">
+          <div class="xish-empty-rewards">🎁 No gift rewards available yet.<br/>Check back after earning more points!</div>
+        </div>`;
       return;
     }
-
-    list.innerHTML = [
-      ...cards.map(c => `
-        <div class="xish-reward-item">
-          <span class="xish-reward-icon">💳</span>
-          <div>
-            <div class="xish-reward-name">Loyalty Card</div>
-            <div class="xish-reward-meta">Balance: $${((c.balance_cents || 0) / 100).toFixed(2)}</div>
-          </div>
-        </div>
-      `),
-      ...activeCoupons.map(c => `
-        <div class="xish-reward-item">
-          <span class="xish-reward-icon">🎁</span>
-          <div>
-            <div class="xish-reward-name">${escXish(c.item_reward || 'Gift Reward')}</div>
-            <div class="xish-reward-meta">Qty: ${c.qty_remaining}${c.valid_until ? ' · Expires ' + new Date(c.valid_until).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' }) : ''}</div>
-          </div>
-        </div>
-      `),
-    ].join('');
-  } catch (e) {
-    const list = document.getElementById('xish-rewards-list');
-    if (list) list.innerHTML = `<div class="xish-empty-rewards">Could not load rewards</div>`;
+    body.innerHTML = `
+      <div class="xish-panel-section">
+        <div class="xish-section-title">🎁 Available Gifts</div>
+        ${catalogRes.map(g => {
+          const expires = g.redemption_end
+            ? `Valid until ${new Date(g.redemption_end).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' })}`
+            : 'Always available';
+          const owned = ownedIds.has(g.id);
+          return `
+            <div class="xish-gift-card">
+              <span class="xish-gift-icon">${owned ? '✅' : '🎁'}</span>
+              <div>
+                <div class="xish-gift-name">${escXish(g.item_name)}</div>
+                <div class="xish-gift-meta">${expires}${owned ? ' · In your wallet' : ''}</div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  } catch {
+    body.innerHTML = '<div class="xish-loading-text">Could not load gift catalog</div>';
   }
+}
+
+async function renderXishPanel() {
+  await renderXishTabContent(xishActiveTab);
 }
 
 window.xishLogout = function () {
@@ -2807,12 +2911,13 @@ window.xishLogout = function () {
   if (restaurantId) localStorage.removeItem('xish_pass_' + restaurantId);
   xishMember = null;
   xishToken  = null;
+  _xishMemberDetail = null;
   window.closeXishPanel();
-  // Re-render landing page badge
   const bar = document.getElementById('xish-member-bar');
-  if (bar) bar.remove();
+  if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+  const pip = document.querySelector('#coupons-btn .xish-btn-badge');
+  if (pip) pip.remove();
 };
-
 function escXish(str) {
   if (!str) return '';
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
