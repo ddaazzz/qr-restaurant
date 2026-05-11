@@ -746,11 +746,8 @@ router.post("/xish/join", async (req, res) => {
       }];
     }
 
-    if (!certExists()) {
-      return res.status(503).json({ error: "Wallet pass signing not configured on server" });
-    }
-
-    // Return the download URL — client navigates to it in the same tab so iOS shows the Wallet sheet
+    // Return the download URL — client navigates to it in the same tab so iOS shows the Wallet sheet.
+    // The actual pass signing happens at /api/xish/wallet/download/:memberId, not here.
     const downloadUrl = `${baseUrl}/api/xish/wallet/download/${memberId}`;
     return res.json({ success: true, member_id: memberId, xish_id: xishId, download_url: downloadUrl });
   } catch (err) {
