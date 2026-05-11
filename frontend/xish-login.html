@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XISH — Merchant Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --bg-2: #0e0e18;
+      --gold: #C9A84C;
+      --gold-dark: #9E7828;
+      --text: #F0F0F8;
+      --text-mid: #A0A0B0;
+      --text-dim: #58586A;
+      --border: rgba(201,168,76,0.18);
+      --border-dim: rgba(255,255,255,0.07);
+      --red: #F87171;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(201,168,76,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(201,168,76,0.05) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, transparent 100%);
+      pointer-events: none;
+    }
+    .login-card {
+      position: relative;
+      background: var(--bg-2);
+      border: 1px solid var(--border-dim);
+      border-radius: 20px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 60px rgba(201,168,76,0.06);
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .logo-text {
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+    }
+    .logo-x   { color: var(--gold); font-style: italic; }
+    .logo-ish { color: var(--text); }
+    .logo-sub {
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .form-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .form-sub {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 28px;
+    }
+    .field { margin-bottom: 16px; }
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 7px;
+    }
+    input {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border-dim);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--gold); }
+    input::placeholder { color: var(--text-dim); }
+    .btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #0a0a0a;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.03em;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn-submit:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error-msg {
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.2);
+      color: var(--red);
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .back-link {
+      display: block;
+      text-align: center;
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+    .back-link a { color: var(--gold); text-decoration: none; }
+    .back-link a:hover { text-decoration: underline; }
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border-dim);
+      margin: 28px 0;
+    }
+    .chuio-link {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .chuio-link a { color: var(--text-mid); transition: color 0.2s; }
+    .chuio-link a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="logo">
+    <span class="logo-text"><span class="logo-x">X</span><span class="logo-ish">ISH</span></span>
+  </div>
+  <div class="logo-sub">MERCHANT PORTAL</div>
+
+  <div class="form-title">Sign in</div>
+  <div class="form-sub">Access your XISH loyalty dashboard</div>
+
+  <div class="error-msg" id="error-msg"></div>
+
+  <form id="login-form" onsubmit="handleLogin(event)">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="admin@restaurant.com" required autocomplete="username" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password" />
+    </div>
+    <button type="submit" class="btn-submit" id="submit-btn">Sign In</button>
+  </form>
+
+  <hr class="divider" />
+
+  <div class="chuio-link">
+    Looking for the restaurant portal? <a href="/login.html">Sign in to Chuio</a>
+  </div>
+</div>
+
+<div class="back-link"><a href="/xish">← Back to XISH</a></div>
+
+<script>
+  // Redirect if already logged in with a valid token
+  (function () {
+    const t = localStorage.getItem("token");
+    const r = localStorage.getItem("restaurantId");
+    if (t && r) window.location.replace("/xish/admin");
+  })();
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const btn  = document.getElementById("submit-btn");
+    const err  = document.getElementById("error-msg");
+    const email    = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    btn.disabled = true;
+    btn.textContent = "Signing in…";
+    err.style.display = "none";
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Invalid credentials");
+      }
+
+      // Persist auth
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.role);
+      localStorage.setItem("restaurantId", String(data.restaurantId));
+      if (data.restaurantTimezone) localStorage.setItem("restaurantTimezone", data.restaurantTimezone);
+
+      // Check XISH is enabled for this restaurant before granting access
+      const settingsRes = await fetch("/api/restaurants/" + data.restaurantId + "/settings", {
+        headers: { Authorization: "Bearer " + data.token }
+      });
+      if (settingsRes.ok) {
+        const settings = await settingsRes.json();
+        const xishEnabled = settings.xish_enabled || (settings.feature_flags && settings.feature_flags.xish);
+        if (!xishEnabled && data.role !== "superadmin") {
+          localStorage.removeItem("token");
+          localStorage.removeItem("role");
+          localStorage.removeItem("restaurantId");
+          throw new Error("XISH is not enabled for your restaurant. Please contact your administrator.");
+        }
+      }
+
+      window.location.replace("/xish/admin");
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Sign In";
+    }
+  }
+</script>
+
+</body>
+</html>

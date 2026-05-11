@@ -52,11 +52,26 @@ async function initializeSettings() {
     });
   }
 
+  // Show XISH card if XISH is enabled for this restaurant
+  var xishEnabled = !!(
+    ADMIN_SETTINGS_CACHE.xish_enabled ||
+    (ADMIN_SETTINGS_CACHE.feature_flags && ADMIN_SETTINGS_CACHE.feature_flags.xish)
+  );
+  var xishCard = document.getElementById('settings-card-xish');
+  if (xishCard) xishCard.style.display = xishEnabled ? '' : 'none';
+  // Hide coupons card when XISH is enabled (coupons are managed in XISH dashboard instead)
+  var couponsCard = document.getElementById('settings-card-coupons');
+  if (couponsCard) couponsCard.style.display = xishEnabled ? 'none' : '';
+  // Expose for coupon renderer
+  window._xishEnabled = xishEnabled;
+
   // Load CRM count preview for the settings card
   loadCrmCountPreview();
 
-  // Load SR items count preview for the settings card
-  loadSrCountPreview();
+  // Load SR items count preview (admin-only endpoint — skip for staff)
+  if (IS_ADMIN || IS_SUPERADMIN) {
+    loadSrCountPreview();
+  }
 
   // Attach event listeners only once
   if (!settingsInitialized) {
@@ -242,6 +257,9 @@ async function showSettingsPage(pageName) {
         break;
       case 'crm':
         await loadCrmPage();
+        break;
+      case 'xish':
+        await loadXishSettingsPage();
         break;
     }
   }
@@ -745,7 +763,16 @@ async function loadQRSettingsModal() {
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
     const settings = await res.json();
-    
+
+    // Venue type
+    const venueSelect = document.getElementById('venue-type-select');
+    if (venueSelect) {
+      // Map has_table_service=false → 'counter', otherwise 'restaurant'
+      const vt = settings.has_table_service === false ? 'counter' : 'restaurant';
+      venueSelect.value = vt;
+      updateVenueTypeDesc(vt);
+    }
+
     const qrModeSelect = document.getElementById('qr-mode-select');
     if (qrModeSelect && settings.qr_mode) {
       qrModeSelect.value = settings.qr_mode;
@@ -759,6 +786,37 @@ async function loadQRSettingsModal() {
   } catch (err) {
     console.error("Failed to load QR settings:", err);
   }
+}
+
+async function saveVenueType(value) {
+  const isCounter = value === 'counter';
+  const hasTableService = !isCounter;
+  updateVenueTypeDesc(value);
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ venue_type: value, has_table_service: hasTableService })
+    });
+    if (!res.ok) throw new Error('Failed to save');
+    const updated = await res.json();
+    ADMIN_SETTINGS_CACHE = { ...ADMIN_SETTINGS_CACHE, ...updated };
+    // Apply nav visibility immediately
+    if (typeof applyNavVisibility === 'function') applyNavVisibility(updated.has_table_service !== false);
+  } catch (err) {
+    console.error('Error saving venue type:', err);
+    alert('Failed to save business type.');
+  }
+}
+
+function updateVenueTypeDesc(value) {
+  const desc = document.getElementById('venue-type-desc');
+  if (!desc) return;
+  const descriptions = {
+    restaurant: 'Full table service. Tables, bookings, and To-Go tabs are all available.',
+    counter: 'No table management. Tables and Bookings tabs are hidden. To-Go is the main workflow for counter and self pick-up orders.'
+  };
+  desc.textContent = descriptions[value] || '';
 }
 
 async function saveShowItemStatusSetting(enabled) {
@@ -782,6 +840,11 @@ async function loadCouponsModal() {
     const coupons = await res.json();
     
     const couponsList = document.getElementById('coupons-list');
+
+    // Show XISH sync banner if XISH is enabled
+    var xishBanner = document.getElementById('xish-coupon-sync-banner');
+    if (xishBanner) xishBanner.style.display = window._xishEnabled ? '' : 'none';
+
     if (coupons.length === 0) {
       document.getElementById('no-coupons-msg').style.display = 'block';
       couponsList.innerHTML = '';
@@ -798,11 +861,61 @@ async function loadCouponsModal() {
           coupon.discount_type === 'percentage' ? coupon.discount_value + '%' : '$' + coupon.discount_value + ' off';
         couponElement.querySelector('[data-coupon-edit]').onclick = () => editCoupon(coupon);
         couponElement.querySelector('[data-coupon-delete]').onclick = () => deleteCoupon(coupon.id);
+
+        // Inject XISH sync button if XISH is enabled
+        if (window._xishEnabled) {
+          var actions = couponElement.querySelector('[data-coupon-actions]') ||
+                        couponElement.querySelector('.coupon-actions') ||
+                        couponElement.querySelector('[data-coupon-delete]').parentElement;
+          if (actions) {
+            var syncBtn = document.createElement('button');
+            syncBtn.textContent = '→ XISH';
+            syncBtn.title = 'Sync coupon to XISH loyalty reward';
+            syncBtn.style.cssText = 'margin-left:8px; padding:4px 10px; font-size:11px; font-weight:600; color:#C9A84C; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.35); border-radius:5px; cursor:pointer;';
+            syncBtn.onclick = function() { syncCouponToXish(coupon.id); };
+            actions.appendChild(syncBtn);
+          }
+        }
+
         couponsList.appendChild(couponElement);
       });
     }
   } catch (err) {
     console.error("Failed to load coupons:", err);
+  }
+}
+
+// Sync a Chuio coupon to an XISH gift reward
+async function syncCouponToXish(couponId) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/sync-coupon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coupon_id: couponId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Sync failed');
+    }
+    showAdminToast('Coupon synced to XISH reward ✦', 'success');
+  } catch (err) {
+    console.error('[XISH sync]', err);
+    showAdminToast('Failed to sync: ' + err.message, 'error');
+  }
+}
+
+// Load XISH quick stats for settings card
+async function loadXishSettingsPage() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/analytics/stats?days=30`);
+    if (!res.ok) return;
+    const d = await res.json();
+    var membEl = document.getElementById('xish-quick-members');
+    var rewEl  = document.getElementById('xish-quick-rewards');
+    if (membEl) membEl.textContent = (d.total_members ?? '—').toLocaleString ? (d.total_members ?? '—').toLocaleString() : (d.total_members ?? '—');
+    if (rewEl)  rewEl.textContent  = (d.total_redemptions ?? '—').toLocaleString ? (d.total_redemptions ?? '—').toLocaleString() : (d.total_redemptions ?? '—');
+  } catch (e) {
+    // Non-critical
   }
 }
 

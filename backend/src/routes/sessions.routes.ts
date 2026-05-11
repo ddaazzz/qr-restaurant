@@ -295,7 +295,8 @@ router.get("/sessions/:sessionId", async (req, res) => {
       `SELECT ts.id, ts.pax, ts.restaurant_session_number,
               to_char(ts.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at,
               CASE WHEN ts.ended_at IS NULL THEN NULL ELSE to_char(ts.ended_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS ended_at,
-              ts.payment_method,
+              ts.payment_method, ts.order_type,
+              CASE WHEN ts.pickup_ready_at IS NULL THEN NULL ELSE to_char(ts.pickup_ready_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS pickup_ready_at,
               t.name AS table_name, t.id AS table_id
        FROM table_sessions ts
        LEFT JOIN tables t ON ts.table_id = t.id
@@ -795,6 +796,70 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
 
     await client.query("COMMIT");
 
+    // Fire-and-forget: XISH point sync if this restaurant has XISH enabled
+    pool.query(
+      `SELECT r.xish_enabled, ts.total_amount_cents, ts.customer_phone, ts.restaurant_id
+       FROM table_sessions ts
+       JOIN restaurants r ON r.id = ts.restaurant_id
+       WHERE ts.id = $1`,
+      [sessionId]
+    ).then(async (xishCheck) => {
+      const xr = xishCheck.rows[0];
+      if (xr?.xish_enabled && xr.total_amount_cents > 0) {
+        try {
+          await pool.query(
+            `SELECT * FROM (
+               SELECT m.id AS member_id
+               FROM crm_customers c
+               JOIN xish_members m ON m.crm_customer_id = c.id
+               WHERE c.restaurant_id = $1
+                 AND c.phone IS NOT NULL
+                 AND c.phone = $2
+               LIMIT 1
+             ) sub`,
+            [xr.restaurant_id, xr.customer_phone || ""]
+          ).then(async (memberCheck) => {
+            if (memberCheck.rows[0]) {
+              const memberId = memberCheck.rows[0].member_id;
+              const pointsToAward = Math.floor(xr.total_amount_cents / 1000);
+              if (pointsToAward > 0) {
+                await pool.query(
+                  `INSERT INTO xish_point_transactions (member_id, restaurant_id, session_id, points_delta, reason)
+                   VALUES ($1, $2, $3, $4, 'purchase')`,
+                  [memberId, xr.restaurant_id, sessionId, pointsToAward]
+                );
+                await pool.query(
+                  `UPDATE xish_members
+                   SET points_balance = points_balance + $2,
+                       tier = CASE
+                         WHEN points_balance + $2 >= 10000 THEN 'platinum'
+                         WHEN points_balance + $2 >= 5000  THEN 'gold'
+                         WHEN points_balance + $2 >= 2000  THEN 'silver'
+                         ELSE 'basic'
+                       END,
+                       updated_at = NOW()
+                   WHERE id = $1`,
+                  [memberId, pointsToAward]
+                );
+                await pool.query(
+                  `UPDATE crm_customers c
+                   SET xish_member_status = m.tier,
+                       is_previous_diner  = true,
+                       xish_discount_usage_count = xish_discount_usage_count + 1,
+                       updated_at = NOW()
+                   FROM xish_members m
+                   WHERE m.id = $1 AND m.crm_customer_id = c.id`,
+                  [memberId]
+                );
+              }
+            }
+          });
+        } catch (xishErr: any) {
+          console.warn("[XISH] point sync failed silently:", xishErr.message);
+        }
+      }
+    }).catch(() => {});
+
     // Fire-and-forget: upsert CRM customer and refresh their stats from this session
     pool.query(
       `SELECT customer_name, customer_phone, customer_email, restaurant_id
@@ -1066,6 +1131,30 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
     res.status(500).json({ error: "Failed to create to-go order", details: err instanceof Error ? err.message : String(err) });
   } finally {
     client.release();
+  }
+});
+
+// POST /restaurants/:restaurantId/orders/:orderId/ready
+// Marks a to-go order as ready for pickup (sets pickup_ready_at on session)
+router.post("/restaurants/:restaurantId/orders/:orderId/ready", async (req, res) => {
+  const { restaurantId, orderId } = req.params;
+  try {
+    const orderRes = await pool.query(
+      "SELECT session_id FROM orders WHERE id = $1 AND restaurant_id = $2",
+      [orderId, restaurantId]
+    );
+    if (!orderRes.rows.length) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+    const sessionId = orderRes.rows[0].session_id;
+    await pool.query(
+      "UPDATE table_sessions SET pickup_ready_at = NOW() AT TIME ZONE 'UTC' WHERE id = $1",
+      [sessionId]
+    );
+    res.json({ success: true, session_id: sessionId });
+  } catch (err) {
+    console.error("Mark order ready error:", err);
+    res.status(500).json({ error: "Failed to mark order as ready" });
   }
 });
 

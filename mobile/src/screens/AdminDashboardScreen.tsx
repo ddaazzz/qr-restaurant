@@ -26,11 +26,12 @@ import { OrdersTab } from './admin/OrdersTab';
 import { SettingsTab } from './admin/SettingsTab';
 import { BookingsTab, BookingsTabRef } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
+import { ToGoTab } from './admin/ToGoTab';
 import { API_URL, apiClient } from '../services/apiClient';
 import { useSubscription, type PremiumFeatureKey } from '../contexts/SubscriptionContext';
 import { PremiumGateModal } from '../components/PremiumGateModal';
 
-type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
+type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings' | 'togo';
 
 // Map access_rights IDs to tab names
 const ACCESS_RIGHTS_TAB_MAP: Record<number, TabType> = {
@@ -130,7 +131,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
   // Compute visible tabs based on role and access_rights
   const visibleTabs = useMemo((): TabType[] => {
-    const allTabs: TabType[] = ['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'];
+    const allTabs: TabType[] = ['tables', 'orders', 'togo', 'menu', 'staff', 'bookings', 'reports', 'settings'];
     
     // Admin and superadmin always see all tabs
     if (!user || user.role === 'admin' || user.role === 'superadmin') {
@@ -317,6 +318,8 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         return <BookingsTab ref={bookingsTabRef} restaurantId={user.restaurantId} searchQuery={searchQuery} />;
       case 'reports':
         return <ReportsTab restaurantId={user.restaurantId} />;
+      case 'togo':
+        return <ToGoTab restaurantId={user.restaurantId} />;
       case 'settings':
         return <SettingsTab restaurantId={user.restaurantId} navigation={navigation} />;
       default:
@@ -328,6 +331,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     const names: Record<TabType, string> = {
       'tables': t('admin.tables'),
       'orders': t('admin.orders'),
+      'togo': 'Pick-up Orders',
       'menu': t('admin.menu'),
       'staff': t('admin.staff'),
       'bookings': t('admin.bookings'),
@@ -341,6 +345,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     const placeholders: Record<TabType, string> = {
       'tables': 'Search table number...',
       'orders': 'Search food item...',
+      'togo': 'Search order...',
       'menu': 'Search food item...',
       'staff': 'Search staff name...',
       'bookings': 'Search name, phone, email...',
@@ -350,7 +355,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     return placeholders[activeTab];
   };
 
-  const showSearchBar = activeTab !== 'reports' && activeTab !== 'settings';
+  const showSearchBar = activeTab !== 'reports' && activeTab !== 'settings' && activeTab !== 'togo';
 
   return (
     <View style={styles.rootContainer}>
@@ -567,6 +572,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                   const tabConfig: Record<TabType, { label: string; icon: string }> = {
                     'tables': { label: t('admin.tables'), icon: 'grid' },
                     'orders': { label: t('admin.orders'), icon: 'receipt' },
+                    'togo': { label: 'Pick-up', icon: 'bag-handle' },
                     'menu': { label: t('admin.menu'), icon: 'restaurant' },
                     'staff': { label: t('admin.staff'), icon: 'people' },
                     'bookings': { label: t('admin.bookings'), icon: 'calendar' },

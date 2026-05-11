@@ -33,12 +33,6 @@
       <p id="qr-mode-preview" data-i18n="admin.configure-qr-modes">Configure QR modes</p>
     </div>
 
-    <!-- Coupons Card -->
-    <div class="settings-card" onclick="showSettingsPage('coupons')">
-      <h3 data-i18n="admin.coupons">Coupons</h3>
-      <p data-i18n="admin.manage-coupons">Manage coupons</p>
-    </div>
-
     <!-- Booking Settings Card -->
     <div class="settings-card" onclick="showSettingsPage('booking-settings')">
       <h3 data-i18n="admin.booking-settings">Booking Settings</h3>
@@ -79,6 +73,18 @@
     <div class="settings-card" onclick="showSettingsPage('crm')">
       <h3 data-i18n="admin.crm">CRM</h3>
       <p id="crm-count-preview" data-i18n="admin.crm-desc">Customer relationships</p>
+    </div>
+
+    <!-- XISH Loyalty Card — shown only when xish_enabled -->
+    <div class="settings-card xish-only" id="settings-card-xish" style="display:none; border: 1px solid rgba(201,168,76,0.4); background: linear-gradient(135deg, rgba(201,168,76,0.06), transparent);" onclick="showSettingsPage('xish')">
+      <h3 style="color:#C9A84C;">✦ XISH Loyalty</h3>
+      <p id="xish-settings-preview">Loyalty rewards & campaigns</p>
+    </div>
+
+    <!-- Coupons Card — hidden when XISH is enabled (managed in XISH dashboard) -->
+    <div class="settings-card" id="settings-card-coupons" onclick="showSettingsPage('coupons')">
+      <h3 data-i18n="admin.coupons">Coupons</h3>
+      <p data-i18n="admin.manage-coupons">Manage coupons</p>
     </div>
 
     <!-- Users & Restaurants Card -->
@@ -311,6 +317,19 @@
     
   </div>
       <div class="settings-page-content">
+
+        <!-- Venue Type -->
+        <div class="form-row" style="margin-bottom: 24px;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Business Type</label>
+            <select id="venue-type-select" onchange="saveVenueType(this.value)" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+              <option value="restaurant">🍽️ Restaurant / Café (Table Service)</option>
+              <option value="counter">🥡 Restaurant / Café (No Table Service / Self Pick-up)</option>
+            </select>
+            <p id="venue-type-desc" style="font-size: 0.85em; color: #666; margin-top: 10px; line-height: 1.5;"></p>
+          </div>
+        </div>
+
         <div style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 0.9em; color: #856404;">
           <strong>Note:</strong> <span data-i18n="admin.qr-mode-warning">QR Code Mode can only be changed when there are no active sessions. Please close all sessions before making changes.</span>
         </div>
@@ -423,8 +442,48 @@
           <!-- JS renders active coupons here -->
         </div>
         <p id="no-coupons-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;" data-i18n="admin.no-coupons">No active coupons</p>
+
+        <!-- XISH Coupon Sync Banner (shown when XISH enabled) -->
+        <div id="xish-coupon-sync-banner" style="display:none; margin-top: 20px; padding: 14px 16px; background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.3); border-radius: 8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div>
+              <strong style="color:#C9A84C;">✦ XISH Loyalty</strong>
+              <p style="font-size:12px; color:#888; margin-top:3px;">Sync a coupon to XISH to create a redeemable gift reward for loyalty members.</p>
+            </div>
+            <a href="/xish/admin" target="_blank" style="font-size:12px; color:#C9A84C; text-decoration:underline; white-space:nowrap;">Open XISH Dashboard →</a>
+          </div>
+        </div>
       </div>
     </div>
+  </div>
+
+  <!-- HIDDEN: XISH Loyalty Modal -->
+  <div id="page-xish" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('xish')">&#8592; Back</button>
+      <h3 style="color:#C9A84C;">✦ XISH Loyalty</h3>
+      <a href="/xish/admin" target="_blank" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">Open Dashboard ↗</a>
+    </div>
+    <div class="settings-page-content">
+      <p style="color: #888; font-size: 14px; margin-bottom: 20px;">XISH Loyalty is enabled for your restaurant. Use the merchant dashboard to configure tiers, discounts, gift rewards, and push campaigns.</p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+        <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.25); border-radius: 10px; padding: 20px; text-align:center;">
+          <div id="xish-quick-members" style="font-size: 28px; font-weight: 700; color: #C9A84C;">—</div>
+          <div style="font-size: 12px; color: #888; margin-top: 4px;">Enrolled Members</div>
+        </div>
+        <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.25); border-radius: 10px; padding: 20px; text-align:center;">
+          <div id="xish-quick-rewards" style="font-size: 28px; font-weight: 700; color: #C9A84C;">—</div>
+          <div style="font-size: 12px; color: #888; margin-top: 4px;">Rewards Redeemed</div>
+        </div>
+      </div>
+
+      <div style="text-align:center; padding: 20px;">
+        <a href="/xish/admin" target="_blank" class="btn-primary" style="display:inline-block; padding: 12px 28px;">Open Full XISH Dashboard ↗</a>
+      </div>
+    </div>
+  </div>
   </div>
 
   <!-- HIDDEN: Booking Settings Modal -->

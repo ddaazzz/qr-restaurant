@@ -1,21 +1,15 @@
   let activeDrawer = null;
 
-  const API_BASE = (() => {
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-    const protocol = window.location.protocol; // "https:" or "http:"
-    
-    if (isLocalhost) {
-      return `http://${window.location.host}/api`;
-    }
-    // For all other cases (including private IPs), use the same protocol as the page
-    return `${protocol}//${window.location.host}/api`;
-  })();
+  const API_BASE = window.location.origin + '/api';
 
 const urlParams = new URLSearchParams(window.location.search);
 const IS_STAFF = urlParams.get("staff") === "1";
 
-const qrToken = window.location.pathname.split("/").filter(Boolean)[0];
+// Detect order-now (to-go) mode: path is /order-now/{restaurantId}
+const _pathParts = window.location.pathname.split('/').filter(Boolean);
+const IS_ORDER_NOW = _pathParts[0] === 'order-now';
+const ORDER_NOW_RESTAURANT_ID = IS_ORDER_NOW ? (_pathParts[1] || null) : null;
+const qrToken = IS_ORDER_NOW ? null : (_pathParts[0] || null);
 
 let sessionId = null;
 let tableName = null;
@@ -37,6 +31,11 @@ let confirmationPollTimer = null;      // setInterval handle for fast confirmati
 let confirmationPollDeadline = 0;      // epoch ms after which we stop fast polling
 let idlePollTimer = null;              // setInterval handle for slow background polling
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
+
+/* ─── XISH State (Phase 5+6) ─────────────────────────────── */
+let xishEnabled  = false;
+let xishMember   = null;  // { member_id, name, tier, points_balance, xish_id, discount_percent }
+let xishToken    = null;  // Current XISH session JWT
 
 async function fetchAndApplyPaymentSettings() {
   try {
@@ -303,6 +302,21 @@ function setLanguageFromMenu(lang) {
 }
 
 async function initLanding() {
+  if (IS_ORDER_NOW) {
+    if (!ORDER_NOW_RESTAURANT_ID) {
+      alert("Invalid to-go QR code");
+      return;
+    }
+    const res = await fetch(`${API_BASE}/scan/order-now/${ORDER_NOW_RESTAURANT_ID}`, { method: "POST" });
+    if (!res.ok) {
+      alert("Restaurant not found");
+      return;
+    }
+    const session = await res.json();
+    await _applySessionToLanding(session, true);
+    return;
+  }
+
   if (!qrToken) {
     alert("Invalid QR code");
     return;
@@ -310,6 +324,10 @@ async function initLanding() {
 
   const res = await fetch(`${API_BASE}/scan/${qrToken}`, { method: "POST" });
   const session = await res.json();
+  await _applySessionToLanding(session, false);
+}
+
+async function _applySessionToLanding(session, isOrderNow) {
   sessionId = session.session_id;
   restaurantId = session.restaurant_id;
   restaurantName = session.restaurant_name;
@@ -381,7 +399,11 @@ async function initLanding() {
   }
   const tableNameEl = document.getElementById("tableInfo")
   if (tableNameEl){
-    tableNameEl.textContent = `${session.table_name} • ${t('menu.pax-label')} ${session.pax != null ? session.pax : "-"}`;
+    if (isOrderNow) {
+      tableNameEl.textContent = t('menu.to-go-order') || 'To-Go Order';
+    } else {
+      tableNameEl.textContent = `${session.table_name} • ${t('menu.pax-label')} ${session.pax != null ? session.pax : "-"}`;
+    }
   }
   const addressEl = document.getElementById("address")
   if (addressEl){
@@ -393,11 +415,20 @@ async function initLanding() {
   }
 
   // buttons
-  document.getElementById("start-order-btn").onclick = startOrdering;
-  document.getElementById("check-orders-btn").onclick = () => {
-    startOrdering();
-    openOrdersDrawer();
-  };
+  if (isOrderNow) {
+    const startBtn = document.getElementById("start-order-btn");
+    if (startBtn) startBtn.textContent = t('menu.start-togo-order') || 'Start To-Go Order';
+    document.getElementById("start-order-btn").onclick = startOrdering;
+    // Hide "check orders" for order-now — not applicable until order placed
+    const checkBtn = document.getElementById("check-orders-btn");
+    if (checkBtn) checkBtn.style.display = 'none';
+  } else {
+    document.getElementById("start-order-btn").onclick = startOrdering;
+    document.getElementById("check-orders-btn").onclick = () => {
+      startOrdering();
+      openOrdersDrawer();
+    };
+  }
 
   // Show payment result banner if returning from Payment Asia
   const paymentStatus = urlParams.get('payment_status');
@@ -421,6 +452,11 @@ async function initLanding() {
   // Initialize active language button for landing page
   const currentLang = localStorage.getItem('language') || 'zh';
   setLanguage(currentLang);
+
+  // Phase 5+6: XISH mode detection
+  if (session.xish_enabled || (session.feature_flags && session.feature_flags.xish)) {
+    await initXishMode(session);
+  }
 }
 
 async function startOrdering() {
@@ -431,7 +467,9 @@ async function startOrdering() {
   const currentLang = localStorage.getItem('language') || 'zh';
   setLanguage(currentLang);
 
-  document.getElementById("table-indicator").textContent = `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
+  document.getElementById("table-indicator").textContent = IS_ORDER_NOW
+    ? (t('menu.to-go-order') || 'To-Go Order')
+    : `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
 
   // Cart bar click handlers — only attach once
   if (!orderingInitialized) {
@@ -1176,6 +1214,53 @@ async function submitOrder() {
   const hasSr = hasSrCartItems();
   if (!hasFood && !hasSr) return;
 
+  // ─── Order-now / To-Go mode: create a fresh session + order ─────────────
+  if (IS_ORDER_NOW && hasFood) {
+    const customerName = prompt('Your name (for pickup notification):', '') || null;
+    const customerPhone = prompt('Your phone number (optional):', '') || null;
+
+    const payload = {
+      pax: 1,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      items: cart.items.map(i => ({
+        menu_item_id: i.menuItemId,
+        quantity: i.quantity,
+        selected_option_ids: i.variantOptionIds || [],
+        addons: (i.addons || []).map(a => ({
+          addon_id: a.addonId,
+          quantity: a.quantity || 1,
+          selected_option_ids: a.selected_option_ids || []
+        }))
+      }))
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/to-go-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Order failed');
+        return;
+      }
+      const data = await res.json();
+      sessionId = data.session.id;
+      lastOrderId = data.order ? data.order.id : null;
+      cart.items = [];
+      saveCartToStorage();
+      updateCartBar();
+      closeAllDrawers();
+      showToGoConfirmation(customerName, data.order);
+    } catch (err) {
+      alert('Order failed: ' + err.message);
+    }
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (hasFood) {
     const payload = {
       items: cart.items.map(i => ({
@@ -1636,7 +1721,10 @@ function renderCartDrawer() {
   html += '</div>';
 
   const serviceCharge = Math.round(subtotal * serviceChargePct / 100);
-  const total = subtotal + serviceCharge;
+  const xishDiscountCents = (xishMember && xishMember.discount_percent > 0)
+    ? Math.round(subtotal * xishMember.discount_percent / 100)
+    : 0;
+  const total = subtotal + serviceCharge - xishDiscountCents;
 
   html += `
     <div class="cart-footer">
@@ -1649,6 +1737,12 @@ function renderCartDrawer() {
           <div class="summary-line">
             <span>${t('menu.service-charge-label')} (${serviceChargePct}%):</span>
             <span>$${(serviceCharge / 100).toFixed(2)}</span>
+          </div>
+        ` : ''}
+        ${xishDiscountCents > 0 ? `
+          <div class="summary-line" style="color:#c9a84c;font-weight:600">
+            <span>✦ XISH ${xishMember.tier.charAt(0).toUpperCase() + xishMember.tier.slice(1)} (${xishMember.discount_percent}% off):</span>
+            <span>-$${(xishDiscountCents / 100).toFixed(2)}</span>
           </div>
         ` : ''}
         <div class="cart-total">
@@ -1726,10 +1820,13 @@ function updateCartBar() {
     0
   );
   const serviceCharge = Math.round(subtotalCents * serviceChargePct / 100);
-  const totalCents = subtotalCents + serviceCharge;
+  const xishDiscountCents = (xishMember && xishMember.discount_percent > 0)
+    ? Math.round(subtotalCents * xishMember.discount_percent / 100)
+    : 0;
+  const totalCents = subtotalCents + serviceCharge - xishDiscountCents;
 
   countEl.textContent = `${totalCount} item${totalCount !== 1 ? "s" : ""}`;
-  totalEl.textContent = `$${(totalCents / 100).toFixed(2)}`;
+  totalEl.textContent = `$${(totalCents / 100).toFixed(2)}${xishDiscountCents > 0 ? ' ✦' : ''}`;
 
   btn.disabled = totalCount === 0;
   updateCartBadges();
@@ -2328,5 +2425,337 @@ async function submitPaymentInline(orderId, totalCents) {
     alert('Payment failed: ' + err.message);
   }
 }
+
+/* ─── ORDER-NOW / TO-GO CONFIRMATION & PICKUP POLLING ──────── */
+
+function showToGoConfirmation(customerName, order) {
+  // Show a full-screen confirmation on the app div
+  const app = document.getElementById('app');
+  if (!app) return;
+
+  const orderNum = order ? `#${order.restaurant_order_number || order.id}` : '';
+
+  const confirmEl = document.createElement('div');
+  confirmEl.id = 'togo-confirmation';
+  confirmEl.style.cssText = `
+    position:fixed; inset:0; background:#fff; z-index:9000;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; padding:32px; text-align:center;
+  `;
+  confirmEl.innerHTML = `
+    <div style="font-size:56px; margin-bottom:20px;">🥡</div>
+    <div style="font-size:24px; font-weight:800; color:#1f2937; margin-bottom:8px;">Order Placed!</div>
+    ${orderNum ? `<div style="font-size:18px; font-weight:700; color:#667eea; margin-bottom:12px;">${orderNum}</div>` : ''}
+    ${customerName ? `<div style="font-size:15px; color:#6b7280; margin-bottom:6px;">Hi <strong>${escXish(customerName)}</strong> 👋</div>` : ''}
+    <div style="font-size:14px; color:#6b7280; margin-bottom:32px;">We'll prepare your order right away.<br>We'll let you know when it's ready!</div>
+    <div id="togo-status-banner" style="
+      font-size:14px; font-weight:600; color:#d97706;
+      background:#fef3c7; border:1px solid #fde68a;
+      border-radius:8px; padding:10px 20px; margin-bottom:24px;
+    ">⏳ Preparing your order…</div>
+    <button onclick="document.getElementById('togo-confirmation').remove()" style="
+      padding:12px 28px; background:#667eea; color:white;
+      border:none; border-radius:8px; font-size:14px;
+      font-weight:600; cursor:pointer;
+    ">Browse Menu</button>
+  `;
+  document.body.appendChild(confirmEl);
+
+  // Poll for pickup_ready_at
+  if (sessionId) startPickupPolling(sessionId);
+}
+
+let _pickupPollTimer = null;
+
+function startPickupPolling(sid) {
+  if (_pickupPollTimer) clearInterval(_pickupPollTimer);
+  _pickupPollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${sid}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.pickup_ready_at) {
+        clearInterval(_pickupPollTimer);
+        _pickupPollTimer = null;
+        const banner = document.getElementById('togo-status-banner');
+        if (banner) {
+          banner.style.background = '#d1fae5';
+          banner.style.borderColor = '#6ee7b7';
+          banner.style.color = '#065f46';
+          banner.textContent = '✓ Your order is ready for pickup!';
+        }
+        // Try browser notification
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('Your order is ready! 🥡', { body: 'Please collect your order at the counter.' });
+        }
+      }
+    } catch (e) {}
+  }, 10000); // poll every 10s
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   XISH PHASE 5+6 — Customer Menu Integration & Smart QR Auth
+   ═══════════════════════════════════════════════════════════════ */
+
+async function initXishMode(session) {
+  xishEnabled = true;
+
+  // Phase 6: Try auto-login from URL params (wallet_id or token)
+  const walletId    = urlParams.get('wallet_id');
+  const memberToken = urlParams.get('token');
+
+  if (walletId) {
+    try {
+      const r = await fetch(`${API_BASE}/xish/auth/qr-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restaurant_id: restaurantId, table_id: tableUnitId, wallet_id: walletId }),
+      });
+      const loginRes = await r.json();
+      if (loginRes && loginRes.mode === 'member') {
+        xishMember = loginRes.member;
+        xishToken  = loginRes.token;
+        localStorage.setItem('xish_token', loginRes.token);
+      }
+    } catch (e) { console.warn('[XISH] qr-login failed:', e); }
+  } else if (memberToken) {
+    try {
+      const r = await fetch(`${API_BASE}/xish/auth/wallet-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: memberToken, restaurant_id: restaurantId }),
+      });
+      const loginRes = await r.json();
+      if (loginRes && loginRes.mode === 'member') {
+        xishMember = loginRes.member;
+        xishToken  = loginRes.token;
+        localStorage.setItem('xish_token', loginRes.token);
+      }
+    } catch (e) { console.warn('[XISH] wallet-login failed:', e); }
+  }
+
+  // Try existing stored token (persisted across page loads)
+  if (!xishMember) {
+    const storedToken = localStorage.getItem('xish_token');
+    if (storedToken) {
+      try {
+        const r = await fetch(`${API_BASE}/xish/auth/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: storedToken }),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (data.valid && data.member) {
+            xishMember = data.member;
+            xishToken  = storedToken;
+          }
+        } else {
+          localStorage.removeItem('xish_token'); // expired
+        }
+      } catch (e) { /* silent */ }
+    }
+  }
+
+  // Transform the landing page
+  decorateLandingXish(session);
+}
+
+function decorateLandingXish(session) {
+  const landing = document.getElementById('landing-page');
+  if (!landing) return;
+  landing.classList.add('xish-mode');
+
+  // Inject XISH partner badge above restaurant name
+  const nameEl = document.getElementById('restaurantName');
+  if (nameEl && !document.getElementById('xish-partner-badge')) {
+    const badge = document.createElement('div');
+    badge.id = 'xish-partner-badge';
+    badge.className = 'xish-partner-badge';
+    badge.innerHTML = '<span class="xish-x">✦</span> XISH Partner';
+    nameEl.parentNode.insertBefore(badge, nameEl);
+  }
+
+  // Show member status bar if logged in
+  if (xishMember && !document.getElementById('xish-member-bar')) {
+    const tierEmoji = { platinum: '💫', gold: '🌟', silver: '🤍', basic: '⭐' }[xishMember.tier] || '⭐';
+    const bar = document.createElement('div');
+    bar.id = 'xish-member-bar';
+    bar.className = 'xish-member-bar';
+    bar.innerHTML = `
+      <div class="xish-member-bar-info">
+        <span class="xish-tier-pip ${xishMember.tier}">${tierEmoji} ${(xishMember.tier||'basic').charAt(0).toUpperCase()+(xishMember.tier||'basic').slice(1)}</span>
+        <span class="xish-member-name">${escXish(xishMember.name || 'Member')}</span>
+      </div>
+      <div class="xish-member-bar-pts">${(xishMember.points_balance || 0).toLocaleString()} pts</div>
+    `;
+    const startBtn = document.getElementById('start-order-btn');
+    if (startBtn) startBtn.parentNode.insertBefore(bar, startBtn);
+  }
+
+  // Add XISH Rewards button (third button after "Check Orders")
+  const checkOrdersBtn = document.getElementById('check-orders-btn');
+  if (checkOrdersBtn && !document.getElementById('xish-rewards-btn')) {
+    const xishBtn = document.createElement('button');
+    xishBtn.id = 'xish-rewards-btn';
+    xishBtn.className = 'xish-rewards-btn';
+    xishBtn.innerHTML = '✦ XISH Rewards';
+    xishBtn.onclick = window.openXishPanel;
+    checkOrdersBtn.parentNode.insertBefore(xishBtn, checkOrdersBtn.nextSibling);
+  }
+
+  // Inject XISH panel into DOM
+  if (!document.getElementById('xish-panel-overlay')) {
+    injectXishPanel();
+  }
+}
+
+function injectXishPanel() {
+  const frame = document.getElementById('phone-frame') || document.body;
+  const overlay = document.createElement('div');
+  overlay.id = 'xish-panel-overlay';
+  overlay.className = 'xish-panel-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) window.closeXishPanel(); };
+  overlay.innerHTML = `
+    <div id="xish-panel" class="xish-panel">
+      <div class="xish-panel-header">
+        <div class="xish-panel-logo"><span class="xish-x">X</span>ISH Loyalty</div>
+        <button class="xish-panel-close" onclick="closeXishPanel()">✕</button>
+      </div>
+      <div class="xish-panel-body" id="xish-panel-body">
+        <div class="xish-loading-text">Loading…</div>
+      </div>
+    </div>
+  `;
+  frame.appendChild(overlay);
+}
+
+window.openXishPanel = async function () {
+  const overlay = document.getElementById('xish-panel-overlay');
+  if (!overlay) { injectXishPanel(); }
+  document.getElementById('xish-panel-overlay').style.display = 'flex';
+  await renderXishPanel();
+};
+
+window.closeXishPanel = function () {
+  const overlay = document.getElementById('xish-panel-overlay');
+  if (overlay) overlay.style.display = 'none';
+};
+
+async function renderXishPanel() {
+  const body = document.getElementById('xish-panel-body');
+  if (!body) return;
+
+  if (!xishMember) {
+    body.innerHTML = `
+      <div class="xish-panel-guest">
+        <div class="xish-join-hero">
+          <div class="xish-join-icon">✦</div>
+          <div class="xish-join-title">Member Rewards</div>
+          <div class="xish-join-sub">Join XISH to earn points,<br/>unlock tier discounts &amp; free gifts</div>
+          <a href="/xish" target="_blank" class="xish-btn-gold xish-join-cta" style="margin-top:18px;display:block;text-align:center;padding:12px;border-radius:8px;font-weight:600;text-decoration:none;">Learn more about XISH</a>
+        </div>
+        <div class="xish-blurred-section">
+          <div class="xish-section-title">🎁 Your Rewards</div>
+          <div class="xish-blur-wrap">
+            <div class="xish-blur-items">
+              <div class="xish-blur-item"></div>
+              <div class="xish-blur-item"></div>
+              <div class="xish-blur-item"></div>
+            </div>
+            <div class="xish-blur-overlay">Log in to unlock rewards</div>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Member logged in
+  const tierEmoji = { platinum: '💫', gold: '🌟', silver: '🤍', basic: '⭐' }[xishMember.tier] || '⭐';
+  const tierLabel = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
+  const discountHtml = (xishMember.discount_percent > 0)
+    ? `<div class="xish-discount-active">${xishMember.discount_percent}% member discount applied to your order ✓</div>`
+    : '';
+
+  body.innerHTML = `
+    <div class="xish-member-hero">
+      <div class="xish-tier-badge-large ${xishMember.tier}">${tierEmoji} ${tierLabel}</div>
+      <div class="xish-member-greeting">Welcome, ${escXish(xishMember.name || 'Member')}</div>
+      <div class="xish-points-row">
+        <div class="xish-pts-label">POINTS BALANCE</div>
+        <div class="xish-pts-value">${(xishMember.points_balance || 0).toLocaleString()}</div>
+      </div>
+      ${discountHtml}
+      <div class="xish-xish-id">ID: ${escXish(xishMember.xish_id || '—')}</div>
+    </div>
+    <div class="xish-panel-section">
+      <div class="xish-section-title">🎁 Your Rewards</div>
+      <div id="xish-rewards-list" class="xish-loading-text">Loading…</div>
+    </div>
+    <div class="xish-panel-footer">
+      <button class="xish-btn-outline" onclick="xishLogout()">Sign Out</button>
+    </div>
+  `;
+
+  // Load member rewards
+  try {
+    const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
+      headers: xishToken ? { 'Authorization': 'Bearer ' + xishToken } : {},
+    });
+    const data = await r.json();
+    const list = document.getElementById('xish-rewards-list');
+    if (!list) return;
+
+    const activeCoupons = (data.gift_coupons || []).filter(c => c.qty_remaining > 0);
+    const cards = (data.loyalty_cards || []).filter(c => c.is_active);
+
+    if (!activeCoupons.length && !cards.length) {
+      list.innerHTML = `<div class="xish-empty-rewards">No active rewards yet — keep dining to earn points and unlock gifts!</div>`;
+      return;
+    }
+
+    list.innerHTML = [
+      ...cards.map(c => `
+        <div class="xish-reward-item">
+          <span class="xish-reward-icon">💳</span>
+          <div>
+            <div class="xish-reward-name">Loyalty Card</div>
+            <div class="xish-reward-meta">Balance: $${((c.balance_cents || 0) / 100).toFixed(2)}</div>
+          </div>
+        </div>
+      `),
+      ...activeCoupons.map(c => `
+        <div class="xish-reward-item">
+          <span class="xish-reward-icon">🎁</span>
+          <div>
+            <div class="xish-reward-name">${escXish(c.item_reward || 'Gift Reward')}</div>
+            <div class="xish-reward-meta">Qty: ${c.qty_remaining}${c.valid_until ? ' · Expires ' + new Date(c.valid_until).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' }) : ''}</div>
+          </div>
+        </div>
+      `),
+    ].join('');
+  } catch (e) {
+    const list = document.getElementById('xish-rewards-list');
+    if (list) list.innerHTML = `<div class="xish-empty-rewards">Could not load rewards</div>`;
+  }
+}
+
+window.xishLogout = function () {
+  localStorage.removeItem('xish_token');
+  xishMember = null;
+  xishToken  = null;
+  window.closeXishPanel();
+  // Re-render landing page badge
+  const bar = document.getElementById('xish-member-bar');
+  if (bar) bar.remove();
+};
+
+function escXish(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ══════════════════════════════════════════════════════════════ */
 
   initLanding();

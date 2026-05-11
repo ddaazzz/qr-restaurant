@@ -1,14 +1,5 @@
 // ============== STAFF PORTAL API CONFIGURATION ==============
-const API_BASE = (() => {
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  
-  if (isLocalhost) {
-    return `http://${window.location.host}/api`;
-  }
-  // For local IPs and remote: use the same protocol as the page (avoids http→https mismatch)
-  return `${window.location.protocol}//${window.location.host}/api`;
-})();
+const API_BASE = window.location.origin + '/api';
 
 // Reset menu background when on staff page
 if (window.resetMenuBackground) {

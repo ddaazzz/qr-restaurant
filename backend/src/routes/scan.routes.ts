@@ -54,7 +54,7 @@ router.post("/scan/:qrToken", async (req, res) => {
       restaurantResult = await pool.query(
         `SELECT id, name, address, phone, logo_url, background_url, theme_color,
                 service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
-                timezone, language_preference
+                timezone, language_preference, xish_enabled, venue_type, has_table_service
          FROM restaurants WHERE id = $1`,
         [unit.restaurant_id]
       );
@@ -89,13 +89,79 @@ router.post("/scan/:qrToken", async (req, res) => {
       ui_config: mergeUiConfig(restaurant?.ui_config || null),
       ui_mode: restaurant?.ui_mode || "native",
       custom_frontend_url: restaurant?.custom_frontend_url || null,
+      xish_enabled: !!(restaurant?.xish_enabled || (restaurant?.feature_flags as any)?.xish),
       timezone: restaurant?.timezone || "Asia/Hong_Kong",
       language_preference: restaurant?.language_preference || null,
+      venue_type: restaurant?.venue_type || "restaurant",
+      has_table_service: restaurant?.has_table_service !== false,
     });
 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to retrieve table info" });
+  }
+});
+
+/**
+ * @route POST /scan/order-now/:restaurantId
+ * @desc Customer-facing: scan to-go / order-now QR (no table, no seating)
+ */
+router.post("/scan/order-now/:restaurantId", async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+
+    let restaurantResult;
+    try {
+      restaurantResult = await pool.query(
+        `SELECT id, name, address, phone, logo_url, background_url, theme_color,
+                service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
+                timezone, language_preference, xish_enabled, venue_type, has_table_service
+         FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+    } catch (err) {
+      restaurantResult = await pool.query(
+        `SELECT id, name, address, phone, logo_url, background_url, theme_color,
+                service_charge_percent, custom_frontend_url
+         FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+    }
+
+    if (!restaurantResult.rows.length) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    const restaurant = restaurantResult.rows[0];
+
+    res.json({
+      order_type: "to-go",
+      table_unit_id: null,
+      table_id: null,
+      table_name: null,
+      restaurant_id: restaurant.id,
+      restaurant_name: restaurant.name || "",
+      logo_url: restaurant.logo_url || "",
+      background_url: restaurant.background_url || "",
+      theme_color: restaurant.theme_color || "",
+      address: restaurant.address || "",
+      phone: restaurant.phone || "",
+      service_charge_percent: restaurant.service_charge_percent || 0,
+      session_id: null,
+      pax: null,
+      feature_flags: mergeFeatureFlags(restaurant.feature_flags || null),
+      ui_config: mergeUiConfig(restaurant.ui_config || null),
+      ui_mode: restaurant.ui_mode || "native",
+      custom_frontend_url: restaurant.custom_frontend_url || null,
+      xish_enabled: !!(restaurant.xish_enabled || (restaurant.feature_flags as any)?.xish),
+      timezone: restaurant.timezone || "Asia/Hong_Kong",
+      language_preference: restaurant.language_preference || null,
+      venue_type: restaurant.venue_type || "restaurant",
+      has_table_service: restaurant.has_table_service !== false,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to retrieve restaurant info" });
   }
 });
 

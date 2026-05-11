@@ -72,7 +72,7 @@
             <img src="/uploads/website/order.png" alt="orders" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.orders">Orders</span>
           </button>
-          <button class="menu-btn active" data-section="tables" onclick="switchSection('tables')">
+          <button class="menu-btn active" data-section="tables" onclick="switchSection('tables')" id="tables-nav-btn">
             <img src="/uploads/website/table.png" alt="tables" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.tables">Tables</span>
           </button>
@@ -83,6 +83,10 @@
           <button class="menu-btn" data-section="staff" onclick="switchSection('staff')" id="staff-nav-btn">
             <img src="/uploads/website/teamwork.png" alt="staff" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.staff">Staff</span>
+          </button>
+          <button class="menu-btn admin-only" data-section="togo" onclick="switchSection('togo')" id="togo-nav-btn">
+            <img src="/uploads/website/food-delivery-2.png" alt="pick-up" class="icon">
+            <span class="menu-text">Pick-up</span>
           </button>
           <button class="menu-btn" data-section="bookings" onclick="switchSection('bookings')" id="bookings-nav-btn">
             <img src="/uploads/website/bookings.png" alt="bookings" class="icon">
@@ -146,6 +150,11 @@
           <!-- Settings content loaded dynamically from admin-settings.html -->
         </section>
 
+        <!-- ================= TO-GO ORDERS SECTION ================= -->
+        <section id="section-togo" class="content-section admin-only">
+          <!-- To-Go content loaded dynamically from admin-togo.html -->
+        </section>
+
         <!-- ================= USERS & RESTAURANTS SECTION (Superadmin) ================= -->
         <section id="section-users" class="content-section superadmin-only">
           <!-- Users/restaurants content loaded dynamically from admin-users.html -->
@@ -185,11 +194,11 @@
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <!-- Auto-print WebSocket client for real-time session detection -->
   <script src="/auto-print-websocket.js"></script>
-  <script src="/admin.js"></script>
+  <script src="/admin.js?v=20260510b"></script>
   <!-- Modular admin functions -->
   <script src="/admin-orders.js?v=20260416h"></script>
   <script src="/admin-tables.js"></script>
-  <script src="/admin-menu.js"></script>
+  <script src="/admin-menu.js?v=20260510c"></script>
   <script src="/admin-staff.js"></script>
   <script src="/admin-reports.js?v=20260416h"></script>
   <script src="/admin-settings.js?v=20260518b"></script>
@@ -198,6 +207,7 @@
   <script src="/admin-printer-qr.js"></script>
   <script src="/admin-printer-bill.js"></script>
   <script src="/admin-printer.js"></script>
+  <script src="/admin-togo.js"></script>
   <script src="/admin-bookings.js"></script>
   <script src="/admin-users.js?v=20260518b"></script>
   <!-- QR scanning functionality -->

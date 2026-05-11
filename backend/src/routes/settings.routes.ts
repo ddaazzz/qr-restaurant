@@ -12,7 +12,8 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
               language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
               show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
-              custom_domain, is_customized
+              custom_domain, is_customized, xish_enabled, lat, lng,
+              venue_type, has_table_service
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     ).catch(async (err: any) => {
@@ -45,6 +46,8 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     r.custom_frontend_url = r.custom_frontend_url || null;
     r.custom_domain = r.custom_domain || null;
     r.is_customized = r.is_customized || false;
+    r.venue_type = r.venue_type || 'restaurant';
+    r.has_table_service = r.has_table_service !== false; // default true
     res.json(r);
   } catch (err: any) {
     console.error('[Settings] Error fetching settings:', err);
@@ -108,7 +111,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags } = req.body;
+    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service } = req.body;
     
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -179,6 +182,31 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
       // Merge with existing feature_flags to avoid overwriting unrelated flags
       updates.push(`feature_flags = COALESCE(feature_flags, '{}'::jsonb) || $${paramCount++}::jsonb`);
       values.push(JSON.stringify(feature_flags));
+      // Sync xish feature flag to the dedicated xish_enabled column
+      if (typeof feature_flags.xish === 'boolean') {
+        updates.push(`xish_enabled = $${paramCount++}`);
+        values.push(feature_flags.xish);
+      }
+    }
+    if (xish_enabled !== undefined) {
+      updates.push(`xish_enabled = $${paramCount++}`);
+      values.push(xish_enabled);
+    }
+    if (lat !== undefined) {
+      updates.push(`lat = $${paramCount++}`);
+      values.push(lat);
+    }
+    if (lng !== undefined) {
+      updates.push(`lng = $${paramCount++}`);
+      values.push(lng);
+    }
+    if (venue_type !== undefined) {
+      updates.push(`venue_type = $${paramCount++}`);
+      values.push(venue_type);
+    }
+    if (has_table_service !== undefined) {
+      updates.push(`has_table_service = $${paramCount++}`);
+      values.push(has_table_service);
     }
 
     if (updates.length === 0) {
@@ -187,7 +215,7 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
 
     values.push(restaurantId);
     const result = await pool.query(
-      `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING id, name, address, phone, logo_url, background_url, theme_color, timezone, language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins`,
+      `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING id, name, address, phone, logo_url, background_url, theme_color, timezone, language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins, xish_enabled, venue_type, has_table_service`,
       values
     );
     

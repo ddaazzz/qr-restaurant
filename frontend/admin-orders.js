@@ -609,10 +609,8 @@ function updateOrderTypeUI() {
   const tableUI = document.getElementById('table-selection-ui');
   const submitBtn = document.getElementById('order-submit-btn');
   
-  // Hide table selection
   if (tableUI) tableUI.style.display = 'none';
   
-  // Update button visibility and text
   if (!orderType) {
     if (submitBtn) submitBtn.style.display = 'none';
     return;
@@ -620,14 +618,13 @@ function updateOrderTypeUI() {
   
   if (submitBtn) {
     submitBtn.style.display = 'block';
-    
     if (orderType === 'table') {
       submitBtn.textContent = t('admin.add-to-table');
       if (tableUI) tableUI.style.display = 'block';
     } else if (orderType === 'pay-now') {
-      submitBtn.textContent = t('admin.order-now');
+      submitBtn.textContent = t('admin.eat-here') || 'Eat Here';
     } else if (orderType === 'to-go') {
-      submitBtn.textContent = t('admin.to-go');
+      submitBtn.textContent = t('admin.takeaway') || 'Takeaway';
     }
   }
 }
@@ -887,50 +884,176 @@ async function submitToGoOrder() {
     alert('Cart is empty');
     return;
   }
-  
+
+  if (typeof loadActiveKPayTerminal === 'function') await loadActiveKPayTerminal();
+
+  // Calculate totals
+  const items = ORDERS_CART.map(cartItem => ({
+    menu_item_id: cartItem.id,
+    quantity: cartItem.quantity,
+    selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
+  }));
+
+  let subtotalCents = 0;
+  ORDERS_CART.forEach(ci => {
+    const basePrice = ci.price || 0;
+    const variantExtra = (ci.variants || []).reduce((s, v) => s + (v.price_cents || 0), 0);
+    subtotalCents += (basePrice + variantExtra) * ci.quantity;
+  });
+
+  const serviceChargePercent = window.serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 0);
+  const serviceChargeCents = Math.round(subtotalCents * serviceChargePercent / 100);
+  const grandTotal = subtotalCents + serviceChargeCents;
+
+  const couponsRes = await fetch(`${API}/restaurants/${restaurantId}/coupons`);
+  const coupons = couponsRes.ok ? await couponsRes.json() : [];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'togo-order-modal';
+  overlay.innerHTML = `
+    <div class="modal-content" style="width:420px; max-height:90vh; overflow-y:auto;">
+      <h3 style="margin:0 0 16px 0;">🥡 New Takeaway Order</h3>
+
+      <div style="background:#f5f5f5; border-radius:8px; padding:14px; margin-bottom:16px;">
+        <p style="margin:0 0 4px 0; font-size:14px; color:#555;">Subtotal: $${(subtotalCents / 100).toFixed(2)}</p>
+        <p style="margin:0 0 4px 0; font-size:14px; color:#555;">Service Charge (${serviceChargePercent}%): $${(serviceChargeCents / 100).toFixed(2)}</p>
+        <p id="togo-modal-total-line" style="margin:8px 0 0 0; font-size:16px; font-weight:700; border-top:1px solid #ddd; padding-top:8px;">Total: $${(grandTotal / 100).toFixed(2)}</p>
+      </div>
+
+      <label style="display:block; margin-bottom:14px;">
+        <span style="font-weight:600; display:block; margin-bottom:5px;">Payment</span>
+        <select id="togo-modal-payment" onchange="updateToGoModalTotal(${grandTotal}); document.getElementById('togo-modal-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
+          <option value="pay-later">Pay Later (Unpaid)</option>
+        </select>
+      </label>
+
+      <div id="togo-modal-kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:14px; font-size:13px; color:#1d4ed8;">
+        Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
+      </div>
+
+      <label style="display:block; margin-bottom:14px;">
+        <span style="font-weight:600; display:block; margin-bottom:5px;">Discount / Coupon</span>
+        <select id="togo-modal-coupon" onchange="updateToGoModalTotal(${grandTotal})" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          <option value="">No Discount</option>
+          ${coupons.map(c => `<option value="${c.id}" data-type="${c.discount_type}" data-value="${c.discount_value}">${c.code} — ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}</option>`).join('')}
+        </select>
+      </label>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <label style="display:block;">
+          <span style="font-weight:600; display:block; margin-bottom:5px;">Customer Name <span style="font-weight:400; color:#9ca3af;">(optional)</span></span>
+          <input id="togo-modal-name" type="text" placeholder="e.g. John" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+        </label>
+        <label style="display:block;">
+          <span style="font-weight:600; display:block; margin-bottom:5px;">Phone <span style="font-weight:400; color:#9ca3af;">(optional)</span></span>
+          <input id="togo-modal-phone" type="tel" placeholder="e.g. 9123 4567" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+        </label>
+      </div>
+
+      <div class="modal-button-group">
+        <button onclick="document.getElementById('togo-order-modal').remove()" class="modal-cancel-btn">Cancel</button>
+        <button onclick="confirmToGoOrder(${grandTotal}, ${serviceChargeCents})" class="modal-btn-primary">Confirm Order</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function updateToGoModalTotal(grandTotal) {
+  const couponSelect = document.getElementById('togo-modal-coupon');
+  const selectedOption = couponSelect?.options?.[couponSelect.selectedIndex];
+  let discount = 0;
+  if (selectedOption?.value) {
+    const couponType = selectedOption.getAttribute('data-type');
+    const couponValue = Number(selectedOption.getAttribute('data-value'));
+    discount = couponType === 'percentage' ? Math.round(grandTotal * couponValue / 100) : couponValue;
+  }
+  const final = grandTotal - discount;
+  const line = document.getElementById('togo-modal-total-line');
+  if (line) {
+    line.innerHTML = `Total: <span style="color:${discount > 0 ? '#10b981' : 'inherit'};">$${(final / 100).toFixed(2)}</span>${discount > 0 ? ` <span style="font-size:12px; color:#666;">(-$${(discount / 100).toFixed(2)})</span>` : ''}`;
+  }
+}
+
+async function confirmToGoOrder(grandTotal, serviceChargeCents) {
+  const paymentMethod = document.getElementById('togo-modal-payment')?.value || 'cash';
+  const customerName = document.getElementById('togo-modal-name')?.value.trim() || null;
+  const customerPhone = document.getElementById('togo-modal-phone')?.value.trim() || null;
+
+  const couponSelect = document.getElementById('togo-modal-coupon');
+  const selectedOption = couponSelect?.options?.[couponSelect.selectedIndex];
+  let discountApplied = 0;
+  if (selectedOption?.value) {
+    const couponType = selectedOption.getAttribute('data-type');
+    const couponValue = Number(selectedOption.getAttribute('data-value'));
+    discountApplied = couponType === 'percentage' ? Math.round(grandTotal * couponValue / 100) : couponValue;
+  }
+
+  const finalAmount = grandTotal - discountApplied;
+
+  const items = ORDERS_CART.map(cartItem => ({
+    menu_item_id: cartItem.id,
+    quantity: cartItem.quantity,
+    selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
+  }));
+
+  document.getElementById('togo-order-modal')?.remove();
+
   try {
-    // For "To Go", create items array directly with correct format
-    const items = ORDERS_CART.map(cartItem => ({
-      menu_item_id: cartItem.id,
-      quantity: cartItem.quantity,
-      selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
-    }));
-    
-    // Get customer contact info
-    const customerName = prompt('Customer name:', '');
-    if (!customerName) throw new Error('Customer name required for to-go order');
-    const customerPhone = prompt('Customer phone (optional):', '');
-    
-    // Use to-go-order endpoint
+    // Create the to-go session + order
     const orderRes = await fetch(`${API}/restaurants/${restaurantId}/to-go-order`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pax: 1,
-        items: items,
-        customer_name: customerName,
-        customer_phone: customerPhone || null
-      })
+      body: JSON.stringify({ pax: 1, items, customer_name: customerName, customer_phone: customerPhone })
     });
-    
     if (!orderRes.ok) {
-      const error = await orderRes.json();
-      throw new Error(error.error || 'Failed to create to-go order');
+      const err = await orderRes.json();
+      throw new Error(err.error || 'Failed to create to-go order');
     }
-    
+    const { session } = await orderRes.json();
+
     // Clear cart
     ORDERS_CART = [];
     EDITING_EXISTING_ORDER_ID = null;
     EDITING_EXISTING_SESSION_ID = null;
     updateOrdersCartDisplay();
     updateCartOrderHeader();
-    document.getElementById('order-type-togo').checked = false;
-    updateOrderTypeUI();
-    
-    alert(`To-go order created for ${customerName}`);
-    await loadOrdersHistoryLeftPanel();
+    const togoRadio = document.getElementById('order-type-togo');
+    if (togoRadio) { togoRadio.checked = false; updateOrderTypeUI(); }
+
+    // Handle payment
+    if (paymentMethod === 'pay-later') {
+      // Leave unpaid — just show toast
+      showToast(`Takeaway order created${customerName ? ' for ' + customerName : ''} — awaiting payment`);
+      await loadOrdersHistoryLeftPanel();
+    } else if (paymentMethod === 'kpay') {
+      if (!window._kpayTerminal) return alert('No active KPay terminal configured.');
+      await startKPayPayment({
+        sessionId: session.id,
+        finalAmount,
+        discountApplied,
+        serviceChargeAmount: serviceChargeCents,
+        reason: '',
+        terminalId: window._kpayTerminal.id,
+      });
+    } else {
+      await _doCloseBill({
+        sessionId: session.id,
+        paymentMethod,
+        finalAmount,
+        discountApplied,
+        serviceChargeAmount: serviceChargeCents,
+        reason: '',
+      });
+      showToast(`Takeaway order created${customerName ? ' for ' + customerName : ''}`);
+      await loadOrdersHistoryLeftPanel();
+    }
   } catch (err) {
-    alert('Error creating to-go order: ' + err.message);
+    alert('Error creating takeaway order: ' + err.message);
     console.error(err);
   }
 }
@@ -1786,7 +1909,17 @@ async function submitSettleBill(sessionId, grandTotal, serviceChargeCents, order
     await loadOrdersHistoryLeftPanel();
   }
   // Refresh the order detail to reflect new paid status
-  await selectOrderFromHistory(orderId);
+  // If called from the To-Go tab, refresh that panel instead
+  if (window._togoRefreshOrderId) {
+    const togoId = window._togoRefreshOrderId;
+    window._togoRefreshOrderId = null;
+    if (typeof selectToGoOrder === 'function') {
+      await selectToGoOrder(togoId);
+      if (typeof loadToGoOrders === 'function') await loadToGoOrders(true);
+    }
+  } else {
+    await selectOrderFromHistory(orderId);
+  }
 }
 
 // ─── KPay order-history helpers ──────────────────────────────────────────────

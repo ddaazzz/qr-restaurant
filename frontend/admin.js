@@ -95,17 +95,8 @@ function showPaxPrompt() {
   });
 }
 
-// Determine API base URL - use same domain for remote access, local backend for development
-var API = (() => {
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  
-  if (isLocalhost) {
-    return `http://${window.location.host}/api`;
-  }
-  // Remote/local network access - use HTTPS with same host:port
-  return `https://${window.location.host}/api`;
-})();
+// Determine API base URL - always use same origin as page (avoids mixed-content errors)
+var API = window.location.origin + '/api';
 
 var restaurantId = localStorage.getItem("restaurantId");
 var token = localStorage.getItem("token");
@@ -210,8 +201,10 @@ async function initializeApp() {
 
   await loadApp();
   
-  // Initialize to Tables section
-  await switchSection("tables");
+  // Initialize to Tables section (or To-Go if no table service)
+  var startSection = (typeof ADMIN_SETTINGS_CACHE !== 'undefined' && ADMIN_SETTINGS_CACHE.has_table_service === false)
+    ? 'togo' : 'tables';
+  await switchSection(startSection);
 }
 
 // ============= NAVIGATION =============
@@ -291,11 +284,13 @@ async function switchSection(sectionId) {
       var menuSection = document.getElementById("section-menu");
       if (menuSection && !menuSection.innerHTML.includes("menu-container")) {
         try {
-          var menuResponse = await fetch('/admin-menu.html');
+          var menuResponse = await fetch('/admin-menu.html?v=20260510c', { cache: 'no-store' });
+          if (!menuResponse.ok) throw new Error('Failed to load menu HTML: ' + menuResponse.status);
           menuSection.innerHTML = await menuResponse.text();
           reTranslateContent();
         } catch (err) {
           console.error("Error loading menu HTML:", err);
+          if (menuSection) menuSection.innerHTML = `<div style="padding:32px;color:#ef4444;text-align:center;font-size:15px;">Failed to load menu interface. Please refresh the page.<br><small>${err.message}</small></div>`;
         }
       }
       if (typeof initializeMenu === 'function') {
@@ -444,6 +439,24 @@ async function switchSection(sectionId) {
         await loadUsersManagement();
       }
       updateSectionHeader('admin.users-restaurants', null);
+    } else if (sectionId === "togo") {
+      var togoSection = document.getElementById("section-togo");
+      if (togoSection && !togoSection.innerHTML.includes("togo-container")) {
+        try {
+          var togoResponse = await fetch('/admin-togo.html');
+          togoSection.innerHTML = await togoResponse.text();
+          reTranslateContent();
+        } catch (err) {
+          console.error("Error loading togo HTML:", err);
+        }
+      }
+      if (typeof initializeToGo === 'function') {
+        await initializeToGo();
+      } else {
+        console.warn('[admin.js] initializeToGo not yet loaded');
+      }
+      reTranslateContent();
+      updateSectionHeader('Pick-up Orders', 'togo-qr-header-btn');
     }
 
     IS_EDIT_MODE = false;
@@ -457,6 +470,22 @@ async function switchSection(sectionId) {
   var sidebar = document.getElementById("sidebar");
   if (sidebar && window.innerWidth < 768) {
     sidebar.classList.add("collapsed");
+  }
+}
+
+function applyNavVisibility(hasTableService) {
+  var tablesBtn = document.getElementById('tables-nav-btn');
+  var bookingsBtn = document.getElementById('bookings-nav-btn');
+  if (hasTableService) {
+    if (tablesBtn) tablesBtn.style.display = '';
+    if (bookingsBtn) bookingsBtn.style.display = '';
+  } else {
+    if (tablesBtn) tablesBtn.style.display = 'none';
+    if (bookingsBtn) bookingsBtn.style.display = 'none';
+    // If currently on a hidden tab, jump to togo
+    if (CURRENT_SECTION === 'tables' || CURRENT_SECTION === 'bookings') {
+      switchSection('togo');
+    }
   }
 }
 
@@ -742,6 +771,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Load settings on page load (theme color, service charge)
   if (typeof initializeSettingsOnPageLoad === "function") {
     await initializeSettingsOnPageLoad();
+    // Apply nav visibility based on has_table_service
+    if (typeof ADMIN_SETTINGS_CACHE !== 'undefined') {
+      applyNavVisibility(ADMIN_SETTINGS_CACHE.has_table_service !== false);
+    }
   }
 
   // Initialize app

@@ -15,9 +15,19 @@ async function loadUsersManagement() {
       fetch(`${API}/manage/restaurants`, { headers: { Authorization: `Bearer ${token}` } }),
     ]);
 
-    if (usersRes.ok) {
+    // Stale / expired token — redirect to login
+    if (usersRes.status === 401 || usersRes.status === 403) {
+      if (usersRes.status === 401) {
+        localStorage.clear();
+        window.location.href = '/login.html?reason=SessionExpired';
+        return;
+      }
+      var usersListEl = document.getElementById('users-list');
+      if (usersListEl) usersListEl.innerHTML = '<p style="color:#ef4444;text-align:center;padding:20px;">Access denied. Please log out and log back in as a superadmin.</p>';
+    } else if (usersRes.ok) {
       usersData = await usersRes.json();
     }
+
     if (restaurantsRes.ok) {
       restaurantsData = await restaurantsRes.json();
     }
@@ -725,6 +735,7 @@ async function openRestaurantDetail(restId) {
       { key: 'coupons',                 label: 'Coupons',           desc: 'Discount coupons and promotions' },
       { key: 'service_requests',        label: 'Service Requests',  desc: 'Customer call-waiter / bill requests' },
       { key: 'allow_custom_food_items', label: 'Custom Food Items', desc: 'Staff can add free-text items to orders' },
+      { key: 'xish',                    label: '✦ XISH Loyalty',    desc: 'National loyalty network — members earn points & tiered discounts' },
     ];
 
     var results = await Promise.allSettled([

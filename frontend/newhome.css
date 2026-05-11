@@ -26,6 +26,21 @@ ul { list-style: none; }
 .nh-nav.scrolled { background: rgba(255,255,255,0.92); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(229,231,235,0.8); box-shadow: 0 1px 6px rgba(0,0,0,0.06); padding: 2px 0; }
 .nh-nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 40px; display: flex; align-items: center; justify-content: flex-start; gap: 16px; position: relative; }
 .nh-nav-logo { height: 80px; width: auto; }
+
+/* Product Switcher */
+.nh-product-switcher { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.nh-ps-item { display: flex; align-items: center; text-decoration: none; opacity: 0.55; transition: opacity 0.2s; }
+.nh-ps-item:hover { opacity: 0.8; }
+.nh-ps-item.active { opacity: 1; }
+.nh-ps-divider { color: #d1d5db; font-size: 16px; user-select: none; }
+.nh-ps-chuio img { height: 80px; width: auto; }
+.nh-ps-xish { text-decoration: none; }
+.nh-ps-xish-wordmark { font-size: 16px; font-weight: 900; letter-spacing: 0.06em; line-height: 1; }
+.nh-ps-x { color: #C9A84C; }
+.nh-ps-xish-wordmark { color: #374151; }
+.nh-ps-xish:hover .nh-ps-xish-wordmark { color: #111827; }
+.nh-ps-item.active .nh-ps-chuio img { border-bottom: 2px solid #FF6A2A; padding-bottom: 2px; }
+
 .nh-nav-links { display: flex; align-items: center; gap: 28px; position: absolute; left: 50%; transform: translateX(-50%); }
 .nh-nav-links a { font-size: 14px; font-weight: 500; color: #6b7280; transition: color 0.2s; }
 .nh-nav-links a:hover { color: #111827; }

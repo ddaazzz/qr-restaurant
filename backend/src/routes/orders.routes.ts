@@ -910,12 +910,19 @@ router.patch("/orders/:id/status", async (req, res) => {
 router.get("/restaurants/:restaurantId/orders", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { limit } = req.query;
+    const { limit, order_type } = req.query;
     const limitVal = limit ? parseInt(limit as string) : 20;
 
     if (!restaurantId) {
       return res.status(400).json({ error: "Restaurant ID is required" });
     }
+
+    const orderTypeFilter = order_type ? ` AND COALESCE(ts.order_type, 'counter') = ANY($3::text[])` : '';
+    const queryParams: any[] = order_type === 'to-go'
+      ? [restaurantId, limitVal, ['to-go', 'counter']]
+      : order_type
+        ? [restaurantId, limitVal, [order_type]]
+        : [restaurantId, limitVal];
 
     // Get orders from database
     const result = await pool.query(
@@ -961,7 +968,9 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         cpay.payment_gateway_env AS cp_env,
         to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at,
         o.void_vendor_ref,
-        o.refund_vendor_ref
+        o.refund_vendor_ref,
+        to_char(ts.pickup_ready_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS pickup_ready_at,
+        to_char(ts.ended_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS session_ended_at
       FROM orders o
       JOIN restaurants r ON r.id = o.restaurant_id
       LEFT JOIN table_sessions ts ON o.session_id = ts.id
@@ -980,10 +989,11 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
       ) cpay ON true
       WHERE o.restaurant_id = $1
       AND COALESCE(o.is_split_parent, FALSE) = FALSE
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
+      ${orderTypeFilter}
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, ts.pickup_ready_at, ts.ended_at, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
       ORDER BY o.created_at DESC
       LIMIT $2`,
-      [restaurantId, limitVal]
+      queryParams
     );
 
     const orders = result.rows.map(order => ({
@@ -1023,6 +1033,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         COALESCE(t.name, '') as table_name,
         COALESCE(ts.customer_name, '') as customer_name,
         COALESCE(ts.customer_phone, '') as customer_phone,
+        to_char(ts.pickup_ready_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS pickup_ready_at,
         COALESCE(
           (SELECT pat.network FROM payment_asia_transactions pat WHERE pat.merchant_reference = o.chuio_order_reference AND pat.transaction_type = 'payment' ORDER BY pat.created_at DESC LIMIT 1),
           (SELECT pcp.payment_method FROM chuio_payments pcp WHERE pcp.order_reference = o.chuio_order_reference AND pcp.payment_vendor = 'payment-asia' LIMIT 1)
@@ -1056,7 +1067,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
       GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.custom_amount_cents,
                o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at,
                o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name,
-               ts.customer_name, ts.customer_phone, cpay.payment_vendor, cpay.payment_method,
+               ts.customer_name, ts.customer_phone, ts.pickup_ready_at, cpay.payment_vendor, cpay.payment_method,
                cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env,
                cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
       `,

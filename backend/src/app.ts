@@ -23,6 +23,10 @@ import paymentTerminalsRoutes from "./routes/payment-terminals.routes";
 import paymentTransactionsRoutes from "./routes/payment-transactions.routes";
 import crmRoutes from "./routes/crm.routes";
 import serviceRequestsRoutes from "./routes/serviceRequests.routes";
+import xishMembersRoutes from "./routes/xish-members.routes";
+import xishAuthRoutes from "./routes/xish-auth.routes";
+import xishCampaignsRoutes from "./routes/xish-campaigns.routes";
+import xishWalletRoutes from "./routes/xish-wallet.routes";
 import { isR2Configured, s3Client, R2_BUCKET_NAME } from "./config/storage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 
@@ -180,6 +184,10 @@ app.use("/api", bookingsRoutes);
 app.use("/api", waitlistRoutes);
 app.use("/api", crmRoutes);
 app.use("/api", serviceRequestsRoutes);
+app.use("/api", xishMembersRoutes);
+app.use("/api", xishAuthRoutes);
+app.use("/api", xishCampaignsRoutes);
+app.use("/api", xishWalletRoutes);
 
 /* ======================
    FRONTEND STATIC FILES
@@ -189,8 +197,8 @@ const FRONTEND_PATH = path.join(__dirname, "../../frontend");
 app.use(express.static(FRONTEND_PATH, {    
   index: false,
   setHeaders: (res, filePath) => {
-    // Prevent browser caching of JS/CSS so deploys take effect immediately
-    if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+    // Prevent browser caching of all frontend files so deploys take effect immediately
+    if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     }
   },
@@ -214,6 +222,30 @@ app.get("/en", (_req, res) => {
 
 app.get("/login", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "login.html"));
+});
+
+app.get("/xish", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "xish-landing.html"));
+});
+
+app.get("/xish/login", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "xish-login.html"));
+});
+
+app.get("/xish/", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "xish-landing.html"));
+});
+
+app.get("/xish/admin", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "xish-admin.html"));
+});
+
+app.get("/xish/admin/", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "xish-admin.html"));
+});
+
+app.get("/xish/join/:restaurantId", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "xish-join.html"));
 });
 
 app.get("/register", (_req, res) => {
@@ -246,6 +278,13 @@ app.get("/terms", (_req, res) => {
 
 app.get("/careers", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "careers.html"));
+});
+
+/* ======================
+   ORDER-NOW (TO-GO) CUSTOMER MENU ROUTE
+====================== */
+app.get("/order-now/:restaurantId", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "landing.html"));
 });
 
 /* ======================
