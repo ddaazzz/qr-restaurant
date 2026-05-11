@@ -126,7 +126,7 @@ body {
   padding: 3px 10px;
   font-size: 11px;
   font-weight: 600;
-  color: #fbbf24;
+  color: rgba(255,255,255,0.92);
   letter-spacing: 0.05em;
   width: fit-content;
   margin-top: 2px;
@@ -211,7 +211,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #fbbf24;
+  color: var(--restaurant-color);
 }
 
 .xish-mbc-name {
@@ -236,7 +236,7 @@ body {
 .xish-mbc-pts {
   font-size: 20px;
   font-weight: 700;
-  color: #fbbf24;
+  color: var(--restaurant-color);
   line-height: 1;
 }
 
@@ -358,8 +358,8 @@ body {
   justify-content: center;
   gap: 6px;
   padding: 16px 8px 14px;
-  background: #fff7ed;
-  border: 1.5px solid #fed7aa;
+  background: var(--bg-light);
+  border: 1.5px solid var(--border-color);
   border-radius: 16px;
   cursor: pointer;
   transition: background 0.18s, transform 0.1s;
@@ -368,7 +368,7 @@ body {
 }
 
 .xish-action-btn:active {
-  background: #ffedd5;
+  background: #e5e7eb;
   transform: scale(0.97);
 }
 
@@ -377,7 +377,7 @@ body {
 .xish-act-label {
   font-size: 11px;
   font-weight: 600;
-  color: #92400e;
+  color: var(--text-dark);
   text-align: center;
 }
 
@@ -446,7 +446,7 @@ body {
   letter-spacing: -0.3px;
 }
 
-.xish-panel-logo .xish-x { color: #f97316; }
+.xish-panel-logo .xish-x { color: var(--restaurant-color); }
 
 .xish-panel-close {
   width: 30px;
@@ -514,10 +514,10 @@ body {
   width: fit-content;
 }
 
-.xish-tier-badge-large.basic    { background: rgba(156,163,175,0.3); color: #d1d5db; }
-.xish-tier-badge-large.silver   { background: rgba(148,163,184,0.3); color: #cbd5e1; }
-.xish-tier-badge-large.gold     { background: rgba(251,191,36,0.25); color: #fbbf24; }
-.xish-tier-badge-large.platinum { background: rgba(167,139,250,0.3); color: #c4b5fd; }
+.xish-tier-badge-large.basic    { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.65); }
+.xish-tier-badge-large.silver   { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.80); }
+.xish-tier-badge-large.gold     { background: rgba(255,255,255,0.22); color: #fff; }
+.xish-tier-badge-large.platinum { background: rgba(255,255,255,0.28); color: #fff; }
 
 .xish-member-greeting {
   font-size: 22px;
@@ -543,7 +543,7 @@ body {
 .xish-pts-value {
   font-size: 32px;
   font-weight: 800;
-  color: #fbbf24;
+  color: var(--restaurant-color);
   letter-spacing: -1px;
   line-height: 1;
 }
@@ -556,7 +556,7 @@ body {
 
 .xish-discount-active {
   font-size: 12px;
-  color: #34d399;
+  color: var(--restaurant-color);
   font-weight: 600;
 }
 
@@ -582,7 +582,7 @@ body {
 .xish-progress-bar-fill {
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, #f97316, #fbbf24);
+  background: var(--restaurant-color);
   transition: width 0.6s ease;
 }
 
@@ -649,15 +649,16 @@ body {
 .xish-coupon-expiry {
   font-size: 11px;
   font-weight: 600;
-  color: #f97316;
+  color: var(--restaurant-color);
   margin-top: 4px;
 }
 
 /* ── Gift Cards tab ─────────────────────────────── */
 .xish-gift-card {
-  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  background: var(--bg-light);
+  border: 1.5px solid var(--border-color);
   border-radius: 16px;
-  padding: 18px;
+  padding: 16px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -669,12 +670,12 @@ body {
 .xish-gift-name {
   font-size: 15px;
   font-weight: 600;
-  color: #f9fafb;
+  color: var(--text-dark);
 }
 
 .xish-gift-meta {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-light);
   margin-top: 3px;
 }
 
@@ -686,7 +687,7 @@ body {
   padding: 20px 0;
 }
 
-.xish-join-icon { font-size: 40px; color: #f97316; margin-bottom: 12px; }
+.xish-join-icon { font-size: 40px; color: var(--restaurant-color); margin-bottom: 12px; }
 
 .xish-join-title {
   font-size: 22px;
@@ -703,7 +704,7 @@ body {
 }
 
 .xish-btn-gold {
-  background: linear-gradient(90deg, #f97316, #fb923c);
+  background: var(--text-dark);
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -718,7 +719,7 @@ body {
   text-align: center;
 }
 
-.xish-btn-gold:active { opacity: 0.85; }
+.xish-btn-gold:active { opacity: 0.75; }
 
 .xish-btn-outline {
   background: transparent;
