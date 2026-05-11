@@ -7,8 +7,8 @@
 
   /* ─── State ────────────────────────────────────────── */
   const state = {
-    token: localStorage.getItem("token"),
-    restaurantId: localStorage.getItem("restaurantId"),
+    token: localStorage.getItem("xish_token"),
+    restaurantId: localStorage.getItem("xish_restaurantId"),
     restaurantName: "",
     currentSection: "stats",
     crmPage: 1,
@@ -21,7 +21,7 @@
 
   /* ─── Auth guard ───────────────────────────────────── */
   if (!state.token || !state.restaurantId) {
-    window.location.href = "/login.html?redirect=" + encodeURIComponent(window.location.pathname);
+    window.location.href = "/xish/login?redirect=" + encodeURIComponent(window.location.pathname);
   }
 
   /* ─── API helper ───────────────────────────────────── */
@@ -36,8 +36,11 @@
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch("/api" + path, opts);
     if (res.status === 401) {
-      localStorage.clear();
-      window.location.href = "/login.html";
+      localStorage.removeItem("xish_token");
+      localStorage.removeItem("xish_restaurantId");
+      localStorage.removeItem("xish_role");
+      localStorage.removeItem("xish_restaurantTimezone");
+      window.location.href = "/xish/login";
       return null;
     }
     const data = await res.json().catch(() => ({}));

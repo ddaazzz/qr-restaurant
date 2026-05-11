@@ -190,10 +190,10 @@
 <div class="back-link"><a href="/xish">← Back to XISH</a></div>
 
 <script>
-  // Redirect if already logged in with a valid token
+  // Redirect if already logged in with a valid XISH token
   (function () {
-    const t = localStorage.getItem("token");
-    const r = localStorage.getItem("restaurantId");
+    const t = localStorage.getItem("xish_token");
+    const r = localStorage.getItem("xish_restaurantId");
     if (t && r) window.location.replace("/xish/admin");
   })();
 
@@ -220,12 +220,6 @@
         throw new Error(data.error || "Invalid credentials");
       }
 
-      // Persist auth
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
-      localStorage.setItem("restaurantId", String(data.restaurantId));
-      if (data.restaurantTimezone) localStorage.setItem("restaurantTimezone", data.restaurantTimezone);
-
       // Check XISH is enabled for this restaurant before granting access
       const settingsRes = await fetch("/api/restaurants/" + data.restaurantId + "/settings", {
         headers: { Authorization: "Bearer " + data.token }
@@ -234,12 +228,15 @@
         const settings = await settingsRes.json();
         const xishEnabled = settings.xish_enabled || (settings.feature_flags && settings.feature_flags.xish);
         if (!xishEnabled && data.role !== "superadmin") {
-          localStorage.removeItem("token");
-          localStorage.removeItem("role");
-          localStorage.removeItem("restaurantId");
           throw new Error("XISH is not enabled for your restaurant. Please contact your administrator.");
         }
       }
+
+      // Persist auth under xish_ keys (separate from main Chuio session)
+      localStorage.setItem("xish_token", data.token);
+      localStorage.setItem("xish_role", data.role);
+      localStorage.setItem("xish_restaurantId", String(data.restaurantId));
+      if (data.restaurantTimezone) localStorage.setItem("xish_restaurantTimezone", data.restaurantTimezone);
 
       window.location.replace("/xish/admin");
     } catch (ex) {
