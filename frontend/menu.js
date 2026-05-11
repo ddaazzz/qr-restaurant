@@ -457,6 +457,14 @@ async function _applySessionToLanding(session, isOrderNow) {
   if (session.xish_enabled || (session.feature_flags && session.feature_flags.xish)) {
     await initXishMode(session);
   }
+
+  // Order-now: skip the landing page and go straight to the menu.
+  // The landing page exists for table-scan (pax selection etc.) but is
+  // meaningless for a pick-up / wallet-pass deep-link. XISH is already
+  // initialised above, so the loyalty panel will be ready when the menu loads.
+  if (isOrderNow) {
+    await startOrdering();
+  }
 }
 
 async function startOrdering() {
