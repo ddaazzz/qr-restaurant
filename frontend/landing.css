@@ -766,3 +766,87 @@ body {
   font-size: 13px; font-weight: 600; color: var(--text-dark);
 }
 
+/* ═══════════════════════════════════════════════════
+   CUSTOMER TABLE SCAN PANEL
+   ═══════════════════════════════════════════════════ */
+
+.table-scan-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9100;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.table-scan-overlay.open {
+  display: flex;
+}
+
+.table-scan-panel {
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 430px;
+  padding: 0 0 24px;
+  animation: slideUpPanel 0.3s ease;
+}
+
+.table-scan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table-scan-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.table-scan-close-btn {
+  background: var(--bg-light);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark);
+}
+
+.table-scan-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-light);
+  padding: 12px 20px 8px;
+}
+
+/* html5-qrcode renders inside this element */
+#table-scan-reader {
+  margin: 0 20px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.table-scan-status {
+  text-align: center;
+  padding: 10px 20px 0;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.table-scan-error {
+  text-align: center;
+  padding: 10px 20px 0;
+  font-size: 13px;
+  color: #ef4444;
+  white-space: pre-wrap;
+}
+

@@ -383,34 +383,57 @@ async function _applySessionToLanding(session, isOrderNow) {
     document.body.style.backgroundColor = "#ffffff";
   };
 
-  const nameEl = document.getElementById("restaurantName")
-  if (nameEl){
-    nameEl.textContent = session.restaurant_name;
-  }
   const nameEl = document.getElementById("restaurantName");
   if (nameEl) nameEl.textContent = session.restaurant_name;
 
   const addressEl = document.getElementById("address");
   if (addressEl) addressEl.textContent = session.address || "";
 
-  // Wire Dine In and Pick Up buttons
-  const dineInBtn = document.getElementById("dine-in-btn");
-  const togoBtn   = document.getElementById("togo-btn");
-  const checkBtn  = document.getElementById("check-orders-btn");
+  // Wire action buttons based on restaurant type (has_table_service)
+  const dineInBtn      = document.getElementById("dine-in-btn");
+  const togoBtn        = document.getElementById("togo-btn");
+  const checkBtn       = document.getElementById("check-orders-btn");
+  const hasTableService = session.has_table_service !== false;
+
+  // Helper to relabel a landing action button
+  function _relabelBtn(btn, emoji, main, sub) {
+    if (!btn) return;
+    const em = btn.querySelector('.action-emoji');
+    const ml = btn.querySelector('.action-label-main');
+    const sl = btn.querySelector('.action-label-sub');
+    if (em) em.textContent = emoji;
+    if (ml) ml.textContent = main;
+    if (sl) sl.textContent = sub;
+  }
 
   if (isOrderNow) {
-    if (dineInBtn) dineInBtn.onclick = () => { orderType = 'dine-in';   startOrdering(); };
-    if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
-    if (checkBtn)  checkBtn.style.display = 'none';
-  } else {
-    // Table QR — relabel Dine In button as "Order"
-    if (dineInBtn) {
-      const mainLabel = dineInBtn.querySelector('.action-label-main');
-      const subLabel  = dineInBtn.querySelector('.action-label-sub');
-      if (mainLabel) mainLabel.textContent = '點餐';
-      if (subLabel)  subLabel.textContent  = 'ORDER';
-      dineInBtn.onclick = () => { orderType = 'dine-in'; startOrdering(); };
+    // Order-now QR — no pre-existing table session
+    if (checkBtn) checkBtn.style.display = 'none';
+
+    if (hasTableService) {
+      // Table-service restaurant: let customer scan a table QR or order takeaway
+      _relabelBtn(dineInBtn, '🍽', '堂食', 'ORDER FOR TABLE');
+      _relabelBtn(togoBtn,   '🥡', '外帶', 'TAKEAWAY');
+      if (dineInBtn) dineInBtn.onclick = () => openTableScanPanel();
+      if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
+    } else {
+      // Counter / no-table restaurant: walk-in pickup or takeaway
+      _relabelBtn(dineInBtn, '🏪', '取餐', 'PICK UP');
+      _relabelBtn(togoBtn,   '🥡', '外帶', 'TAKEAWAY');
+      if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
+      if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
     }
+  } else {
+    // Table QR scan mode — customer already at a specific table
+    if (hasTableService) {
+      _relabelBtn(dineInBtn, '🍽', '點餐', 'ORDER');
+      if (dineInBtn) dineInBtn.onclick = () => { orderType = 'dine-in'; startOrdering(); };
+    } else {
+      // Counter restaurant with a QR code (edge case)
+      _relabelBtn(dineInBtn, '🏪', '取餐', 'PICK UP');
+      if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
+    }
+    _relabelBtn(togoBtn, '🥡', '外帶', 'TAKEAWAY');
     if (togoBtn)  togoBtn.onclick  = () => { orderType = 'takeaway'; startOrdering(); };
     if (checkBtn) checkBtn.onclick = () => { startOrdering(); openOrdersDrawer(); };
   }
@@ -441,6 +464,129 @@ async function _applySessionToLanding(session, isOrderNow) {
   }
 }
 
+/* ─── Customer Table Scan (order-now → link to table QR) ─────────────────── */
+
+function openTableScanPanel() {
+  const overlay = document.getElementById('table-scan-overlay');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  setTimeout(() => _startCustomerTableScan(), 50);
+}
+
+function closeTableScanPanel() {
+  const overlay = document.getElementById('table-scan-overlay');
+  if (overlay) overlay.classList.remove('open');
+  _stopCustomerTableScan();
+}
+
+function _stopCustomerTableScan() {
+  if (_customerTableScanner) {
+    try { _customerTableScanner.stop().catch(() => {}); } catch (e) {}
+    _customerTableScanner = null;
+  }
+}
+
+async function _startCustomerTableScan() {
+  const statusEl = document.getElementById('table-scan-status');
+  const errorEl  = document.getElementById('table-scan-error');
+  if (statusEl) { statusEl.textContent = 'Initializing camera…'; statusEl.style.display = 'block'; }
+  if (errorEl)  errorEl.style.display = 'none';
+
+  let retries = 0;
+  while (typeof Html5Qrcode === 'undefined' && retries < 20) {
+    await new Promise(r => setTimeout(r, 100));
+    retries++;
+  }
+  if (typeof Html5Qrcode === 'undefined') {
+    if (errorEl) { errorEl.textContent = 'QR scanner library not loaded. Please refresh.'; errorEl.style.display = 'block'; }
+    if (statusEl) statusEl.style.display = 'none';
+    return;
+  }
+
+  try {
+    const readerEl = document.getElementById('table-scan-reader');
+    if (readerEl) readerEl.innerHTML = '';
+    _customerTableScanner = new Html5Qrcode('table-scan-reader', {
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+    });
+    await _customerTableScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 },
+      async (text) => {
+        _stopCustomerTableScan();
+        if (statusEl) { statusEl.textContent = 'QR detected — looking up table…'; statusEl.style.display = 'block'; }
+        await _processCustomerTableScan(text);
+      },
+      () => {}
+    );
+    if (statusEl) { statusEl.textContent = ''; statusEl.style.display = 'none'; }
+  } catch (err) {
+    _customerTableScanner = null;
+    let msg = 'Could not start camera.';
+    const m = err?.message || String(err);
+    if (m.includes('NotAllowedError') || m.includes('Permission denied'))
+      msg = '📵 Camera permission denied. Please allow camera access in your browser settings.';
+    else if (m.includes('NotFoundError'))
+      msg = '📷 No camera found on this device.';
+    if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+    if (statusEl) statusEl.style.display = 'none';
+  }
+}
+
+async function _processCustomerTableScan(qrText) {
+  const errorEl  = document.getElementById('table-scan-error');
+  const statusEl = document.getElementById('table-scan-status');
+  if (errorEl)  errorEl.style.display = 'none';
+  if (statusEl) { statusEl.textContent = 'Looking up table…'; statusEl.style.display = 'block'; }
+
+  let token = qrText.trim();
+  if (token.includes('/')) {
+    const parts = token.split('/').filter(Boolean);
+    token = parts[parts.length - 1];
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/scan/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (errorEl) { errorEl.textContent = err.error || 'Invalid QR code'; errorEl.style.display = 'block'; }
+      if (statusEl) statusEl.style.display = 'none';
+      setTimeout(() => { if (errorEl) errorEl.style.display = 'none'; _startCustomerTableScan(); }, 2500);
+      return;
+    }
+    const data = await res.json();
+
+    if (!data.session_id) {
+      if (errorEl) {
+        errorEl.textContent = '⚠️ No active session at this table. Please ask a staff member to open it.';
+        errorEl.style.display = 'block';
+      }
+      if (statusEl) statusEl.style.display = 'none';
+      setTimeout(() => { if (errorEl) errorEl.style.display = 'none'; _startCustomerTableScan(); }, 3500);
+      return;
+    }
+
+    // Success — link order to the scanned table session
+    sessionId       = data.session_id;
+    tableName       = data.table_name;
+    tableUnitId     = data.table_unit_id || null;
+    pax             = data.pax || null;
+    hasScannedTable = true;
+    orderType       = 'dine-in';
+    closeTableScanPanel();
+    startOrdering();
+  } catch (e) {
+    if (errorEl) { errorEl.textContent = 'Network error. Please try again.'; errorEl.style.display = 'block'; }
+    if (statusEl) statusEl.style.display = 'none';
+    setTimeout(() => { if (errorEl) errorEl.style.display = 'none'; _startCustomerTableScan(); }, 2000);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 async function startOrdering() {
   document.getElementById("landing-page").style.display = "none";
   document.getElementById("app").style.display = "flex";
@@ -449,9 +595,19 @@ async function startOrdering() {
   const currentLang = localStorage.getItem('language') || 'zh';
   setLanguage(currentLang);
 
-  document.getElementById("table-indicator").textContent = IS_ORDER_NOW
-    ? (orderType === 'dine-in' ? '🍽 Dine In' : '🥡 Take Away')
-    : `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
+  {
+    let _indicator;
+    if (!IS_ORDER_NOW || hasScannedTable) {
+      _indicator = `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
+    } else if (orderType === 'counter') {
+      _indicator = '🏪 Pick Up';
+    } else if (orderType === 'takeaway') {
+      _indicator = '🥡 Takeaway';
+    } else {
+      _indicator = '🍽 Dine In';
+    }
+    document.getElementById("table-indicator").textContent = _indicator;
+  }
 
   // Cart bar click handlers — only attach once
   if (!orderingInitialized) {
@@ -1197,13 +1353,14 @@ async function submitOrder() {
   if (!hasFood && !hasSr) return;
 
   // ─── Order-now / To-Go mode: create a fresh session + order ─────────────
-  if (IS_ORDER_NOW && hasFood) {
+  // After scanning a table QR from order-now mode, route through the table session path
+  if (IS_ORDER_NOW && !hasScannedTable && hasFood) {
     const customerName = prompt('Your name (for pickup notification):', '') || null;
     const customerPhone = prompt('Your phone number (optional):', '') || null;
 
     const payload = {
       pax: 1,
-      order_type: orderType,   // 'takeaway' or 'dine-in' chosen on landing
+      order_type: orderType,   // 'takeaway', 'counter', etc.
       customer_name: customerName,
       customer_phone: customerPhone,
       items: cart.items.map(i => ({
@@ -2575,6 +2732,8 @@ async function initXishMode(session) {
 
 // Order type: 'takeaway' | 'dine-in'
 let orderType = 'takeaway';
+let hasScannedTable = false; // true after user scans a table QR from order-now mode
+let _customerTableScanner = null; // Html5Qrcode instance for customer table scan
 
 // Active XISH panel tab
 let xishActiveTab = 'points';

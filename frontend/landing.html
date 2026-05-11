@@ -13,6 +13,8 @@
   <link rel="stylesheet" href="/language-switcher.css" />
   <!-- Menu styles -->
   <link rel="stylesheet" href="/menu.css?v=20260512a" />
+  <!-- QR Code scanner (used for customer table-scan from order-now mode) -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
 </head>
 
 <body>
@@ -96,6 +98,21 @@
     <p id="phone"     style="display:none"></p>
 
   </div><!-- /#landing-page -->
+
+  <!-- ================= CUSTOMER TABLE SCAN PANEL ================= -->
+  <!-- Shown when user taps "Order for Table" from an order-now QR -->
+  <div id="table-scan-overlay" class="table-scan-overlay">
+    <div class="table-scan-panel">
+      <div class="table-scan-header">
+        <span class="table-scan-title">📍 Scan Table QR</span>
+        <button class="table-scan-close-btn" onclick="closeTableScanPanel()">✕</button>
+      </div>
+      <p class="table-scan-hint">Point your camera at the QR code on your table</p>
+      <div id="table-scan-reader"></div>
+      <div id="table-scan-status" class="table-scan-status" style="display:none"></div>
+      <div id="table-scan-error" class="table-scan-error" style="display:none"></div>
+    </div>
+  </div>
 
   <!-- ================= MENU APP (HIDDEN INITIALLY) ================= -->
   <div id="app" style="display:none;">
