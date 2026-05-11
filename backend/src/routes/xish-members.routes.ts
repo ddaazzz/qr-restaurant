@@ -86,7 +86,12 @@ router.get("/restaurants/:restaurantId/xish/members", async (req, res) => {
              AND lc.restaurant_id = c.restaurant_id
          )                           AS card_balance_cents
        FROM crm_customers c
-       LEFT JOIN xish_members m ON m.crm_customer_id = c.id
+       LEFT JOIN LATERAL (
+         SELECT * FROM xish_members
+         WHERE crm_customer_id = c.id
+         ORDER BY id DESC
+         LIMIT 1
+       ) m ON true
        WHERE ${where}
        ORDER BY c.last_visit_at DESC NULLS LAST
        LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -94,9 +99,14 @@ router.get("/restaurants/:restaurantId/xish/members", async (req, res) => {
     );
 
     const countRes = await pool.query(
-      `SELECT COUNT(*)::int AS total
+      `SELECT COUNT(DISTINCT c.id)::int AS total
        FROM crm_customers c
-       LEFT JOIN xish_members m ON m.crm_customer_id = c.id
+       LEFT JOIN LATERAL (
+         SELECT * FROM xish_members
+         WHERE crm_customer_id = c.id
+         ORDER BY id DESC
+         LIMIT 1
+       ) m ON true
        WHERE ${where}`,
       values
     );
@@ -241,15 +251,23 @@ router.post("/xish/members/:memberId/award-points", async (req, res) => {
       [memberId, restaurant_id, session_id || null, points_delta, reason]
     );
 
+    // Determine new tier from restaurant's configurable tier settings
     const updated = await client.query(
       `UPDATE xish_members
        SET points_balance = points_balance + $2,
-           tier = CASE
-             WHEN points_balance + $2 >= 10000 THEN 'platinum'
-             WHEN points_balance + $2 >= 5000  THEN 'gold'
-             WHEN points_balance + $2 >= 2000  THEN 'silver'
-             ELSE 'basic'
-           END,
+           tier = COALESCE(
+             (
+               SELECT ts.tier
+               FROM xish_tier_settings ts
+               JOIN crm_customers c ON c.id = xish_members.crm_customer_id
+               WHERE ts.restaurant_id = c.restaurant_id
+                 AND ts.is_active = true
+                 AND (xish_members.points_balance + $2) >= ts.points_threshold
+               ORDER BY ts.points_threshold DESC
+               LIMIT 1
+             ),
+             'basic'
+           ),
            updated_at = NOW()
        WHERE id = $1
        RETURNING points_balance, tier`,
