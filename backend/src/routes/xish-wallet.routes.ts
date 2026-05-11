@@ -128,14 +128,19 @@ async function buildPassJson(
   const nextTierRow    = tiers[currentTierIdx + 1] || null;
   const discountPct    = Number(currentTierRow?.discount_percent || 0);
 
-  let progressText: string;
+  // Unicode progress bar — iOS Wallet renders these block characters visually.
+  // e.g. "████░░░░░░ 40%"  (10-block scale)
+  let progressBar: string;
   let progressLabel: string;
   if (nextTierRow) {
-    const ptsNeeded  = Number(nextTierRow.points_threshold) - pts;
-    progressText  = `${ptsNeeded.toLocaleString()} pts to ${capitalize(nextTierRow.tier)}`;
-    progressLabel = `NEXT: ${capitalize(nextTierRow.tier).toUpperCase()}`;
+    const start   = Number(currentTierRow?.points_threshold || 0);
+    const end     = Number(nextTierRow.points_threshold);
+    const pct     = end > start ? Math.min(1, Math.max(0, (pts - start) / (end - start))) : 1;
+    const filled  = Math.round(pct * 10);
+    progressBar   = "\u2588".repeat(filled) + "\u2591".repeat(10 - filled) + ` ${Math.round(pct * 100)}%`;
+    progressLabel = `TO ${capitalize(nextTierRow.tier).toUpperCase()}`;
   } else {
-    progressText  = "Max tier reached";
+    progressBar   = "\u2588".repeat(10) + " 100%";
     progressLabel = "STATUS";
   }
 
@@ -153,7 +158,11 @@ async function buildPassJson(
     teamIdentifier: process.env.APPLE_TEAM_ID || "5V7D5PUU8D",
     organizationName: s.organization_name || restaurantName,
     description: s.description || `${restaurantName} Loyalty Card`,
-    logoText: s.logo_text ? `${s.logo_text} · XISH` : `${restaurantName} · XISH`,
+    // Only use logo_text if it has been customised away from the generic "XISH" default.
+    // This prevents "XISH · XISH" when the merchant hasn't set a custom logo text.
+    logoText: (s.logo_text && s.logo_text !== "XISH")
+      ? `${s.logo_text} \u00b7 XISH`
+      : `${restaurantName} \u00b7 XISH`,
     foregroundColor: s.foreground_color || "rgb(255,255,255)",
     backgroundColor: s.background_color || "rgb(15,15,20)",
     labelColor: s.label_color || "rgb(201,168,76)",
@@ -165,19 +174,17 @@ async function buildPassJson(
         // "XISH" label places the brand name prominently in the centre of the card
         { key: "points", label: "XISH", value: `${pts.toLocaleString()} pts` },
       ],
+      // iOS storeCard: secondary + auxiliary are rendered in one combined row,
+      // max 4 fields total. We use exactly 2+2=4.
       secondaryFields: [
         { key: "member_name", label: s.secondary1_label || "MEMBER",  value: m.customer_name || "—" },
         { key: "xish_id",    label: s.secondary2_label || "XISH ID", value: m.xish_id },
       ],
       auxiliaryFields: [
-        // Points remaining to next tier (plain text — Apple Wallet renders no native bar)
-        { key: "progress", label: progressLabel, value: progressText },
+        // Visual progress bar toward next tier (unicode blocks render fine in iOS Wallet)
+        { key: "progress", label: progressLabel, value: progressBar },
         // Active discount for current tier
         { key: "discount", label: "DISCOUNT",  value: discountPct > 0 ? `${discountPct}% off` : "Earn to unlock" },
-        // Available gift count (detail on back)
-        { key: "gifts",    label: "GIFTS",     value: gifts.length > 0 ? `${gifts.length} available` : "None" },
-        // XISH network size (full list on back)
-        { key: "venues",   label: "VENUES",    value: venues.length > 0 ? `${venues.length} restaurant${venues.length !== 1 ? "s" : ""}` : "—" },
       ],
       backFields: [] as any[],
     },

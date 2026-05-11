@@ -834,14 +834,18 @@
     card.style.background = bg;
     card.style.color      = fg;
 
-    // logoText → "Logo Text · XISH" to reflect the multi-brand format
+    // logoText: use restaurant org name when logo_text is the default "XISH"
     const logoText = document.getElementById("wp-logo-text").value || "XISH";
+    const orgName  = document.getElementById("wp-org-name").value  || "Restaurant";
     const headerLbl = document.getElementById("wp-header-lbl").value || "TIER";
     const sec1Lbl   = document.getElementById("wp-sec1-lbl").value  || "MEMBER";
     const sec2Lbl   = document.getElementById("wp-sec2-lbl").value  || "XISH ID";
 
     const logoEl = document.getElementById("wp-prev-logo-text");
-    if (logoEl) { logoEl.textContent = logoText === "XISH" ? "XISH" : `${logoText} · XISH`; logoEl.style.color = lbl; }
+    if (logoEl) {
+      logoEl.textContent = (logoText && logoText !== "XISH") ? `${logoText} · XISH` : `${orgName} · XISH`;
+      logoEl.style.color = lbl;
+    }
     const hlblEl = document.getElementById("wp-prev-header-lbl");
     if (hlblEl) { hlblEl.textContent = headerLbl; hlblEl.style.color = lbl; }
     const hvalEl = document.getElementById("wp-prev-header-val");
