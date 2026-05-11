@@ -37,24 +37,26 @@ body {
    ═══════════════════════════════════════════════════ */
 
 .landing {
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: #111;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── HERO ─────────────────────────────────────────── */
 .landing-hero {
-  flex: 0 0 42%;
+  width: 100%;
+  min-height: 46vh;
+  flex-shrink: 0;
   position: relative;
   background: linear-gradient(160deg, #1a252f 0%, #2c3e50 100%);
   background-size: cover;
   background-position: center;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  align-items: flex-end;
   overflow: hidden;
 }
 
@@ -71,21 +73,26 @@ body {
   z-index: 1;
 }
 
-.landing-hero-top {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  justify-content: flex-end;
-  padding: 14px 16px 0;
-}
-
 .landing-hero-bottom {
   position: relative;
   z-index: 2;
-  padding: 0 20px 22px;
+  padding: 0 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+}
+
+/* ── LANGUAGE SWITCHER (removed from landing, now in menu header) ── */
+
+/* ── CONTENT SECTION ──────────────────────────────── */
+.landing-content {
+  background: var(--bg-white);
+  padding: 20px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex-shrink: 0;
 }
 
 /* Logo — small square badge in hero */
@@ -132,57 +139,7 @@ body {
   margin-top: 2px;
 }
 
-/* ── LANGUAGE SWITCHER in hero ────────────────────── */
-.language-switcher-landing {
-  display: flex;
-  gap: 4px;
-}
-
-.language-switcher-landing .lang-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1.5px solid rgba(255,255,255,0.45);
-  border-radius: 20px;
-  background: rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.9);
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  backdrop-filter: blur(4px);
-}
-
-.language-switcher-landing .lang-btn.active,
-.language-switcher-landing .lang-btn:hover {
-  background: rgba(255,255,255,0.3);
-  color: #fff;
-}
-
-/* ── BOTTOM CARD ──────────────────────────────────── */
-.landing-card {
-  flex: 1;
-  background: var(--bg-white);
-  border-radius: 22px 22px 0 0;
-  margin-top: -18px;
-  padding: 22px 18px 28px;
-  overflow-y: auto;
-  box-shadow: 0 -6px 24px rgba(0,0,0,0.18);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  position: relative;
-  z-index: 3;
-}
-
-/* Pill handle at top of card */
-.landing-card::before {
-  content: '';
-  display: block;
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: #d1d5db;
-  margin: -8px auto 10px;
-}
+/* ── XISH MEMBER BAR (in content) ──────────────────── */
 
 /* ── XISH MEMBER BAR (in card) ────────────────────── */
 .xish-member-bar-card {
@@ -300,7 +257,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   padding: 13px 16px;
   background: transparent;
   border: 1.5px solid var(--border-color);
@@ -311,11 +268,29 @@ body {
   cursor: pointer;
   transition: background 0.18s;
   -webkit-tap-highlight-color: transparent;
+  flex-wrap: wrap;
 }
 
 .landing-secondary-btn:active { background: var(--bg-light); }
 
 .secondary-icon { font-size: 16px; }
+
+.landing-secondary-zh {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.landing-secondary-sep {
+  color: var(--text-light);
+  font-weight: 400;
+}
+
+.landing-secondary-en {
+  font-size: 13px;
+  color: var(--text-light);
+  font-weight: 500;
+}
 
 /* ── XISH LOYALTY SECTION ─────────────────────────── */
 .xish-landing-section {
@@ -372,13 +347,22 @@ body {
   transform: scale(0.97);
 }
 
-.xish-act-icon { font-size: 26px; line-height: 1; }
+.xish-act-icon { font-size: 24px; line-height: 1; }
 
-.xish-act-label {
-  font-size: 11px;
-  font-weight: 600;
+.xish-act-label-zh {
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text-dark);
   text-align: center;
+  line-height: 1;
+}
+
+.xish-act-label-en {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-light);
+  text-align: center;
+  line-height: 1;
 }
 
 /* Badge pip on xish buttons (e.g. coupon count) */

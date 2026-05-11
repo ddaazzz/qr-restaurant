@@ -286,10 +286,10 @@ function setLanguageFromMenu(lang) {
     setLanguage(lang);
   }
   
-  // Update table indicator
-  if (document.getElementById('table-indicator')) {
-    document.getElementById("table-indicator").textContent = `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
-  }
+  // Update new header center text
+  _refreshHeaderText();
+  const langLabel = document.getElementById('header-lang-label');
+  if (langLabel) langLabel.textContent = lang === 'zh' ? '中' : 'EN';
   
   // Re-render cart to update labels
   updateCartBar();
@@ -298,6 +298,61 @@ function setLanguageFromMenu(lang) {
   if (window.menu && document.getElementById('menu') && document.getElementById('menu').innerHTML) {
     renderMenu(window.menu);
     renderCategories(window.menu.categories);
+  }
+}
+
+// ── New header helper functions ──────────────────────────────────────────────
+
+function _refreshHeaderText() {
+  const orderTypeEl = document.getElementById('header-order-type');
+  const orderSubEl  = document.getElementById('header-order-sub');
+  if (!orderTypeEl) return;
+  const lang = localStorage.getItem('language') || 'zh';
+  if (!IS_ORDER_NOW || hasScannedTable) {
+    orderTypeEl.textContent = lang === 'zh' ? '堂食點餐' : 'Dine In';
+    if (orderSubEl) orderSubEl.textContent = `${pax || '-'} ${t('menu.pax-label')} · ${t('menu.table-label')} ${tableName}`;
+  } else if (orderType === 'counter') {
+    orderTypeEl.textContent = lang === 'zh' ? '取餐' : 'Pick Up';
+    if (orderSubEl) orderSubEl.textContent = lang === 'zh' ? '即時取餐' : 'Order for Now';
+  } else if (orderType === 'takeaway') {
+    orderTypeEl.textContent = lang === 'zh' ? '外帶' : 'Takeaway';
+    if (orderSubEl) orderSubEl.textContent = lang === 'zh' ? '即時外帶' : 'Order for Now';
+  } else {
+    orderTypeEl.textContent = lang === 'zh' ? '堂食' : 'Dine In';
+    if (orderSubEl) orderSubEl.textContent = '';
+  }
+}
+
+function backToLanding() {
+  closeAllDrawers();
+  if (idlePollTimer)         { clearInterval(idlePollTimer);         idlePollTimer = null; }
+  if (confirmationPollTimer) { clearInterval(confirmationPollTimer); confirmationPollTimer = null; }
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('landing-page').style.display = '';
+}
+
+function cycleHeaderLang() {
+  const current = localStorage.getItem('language') || 'zh';
+  setLanguageFromMenu(current === 'zh' ? 'en' : 'zh');
+}
+
+function openXishOrJoin() {
+  if (typeof xishEnabled !== 'undefined' && xishEnabled) {
+    openXishTab('points');
+  }
+}
+
+function toggleMenuSearch() {
+  const row = document.getElementById('menu-search-row');
+  if (!row) return;
+  const visible = row.style.display !== 'none';
+  row.style.display = visible ? 'none' : 'block';
+  if (!visible) {
+    const inp = document.getElementById('search-input');
+    if (inp) { inp.value = ''; filterMenu(''); setTimeout(() => inp.focus(), 50); }
+  } else {
+    const inp = document.getElementById('search-input');
+    if (inp) { inp.value = ''; filterMenu(''); }
   }
 }
 
@@ -595,18 +650,10 @@ async function startOrdering() {
   const currentLang = localStorage.getItem('language') || 'zh';
   setLanguage(currentLang);
 
+  _refreshHeaderText();
   {
-    let _indicator;
-    if (!IS_ORDER_NOW || hasScannedTable) {
-      _indicator = `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
-    } else if (orderType === 'counter') {
-      _indicator = '🏪 Pick Up';
-    } else if (orderType === 'takeaway') {
-      _indicator = '🥡 Takeaway';
-    } else {
-      _indicator = '🍽 Dine In';
-    }
-    document.getElementById("table-indicator").textContent = _indicator;
+    const langLabel = document.getElementById('header-lang-label');
+    if (langLabel) langLabel.textContent = currentLang === 'zh' ? '中' : 'EN';
   }
 
   // Cart bar click handlers — only attach once
@@ -2027,12 +2074,13 @@ function setCartBarVisible(visible) {
   else bar.classList.add('hidden');
 }
 function setHeaderOrdersMode(active, isPayment = false) {
-  const backBtn        = document.getElementById('header-back-btn');
-  const pageTitle      = document.getElementById('header-page-title');
-  const tableIndicator = document.getElementById('table-indicator');
-  const searchContainer= document.getElementById('search-container');
-  const headerRight    = document.querySelector('.header-right-menu');
-  const headerTableName= document.getElementById('header-table-name');
+  const backBtn      = document.getElementById('header-back-btn');
+  const pageTitle    = document.getElementById('header-page-title');
+  const headerTableName = document.getElementById('header-table-name');
+  const menuBtn      = document.getElementById('header-menu-btn');
+  const orderInfo    = document.getElementById('header-order-info');
+  const headerIcons  = document.getElementById('header-icons');
+  const searchRow    = document.getElementById('menu-search-row');
 
   const show = el => el && (el.style.display = '');
   const hide = el => el && (el.style.display = 'none');
@@ -2041,19 +2089,20 @@ function setHeaderOrdersMode(active, isPayment = false) {
     show(backBtn);
     show(pageTitle);
     show(headerTableName);
-    hide(tableIndicator);
-    hide(searchContainer);
-    hide(headerRight);
+    hide(menuBtn);
+    hide(orderInfo);
+    hide(headerIcons);
+    if (searchRow) hide(searchRow);
 
     pageTitle.textContent = isPayment ? t('menu.payment') || 'Payment' : t('menu.check-orders') || 'Check Orders';
-    headerTableName.textContent = `${t('menu.table-label') || 'Table'} ${tableName}`;
+    headerTableName.textContent = tableName ? `${t('menu.table-label') || 'Table'} ${tableName}` : '';
   } else {
     hide(backBtn);
     hide(pageTitle);
     hide(headerTableName);
-    show(tableIndicator);
-    show(searchContainer);
-    show(headerRight);
+    show(menuBtn);
+    show(orderInfo);
+    show(headerIcons);
   }
 }
 

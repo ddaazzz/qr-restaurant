@@ -8,11 +8,11 @@
   <!-- Translations -->
   <script src="/translations.js"></script>
   <!-- Landing styles -->
-  <link rel="stylesheet" href="/landing.css?v=20260511b" />
+  <link rel="stylesheet" href="/landing.css?v=20260511c" />
   <!-- Language Switcher Styles -->
   <link rel="stylesheet" href="/language-switcher.css" />
   <!-- Menu styles -->
-  <link rel="stylesheet" href="/menu.css?v=20260512a" />
+  <link rel="stylesheet" href="/menu.css?v=20260514a" />
   <!-- QR Code scanner (used for customer table-scan from order-now mode) -->
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
 </head>
@@ -23,17 +23,8 @@
   <!-- ================= LANDING PAGE ================= -->
   <div id="landing-page" class="landing">
 
-    <!-- ── HERO SECTION ─────────────────────────────── -->
+    <!-- ── HERO IMAGE ─────────────────────────────────── -->
     <div id="landing-hero" class="landing-hero">
-      <!-- Top bar: language switcher -->
-      <div class="landing-hero-top">
-        <div class="language-switcher-landing">
-          <button class="lang-btn lang-btn-en" onclick="setLanguageFromMenu('en')" data-lang="en" title="English">EN</button>
-          <button class="lang-btn lang-btn-zh" onclick="setLanguageFromMenu('zh')" data-lang="zh" title="中文">中</button>
-        </div>
-      </div>
-
-      <!-- Bottom of hero: logo + name + badge -->
       <div class="landing-hero-bottom">
         <img id="logo" class="landing-logo" />
         <h2 id="restaurantName"></h2>
@@ -42,56 +33,61 @@
       </div>
     </div>
 
-    <!-- ── BOTTOM CARD ───────────────────────────────── -->
-    <div id="landing-card" class="landing-card">
+    <!-- ── SCROLLABLE CONTENT ─────────────────────────── -->
+    <div id="landing-content" class="landing-content">
 
       <!-- XISH member bar (shown when member is logged in) -->
       <div id="xish-member-bar" class="xish-member-bar-card" style="display:none"></div>
 
-      <!-- Primary actions: Dine In + Pick Up -->
+      <!-- Primary actions -->
       <div class="landing-action-row">
         <button id="dine-in-btn" class="landing-action-btn">
           <span class="action-emoji">🍽</span>
           <span class="action-label-main">堂食</span>
-          <span class="action-label-sub">DINE IN</span>
+          <span class="action-label-sub">ORDER FOR TABLE</span>
         </button>
         <button id="togo-btn" class="landing-action-btn">
           <span class="action-emoji">🥡</span>
-          <span class="action-label-main">自提</span>
-          <span class="action-label-sub">PICK UP</span>
+          <span class="action-label-main">外帶</span>
+          <span class="action-label-sub">TAKEAWAY</span>
         </button>
       </div>
 
-      <!-- Transaction Record (secondary) -->
+      <!-- Transaction Record (hidden in order-now mode) -->
       <button id="check-orders-btn" class="landing-secondary-btn">
         <span class="secondary-icon">📋</span>
-        <span data-i18n="menu.check-orders">Transaction Record</span>
+        <span class="landing-secondary-zh">交易記錄</span>
+        <span class="landing-secondary-sep"> · </span>
+        <span class="landing-secondary-en">Transaction Record</span>
       </button>
 
       <!-- XISH loyalty section (revealed by JS when xish_enabled) -->
       <div id="xish-landing-section" class="xish-landing-section" style="display:none">
         <div class="xish-section-divider">
           <span class="xish-divider-line"></span>
-          <span class="xish-divider-label">✦ XISH Membership</span>
+          <span class="xish-divider-label">✦ XISH</span>
           <span class="xish-divider-line"></span>
         </div>
         <div class="xish-action-row">
           <button class="xish-action-btn" id="my-points-btn" onclick="openXishTab('points')">
             <span class="xish-act-icon">⭐</span>
-            <span class="xish-act-label">My Points</span>
+            <span class="xish-act-label-zh">積分</span>
+            <span class="xish-act-label-en">My Points</span>
           </button>
           <button class="xish-action-btn" id="coupons-btn" onclick="openXishTab('coupons')">
             <span class="xish-act-icon">🎟</span>
-            <span class="xish-act-label">Coupons</span>
+            <span class="xish-act-label-zh">優惠券</span>
+            <span class="xish-act-label-en">Coupons</span>
           </button>
           <button class="xish-action-btn" id="gift-cards-btn" onclick="openXishTab('gifts')">
             <span class="xish-act-icon">🎁</span>
-            <span class="xish-act-label">Gift Cards</span>
+            <span class="xish-act-label-zh">禮品卡</span>
+            <span class="xish-act-label-en">Gift Cards</span>
           </button>
         </div>
       </div>
 
-    </div><!-- /.landing-card -->
+    </div><!-- /.landing-content -->
 
     <!-- Hidden data elements still written to by JS -->
     <p id="tableInfo" style="display:none"></p>
@@ -119,27 +115,42 @@
 
     <!-- Header -->
     <div class="app-header">
-      <!-- Back button — shown when orders/payment screen is active -->
+      <!-- Left: back to landing -->
+      <button id="header-menu-btn" class="header-menu-btn" onclick="backToLanding()">
+        <svg width="18" height="13" viewBox="0 0 18 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="0" y1="1.5" x2="18" y2="1.5"/>
+          <line x1="0" y1="6.5" x2="18" y2="6.5"/>
+          <line x1="0" y1="11.5" x2="18" y2="11.5"/>
+        </svg>
+      </button>
+      <!-- Center: order type + sub-info -->
+      <div class="header-order-info" id="header-order-info">
+        <div class="header-order-type" id="header-order-type"></div>
+        <div class="header-order-sub" id="header-order-sub"></div>
+      </div>
+      <!-- Right: icon buttons -->
+      <div class="header-icons" id="header-icons">
+        <button class="header-icon-btn" id="header-search-btn" onclick="toggleMenuSearch()" title="Search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <button class="header-icon-btn" id="header-lang-btn" onclick="cycleHeaderLang()" title="Language">
+          <span id="header-lang-label">中</span>
+        </button>
+        <button class="header-icon-btn" id="orders-btn" title="Orders">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </button>
+        <button class="header-icon-btn" id="header-profile-btn" onclick="openXishOrJoin()" title="Profile">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+      </div>
+      <!-- Orders/payment mode overrides (shown instead of above) -->
       <button id="header-back-btn" class="header-back-btn" style="display:none" onclick="headerBackAction()">‹</button>
       <span id="header-page-title" class="header-page-title" style="display:none"></span>
-
-      <!-- Normal menu header -->
-      <span id="table-indicator"></span>
-
-      <div id="search-container">
-        <input type="text" id="search-input" placeholder="🔍 Search…" oninput="filterMenu(this.value)" autocomplete="off" />
-      </div>
-
-      <div class="header-right-menu">
-        <div class="language-switcher-menu">
-          <button class="lang-btn lang-btn-en" onclick="setLanguageFromMenu('en')" data-lang="en" title="English">EN</button>
-          <button class="lang-btn lang-btn-zh" onclick="setLanguageFromMenu('zh')" data-lang="zh" title="中文">中</button>
-        </div>
-        <button id="orders-btn" title="Check Orders">🧾 Orders</button>
-      </div>
-
-      <!-- Table name shown in header right when orders drawer is active -->
       <span id="header-table-name" class="header-table-name" style="display:none"></span>
+    </div>
+    <!-- Collapsible search row (toggled by search icon) -->
+    <div id="menu-search-row" class="menu-search-row" style="display:none">
+      <input type="text" id="search-input" placeholder="🔍 Search…" oninput="filterMenu(this.value)" autocomplete="off" />
     </div>
 
     <!-- Main layout -->
@@ -191,7 +202,7 @@
 </div><!-- #phone-frame -->
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="/menu.js?v=20260513a" defer></script>
+  <script src="/menu.js?v=20260514a" defer></script>
 
 </body>
 </html>
