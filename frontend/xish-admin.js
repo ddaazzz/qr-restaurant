@@ -766,7 +766,7 @@
 
   // ── Join QR ──────────────────────────────────────────────
   function xaWalletGenerateJoinQR() {
-    const baseUrl = "https://chuio.io";
+    const baseUrl = window.location.origin;
     const joinUrl = `${baseUrl}/xish/join/${state.restaurantId}`;
     const urlInput = document.getElementById("wp-join-url");
     if (urlInput) urlInput.value = joinUrl;
