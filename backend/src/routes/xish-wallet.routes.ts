@@ -4,6 +4,7 @@ import { PKPass } from "passkit-generator";
 import * as fs from "fs";
 import * as path from "path";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import { sendPassUpdatePush } from "../utils/xish-apns";
 
 const router = Router();
@@ -213,14 +214,22 @@ async function buildPassJson(
     passJson.storeCard.backFields.push({ key: "tier_table", label: "MEMBERSHIP TIERS", value: tierLines + ptsToNext });
   }
 
-  // 2. Active discounts for current tier (from xish_discount_settings)
-  if (discounts.length > 0) {
-    const discountLines = discounts.map((d: any) => {
+  // 2. Discounts: tier built-in discount + any explicit xish_discount_settings rows
+  {
+    const discountLines: string[] = [];
+    // Always show the tier's built-in discount if > 0
+    if (discountPct > 0) {
+      discountLines.push(`${discountPct}% off all orders (${capitalize(tier)} tier)`);
+    }
+    // Additional one-off discounts from xish_discount_settings
+    for (const d of discounts) {
       let line = `${d.discount_percent}% discount`;
       if (d.valid_until) line += `  ·  Until ${new Date(d.valid_until).toLocaleDateString("en-GB")}`;
-      return line;
-    }).join("\n");
-    passJson.storeCard.backFields.push({ key: "discounts", label: "YOUR DISCOUNTS", value: discountLines });
+      discountLines.push(line);
+    }
+    if (discountLines.length > 0) {
+      passJson.storeCard.backFields.push({ key: "discounts", label: "YOUR DISCOUNTS", value: discountLines.join("\n") });
+    }
   }
 
   // 3. Available gifts (from xish_gift_settings)
@@ -234,7 +243,23 @@ async function buildPassJson(
   }
 
   // 4. Custom back fields from wallet settings
-  if (s.back1_label) passJson.storeCard.backFields.push({ key: "back1", label: s.back1_label, value: s.back1_value || baseUrl });
+  //    For "Order Online"-style fields: auto-generate a URL to the pickup menu
+  //    with a long-lived XISH JWT so the member is auto-logged in on tap.
+  if (s.back1_label) {
+    let back1Val = s.back1_value || "";
+    // If the label looks like an order/menu link AND no value is set, build the pickup URL
+    const isOrderLink = /order|menu|pickup|pick.?up/i.test(s.back1_label);
+    if (!back1Val && isOrderLink) {
+      const JWT_SECRET = process.env.JWT_SECRET || "";
+      const orderToken = jwt.sign(
+        { memberId: m.id, restaurantId: m.restaurant_id, type: "wallet" },
+        JWT_SECRET,
+        { expiresIn: "365d" }
+      );
+      back1Val = `${baseUrl}/order-now/${m.restaurant_id}?token=${orderToken}`;
+    }
+    passJson.storeCard.backFields.push({ key: "back1", label: s.back1_label, value: back1Val || baseUrl });
+  }
   if (s.back2_label) passJson.storeCard.backFields.push({ key: "back2", label: s.back2_label, value: s.back2_value || "" });
   if (s.back3_label) passJson.storeCard.backFields.push({ key: "back3", label: s.back3_label, value: s.back3_value || "" });
 
