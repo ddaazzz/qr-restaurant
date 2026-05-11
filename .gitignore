@@ -4,8 +4,6 @@ dist/
 .env.local
 .DS_Store
 
-backend/.env
-
 # Logs and error files
 *.log
 *.err

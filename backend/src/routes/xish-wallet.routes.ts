@@ -53,6 +53,187 @@ async function signPassJson(passJson: any, logoBuffer?: Buffer): Promise<Buffer>
   return pass.getAsBuffer();
 }
 
+// ─── Shared pass builder — rich content + geofencing ─────────────────────────
+async function buildPassJson(
+  m: {
+    id: number;
+    xish_id: string;
+    points_balance: number;
+    tier: string;
+    customer_name: string;
+    wallet_id?: string | null;
+    restaurant_id: number;
+  },
+  s: Record<string, any>,
+  restaurantName: string
+): Promise<{ passJson: any; serial: string }> {
+  const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
+  const serial  = `XISH-${m.xish_id}-${Date.now()}`;
+  const pts     = m.points_balance || 0;
+  const tier    = m.tier || "basic";
+
+  // Fetch tier settings, active discounts, available gifts, XISH venues in parallel
+  const [tierRows, discountRows, giftRows, venueRows] = await Promise.all([
+    pool.query(
+      `SELECT tier, points_threshold, discount_percent
+       FROM xish_tier_settings
+       WHERE restaurant_id = $1 AND is_active = true
+       ORDER BY points_threshold ASC`,
+      [m.restaurant_id]
+    ),
+    pool.query(
+      `SELECT discount_percent, valid_until
+       FROM xish_discount_settings
+       WHERE restaurant_id = $1 AND tier = $2 AND is_active = true
+         AND (valid_until IS NULL OR valid_until > NOW())
+       ORDER BY discount_percent DESC`,
+      [m.restaurant_id, tier]
+    ),
+    pool.query(
+      `SELECT item_name, quantity, redemption_end
+       FROM xish_gift_settings
+       WHERE restaurant_id = $1 AND is_active = true
+         AND (redemption_end IS NULL OR redemption_end > NOW())
+       ORDER BY id ASC`,
+      [m.restaurant_id]
+    ),
+    pool.query(
+      `SELECT name, lat::float AS lat, lng::float AS lng
+       FROM restaurants
+       WHERE xish_enabled = true AND lat IS NOT NULL AND lng IS NOT NULL
+       ORDER BY id ASC LIMIT 10`
+    ),
+  ]);
+
+  const tiers      = tierRows.rows;
+  const discounts  = discountRows.rows;
+  const gifts      = giftRows.rows;
+  const venues     = venueRows.rows;
+
+  // Tier progression
+  const currentTierRow = tiers.find((t: any) => t.tier === tier);
+  const discountPct    = Number(currentTierRow?.discount_percent || 0);
+  const nextTierRow    = tiers.find((t: any) => t.points_threshold > pts);
+  const nextTierLabel  = nextTierRow
+    ? `${(nextTierRow.points_threshold - pts).toLocaleString()} pts to ${capitalize(nextTierRow.tier)}`
+    : "Max Tier";
+
+  const passJson: any = {
+    formatVersion: 1,
+    passTypeIdentifier: process.env.APPLE_PASS_TYPE_ID || "pass.io.xish.loyalty",
+    serialNumber: serial,
+    teamIdentifier: process.env.APPLE_TEAM_ID || "5V7D5PUU8D",
+    organizationName: s.organization_name || restaurantName,
+    description: s.description || `${restaurantName} Loyalty Card`,
+    logoText: s.logo_text || restaurantName,
+    foregroundColor: s.foreground_color || "rgb(255,255,255)",
+    backgroundColor: s.background_color || "rgb(15,15,20)",
+    labelColor: s.label_color || "rgb(201,168,76)",
+    storeCard: {
+      headerFields: [
+        { key: "tier", label: s.header_field_label || "TIER", value: tier.toUpperCase() },
+      ],
+      primaryFields: [
+        { key: "points", label: s.primary_field_label || "POINTS BALANCE", value: `${pts.toLocaleString()} pts` },
+      ],
+      secondaryFields: [
+        { key: "member_name", label: s.secondary1_label || "MEMBER",  value: m.customer_name || "—" },
+        { key: "xish_id",    label: s.secondary2_label || "XISH ID", value: m.xish_id },
+      ],
+      auxiliaryFields: [
+        { key: "next_tier", label: "NEXT MILESTONE", value: nextTierLabel },
+        { key: "discount",  label: "YOUR DISCOUNT",  value: discountPct > 0 ? `${discountPct}% off` : "Earn points to unlock" },
+      ],
+      backFields: [] as any[],
+    },
+    barcodes: [{
+      message: m.xish_id,
+      format: s.barcode_format || "PKBarcodeFormatQR",
+      messageEncoding: "iso-8859-1",
+      altText: m.xish_id,
+    }],
+  };
+
+  // ─── Back fields ───────────────────────────────────────────────────────────
+
+  // 1. Membership tier ladder
+  if (tiers.length > 0) {
+    const tierLines = tiers.map((t: any) => {
+      const threshold = t.points_threshold === 0 ? "0+" : `${Number(t.points_threshold).toLocaleString()}+`;
+      const disc = Number(t.discount_percent) > 0 ? `  ·  ${t.discount_percent}% off` : "";
+      return `${capitalize(t.tier)}  ${threshold} pts${disc}`;
+    }).join("\n");
+    passJson.storeCard.backFields.push({ key: "tier_table", label: "MEMBERSHIP TIERS", value: tierLines });
+  }
+
+  // 2. Active discounts for current tier (from xish_discount_settings)
+  if (discounts.length > 0) {
+    const discountLines = discounts.map((d: any) => {
+      let line = `${d.discount_percent}% discount`;
+      if (d.valid_until) line += `  ·  Until ${new Date(d.valid_until).toLocaleDateString("en-GB")}`;
+      return line;
+    }).join("\n");
+    passJson.storeCard.backFields.push({ key: "discounts", label: "YOUR DISCOUNTS", value: discountLines });
+  }
+
+  // 3. Available gifts (from xish_gift_settings)
+  if (gifts.length > 0) {
+    const giftLines = gifts.map((g: any) => {
+      let line = `${g.quantity}× ${g.item_name}`;
+      if (g.redemption_end) line += `  ·  Redeem by ${new Date(g.redemption_end).toLocaleDateString("en-GB")}`;
+      return line;
+    }).join("\n");
+    passJson.storeCard.backFields.push({ key: "gifts", label: "AVAILABLE GIFTS", value: giftLines });
+  }
+
+  // 4. Custom back fields from wallet settings
+  if (s.back1_label) passJson.storeCard.backFields.push({ key: "back1", label: s.back1_label, value: s.back1_value || baseUrl });
+  if (s.back2_label) passJson.storeCard.backFields.push({ key: "back2", label: s.back2_label, value: s.back2_value || "" });
+  if (s.back3_label) passJson.storeCard.backFields.push({ key: "back3", label: s.back3_label, value: s.back3_value || "" });
+
+  // 5. XISH network — all connected restaurants
+  if (venues.length > 0) {
+    passJson.storeCard.backFields.push({
+      key: "xish_network",
+      label: "EARN POINTS AT",
+      value: venues.map((r: any) => r.name).join("\n"),
+    });
+  }
+
+  // ─── Geofencing: all XISH restaurants (Apple Wallet limit: 10) ────────────
+  const geoLocations: any[] = [];
+
+  // Wallet-settings location first (if explicitly configured)
+  if (s.location_lat && s.location_lng) {
+    geoLocations.push({
+      latitude: parseFloat(s.location_lat),
+      longitude: parseFloat(s.location_lng),
+      relevantText: s.location_label || (s.program_name || restaurantName),
+    });
+  }
+
+  for (const r of venues) {
+    if (geoLocations.length >= 10) break;
+    // Skip if nearly identical to the wallet-settings location
+    if (s.location_lat && s.location_lng &&
+        Math.abs(r.lat - parseFloat(s.location_lat)) < 0.0002 &&
+        Math.abs(r.lng - parseFloat(s.location_lng)) < 0.0002) continue;
+    geoLocations.push({
+      latitude: r.lat,
+      longitude: r.lng,
+      relevantText: `${r.name} — Tap to view your XISH card`,
+    });
+  }
+
+  if (geoLocations.length > 0) passJson.locations = geoLocations;
+
+  return { passJson, serial };
+}
+
+function capitalize(str: string): string {
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+}
+
 // Haversine formula — returns distance in metres between two lat/lng points
 function haversineMetres(
   lat1: number, lng1: number,
@@ -259,9 +440,10 @@ router.post("/xish/wallet/generate-pass", async (req, res) => {
     if (!member_id) return res.status(400).json({ error: "member_id required" });
 
     const memberRes = await pool.query(
-      `SELECT m.*, c.name AS customer_name, c.restaurant_id
+      `SELECT m.*, c.name AS customer_name, c.restaurant_id, r.name AS restaurant_name
        FROM xish_members m
        JOIN crm_customers c ON c.id = m.crm_customer_id
+       JOIN restaurants r ON r.id = c.restaurant_id
        WHERE m.id = $1`,
       [member_id]
     );
@@ -275,89 +457,26 @@ router.post("/xish/wallet/generate-pass", async (req, res) => {
     );
     const s = settingsRes.rows[0] || {};
 
-    const programName    = s.program_name     || "XISH Loyalty";
-    const logoText       = s.logo_text        || "XISH";
-    const orgName        = s.organization_name || "XISH Loyalty";
-    const desc           = s.description      || "XISH Loyalty Card";
-    const bgColor        = s.background_color || "rgb(15,15,20)";
-    const fgColor        = s.foreground_color || "rgb(255,255,255)";
-    const lblColor       = s.label_color      || "rgb(201,168,76)";
-    const headerLbl      = s.header_field_label   || "TIER";
-    const primaryLbl     = s.primary_field_label  || "POINTS BALANCE";
-    const sec1Lbl        = s.secondary1_label || "MEMBER";
-    const sec2Lbl        = s.secondary2_label || "XISH ID";
-    const barcodeFormat  = s.barcode_format   || "PKBarcodeFormatQR";
-
-    const serial = `XISH-${m.xish_id || member_id}-${Date.now()}`;
     const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
     const passUrl = `${baseUrl}/xish/wallet/member/${m.wallet_id || member_id}`;
 
-    const passJson: any = {
-      formatVersion: 1,
-      passTypeIdentifier: process.env.APPLE_PASS_TYPE_ID || "pass.io.xish.loyalty",
-      serialNumber: serial,
-      teamIdentifier: process.env.APPLE_TEAM_ID || "TEAMID",
-      organizationName: orgName,
-      description: desc,
-      logoText: logoText,
-      foregroundColor: fgColor,
-      backgroundColor: bgColor,
-      labelColor: lblColor,
-      webServiceURL: `${baseUrl}/api/xish/wallet/passkit`,
-      authenticationToken: m.wallet_id || `token-${member_id}`,
-      storeCard: {
-        headerFields: [
-          { key: "tier", label: headerLbl, value: (m.tier || "basic").toUpperCase() },
-        ],
-        primaryFields: [
-          { key: "points", label: primaryLbl, value: `${(m.points_balance || 0).toLocaleString()} pts` },
-        ],
-        secondaryFields: [
-          { key: "member_name", label: sec1Lbl, value: m.customer_name || "—" },
-          { key: "xish_id",    label: sec2Lbl, value: m.xish_id || String(member_id) },
-        ],
-        backFields: [] as any[],
+    const { passJson, serial } = await buildPassJson(
+      {
+        id: m.id,
+        xish_id: m.xish_id || String(member_id),
+        points_balance: m.points_balance || 0,
+        tier: m.tier || "basic",
+        customer_name: m.customer_name || "—",
+        wallet_id: m.wallet_id,
+        restaurant_id: m.restaurant_id,
       },
-      barcodes: [
-        {
-          message: m.xish_id || String(member_id),
-          format: barcodeFormat,
-          messageEncoding: "iso-8859-1",
-          altText: m.xish_id || String(member_id),
-        },
-      ],
-    };
+      s,
+      m.restaurant_name || (s.organization_name || "XISH Loyalty")
+    );
 
-    // Back fields from settings
-    if (s.back1_label) {
-      passJson.storeCard.backFields.push({
-        key: "back1", label: s.back1_label,
-        value: s.back1_value || passUrl,
-      });
-    }
-    if (s.back2_label) {
-      passJson.storeCard.backFields.push({
-        key: "back2", label: s.back2_label,
-        value: s.back2_value || `Asia's national loyalty network — xish.io`,
-      });
-    }
-    if (s.back3_label) {
-      passJson.storeCard.backFields.push({
-        key: "back3", label: s.back3_label,
-        value: s.back3_value || "",
-      });
-    }
-
-    // Location relevance
-    if (s.location_lat && s.location_lng) {
-      passJson.locations = [
-        {
-          latitude: parseFloat(s.location_lat),
-          longitude: parseFloat(s.location_lng),
-          relevantText: s.location_label || programName,
-        },
-      ];
-    }
+    // Add webServiceURL + authenticationToken (generate-pass specific)
+    passJson.webServiceURL = `${baseUrl}/api/xish/wallet/passkit`;
+    passJson.authenticationToken = m.wallet_id || `token-${member_id}`;
 
     // Record serial in DB
     await pool.query(
@@ -401,9 +520,10 @@ router.get("/xish/wallet/download/:memberId", async (req, res) => {
     const { memberId } = req.params;
 
     const memberRes = await pool.query(
-      `SELECT m.*, c.name AS customer_name, c.restaurant_id
+      `SELECT m.*, c.name AS customer_name, c.restaurant_id, r.name AS restaurant_name
        FROM xish_members m
        JOIN crm_customers c ON c.id = m.crm_customer_id
+       JOIN restaurants r ON r.id = c.restaurant_id
        WHERE m.id = $1::int OR m.xish_id = $1::text`,
       [memberId]
     );
@@ -416,57 +536,23 @@ router.get("/xish/wallet/download/:memberId", async (req, res) => {
     );
     const s = settingsRes.rows[0] || {};
 
-    const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
-    const passUrl = `${baseUrl}/xish/wallet/member/${m.wallet_id || m.id}`;
-    const serial  = `XISH-${m.xish_id || m.id}-${Date.now()}`;
-
-    const passJson: any = {
-      formatVersion: 1,
-      passTypeIdentifier: process.env.APPLE_PASS_TYPE_ID || "pass.io.xish.loyalty",
-      serialNumber: serial,
-      teamIdentifier: process.env.APPLE_TEAM_ID || "5V7D5PUU8D",
-      organizationName: s.organization_name || "XISH Loyalty",
-      description: s.description || "XISH Loyalty Card",
-      logoText: s.logo_text || "XISH",
-      foregroundColor: s.foreground_color || "rgb(255,255,255)",
-      backgroundColor: s.background_color || "rgb(15,15,20)",
-      labelColor: s.label_color || "rgb(201,168,76)",
-      storeCard: {
-        headerFields: [
-          { key: "tier", label: s.header_field_label || "TIER", value: (m.tier || "basic").toUpperCase() },
-        ],
-        primaryFields: [
-          { key: "points", label: s.primary_field_label || "POINTS BALANCE", value: `${(m.points_balance || 0).toLocaleString()} pts` },
-        ],
-        secondaryFields: [
-          { key: "member_name", label: s.secondary1_label || "MEMBER", value: m.customer_name || "—" },
-          { key: "xish_id",    label: s.secondary2_label || "XISH ID",  value: m.xish_id || String(m.id) },
-        ],
-        backFields: [] as any[],
-      },
-      barcodes: [{
-        message: m.xish_id || String(m.id),
-        format: s.barcode_format || "PKBarcodeFormatQR",
-        messageEncoding: "iso-8859-1",
-        altText: m.xish_id || String(m.id),
-      }],
-    };
-
-    if (s.back1_label) passJson.storeCard.backFields.push({ key: "back1", label: s.back1_label, value: s.back1_value || passUrl });
-    if (s.back2_label) passJson.storeCard.backFields.push({ key: "back2", label: s.back2_label, value: s.back2_value || "" });
-    if (s.back3_label) passJson.storeCard.backFields.push({ key: "back3", label: s.back3_label, value: s.back3_value || "" });
-
-    if (s.location_lat && s.location_lng) {
-      passJson.locations = [{
-        latitude: parseFloat(s.location_lat),
-        longitude: parseFloat(s.location_lng),
-        relevantText: s.location_label || (s.program_name || "XISH"),
-      }];
-    }
-
     if (!certExists()) {
       return res.status(503).json({ error: "PassKit certificates not configured on server" });
     }
+
+    const { passJson } = await buildPassJson(
+      {
+        id: m.id,
+        xish_id: m.xish_id || String(m.id),
+        points_balance: m.points_balance || 0,
+        tier: m.tier || "basic",
+        customer_name: m.customer_name || "—",
+        wallet_id: m.wallet_id,
+        restaurant_id: m.restaurant_id,
+      },
+      s,
+      m.restaurant_name || "Restaurant"
+    );
 
     const pkpassBuffer = await signPassJson(passJson);
     res.set("Content-Type", "application/vnd.apple.pkpass");
@@ -567,8 +653,8 @@ router.post("/xish/pos-sync", async (req, res) => {
          SET points_balance = points_balance + $2,
              tier = CASE
                WHEN points_balance + $2 >= 10000 THEN 'platinum'
-               WHEN points_balance + $2 >= 5000  THEN 'gold'
-               WHEN points_balance + $2 >= 2000  THEN 'silver'
+               WHEN points_balance + $2 >= 2000  THEN 'gold'
+               WHEN points_balance + $2 >= 500   THEN 'silver'
                ELSE 'basic'
              END,
              updated_at = NOW()
@@ -688,66 +774,8 @@ router.post("/xish/join", async (req, res) => {
       memberId = newMember.rows[0].id;
     }
 
-    // 3. Load wallet settings
-    const sRes = await pool.query(
-      `SELECT * FROM xish_wallet_settings WHERE restaurant_id = $1`,
-      [restaurant_id]
-    );
-    const s = sRes.rows[0] || {};
-
-    const rRes = await pool.query(`SELECT name FROM restaurants WHERE id = $1`, [restaurant_id]);
-    const restaurantName = rRes.rows[0]?.name || "Restaurant";
-
-    const baseUrl    = process.env.APP_BASE_URL || "https://chuio.io";
-    const serial     = `XISH-${xishId}-${Date.now()}`;
-    const memberName = cleanName || (cleanPhone ? cleanPhone : "Loyalty Member");
-
-    const passJson: any = {
-      formatVersion: 1,
-      passTypeIdentifier: process.env.APPLE_PASS_TYPE_ID || "pass.io.xish.loyalty",
-      serialNumber: serial,
-      teamIdentifier: process.env.APPLE_TEAM_ID || "5V7D5PUU8D",
-      organizationName: s.organization_name || restaurantName,
-      description: s.description || `${restaurantName} Loyalty Card`,
-      logoText: s.logo_text || restaurantName,
-      foregroundColor: s.foreground_color || "rgb(255,255,255)",
-      backgroundColor: s.background_color || "rgb(15,15,20)",
-      labelColor: s.label_color || "rgb(201,168,76)",
-      storeCard: {
-        headerFields: [
-          { key: "tier", label: s.header_field_label || "TIER", value: "BASIC" },
-        ],
-        primaryFields: [
-          { key: "points", label: s.primary_field_label || "POINTS BALANCE", value: "0 pts" },
-        ],
-        secondaryFields: [
-          { key: "member_name", label: s.secondary1_label || "MEMBER",  value: memberName },
-          { key: "xish_id",    label: s.secondary2_label || "XISH ID", value: xishId },
-        ],
-        backFields: [] as any[],
-      },
-      barcodes: [{
-        message: xishId,
-        format: s.barcode_format || "PKBarcodeFormatQR",
-        messageEncoding: "iso-8859-1",
-        altText: xishId,
-      }],
-    };
-
-    if (s.back1_label) passJson.storeCard.backFields.push({ key: "back1", label: s.back1_label, value: s.back1_value || baseUrl });
-    if (s.back2_label) passJson.storeCard.backFields.push({ key: "back2", label: s.back2_label, value: s.back2_value || "" });
-    if (s.back3_label) passJson.storeCard.backFields.push({ key: "back3", label: s.back3_label, value: s.back3_value || "" });
-
-    if (s.location_lat && s.location_lng) {
-      passJson.locations = [{
-        latitude: parseFloat(s.location_lat),
-        longitude: parseFloat(s.location_lng),
-        relevantText: s.location_label || (s.program_name || restaurantName),
-      }];
-    }
-
-    // Return the download URL — client navigates to it in the same tab so iOS shows the Wallet sheet.
-    // The actual pass signing happens at /api/xish/wallet/download/:memberId, not here.
+    const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
+    // Pass is signed at /api/xish/wallet/download/:memberId when the user opens the link.
     const downloadUrl = `${baseUrl}/api/xish/wallet/download/${memberId}`;
     return res.json({ success: true, member_id: memberId, xish_id: xishId, download_url: downloadUrl });
   } catch (err) {
