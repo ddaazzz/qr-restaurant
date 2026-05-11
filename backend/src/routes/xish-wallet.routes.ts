@@ -110,13 +110,33 @@ async function buildPassJson(
   const gifts      = giftRows.rows;
   const venues     = venueRows.rows;
 
-  // Tier progression
-  const currentTierRow = tiers.find((t: any) => t.tier === tier);
+  // ─── Tier progression + progress bar ─────────────────────────────────────
+  // tiers is already sorted ASC by points_threshold
+  const currentTierIdx = tiers.findIndex((t: any) => t.tier === tier);
+  const currentTierRow = tiers[currentTierIdx >= 0 ? currentTierIdx : 0];
+  const nextTierRow    = tiers[currentTierIdx + 1] || null;
   const discountPct    = Number(currentTierRow?.discount_percent || 0);
-  const nextTierRow    = tiers.find((t: any) => t.points_threshold > pts);
-  const nextTierLabel  = nextTierRow
-    ? `${(nextTierRow.points_threshold - pts).toLocaleString()} pts to ${capitalize(nextTierRow.tier)}`
-    : "Max Tier";
+
+  let progressBar: string;
+  let nextLabel: string;
+  if (nextTierRow) {
+    const start  = Number(currentTierRow?.points_threshold || 0);
+    const end    = Number(nextTierRow.points_threshold);
+    const pct    = end > start ? Math.min(1, Math.max(0, (pts - start) / (end - start))) : 1;
+    const filled = Math.round(pct * 10);
+    progressBar  = "█".repeat(filled) + "░".repeat(10 - filled) + ` ${Math.round(pct * 100)}%`;
+    nextLabel    = `TO ${capitalize(nextTierRow.tier).toUpperCase()}`;
+  } else {
+    progressBar = "██████████ 100%";
+    nextLabel   = "STATUS";
+  }
+
+  // ─── Front-of-card layout ─────────────────────────────────────────────────
+  // logoText  → "Restaurant Name · XISH"   (top-left, establishment branding)
+  // header    → tier badge                 (top-right)
+  // primary   → "XISH" label + pts value   (centre — makes XISH the focal brand)
+  // secondary → member name + XISH ID
+  // auxiliary → progress bar | discount | gifts | venues   (4 info tiles)
 
   const passJson: any = {
     formatVersion: 1,
@@ -125,7 +145,7 @@ async function buildPassJson(
     teamIdentifier: process.env.APPLE_TEAM_ID || "5V7D5PUU8D",
     organizationName: s.organization_name || restaurantName,
     description: s.description || `${restaurantName} Loyalty Card`,
-    logoText: s.logo_text || restaurantName,
+    logoText: s.logo_text ? `${s.logo_text} · XISH` : `${restaurantName} · XISH`,
     foregroundColor: s.foreground_color || "rgb(255,255,255)",
     backgroundColor: s.background_color || "rgb(15,15,20)",
     labelColor: s.label_color || "rgb(201,168,76)",
@@ -134,15 +154,22 @@ async function buildPassJson(
         { key: "tier", label: s.header_field_label || "TIER", value: tier.toUpperCase() },
       ],
       primaryFields: [
-        { key: "points", label: s.primary_field_label || "POINTS BALANCE", value: `${pts.toLocaleString()} pts` },
+        // "XISH" label places the brand name prominently in the centre of the card
+        { key: "points", label: "XISH", value: `${pts.toLocaleString()} pts` },
       ],
       secondaryFields: [
         { key: "member_name", label: s.secondary1_label || "MEMBER",  value: m.customer_name || "—" },
         { key: "xish_id",    label: s.secondary2_label || "XISH ID", value: m.xish_id },
       ],
       auxiliaryFields: [
-        { key: "next_tier", label: "NEXT MILESTONE", value: nextTierLabel },
-        { key: "discount",  label: "YOUR DISCOUNT",  value: discountPct > 0 ? `${discountPct}% off` : "Earn points to unlock" },
+        // 10-block unicode progress bar toward next tier
+        { key: "progress", label: nextLabel,   value: progressBar },
+        // Active discount for current tier
+        { key: "discount", label: "DISCOUNT",  value: discountPct > 0 ? `${discountPct}% off` : "Earn to unlock" },
+        // Available gift count (detail on back)
+        { key: "gifts",    label: "GIFTS",     value: gifts.length > 0 ? `${gifts.length} available` : "None" },
+        // XISH network size (full list on back)
+        { key: "venues",   label: "VENUES",    value: venues.length > 0 ? `${venues.length} restaurant${venues.length !== 1 ? "s" : ""}` : "—" },
       ],
       backFields: [] as any[],
     },
@@ -156,14 +183,19 @@ async function buildPassJson(
 
   // ─── Back fields ───────────────────────────────────────────────────────────
 
-  // 1. Membership tier ladder
+  // 1. Membership tier ladder (with current position marker)
   if (tiers.length > 0) {
     const tierLines = tiers.map((t: any) => {
       const threshold = t.points_threshold === 0 ? "0+" : `${Number(t.points_threshold).toLocaleString()}+`;
-      const disc = Number(t.discount_percent) > 0 ? `  ·  ${t.discount_percent}% off` : "";
-      return `${capitalize(t.tier)}  ${threshold} pts${disc}`;
+      const disc      = Number(t.discount_percent) > 0 ? `  ·  ${t.discount_percent}% off` : "";
+      const current   = t.tier === tier ? "  ◀" : "";
+      return `${capitalize(t.tier)}  ${threshold} pts${disc}${current}`;
     }).join("\n");
-    passJson.storeCard.backFields.push({ key: "tier_table", label: "MEMBERSHIP TIERS", value: tierLines });
+    // Append how many pts to next tier
+    const ptsToNext = nextTierRow
+      ? `\n\n${(Number(nextTierRow.points_threshold) - pts).toLocaleString()} pts until ${capitalize(nextTierRow.tier)}`
+      : "\n\nMax tier reached 🎉";
+    passJson.storeCard.backFields.push({ key: "tier_table", label: "MEMBERSHIP TIERS", value: tierLines + ptsToNext });
   }
 
   // 2. Active discounts for current tier (from xish_discount_settings)
