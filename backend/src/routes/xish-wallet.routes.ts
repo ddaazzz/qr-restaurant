@@ -6,20 +6,31 @@ import * as path from "path";
 
 const router = Router();
 
-// ─── Cert paths (resolved relative to dist/ at runtime) ──────────────────────
+// ─── Cert loading: prefer env vars (Render), fall back to local files ─────────
 const CERTS_DIR = path.resolve(__dirname, "../../certs");
 
+function loadCert(envKey: string, fileName: string): Buffer | null {
+  const b64 = process.env[envKey];
+  if (b64) return Buffer.from(b64, "base64");
+  const filePath = path.join(CERTS_DIR, fileName);
+  if (fs.existsSync(filePath)) return fs.readFileSync(filePath);
+  return null;
+}
+
 function certExists(): boolean {
-  return (
-    fs.existsSync(path.join(CERTS_DIR, "pass.pem")) &&
-    fs.existsSync(path.join(CERTS_DIR, "passkit.key.pem")) &&
-    fs.existsSync(path.join(CERTS_DIR, "wwdr.pem"))
+  return !!(
+    loadCert("APPLE_PASS_CERT_B64", "pass.pem") &&
+    loadCert("APPLE_PASS_KEY_B64", "passkit.key.pem") &&
+    loadCert("APPLE_WWDR_B64", "wwdr.pem")
   );
 }
 
 // ─── Build + sign a .pkpass Buffer from a pass JSON object ───────────────────
 async function signPassJson(passJson: any, logoBuffer?: Buffer): Promise<Buffer> {
-  if (!certExists()) throw new Error("PassKit certificates not found in certs/");
+  const signerCert = loadCert("APPLE_PASS_CERT_B64", "pass.pem");
+  const signerKey  = loadCert("APPLE_PASS_KEY_B64", "passkit.key.pem");
+  const wwdr       = loadCert("APPLE_WWDR_B64", "wwdr.pem");
+  if (!signerCert || !signerKey || !wwdr) throw new Error("PassKit certificates not configured");
 
   // Minimal 1×1 transparent PNG placeholder for icon/logo
   const transparentPng = Buffer.from(
@@ -36,11 +47,7 @@ async function signPassJson(passJson: any, logoBuffer?: Buffer): Promise<Buffer>
     "icon@2x.png":  logo,
   };
 
-  const certs = {
-    wwdr:       fs.readFileSync(path.join(CERTS_DIR, "wwdr.pem")),
-    signerCert: fs.readFileSync(path.join(CERTS_DIR, "pass.pem")),
-    signerKey:  fs.readFileSync(path.join(CERTS_DIR, "passkit.key.pem")),
-  };
+  const certs = { wwdr, signerCert, signerKey };
 
   const pass = new PKPass(buffers, certs, passJson);
   return pass.getAsBuffer();
