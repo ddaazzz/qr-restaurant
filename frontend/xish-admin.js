@@ -208,9 +208,7 @@
     const search = document.getElementById("crm-search").value.trim();
     const tier   = document.getElementById("crm-tier-filter").value;
     const diner  = document.getElementById("crm-diner-filter").value;
-    const offset = (state.crmPage - 1) * state.crmPageSize;
-
-    let qs = `?limit=${state.crmPageSize}&offset=${offset}`;
+    let qs = `?limit=${state.crmPageSize}&page=${state.crmPage}`;
     if (search) qs += "&search=" + encodeURIComponent(search);
     if (tier)   qs += "&tier=" + tier;
     if (diner !== "") qs += "&is_previous_diner=" + diner;
@@ -836,36 +834,40 @@
     card.style.background = bg;
     card.style.color      = fg;
 
-    const logoText   = document.getElementById("wp-logo-text").value  || "XISH";
-    const headerLbl  = document.getElementById("wp-header-lbl").value || "TIER";
-    const primaryLbl = document.getElementById("wp-primary-lbl").value || "POINTS BALANCE";
-    const sec1Lbl    = document.getElementById("wp-sec1-lbl").value   || "MEMBER";
-    const sec2Lbl    = document.getElementById("wp-sec2-lbl").value   || "XISH ID";
+    // logoText → "Logo Text · XISH" to reflect the multi-brand format
+    const logoText = document.getElementById("wp-logo-text").value || "XISH";
+    const headerLbl = document.getElementById("wp-header-lbl").value || "TIER";
+    const sec1Lbl   = document.getElementById("wp-sec1-lbl").value  || "MEMBER";
+    const sec2Lbl   = document.getElementById("wp-sec2-lbl").value  || "XISH ID";
 
-    document.getElementById("wp-prev-logo-text").textContent  = logoText;
-    document.getElementById("wp-prev-logo-text").style.color  = lbl;
-    document.getElementById("wp-prev-header-lbl").textContent = headerLbl;
-    document.getElementById("wp-prev-header-lbl").style.color = lbl;
-    document.getElementById("wp-prev-primary-lbl").textContent = primaryLbl;
-    document.getElementById("wp-prev-primary-lbl").style.color = lbl;
-    document.getElementById("wp-prev-sec1-lbl").textContent   = sec1Lbl;
-    document.getElementById("wp-prev-sec1-lbl").style.color   = lbl;
-    document.getElementById("wp-prev-sec2-lbl").textContent   = sec2Lbl;
-    document.getElementById("wp-prev-sec2-lbl").style.color   = lbl;
-    document.getElementById("wp-prev-header-val").style.color = fg;
-    document.getElementById("wp-prev-primary-val").style.color = fg;
+    const logoEl = document.getElementById("wp-prev-logo-text");
+    if (logoEl) { logoEl.textContent = logoText === "XISH" ? "XISH" : `${logoText} · XISH`; logoEl.style.color = lbl; }
+    const hlblEl = document.getElementById("wp-prev-header-lbl");
+    if (hlblEl) { hlblEl.textContent = headerLbl; hlblEl.style.color = lbl; }
+    const hvalEl = document.getElementById("wp-prev-header-val");
+    if (hvalEl) hvalEl.style.color = fg;
+    const pvalEl = document.getElementById("wp-prev-primary-val");
+    if (pvalEl) pvalEl.style.color = fg;
+    const s1El = document.getElementById("wp-prev-sec1-lbl");
+    if (s1El) { s1El.textContent = sec1Lbl; s1El.style.color = lbl; }
+    const s2El = document.getElementById("wp-prev-sec2-lbl");
+    if (s2El) { s2El.textContent = sec2Lbl; s2El.style.color = lbl; }
+    const aux2El = document.getElementById("wp-prev-aux2-lbl");
+    if (aux2El) aux2El.style.color = lbl;
+
+    // Propagate label colour to all auxiliary tile labels
+    card.querySelectorAll(".wp-aux-lbl").forEach(el => { el.style.color = lbl; });
 
     // Strip accent colour
     const strip = document.getElementById("wp-prev-strip");
     if (strip) strip.style.background = `linear-gradient(90deg,${lbl},rgba(${lbl.replace("rgb(","").replace(")","")},0.25))`;
 
-    // Barcode label
+    // Barcode placeholder
     const barcodeFormat = document.getElementById("wp-barcode-format").value;
     const barcodeEl = document.getElementById("wp-prev-barcode");
     if (barcodeEl) {
       const isQR = barcodeFormat === "PKBarcodeFormatQR" || barcodeFormat === "PKBarcodeFormatAztec";
       if (!isQR) {
-        // Show barcode lines placeholder
         barcodeEl.innerHTML = `<svg viewBox="0 0 100 60" width="160" height="60" xmlns="http://www.w3.org/2000/svg">
           ${Array.from({length:30}, (_, i) => `<rect x="${i*3+2}" y="0" width="${i%3===0?2:1}" height="60" fill="#111"/>`).join("")}
         </svg>`;

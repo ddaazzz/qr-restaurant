@@ -429,37 +429,55 @@
         <div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Live Preview</div>
 
         <!-- Apple Wallet Card Mockup -->
-        <div id="wp-preview-card" style="width:340px; border-radius:16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35); font-family:'Inter',sans-serif; background:rgb(15,15,20); color:rgb(255,255,255); user-select:none;">
-          <!-- Header bar -->
+        <div id="wp-preview-card" style="width:340px;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);font-family:'Inter',sans-serif;background:rgb(15,15,20);color:rgb(255,255,255);user-select:none;">
+          <!-- Header -->
           <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px 8px;">
-            <span id="wp-prev-logo-text" style="font-size:18px;font-weight:800;letter-spacing:.05em;color:rgb(201,168,76);">XISH</span>
+            <span id="wp-prev-logo-text" style="font-size:15px;font-weight:800;letter-spacing:.04em;color:rgb(201,168,76);">XISH</span>
             <div style="text-align:right;">
               <div id="wp-prev-header-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(201,168,76);">TIER</div>
               <div id="wp-prev-header-val" style="font-size:13px;font-weight:700;">GOLD</div>
             </div>
           </div>
-          <!-- Strip / accent bar -->
-          <div id="wp-prev-strip" style="height:6px;background:linear-gradient(90deg,rgb(201,168,76),rgba(201,168,76,.3));"></div>
-          <!-- Primary -->
-          <div style="padding:16px 18px 10px;">
-            <div id="wp-prev-primary-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(201,168,76);">POINTS BALANCE</div>
-            <div id="wp-prev-primary-val" style="font-size:32px;font-weight:800;margin-top:2px;">1,250 pts</div>
+          <!-- Strip -->
+          <div id="wp-prev-strip" style="height:4px;background:linear-gradient(90deg,rgb(201,168,76),rgba(201,168,76,.25));"></div>
+          <!-- Primary: XISH label + points -->
+          <div style="padding:12px 18px 6px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;opacity:.65;color:rgb(201,168,76);">XISH</div>
+            <div id="wp-prev-primary-val" style="font-size:30px;font-weight:800;margin-top:2px;">1,250 pts</div>
           </div>
           <!-- Secondary -->
-          <div style="display:flex;justify-content:space-between;padding:0 18px 16px;">
+          <div style="display:flex;justify-content:space-between;padding:0 18px 10px;">
             <div>
               <div id="wp-prev-sec1-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(201,168,76);">MEMBER</div>
-              <div id="wp-prev-sec1-val" style="font-size:13px;font-weight:600;">Jane Smith</div>
+              <div style="font-size:13px;font-weight:600;">Jane Smith</div>
             </div>
             <div style="text-align:right;">
               <div id="wp-prev-sec2-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(201,168,76);">XISH ID</div>
-              <div id="wp-prev-sec2-val" style="font-size:13px;font-weight:600;">XSH-00042</div>
+              <div style="font-size:13px;font-weight:600;">XSH-00042</div>
             </div>
           </div>
-          <!-- Barcode area -->
-          <div style="background:white;margin:0 14px 14px;border-radius:10px;padding:14px;text-align:center;">
+          <!-- Auxiliary: 4 tiles -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;border-top:1px solid rgba(255,255,255,.08);">
+            <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);">
+              <div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(201,168,76);margin-bottom:3px;">TO GOLD</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:0;">████░░ 67%</div>
+            </div>
+            <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);">
+              <div id="wp-prev-aux2-lbl" style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(201,168,76);margin-bottom:3px;">DISCOUNT</div>
+              <div style="font-size:10px;font-weight:700;">5% off</div>
+            </div>
+            <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);">
+              <div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(201,168,76);margin-bottom:3px;">GIFTS</div>
+              <div style="font-size:10px;font-weight:700;">1 avail.</div>
+            </div>
+            <div style="padding:8px 10px;">
+              <div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(201,168,76);margin-bottom:3px;">VENUES</div>
+              <div style="font-size:10px;font-weight:700;">3 restaurants</div>
+            </div>
+          </div>
+          <!-- Barcode -->
+          <div style="background:white;margin:10px 14px 14px;border-radius:10px;padding:14px;text-align:center;">
             <div id="wp-prev-barcode" style="width:90px;height:90px;margin:0 auto;display:flex;align-items:center;justify-content:center;">
-              <!-- QR placeholder -->
               <svg viewBox="0 0 100 100" width="80" height="80" xmlns="http://www.w3.org/2000/svg">
                 <rect x="5" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/>
                 <rect x="15" y="15" width="15" height="15" fill="#111"/>
@@ -483,9 +501,10 @@
         <div style="margin-top:16px;padding:12px;background:#f9fafb;border-radius:10px;font-size:12px;color:#6b7280;">
           <div style="font-weight:600;color:#374151;margin-bottom:4px;">What members see:</div>
           <ul style="margin:0;padding-left:16px;line-height:1.7;">
-            <li>Front: tier, points, name, ID + barcode</li>
-            <li>Back: your custom links &amp; info</li>
-            <li>Lock screen notification when near your location</li>
+            <li><strong>Front:</strong> establishment · XISH, tier, points, member name &amp; ID</li>
+            <li><strong>Row 2:</strong> progress bar to next tier · discount · gifts · venues</li>
+            <li><strong>Back (tap ⓘ):</strong> full tier ladder, active discounts, available gifts, all XISH restaurants</li>
+            <li><strong>Geofencing:</strong> card surfaces on lock screen near any XISH venue (up to 10)</li>
           </ul>
         </div>
       </div>
