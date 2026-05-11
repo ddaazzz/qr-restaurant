@@ -311,6 +311,10 @@ function _refreshHeaderText() {
   if (!IS_ORDER_NOW || hasScannedTable) {
     orderTypeEl.textContent = lang === 'zh' ? '堂食點餐' : 'Dine In';
     if (orderSubEl) orderSubEl.textContent = `${pax || '-'} ${t('menu.pax-label')} · ${t('menu.table-label')} ${tableName}`;
+  } else if (orderType === 'takeaway' && tableName) {
+    // Table-session takeaway: ordered takeaway but seated at a table
+    orderTypeEl.textContent = lang === 'zh' ? '外帶' : 'Takeaway';
+    if (orderSubEl) orderSubEl.textContent = `${t('menu.table-label')} ${tableName}`;
   } else if (orderType === 'counter') {
     orderTypeEl.textContent = lang === 'zh' ? '取餐' : 'Pick Up';
     if (orderSubEl) orderSubEl.textContent = lang === 'zh' ? '即時取餐' : 'Order for Now';
@@ -1449,7 +1453,10 @@ async function submitOrder() {
   // ─────────────────────────────────────────────────────────────────────────
 
   if (hasFood) {
+    // Table-session takeaway: customer at a scanned table chose to take food away
+    const isTableTakeaway = !IS_ORDER_NOW && orderType === 'takeaway' && !!tableName;
     const payload = {
+      is_takeaway: isTableTakeaway,
       items: cart.items.map(i => ({
         menu_item_id: i.menuItemId,
         quantity: i.quantity,
@@ -1689,6 +1696,18 @@ function renderOrdersDrawer(orders, tableName) {
     <div class="orders-items">
   `;
 
+  // Show takeaway banner if this is a table-takeaway order
+  if (orders.length && orders[0].is_takeaway && tableName) {
+    const lang = localStorage.getItem('language') || 'zh';
+    html += `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:10px;margin-bottom:12px;">
+      <span style="font-size:18px;">🥡</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#ea580c;">${lang === 'zh' ? '外帶訂單' : 'Takeaway Order'}</div>
+        <div style="font-size:11px;color:#9ca3af;">${lang === 'zh' ? '送往' : 'Deliver to'} ${t('menu.table-label')} ${tableName}</div>
+      </div>
+    </div>`;
+  }
+
   if (!orders.length) {
     html += `<p class="no-orders">📋 No orders yet</p>`;
   } else {
@@ -1704,7 +1723,10 @@ function renderOrdersDrawer(orders, tableName) {
       } else if (isPaid) {
         html += `<div style="opacity:0.65;">`;
       } else if (oIdx > 0) {
-        html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">Order #${order.restaurant_order_number || order.order_id} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">Unpaid</span></div>`;
+        const isTakeawayBadge = order.is_takeaway
+          ? `<span class="order-type-badge takeaway">🥡 ${localStorage.getItem('language') === 'zh' ? '外帶' : 'Takeaway'}</span>`
+          : '';
+        html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">Order #${order.restaurant_order_number || order.order_id}${isTakeawayBadge} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">Unpaid</span></div>`;
       }
 
       order.items.forEach(item => {

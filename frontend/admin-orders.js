@@ -1292,7 +1292,8 @@ async function loadOrdersHistoryLeftPanel() {
   
   try {
     // Load orders from API
-    const response = await fetch(`${API}/restaurants/${restaurantId}/orders?limit=100`);
+    const orderTypeParam = ORDER_HISTORY_FILTER !== 'all' ? `&order_type=${ORDER_HISTORY_FILTER}` : '';
+    const response = await fetch(`${API}/restaurants/${restaurantId}/orders?limit=100${orderTypeParam}`);
     if (!response.ok) throw new Error('Failed to load orders');
     
     const orders = await response.json();
@@ -1346,7 +1347,11 @@ async function loadOrdersHistoryLeftPanel() {
       
       let typeLabel = 'Order';
       let typeIcon = '';
-      if (order.order_type === 'counter') {
+      if (order.is_takeaway && order.table_name) {
+        typeLabel = `🥡 Takeaway · Table ${order.table_name}`;
+      } else if (order.is_takeaway) {
+        typeLabel = '🥡 Takeaway';
+      } else if (order.order_type === 'counter') {
         typeLabel = 'Order Now';
         typeIcon = '';
       } else if (order.order_type === 'to-go') {

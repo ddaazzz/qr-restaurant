@@ -249,6 +249,7 @@ async function loadKitchenOrders() {
           orderId,
           table: item.table_name,
           orderType: item.order_type,
+          is_takeaway: item.is_takeaway || false,
           items: [],
           createdAt: item.created_at
         };
@@ -274,9 +275,14 @@ function renderKitchenOrders(orders) {
     const hasAllServed = order.items.every(item => item.status === "served");
     const statusClass = hasAllServed ? "ready" : (order.items.some(item => item.status === "preparing") ? "preparing" : "pending");
     
-    // Determine display label: use table name if available and order type is 'table', otherwise use order type
+    // Determine display label
     let displayLabel = order.table;
-    if (order.table === 'Unknown Table' || order.orderType !== 'table') {
+    if (order.is_takeaway) {
+      // Table-session takeaway: show table name with takeaway indicator
+      displayLabel = order.table && order.table !== 'Unknown Table'
+        ? `🥡 ${order.table}`
+        : '🥡 Takeaway';
+    } else if (order.table === 'Unknown Table' || order.orderType !== 'table') {
       // Format order type nicely: 'to-go' -> 'To Go', 'counter' -> 'Counter', 'order-now' -> 'Order Now'
       if (order.orderType) {
         displayLabel = order.orderType

@@ -23,7 +23,8 @@ function getPaymentMethodLabel(method: string | null, paid: boolean): string {
 // If order already exists for session, add items to it. If not, create one.
 router.post("/sessions/:sessionId/orders", async (req, res) => {
   const { sessionId } = req.params;
-  const { items } = req.body;
+  const { items, is_takeaway } = req.body;
+  const isTakeaway: boolean = is_takeaway === true || is_takeaway === 'true';
 
   if (!items || items.length === 0) {
     return res.status(400).json({ error: "No items in order" });
@@ -79,14 +80,14 @@ router.post("/sessions/:sessionId/orders", async (req, res) => {
       // Create new order for this session (first time items are added)
       const orderRes = await pool.query(
         `
-        INSERT INTO orders (session_id, restaurant_id)
-        VALUES ($1, $2)
+        INSERT INTO orders (session_id, restaurant_id, is_takeaway)
+        VALUES ($1, $2, $3)
         RETURNING id
         `,
-        [sessionId, restaurantId]
+        [sessionId, restaurantId, isTakeaway]
       );
       orderId = orderRes.rows[0].id;
-      console.log(`[Orders] ✨ Created new order ${orderId} for session ${sessionId}`);
+      console.log(`[Orders] ✨ Created new order ${orderId} for session ${sessionId} (is_takeaway=${isTakeaway})`);
     }
 
     // ✅ LOOP STARTS HERE — item is now defined
@@ -461,6 +462,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         o.payment_method AS order_payment_method,
         o.restaurant_order_number,
         o.chuio_order_reference AS order_reference,
+        o.is_takeaway,
         oi.status AS item_status,
         to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
 
@@ -498,6 +500,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         o.id,
         o.status,
         o.payment_method,
+        o.is_takeaway,
         o.created_at,
         oi.id,
         oi.parent_order_item_id,
@@ -526,6 +529,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
           order_payment_method: row.order_payment_method,
           restaurant_order_number: row.restaurant_order_number,
           order_reference: row.order_reference,
+          is_takeaway: row.is_takeaway || false,
           created_at: row.created_at,
           restaurant_id: row.restaurant_id,
           items: [],
@@ -620,6 +624,7 @@ router.get("/kitchen/items", async (req, res) => {
 
         COALESCE(tu.display_name, 'Unknown Table') AS table_name,
         ts.order_type,
+        o.is_takeaway,
         o.id AS order_id,
         o.restaurant_order_number,
         ts.id AS session_id,
@@ -661,6 +666,7 @@ router.get("/kitchen/items", async (req, res) => {
         tu.display_name,
         ts.order_type,
         o.id,
+        o.is_takeaway,
         o.restaurant_order_number,
         ts.id,
         ts.restaurant_id,
@@ -685,6 +691,7 @@ router.get("/kitchen/items", async (req, res) => {
         session_id: row.session_id,
         table_name: row.table_name,
         order_type: row.order_type,
+        is_takeaway: row.is_takeaway || false,
         menu_item_name: row.item_name,
         category_id: row.category_id,
         quantity: row.quantity,
@@ -918,11 +925,13 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
     }
 
     const orderTypeFilter = order_type ? ` AND COALESCE(ts.order_type, 'counter') = ANY($3::text[])` : '';
-    const queryParams: any[] = order_type === 'to-go'
-      ? [restaurantId, limitVal, ['to-go', 'counter']]
-      : order_type
-        ? [restaurantId, limitVal, [order_type]]
-        : [restaurantId, limitVal];
+    const pickupFilter   = order_type === 'pickup' ? ` AND (COALESCE(ts.order_type,'counter') IN ('to-go','counter') OR o.is_takeaway = TRUE)` : '';
+    const effectiveFilter = order_type === 'pickup' ? pickupFilter : orderTypeFilter;
+    const queryParams: any[] = (order_type && order_type !== 'pickup')
+      ? order_type === 'to-go'
+        ? [restaurantId, limitVal, ['to-go', 'counter']]
+        : [restaurantId, limitVal, [order_type]]
+      : [restaurantId, limitVal];
 
     // Get orders from database
     const result = await pool.query(
@@ -931,6 +940,7 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         o.restaurant_order_number,
         o.session_id,
         o.status,
+        o.is_takeaway,
         (o.status = 'completed') AS payment_received,
         o.payment_method AS payment_method_online,
         COALESCE(o.chuio_order_reference, (SELECT kt2.kpay_reference_id FROM kpay_transactions kt2 WHERE kt2.order_id = o.id ORDER BY kt2.created_at DESC LIMIT 1)) AS kpay_reference_id,
@@ -989,8 +999,8 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
       ) cpay ON true
       WHERE o.restaurant_id = $1
       AND COALESCE(o.is_split_parent, FALSE) = FALSE
-      ${orderTypeFilter}
-      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, ts.pickup_ready_at, ts.ended_at, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
+      ${effectiveFilter}
+      GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.is_takeaway, o.payment_method, o.chuio_order_reference, o.payment_status, o.restaurant_id, o.created_at, o.custom_amount_cents, o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name, ts.customer_name, ts.customer_phone, ts.pax, ts.discount_applied, ts.pickup_ready_at, ts.ended_at, kt.status, kt.completed_at, kt.refund_amount_cents, kt.pay_method, r.service_charge_percent, cpay.payment_vendor, cpay.payment_method, cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env, cpay.completed_at, u.name
       ORDER BY o.created_at DESC
       LIMIT $2`,
       queryParams
