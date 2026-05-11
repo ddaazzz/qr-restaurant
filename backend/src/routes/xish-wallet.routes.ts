@@ -3,6 +3,8 @@ import pool from "../config/db";
 import { PKPass } from "passkit-generator";
 import * as fs from "fs";
 import * as path from "path";
+import crypto from "crypto";
+import { sendPassUpdatePush } from "../utils/xish-apns";
 
 const router = Router();
 
@@ -66,7 +68,7 @@ async function buildPassJson(
   },
   s: Record<string, any>,
   restaurantName: string
-): Promise<{ passJson: any; serial: string }> {
+): Promise<{ passJson: any; serial: string; authToken: string }> {
   const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
   const serial  = `XISH-${m.xish_id}-${Date.now()}`;
   const pts     = m.points_balance || 0;
@@ -259,7 +261,18 @@ async function buildPassJson(
 
   if (geoLocations.length > 0) passJson.locations = geoLocations;
 
-  return { passJson, serial };
+  // ─── Auth token (stable per member — used for PassKit web service auth) ──────
+  const authRes = await pool.query(
+    `SELECT pass_auth_token FROM xish_wallet_passes WHERE member_id = $1 AND pass_type = 'apple'`,
+    [m.id]
+  );
+  const authToken: string = authRes.rows[0]?.pass_auth_token || crypto.randomUUID();
+
+  const baseUrlForService = process.env.APP_BASE_URL || "https://chuio.io";
+  passJson.webServiceURL       = `${baseUrlForService}/api/xish/wallet/passkit`;
+  passJson.authenticationToken = authToken;
+
+  return { passJson, serial, authToken };
 }
 
 function capitalize(str: string): string {
@@ -492,7 +505,7 @@ router.post("/xish/wallet/generate-pass", async (req, res) => {
     const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
     const passUrl = `${baseUrl}/xish/wallet/member/${m.wallet_id || member_id}`;
 
-    const { passJson, serial } = await buildPassJson(
+    const { passJson, serial, authToken } = await buildPassJson(
       {
         id: m.id,
         xish_id: m.xish_id || String(member_id),
@@ -506,17 +519,15 @@ router.post("/xish/wallet/generate-pass", async (req, res) => {
       m.restaurant_name || (s.organization_name || "XISH Loyalty")
     );
 
-    // Add webServiceURL + authenticationToken (generate-pass specific)
-    passJson.webServiceURL = `${baseUrl}/api/xish/wallet/passkit`;
-    passJson.authenticationToken = m.wallet_id || `token-${member_id}`;
-
-    // Record serial in DB
+    // Record serial + auth token in DB (auth token preserved if already set)
     await pool.query(
-      `INSERT INTO xish_wallet_passes (member_id, pass_type, pass_serial, last_updated_at)
-       VALUES ($1, $2, $3, NOW())
+      `INSERT INTO xish_wallet_passes (member_id, pass_type, pass_serial, pass_auth_token, last_updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
        ON CONFLICT (member_id, pass_type)
-       DO UPDATE SET pass_serial = $3, last_updated_at = NOW()`,
-      [member_id, pass_type, serial]
+       DO UPDATE SET pass_serial = $3,
+                     pass_auth_token = COALESCE(xish_wallet_passes.pass_auth_token, $4),
+                     last_updated_at = NOW()`,
+      [member_id, pass_type, serial, authToken]
     );
 
     if (certExists()) {
@@ -572,7 +583,7 @@ router.get("/xish/wallet/download/:memberId", async (req, res) => {
       return res.status(503).json({ error: "PassKit certificates not configured on server" });
     }
 
-    const { passJson } = await buildPassJson(
+    const { passJson, serial, authToken } = await buildPassJson(
       {
         id: m.id,
         xish_id: m.xish_id || String(m.id),
@@ -587,6 +598,18 @@ router.get("/xish/wallet/download/:memberId", async (req, res) => {
     );
 
     const pkpassBuffer = await signPassJson(passJson);
+
+    // Persist serial + auth token so PassKit web service can verify + push
+    await pool.query(
+      `INSERT INTO xish_wallet_passes (member_id, pass_type, pass_serial, pass_auth_token, last_updated_at)
+       VALUES ($1, 'apple', $2, $3, NOW())
+       ON CONFLICT (member_id, pass_type)
+       DO UPDATE SET pass_serial = $2,
+                     pass_auth_token = COALESCE(xish_wallet_passes.pass_auth_token, $3),
+                     last_updated_at = NOW()`,
+      [m.id, serial, authToken]
+    );
+
     res.set("Content-Type", "application/vnd.apple.pkpass");
     res.set("Content-Disposition", `attachment; filename="xish-${m.xish_id || m.id}.pkpass"`);
     res.send(pkpassBuffer);
@@ -704,6 +727,9 @@ router.post("/xish/pos-sync", async (req, res) => {
          WHERE m.id = $1 AND m.crm_customer_id = c.id`,
         [member.id]
       );
+
+      // Push pass update to all registered devices for this member (non-blocking)
+      sendPassUpdatePush(member.id).catch(() => {});
     }
 
     res.json({ ok: true, points_awarded: pointsToAward, member_id: member.id });
@@ -814,6 +840,205 @@ router.post("/xish/join", async (req, res) => {
     console.error("[XISH join]", err);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// ─── PassKit Web Service (Apple Wallet update protocol) ──────────────────────
+// Apple calls these endpoints using the webServiceURL in the pass JSON.
+// Spec: https://developer.apple.com/library/archive/documentation/PassKit/Reference/PassKit_WebService/WebService.html
+
+/** Extract and verify ApplePass auth token against our DB. Returns member_id or null. */
+async function verifyPassAuth(serialNumber: string, authHeader: string | undefined): Promise<number | null> {
+  const token = (authHeader || "").replace(/^ApplePass\s+/i, "").trim();
+  if (!token) return null;
+  const r = await pool.query(
+    `SELECT member_id FROM xish_wallet_passes
+     WHERE pass_serial = $1 AND pass_auth_token = $2 AND pass_type = 'apple'`,
+    [serialNumber, token]
+  );
+  return r.rows[0]?.member_id ?? null;
+}
+
+// 1. Device registers for push updates
+router.post(
+  "/xish/wallet/passkit/v1/devices/:deviceId/registrations/:passTypeId/:serialNumber",
+  async (req, res) => {
+    try {
+      const { deviceId, passTypeId, serialNumber } = req.params;
+      const { pushToken } = req.body;
+      if (!pushToken) return res.status(400).send();
+
+      const memberId = await verifyPassAuth(serialNumber, req.headers.authorization as string);
+      if (!memberId) return res.status(401).send();
+
+      const existing = await pool.query(
+        `SELECT id FROM xish_wallet_device_registrations WHERE device_library_id = $1 AND pass_serial = $2`,
+        [deviceId, serialNumber]
+      );
+
+      await pool.query(
+        `INSERT INTO xish_wallet_device_registrations
+           (device_library_id, push_token, pass_type_id, pass_serial, member_id)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (device_library_id, pass_serial)
+         DO UPDATE SET push_token = $2`,
+        [deviceId, pushToken, passTypeId, serialNumber, memberId]
+      );
+
+      res.status(existing.rows.length > 0 ? 200 : 201).send();
+    } catch (err) {
+      console.error("[PassKit register]", err);
+      res.status(500).send();
+    }
+  }
+);
+
+// 2. Device unregisters
+router.delete(
+  "/xish/wallet/passkit/v1/devices/:deviceId/registrations/:passTypeId/:serialNumber",
+  async (req, res) => {
+    try {
+      const { deviceId, serialNumber } = req.params;
+      const memberId = await verifyPassAuth(serialNumber, req.headers.authorization as string);
+      if (!memberId) return res.status(401).send();
+
+      await pool.query(
+        `DELETE FROM xish_wallet_device_registrations
+         WHERE device_library_id = $1 AND pass_serial = $2`,
+        [deviceId, serialNumber]
+      );
+      res.status(200).send();
+    } catch (err) {
+      console.error("[PassKit unregister]", err);
+      res.status(500).send();
+    }
+  }
+);
+
+// 3. List serials updated since a given tag (iOS polls this on reconnect)
+router.get(
+  "/xish/wallet/passkit/v1/devices/:deviceId/registrations/:passTypeId",
+  async (req, res) => {
+    try {
+      const { deviceId } = req.params;
+      const since = req.query.passesUpdatedSince as string | undefined;
+
+      const params: any[] = [deviceId];
+      const sinceClause   = since ? `AND wp.last_updated_at > $2` : "";
+      if (since) params.push(since);
+
+      const result = await pool.query(
+        `SELECT wp.pass_serial, wp.last_updated_at
+         FROM xish_wallet_device_registrations dr
+         JOIN xish_wallet_passes wp
+           ON wp.member_id = dr.member_id AND wp.pass_type = 'apple'
+         WHERE dr.device_library_id = $1 ${sinceClause}
+         ORDER BY wp.last_updated_at DESC`,
+        params
+      );
+
+      if (result.rows.length === 0) return res.status(204).send();
+
+      res.json({
+        lastUpdated:   result.rows[0].last_updated_at.toISOString(),
+        serialNumbers: result.rows.map((r: any) => r.pass_serial),
+      });
+    } catch (err) {
+      console.error("[PassKit list-passes]", err);
+      res.status(500).send();
+    }
+  }
+);
+
+// 4. Return the latest signed .pkpass for a serial (iOS fetches this after push)
+router.get(
+  "/xish/wallet/passkit/v1/passes/:passTypeId/:serialNumber",
+  async (req, res) => {
+    try {
+      const { serialNumber } = req.params;
+
+      // Look up member via current pass serial OR stale serial still in device_registrations
+      const memberLookup = await pool.query(
+        `SELECT member_id FROM xish_wallet_passes
+         WHERE pass_serial = $1 AND pass_type = 'apple'
+         UNION
+         SELECT member_id FROM xish_wallet_device_registrations
+         WHERE pass_serial = $1
+         LIMIT 1`,
+        [serialNumber]
+      );
+      if (!memberLookup.rows[0]) return res.status(404).send();
+      const memberId = memberLookup.rows[0].member_id;
+
+      // Verify auth token
+      const token = (req.headers.authorization as string || "").replace(/^ApplePass\s+/i, "").trim();
+      if (token) {
+        const check = await pool.query(
+          `SELECT 1 FROM xish_wallet_passes
+           WHERE member_id = $1 AND pass_auth_token = $2 AND pass_type = 'apple'`,
+          [memberId, token]
+        );
+        if (!check.rows[0]) return res.status(401).send();
+      }
+
+      if (!certExists()) return res.status(503).send();
+
+      const mRes = await pool.query(
+        `SELECT m.*, c.name AS customer_name, c.restaurant_id, r.name AS restaurant_name
+         FROM xish_members m
+         JOIN crm_customers c ON c.id = m.crm_customer_id
+         JOIN restaurants r   ON r.id = c.restaurant_id
+         WHERE m.id = $1`,
+        [memberId]
+      );
+      if (!mRes.rows[0]) return res.status(404).send();
+      const m = mRes.rows[0];
+
+      const sRes = await pool.query(
+        `SELECT * FROM xish_wallet_settings WHERE restaurant_id = $1`,
+        [m.restaurant_id]
+      );
+      const s = sRes.rows[0] || {};
+
+      const { passJson, serial, authToken } = await buildPassJson(
+        {
+          id: m.id,
+          xish_id: m.xish_id || String(m.id),
+          points_balance: m.points_balance || 0,
+          tier: m.tier || "basic",
+          customer_name: m.customer_name || "—",
+          wallet_id: m.wallet_id,
+          restaurant_id: m.restaurant_id,
+        },
+        s,
+        m.restaurant_name || "Restaurant"
+      );
+
+      // Update pass serial + timestamp (device will re-register with new serial)
+      await pool.query(
+        `INSERT INTO xish_wallet_passes (member_id, pass_type, pass_serial, pass_auth_token, last_updated_at)
+         VALUES ($1, 'apple', $2, $3, NOW())
+         ON CONFLICT (member_id, pass_type)
+         DO UPDATE SET pass_serial = $2, last_updated_at = NOW()`,
+        [memberId, serial, authToken]
+      );
+
+      const pkpassBuffer = await signPassJson(passJson);
+      res.set("Content-Type",    "application/vnd.apple.pkpass");
+      res.set("Last-Modified",   new Date().toUTCString());
+      res.send(pkpassBuffer);
+    } catch (err) {
+      console.error("[PassKit get-pass]", err);
+      res.status(500).send();
+    }
+  }
+);
+
+// 5. Apple sends error logs here — just acknowledge
+router.post("/xish/wallet/passkit/v1/log", (req, res) => {
+  if (req.body?.logs?.length) {
+    console.log("[PassKit log]", JSON.stringify(req.body.logs));
+  }
+  res.status(200).send();
 });
 
 export default router;

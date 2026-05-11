@@ -2,6 +2,7 @@ import { Router } from "express";
 import pool from "../config/db";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { sendPassUpdatePush } from "../utils/xish-apns";
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "xish-secret-change-in-prod";
@@ -286,6 +287,10 @@ router.post("/xish/members/:memberId/award-points", async (req, res) => {
     }
 
     await client.query("COMMIT");
+
+    // Push updated pass to every registered device for this member (non-blocking)
+    sendPassUpdatePush(parseInt(String(memberId))).catch(() => {});
+
     res.json(updated.rows[0]);
   } catch (err) {
     await client.query("ROLLBACK");
