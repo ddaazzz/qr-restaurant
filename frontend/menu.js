@@ -2867,13 +2867,13 @@ function injectXishPanel() {
   overlay.innerHTML = `
     <div id="xish-panel" class="xish-panel">
       <div class="xish-panel-header">
-        <div class="xish-panel-logo"><span class="xish-x">✦</span> XISH Loyalty</div>
-        <button class="xish-panel-close" onclick="closeXishPanel()">✕</button>
+        <div class="xish-panel-logo"><span class="xish-x"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> XISH Loyalty</div>
+        <button class="xish-panel-close" onclick="closeXishPanel()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="xish-panel-tabs" id="xish-panel-tabs">
-        <button class="xish-tab-btn active" data-tab="points" onclick="switchXishTab('points')">⭐ Points</button>
-        <button class="xish-tab-btn" data-tab="coupons" onclick="switchXishTab('coupons')">🎟 Coupons</button>
-        <button class="xish-tab-btn" data-tab="gifts" onclick="switchXishTab('gifts')">🎁 Gifts</button>
+        <button class="xish-tab-btn active" data-tab="points" onclick="switchXishTab('points')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Points</button>
+        <button class="xish-tab-btn" data-tab="coupons" onclick="switchXishTab('coupons')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3l-4 4-4-4"/></svg>Coupons</button>
+        <button class="xish-tab-btn" data-tab="gifts" onclick="switchXishTab('gifts')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>Gifts</button>
       </div>
       <div class="xish-panel-body" id="xish-panel-body">
         <div class="xish-loading-text">Loading…</div>
@@ -2932,7 +2932,7 @@ async function renderXishGuestPanel() {
   body.innerHTML = `
     <div class="xish-panel-guest">
       <div class="xish-join-hero">
-        <div class="xish-join-icon">✦</div>
+        <div class="xish-join-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" color="var(--restaurant-color)"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
         <div class="xish-join-title">XISH Member Rewards</div>
         <div class="xish-join-sub">Join to earn points on every order,<br/>unlock tier discounts &amp; free gifts</div>
         <a href="${joinUrl}" target="_blank" class="xish-btn-gold" style="margin-top:18px">Add XISH Card to Wallet</a>
@@ -2983,14 +2983,19 @@ async function renderXishTabContent(tab) {
 }
 
 async function renderXishPointsTab(body) {
-  const tierEmoji = { platinum: '💫', gold: '🌟', silver: '🤍', basic: '⭐' }[xishMember.tier] || '⭐';
+  const tierSvg = {
+    platinum: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    gold:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    silver:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    basic:    `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg>`,
+  }[xishMember.tier] || '';
   const tierLabel = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
   const discountHtml = (xishMember.discount_percent > 0)
-    ? `<div class="xish-discount-active">${xishMember.discount_percent}% member discount active ✓</div>`
+    ? `<div class="xish-discount-active">${xishMember.discount_percent}% member discount active</div>`
     : '';
   body.innerHTML = `
     <div class="xish-member-hero">
-      <div class="xish-tier-badge-large ${xishMember.tier}">${tierEmoji} ${tierLabel}</div>
+      <div class="xish-tier-badge-large ${xishMember.tier}">${tierSvg} ${tierLabel}</div>
       <div class="xish-member-greeting">${escXish(xishMember.name || 'Member')}</div>
       <div class="xish-points-row">
         <div class="xish-pts-label">POINTS BALANCE</div>
@@ -2998,17 +3003,17 @@ async function renderXishPointsTab(body) {
       </div>
       ${discountHtml}
       <div class="xish-xish-id">ID: ${escXish(xishMember.xish_id || '—')}</div>
-      <div class="xish-progress-wrap" id="xish-progress-wrap">
-        <div class="xish-progress-label">
+      <div class="xish-tier-progress-wrap" id="xish-progress-wrap">
+        <div class="xish-tier-progress-label">
           <span>Progress to next tier</span><span id="xish-progress-text">—</span>
         </div>
-        <div class="xish-progress-bar-bg">
-          <div class="xish-progress-bar-fill" id="xish-progress-fill" style="width:0%"></div>
+        <div class="xish-tier-progress-bar">
+          <div class="xish-tier-progress-fill" id="xish-progress-fill" style="width:0%"></div>
         </div>
       </div>
     </div>
     <div class="xish-panel-section">
-      <div class="xish-section-title">📋 Recent Points History</div>
+      <div class="xish-section-title">Recent Points History</div>
       <div id="xish-history-list" class="xish-loading-text">Loading history…</div>
     </div>
   `;
@@ -3030,7 +3035,7 @@ async function renderXishPointsTab(body) {
       progressText.textContent = `${(nextTier.points_threshold - pts).toLocaleString()} pts to ${nextTier.tier.charAt(0).toUpperCase() + nextTier.tier.slice(1)}`;
     } else {
       progressFill.style.width = '100%';
-      progressText.textContent = 'Max tier reached 🏆';
+      progressText.textContent = 'Max tier reached';
     }
   }
   const historyEl = document.getElementById('xish-history-list');
@@ -3063,7 +3068,7 @@ async function renderXishCouponsTab(body) {
   if (!allCoupons.length) {
     body.innerHTML = `
       <div class="xish-panel-section">
-        <div class="xish-empty-rewards">🎟 No coupons yet.<br/>Earn points and level up your tier to unlock gift rewards!</div>
+        <div class="xish-empty-rewards">No coupons yet.<br/>Earn points and level up your tier to unlock gift rewards!</div>
       </div>`;
     return;
   }
@@ -3071,9 +3076,10 @@ async function renderXishCouponsTab(body) {
     const expiry = c.valid_until
       ? `Expires ${new Date(c.valid_until).toLocaleDateString('en-HK', { day: 'numeric', month: 'short', year: 'numeric' })}`
       : 'No expiry';
+    const couponIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3l-4 4-4-4"/><line x1="12" y1="12" x2="12" y2="17"/></svg>`;
     return `
       <div class="xish-coupon-card" style="${faded ? 'opacity:0.45' : ''}">
-        <span class="xish-coupon-icon">🎁</span>
+        <span class="xish-coupon-icon">${couponIconSvg}</span>
         <div>
           <div class="xish-coupon-name">${escXish(c.item_reward || c.item_name || 'Gift Reward')}</div>
           <div class="xish-coupon-meta">Qty remaining: ${c.qty_remaining}</div>
@@ -3083,7 +3089,7 @@ async function renderXishCouponsTab(body) {
   };
   body.innerHTML = `
     <div class="xish-panel-section">
-      <div class="xish-section-title">🎟 Active Coupons (${active.length})</div>
+      <div class="xish-section-title">Active Coupons (${active.length})</div>
       ${active.length ? active.map(c => renderCoupon(c, false)).join('') : '<div class="xish-empty-rewards">No active coupons</div>'}
     </div>
     ${used.length ? `
@@ -3105,13 +3111,15 @@ async function renderXishGiftsTab(body) {
     if (!catalogRes.length) {
       body.innerHTML = `
         <div class="xish-panel-section">
-          <div class="xish-empty-rewards">🎁 No gift rewards available yet.<br/>Check back after earning more points!</div>
+          <div class="xish-empty-rewards">No gift rewards available yet.<br/>Check back after earning more points!</div>
         </div>`;
       return;
     }
+    const giftIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>`;
+    const checkIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
     body.innerHTML = `
       <div class="xish-panel-section">
-        <div class="xish-section-title">🎁 Available Gifts</div>
+        <div class="xish-section-title">Available Gifts</div>
         ${catalogRes.map(g => {
           const expires = g.redemption_end
             ? `Valid until ${new Date(g.redemption_end).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' })}`
@@ -3119,7 +3127,7 @@ async function renderXishGiftsTab(body) {
           const owned = ownedIds.has(g.id);
           return `
             <div class="xish-gift-card">
-              <span class="xish-gift-icon">${owned ? '✅' : '🎁'}</span>
+              <span class="xish-gift-icon">${owned ? checkIconSvg : giftIconSvg}</span>
               <div>
                 <div class="xish-gift-name">${escXish(g.item_name)}</div>
                 <div class="xish-gift-meta">${expires}${owned ? ' · In your wallet' : ''}</div>

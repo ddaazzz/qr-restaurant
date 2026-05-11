@@ -2337,7 +2337,16 @@ body {
   padding: 5px 10px;
   background: rgba(5,150,105,0.08);
   border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.xish-discount-active::before {
+  content: '';
   display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2.5'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") no-repeat center/contain;
 }
 .xish-xish-id { font-size: 11px; color: var(--text-light); margin-top: 8px; font-family: monospace; }
 
@@ -2387,7 +2396,35 @@ body {
   margin-bottom: 8px;
   border: 1px solid var(--border-color);
 }
-.xish-reward-icon { font-size: 22px; flex-shrink: 0; }
+.xish-reward-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--restaurant-color); }
+.xish-coupon-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--restaurant-color); }
+.xish-gift-icon   { display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--restaurant-color); }
+.xish-coupon-card, .xish-gift-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-light);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-color);
+}
+.xish-coupon-name, .xish-gift-name { font-size: 13px; color: var(--text-dark); font-weight: 500; }
+.xish-coupon-meta, .xish-gift-meta { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+.xish-coupon-expiry { font-size: 10px; color: var(--text-light); margin-top: 2px; }
+.xish-point-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.xish-point-row:last-child { border-bottom: none; }
+.xish-point-desc { font-size: 13px; color: var(--text-dark); font-weight: 500; }
+.xish-point-meta { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+.xish-point-val { font-size: 14px; font-weight: 700; }
+.xish-point-val.positive { color: var(--restaurant-color); }
+.xish-point-val.negative { color: #ef4444; }
 .xish-reward-name { font-size: 13px; color: var(--text-dark); font-weight: 500; }
 .xish-reward-meta { font-size: 11px; color: var(--text-light); margin-top: 2px; }
 .xish-empty-rewards { font-size: 13px; color: var(--text-light); padding: 16px 0; text-align: center; }
@@ -2436,7 +2473,13 @@ body {
   border: 1px solid var(--border-color);
   margin-bottom: 20px;
 }
-.xish-join-icon { font-size: 36px; margin-bottom: 8px; }
+.xish-join-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--restaurant-color);
+  margin-bottom: 10px;
+}
 .xish-join-title { font-size: 18px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
 .xish-join-sub { font-size: 13px; color: var(--text-light); line-height: 1.6; }
 .xish-join-cta {
