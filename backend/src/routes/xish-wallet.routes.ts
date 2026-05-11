@@ -70,12 +70,16 @@ async function buildPassJson(
   restaurantName: string
 ): Promise<{ passJson: any; serial: string; authToken: string }> {
   const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
-  const serial  = `XISH-${m.xish_id}-${Date.now()}`;
   const pts     = m.points_balance || 0;
   const tier    = m.tier || "basic";
 
-  // Fetch tier settings, active discounts, available gifts, XISH venues in parallel
-  const [tierRows, discountRows, giftRows, venueRows] = await Promise.all([
+  // Fetch stored serial+token AND tier/discount/gift/venue data in parallel
+  const [existingPass, tierRows, discountRows, giftRows, venueRows] = await Promise.all([
+    pool.query(
+      `SELECT pass_serial, pass_auth_token FROM xish_wallet_passes
+       WHERE member_id = $1 AND pass_type = 'apple'`,
+      [m.id]
+    ),
     pool.query(
       `SELECT tier, points_threshold, discount_percent
        FROM xish_tier_settings
@@ -112,25 +116,27 @@ async function buildPassJson(
   const gifts      = giftRows.rows;
   const venues     = venueRows.rows;
 
-  // ─── Tier progression + progress bar ─────────────────────────────────────
-  // tiers is already sorted ASC by points_threshold
+  // ─── Serial + auth token: stable per member, only created once ────────────
+  // A stable serial is required so iOS device registrations remain valid after
+  // every push update. The auth token is equally stable.
+  const serial:    string = existingPass.rows[0]?.pass_serial    || `XISH-${m.xish_id}`;
+  const authToken: string = existingPass.rows[0]?.pass_auth_token || crypto.randomUUID();
+
+  // ─── Tier progression ────────────────────────────────────────────────────
   const currentTierIdx = tiers.findIndex((t: any) => t.tier === tier);
   const currentTierRow = tiers[currentTierIdx >= 0 ? currentTierIdx : 0];
   const nextTierRow    = tiers[currentTierIdx + 1] || null;
   const discountPct    = Number(currentTierRow?.discount_percent || 0);
 
-  let progressBar: string;
-  let nextLabel: string;
+  let progressText: string;
+  let progressLabel: string;
   if (nextTierRow) {
-    const start  = Number(currentTierRow?.points_threshold || 0);
-    const end    = Number(nextTierRow.points_threshold);
-    const pct    = end > start ? Math.min(1, Math.max(0, (pts - start) / (end - start))) : 1;
-    const filled = Math.round(pct * 10);
-    progressBar  = "█".repeat(filled) + "░".repeat(10 - filled) + ` ${Math.round(pct * 100)}%`;
-    nextLabel    = `TO ${capitalize(nextTierRow.tier).toUpperCase()}`;
+    const ptsNeeded  = Number(nextTierRow.points_threshold) - pts;
+    progressText  = `${ptsNeeded.toLocaleString()} pts to ${capitalize(nextTierRow.tier)}`;
+    progressLabel = `NEXT: ${capitalize(nextTierRow.tier).toUpperCase()}`;
   } else {
-    progressBar = "██████████ 100%";
-    nextLabel   = "STATUS";
+    progressText  = "Max tier reached";
+    progressLabel = "STATUS";
   }
 
   // ─── Front-of-card layout ─────────────────────────────────────────────────
@@ -164,8 +170,8 @@ async function buildPassJson(
         { key: "xish_id",    label: s.secondary2_label || "XISH ID", value: m.xish_id },
       ],
       auxiliaryFields: [
-        // 10-block unicode progress bar toward next tier
-        { key: "progress", label: nextLabel,   value: progressBar },
+        // Points remaining to next tier (plain text — Apple Wallet renders no native bar)
+        { key: "progress", label: progressLabel, value: progressText },
         // Active discount for current tier
         { key: "discount", label: "DISCOUNT",  value: discountPct > 0 ? `${discountPct}% off` : "Earn to unlock" },
         // Available gift count (detail on back)
@@ -262,12 +268,6 @@ async function buildPassJson(
   if (geoLocations.length > 0) passJson.locations = geoLocations;
 
   // ─── Auth token (stable per member — used for PassKit web service auth) ──────
-  const authRes = await pool.query(
-    `SELECT pass_auth_token FROM xish_wallet_passes WHERE member_id = $1 AND pass_type = 'apple'`,
-    [m.id]
-  );
-  const authToken: string = authRes.rows[0]?.pass_auth_token || crypto.randomUUID();
-
   const baseUrlForService = process.env.APP_BASE_URL || "https://chuio.io";
   passJson.webServiceURL       = `${baseUrlForService}/api/xish/wallet/passkit`;
   passJson.authenticationToken = authToken;

@@ -102,9 +102,12 @@ export async function sendPassUpdatePush(memberId: number): Promise<void> {
       [memberId]
     );
 
-    if (result.rows.length === 0) return;
+    if (result.rows.length === 0) {
+      console.log(`[XISH APNs] No registered devices for member ${memberId} — pass update will be fetched on next open`);
+      return;
+    }
 
-    console.log(`[XISH APNs] Pushing to ${result.rows.length} device(s) for member ${memberId}`);
+    console.log(`[XISH APNs] Sending push to ${result.rows.length} device(s) for member ${memberId}`);
 
     const outcomes = await Promise.allSettled(
       result.rows.map((r) => pushOneDevice(r.push_token, cert, key))
@@ -112,10 +115,12 @@ export async function sendPassUpdatePush(memberId: number): Promise<void> {
 
     outcomes.forEach((o, i) => {
       if (o.status === "rejected") {
-        console.error(`[XISH APNs] Push #${i} failed:`, o.reason);
+        console.error(`[XISH APNs] Push #${i} failed:`, o.reason?.message ?? o.reason);
+      } else {
+        console.log(`[XISH APNs] Push #${i} delivered`);
       }
     });
-  } catch (err) {
-    console.error("[XISH APNs] sendPassUpdatePush error:", err);
+  } catch (err: any) {
+    console.error("[XISH APNs] sendPassUpdatePush error:", err?.message ?? err);
   }
 }
