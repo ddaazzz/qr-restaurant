@@ -458,12 +458,9 @@ async function _applySessionToLanding(session, isOrderNow) {
     await initXishMode(session);
   }
 
-  // Order-now: skip the landing page and go straight to the menu.
-  // The landing page exists for table-scan (pax selection etc.) but is
-  // meaningless for a pick-up / wallet-pass deep-link. XISH is already
-  // initialised above, so the loyalty panel will be ready when the menu loads.
+  // Order-now: inject dine-in / take-away selector on the landing page
   if (isOrderNow) {
-    await startOrdering();
+    injectOrderTypeSelector();
   }
 }
 
@@ -476,7 +473,7 @@ async function startOrdering() {
   setLanguage(currentLang);
 
   document.getElementById("table-indicator").textContent = IS_ORDER_NOW
-    ? (t('menu.to-go-order') || 'To-Go Order')
+    ? (orderType === 'dine-in' ? '🍽 Dine In' : '🥡 Take Away')
     : `${t('menu.table-label')} ${tableName} • ${t('menu.pax-label')} ${pax || '-'}`;
 
   // Cart bar click handlers — only attach once
@@ -1229,6 +1226,7 @@ async function submitOrder() {
 
     const payload = {
       pax: 1,
+      order_type: orderType,   // 'takeaway' or 'dine-in' chosen on landing
       customer_name: customerName,
       customer_phone: customerPhone,
       items: cart.items.map(i => ({
@@ -1994,7 +1992,10 @@ function startOrderPolling() {
   if (orderPollerStarted) return;
   orderPollerStarted = true;
 
-  loadOrderStatus({ forceRender: true }); // immediate first load
+  // In order-now mode, sessionId is null until the first order is placed.
+  // Skip the immediate load to avoid the "No sessionId" warning; the poll
+  // interval will naturally pick it up once an order exists.
+  if (sessionId) loadOrderStatus({ forceRender: true });
   // Slow idle poll every 30s — just keeps orders in sync without constant flicker.
   // Fast confirmation polling (2s) is started separately after PA redirect.
   idlePollTimer = setInterval(() => loadOrderStatus(), 30_000);
@@ -2594,10 +2595,32 @@ async function initXishMode(session) {
   decorateLandingXish(session);
 }
 
+// Order type chosen on landing page: 'takeaway' | 'dine-in'
+let orderType = 'takeaway'; // default for order-now
+
+function injectOrderTypeSelector() {
+  const startBtn = document.getElementById('start-order-btn');
+  if (!startBtn || document.getElementById('order-type-selector')) return;
+
+  const sel = document.createElement('div');
+  sel.id = 'order-type-selector';
+  sel.className = 'order-type-selector';
+  sel.innerHTML = `
+    <div class="order-type-label">Order type</div>
+    <div class="order-type-btns">
+      <button class="order-type-btn active" data-type="takeaway" onclick="setOrderType('takeaway', this)">🥡 Take Away</button>
+      <button class="order-type-btn" data-type="dine-in" onclick="setOrderType('dine-in', this)">🍽 Dine In</button>
+    </div>
+  `;
+  startBtn.parentNode.insertBefore(sel, startBtn);
+}
+
+window.setOrderType = function(type, btn) {
+  orderType = type;
+  document.querySelectorAll('.order-type-btn').forEach(b => b.classList.toggle('active', b === btn));
+};
+
 function decorateLandingXish(session) {
-  const landing = document.getElementById('landing-page');
-  if (!landing) return;
-  landing.classList.add('xish-mode');
 
   // Inject XISH partner badge above restaurant name
   const nameEl = document.getElementById('restaurantName');

@@ -99,6 +99,57 @@ body {
   box-shadow: 0 2px 6px rgba(249, 115, 22, 0.2);
 }
 
+#start-order-btn {
+  background: var(--restaurant-color);
+  color: var(--bg-white);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+}
+
+#start-order-btn:active {
+  background: var(--secondary-color);
+  transform: translateY(2px);
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.2);
+}
+
+/* ── Order type selector (order-now landing) ── */
+.order-type-selector {
+  width: 100%;
+  margin-bottom: 14px;
+}
+.order-type-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .6;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.order-type-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.order-type-btn {
+  flex: 1;
+  max-width: 150px;
+  padding: 10px 0;
+  border: 2px solid rgba(255,255,255,.25);
+  border-radius: 10px;
+  background: rgba(255,255,255,.08);
+  color: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.order-type-btn.active {
+  background: var(--restaurant-color, #f97316);
+  border-color: var(--restaurant-color, #f97316);
+  color: #fff;
+  font-weight: 700;
+}
+
 #check-orders-btn {
   background: var(--text-dark);
   color: var(--bg-white);
