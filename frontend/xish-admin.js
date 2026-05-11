@@ -7,7 +7,7 @@
 
   /* ─── State ────────────────────────────────────────── */
   const state = {
-    token: localStorage.getItem("xish_token"),
+    token: localStorage.getItem("xish_merchant_token"),
     restaurantId: localStorage.getItem("xish_restaurantId"),
     restaurantName: "",
     currentSection: "stats",
@@ -36,7 +36,7 @@
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch("/api" + path, opts);
     if (res.status === 401) {
-      localStorage.removeItem("xish_token");
+      localStorage.removeItem("xish_merchant_token");
       localStorage.removeItem("xish_restaurantId");
       localStorage.removeItem("xish_role");
       localStorage.removeItem("xish_restaurantTimezone");

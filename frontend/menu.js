@@ -2557,6 +2557,31 @@ async function initXishMode(session) {
     }
   }
 
+  // Try xish_pass_ from previous join (customer scanned join QR before visiting menu)
+  if (!xishMember) {
+    try {
+      const passRaw = localStorage.getItem('xish_pass_' + restaurantId);
+      if (passRaw) {
+        const passData = JSON.parse(passRaw);
+        if (passData && passData.xish_id) {
+          const r = await fetch(`${API_BASE}/xish/auth/xish-id-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ xish_id: passData.xish_id, restaurant_id: restaurantId }),
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (data.mode === 'member') {
+              xishMember = data.member;
+              xishToken  = data.token;
+              localStorage.setItem('xish_token', data.token);
+            }
+          }
+        }
+      }
+    } catch (e) { /* silent */ }
+  }
+
   // Transform the landing page
   decorateLandingXish(session);
 }
@@ -2582,13 +2607,18 @@ function decorateLandingXish(session) {
     const bar = document.createElement('div');
     bar.id = 'xish-member-bar';
     bar.className = 'xish-member-bar';
+    const couponsBadge = (xishMember.active_coupons > 0)
+      ? `<span class="xish-coupons-pip">${xishMember.active_coupons} reward${xishMember.active_coupons > 1 ? 's' : ''}</span>`
+      : '';
     bar.innerHTML = `
       <div class="xish-member-bar-info">
         <span class="xish-tier-pip ${xishMember.tier}">${tierEmoji} ${(xishMember.tier||'basic').charAt(0).toUpperCase()+(xishMember.tier||'basic').slice(1)}</span>
         <span class="xish-member-name">${escXish(xishMember.name || 'Member')}</span>
+        ${couponsBadge}
       </div>
       <div class="xish-member-bar-pts">${(xishMember.points_balance || 0).toLocaleString()} pts</div>
     `;
+    bar.onclick = window.openXishPanel;
     const startBtn = document.getElementById('start-order-btn');
     if (startBtn) startBtn.parentNode.insertBefore(bar, startBtn);
   }
@@ -2743,6 +2773,7 @@ async function renderXishPanel() {
 
 window.xishLogout = function () {
   localStorage.removeItem('xish_token');
+  if (restaurantId) localStorage.removeItem('xish_pass_' + restaurantId);
   xishMember = null;
   xishToken  = null;
   window.closeXishPanel();

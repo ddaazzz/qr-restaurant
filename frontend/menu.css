@@ -2212,7 +2212,10 @@ body {
   margin: 8px 0 4px;
   width: 100%;
   max-width: 280px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
+.xish-member-bar:hover { background: rgba(201,168,76,0.2); }
 .xish-member-bar-info {
   display: flex;
   align-items: center;
@@ -2231,6 +2234,7 @@ body {
 .xish-tier-pip.silver   { background: rgba(160,160,176,0.2); color: #a0a0b0; }
 .xish-tier-pip.basic    { background: rgba(255,255,255,0.08); color: #808090; }
 .xish-member-name { font-size: 12px; color: #f0f0f8; font-weight: 500; }
+.xish-coupons-pip { font-size: 10px; font-weight: 700; background: rgba(201,168,76,0.25); color: #c9a84c; padding: 2px 7px; border-radius: 10px; }
 .xish-member-bar-pts { font-size: 13px; font-weight: 700; color: #c9a84c; }
 
 /* XISH Rewards button */

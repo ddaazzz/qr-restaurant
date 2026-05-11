@@ -180,3 +180,73 @@ router.post("/xish/auth/verify", async (req, res) => {
 });
 
 export default router;
+
+// ─── POST /api/xish/auth/xish-id-login ───────────────────────────────────────
+// Auto-login returning members who have previously joined (stored xish_id in localStorage).
+// No password required — xish_id is the "credential" for low-stakes loyalty display only.
+router.post("/xish/auth/xish-id-login", async (req, res) => {
+  try {
+    const { xish_id, restaurant_id } = req.body;
+    if (!xish_id || !restaurant_id) {
+      return res.status(400).json({ error: "xish_id and restaurant_id required" });
+    }
+
+    const memberRes = await pool.query(
+      `SELECT m.id AS member_id, m.points_balance, m.tier, m.xish_id,
+              c.name, c.restaurant_id,
+              (SELECT COUNT(*)::int FROM xish_gift_coupons gc
+               WHERE gc.member_id = m.id AND gc.qty_remaining > 0
+                 AND (gc.valid_until IS NULL OR gc.valid_until > NOW())) AS active_coupons,
+              ds.discount_percent
+       FROM xish_members m
+       JOIN crm_customers c ON c.id = m.crm_customer_id
+       LEFT JOIN LATERAL (
+         SELECT discount_percent FROM xish_discount_settings
+         WHERE restaurant_id = $2
+           AND tier = m.tier
+           AND is_active = true
+           AND (valid_from IS NULL OR valid_from <= NOW())
+           AND (valid_until IS NULL OR valid_until > NOW())
+         ORDER BY discount_percent DESC
+         LIMIT 1
+       ) ds ON true
+       WHERE m.xish_id = $1 AND c.restaurant_id = $2`,
+      [xish_id, restaurant_id]
+    );
+
+    if (!memberRes.rows[0]) {
+      return res.json({ mode: "guest" });
+    }
+
+    const member = memberRes.rows[0];
+    const token = jwt.sign(
+      { memberId: member.member_id, restaurantId: parseInt(restaurant_id), type: "xish_id" },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    // Update last_visit_at
+    await pool.query(
+      `UPDATE crm_customers SET last_visit_at = NOW(), updated_at = NOW()
+       WHERE id = (SELECT crm_customer_id FROM xish_members WHERE id = $1)`,
+      [member.member_id]
+    );
+
+    res.json({
+      mode: "member",
+      token,
+      member: {
+        member_id: member.member_id,
+        name: member.name,
+        tier: member.tier,
+        points_balance: member.points_balance,
+        xish_id: member.xish_id,
+        discount_percent: member.discount_percent || 0,
+        active_coupons: member.active_coupons || 0,
+      },
+    });
+  } catch (err) {
+    console.error("[XISH xish-id-login]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});

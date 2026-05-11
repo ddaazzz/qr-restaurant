@@ -190,9 +190,9 @@
 <div class="back-link"><a href="/xish">← Back to XISH</a></div>
 
 <script>
-  // Redirect if already logged in with a valid XISH token
+// Redirect if already logged in with a valid XISH merchant token
   (function () {
-    const t = localStorage.getItem("xish_token");
+    const t = localStorage.getItem("xish_merchant_token");
     const r = localStorage.getItem("xish_restaurantId");
     if (t && r) window.location.replace("/xish/admin");
   })();
@@ -232,8 +232,8 @@
         }
       }
 
-      // Persist auth under xish_ keys (separate from main Chuio session)
-      localStorage.setItem("xish_token", data.token);
+      // Persist auth under xish_merchant_ keys (separate from main Chuio session and customer xish_token)
+      localStorage.setItem("xish_merchant_token", data.token);
       localStorage.setItem("xish_role", data.role);
       localStorage.setItem("xish_restaurantId", String(data.restaurantId));
       if (data.restaurantTimezone) localStorage.setItem("xish_restaurantTimezone", data.restaurantTimezone);
