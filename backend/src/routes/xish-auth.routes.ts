@@ -142,13 +142,13 @@ router.post("/xish/auth/wallet-login", async (req, res) => {
 router.post("/xish/auth/verify", async (req, res) => {
   try {
     const { token } = req.body;
-    if (!token) return res.status(400).json({ error: "token required" });
+    if (!token) return res.json({ valid: false, member: null });
 
     let payload: any;
     try {
       payload = jwt.verify(token, JWT_SECRET);
     } catch {
-      return res.status(401).json({ error: "Invalid or expired token" });
+      return res.json({ valid: false, member: null });
     }
 
     const memberRes = await pool.query(
@@ -170,7 +170,7 @@ router.post("/xish/auth/verify", async (req, res) => {
       [payload.memberId, payload.restaurantId]
     );
 
-    if (!memberRes.rows[0]) return res.status(404).json({ error: "Member not found" });
+    if (!memberRes.rows[0]) return res.json({ valid: false, member: null });
 
     res.json({ valid: true, member: memberRes.rows[0], payload });
   } catch (err) {
