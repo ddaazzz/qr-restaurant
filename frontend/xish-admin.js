@@ -9,7 +9,9 @@
   const state = {
     token: localStorage.getItem("xish_merchant_token"),
     restaurantId: localStorage.getItem("xish_restaurantId"),
+    role: localStorage.getItem("xish_role"),
     restaurantName: "",
+    allRestaurants: [],
     currentSection: "stats",
     crmPage: 1,
     crmTotal: 0,
@@ -83,7 +85,7 @@
     document.getElementById("section-" + name).classList.add("active");
     if (btn) btn.classList.add("active");
 
-    const titles = { stats: "Statistics", crm: "Members CRM", discounts: "Discounts", gifts: "Gift Cards", campaigns: "Campaigns", coupons: "Coupons", tiers: "Member Tiers", wallet: "Wallet Pass" };
+    const titles = { stats: "統計 · Statistics", crm: "會員管理 · Members CRM", discounts: "折扣 · Discounts", gifts: "禮品卡 · Gift Cards", campaigns: "推廣活動 · Campaigns", coupons: "優惠券 · Coupons", tiers: "會員等級 · Member Tiers", wallet: "電子錢包 · Wallet Pass" };
     document.getElementById("xa-page-title").textContent = titles[name] || name;
 
     state.currentSection = name;
@@ -1016,14 +1018,91 @@
       const res = await api("GET", `/restaurants/${state.restaurantId}`);
       if (res && res.name) {
         state.restaurantName = res.name;
-        document.getElementById("xa-restaurant-badge").textContent = res.name;
+        setRestaurantBadge(res.name);
       }
     } catch {
-      document.getElementById("xa-restaurant-badge").textContent = "Restaurant #" + state.restaurantId;
+      setRestaurantBadge("Restaurant #" + state.restaurantId);
     }
+
+    // If superadmin: fetch all restaurants for merchant switcher
+    if (state.role === "superadmin") {
+      try {
+        const list = await api("GET", "/auth/admin-restaurants");
+        if (Array.isArray(list)) {
+          state.allRestaurants = list;
+        }
+        if (state.allRestaurants.length > 0) {
+          const arrow = document.getElementById("xa-merchant-arrow");
+          if (arrow) arrow.style.display = "";
+        }
+      } catch (e) {
+        console.warn("Could not load restaurant list for superadmin", e);
+      }
+    }
+
     // Load initial section
     xaLoadStats();
   }
+
+  function setRestaurantBadge(name) {
+    const badge = document.getElementById("xa-restaurant-badge");
+    if (!badge) return;
+    const arrow = document.getElementById("xa-merchant-arrow");
+    badge.innerHTML = escHtml(name) + (arrow ? arrow.outerHTML : "");
+    // Re-attach arrow element reference after innerHTML
+    const newArrow = badge.querySelector("#xa-merchant-arrow");
+    if (state.role === "superadmin" && newArrow) newArrow.style.display = "";
+  }
+
+  /* ─── Merchant Dropdown (superadmin) ────────────────── */
+  window.xaToggleMerchantDropdown = function () {
+    if (state.role !== "superadmin" || state.allRestaurants.length === 0) return;
+    const dd = document.getElementById("xa-merchant-dropdown");
+    if (!dd) return;
+    if (dd.style.display !== "none") {
+      dd.style.display = "none";
+      return;
+    }
+    // Build dropdown
+    let html = `<input class="xa-merchant-dropdown-search" id="xa-merch-search" type="text" placeholder="搜尋商戶 Search…" oninput="xaFilterMerchants()" autocomplete="off">`;
+    html += state.allRestaurants.map(r =>
+      `<button class="xa-merchant-dropdown-item${String(r.id) === String(state.restaurantId) ? " active" : ""}" onclick="xaSwitchMerchant(${r.id}, ${JSON.stringify(escHtml(r.name || "Restaurant #" + r.id))})">${escHtml(r.name || "Restaurant #" + r.id)}</button>`
+    ).join("");
+    dd.innerHTML = html;
+    dd.style.display = "block";
+    setTimeout(() => {
+      const s = document.getElementById("xa-merch-search");
+      if (s) s.focus();
+    }, 50);
+  };
+
+  window.xaFilterMerchants = function () {
+    const q = (document.getElementById("xa-merch-search")?.value || "").toLowerCase();
+    const dd = document.getElementById("xa-merchant-dropdown");
+    if (!dd) return;
+    dd.querySelectorAll(".xa-merchant-dropdown-item").forEach(btn => {
+      btn.style.display = btn.textContent.toLowerCase().includes(q) ? "" : "none";
+    });
+  };
+
+  window.xaSwitchMerchant = function (id, name) {
+    state.restaurantId = String(id);
+    state.restaurantName = name;
+    localStorage.setItem("xish_restaurantId", String(id));
+    document.getElementById("xa-merchant-dropdown").style.display = "none";
+    setRestaurantBadge(name);
+    // Reload current section data
+    xaSwitchSection(state.currentSection, document.querySelector(`.xa-nav-btn[data-section="${state.currentSection}"]`));
+  };
+
+  // Close dropdown on outside click
+  document.addEventListener("click", function (e) {
+    const badge = document.getElementById("xa-restaurant-badge");
+    const dd = document.getElementById("xa-merchant-dropdown");
+    if (dd && dd.style.display !== "none" && !badge?.contains(e.target) && !dd.contains(e.target)) {
+      dd.style.display = "none";
+    }
+  });
 
   init();
 

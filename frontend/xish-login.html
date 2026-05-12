@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>XISH — Merchant Sign In</title>
+  <title>XISH — 商戶登入 · Merchant Sign In</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0a0a0f;
-      --bg-2: #0e0e18;
-      --gold: #C9A84C;
-      --gold-dark: #9E7828;
-      --text: #F0F0F8;
-      --text-mid: #A0A0B0;
-      --text-dim: #58586A;
-      --border: rgba(201,168,76,0.18);
-      --border-dim: rgba(255,255,255,0.07);
-      --red: #F87171;
+      --bg: #f7f8fa;
+      --bg-2: #ffffff;
+      --gold: #b8953e;
+      --gold-dark: #8c6e28;
+      --text: #111827;
+      --text-mid: #4b5563;
+      --text-dim: #9ca3af;
+      --border: rgba(184,149,62,0.25);
+      --border-dim: #e5e7eb;
+      --red: #ef4444;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -37,8 +37,8 @@
       position: fixed;
       inset: 0;
       background-image:
-        linear-gradient(rgba(201,168,76,0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(201,168,76,0.05) 1px, transparent 1px);
+        linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
       background-size: 60px 60px;
       mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, transparent 100%);
       pointer-events: none;
@@ -51,7 +51,7 @@
       padding: 48px 40px;
       width: 100%;
       max-width: 420px;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 60px rgba(201,168,76,0.06);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.1);
     }
     .logo {
       text-align: center;
@@ -94,7 +94,7 @@
     }
     input {
       width: 100%;
-      background: rgba(255,255,255,0.04);
+      background: #f9fafb;
       border: 1px solid var(--border-dim);
       border-radius: 10px;
       color: var(--text);
@@ -102,14 +102,14 @@
       font-size: 14px;
       padding: 12px 14px;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background 0.2s;
     }
-    input:focus { border-color: var(--gold); }
+    input:focus { border-color: var(--gold); background: #ffffff; }
     input::placeholder { color: var(--text-dim); }
     .btn-submit {
       width: 100%;
-      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
-      color: #0a0a0a;
+      background: var(--gold);
+      color: #ffffff;
       font-weight: 700;
       font-size: 15px;
       letter-spacing: 0.03em;
@@ -123,8 +123,8 @@
     .btn-submit:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
     .error-msg {
-      background: rgba(248,113,113,0.1);
-      border: 1px solid rgba(248,113,113,0.2);
+      background: #fef2f2;
+      border: 1px solid #fecaca;
       color: var(--red);
       font-size: 13px;
       padding: 10px 14px;
@@ -163,21 +163,21 @@
   </div>
   <div class="logo-sub">MERCHANT PORTAL</div>
 
-  <div class="form-title">Sign in</div>
-  <div class="form-sub">Access your XISH loyalty dashboard</div>
+  <div class="form-title">登入 · Sign in</div>
+  <div class="form-sub">存取您的 XISH 商戶儀表板 · Access your XISH loyalty dashboard</div>
 
   <div class="error-msg" id="error-msg"></div>
 
   <form id="login-form" onsubmit="handleLogin(event)">
     <div class="field">
-      <label>Email</label>
+      <label>電郵地址 · Email</label>
       <input type="email" id="email" placeholder="admin@restaurant.com" required autocomplete="username" />
     </div>
     <div class="field">
-      <label>Password</label>
+      <label>密碼 · Password</label>
       <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password" />
     </div>
-    <button type="submit" class="btn-submit" id="submit-btn">Sign In</button>
+    <button type="submit" class="btn-submit" id="submit-btn">登入 · Sign In</button>
   </form>
 
   <hr class="divider" />
@@ -205,7 +205,7 @@
     const password = document.getElementById("password").value;
 
     btn.disabled = true;
-    btn.textContent = "Signing in…";
+    btn.textContent = "登入中… Signing in…";
     err.style.display = "none";
 
     try {
@@ -243,7 +243,7 @@
       err.textContent = ex.message;
       err.style.display = "block";
       btn.disabled = false;
-      btn.textContent = "Sign In";
+      btn.textContent = "登入 · Sign In";
     }
   }
 </script>

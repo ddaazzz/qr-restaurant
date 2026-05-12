@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>XISH Merchant Dashboard</title>
+  <title>XISH 商戶儀表板 · Merchant Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -25,40 +25,40 @@
   <nav class="xa-nav">
     <button class="xa-nav-btn active" data-section="stats" onclick="xaSwitchSection('stats', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/pie-chart.png" alt="statistics" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Statistics</span>
+      <span class="xa-nav-label">統計 <small style="opacity:.55;font-size:10px">Statistics</small></span>
     </button>
     <button class="xa-nav-btn" data-section="crm" onclick="xaSwitchSection('crm', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/group.png" alt="members" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Members CRM</span>
+      <span class="xa-nav-label">會員管理 <small style="opacity:.55;font-size:10px">Members CRM</small></span>
     </button>
     <button class="xa-nav-btn" data-section="tiers" onclick="xaSwitchSection('tiers', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/graphic.png" alt="tiers" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Member Tiers</span>
+      <span class="xa-nav-label">會員等級 <small style="opacity:.55;font-size:10px">Member Tiers</small></span>
     </button>
     <button class="xa-nav-btn" data-section="discounts" onclick="xaSwitchSection('discounts', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/tag.png" alt="discounts" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Discounts</span>
+      <span class="xa-nav-label">折扣 <small style="opacity:.55;font-size:10px">Discounts</small></span>
     </button>
     <button class="xa-nav-btn" data-section="gifts" onclick="xaSwitchSection('gifts', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/gift-card.png" alt="gift cards" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Gift Cards</span>
+      <span class="xa-nav-label">禮品卡 <small style="opacity:.55;font-size:10px">Gift Cards</small></span>
     </button>
     <button class="xa-nav-btn" data-section="coupons" onclick="xaSwitchSection('coupons', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/marketing.png" alt="coupons" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Coupons</span>
+      <span class="xa-nav-label">優惠券 <small style="opacity:.55;font-size:10px">Coupons</small></span>
     </button>
     <button class="xa-nav-btn" data-section="campaigns" onclick="xaSwitchSection('campaigns', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/marketing-2.png" alt="campaigns" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Campaigns</span>
+      <span class="xa-nav-label">推廣活動 <small style="opacity:.55;font-size:10px">Campaigns</small></span>
     </button>
     <button class="xa-nav-btn" data-section="wallet" onclick="xaSwitchSection('wallet', this)">
       <span class="xa-nav-icon"><img src="/uploads/website/card.png" alt="wallet" class="xa-nav-img"></span>
-      <span class="xa-nav-label">Wallet Pass</span>
+      <span class="xa-nav-label">電子錢包 <small style="opacity:.55;font-size:10px">Wallet Pass</small></span>
     </button>
   </nav>
 
   <div class="xa-sidebar-footer">
-    <a href="/admin" class="xa-back-link">← Back to Chuio Admin</a>
+    <a href="/admin" class="xa-back-link">← 返回 Chuio 後台 · Back to Chuio Admin</a>
   </div>
 </aside>
 
@@ -73,11 +73,12 @@
     <div class="xa-topbar-title" id="xa-page-title">Statistics</div>
     <div class="xa-topbar-right">
       <select class="xa-period-select" id="xa-period-select" onchange="xaLoadStats()">
-        <option value="7">Last 7 days</option>
-        <option value="30" selected>Last 30 days</option>
-        <option value="90">Last 90 days</option>
+        <option value="7">暴迗 7 天 · Last 7 days</option>
+        <option value="30" selected>暴迗 30 天 · Last 30 days</option>
+        <option value="90">暴迗 90 天 · Last 90 days</option>
       </select>
-      <div class="xa-restaurant-badge" id="xa-restaurant-badge">Loading…</div>
+      <div class="xa-restaurant-badge" id="xa-restaurant-badge" onclick="xaToggleMerchantDropdown()" title="切換商戶 · Switch merchant">載入中…<span class="xa-restaurant-badge-arrow" id="xa-merchant-arrow" style="display:none">▾</span></div>
+      <div class="xa-merchant-dropdown" id="xa-merchant-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);right:24px;"></div>
     </div>
   </header>
 
@@ -97,7 +98,7 @@
     <div class="xa-stats-lower">
       <!-- Tier Breakdown -->
       <div class="xa-card">
-        <div class="xa-card-title">Member Tier Breakdown</div>
+        <div class="xa-card-title">會員等級分佈 · Member Tier Breakdown</div>
         <div class="xa-tier-chart" id="xa-tier-chart">
           <div class="xa-tier-row">
             <span class="xa-tier-label">Platinum</span>
@@ -124,14 +125,14 @@
 
       <!-- Recent Transactions -->
       <div class="xa-card xa-card-wide">
-        <div class="xa-card-title">Recent Point Awards</div>
+        <div class="xa-card-title">最近積分記錄 · Recent Point Awards</div>
         <table class="xa-table" id="xa-recent-tx">
           <thead>
             <tr>
-              <th>Member</th>
-              <th>Points</th>
-              <th>Reason</th>
-              <th>Date</th>
+              <th>會員 Member</th>
+              <th>積分 Points</th>
+              <th>原因 Reason</th>
+              <th>日期 Date</th>
             </tr>
           </thead>
           <tbody id="xa-recent-tx-body">
@@ -149,34 +150,34 @@
     <div class="xa-toolbar">
       <div class="xa-search-wrap">
         <span class="xa-search-icon">🔍</span>
-        <input type="text" class="xa-search" id="crm-search" placeholder="Search name, phone, XISH ID…" oninput="xaDebounceCrm()" />
+        <input type="text" class="xa-search" id="crm-search" placeholder="搜尋姓名、電話、XISH ID… Search name, phone, XISH ID…" oninput="xaDebounceCrm()" />
       </div>
       <select class="xa-filter-select" id="crm-tier-filter" onchange="xaLoadCrm()">
-        <option value="">All Tiers</option>
-        <option value="platinum">Platinum</option>
-        <option value="gold">Gold</option>
-        <option value="silver">Silver</option>
-        <option value="basic">Basic</option>
+        <option value="">全部等級 All Tiers</option>
+        <option value="platinum">白金 Platinum</option>
+        <option value="gold">黄金 Gold</option>
+        <option value="silver">白銀 Silver</option>
+        <option value="basic">普通 Basic</option>
       </select>
       <select class="xa-filter-select" id="crm-diner-filter" onchange="xaLoadCrm()">
-        <option value="">All Members</option>
-        <option value="true">Previous Diners</option>
-        <option value="false">New Members</option>
+        <option value="">全部會員 All Members</option>
+        <option value="true">舊點客 Previous Diners</option>
+        <option value="false">新會員 New Members</option>
       </select>
-      <button class="xa-btn-gold" onclick="xaOpenRegisterModal()">+ Register Member</button>
+      <button class="xa-btn-gold" onclick="xaOpenRegisterModal()">＋ 登記會員 · Register Member</button>
     </div>
 
     <table class="xa-table xa-table-full" id="crm-table">
       <thead>
         <tr>
           <th>XISH ID</th>
-          <th>Name</th>
-          <th>Phone</th>
-          <th>Tier</th>
-          <th>Points</th>
-          <th>Prev Diner</th>
-          <th>Joined</th>
-          <th>Actions</th>
+              <th>姓名 Name</th>
+              <th>電話 Phone</th>
+              <th>等級 Tier</th>
+              <th>積分 Points</th>
+              <th>舊點客 Prev Diner</th>
+              <th>加入日期 Joined</th>
+              <th>操作 Actions</th>
         </tr>
       </thead>
       <tbody id="crm-table-body">
@@ -192,8 +193,8 @@
   <section class="xa-section" id="section-tiers">
 
     <div class="xa-toolbar">
-      <div class="xa-section-desc">Configure point thresholds and automatic discounts per member tier. Changes apply at next member checkout.</div>
-      <button class="xa-btn-gold" onclick="xaSaveTiers()">💾 Save Tier Settings</button>
+      <div class="xa-section-desc">設定各會員等級的積分門標及自動折扣。更改將在下次會員結責時生效。<br><small style="opacity:.65">Configure point thresholds and automatic discounts per member tier. Changes apply at next member checkout.</small></div>
+      <button class="xa-btn-gold" onclick="xaSaveTiers()">💾 儲存設定 · Save Tier Settings</button>
     </div>
 
     <div class="xa-tier-config-grid" id="tiers-grid">
@@ -210,8 +211,8 @@
   <section class="xa-section" id="section-discounts">
 
     <div class="xa-toolbar">
-      <div class="xa-section-desc">Define discount percentages per member tier. Members automatically receive the highest applicable discount at checkout.</div>
-      <button class="xa-btn-gold" onclick="xaOpenDiscountModal()">+ Add Discount Rule</button>
+      <div class="xa-section-desc">為各會員等級設定折扣百分比。會員結責時自動獲得最高適用折扣。<br><small style="opacity:.65">Define discount percentages per member tier. Members automatically receive the highest applicable discount at checkout.</small></div>
+      <button class="xa-btn-gold" onclick="xaOpenDiscountModal()">＋ 新增折扣 · Add Discount Rule</button>
     </div>
 
     <div class="xa-cards-list" id="discount-list">
@@ -224,8 +225,8 @@
   <section class="xa-section" id="section-gifts">
 
     <div class="xa-toolbar">
-      <div class="xa-section-desc">Define redeemable gift items. Members scan their loyalty card to claim their gift at the restaurant.</div>
-      <button class="xa-btn-gold" onclick="xaOpenGiftModal()">+ Add Gift Card</button>
+      <div class="xa-section-desc">定義可兑換的禮品項目。會員在餐廳出示入得積分卡即可兑換。<br><small style="opacity:.65">Define redeemable gift items. Members scan their loyalty card to claim their gift at the restaurant.</small></div>
+      <button class="xa-btn-gold" onclick="xaOpenGiftModal()">＋ 新增禮品卡 · Add Gift Card</button>
     </div>
 
     <div class="xa-cards-list" id="gift-list">
@@ -238,8 +239,8 @@
   <section class="xa-section" id="section-coupons">
 
     <div class="xa-toolbar">
-      <div class="xa-section-desc">Your restaurant's Chuio coupons. Sync any coupon to XISH Gift Cards so members can redeem them with their loyalty card.</div>
-      <button class="xa-btn-outline" onclick="xaLoadCoupons()">↻ Refresh</button>
+      <div class="xa-section-desc">您餐廳的 Chuio 優惠券。同步到 XISH 禮品卡就能讓會員用積分卡兑換。<br><small style="opacity:.65">Your restaurant's Chuio coupons. Sync any coupon to XISH Gift Cards so members can redeem them with their loyalty card.</small></div>
+      <button class="xa-btn-outline" onclick="xaLoadCoupons()">↻ 重新載入 · Refresh</button>
     </div>
 
     <div class="xa-cards-list" id="coupons-list">
@@ -252,8 +253,8 @@
   <section class="xa-section" id="section-campaigns">
 
     <div class="xa-toolbar">
-      <div class="xa-section-desc">Send targeted push notifications to your XISH members. Filter by tier, age, gender, birthday month, or previous-diner status.</div>
-      <button class="xa-btn-gold" onclick="xaOpenCampaignModal()">+ New Campaign</button>
+      <div class="xa-section-desc">向 XISH 會員發送點對推送通知，可按等級、年齢、性別、生日月份或舊點客笛選。<br><small style="opacity:.65">Send targeted push notifications to your XISH members. Filter by tier, age, gender, birthday month, or previous-diner status.</small></div>
+      <button class="xa-btn-gold" onclick="xaOpenCampaignModal()">＋ 新建推廣 · New Campaign</button>
     </div>
 
     <div class="xa-cards-list" id="campaign-list">
