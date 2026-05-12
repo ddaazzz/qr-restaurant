@@ -29,7 +29,7 @@
         <img id="logo" class="landing-logo" />
         <h2 id="restaurantName"></h2>
         <p id="address"></p>
-        <div id="xish-hero-badge" class="xish-hero-badge" style="display:none">✦ XISH Partner</div>
+        <div id="xish-hero-badge" class="xish-hero-badge" style="display:none"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> XISH Partner</div>
       </div>
     </div>
 
@@ -42,12 +42,12 @@
       <!-- Primary actions -->
       <div class="landing-action-row">
         <button id="dine-in-btn" class="landing-action-btn">
-          <span class="action-emoji">🍽</span>
+          <span class="action-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg></span>
           <span class="action-label-main">堂食</span>
           <span class="action-label-sub">ORDER FOR TABLE</span>
         </button>
         <button id="togo-btn" class="landing-action-btn">
-          <span class="action-emoji">🥡</span>
+          <span class="action-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
           <span class="action-label-main">外帶</span>
           <span class="action-label-sub">TAKEAWAY</span>
         </button>
@@ -55,7 +55,7 @@
 
       <!-- Transaction Record (hidden in order-now mode) -->
       <button id="check-orders-btn" class="landing-secondary-btn">
-        <span class="secondary-icon">📋</span>
+        <span class="secondary-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
         <span class="landing-secondary-zh">交易記錄</span>
         <span class="landing-secondary-sep"> · </span>
         <span class="landing-secondary-en">Transaction Record</span>
@@ -65,22 +65,22 @@
       <div id="xish-landing-section" class="xish-landing-section" style="display:none">
         <div class="xish-section-divider">
           <span class="xish-divider-line"></span>
-          <span class="xish-divider-label">✦ XISH</span>
+          <span class="xish-divider-label"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>XISH</span>
           <span class="xish-divider-line"></span>
         </div>
         <div class="xish-action-row">
           <button class="xish-action-btn" id="my-points-btn" onclick="openXishTab('points')">
-            <span class="xish-act-icon">⭐</span>
+          <span class="xish-act-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
             <span class="xish-act-label-zh">積分</span>
             <span class="xish-act-label-en">My Points</span>
           </button>
           <button class="xish-action-btn" id="coupons-btn" onclick="openXishTab('coupons')">
-            <span class="xish-act-icon">🎟</span>
+          <span class="xish-act-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg></span>
             <span class="xish-act-label-zh">優惠券</span>
             <span class="xish-act-label-en">Coupons</span>
           </button>
           <button class="xish-action-btn" id="gift-cards-btn" onclick="openXishTab('gifts')">
-            <span class="xish-act-icon">🎁</span>
+          <span class="xish-act-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
             <span class="xish-act-label-zh">禮品卡</span>
             <span class="xish-act-label-en">Gift Cards</span>
           </button>

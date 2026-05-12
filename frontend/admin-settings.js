@@ -936,6 +936,18 @@ async function loadMenuSettingsPage() {
     const cols = (settings.ui_config || {}).menu_columns || 1;
     const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
     if (radio) radio.checked = true;
+
+    // Portal styling
+    const portalBg = (settings.ui_config || {}).portal_bg || '';
+    const portalCard = (settings.ui_config || {}).portal_card_bg || '';
+    const bgInput = document.getElementById('portal-bg-color');
+    const bgPicker = document.getElementById('portal-bg-picker');
+    const cardInput = document.getElementById('portal-card-color');
+    const cardPicker = document.getElementById('portal-card-picker');
+    if (bgInput) bgInput.value = portalBg;
+    if (bgPicker && isValidHex(portalBg)) bgPicker.value = portalBg;
+    if (cardInput) cardInput.value = portalCard;
+    if (cardPicker && isValidHex(portalCard)) cardPicker.value = portalCard;
   } catch (err) {
     console.error('Failed to load menu settings:', err);
   }
@@ -966,6 +978,33 @@ async function saveMenuLayoutSetting(columns) {
   } catch (err) {
     console.error('Error saving menu layout setting:', err);
     alert(adminSettingsT('admin.menu-settings-save-failed', 'Failed to save setting'));
+  }
+}
+
+function isValidHex(v) {
+  return /^#[0-9a-fA-F]{3,6}$/.test(v);
+}
+
+function syncColorPicker(pickerId, textValue) {
+  const picker = document.getElementById(pickerId);
+  if (picker && isValidHex(textValue)) picker.value = textValue;
+}
+
+async function savePortalStyling() {
+  try {
+    const portalBg = (document.getElementById('portal-bg-color')?.value || '').trim();
+    const portalCard = (document.getElementById('portal-card-color')?.value || '').trim();
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ui_config: { portal_bg: portalBg, portal_card_bg: portalCard } })
+    });
+    if (!res.ok) throw new Error('Failed to save portal styling');
+    const saved = document.getElementById('portal-styling-saved');
+    if (saved) { saved.style.display = 'inline'; setTimeout(() => { saved.style.display = 'none'; }, 2500); }
+  } catch (err) {
+    console.error('Error saving portal styling:', err);
+    alert('Failed to save portal styling');
   }
 }
 

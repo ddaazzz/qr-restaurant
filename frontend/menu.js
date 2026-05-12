@@ -401,6 +401,16 @@ async function _applySessionToLanding(session, isOrderNow) {
   // Apply menu column layout from ui_config
   menuColumns = (session.ui_config?.menu_columns === 2) ? 2 : 1;
 
+  // Apply portal styling from ui_config
+  if (session.ui_config?.portal_bg) {
+    const content = document.getElementById('landing-content');
+    if (content) content.style.backgroundColor = session.ui_config.portal_bg;
+    document.documentElement.style.setProperty('--landing-bg', session.ui_config.portal_bg);
+  }
+  if (session.ui_config?.portal_card_bg) {
+    document.documentElement.style.setProperty('--bg-light', session.ui_config.portal_card_bg);
+  }
+
   // Apply restaurant language preference if available
   if (session.language_preference) {
     localStorage.setItem('restaurantLanguage', session.language_preference);
@@ -455,15 +465,20 @@ async function _applySessionToLanding(session, isOrderNow) {
   const hasTableService = session.has_table_service !== false;
 
   // Helper to relabel a landing action button
-  function _relabelBtn(btn, emoji, main, sub) {
+  function _relabelBtn(btn, svgOrIcon, main, sub) {
     if (!btn) return;
-    const em = btn.querySelector('.action-emoji');
+    const em = btn.querySelector('.action-icon');
     const ml = btn.querySelector('.action-label-main');
     const sl = btn.querySelector('.action-label-sub');
-    if (em) em.textContent = emoji;
+    if (em) em.innerHTML = svgOrIcon;
     if (ml) ml.textContent = main;
     if (sl) sl.textContent = sub;
   }
+
+  // SVG icon strings for landing action buttons
+  const _SVG_DINEIN   = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg>';
+  const _SVG_TAKEAWAY = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
+  const _SVG_COUNTER  = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
 
   if (isOrderNow) {
     // Order-now QR — no pre-existing table session
@@ -471,28 +486,28 @@ async function _applySessionToLanding(session, isOrderNow) {
 
     if (hasTableService) {
       // Table-service restaurant: let customer scan a table QR or order takeaway
-      _relabelBtn(dineInBtn, '🍽', '堂食', 'ORDER FOR TABLE');
-      _relabelBtn(togoBtn,   '🥡', '外帶', 'TAKEAWAY');
+      _relabelBtn(dineInBtn, _SVG_DINEIN,   '堂食', 'ORDER FOR TABLE');
+      _relabelBtn(togoBtn,   _SVG_TAKEAWAY, '外帶', 'TAKEAWAY');
       if (dineInBtn) dineInBtn.onclick = () => openTableScanPanel();
       if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
     } else {
       // Counter / no-table restaurant: walk-in pickup or takeaway
-      _relabelBtn(dineInBtn, '🏪', '取餐', 'PICK UP');
-      _relabelBtn(togoBtn,   '🥡', '外帶', 'TAKEAWAY');
+      _relabelBtn(dineInBtn, _SVG_COUNTER,  '取餐', 'PICK UP');
+      _relabelBtn(togoBtn,   _SVG_TAKEAWAY, '外帶', 'TAKEAWAY');
       if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
       if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
     }
   } else {
     // Table QR scan mode — customer already at a specific table
     if (hasTableService) {
-      _relabelBtn(dineInBtn, '🍽', '點餐', 'ORDER');
+      _relabelBtn(dineInBtn, _SVG_DINEIN, '點餐', 'ORDER');
       if (dineInBtn) dineInBtn.onclick = () => { orderType = 'dine-in'; startOrdering(); };
     } else {
       // Counter restaurant with a QR code (edge case)
-      _relabelBtn(dineInBtn, '🏪', '取餐', 'PICK UP');
+      _relabelBtn(dineInBtn, _SVG_COUNTER, '取餐', 'PICK UP');
       if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
     }
-    _relabelBtn(togoBtn, '🥡', '外帶', 'TAKEAWAY');
+    _relabelBtn(togoBtn, _SVG_TAKEAWAY, '外帶', 'TAKEAWAY');
     if (togoBtn)  togoBtn.onclick  = () => { orderType = 'takeaway'; startOrdering(); };
     if (checkBtn) checkBtn.onclick = () => { startOrdering(); openOrdersDrawer(); };
   }
@@ -2822,18 +2837,21 @@ function decorateLandingXish(session) {
   const memberBarEl = document.getElementById('xish-member-bar');
   if (memberBarEl) {
     if (xishMember) {
-      const tierEmoji = { platinum: '💫', gold: '🌟', silver: '🤍', basic: '⭐' }[xishMember.tier] || '⭐';
-      const tierLabel = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
+      const tierSvg = { platinum: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', gold: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', silver: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', basic: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>' }[xishMember.tier] || '';
+      const tierZh = { platinum: '白金', gold: '黃金', silver: '銀維', basic: '基礎' }[xishMember.tier] || '基礎';
+      const tierEn = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
+      const lang = localStorage.getItem('language') || 'zh';
+      const tierLabel = lang === 'zh' ? tierZh : tierEn;
       const activeCoupons = xishMember.active_coupons || 0;
       memberBarEl.innerHTML = `
         <div class="xish-mbc-left">
-          <span class="xish-mbc-tier">${tierEmoji} ${tierLabel}</span>
+          <span class="xish-mbc-tier">${tierSvg} ${tierLabel}</span>
           <span class="xish-mbc-name">${escXish(xishMember.name || 'Member')}</span>
           <span class="xish-mbc-sub">${escXish(xishMember.xish_id || '')}</span>
         </div>
         <div class="xish-mbc-right">
           <div class="xish-mbc-pts">${(xishMember.points_balance || 0).toLocaleString()}</div>
-          <div class="xish-mbc-pts-label">POINTS</div>
+          <div class="xish-mbc-pts-label">積分 &middot; POINTS</div>
         </div>
       `;
       memberBarEl.style.display = 'flex';
@@ -2871,15 +2889,15 @@ function injectXishPanel() {
         <button class="xish-panel-close" onclick="closeXishPanel()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="xish-panel-tabs" id="xish-panel-tabs">
-        <button class="xish-tab-btn active" data-tab="points" onclick="switchXishTab('points')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Points</button>
-        <button class="xish-tab-btn" data-tab="coupons" onclick="switchXishTab('coupons')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3l-4 4-4-4"/></svg>Coupons</button>
-        <button class="xish-tab-btn" data-tab="gifts" onclick="switchXishTab('gifts')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>Gifts</button>
+        <button class="xish-tab-btn active" data-tab="points" onclick="switchXishTab('points')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span class="xish-tab-zh">積分</span><span class="xish-tab-en"> Points</span></button>
+        <button class="xish-tab-btn" data-tab="coupons" onclick="switchXishTab('coupons')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg><span class="xish-tab-zh">優惠券</span><span class="xish-tab-en"> Coupons</span></button>
+        <button class="xish-tab-btn" data-tab="gifts" onclick="switchXishTab('gifts')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span class="xish-tab-zh">禮品</span><span class="xish-tab-en"> Gifts</span></button>
       </div>
       <div class="xish-panel-body" id="xish-panel-body">
         <div class="xish-loading-text">Loading…</div>
       </div>
       <div class="xish-panel-footer" id="xish-panel-footer" style="display:none">
-        <button class="xish-btn-outline" onclick="xishLogout()">Sign Out</button>
+        <button class="xish-btn-outline" onclick="xishLogout()">${(localStorage.getItem('language')||'zh')==='zh' ? '登出' : 'Sign Out'}</button>
       </div>
     </div>
   `;
@@ -2929,23 +2947,24 @@ async function renderXishGuestPanel() {
   const body = document.getElementById('xish-panel-body');
   if (!body) return;
   const joinUrl = `/xish?restaurant_id=${restaurantId || ''}`;
+  const gLang = localStorage.getItem('language') || 'zh';
   body.innerHTML = `
     <div class="xish-panel-guest">
       <div class="xish-join-hero">
         <div class="xish-join-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" color="var(--restaurant-color)"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-        <div class="xish-join-title">XISH Member Rewards</div>
-        <div class="xish-join-sub">Join to earn points on every order,<br/>unlock tier discounts &amp; free gifts</div>
-        <a href="${joinUrl}" target="_blank" class="xish-btn-gold" style="margin-top:18px">Add XISH Card to Wallet</a>
+        <div class="xish-join-title">${gLang === 'zh' ? 'XISH 會員累積獎勵' : 'XISH Member Rewards'}</div>
+        <div class="xish-join-sub">${gLang === 'zh' ? '立即加入，每次消費即可累積積分，<br/>解鎖等級折扣及免費贈品' : 'Join to earn points on every order,<br/>unlock tier discounts &amp; free gifts'}</div>
+        <a href="${joinUrl}" target="_blank" class="xish-btn-gold" style="margin-top:18px">${gLang === 'zh' ? '加入 XISH 錢包' : 'Add XISH Card to Wallet'}</a>
       </div>
       <div class="xish-blurred-section" style="margin-top:20px">
-        <div class="xish-section-title">🎁 Member Rewards</div>
+        <div class="xish-section-title">${gLang === 'zh' ? '會員專屬獎勵' : 'Member Rewards'}</div>
         <div class="xish-blur-wrap">
           <div class="xish-blur-items">
             <div class="xish-blur-item"></div>
             <div class="xish-blur-item"></div>
             <div class="xish-blur-item"></div>
           </div>
-          <div class="xish-blur-overlay">Log in to unlock rewards</div>
+          <div class="xish-blur-overlay">${gLang === 'zh' ? '登入即可解鎖' : 'Log in to unlock rewards'}</div>
         </div>
       </div>
     </div>
@@ -2970,7 +2989,7 @@ async function renderXishTabContent(tab) {
   const body = document.getElementById('xish-panel-body');
   const footer = document.getElementById('xish-panel-footer');
   if (!body) return;
-  body.innerHTML = '<div class="xish-loading-text">Loading…</div>';
+  body.innerHTML = `<div class="xish-loading-text">${(localStorage.getItem('language')||'zh')==='zh' ? '載入中…' : 'Loading…'}</div>`;
   if (footer) footer.style.display = 'none';
   if (tab === 'points') {
     await renderXishPointsTab(body);
@@ -2989,23 +3008,26 @@ async function renderXishPointsTab(body) {
     silver:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
     basic:    `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg>`,
   }[xishMember.tier] || '';
-  const tierLabel = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
+    const tierZhMap = { platinum: '白金', gold: '黃金', silver: '銀維', basic: '基礎' };
+  const tierLabel = lang === 'zh'
+    ? (tierZhMap[xishMember.tier] || '基礎')
+    : (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
   const discountHtml = (xishMember.discount_percent > 0)
-    ? `<div class="xish-discount-active">${xishMember.discount_percent}% member discount active</div>`
+    ? `<div class="xish-discount-active">${xishMember.discount_percent}% ${lang === 'zh' ? '會員折扣生效中' : 'member discount active'}</div>`
     : '';
   body.innerHTML = `
     <div class="xish-member-hero">
       <div class="xish-tier-badge-large ${xishMember.tier}">${tierSvg} ${tierLabel}</div>
       <div class="xish-member-greeting">${escXish(xishMember.name || 'Member')}</div>
       <div class="xish-points-row">
-        <div class="xish-pts-label">POINTS BALANCE</div>
+        <div class="xish-pts-label">${lang === 'zh' ? '積分餘額' : 'POINTS BALANCE'}</div>
         <div class="xish-pts-value">${(xishMember.points_balance || 0).toLocaleString()}</div>
       </div>
       ${discountHtml}
       <div class="xish-xish-id">ID: ${escXish(xishMember.xish_id || '—')}</div>
       <div class="xish-tier-progress-wrap" id="xish-progress-wrap">
         <div class="xish-tier-progress-label">
-          <span>Progress to next tier</span><span id="xish-progress-text">—</span>
+          <span>${lang === 'zh' ? '升級進度' : 'Progress to next tier'}</span><span id="xish-progress-text">—</span>
         </div>
         <div class="xish-tier-progress-bar">
           <div class="xish-tier-progress-fill" id="xish-progress-fill" style="width:0%"></div>
@@ -3013,8 +3035,8 @@ async function renderXishPointsTab(body) {
       </div>
     </div>
     <div class="xish-panel-section">
-      <div class="xish-section-title">Recent Points History</div>
-      <div id="xish-history-list" class="xish-loading-text">Loading history…</div>
+      <div class="xish-section-title">${lang === 'zh' ? '最近積分記錄' : 'Recent Points History'}</div>
+      <div id="xish-history-list" class="xish-loading-text">${lang === 'zh' ? '載入中…' : 'Loading history…'}</div>
     </div>
   `;
   const [detail, tiersRes] = await Promise.all([
@@ -3035,14 +3057,15 @@ async function renderXishPointsTab(body) {
       progressText.textContent = `${(nextTier.points_threshold - pts).toLocaleString()} pts to ${nextTier.tier.charAt(0).toUpperCase() + nextTier.tier.slice(1)}`;
     } else {
       progressFill.style.width = '100%';
-      progressText.textContent = 'Max tier reached';
+      const tierNames = { platinum: '白金', gold: '黃金', silver: '銀維', basic: '基礎' };
+      progressText.textContent = lang === 'zh' ? '已達最高等級' : 'Max tier reached';
     }
   }
   const historyEl = document.getElementById('xish-history-list');
   if (!historyEl) return;
   const history = (detail && detail.point_history) ? detail.point_history.slice(0, 20) : [];
   if (!history.length) {
-    historyEl.innerHTML = '<div class="xish-empty-rewards">No transactions yet. Start ordering to earn points!</div>';
+    historyEl.innerHTML = `<div class="xish-empty-rewards">${lang === 'zh' ? '尚未有交易記錄。開始點餐即可累積積分！' : 'No transactions yet. Start ordering to earn points!'}</div>`;
     return;
   }
   historyEl.innerHTML = history.map(row => {
@@ -3089,12 +3112,12 @@ async function renderXishCouponsTab(body) {
   };
   body.innerHTML = `
     <div class="xish-panel-section">
-      <div class="xish-section-title">Active Coupons (${active.length})</div>
-      ${active.length ? active.map(c => renderCoupon(c, false)).join('') : '<div class="xish-empty-rewards">No active coupons</div>'}
+      <div class="xish-section-title">${lang === 'zh' ? `有效優惠券 (${active.length})` : `Active Coupons (${active.length})`}</div>
+      ${active.length ? active.map(c => renderCoupon(c, false)).join('') : `<div class="xish-empty-rewards">${lang === 'zh' ? '暫無有效優惠券' : 'No active coupons'}</div>`}
     </div>
     ${used.length ? `
     <div class="xish-panel-section">
-      <div class="xish-section-title">Used / Expired</div>
+      <div class="xish-section-title">${lang === 'zh' ? '已使用 / 已過期' : 'Used / Expired'}</div>
       ${used.map(c => renderCoupon(c, true)).join('')}
     </div>` : ''}
   `;
@@ -3108,10 +3131,11 @@ async function renderXishGiftsTab(body) {
       getXishMemberDetail(),
     ]);
     const ownedIds = new Set(((detail && detail.gift_coupons) || []).map(c => c.gift_setting_id).filter(Boolean));
+    const giftLang = localStorage.getItem('language') || 'zh';
     if (!catalogRes.length) {
       body.innerHTML = `
         <div class="xish-panel-section">
-          <div class="xish-empty-rewards">No gift rewards available yet.<br/>Check back after earning more points!</div>
+          <div class="xish-empty-rewards">${giftLang === 'zh' ? '目前沒有可砲等級禮品。累積更多積分之後將會解鎖！' : 'No gift rewards available yet.<br/>Check back after earning more points!'}</div>
         </div>`;
       return;
     }
@@ -3119,7 +3143,7 @@ async function renderXishGiftsTab(body) {
     const checkIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
     body.innerHTML = `
       <div class="xish-panel-section">
-        <div class="xish-section-title">Available Gifts</div>
+        <div class="xish-section-title">${giftLang === 'zh' ? '可兌禮品' : 'Available Gifts'}</div>
         ${catalogRes.map(g => {
           const expires = g.redemption_end
             ? `Valid until ${new Date(g.redemption_end).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' })}`
@@ -3130,13 +3154,14 @@ async function renderXishGiftsTab(body) {
               <span class="xish-gift-icon">${owned ? checkIconSvg : giftIconSvg}</span>
               <div>
                 <div class="xish-gift-name">${escXish(g.item_name)}</div>
-                <div class="xish-gift-meta">${expires}${owned ? ' · In your wallet' : ''}</div>
+                <div class="xish-gift-meta">${expires}${owned ? (giftLang === 'zh' ? ' · 已加入錢包' : ' · In your wallet') : ''}</div>
               </div>
             </div>`;
         }).join('')}
       </div>`;
   } catch {
-    body.innerHTML = '<div class="xish-loading-text">Could not load gift catalog</div>';
+    const giftLangErr = localStorage.getItem('language') || 'zh';
+    body.innerHTML = `<div class="xish-loading-text">${giftLangErr === 'zh' ? '無法載入禮品列表' : 'Could not load gift catalog'}</div>`;
   }
 }
 

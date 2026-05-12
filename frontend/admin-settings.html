@@ -561,6 +561,30 @@
           </div>
         </div>
 
+        <!-- Section: Portal Styling -->
+        <div class="settings-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--text-main);">Portal Styling</h4>
+          <div style="font-size: 12px; color: var(--text-light); margin-bottom: 14px;">Customise the customer landing page appearance.</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+            <label>
+              <span style="display:block; font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 4px;">Landing Background</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="color" id="portal-bg-picker" value="#ffffff" style="width:36px;height:36px;border:none;padding:2px;border-radius:6px;cursor:pointer;background:none;" oninput="document.getElementById('portal-bg-color').value=this.value">
+                <input type="text" id="portal-bg-color" placeholder="#ffffff" maxlength="20" style="flex:1;height:36px;padding:0 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;font-family:monospace;" oninput="syncColorPicker('portal-bg-picker',this.value)">
+              </div>
+            </label>
+            <label>
+              <span style="display:block; font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 4px;">Card Background</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="color" id="portal-card-picker" value="#f3f4f6" style="width:36px;height:36px;border:none;padding:2px;border-radius:6px;cursor:pointer;background:none;" oninput="document.getElementById('portal-card-color').value=this.value">
+                <input type="text" id="portal-card-color" placeholder="#f3f4f6" maxlength="20" style="flex:1;height:36px;padding:0 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;font-family:monospace;" oninput="syncColorPicker('portal-card-picker',this.value)">
+              </div>
+            </label>
+          </div>
+          <button onclick="savePortalStyling()" class="btn-primary" style="font-size:13px; padding:8px 18px;">Save Portal Styling</button>
+          <span id="portal-styling-saved" style="display:none; margin-left:10px; font-size:12px; color:#16a34a;">Saved ✓</span>
+        </div>
+
       </div>
     </div>
   </div>
