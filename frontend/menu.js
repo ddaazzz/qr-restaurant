@@ -3002,6 +3002,7 @@ async function renderXishTabContent(tab) {
 }
 
 async function renderXishPointsTab(body) {
+  const lang = localStorage.getItem('language') || 'zh';
   const tierSvg = {
     platinum: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
     gold:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
@@ -3084,6 +3085,7 @@ async function renderXishPointsTab(body) {
 }
 
 async function renderXishCouponsTab(body) {
+  const lang = localStorage.getItem('language') || 'zh';
   const detail = await getXishMemberDetail();
   const allCoupons = detail ? (detail.gift_coupons || []) : [];
   const active = allCoupons.filter(c => c.qty_remaining > 0);
@@ -3091,7 +3093,7 @@ async function renderXishCouponsTab(body) {
   if (!allCoupons.length) {
     body.innerHTML = `
       <div class="xish-panel-section">
-        <div class="xish-empty-rewards">No coupons yet.<br/>Earn points and level up your tier to unlock gift rewards!</div>
+        <div class="xish-empty-rewards">${lang === 'zh' ? '尚未有優惠券。累積積分升級即可解鎖獎勵！' : 'No coupons yet.<br/>Earn points and level up your tier to unlock gift rewards!'}</div>
       </div>`;
     return;
   }
@@ -3135,7 +3137,7 @@ async function renderXishGiftsTab(body) {
     if (!catalogRes.length) {
       body.innerHTML = `
         <div class="xish-panel-section">
-          <div class="xish-empty-rewards">${giftLang === 'zh' ? '目前沒有可砲等級禮品。累積更多積分之後將會解鎖！' : 'No gift rewards available yet.<br/>Check back after earning more points!'}</div>
+          <div class="xish-empty-rewards">${giftLang === 'zh' ? '目前沒有可兌禮品。累積更多積分之後將會解鎖！' : 'No gift rewards available yet.<br/>Check back after earning more points!'}</div>
         </div>`;
       return;
     }
