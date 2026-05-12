@@ -84,7 +84,7 @@ ul { list-style: none; }
   align-items: center;
   gap: 8px;
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
-  color: #0a0a0a;
+  color: #ffffff;
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.04em;
@@ -98,7 +98,7 @@ ul { list-style: none; }
   display: inline-flex;
   align-items: center;
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
-  color: #0a0a0a;
+  color: #ffffff;
   font-weight: 700;
   font-size: 13px;
   padding: 8px 20px;
@@ -335,7 +335,7 @@ ul { list-style: none; }
 .wc-merchant-sub { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
 .wc-tier-badge {
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
-  color: #0a0a0a;
+  color: #ffffff;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -466,7 +466,7 @@ ul { list-style: none; }
 }
 .tab-btn.active {
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
-  color: #0a0a0a;
+  color: #ffffff;
   font-weight: 700;
 }
 
@@ -528,7 +528,7 @@ ul { list-style: none; }
   justify-content: center;
   gap: 8px;
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
-  color: #0a0a0a;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -708,7 +708,7 @@ ul { list-style: none; }
 .step-num {
   width: 48px; height: 48px;
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
-  color: #0a0a0a;
+  color: #ffffff;
   font-weight: 800;
   font-size: 18px;
   border-radius: 50%;
@@ -774,7 +774,7 @@ ul { list-style: none; }
   position: absolute;
   top: -12px; right: 24px;
   background: var(--gold);
-  color: #0a0a0a;
+  color: #ffffff;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;

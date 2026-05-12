@@ -2142,12 +2142,12 @@ body {
 
 /* XISH-mode landing page */
 .landing.xish-mode {
-  background-color: #0a0a0f;
-  color: #f0f0f8;
+  background-color: #ffffff;
+  color: #111827;
 }
 .landing.xish-mode h2,
 .landing.xish-mode p {
-  color: #f0f0f8;
+  color: #111827;
 }
 
 /* XISH partner badge */
@@ -2200,14 +2200,14 @@ body {
 .xish-tier-pip.gold     { background: rgba(161,0,53,0.25); color: #A10035; }
 .xish-tier-pip.silver   { background: rgba(160,160,176,0.2); color: #a0a0b0; }
 .xish-tier-pip.basic    { background: rgba(255,255,255,0.08); color: #808090; }
-.xish-member-name { font-size: 12px; color: #f0f0f8; font-weight: 500; }
+.xish-member-name { font-size: 12px; color: #111827; font-weight: 500; }
 .xish-coupons-pip { font-size: 10px; font-weight: 700; background: rgba(161,0,53,0.25); color: #A10035; padding: 2px 7px; border-radius: 10px; }
 .xish-member-bar-pts { font-size: 13px; font-weight: 700; color: #A10035; }
 
 /* XISH Rewards button */
 .xish-rewards-btn {
   background: linear-gradient(135deg, #A10035, #7A0028);
-  color: #0a0a0f;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   padding: 12px 20px;
