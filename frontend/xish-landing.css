@@ -911,6 +911,99 @@ ul { list-style: none; }
 .footer-bottom-links { display: flex; gap: 24px; }
 .footer-bottom-links a:hover { color: var(--gold); }
 
+/* ─── LIGHT THEME OVERRIDES ─────────────────────────── */
+:root {
+  --bg: #f7f8fa;
+  --bg-2: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f9fafb;
+  --gold: #b8953e;
+  --gold-light: #d4ab58;
+  --gold-dark: #8c6e28;
+  --text: #111827;
+  --text-mid: #4b5563;
+  --text-dim: #9ca3af;
+  --border: rgba(184, 149, 62, 0.22);
+  --border-dim: #e5e7eb;
+}
+
+.btn-gold,
+.btn-gold-sm { color: #ffffff; }
+
+.xish-header.scrolled {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--border-dim);
+  backdrop-filter: blur(12px);
+}
+
+.mobile-nav {
+  background: rgba(255, 255, 255, 0.98);
+  border-top: 1px solid var(--border-dim);
+}
+
+.hero-bg-grid {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+}
+
+.wallet-card {
+  background: #ffffff;
+  border: 1px solid var(--border-dim);
+  box-shadow: 0 18px 48px rgba(17, 24, 39, 0.12);
+}
+
+.wc-hot { color: var(--gold-dark); }
+.wc-progress-bar { background: #e5e7eb; }
+
+.feature-card,
+.qr-card,
+.price-card,
+.member-tab-panel,
+.merchant-tab-panel {
+  background: #ffffff;
+  border: 1px solid var(--border-dim);
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+}
+
+.feature-card:hover,
+.qr-card:hover,
+.price-card:hover {
+  background: #f9fafb;
+  border-color: var(--border);
+}
+
+.lcp-progress-bar { background: #e5e7eb; }
+.lcp-btn-dark { background: #f3f4f6; color: var(--text); }
+.lcp-btn-dark:hover { background: #e5e7eb; }
+
+.dp-phone-shell,
+.dp-header,
+.dp-insight,
+.dp-bar-chart {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.dp-date-pill {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #64748b;
+}
+
+.steps,
+.qr-section,
+.pricing,
+.cities,
+.final-cta {
+  background: #ffffff;
+}
+
+.xish-footer {
+  background: #f8fafc;
+  border-top: 1px solid var(--border-dim);
+}
+
 /* ─── RESPONSIVE ────────────────────────────────────── */
 @media (max-width: 1024px) {
   .hero-inner { grid-template-columns: 1fr; gap: 48px; }

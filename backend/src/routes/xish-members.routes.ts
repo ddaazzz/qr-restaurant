@@ -7,6 +7,15 @@ import { sendPassUpdatePush } from "../utils/xish-apns";
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "xish-secret-change-in-prod";
 
+async function safeQuery(sql: string, params: any[] = []) {
+  try {
+    return await pool.query(sql, params);
+  } catch (err) {
+    console.error("[XISH safeQuery]", err);
+    return { rows: [] as any[] };
+  }
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function generateXishId(): string {
@@ -123,13 +132,15 @@ router.get("/restaurants/:restaurantId/xish/members", async (req, res) => {
 router.get("/xish/members/:memberId", async (req, res) => {
   try {
     const { memberId } = req.params;
+    if (!/^\d+$/.test(String(memberId))) {
+      return res.status(400).json({ error: "Invalid member ID" });
+    }
+
     const memberRes = await pool.query(
       `SELECT
          m.*,
          c.name, c.phone, c.email, c.restaurant_id,
-         c.total_visits, c.total_spent_cents, c.last_visit_at,
-         c.xish_member_status, c.is_previous_diner, c.xish_discount_usage_count,
-         c.date_of_birth, c.gender, c.created_at AS registered_at
+         c.created_at AS registered_at
        FROM xish_members m
        JOIN crm_customers c ON c.id = m.crm_customer_id
        WHERE m.id = $1`,
@@ -140,15 +151,15 @@ router.get("/xish/members/:memberId", async (req, res) => {
     const member = memberRes.rows[0];
 
     const [cardsRes, couponsRes, pointsRes] = await Promise.all([
-      pool.query(
+      safeQuery(
         `SELECT * FROM xish_loyalty_cards WHERE member_id = $1 AND is_active = true ORDER BY issued_at DESC`,
         [memberId]
       ),
-      pool.query(
+      safeQuery(
         `SELECT * FROM xish_gift_coupons WHERE member_id = $1 ORDER BY created_at DESC`,
         [memberId]
       ),
-      pool.query(
+      safeQuery(
         `SELECT pt.*, r.name AS restaurant_name
          FROM xish_point_transactions pt
          JOIN restaurants r ON r.id = pt.restaurant_id
@@ -333,6 +344,10 @@ router.get("/xish/members/:memberId/wallet-token", async (req, res) => {
 router.get("/xish/tiers/:restaurantId", async (req, res) => {
   try {
     const { restaurantId } = req.params;
+    if (!/^\d+$/.test(String(restaurantId))) {
+      return res.json([]);
+    }
+
     const result = await pool.query(
       `SELECT tier, points_threshold, discount_percent
        FROM xish_tier_settings
@@ -343,7 +358,7 @@ router.get("/xish/tiers/:restaurantId", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("[XISH tiers]", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.json([]);
   }
 });
 
@@ -352,6 +367,10 @@ router.get("/xish/tiers/:restaurantId", async (req, res) => {
 router.get("/xish/gift-catalog/:restaurantId", async (req, res) => {
   try {
     const { restaurantId } = req.params;
+    if (!/^\d+$/.test(String(restaurantId))) {
+      return res.json([]);
+    }
+
     const result = await pool.query(
       `SELECT id, item_name, quantity, redemption_start, redemption_end, is_active
        FROM xish_gift_settings
@@ -365,7 +384,7 @@ router.get("/xish/gift-catalog/:restaurantId", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("[XISH gift catalog]", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.json([]);
   }
 });
 

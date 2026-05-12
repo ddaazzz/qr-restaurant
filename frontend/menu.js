@@ -2975,6 +2975,7 @@ let _xishMemberDetail = null;
 
 async function getXishMemberDetail() {
   if (_xishMemberDetail) return _xishMemberDetail;
+  if (!xishMember || !xishMember.member_id) return null;
   try {
     const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
       headers: xishToken ? { 'Authorization': 'Bearer ' + xishToken } : {},
@@ -3040,9 +3041,14 @@ async function renderXishPointsTab(body) {
       <div id="xish-history-list" class="xish-loading-text">${lang === 'zh' ? '載入中…' : 'Loading history…'}</div>
     </div>
   `;
+  const targetRestaurantId = (xishMember && xishMember.restaurant_id) || restaurantId;
+  const tiersPromise = targetRestaurantId
+    ? fetch(`${API_BASE}/xish/tiers/${targetRestaurantId}`).then(r => r.ok ? r.json() : []).catch(() => [])
+    : Promise.resolve([]);
+
   const [detail, tiersRes] = await Promise.all([
     getXishMemberDetail(),
-    fetch(`${API_BASE}/xish/tiers/${xishMember.restaurant_id || restaurantId}`).then(r => r.ok ? r.json() : []).catch(() => []),
+    tiersPromise,
   ]);
   const progressFill = document.getElementById('xish-progress-fill');
   const progressText = document.getElementById('xish-progress-text');
@@ -3128,6 +3134,12 @@ async function renderXishCouponsTab(body) {
 async function renderXishGiftsTab(body) {
   try {
     const targetRestaurantId = (xishMember && xishMember.restaurant_id) || restaurantId;
+    if (!targetRestaurantId) {
+      const giftLangMissing = localStorage.getItem('language') || 'zh';
+      body.innerHTML = `<div class="xish-loading-text">${giftLangMissing === 'zh' ? '目前無法載入禮品' : 'Could not load gifts right now'}</div>`;
+      return;
+    }
+
     const [catalogRes, detail] = await Promise.all([
       fetch(`${API_BASE}/xish/gift-catalog/${targetRestaurantId}`).then(r => r.ok ? r.json() : []).catch(() => []),
       getXishMemberDetail(),
