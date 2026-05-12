@@ -36,7 +36,7 @@ ul { list-style: none; }
 .nh-ps-chuio img { height: 80px; width: auto; }
 .nh-ps-xish { text-decoration: none; }
 .nh-ps-xish-wordmark { font-size: 16px; font-weight: 900; letter-spacing: 0.06em; line-height: 1; }
-.nh-ps-x { color: #C9A84C; }
+.nh-ps-x { color: #A10035; }
 .nh-ps-xish-wordmark { color: #374151; }
 .nh-ps-xish:hover .nh-ps-xish-wordmark { color: #111827; }
 .nh-ps-item.active .nh-ps-chuio img { border-bottom: 2px solid #FF6A2A; padding-bottom: 2px; }

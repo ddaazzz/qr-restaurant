@@ -871,7 +871,7 @@ async function loadCouponsModal() {
             var syncBtn = document.createElement('button');
             syncBtn.textContent = '→ XISH';
             syncBtn.title = 'Sync coupon to XISH loyalty reward';
-            syncBtn.style.cssText = 'margin-left:8px; padding:4px 10px; font-size:11px; font-weight:600; color:#C9A84C; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.35); border-radius:5px; cursor:pointer;';
+            syncBtn.style.cssText = 'margin-left:8px; padding:4px 10px; font-size:11px; font-weight:600; color:#A10035; background:rgba(161,0,53,0.1); border:1px solid rgba(161,0,53,0.35); border-radius:5px; cursor:pointer;';
             syncBtn.onclick = function() { syncCouponToXish(coupon.id); };
             actions.appendChild(syncBtn);
           }

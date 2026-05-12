@@ -144,7 +144,7 @@ body {
 /* ── XISH MEMBER BAR (in card) ────────────────────── */
 .xish-member-bar-card {
   background: #faf8f3;
-  border: 1.5px solid rgba(201,168,76,0.28);
+  border: 1.5px solid rgba(161,0,53,0.28);
   border-radius: 14px;
   padding: 12px 16px;
   display: flex;
@@ -194,7 +194,7 @@ body {
 .xish-mbc-pts {
   font-size: 22px;
   font-weight: 700;
-  color: var(--restaurant-color, #c9a84c);
+  color: var(--restaurant-color, #A10035);
   line-height: 1;
 }
 
@@ -360,7 +360,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--restaurant-color, #c9a84c);
+  color: var(--restaurant-color, #A10035);
   flex-shrink: 0;
 }
 

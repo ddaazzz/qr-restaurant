@@ -731,7 +731,7 @@
       document.getElementById("wp-description").value   = s.description || "";
       document.getElementById("wp-bg-color").value      = s.background_color || "rgb(15,15,20)";
       document.getElementById("wp-fg-color").value      = s.foreground_color || "rgb(255,255,255)";
-      document.getElementById("wp-lbl-color").value     = s.label_color || "rgb(201,168,76)";
+      document.getElementById("wp-lbl-color").value     = s.label_color || "rgb(161,0,53)";
       document.getElementById("wp-header-lbl").value    = s.header_field_label || "TIER";
       document.getElementById("wp-primary-lbl").value   = s.primary_field_label || "POINTS BALANCE";
       document.getElementById("wp-sec1-lbl").value      = s.secondary1_label || "MEMBER";
@@ -750,7 +750,7 @@
       // Sync colour pickers
       document.getElementById("wp-bg-picker").value  = rgbToHex(s.background_color || "rgb(15,15,20)");
       document.getElementById("wp-fg-picker").value  = rgbToHex(s.foreground_color || "rgb(255,255,255)");
-      document.getElementById("wp-lbl-picker").value = rgbToHex(s.label_color || "rgb(201,168,76)");
+      document.getElementById("wp-lbl-picker").value = rgbToHex(s.label_color || "rgb(161,0,53)");
 
       // Show cert warning if still stub
       if (s.apple_cert_required !== false) {
@@ -829,7 +829,7 @@
   window.xaWalletPreview = function () {
     const bg  = document.getElementById("wp-bg-color").value  || "rgb(15,15,20)";
     const fg  = document.getElementById("wp-fg-color").value  || "rgb(255,255,255)";
-    const lbl = document.getElementById("wp-lbl-color").value || "rgb(201,168,76)";
+    const lbl = document.getElementById("wp-lbl-color").value || "rgb(161,0,53)";
 
     const card = document.getElementById("wp-preview-card");
     if (!card) return;

@@ -8,9 +8,9 @@
   --bg-2:        #111118;
   --bg-card:     rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
-  --gold:        #C9A84C;
-  --gold-light:  #E8C872;
-  --gold-dark:   #9E7828;
+  --gold:        #A10035;
+  --gold-light:  #C2185B;
+  --gold-dark:   #7A0028;
   --text:        #FAFAFA;
   --text-mid:    #B0B0B8;
   --text-dim:    #68686E;
@@ -245,8 +245,8 @@ ul { list-style: none; }
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(201,168,76,0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(201,168,76,0.06) 1px, transparent 1px);
+    linear-gradient(rgba(161,0,53,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(161,0,53,0.06) 1px, transparent 1px);
   background-size: 60px 60px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 0%, transparent 100%);
 }
@@ -323,9 +323,9 @@ ul { list-style: none; }
   border-radius: 20px;
   padding: 22px;
   box-shadow:
-    0 0 60px rgba(201,168,76,0.12),
+    0 0 60px rgba(161,0,53,0.12),
     0 24px 60px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(201,168,76,0.15);
+    inset 0 1px 0 rgba(161,0,53,0.15);
 }
 
 .wc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
@@ -362,7 +362,7 @@ ul { list-style: none; }
 }
 .wc-pts-green { color: #4ADE80; font-weight: 600; }
 .wc-when { color: var(--text-dim); font-size: 9px; }
-.wc-hot { background: rgba(201,168,76,0.15); color: var(--gold); font-size: 8px; padding: 2px 6px; border-radius: 4px; }
+.wc-hot { background: rgba(161,0,53,0.15); color: var(--gold); font-size: 8px; padding: 2px 6px; border-radius: 4px; }
 .wc-reserve { color: var(--text-dim); font-size: 9px; }
 .wc-open { color: var(--text-dim); font-size: 9px; }
 .wc-dist { color: var(--text-dim); font-size: 9px; }
@@ -374,7 +374,7 @@ ul { list-style: none; }
 .stats-bar {
   border-top: 1px solid var(--border-dim);
   border-bottom: 1px solid var(--border-dim);
-  background: rgba(201,168,76,0.03);
+  background: rgba(161,0,53,0.03);
   padding: 36px 24px;
   overflow: hidden;
 }
@@ -509,7 +509,7 @@ ul { list-style: none; }
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 40px rgba(201,168,76,0.1);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 40px rgba(161,0,53,0.1);
 }
 .lcp-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
 .lcp-merchant-logo { width: 48px; height: 48px; flex-shrink: 0; }
@@ -767,7 +767,7 @@ ul { list-style: none; }
 }
 .pricing-card.visible { opacity: 1; transform: none; }
 .pricing-card-featured {
-  background: linear-gradient(145deg, rgba(201,168,76,0.08), rgba(201,168,76,0.03));
+  background: linear-gradient(145deg, rgba(161,0,53,0.08), rgba(161,0,53,0.03));
   border-color: var(--border);
 }
 .pricing-featured-badge {
@@ -917,9 +917,9 @@ ul { list-style: none; }
   --bg-2: #ffffff;
   --bg-card: #ffffff;
   --bg-card-hover: #f9fafb;
-  --gold: #b8953e;
-  --gold-light: #d4ab58;
-  --gold-dark: #8c6e28;
+  --gold: #A10035;
+  --gold-light: #C2185B;
+  --gold-dark: #7A0028;
   --text: #111827;
   --text-mid: #4b5563;
   --text-dim: #9ca3af;

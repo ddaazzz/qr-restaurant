@@ -7,13 +7,13 @@
   --bg-2:       #ffffff;
   --bg-card:    #ffffff;
   --bg-card-h:  #f9fafb;
-  --gold:       #b8953e;
-  --gold-light: #d4ab58;
-  --gold-dark:  #8c6e28;
+  --gold:       #A10035;
+  --gold-light: #C2185B;
+  --gold-dark:  #7A0028;
   --text:       #111827;
   --text-mid:   #4b5563;
   --text-dim:   #9ca3af;
-  --border:     rgba(184,149,62,0.25);
+  --border:     rgba(161,0,53,0.25);
   --border-dim: #e5e7eb;
   --red:        #ef4444;
   --green:      #16a34a;
@@ -63,7 +63,7 @@ button { cursor: pointer; font-family: inherit; }
 }
 .xa-logo-x    { color: var(--gold); font-style: italic; }
 .xa-logo-ish  { color: var(--text); }
-.xa-logo-tag  { font-size: 9px; font-weight: 600; letter-spacing: 0.14em; color: var(--gold); background: rgba(184,149,62,0.1); border: 1px solid var(--border); padding: 2px 7px; border-radius: 50px; margin-left: 8px; }
+.xa-logo-tag  { font-size: 9px; font-weight: 600; letter-spacing: 0.14em; color: var(--gold); background: rgba(161,0,53,0.1); border: 1px solid var(--border); padding: 2px 7px; border-radius: 50px; margin-left: 8px; }
 
 .xa-sidebar-close {
   display: none;
@@ -100,7 +100,7 @@ button { cursor: pointer; font-family: inherit; }
   transition: background 0.15s, color 0.15s;
 }
 .xa-nav-btn:hover { background: #f3f4f6; color: var(--text-mid); }
-.xa-nav-btn.active { background: rgba(184,149,62,0.08); color: var(--gold); border-left: 2px solid var(--gold); padding-left: 10px; }
+.xa-nav-btn.active { background: rgba(161,0,53,0.08); color: var(--gold); border-left: 2px solid var(--gold); padding-left: 10px; }
 .xa-nav-icon { font-size: 16px; display: flex; align-items: center; }
 .xa-nav-img { width: 18px; height: 18px; object-fit: contain; filter: opacity(0.4); transition: filter 0.15s; }
 .xa-nav-btn:hover .xa-nav-img { filter: opacity(0.65); }
@@ -183,7 +183,7 @@ button { cursor: pointer; font-family: inherit; }
   font-size: 12px;
   font-weight: 600;
   color: var(--gold);
-  background: rgba(184,149,62,0.08);
+  background: rgba(161,0,53,0.08);
   border: 1px solid var(--border);
   padding: 5px 12px;
   border-radius: 50px;
@@ -196,7 +196,7 @@ button { cursor: pointer; font-family: inherit; }
   position: relative;
   user-select: none;
 }
-.xa-restaurant-badge:hover { background: rgba(184,149,62,0.15); }
+.xa-restaurant-badge:hover { background: rgba(161,0,53,0.15); }
 .xa-restaurant-badge-arrow { margin-left: 4px; font-size: 10px; opacity: 0.6; }
 
 /* Merchant dropdown */
@@ -231,7 +231,7 @@ button { cursor: pointer; font-family: inherit; }
   text-overflow: ellipsis;
 }
 .xa-merchant-dropdown-item:hover { background: #f3f4f6; }
-.xa-merchant-dropdown-item.active { background: rgba(184,149,62,0.08); color: var(--gold); font-weight: 600; }
+.xa-merchant-dropdown-item.active { background: rgba(161,0,53,0.08); color: var(--gold); font-weight: 600; }
 .xa-merchant-dropdown-search {
   width: 100%;
   padding: 7px 10px;
@@ -353,7 +353,7 @@ button { cursor: pointer; font-family: inherit; }
   text-transform: uppercase;
 }
 .xa-tier-badge.platinum { background: #ede9fe; color: #6d28d9; }
-.xa-tier-badge.gold     { background: rgba(184,149,62,0.12); color: var(--gold-dark); }
+.xa-tier-badge.gold     { background: rgba(161,0,53,0.12); color: var(--gold-dark); }
 .xa-tier-badge.silver   { background: #f1f5f9; color: #64748b; }
 .xa-tier-badge.basic    { background: #f3f4f6; color: var(--text-dim); }
 
@@ -373,7 +373,7 @@ button { cursor: pointer; font-family: inherit; }
   cursor: pointer;
   transition: 0.15s;
 }
-.xa-page-btn:hover, .xa-page-btn.active { background: rgba(184,149,62,0.08); border-color: var(--gold); color: var(--gold); }
+.xa-page-btn:hover, .xa-page-btn.active { background: rgba(161,0,53,0.08); border-color: var(--gold); color: var(--gold); }
 
 /* ─── TOOLBAR ───────────────────────────────────────── */
 .xa-toolbar {
@@ -710,7 +710,7 @@ button { cursor: pointer; font-family: inherit; }
   font-family: monospace;
   padding: 3px 10px;
   border-radius: 6px;
-  background: rgba(184,149,62,0.08);
+  background: rgba(161,0,53,0.08);
   border: 1px solid var(--border);
   color: var(--gold-dark);
   letter-spacing: 0.06em;
@@ -719,7 +719,7 @@ button { cursor: pointer; font-family: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(184,149,62,0.08);
+  background: rgba(161,0,53,0.08);
   border: 1px solid var(--border);
   color: var(--gold-dark);
   font-size: 12px;
@@ -730,7 +730,7 @@ button { cursor: pointer; font-family: inherit; }
   transition: background 0.15s;
   white-space: nowrap;
 }
-.xa-btn-sync:hover { background: rgba(184,149,62,0.15); }
+.xa-btn-sync:hover { background: rgba(161,0,53,0.15); }
 .xa-btn-sync.synced { background: #dcfce7; border-color: #86efac; color: var(--green); cursor: default; }
 
 /* ─── RESPONSIVE (tier grid) ────────────────────────── */

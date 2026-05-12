@@ -166,7 +166,7 @@ async function buildPassJson(
       : `${restaurantName} \u00b7 XISH`,
     foregroundColor: s.foreground_color || "rgb(255,255,255)",
     backgroundColor: s.background_color || "rgb(15,15,20)",
-    labelColor: s.label_color || "rgb(201,168,76)",
+    labelColor: s.label_color || "rgb(161,0,53)",
     storeCard: {
       headerFields: [
         { key: "tier", label: s.header_field_label || "TIER", value: tier.toUpperCase() },
@@ -345,7 +345,7 @@ router.get("/xish/wallet-settings/:restaurantId", async (req, res) => {
         organization_name: "XISH Loyalty",
         background_color: "rgb(15,15,20)",
         foreground_color: "rgb(255,255,255)",
-        label_color: "rgb(201,168,76)",
+        label_color: "rgb(161,0,53)",
         header_field_label: "TIER",
         primary_field_label: "POINTS BALANCE",
         secondary1_label: "MEMBER",
@@ -789,7 +789,7 @@ router.get("/xish/join-info/:restaurantId", async (req, res) => {
       logo_text:        s.logo_text         || r.name,
       background_color: s.background_color  || "rgb(15,15,20)",
       foreground_color: s.foreground_color  || "rgb(255,255,255)",
-      label_color:      s.label_color       || "rgb(201,168,76)",
+      label_color:      s.label_color       || "rgb(161,0,53)",
       description:      s.description       || `Join ${r.name}'s loyalty programme and earn points on every visit.`,
     });
   } catch (err) {
