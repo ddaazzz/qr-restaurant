@@ -54,7 +54,7 @@ router.get("/restaurants/:restaurantId/xish/members", async (req, res) => {
       values.push(tier);
     }
     if (search) {
-      conditions.push(`(c.name ILIKE $${idx} OR c.phone ILIKE $${idx} OR c.email ILIKE $${idx})`);
+      conditions.push(`(c.name ILIKE $${idx} OR c.phone ILIKE $${idx} OR c.email ILIKE $${idx} OR m.xish_id ILIKE $${idx})`);
       values.push(`%${search}%`);
       idx++;
     }
@@ -86,7 +86,6 @@ router.get("/restaurants/:restaurantId/xish/members", async (req, res) => {
            FROM xish_gift_coupons gc
            WHERE gc.member_id = m.id
              AND gc.qty_remaining > 0
-             AND (gc.item_type IS NULL OR gc.item_type = 'coupon')
              AND (gc.valid_until IS NULL OR gc.valid_until > NOW())
          )                           AS active_coupons,
          (
@@ -501,6 +500,85 @@ router.post("/xish/members/:memberId/redeem-catalog/:giftSettingId", async (req,
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("[XISH redeem-catalog]", err);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// PATCH /xish/members/:memberId — update name, phone, and/or points_balance
+router.patch("/xish/members/:memberId", async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const { name, phone, points_balance } = req.body;
+
+    if (name !== undefined && !name?.trim()) {
+      return res.status(400).json({ error: "Name cannot be empty" });
+    }
+
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name.trim()); }
+    if (phone !== undefined) { fields.push(`phone = $${idx++}`); values.push(phone || null); }
+
+    // Update crm_customers
+    if (fields.length > 0) {
+      values.push(memberId);
+      await pool.query(
+        `UPDATE crm_customers c
+         SET ${fields.join(", ")}, updated_at = NOW()
+         FROM xish_members m
+         WHERE m.id = $${idx} AND m.crm_customer_id = c.id`,
+        values
+      );
+    }
+
+    // Update points_balance on xish_members
+    if (points_balance !== undefined && !isNaN(Number(points_balance))) {
+      await pool.query(
+        `UPDATE xish_members SET points_balance = $1, updated_at = NOW() WHERE id = $2`,
+        [Math.max(0, Math.round(Number(points_balance))), memberId]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[XISH member PATCH]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /xish/members/:memberId — remove xish membership (and crm_customer if no other data)
+router.delete("/xish/members/:memberId", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { memberId } = req.params;
+    await client.query("BEGIN");
+
+    // Get crm_customer_id before deleting
+    const memberRes = await client.query(
+      `SELECT crm_customer_id FROM xish_members WHERE id = $1`,
+      [memberId]
+    );
+    if (memberRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Member not found" });
+    }
+    const crmCustomerId = memberRes.rows[0].crm_customer_id;
+
+    // Delete xish_members row (cascades to wallet passes, gift coupons, loyalty cards via FK)
+    await client.query(`DELETE FROM xish_members WHERE id = $1`, [memberId]);
+
+    // Also remove the crm_customer record
+    await client.query(`DELETE FROM crm_customers WHERE id = $1`, [crmCustomerId]);
+
+    await client.query("COMMIT");
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[XISH member DELETE]", err);
     res.status(500).json({ error: "Internal server error" });
   } finally {
     client.release();

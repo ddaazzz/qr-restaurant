@@ -613,7 +613,53 @@
   </div>
 </div>
 
-<!-- Discount Settings Modal -->
+<!-- Edit Member Modal -->
+<div class="xa-modal-overlay" id="modal-edit-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3>編輯會員 · Edit Member</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-edit-member')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <input type="hidden" id="edit-member-id">
+      <div class="xa-form-row">
+        <label class="xa-label">姓名 Name</label>
+        <input class="xa-input" id="edit-member-name" type="text" placeholder="Member name">
+      </div>
+      <div class="xa-form-row">
+        <label class="xa-label">電話 Phone</label>
+        <input class="xa-input" id="edit-member-phone" type="tel" placeholder="Phone number">
+      </div>
+      <div class="xa-form-row">
+        <label class="xa-label">積分 Points Balance</label>
+        <input class="xa-input" id="edit-member-points" type="number" min="0" placeholder="0">
+      </div>
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-edit-member')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitEditMember()">儲存 · Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Member Confirm Modal -->
+<div class="xa-modal-overlay" id="modal-delete-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3>刪除會員 · Delete Member</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-delete-member')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <p>確定刪除 <strong id="delete-member-name">—</strong>？此操作不可逆。<br><small style="color:#6b7280">Are you sure you want to delete this member? This cannot be undone.</small></p>
+      <input type="hidden" id="delete-member-id">
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-delete-member')">Cancel</button>
+      <button class="xa-btn-gold" style="background:#e74c3c;border-color:#e74c3c;" onclick="xaSubmitDeleteMember()">刪除 · Delete</button>
+    </div>
+  </div>
+</div>
+
 <div class="xa-modal-overlay" id="modal-discount" style="display:none">
   <div class="xa-modal">
     <div class="xa-modal-header">

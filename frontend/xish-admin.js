@@ -238,8 +238,10 @@
           <td style="color:var(--gold);font-weight:600">${(m.points_balance || 0).toLocaleString()}</td>
           <td style="color:${m.is_previous_diner ? "var(--green)" : "var(--text-dim)"}">${m.is_previous_diner ? "✓" : "—"}</td>
           <td style="color:var(--text-dim)">${fmtDate(m.joined_at)}</td>
-          <td>
-            <button class="xa-btn-sm" onclick="xaOpenAwardModal(${m.xish_member_id}, '${escHtml(m.name || "Guest")}')">Award Points</button>
+          <td style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="xa-btn-sm" onclick="xaOpenAwardModal(${m.xish_member_id}, '${escHtml(m.name || "Guest")}')">積分 Points</button>
+            <button class="xa-btn-sm" onclick="xaOpenEditMember(${m.xish_member_id}, '${escHtml(m.name || "")}', '${escHtml(m.phone || "")}', ${m.points_balance || 0})">編輯</button>
+            <button class="xa-btn-sm" style="background:#fee2e2;color:#e74c3c;border-color:#fca5a5;" onclick="xaOpenDeleteMember(${m.xish_member_id}, '${escHtml(m.name || "?")}')">刪除</button>
           </td>
         </tr>
       `).join("");
@@ -318,8 +320,52 @@
     }
   };
 
-  /* ═════════════════════════════════════════════════════
-     MEMBER TIERS
+  /* ─── Edit Member ───────────────────────────────────── */
+  window.xaOpenEditMember = function (memberId, name, phone, points) {
+    document.getElementById("edit-member-id").value = memberId;
+    document.getElementById("edit-member-name").value = name;
+    document.getElementById("edit-member-phone").value = phone;
+    document.getElementById("edit-member-points").value = points;
+    openModal("modal-edit-member");
+  };
+
+  window.xaSubmitEditMember = async function () {
+    const memberId = document.getElementById("edit-member-id").value;
+    const name   = document.getElementById("edit-member-name").value.trim();
+    const phone  = document.getElementById("edit-member-phone").value.trim();
+    const points = parseInt(document.getElementById("edit-member-points").value, 10);
+    if (!name) { toast("Name is required", "error"); return; }
+    if (isNaN(points) || points < 0) { toast("Points must be 0 or more", "error"); return; }
+    try {
+      await api("PATCH", `/xish/members/${memberId}`, { name, phone: phone || null, points_balance: points });
+      toast("Member updated");
+      xaCloseModal("modal-edit-member");
+      xaLoadCrm();
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  };
+
+  /* ─── Delete Member ─────────────────────────────────── */
+  window.xaOpenDeleteMember = function (memberId, name) {
+    document.getElementById("delete-member-id").value = memberId;
+    document.getElementById("delete-member-name").textContent = name;
+    openModal("modal-delete-member");
+  };
+
+  window.xaSubmitDeleteMember = async function () {
+    const memberId = document.getElementById("delete-member-id").value;
+    try {
+      await api("DELETE", `/xish/members/${memberId}`);
+      toast("Member deleted");
+      xaCloseModal("modal-delete-member");
+      xaLoadCrm();
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  };
+
+
   ═════════════════════════════════════════════════════ */
   const TIER_META = {
     basic:    { label: "Basic",    icon: "⭐",   cls: "basic",    desc: "All new members" },

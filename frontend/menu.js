@@ -1544,7 +1544,7 @@ function openOrderReview() {
 
   let subtotal = 0;
   let itemsHtml = '';
-  reviewItems.forEach(item => {
+  reviewItems.forEach((item, idx) => {
     const addonTotal = (item.addons || []).reduce((s, a) => s + (a.priceCents || 0) * (a.quantity || 1), 0);
     const line = (item.totalPriceCents + addonTotal) * item.quantity;
     subtotal += line;
@@ -1552,14 +1552,25 @@ function openOrderReview() {
     const addonsHtml = (item.addons || []).map(a =>
       `<div style="font-size:11px;color:#667eea;padding-left:8px;">+ ${a.name} $${(a.priceCents/100).toFixed(2)}</div>`
     ).join('');
+    const imageHtml = item.image_url
+      ? `<img src="${item.image_url}" style="width:56px;height:56px;border-radius:8px;object-fit:cover;flex-shrink:0;margin-right:12px;" onerror="this.style.display='none'">`
+      : '';
     itemsHtml += `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px 16px;border-bottom:1px solid #f3f4f6;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;font-size:14px;color:#1f2937;">${displayName} <span style="color:#9ca3af;font-weight:400;">×${item.quantity}</span></div>
+      <div style="display:flex;align-items:flex-start;padding:12px 16px;border-bottom:1px solid #f3f4f6;">
+        ${imageHtml}
+        <div style="flex:1;min-width:0;cursor:pointer;" onclick="(function(){ var ov=document.getElementById('order-review-overlay'); if(ov)ov.remove(); restorePendingToCart(); openCartDrawer(); openDrawer(${item.menuItemId || item.id}); })()">
+          <div style="font-weight:600;font-size:14px;color:#1f2937;">${displayName}</div>
           ${addonsHtml}
           ${item.variantOptionDetails ? item.variantOptionDetails.map(v => `<div style="font-size:11px;color:#9ca3af;padding-left:8px;margin-top:1px;">– ${v.variant}: ${v.option}</div>`).join('') : ''}
         </div>
-        <div style="font-weight:700;font-size:14px;margin-left:12px;white-space:nowrap;color:#1f2937;">$${(line/100).toFixed(2)}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:12px;flex-shrink:0;">
+          <div style="font-weight:700;font-size:14px;white-space:nowrap;color:#1f2937;">$${(line/100).toFixed(2)}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button onclick="(function(){ if(pendingOrderItems[${idx}].quantity>1){pendingOrderItems[${idx}].quantity--;}else{pendingOrderItems.splice(${idx},1);} var ov=document.getElementById('order-review-overlay'); if(ov)ov.remove(); openOrderReview(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">−</button>
+            <span style="font-size:14px;font-weight:600;color:#1f2937;min-width:16px;text-align:center;">${item.quantity}</span>
+            <button onclick="(function(){ pendingOrderItems[${idx}].quantity++; var ov=document.getElementById('order-review-overlay'); if(ov)ov.remove(); openOrderReview(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">+</button>
+          </div>
+        </div>
       </div>`;
   });
 
@@ -1666,7 +1677,7 @@ function openOrderReview() {
         document.getElementById('order-review-overlay').remove();
         submitOrder({ customerName: n, customerPhone: p });
       })()" style="width:100%;padding:14px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">
-        ${t('menu.place-order') || (isZh ? '下訂單' : 'Place Order')}
+        ${t('menu.review-confirm') || (isZh ? '確認訂單' : 'Confirm Order')}
       </button>
     </div>
   `;
