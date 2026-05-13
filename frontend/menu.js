@@ -15,6 +15,8 @@ let sessionId = null;
 let tableName = null;
 let restaurantId = null;
 let restaurantName = null;
+let restaurantAddress = null;
+let hasTableService = true;
 let tableUnitId = null;
 let pax = null;
 let serviceChargePct = 0;
@@ -392,6 +394,8 @@ async function _applySessionToLanding(session, isOrderNow) {
   sessionId = session.session_id;
   restaurantId = session.restaurant_id;
   restaurantName = session.restaurant_name;
+  restaurantAddress = session.address || null;
+  hasTableService = session.has_table_service !== false;
   tableName = session.table_name;
   tableUnitId = session.table_unit_id || null;
   pax = session.pax;
@@ -1549,13 +1553,13 @@ function openOrderReview() {
       `<div style="font-size:11px;color:#667eea;padding-left:8px;">+ ${a.name} $${(a.priceCents/100).toFixed(2)}</div>`
     ).join('');
     itemsHtml += `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f3f4f6;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px 16px;border-bottom:1px solid #f3f4f6;">
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;font-size:14px;">${displayName} <span style="color:#9ca3af;font-weight:400;">×${item.quantity}</span></div>
+          <div style="font-weight:600;font-size:14px;color:#1f2937;">${displayName} <span style="color:#9ca3af;font-weight:400;">×${item.quantity}</span></div>
           ${addonsHtml}
-          ${item.variantOptionDetails ? item.variantOptionDetails.map(v => `<div style="font-size:11px;color:#9ca3af;padding-left:8px;">${v.variant}: ${v.option}</div>`).join('') : ''}
+          ${item.variantOptionDetails ? item.variantOptionDetails.map(v => `<div style="font-size:11px;color:#9ca3af;padding-left:8px;margin-top:1px;">– ${v.variant}: ${v.option}</div>`).join('') : ''}
         </div>
-        <div style="font-weight:700;font-size:14px;margin-left:12px;white-space:nowrap;">$${(line/100).toFixed(2)}</div>
+        <div style="font-weight:700;font-size:14px;margin-left:12px;white-space:nowrap;color:#1f2937;">$${(line/100).toFixed(2)}</div>
       </div>`;
   });
 
@@ -1583,59 +1587,77 @@ function openOrderReview() {
 
   const overlay = document.createElement('div');
   overlay.id = 'order-review-overlay';
-  overlay.style.cssText = `
-    position:fixed;inset:0;background:#fff;z-index:8500;
-    display:flex;flex-direction:column;overflow:hidden;
-  `;
+  overlay.style.cssText = 'position:fixed;inset:0;background:#f5f5f5;z-index:8500;display:flex;flex-direction:column;overflow:hidden;';
+
+  // Order type label
+  const orderTypeLabel = orderType === 'dine-in'
+    ? (isZh ? '堂食' : 'Dine In')
+    : orderType === 'counter'
+      ? (isZh ? '堂食' : 'Dine In')
+      : (isZh ? '外帶' : 'Takeaway');
+
   overlay.innerHTML = `
-    <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
-      <button onclick="(function(){ document.getElementById('order-review-overlay').remove(); restorePendingToCart(); openCartDrawer(); })()" style="
-        background:none;border:none;font-size:22px;cursor:pointer;color:#374151;
-        width:36px;height:36px;display:flex;align-items:center;justify-content:center;
-        border-radius:50%;flex-shrink:0;">←</button>
-      <h2 style="flex:1;text-align:center;margin:0;font-size:17px;font-weight:700;color:#1f2937;">
-        ${t('menu.order-review-title') || (isZh ? '訂單確認' : 'Order Review')}
-      </h2>
+    <div style="display:flex;align-items:center;padding:16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
+      <button onclick="(function(){ document.getElementById('order-review-overlay').remove(); restorePendingToCart(); openCartDrawer(); })()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">←</button>
+      <h2 style="flex:1;text-align:center;margin:0;font-size:17px;font-weight:700;color:#1f2937;">${t('menu.order-review-title') || (isZh ? '訂單確認' : 'Order Review')}</h2>
       <div style="width:36px;flex-shrink:0;"></div>
     </div>
-    <div style="flex:1;overflow-y:auto;padding:16px;">
-      ${itemsHtml || '<p style="color:#9ca3af;text-align:center;padding:20px 0;">No items</p>'}
-      <div style="margin-top:16px;padding-top:12px;border-top:2px solid #e5e7eb;">
-        <div style="display:flex;justify-content:space-between;font-size:14px;color:#6b7280;margin-bottom:6px;">
+
+    <!-- Restaurant info bar -->
+    <div style="background:#fff;padding:12px 16px 0;flex-shrink:0;">
+      <div style="font-size:15px;font-weight:700;color:#1f2937;">${escXish(restaurantName || '')}</div>
+      ${restaurantAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:2px;">${escXish(restaurantAddress)}</div>` : ''}
+      <div style="display:flex;gap:0;margin-top:10px;border-bottom:2px solid #e5e7eb;">
+        <div style="padding:8px 16px;font-size:13px;font-weight:700;color:var(--restaurant-color,#667eea);border-bottom:2px solid var(--restaurant-color,#667eea);margin-bottom:-2px;">${orderTypeLabel}</div>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;">
+      <!-- Items -->
+      <div style="background:#fff;margin-top:8px;">
+        ${itemsHtml || '<p style="color:#9ca3af;text-align:center;padding:20px 0;">No items</p>'}
+      </div>
+
+      <!-- Summary -->
+      <div style="background:#fff;margin-top:8px;padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;color:#6b7280;padding:6px 0;">
           <span>${t('menu.subtotal-label') || 'Subtotal'}</span>
           <span>$${(subtotal/100).toFixed(2)}</span>
         </div>
-        ${serviceChargePct > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#6b7280;margin-bottom:6px;">
+        ${serviceChargePct > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#6b7280;padding:6px 0;">
           <span>${t('menu.service-charge-label')||'Service Charge'} (${serviceChargePct}%)</span>
           <span>$${(serviceCharge/100).toFixed(2)}</span>
         </div>` : ''}
-        ${xishDiscountCents > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#A10035;font-weight:600;margin-bottom:6px;">
+        ${xishDiscountCents > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#A10035;font-weight:600;padding:6px 0;">
           <span>✦ XISH (${xishMember.discount_percent}% off)</span>
           <span>-$${(xishDiscountCents/100).toFixed(2)}</span>
         </div>` : ''}
-        ${couponDiscountCents > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#059669;font-weight:600;margin-bottom:6px;">
-          <span>${t('menu.coupon-code')||'Coupon'} (${appliedCoupon.code})</span>
-          <span>-$${(couponDiscountCents/100).toFixed(2)}</span>
-        </div>` : ''}
-        <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1f2937;margin-top:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1f2937;padding:10px 0 4px;">
           <span>${t('menu.total-label') || 'Total'}</span>
           <span id="review-total-value">$${(total/100).toFixed(2)}</span>
         </div>
       </div>
-      ${namePhoneHtml}
-      <div style="margin-top:14px;">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input type="text" id="review-coupon-input" placeholder="${isZh ? '優惠碼' : 'Coupon Code'}"
-            value="${appliedCoupon ? appliedCoupon.code : ''}"
-            style="flex:1;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box;text-transform:uppercase;" />
-          <button onclick="applyCouponFromReview()" style="padding:10px 16px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
-            ${t('menu.apply-coupon') || (isZh ? '套用' : 'Apply')}
-          </button>
-        </div>
-        <div id="review-coupon-display">${appliedCoupon ? `<div style="color:#059669;font-size:12px;margin-top:5px;">✓ ${t('menu.coupon-applied')||'Coupon applied'}</div>` : ''}</div>
+
+      <!-- Coupon row -->
+      <div style="background:#fff;margin-top:8px;">
+        <button id="review-coupon-row" onclick="openCouponSheet()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:none;border:none;border-top:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;cursor:pointer;text-align:left;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg>
+            <span style="font-size:14px;color:#374151;font-weight:500;">${isZh ? '優惠券' : 'Coupons'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span id="review-coupon-label" style="font-size:13px;color:${appliedCoupon ? '#059669' : '#9ca3af'};">
+              ${appliedCoupon ? `-$${(couponDiscountCents/100).toFixed(2)} (${escXish(appliedCoupon.code)})` : (isZh ? '暫無' : 'None')}
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </button>
       </div>
+
+      ${namePhoneHtml ? `<div style="background:#fff;margin-top:8px;padding:14px 16px;">${namePhoneHtml.replace(/style="margin-top:16px;/, 'style="')}</div>` : ''}
     </div>
-    <div style="padding:16px;border-top:1px solid #e5e7eb;flex-shrink:0;">
+
+    <div style="padding:16px;background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;">
       <button id="review-place-order-btn" onclick="(function(){
         var name = document.getElementById('review-customer-name');
         var phone = document.getElementById('review-customer-phone');
@@ -1643,20 +1665,13 @@ function openOrderReview() {
         var p = phone ? phone.value.trim() || null : null;
         document.getElementById('order-review-overlay').remove();
         submitOrder({ customerName: n, customerPhone: p });
-      })()" style="
-        width:100%;padding:14px;background:var(--restaurant-color,#667eea);
-        color:#fff;border:none;border-radius:12px;font-size:16px;
-        font-weight:700;cursor:pointer;
-      ">${t('menu.place-order') || (isZh ? '下訂單' : 'Place Order')}</button>
+      })()" style="width:100%;padding:14px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">
+        ${t('menu.place-order') || (isZh ? '下訂單' : 'Place Order')}
+      </button>
     </div>
   `;
   document.body.appendChild(overlay);
   closeAllDrawers();
-
-  // Initialize coupon picker if XISH member is logged in
-  if (xishMember && xishMember.member_id && xishToken) {
-    initReviewCouponPicker(isZh);
-  }
 }
 
 async function submitOrder({ customerName = null, customerPhone = null } = {}) {
@@ -2556,7 +2571,7 @@ function startOrderPolling() {
 function applyCouponToOrders() {
   const couponCode = document.getElementById("orders-coupon-input")
     ? document.getElementById("orders-coupon-input").value.trim().toUpperCase()
-    : (document.getElementById("review-coupon-input") ? document.getElementById("review-coupon-input").value.trim().toUpperCase() : '');
+    : (appliedCoupon ? appliedCoupon.code : '');
   if (!couponCode) {
     alert(t('menu.enter-coupon'));
     return;
@@ -2570,84 +2585,125 @@ function applyCouponToOrders() {
   applyCouponToSession(sessionId, couponCode);
 }
 
-async function initReviewCouponPicker(isZh) {
-  const input = document.getElementById('review-coupon-input');
-  if (!input) return;
+async function openCouponSheet() {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+
+  // Remove any existing sheet
+  const existing = document.getElementById('coupon-sheet');
+  if (existing) existing.remove();
+
+  const sheet = document.createElement('div');
+  sheet.id = 'coupon-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;flex-direction:column;justify-content:flex-end;';
+  sheet.innerHTML = `
+    <div onclick="document.getElementById('coupon-sheet').remove()" style="flex:1;background:rgba(0,0,0,0.4);"></div>
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,16px);max-height:80vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid #f3f4f6;flex-shrink:0;">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '選擇優惠券' : 'Select Coupon'}</h3>
+        <button onclick="document.getElementById('coupon-sheet').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;">×</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:0 0 8px;">
+        <div id="coupon-sheet-list" style="padding:8px 0;">
+          <div style="text-align:center;padding:24px;color:#9ca3af;font-size:13px;">${isZh ? '載入中…' : 'Loading…'}</div>
+        </div>
+        <!-- Manual code entry -->
+        <div style="padding:12px 20px;border-top:1px solid #f3f4f6;">
+          <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px;">${isZh ? '或手動輸入優惠碼' : 'Or enter code manually'}</div>
+          <div style="display:flex;gap:8px;">
+            <input id="coupon-sheet-input" type="text" placeholder="${isZh ? '優惠碼' : 'Coupon code'}"
+              style="flex:1;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;text-transform:uppercase;outline:none;"
+              value="${appliedCoupon ? appliedCoupon.code : ''}" />
+            <button onclick="applyCouponFromSheet()" style="padding:10px 16px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+              ${isZh ? '套用' : 'Apply'}
+            </button>
+          </div>
+          <div id="coupon-sheet-error" style="min-height:18px;margin-top:6px;font-size:12px;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+
+  // Fetch XISH coupons if logged in
+  const listEl = document.getElementById('coupon-sheet-list');
   let myCoupons = [];
-  try {
-    const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
-      headers: { 'Authorization': `Bearer ${xishToken}` }
+  if (xishMember && xishMember.member_id && xishToken) {
+    try {
+      const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
+        headers: { 'Authorization': `Bearer ${xishToken}` }
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const all = (d.member && d.member.gift_coupons) || d.gift_coupons || [];
+        myCoupons = all.filter(c =>
+          (c.item_type || c.setting_type || '').toLowerCase() === 'coupon' &&
+          c.qty_remaining > 0 && c.coupon_code
+        );
+      }
+    } catch (_) {}
+  }
+
+  if (!listEl) return;
+
+  if (!myCoupons.length) {
+    listEl.innerHTML = `<div style="text-align:center;padding:20px 16px;color:#9ca3af;font-size:13px;">${isZh ? '暫無可用優惠券' : 'No coupons available'}</div>`;
+  } else {
+    listEl.innerHTML = '';
+    myCoupons.forEach(c => {
+      const label = c.name || c.item_reward || (isZh ? '優惠券' : 'Coupon');
+      const expiry = c.valid_until
+        ? (isZh
+            ? `到期：${new Date(c.valid_until).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' })}`
+            : `Exp ${new Date(c.valid_until).toLocaleDateString('en-HK', { month: 'short', day: 'numeric' })}`)
+        : (isZh ? '永久有效' : 'No expiry');
+      const isSelected = appliedCoupon && appliedCoupon.code === c.coupon_code;
+      const btn = document.createElement('button');
+      btn.style.cssText = `width:100%;display:flex;align-items:center;gap:12px;padding:12px 20px;background:none;border:none;border-bottom:1px solid #f9fafb;cursor:pointer;text-align:left;`;
+      btn.innerHTML = `
+        <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${isSelected ? 'var(--restaurant-color,#667eea)' : '#d1d5db'};background:${isSelected ? 'var(--restaurant-color,#667eea)' : 'transparent'};flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+          ${isSelected ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:#1f2937;">${escXish(label)}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px;">${expiry} · ×${c.qty_remaining}</div>
+        </div>
+        <span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--restaurant-color,#667eea);background:#f0f4ff;padding:3px 8px;border-radius:4px;flex-shrink:0;">${escXish(c.coupon_code)}</span>
+      `;
+      btn.addEventListener('click', () => {
+        const input = document.getElementById('coupon-sheet-input');
+        if (input) input.value = c.coupon_code;
+        applyCouponFromSheet();
+      });
+      listEl.appendChild(btn);
     });
-    if (r.ok) {
-      const d = await r.json();
-      const allGiftCoupons = (d.member && d.member.gift_coupons) || (d.gift_coupons) || [];
-      myCoupons = allGiftCoupons.filter(c =>
-        (c.item_type || c.setting_type || '').toLowerCase() === 'coupon' &&
-        c.qty_remaining > 0 &&
-        c.coupon_code
-      );
-    }
-  } catch (_) {}
-  if (!myCoupons.length) return;
-
-  // Build picker dropdown
-  const wrapper = input.parentElement;
-  if (!wrapper) return;
-  wrapper.style.position = 'relative';
-
-  const dropdown = document.createElement('div');
-  dropdown.id = 'coupon-picker-dropdown';
-  dropdown.style.cssText = `position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:100;max-height:180px;overflow-y:auto;display:none;margin-top:4px;`;
-
-  myCoupons.forEach(c => {
-    const label = c.name || c.item_reward || (isZh ? '優惠券' : 'Coupon');
-    const expiry = c.valid_until
-      ? (isZh ? `到期 ${new Date(c.valid_until).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' })}` : `Exp ${new Date(c.valid_until).toLocaleDateString('en-HK', { month: 'short', day: 'numeric' })}`)
-      : (isZh ? '永久有效' : 'No expiry');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.style.cssText = `width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:none;border:none;border-bottom:1px solid #f3f4f6;cursor:pointer;text-align:left;font-size:13px;`;
-    btn.innerHTML = `<div><div style="font-weight:600;color:#1f2937;">${escXish(label)}</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">${expiry} · ×${c.qty_remaining}</div></div><span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--restaurant-color,#667eea);background:#f5f3ff;padding:3px 8px;border-radius:4px;">${escXish(c.coupon_code)}</span>`;
-    btn.addEventListener('click', () => {
-      input.value = c.coupon_code;
-      dropdown.style.display = 'none';
-      applyCouponFromReview();
-    });
-    btn.addEventListener('mouseenter', () => { btn.style.background = '#f9fafb'; });
-    btn.addEventListener('mouseleave', () => { btn.style.background = 'none'; });
-    dropdown.appendChild(btn);
-  });
-
-  wrapper.appendChild(dropdown);
-
-  // Show on focus/click, hide on outside click
-  input.addEventListener('focus', () => { dropdown.style.display = 'block'; });
-  input.addEventListener('click', () => { dropdown.style.display = 'block'; });
-  document.addEventListener('click', function hidePicker(e) {
-    if (!wrapper.contains(e.target)) {
-      dropdown.style.display = 'none';
-      document.removeEventListener('click', hidePicker);
-    }
-  }, true);
-
-  // Add a small caret indicator to show coupons are available
-  const applyBtn = wrapper.nextElementSibling && wrapper.nextElementSibling.id === 'review-coupon-display'
-    ? null : wrapper.parentElement ? wrapper.parentElement.querySelector('#review-coupon-display') : null;
-  // Add badge next to input placeholder
-  input.placeholder = isZh ? `優惠碼 (${myCoupons.length} 張可用)` : `Coupon Code (${myCoupons.length} available)`;
+  }
 }
 
-async function applyCouponFromReview() {
-  const input = document.getElementById('review-coupon-input');
-  const displayEl = document.getElementById('review-coupon-display');
-  const couponCode = (input ? input.value.trim().toUpperCase() : '');
-  if (!couponCode) { alert(t('menu.enter-coupon') || 'Please enter a coupon code.'); return; }
-  if (!sessionId) { alert(t('menu.session-not-found') || 'No active session.'); return; }
+async function applyCouponFromSheet() {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const input = document.getElementById('coupon-sheet-input');
+  const errorEl = document.getElementById('coupon-sheet-error');
+  const code = input ? input.value.trim().toUpperCase() : '';
+  if (!code) {
+    if (errorEl) errorEl.innerHTML = `<span style="color:#ef4444;">${isZh ? '請輸入優惠碼' : 'Please enter a coupon code.'}</span>`;
+    return;
+  }
+  if (errorEl) errorEl.innerHTML = `<span style="color:#9ca3af;">${isZh ? '驗證中…' : 'Checking…'}</span>`;
+
   try {
+    // If no sessionId yet (order-now before first order), just store code locally and validate later
+    if (!sessionId) {
+      appliedCoupon = { code, discount_cents: 0, pending: true };
+      _updateReviewCouponRow(code, 0, isZh);
+      document.getElementById('coupon-sheet')?.remove();
+      return;
+    }
     const response = await fetch(`${API_BASE}/sessions/${sessionId}/apply-coupon`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ coupon_code: couponCode })
+      body: JSON.stringify({ coupon_code: code })
     });
     const data = await response.json();
     if (response.ok) {
@@ -2657,29 +2713,46 @@ async function applyCouponFromReview() {
         discount_type: data.discount_type,
         discount_value: data.discount_value
       };
-      if (displayEl) displayEl.innerHTML = `<div style="color:#059669;font-size:12px;margin-top:5px;">✓ ${t('menu.coupon-applied')||'Coupon applied'} (-$${(data.discount_applied_cents/100).toFixed(2)})</div>`;
-      // Update total in review overlay
-      const totalEl = document.getElementById('review-total-value');
-      if (totalEl) {
-        // Recalculate using pending or cart items
-        const items = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
-        let sub = items.reduce((s, i) => {
-          const price = i.variantPrice != null ? i.variantPrice : i.price || 0;
-          const addonTotal = (i.addons || []).reduce((a, ad) => a + (ad.price || 0) * (ad.quantity || 1), 0);
-          return s + (price + addonTotal) * i.quantity;
-        }, 0);
-        const sc = Math.round(sub * serviceChargePct / 100);
-        const xish = (xishMember && xishMember.discount_percent > 0) ? Math.round(sub * xishMember.discount_percent / 100) : 0;
-        totalEl.textContent = '$' + ((sub + sc - xish - data.discount_applied_cents) / 100).toFixed(2);
-      }
+      _updateReviewCouponRow(data.coupon_code, data.discount_applied_cents, isZh);
+      document.getElementById('coupon-sheet')?.remove();
     } else {
-      if (displayEl) displayEl.innerHTML = `<div style="color:#ef4444;font-size:12px;margin-top:5px;">${data.error || t('menu.coupon-failed') || 'Invalid coupon.'}</div>`;
+      if (errorEl) errorEl.innerHTML = `<span style="color:#ef4444;">${escXish(data.error || (isZh ? '優惠碼無效' : 'Invalid coupon code.'))}</span>`;
     }
   } catch (e) {
-    if (displayEl) displayEl.innerHTML = `<div style="color:#ef4444;font-size:12px;margin-top:5px;">${t('menu.coupon-failed') || 'Failed to apply coupon.'}</div>`;
+    if (errorEl) errorEl.innerHTML = `<span style="color:#ef4444;">${isZh ? '無法驗證優惠碼' : 'Could not verify coupon.'}</span>`;
   }
 }
 
+function _updateReviewCouponRow(code, discountCents, isZh) {
+  const label = document.getElementById('review-coupon-label');
+  if (label) {
+    label.style.color = '#059669';
+    label.textContent = discountCents > 0
+      ? `-$${(discountCents/100).toFixed(2)} (${code})`
+      : code;
+  }
+  // Recalculate and update total
+  const totalEl = document.getElementById('review-total-value');
+  if (totalEl) {
+    const items = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
+    let sub = items.reduce((s, i) => {
+      const addonTotal = (i.addons || []).reduce((a, ad) => a + (ad.priceCents || 0) * (ad.quantity || 1), 0);
+      return s + (i.totalPriceCents + addonTotal) * i.quantity;
+    }, 0);
+    const sc = Math.round(sub * serviceChargePct / 100);
+    const xish = (xishMember && xishMember.discount_percent > 0) ? Math.round(sub * xishMember.discount_percent / 100) : 0;
+    totalEl.textContent = '$' + ((sub + sc - xish - discountCents) / 100).toFixed(2);
+  }
+}
+
+async function applyCouponFromReview() {
+  // Legacy — redirect to sheet
+  openCouponSheet();
+}
+
+async function initReviewCouponPicker() {
+  // No-op — replaced by openCouponSheet
+}
 
 async function applyCouponToSession(sessionId, couponCode) {
   try {
