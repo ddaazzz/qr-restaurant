@@ -86,6 +86,7 @@ router.get("/restaurants/:restaurantId/xish/members", async (req, res) => {
            FROM xish_gift_coupons gc
            WHERE gc.member_id = m.id
              AND gc.qty_remaining > 0
+             AND (gc.item_type IS NULL OR gc.item_type = 'coupon')
              AND (gc.valid_until IS NULL OR gc.valid_until > NOW())
          )                           AS active_coupons,
          (
@@ -156,7 +157,11 @@ router.get("/xish/members/:memberId", async (req, res) => {
         [memberId]
       ),
       safeQuery(
-        `SELECT * FROM xish_gift_coupons WHERE member_id = $1 ORDER BY created_at DESC`,
+        `SELECT gc.*, gs.item_type AS setting_type
+         FROM xish_gift_coupons gc
+         LEFT JOIN xish_gift_settings gs ON gs.id = gc.gift_setting_id
+         WHERE gc.member_id = $1
+         ORDER BY gc.created_at DESC`,
         [memberId]
       ),
       safeQuery(
@@ -372,19 +377,133 @@ router.get("/xish/gift-catalog/:restaurantId", async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, item_name, quantity, redemption_start, redemption_end, is_active
+      `SELECT id, item_name, item_type, points_cost, quantity, redemption_start, redemption_end, is_active, metadata
        FROM xish_gift_settings
        WHERE restaurant_id = $1
          AND is_active = true
          AND (redemption_start IS NULL OR redemption_start <= NOW())
          AND (redemption_end IS NULL OR redemption_end > NOW())
-       ORDER BY id ASC`,
+       ORDER BY item_type ASC, id ASC`,
       [restaurantId]
     );
     res.json(result.rows);
   } catch (err) {
     console.error("[XISH gift catalog]", err);
     res.json([]);
+  }
+});
+
+// ─── POST /api/xish/members/:memberId/redeem-catalog/:giftSettingId ──────────
+// Authenticated member redeems a catalog item (gift or coupon) using their points.
+router.post("/xish/members/:memberId/redeem-catalog/:giftSettingId", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const memberId = parseInt(req.params.memberId);
+    const giftSettingId = parseInt(req.params.giftSettingId);
+
+    if (isNaN(memberId) || isNaN(giftSettingId)) {
+      return res.status(400).json({ error: "Invalid parameters" });
+    }
+
+    await client.query("BEGIN");
+
+    // Fetch the catalog item
+    const giftRes = await client.query(
+      `SELECT gs.*, r.id AS rest_id
+       FROM xish_gift_settings gs
+       JOIN restaurants r ON r.id = gs.restaurant_id
+       WHERE gs.id = $1
+         AND gs.is_active = true
+         AND (gs.redemption_start IS NULL OR gs.redemption_start <= NOW())
+         AND (gs.redemption_end IS NULL OR gs.redemption_end > NOW())`,
+      [giftSettingId]
+    );
+    if (!giftRes.rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Gift not available" });
+    }
+    const gift = giftRes.rows[0];
+
+    // Verify member belongs to same restaurant
+    const memberRes = await client.query(
+      `SELECT m.id, m.points_balance, c.restaurant_id
+       FROM xish_members m
+       JOIN crm_customers c ON c.id = m.crm_customer_id
+       WHERE m.id = $1`,
+      [memberId]
+    );
+    if (!memberRes.rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Member not found" });
+    }
+    const member = memberRes.rows[0];
+    if (member.restaurant_id !== gift.rest_id) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // Check points balance
+    const pointsCost = gift.points_cost || 0;
+    if (pointsCost > 0 && (member.points_balance || 0) < pointsCost) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Insufficient points", points_needed: pointsCost, points_balance: member.points_balance || 0 });
+    }
+
+    // Check if member already holds an active instance of this catalog item
+    const existingRes = await client.query(
+      `SELECT id FROM xish_gift_coupons
+       WHERE member_id = $1 AND gift_setting_id = $2 AND qty_remaining > 0`,
+      [memberId, giftSettingId]
+    );
+    if (existingRes.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "You already have this reward in your wallet" });
+    }
+
+    // Deduct points if there is a cost
+    if (pointsCost > 0) {
+      await client.query(
+        `UPDATE xish_members SET points_balance = points_balance - $1 WHERE id = $2`,
+        [pointsCost, memberId]
+      );
+      await client.query(
+        `INSERT INTO xish_point_transactions (member_id, restaurant_id, points_delta, reason)
+         VALUES ($1, $2, $3, $4)`,
+        [memberId, gift.rest_id, -pointsCost, `Redeemed: ${gift.item_name}`]
+      );
+    }
+
+    // Retrieve coupon_code from metadata if it's a coupon type
+    const metadata = gift.metadata || {};
+    const couponCode = metadata.coupon_code || null;
+
+    // Issue the gift/coupon to the member's wallet
+    const issued = await client.query(
+      `INSERT INTO xish_gift_coupons
+         (restaurant_id, member_id, name, item_reward, item_type, gift_setting_id, coupon_code,
+          qty_remaining, valid_until)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)
+       RETURNING *`,
+      [
+        gift.rest_id,
+        memberId,
+        gift.item_name,
+        gift.item_name,
+        gift.item_type || 'gift',
+        giftSettingId,
+        couponCode,
+        gift.redemption_end || null,
+      ]
+    );
+
+    await client.query("COMMIT");
+    res.json({ ok: true, reward: issued.rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("[XISH redeem-catalog]", err);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    client.release();
   }
 });
 

@@ -3127,7 +3127,7 @@ function injectXishPanel() {
       <div class="xish-panel-tabs" id="xish-panel-tabs">
         <button class="xish-tab-btn active" data-tab="points" onclick="switchXishTab('points')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span class="xish-tab-zh">積分</span><span class="xish-tab-en"> Points</span></button>
         <button class="xish-tab-btn" data-tab="coupons" onclick="switchXishTab('coupons')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg><span class="xish-tab-zh">優惠券</span><span class="xish-tab-en"> Coupons</span></button>
-        <button class="xish-tab-btn" data-tab="gifts" onclick="switchXishTab('gifts')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span class="xish-tab-zh">禮品</span><span class="xish-tab-en"> Gifts</span></button>
+        <button class="xish-tab-btn" data-tab="gifts" onclick="switchXishTab('gifts')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span class="xish-tab-zh">禮品卡</span><span class="xish-tab-en"> Gift Cards</span></button>
       </div>
       <div class="xish-panel-body" id="xish-panel-body">
         <div class="xish-loading-text">Loading…</div>
@@ -3328,41 +3328,95 @@ async function renderXishPointsTab(body) {
 
 async function renderXishCouponsTab(body) {
   const lang = localStorage.getItem('language') || 'zh';
-  const detail = await getXishMemberDetail();
-  const allCoupons = detail ? (detail.gift_coupons || []) : [];
-  const active = allCoupons.filter(c => c.qty_remaining > 0);
-  const used   = allCoupons.filter(c => c.qty_remaining <= 0);
-  if (!allCoupons.length) {
+  const [detail, catalogRaw] = await Promise.all([
+    getXishMemberDetail(),
+    (async () => {
+      const targetRestaurantId = (xishMember && xishMember.restaurant_id) || restaurantId;
+      if (!targetRestaurantId) return [];
+      return fetch(`${API_BASE}/xish/gift-catalog/${targetRestaurantId}`)
+        .then(r => r.ok ? r.json() : []).catch(() => []);
+    })(),
+  ]);
+
+  // Member's owned coupons (item_type = 'coupon') — unused ones
+  const allGiftCoupons = detail ? (detail.gift_coupons || []) : [];
+  const myCoupons  = allGiftCoupons.filter(c => (c.item_type || c.setting_type || '').toLowerCase() === 'coupon' && c.qty_remaining > 0);
+  const usedCoupons = allGiftCoupons.filter(c => (c.item_type || c.setting_type || '').toLowerCase() === 'coupon' && c.qty_remaining <= 0);
+
+  // Catalog coupons available to redeem with points
+  const ownedSettingIds = new Set(allGiftCoupons.map(c => c.gift_setting_id).filter(Boolean));
+  const catalogCoupons = catalogRaw.filter(g => (g.item_type || 'gift').toLowerCase() === 'coupon' && !ownedSettingIds.has(g.id));
+  const userPoints = xishMember ? (xishMember.points_balance || 0) : 0;
+
+  const couponIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg>`;
+  const usedIconSvg   = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
+  const renderOwned = (c, faded) => {
+    const expiry = c.valid_until
+      ? (lang === 'zh' ? `到期：${new Date(c.valid_until).toLocaleDateString('zh-HK', { day: 'numeric', month: 'short' })}` : `Expires ${new Date(c.valid_until).toLocaleDateString('en-HK', { day: 'numeric', month: 'short', year: 'numeric' })}`)
+      : (lang === 'zh' ? '永久有效' : 'No expiry');
+    const label = c.name || c.item_reward || (lang === 'zh' ? '優惠券' : 'Coupon');
+    const codeTag = c.coupon_code ? `<span style="background:#f0f0f0;border-radius:4px;padding:2px 7px;font-size:11px;font-family:monospace;letter-spacing:1px;font-weight:700;">${escXish(c.coupon_code)}</span>` : '';
+    return `
+      <div class="xish-coupon-card" style="${faded ? 'opacity:0.45' : ''}">
+        <span class="xish-coupon-icon">${faded ? usedIconSvg : couponIconSvg}</span>
+        <div style="flex:1;min-width:0;">
+          <div class="xish-coupon-name">${escXish(label)}</div>
+          ${codeTag ? `<div style="margin:3px 0;">${codeTag}</div>` : ''}
+          <div class="xish-coupon-meta">${expiry}</div>
+        </div>
+        ${!faded ? `<div class="xish-coupon-qty" style="font-size:11px;color:#888;">×${c.qty_remaining}</div>` : ''}
+      </div>`;
+  };
+
+  const renderCatalogCoupon = (g) => {
+    const expires = g.redemption_end
+      ? (lang === 'zh' ? `到期：${new Date(g.redemption_end).toLocaleDateString('zh-HK', { day: 'numeric', month: 'short' })}` : `Valid until ${new Date(g.redemption_end).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' })}`)
+      : (lang === 'zh' ? '永久有效' : 'Always available');
+    const cost = g.points_cost || 0;
+    const costLabel = cost > 0
+      ? (lang === 'zh' ? `${cost.toLocaleString()} 積分` : `${cost.toLocaleString()} pts`)
+      : (lang === 'zh' ? '免費兌換' : 'Free');
+    const canAfford = cost === 0 || userPoints >= cost;
+    return `
+      <div class="xish-coupon-card" style="${!canAfford ? 'opacity:0.5' : ''}">
+        <span class="xish-coupon-icon">${couponIconSvg}</span>
+        <div style="flex:1;min-width:0;">
+          <div class="xish-coupon-name">${escXish(g.item_name)}</div>
+          <div class="xish-coupon-meta">${expires}</div>
+        </div>
+        <button
+          onclick="redeemXishCatalogItem(${g.id}, 'coupon')"
+          ${!canAfford ? 'disabled' : ''}
+          style="flex-shrink:0;background:${canAfford ? 'var(--xish-accent,#a10035)' : '#ccc'};color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:${canAfford ? 'pointer' : 'not-allowed'};"
+        >${costLabel}</button>
+      </div>`;
+  };
+
+  const hasAnything = myCoupons.length || usedCoupons.length || catalogCoupons.length;
+  if (!hasAnything) {
     body.innerHTML = `
       <div class="xish-panel-section">
-        <div class="xish-empty-rewards">${lang === 'zh' ? '尚未有優惠券。累積積分升級即可解鎖獎勵！' : 'No coupons yet.<br/>Earn points and level up your tier to unlock gift rewards!'}</div>
+        <div class="xish-empty-rewards">${lang === 'zh' ? '暫時沒有優惠券。<br/>兌換積分即可獲得！' : 'No coupons yet.<br/>Redeem your points to get one!'}</div>
       </div>`;
     return;
   }
-  const renderCoupon = (c, faded) => {
-    const expiry = c.valid_until
-      ? `Expires ${new Date(c.valid_until).toLocaleDateString('en-HK', { day: 'numeric', month: 'short', year: 'numeric' })}`
-      : 'No expiry';
-    const couponIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3l-4 4-4-4"/><line x1="12" y1="12" x2="12" y2="17"/></svg>`;
-    return `
-      <div class="xish-coupon-card" style="${faded ? 'opacity:0.45' : ''}">
-        <span class="xish-coupon-icon">${couponIconSvg}</span>
-        <div>
-          <div class="xish-coupon-name">${escXish(c.item_reward || c.item_name || 'Gift Reward')}</div>
-          <div class="xish-coupon-meta">Qty remaining: ${c.qty_remaining}</div>
-          <div class="xish-coupon-expiry">${expiry}</div>
-        </div>
-      </div>`;
-  };
+
   body.innerHTML = `
+    ${myCoupons.length ? `
     <div class="xish-panel-section">
-      <div class="xish-section-title">${lang === 'zh' ? `有效優惠券 (${active.length})` : `Active Coupons (${active.length})`}</div>
-      ${active.length ? active.map(c => renderCoupon(c, false)).join('') : `<div class="xish-empty-rewards">${lang === 'zh' ? '暫無有效優惠券' : 'No active coupons'}</div>`}
-    </div>
-    ${used.length ? `
+      <div class="xish-section-title">${lang === 'zh' ? `我的優惠券 (${myCoupons.length})` : `My Coupons (${myCoupons.length})`}</div>
+      ${myCoupons.map(c => renderOwned(c, false)).join('')}
+    </div>` : ''}
+    ${catalogCoupons.length ? `
     <div class="xish-panel-section">
-      <div class="xish-section-title">${lang === 'zh' ? '已使用 / 已過期' : 'Used / Expired'}</div>
-      ${used.map(c => renderCoupon(c, true)).join('')}
+      <div class="xish-section-title">${lang === 'zh' ? '可兌換優惠券' : 'Available to Redeem'}</div>
+      ${catalogCoupons.map(g => renderCatalogCoupon(g)).join('')}
+    </div>` : ''}
+    ${usedCoupons.length ? `
+    <div class="xish-panel-section">
+      <div class="xish-section-title" style="opacity:0.6;">${lang === 'zh' ? '已使用' : 'Used'}</div>
+      ${usedCoupons.map(c => renderOwned(c, true)).join('')}
     </div>` : ''}
   `;
 }
@@ -3380,35 +3434,79 @@ async function renderXishGiftsTab(body) {
       fetch(`${API_BASE}/xish/gift-catalog/${targetRestaurantId}`).then(r => r.ok ? r.json() : []).catch(() => []),
       getXishMemberDetail(),
     ]);
-    const ownedIds = new Set(((detail && detail.gift_coupons) || []).map(c => c.gift_setting_id).filter(Boolean));
+
+    // Filter to gift-type items only (not coupons)
+    const giftCatalog = catalogRes.filter(g => (g.item_type || 'gift').toLowerCase() === 'gift');
+    const allGiftCoupons = (detail && detail.gift_coupons) || [];
+    const ownedSettingIds = new Set(allGiftCoupons
+      .filter(c => (c.item_type || c.setting_type || 'gift').toLowerCase() === 'gift' && c.qty_remaining > 0)
+      .map(c => c.gift_setting_id).filter(Boolean));
+    const myGifts = allGiftCoupons.filter(c => (c.item_type || c.setting_type || 'gift').toLowerCase() === 'gift' && c.qty_remaining > 0);
     const giftLang = localStorage.getItem('language') || 'zh';
-    if (!catalogRes.length) {
+    const userPoints = xishMember ? (xishMember.points_balance || 0) : 0;
+
+    const giftIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>`;
+    const checkIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
+    const renderMyGift = (gc) => {
+      const expiry = gc.valid_until
+        ? (giftLang === 'zh' ? `到期：${new Date(gc.valid_until).toLocaleDateString('zh-HK', { day: 'numeric', month: 'short' })}` : `Expires ${new Date(gc.valid_until).toLocaleDateString('en-HK', { day: 'numeric', month: 'short', year: 'numeric' })}`)
+        : (giftLang === 'zh' ? '永久有效' : 'No expiry');
+      return `
+        <div class="xish-gift-card">
+          <span class="xish-gift-icon">${checkIconSvg}</span>
+          <div>
+            <div class="xish-gift-name">${escXish(gc.name || gc.item_reward)}</div>
+            <div class="xish-gift-meta">${expiry}${giftLang === 'zh' ? ' · 已加入錢包' : ' · In your wallet'}</div>
+          </div>
+        </div>`;
+    };
+
+    const renderCatalogGift = (g) => {
+      const expires = g.redemption_end
+        ? (giftLang === 'zh' ? `到期：${new Date(g.redemption_end).toLocaleDateString('zh-HK', { day: 'numeric', month: 'short' })}` : `Valid until ${new Date(g.redemption_end).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' })}`)
+        : (giftLang === 'zh' ? '永久有效' : 'Always available');
+      const cost = g.points_cost || 0;
+      const costLabel = cost > 0
+        ? (giftLang === 'zh' ? `${cost.toLocaleString()} 積分` : `${cost.toLocaleString()} pts`)
+        : (giftLang === 'zh' ? '免費兌換' : 'Free');
+      const owned = ownedSettingIds.has(g.id);
+      const canAfford = cost === 0 || userPoints >= cost;
+      return `
+        <div class="xish-gift-card" style="${!canAfford && !owned ? 'opacity:0.5' : ''}">
+          <span class="xish-gift-icon">${owned ? checkIconSvg : giftIconSvg}</span>
+          <div style="flex:1;min-width:0;">
+            <div class="xish-gift-name">${escXish(g.item_name)}</div>
+            <div class="xish-gift-meta">${expires}${owned ? (giftLang === 'zh' ? ' · 已加入錢包' : ' · In your wallet') : ''}</div>
+          </div>
+          ${!owned ? `<button
+            onclick="redeemXishCatalogItem(${g.id}, 'gift')"
+            ${!canAfford ? 'disabled' : ''}
+            style="flex-shrink:0;background:${canAfford ? 'var(--xish-accent,#a10035)' : '#ccc'};color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:${canAfford ? 'pointer' : 'not-allowed'};"
+          >${costLabel}</button>` : ''}
+        </div>`;
+    };
+
+    if (!myGifts.length && !giftCatalog.length) {
       body.innerHTML = `
         <div class="xish-panel-section">
           <div class="xish-empty-rewards">${giftLang === 'zh' ? '目前沒有可兌禮品。累積更多積分之後將會解鎖！' : 'No gift rewards available yet.<br/>Check back after earning more points!'}</div>
         </div>`;
       return;
     }
-    const giftIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>`;
-    const checkIconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
     body.innerHTML = `
+      ${myGifts.length ? `
       <div class="xish-panel-section">
-        <div class="xish-section-title">${giftLang === 'zh' ? '可兌禮品' : 'Available Gifts'}</div>
-        ${catalogRes.map(g => {
-          const expires = g.redemption_end
-            ? `Valid until ${new Date(g.redemption_end).toLocaleDateString('en-HK', { day: 'numeric', month: 'short' })}`
-            : 'Always available';
-          const owned = ownedIds.has(g.id);
-          return `
-            <div class="xish-gift-card">
-              <span class="xish-gift-icon">${owned ? checkIconSvg : giftIconSvg}</span>
-              <div>
-                <div class="xish-gift-name">${escXish(g.item_name)}</div>
-                <div class="xish-gift-meta">${expires}${owned ? (giftLang === 'zh' ? ' · 已加入錢包' : ' · In your wallet') : ''}</div>
-              </div>
-            </div>`;
-        }).join('')}
-      </div>`;
+        <div class="xish-section-title">${giftLang === 'zh' ? `我的禮品 (${myGifts.length})` : `My Gifts (${myGifts.length})`}</div>
+        ${myGifts.map(g => renderMyGift(g)).join('')}
+      </div>` : ''}
+      ${giftCatalog.length ? `
+      <div class="xish-panel-section">
+        <div class="xish-section-title">${giftLang === 'zh' ? '可兌換禮品' : 'Available Gifts'}</div>
+        ${giftCatalog.map(g => renderCatalogGift(g)).join('')}
+      </div>` : ''}
+    `;
   } catch {
     const giftLangErr = localStorage.getItem('language') || 'zh';
     body.innerHTML = `<div class="xish-loading-text">${giftLangErr === 'zh' ? '無法載入禮品列表' : 'Could not load gift catalog'}</div>`;
@@ -3418,6 +3516,55 @@ async function renderXishGiftsTab(body) {
 async function renderXishPanel() {
   await renderXishTabContent(xishActiveTab);
 }
+
+window.redeemXishCatalogItem = async function(giftSettingId, type) {
+  if (!xishMember || !xishMember.member_id) return;
+  const lang = localStorage.getItem('language') || 'zh';
+  const confirmMsg = lang === 'zh'
+    ? '確認兌換此獎勵？'
+    : 'Confirm redeem this reward?';
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}/redeem-catalog/${giftSettingId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (xishToken || '') },
+    });
+    const data = await res.json();
+    if (res.ok) {
+      // Invalidate cached member detail so tabs refresh
+      _xishMemberDetail = null;
+      // Refresh the active tab
+      const tab = type === 'coupon' ? 'coupons' : 'gifts';
+      xishActiveTab = tab;
+      document.querySelectorAll('.xish-tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
+      await renderXishTabContent(tab);
+      // Update points badge in member bar (subtract cost)
+      if (xishMember) {
+        const cost = data.reward ? 0 : 0; // balance already updated server-side; reload
+        // Re-fetch member info
+        const mRes = await fetch(`${API_BASE}/xish/me`, {
+          headers: { 'Authorization': 'Bearer ' + (xishToken || '') },
+        }).catch(() => null);
+        if (mRes && mRes.ok) {
+          const mData = await mRes.json();
+          if (mData && mData.member) {
+            xishMember = { ...xishMember, ...mData.member };
+            const ptsEl = document.querySelector('.xish-mbc-pts');
+            if (ptsEl) ptsEl.textContent = (xishMember.points_balance || 0).toLocaleString();
+          }
+        }
+      }
+    } else {
+      alert(data.error || (lang === 'zh' ? '兌換失敗，請重試' : 'Redemption failed. Please try again.'));
+    }
+  } catch {
+    const lang2 = localStorage.getItem('language') || 'zh';
+    alert(lang2 === 'zh' ? '網絡錯誤，請重試' : 'Network error. Please try again.');
+  }
+};
 
 window.xishLogout = function () {
   localStorage.removeItem('xish_token');

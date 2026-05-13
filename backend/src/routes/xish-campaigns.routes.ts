@@ -352,10 +352,11 @@ router.post("/restaurants/:restaurantId/xish/sync-coupon", async (req, res) => {
     // Upsert into xish_gift_settings using the coupon id stored in metadata
     const result = await pool.query(
       `INSERT INTO xish_gift_settings
-         (restaurant_id, item_name, quantity, redemption_start, redemption_end, metadata)
-       VALUES ($1, $2, 1, NOW(), $3, $4)
+         (restaurant_id, item_name, item_type, quantity, redemption_start, redemption_end, metadata)
+       VALUES ($1, $2, 'coupon', 1, NOW(), $3, $4)
        ON CONFLICT (restaurant_id, item_name)
        DO UPDATE SET
+         item_type = 'coupon',
          quantity = 1,
          redemption_end = EXCLUDED.redemption_end,
          metadata = EXCLUDED.metadata

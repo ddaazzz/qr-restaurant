@@ -196,6 +196,7 @@ router.post("/xish/auth/xish-id-login", async (req, res) => {
               c.name, c.restaurant_id,
               (SELECT COUNT(*)::int FROM xish_gift_coupons gc
                WHERE gc.member_id = m.id AND gc.qty_remaining > 0
+                 AND (gc.item_type IS NULL OR gc.item_type = 'coupon')
                  AND (gc.valid_until IS NULL OR gc.valid_until > NOW())) AS active_coupons,
               ds.discount_percent
        FROM xish_members m
