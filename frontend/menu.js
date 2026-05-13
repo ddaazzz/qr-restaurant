@@ -31,6 +31,8 @@ let confirmationPollTimer = null;      // setInterval handle for fast confirmati
 let confirmationPollDeadline = 0;      // epoch ms after which we stop fast polling
 let idlePollTimer = null;              // setInterval handle for slow background polling
 let appliedCoupon = null; // { code, discount_cents, discount_type, discount_value }
+let pendingOrderItems = []; // items moved from cart to "pending" before Place Order
+let pendingSrCart = {};     // service-request items moved to pending
 
 /* ─── XISH State (Phase 5+6) ─────────────────────────────── */
 let xishEnabled  = false;
@@ -713,6 +715,7 @@ async function startOrdering() {
 
   // Load cart from localStorage if exists
   loadCartFromStorage();
+  loadPendingFromStorage();
   updateCartBadges();
 
   initCategoryObserver(window.menu.categories);
@@ -1328,6 +1331,34 @@ function saveCartToStorage() {
   }
 }
 
+function pendingStorageKey() {
+  return 'pending_' + (sessionId || restaurantId || 'default');
+}
+
+function savePendingToStorage() {
+  try {
+    localStorage.setItem(pendingStorageKey(), JSON.stringify({ items: pendingOrderItems, srCart: pendingSrCart }));
+  } catch (e) {}
+}
+
+function loadPendingFromStorage() {
+  try {
+    const raw = localStorage.getItem(pendingStorageKey());
+    if (raw) {
+      const d = JSON.parse(raw);
+      pendingOrderItems = d.items || [];
+      pendingSrCart = d.srCart || {};
+    }
+  } catch (e) {}
+}
+
+function clearPendingStorage() {
+  try { localStorage.removeItem(pendingStorageKey()); } catch (e) {}
+  pendingOrderItems = [];
+  pendingSrCart = {};
+}
+
+
 function loadCartFromStorage() {
   try {
     const key = cartStorageKey();
@@ -1430,7 +1461,30 @@ function updateVariantCounter(itemId, variant) {
 }
 
 /* ─── ORDER REVIEW OVERLAY ──────────────────────────────────── */
-function openOrderReview() {
+
+// Restore pending items back to cart (when user presses back on order review)
+function restorePendingToCart() {
+  if (!pendingOrderItems.length && !Object.keys(pendingSrCart).length) return;
+  pendingOrderItems.forEach(item => {
+    const existingIdx = cart.items.findIndex(p =>
+      p.menuItemId === item.menuItemId &&
+      JSON.stringify(p.variantOptionIds || []) === JSON.stringify(item.variantOptionIds || [])
+    );
+    if (existingIdx >= 0) {
+      cart.items[existingIdx].quantity += item.quantity;
+    } else {
+      cart.items.push({ ...item });
+    }
+  });
+  Object.entries(pendingSrCart).forEach(([id, qty]) => {
+    srCart[id] = (srCart[id] || 0) + qty;
+  });
+  clearPendingStorage();
+  saveCartToStorage();
+  updateCartBar();
+}
+
+function addCartToPending() {
   if (paOrderLocked) {
     alert('Payment is complete — no new orders can be placed.');
     return;
@@ -1439,12 +1493,54 @@ function openOrderReview() {
   const hasSr = hasSrCartItems();
   if (!hasFood && !hasSr) return;
 
+  // Move cart items into pending (merge quantities if same item+variants)
+  cart.items.forEach(item => {
+    const existingIdx = pendingOrderItems.findIndex(p =>
+      p.menuItemId === item.menuItemId &&
+      JSON.stringify(p.variantOptionIds || []) === JSON.stringify(item.variantOptionIds || []) &&
+      JSON.stringify((p.addons || []).map(a => a.addonId)) === JSON.stringify((item.addons || []).map(a => a.addonId))
+    );
+    if (existingIdx >= 0) {
+      pendingOrderItems[existingIdx].quantity += item.quantity;
+    } else {
+      pendingOrderItems.push({ ...item });
+    }
+  });
+
+  // Move SR cart items into pendingSrCart
+  Object.entries(srCart).forEach(([id, qty]) => {
+    pendingSrCart[id] = (pendingSrCart[id] || 0) + qty;
+  });
+
+  // Clear cart
+  cart.items = [];
+  srCart = {};
+  saveCartToStorage();
+  savePendingToStorage();
+  updateCartBar();
+
+  // Open order review showing pending items
+  openOrderReview();
+}
+
+function openOrderReview() {
+  if (paOrderLocked) {
+    alert('Payment is complete — no new orders can be placed.');
+    return;
+  }
+  // Read from pendingOrderItems (moved from cart) — or fall back to cart.items if called directly
+  const reviewItems = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
+  const reviewSrCart = Object.keys(pendingSrCart).length > 0 ? pendingSrCart : srCart;
+  const hasFood = reviewItems.length > 0;
+  const hasSr = Object.values(reviewSrCart).some(q => q > 0);
+  if (!hasFood && !hasSr) return;
+
   const lang = localStorage.getItem('language') || 'zh';
   const isZh = lang === 'zh';
 
   let subtotal = 0;
   let itemsHtml = '';
-  cart.items.forEach(item => {
+  reviewItems.forEach(item => {
     const addonTotal = (item.addons || []).reduce((s, a) => s + (a.priceCents || 0) * (a.quantity || 1), 0);
     const line = (item.totalPriceCents + addonTotal) * item.quantity;
     subtotal += line;
@@ -1493,7 +1589,7 @@ function openOrderReview() {
   `;
   overlay.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
-      <button onclick="document.getElementById('order-review-overlay').remove()" style="
+      <button onclick="(function(){ document.getElementById('order-review-overlay').remove(); restorePendingToCart(); openCartDrawer(); })()" style="
         background:none;border:none;font-size:22px;cursor:pointer;color:#374151;
         width:36px;height:36px;display:flex;align-items:center;justify-content:center;
         border-radius:50%;flex-shrink:0;">←</button>
@@ -1556,6 +1652,11 @@ function openOrderReview() {
   `;
   document.body.appendChild(overlay);
   closeAllDrawers();
+
+  // Initialize coupon picker if XISH member is logged in
+  if (xishMember && xishMember.member_id && xishToken) {
+    initReviewCouponPicker(isZh);
+  }
 }
 
 async function submitOrder({ customerName = null, customerPhone = null } = {}) {
@@ -1563,8 +1664,11 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
-  const hasFood = cart.items.length > 0;
-  const hasSr = hasSrCartItems();
+  // Use pending items (moved from cart) if available, otherwise fall back to cart.items
+  const submitItems = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
+  const submitSrCart = Object.keys(pendingSrCart).length > 0 ? pendingSrCart : srCart;
+  const hasFood = submitItems.length > 0;
+  const hasSr = Object.values(submitSrCart).some(q => q > 0);
   if (!hasFood && !hasSr) return;
 
   // ─── Order-now / To-Go mode: create a fresh session + order ─────────────
@@ -1577,7 +1681,7 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
       order_type: orderType,   // 'takeaway', 'counter', etc.
       customer_name: customerName,
       customer_phone: customerPhone,
-      items: cart.items.map(i => ({
+      items: submitItems.map(i => ({
         menu_item_id: i.menuItemId,
         quantity: i.quantity,
         selected_option_ids: i.variantOptionIds || [],
@@ -1623,6 +1727,7 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
           localStorage.setItem(histKey, JSON.stringify(hist));
         } catch (_) {}
       }
+      clearPendingStorage();
       cart.items = [];
       saveCartToStorage();
       updateCartBar();
@@ -1640,7 +1745,7 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
     const isTableTakeaway = !IS_ORDER_NOW && orderType === 'takeaway' && !!tableName;
     const payload = {
       is_takeaway: isTableTakeaway,
-      items: cart.items.map(i => ({
+      items: submitItems.map(i => ({
         menu_item_id: i.menuItemId,
         quantity: i.quantity,
         selected_option_ids: i.variantOptionIds || [],
@@ -1670,6 +1775,7 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
     const orderData = await res.json();
     lastOrderId = orderData.order_id;
 
+    clearPendingStorage();
     cart.items = [];
     saveCartToStorage();
   }
@@ -2195,7 +2301,7 @@ function renderCartDrawer() {
           <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
         </div>
       </div>
-      <button class="btn-primary cart-submit" ${paOrderLocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="openOrderReview()">${t('menu.add-to-order')}</button>
+      <button class="btn-primary cart-submit" ${paOrderLocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="addCartToPending()">${t('menu.add-to-order')}</button>
     </div>
   `;
 
@@ -2464,6 +2570,73 @@ function applyCouponToOrders() {
   applyCouponToSession(sessionId, couponCode);
 }
 
+async function initReviewCouponPicker(isZh) {
+  const input = document.getElementById('review-coupon-input');
+  if (!input) return;
+  let myCoupons = [];
+  try {
+    const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
+      headers: { 'Authorization': `Bearer ${xishToken}` }
+    });
+    if (r.ok) {
+      const d = await r.json();
+      const allGiftCoupons = (d.member && d.member.gift_coupons) || (d.gift_coupons) || [];
+      myCoupons = allGiftCoupons.filter(c =>
+        (c.item_type || c.setting_type || '').toLowerCase() === 'coupon' &&
+        c.qty_remaining > 0 &&
+        c.coupon_code
+      );
+    }
+  } catch (_) {}
+  if (!myCoupons.length) return;
+
+  // Build picker dropdown
+  const wrapper = input.parentElement;
+  if (!wrapper) return;
+  wrapper.style.position = 'relative';
+
+  const dropdown = document.createElement('div');
+  dropdown.id = 'coupon-picker-dropdown';
+  dropdown.style.cssText = `position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:100;max-height:180px;overflow-y:auto;display:none;margin-top:4px;`;
+
+  myCoupons.forEach(c => {
+    const label = c.name || c.item_reward || (isZh ? '優惠券' : 'Coupon');
+    const expiry = c.valid_until
+      ? (isZh ? `到期 ${new Date(c.valid_until).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' })}` : `Exp ${new Date(c.valid_until).toLocaleDateString('en-HK', { month: 'short', day: 'numeric' })}`)
+      : (isZh ? '永久有效' : 'No expiry');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = `width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:none;border:none;border-bottom:1px solid #f3f4f6;cursor:pointer;text-align:left;font-size:13px;`;
+    btn.innerHTML = `<div><div style="font-weight:600;color:#1f2937;">${escXish(label)}</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">${expiry} · ×${c.qty_remaining}</div></div><span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--restaurant-color,#667eea);background:#f5f3ff;padding:3px 8px;border-radius:4px;">${escXish(c.coupon_code)}</span>`;
+    btn.addEventListener('click', () => {
+      input.value = c.coupon_code;
+      dropdown.style.display = 'none';
+      applyCouponFromReview();
+    });
+    btn.addEventListener('mouseenter', () => { btn.style.background = '#f9fafb'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = 'none'; });
+    dropdown.appendChild(btn);
+  });
+
+  wrapper.appendChild(dropdown);
+
+  // Show on focus/click, hide on outside click
+  input.addEventListener('focus', () => { dropdown.style.display = 'block'; });
+  input.addEventListener('click', () => { dropdown.style.display = 'block'; });
+  document.addEventListener('click', function hidePicker(e) {
+    if (!wrapper.contains(e.target)) {
+      dropdown.style.display = 'none';
+      document.removeEventListener('click', hidePicker);
+    }
+  }, true);
+
+  // Add a small caret indicator to show coupons are available
+  const applyBtn = wrapper.nextElementSibling && wrapper.nextElementSibling.id === 'review-coupon-display'
+    ? null : wrapper.parentElement ? wrapper.parentElement.querySelector('#review-coupon-display') : null;
+  // Add badge next to input placeholder
+  input.placeholder = isZh ? `優惠碼 (${myCoupons.length} 張可用)` : `Coupon Code (${myCoupons.length} available)`;
+}
+
 async function applyCouponFromReview() {
   const input = document.getElementById('review-coupon-input');
   const displayEl = document.getElementById('review-coupon-display');
@@ -2488,8 +2661,9 @@ async function applyCouponFromReview() {
       // Update total in review overlay
       const totalEl = document.getElementById('review-total-value');
       if (totalEl) {
-        // Recalculate using current cart values
-        let sub = cart.items.reduce((s, i) => {
+        // Recalculate using pending or cart items
+        const items = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
+        let sub = items.reduce((s, i) => {
           const price = i.variantPrice != null ? i.variantPrice : i.price || 0;
           const addonTotal = (i.addons || []).reduce((a, ad) => a + (ad.price || 0) * (ad.quantity || 1), 0);
           return s + (price + addonTotal) * i.quantity;
