@@ -716,6 +716,8 @@ async function startOrdering() {
   updateCartBadges();
 
   initCategoryObserver(window.menu.categories);
+  // Restore any in-progress to-go order for this restaurant (persists across refreshes)
+  if (IS_ORDER_NOW) restoreSavedToGoOrder();
   startOrderPolling();
   updateCartBar();
 
@@ -1309,9 +1311,18 @@ function addToCart(item) {
 }
 
 // ============ CART PERSISTENCE ============
+// Return the localStorage key for cart data.
+// In order-now mode sessionId is null until the first order is placed,
+// so we scope by restaurantId to keep carts isolated between restaurants.
+function cartStorageKey() {
+  if (sessionId) return `cart_${sessionId}`;
+  if (restaurantId) return `cart_r${restaurantId}`;
+  return 'cart_null';
+}
+
 function saveCartToStorage() {
   try {
-    localStorage.setItem(`cart_${sessionId}`, JSON.stringify(cart));
+    localStorage.setItem(cartStorageKey(), JSON.stringify(cart));
   } catch (e) {
     console.error("Failed to save cart:", e);
   }
@@ -1319,7 +1330,16 @@ function saveCartToStorage() {
 
 function loadCartFromStorage() {
   try {
-    const stored = localStorage.getItem(`cart_${sessionId}`);
+    const key = cartStorageKey();
+    let stored = localStorage.getItem(key);
+    // Migrate from legacy unscoped key if present
+    if (!stored && !sessionId && restaurantId) {
+      const legacy = localStorage.getItem('cart_null');
+      if (legacy) {
+        stored = legacy;
+        localStorage.removeItem('cart_null');
+      }
+    }
     if (stored) {
       cart = JSON.parse(stored);
     }
@@ -1409,7 +1429,120 @@ function updateVariantCounter(itemId, variant) {
   }
 }
 
-async function submitOrder() {
+/* ─── ORDER REVIEW OVERLAY ──────────────────────────────────── */
+function openOrderReview() {
+  if (paOrderLocked) {
+    alert('Payment is complete — no new orders can be placed.');
+    return;
+  }
+  const hasFood = cart.items.length > 0;
+  const hasSr = hasSrCartItems();
+  if (!hasFood && !hasSr) return;
+
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+
+  let subtotal = 0;
+  let itemsHtml = '';
+  cart.items.forEach(item => {
+    const addonTotal = (item.addons || []).reduce((s, a) => s + (a.priceCents || 0) * (a.quantity || 1), 0);
+    const line = (item.totalPriceCents + addonTotal) * item.quantity;
+    subtotal += line;
+    const displayName = getItemDisplayName(item);
+    const addonsHtml = (item.addons || []).map(a =>
+      `<div style="font-size:11px;color:#667eea;padding-left:8px;">+ ${a.name} $${(a.priceCents/100).toFixed(2)}</div>`
+    ).join('');
+    itemsHtml += `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f3f4f6;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:14px;">${displayName} <span style="color:#9ca3af;font-weight:400;">×${item.quantity}</span></div>
+          ${addonsHtml}
+          ${item.variantOptionDetails ? item.variantOptionDetails.map(v => `<div style="font-size:11px;color:#9ca3af;padding-left:8px;">${v.variant}: ${v.option}</div>`).join('') : ''}
+        </div>
+        <div style="font-weight:700;font-size:14px;margin-left:12px;white-space:nowrap;">$${(line/100).toFixed(2)}</div>
+      </div>`;
+  });
+
+  const serviceCharge = Math.round(subtotal * serviceChargePct / 100);
+  const xishDiscountCents = (xishMember && xishMember.discount_percent > 0)
+    ? Math.round(subtotal * xishMember.discount_percent / 100) : 0;
+  const total = subtotal + serviceCharge - xishDiscountCents;
+
+  // Name/phone fields only for order-now mode (counter/pickup QR)
+  const showNamePhone = IS_ORDER_NOW && !hasScannedTable;
+  const namePhoneHtml = showNamePhone ? `
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label style="font-size:12px;color:#6b7280;font-weight:600;">${isZh ? '姓名（取餐通知用）' : 'Your Name (for pickup notification)'}</label>
+        <input id="review-customer-name" type="text" placeholder="${isZh ? '例：陳大明' : 'e.g. John'}"
+          style="width:100%;margin-top:4px;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:12px;color:#6b7280;font-weight:600;">${isZh ? '電話（可選）' : 'Phone Number (optional)'}</label>
+        <input id="review-customer-phone" type="tel" placeholder="${isZh ? '例：9123 4567' : 'e.g. 9123 4567'}"
+          style="width:100%;margin-top:4px;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;">
+      </div>
+    </div>` : '';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'order-review-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:#fff;z-index:8500;
+    display:flex;flex-direction:column;overflow:hidden;
+  `;
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
+      <button onclick="document.getElementById('order-review-overlay').remove()" style="
+        background:none;border:none;font-size:22px;cursor:pointer;color:#374151;
+        width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+        border-radius:50%;flex-shrink:0;">←</button>
+      <h2 style="flex:1;text-align:center;margin:0;font-size:17px;font-weight:700;color:#1f2937;">
+        ${t('menu.order-review-title') || (isZh ? '訂單確認' : 'Order Review')}
+      </h2>
+      <div style="width:36px;flex-shrink:0;"></div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px;">
+      ${itemsHtml || '<p style="color:#9ca3af;text-align:center;padding:20px 0;">No items</p>'}
+      <div style="margin-top:16px;padding-top:12px;border-top:2px solid #e5e7eb;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;color:#6b7280;margin-bottom:6px;">
+          <span>${t('menu.subtotal-label') || 'Subtotal'}</span>
+          <span>$${(subtotal/100).toFixed(2)}</span>
+        </div>
+        ${serviceChargePct > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#6b7280;margin-bottom:6px;">
+          <span>${t('menu.service-charge-label')||'Service Charge'} (${serviceChargePct}%)</span>
+          <span>$${(serviceCharge/100).toFixed(2)}</span>
+        </div>` : ''}
+        ${xishDiscountCents > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#A10035;font-weight:600;margin-bottom:6px;">
+          <span>✦ XISH (${xishMember.discount_percent}% off)</span>
+          <span>-$${(xishDiscountCents/100).toFixed(2)}</span>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1f2937;margin-top:8px;">
+          <span>${t('menu.total-label') || 'Total'}</span>
+          <span>$${(total/100).toFixed(2)}</span>
+        </div>
+      </div>
+      ${namePhoneHtml}
+    </div>
+    <div style="padding:16px;border-top:1px solid #e5e7eb;flex-shrink:0;">
+      <button id="review-place-order-btn" onclick="(function(){
+        var name = document.getElementById('review-customer-name');
+        var phone = document.getElementById('review-customer-phone');
+        var n = name ? name.value.trim() || null : null;
+        var p = phone ? phone.value.trim() || null : null;
+        document.getElementById('order-review-overlay').remove();
+        submitOrder({ customerName: n, customerPhone: p });
+      })()" style="
+        width:100%;padding:14px;background:var(--restaurant-color,#667eea);
+        color:#fff;border:none;border-radius:12px;font-size:16px;
+        font-weight:700;cursor:pointer;
+      ">${t('menu.place-order') || (isZh ? '下訂單' : 'Place Order')}</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  closeAllDrawers();
+}
+
+async function submitOrder({ customerName = null, customerPhone = null } = {}) {
   if (paOrderLocked) {
     alert('Payment is complete — no new orders can be placed.');
     return;
@@ -1421,8 +1554,7 @@ async function submitOrder() {
   // ─── Order-now / To-Go mode: create a fresh session + order ─────────────
   // After scanning a table QR from order-now mode, route through the table session path
   if (IS_ORDER_NOW && !hasScannedTable && hasFood) {
-    const customerName = prompt('Your name (for pickup notification):', '') || null;
-    const customerPhone = prompt('Your phone number (optional):', '') || null;
+    // customerName/customerPhone passed in from the order review page
 
     const payload = {
       pax: 1,
@@ -1455,6 +1587,18 @@ async function submitOrder() {
       const data = await res.json();
       sessionId = data.session.id;
       lastOrderId = data.order ? data.order.id : null;
+      // Persist order info so it survives a page refresh
+      if (restaurantId && data.order) {
+        try {
+          localStorage.setItem('togo_r' + restaurantId, JSON.stringify({
+            sessionId: data.session.id,
+            orderId: data.order.id,
+            orderNumber: data.order.restaurant_order_number,
+            customerName: customerName || null,
+            placedAt: Date.now()
+          }));
+        } catch (_) {}
+      }
       cart.items = [];
       saveCartToStorage();
       updateCartBar();
@@ -1581,14 +1725,19 @@ function onVariantChange(itemId, variantId, optionId, checked) {
 
 async function loadOrderStatus({ forceRender = false } = {}) {
   if (!sessionId) {
-    console.warn("❌ loadOrderStatus: No sessionId");
+    // In order-now mode with no session yet, show empty tracking state if drawer is open
+    if (IS_ORDER_NOW) {
+      const el = document.getElementById('orders-drawer-content');
+      if (el && document.getElementById('orders-drawer')?.classList.contains('open')) {
+        el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#9ca3af;">📋 No active order yet.<br>Browse the menu and place your first order!</div>';
+      }
+    }
     return;
   }
   if (paymentPageActive) return; // don't overwrite the inline payment page
 
   try {
     const url = `${API_BASE}/sessions/${sessionId}/orders?restaurantId=${restaurantId}`;
-    
     const res = await fetch(url);
 
     if (!res.ok) {
@@ -1599,18 +1748,42 @@ async function loadOrderStatus({ forceRender = false } = {}) {
     const data = await res.json();
     const orders = data.items || [];
 
+    // In order-now mode, also fetch queue position for tracking UI
+    let queueInfo = null;
+    if (IS_ORDER_NOW && sessionId) {
+      try {
+        const qRes = await fetch(`${API_BASE}/sessions/${sessionId}/queue-position`);
+        if (qRes.ok) queueInfo = await qRes.json();
+      } catch (_) {}
+    }
+
     // Only re-render the drawer when data has actually changed (avoids flicker)
-    const newHash = JSON.stringify(orders);
+    const newHash = JSON.stringify(orders) + JSON.stringify(queueInfo);
     if (forceRender || newHash !== lastOrdersHash) {
       lastOrdersHash = newHash;
-      renderOrdersDrawer(orders, tableName);
+      renderOrdersDrawer(orders, tableName, queueInfo);
+    }
+
+    // Clear localStorage if order is ready
+    if (IS_ORDER_NOW && queueInfo && queueInfo.status === 'ready') {
+      const key = 'togo_r' + restaurantId;
+      // Keep for 30 more minutes after ready so customer can still see their number
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw);
+          if (!saved.readyAt) {
+            saved.readyAt = Date.now();
+            localStorage.setItem(key, JSON.stringify(saved));
+          } else if (Date.now() - saved.readyAt > 30 * 60 * 1000) {
+            localStorage.removeItem(key);
+          }
+        } catch (_) {}
+      }
     }
 
     // If awaiting confirmation, check if any order is now completed
     if (confirmationPollingActive) {
-      const allDone = orders.length > 0 && orders.every(
-        o => o.order_status === 'completed' || o.order_payment_method !== 'payment-asia'
-      );
       const anyPACompleted = orders.some(
         o => o.order_payment_method === 'payment-asia' && o.order_status === 'completed'
       );
@@ -1619,15 +1792,12 @@ async function loadOrderStatus({ forceRender = false } = {}) {
         showPaymentReturnBanner(true);
         return;
       }
-      // Deadline expired without confirmation
       if (Date.now() > confirmationPollDeadline) {
         stopConfirmationPolling();
         return;
       }
     }
 
-    // If there's a pending PA order, fire a background payment-status sync
-    // so the backend resolves webhook delays; next poll will pick up the result.
     const pendingPA = orders.find(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
     if (pendingPA) {
       fetch(`${API_BASE}/restaurants/${restaurantId}/orders/${pendingPA.order_id}/payment-status`)
@@ -1695,14 +1865,15 @@ async function cancelPAPayment(orderId) {
   }
 }
 
-function renderOrdersDrawer(orders, tableName) {
+function renderOrdersDrawer(orders, tableName, queueInfo = null) {
   const el = document.getElementById("orders-drawer-content");
   if (!el) {
     console.error("❌ orders-drawer-content element not found");
     return;
   }
 
-  console.log("✅ renderOrdersDrawer called with", orders.length, "orders for table:", tableName);
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
 
   let subtotal = 0;
 
@@ -1711,14 +1882,49 @@ function renderOrdersDrawer(orders, tableName) {
     <div class="orders-items">
   `;
 
+  // ── Pickup tracking header for order-now (QR pickup) mode ──────────────
+  if (IS_ORDER_NOW && orders.length > 0) {
+    const firstOrder = orders[0];
+    const orderNum = firstOrder.restaurant_order_number || firstOrder.order_id;
+    const isReady = queueInfo && queueInfo.status === 'ready';
+    const aheadCount = queueInfo ? queueInfo.orders_ahead : null;
+
+    if (isReady) {
+      html += `
+        <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
+          <div style="font-size:26px;margin-bottom:6px;">✅</div>
+          <div style="font-size:15px;font-weight:700;color:#065f46;">${t('menu.ready-for-pickup') || (isZh ? '✓ 可以取餐了！' : '✓ Ready for pickup!')}</div>
+          <div style="font-size:28px;font-weight:900;color:#065f46;margin:8px 0;">#${orderNum}</div>
+          <div style="font-size:12px;color:#047857;">${isZh ? '請持此號碼到櫃台取餐' : 'Please collect your order at the counter'}</div>
+        </div>`;
+    } else {
+      html += `
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
+          <div style="font-size:22px;margin-bottom:4px;">⏳</div>
+          <div style="font-size:13px;color:#78350f;font-weight:600;">${t('menu.being-prepared') || (isZh ? '正在準備中…' : 'Being prepared…')}</div>
+          <div style="font-size:32px;font-weight:900;color:#92400e;margin:8px 0;">#${orderNum}</div>
+          ${aheadCount !== null ? `<div style="font-size:12px;color:#92400e;">
+            ${aheadCount > 0
+              ? `${aheadCount} ${t('menu.orders-ahead') || (isZh ? '個訂單在你前面' : 'order(s) ahead of you')}`
+              : (isZh ? '你是下一位！' : "You're next!")}
+          </div>` : ''}
+        </div>`;
+    }
+    // Try browser notification when ready
+    if (isReady && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification(isZh ? '你的訂單已準備好！🥡' : 'Your order is ready! 🥡', {
+        body: isZh ? `訂單 #${orderNum} 請到櫃台取餐` : `Order #${orderNum} – please collect at the counter.`
+      });
+    }
+  }
+
   // Show takeaway banner if this is a table-takeaway order
   if (orders.length && orders[0].is_takeaway && tableName) {
-    const lang = localStorage.getItem('language') || 'zh';
     html += `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:10px;margin-bottom:12px;">
       <span style="font-size:18px;">🥡</span>
       <div>
-        <div style="font-size:13px;font-weight:700;color:#ea580c;">${lang === 'zh' ? '外帶訂單' : 'Takeaway Order'}</div>
-        <div style="font-size:11px;color:#9ca3af;">${lang === 'zh' ? '送往' : 'Deliver to'} ${t('menu.table-label')} ${tableName}</div>
+        <div style="font-size:13px;font-weight:700;color:#ea580c;">${isZh ? '外帶訂單' : 'Takeaway Order'}</div>
+        <div style="font-size:11px;color:#9ca3af;">${isZh ? '送往' : 'Deliver to'} ${t('menu.table-label')} ${tableName}</div>
       </div>
     </div>`;
   }
@@ -1974,7 +2180,7 @@ function renderCartDrawer() {
           <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
         </div>
       </div>
-      <button class="btn-primary cart-submit" ${paOrderLocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="submitOrder()">${t('menu.confirm-order')}</button>
+      <button class="btn-primary cart-submit" ${paOrderLocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="openOrderReview()">${t('menu.add-to-order')}</button>
     </div>
   `;
 
@@ -2657,11 +2863,31 @@ async function submitPaymentInline(orderId, totalCents) {
 
 /* ─── ORDER-NOW / TO-GO CONFIRMATION & PICKUP POLLING ──────── */
 
+// Restore an active to-go order from localStorage after a page refresh
+function restoreSavedToGoOrder() {
+  if (!IS_ORDER_NOW || !restaurantId) return;
+  const key = 'togo_r' + restaurantId;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    // Expire after 4 hours
+    if (!saved.sessionId || Date.now() - (saved.placedAt || 0) > 4 * 60 * 60 * 1000) {
+      localStorage.removeItem(key);
+      return;
+    }
+    sessionId = saved.sessionId;
+    // Start polling for ready status
+    startPickupPolling(saved.sessionId);
+  } catch (_) {}
+}
+
 function showToGoConfirmation(customerName, order) {
-  // Show a full-screen confirmation on the app div
   const app = document.getElementById('app');
   if (!app) return;
 
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
   const orderNum = order ? `#${order.restaurant_order_number || order.id}` : '';
 
   const confirmEl = document.createElement('div');
@@ -2673,24 +2899,30 @@ function showToGoConfirmation(customerName, order) {
   `;
   confirmEl.innerHTML = `
     <div style="font-size:56px; margin-bottom:20px;">🥡</div>
-    <div style="font-size:24px; font-weight:800; color:#1f2937; margin-bottom:8px;">Order Placed!</div>
-    ${orderNum ? `<div style="font-size:18px; font-weight:700; color:#667eea; margin-bottom:12px;">${orderNum}</div>` : ''}
+    <div style="font-size:24px; font-weight:800; color:#1f2937; margin-bottom:8px;">${isZh ? '訂單已提交！' : 'Order Placed!'}</div>
+    ${orderNum ? `<div style="font-size:22px; font-weight:700; color:#667eea; margin-bottom:12px;">${orderNum}</div>` : ''}
     ${customerName ? `<div style="font-size:15px; color:#6b7280; margin-bottom:6px;">Hi <strong>${escXish(customerName)}</strong> 👋</div>` : ''}
-    <div style="font-size:14px; color:#6b7280; margin-bottom:32px;">We'll prepare your order right away.<br>We'll let you know when it's ready!</div>
+    <div style="font-size:14px; color:#6b7280; margin-bottom:24px;">${isZh ? '餐廳正在為你準備，準備好後會通知你！' : "We'll prepare your order right away.<br>We'll let you know when it's ready!"}</div>
     <div id="togo-status-banner" style="
       font-size:14px; font-weight:600; color:#d97706;
       background:#fef3c7; border:1px solid #fde68a;
-      border-radius:8px; padding:10px 20px; margin-bottom:24px;
-    ">⏳ Preparing your order…</div>
-    <button onclick="document.getElementById('togo-confirmation').remove()" style="
+      border-radius:8px; padding:10px 20px; margin-bottom:16px;
+    ">⏳ ${isZh ? '正在準備中…' : 'Preparing your order…'}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:24px;">${isZh ? '你可以關閉此頁面，訂單號碼會保留在「查看訂單」中' : 'You can close this screen — your order number is saved in "Check Orders"'}</div>
+    <button onclick="document.getElementById('togo-confirmation').remove(); openOrdersDrawer();" style="
       padding:12px 28px; background:#667eea; color:white;
-      border:none; border-radius:8px; font-size:14px;
-      font-weight:600; cursor:pointer;
-    ">Browse Menu</button>
+      border:none; border-radius:12px; font-size:14px;
+      font-weight:600; cursor:pointer; margin-bottom:10px; width:220px;
+    ">${isZh ? '查看訂單狀態' : 'Track My Order'}</button>
+    <button onclick="document.getElementById('togo-confirmation').remove()" style="
+      padding:10px 28px; background:#f3f4f6; color:#374151;
+      border:none; border-radius:12px; font-size:13px;
+      font-weight:600; cursor:pointer; width:220px;
+    ">${isZh ? '繼續瀏覽菜單' : 'Browse Menu'}</button>
   `;
   document.body.appendChild(confirmEl);
 
-  // Poll for pickup_ready_at
+  // Poll for pickup_ready_at via order status endpoint (also updates orders drawer)
   if (sessionId) startPickupPolling(sessionId);
 }
 
@@ -2700,6 +2932,10 @@ function startPickupPolling(sid) {
   if (_pickupPollTimer) clearInterval(_pickupPollTimer);
   _pickupPollTimer = setInterval(async () => {
     try {
+      // Use loadOrderStatus to refresh both order data and queue position
+      await loadOrderStatus({ forceRender: false });
+
+      // Also update the confirmation banner if still visible
       const res = await fetch(`${API_BASE}/sessions/${sid}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -2707,19 +2943,19 @@ function startPickupPolling(sid) {
         clearInterval(_pickupPollTimer);
         _pickupPollTimer = null;
         const banner = document.getElementById('togo-status-banner');
+        const lang = localStorage.getItem('language') || 'zh';
+        const isZh = lang === 'zh';
         if (banner) {
           banner.style.background = '#d1fae5';
           banner.style.borderColor = '#6ee7b7';
           banner.style.color = '#065f46';
-          banner.textContent = '✓ Your order is ready for pickup!';
+          banner.textContent = isZh ? '✓ 可以取餐了！' : '✓ Your order is ready for pickup!';
         }
-        // Try browser notification
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification('Your order is ready! 🥡', { body: 'Please collect your order at the counter.' });
-        }
+        // Force refresh orders drawer too
+        loadOrderStatus({ forceRender: true });
       }
     } catch (e) {}
-  }, 10000); // poll every 10s
+  }, 12000); // poll every 12s
 }
 
 /* ═══════════════════════════════════════════════════════════════

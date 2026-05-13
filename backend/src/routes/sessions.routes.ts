@@ -1138,6 +1138,41 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
   }
 });
 
+// GET /sessions/:sessionId/queue-position
+// Returns how many pending to-go sessions are ahead of this one in the queue
+router.get("/sessions/:sessionId/queue-position", async (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const sessionRes = await pool.query(
+      `SELECT id, restaurant_id, started_at, pickup_ready_at, ended_at
+       FROM table_sessions WHERE id = $1`,
+      [sessionId]
+    );
+    if (!sessionRes.rows.length) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    const session = sessionRes.rows[0];
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS orders_ahead
+       FROM table_sessions
+       WHERE restaurant_id = $1
+         AND order_type IN ('to-go', 'counter', 'takeaway', 'order-now')
+         AND started_at < $2
+         AND pickup_ready_at IS NULL
+         AND ended_at IS NULL
+         AND id != $3`,
+      [session.restaurant_id, session.started_at, sessionId]
+    );
+    res.json({
+      orders_ahead: countRes.rows[0].orders_ahead,
+      status: session.pickup_ready_at ? 'ready' : 'preparing'
+    });
+  } catch (err) {
+    console.error("Queue position error:", err);
+    res.status(500).json({ error: "Failed to get queue position" });
+  }
+});
+
 // POST /restaurants/:restaurantId/orders/:orderId/ready
 // Marks a to-go order as ready for pickup (sets pickup_ready_at on session)
 router.post("/restaurants/:restaurantId/orders/:orderId/ready", async (req, res) => {
