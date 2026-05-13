@@ -823,7 +823,7 @@ async function saveShowItemStatusSetting(enabled) {
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ show_item_status_to_diners: enabled })
     });
     if (!res.ok) throw new Error('Failed to save setting');

@@ -355,7 +355,7 @@
               <span data-i18n="admin.display-kitchen-status">Display kitchen/order status for diners</span>
               <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;">
                 <input type="checkbox" id="show-item-status-toggle" onchange="saveShowItemStatusSetting(this.checked)" style="opacity:0;width:0;height:0;">
-                <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;" id="show-item-status-slider"></span>
+                <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:26px;transition:.3s;" id="show-item-status-slider"></span>
               </label>
             </label>
             <p style="font-size: 0.85em; color: #666; margin-top: 4px; line-height: 1.5;" data-i18n="admin.display-kitchen-status-desc">When enabled, diners can see the kitchen status of each item (e.g. sending, preparing, delivered) in their Check Orders view.</p>
@@ -366,7 +366,8 @@
   </div>
 
   <style>
-    #show-item-status-toggle:checked + span { background: var(--primary-color, #3b49df); }
+    #show-item-status-slider { background: #ccc; }
+    #show-item-status-toggle:checked + span { background: var(--primary-color, #3b49df) !important; }
     #show-item-status-toggle:checked + span::before { transform: translateX(22px); }
     #show-item-status-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
   </style>
