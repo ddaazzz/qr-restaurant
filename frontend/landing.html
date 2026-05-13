@@ -147,6 +147,10 @@
       <button id="header-back-btn" class="header-back-btn" style="display:none" onclick="headerBackAction()">‹</button>
       <span id="header-page-title" class="header-page-title" style="display:none"></span>
       <span id="header-table-name" class="header-table-name" style="display:none"></span>
+      <!-- History button shown in orders mode -->
+      <button id="header-history-btn" class="header-icon-btn" style="display:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);" onclick="openOrderHistory()" title="Order History">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
     </div>
     <!-- Collapsible search row (toggled by search icon) -->
     <div id="menu-search-row" class="menu-search-row" style="display:none">

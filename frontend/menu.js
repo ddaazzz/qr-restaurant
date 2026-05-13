@@ -1466,7 +1466,8 @@ function openOrderReview() {
   const serviceCharge = Math.round(subtotal * serviceChargePct / 100);
   const xishDiscountCents = (xishMember && xishMember.discount_percent > 0)
     ? Math.round(subtotal * xishMember.discount_percent / 100) : 0;
-  const total = subtotal + serviceCharge - xishDiscountCents;
+  const couponDiscountCents = appliedCoupon ? (appliedCoupon.discount_cents || 0) : 0;
+  const total = subtotal + serviceCharge - xishDiscountCents - couponDiscountCents;
 
   // Name/phone fields only for order-now mode (counter/pickup QR)
   const showNamePhone = IS_ORDER_NOW && !hasScannedTable;
@@ -1516,12 +1517,27 @@ function openOrderReview() {
           <span>✦ XISH (${xishMember.discount_percent}% off)</span>
           <span>-$${(xishDiscountCents/100).toFixed(2)}</span>
         </div>` : ''}
+        ${couponDiscountCents > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:#059669;font-weight:600;margin-bottom:6px;">
+          <span>${t('menu.coupon-code')||'Coupon'} (${appliedCoupon.code})</span>
+          <span>-$${(couponDiscountCents/100).toFixed(2)}</span>
+        </div>` : ''}
         <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1f2937;margin-top:8px;">
           <span>${t('menu.total-label') || 'Total'}</span>
-          <span>$${(total/100).toFixed(2)}</span>
+          <span id="review-total-value">$${(total/100).toFixed(2)}</span>
         </div>
       </div>
       ${namePhoneHtml}
+      <div style="margin-top:14px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="review-coupon-input" placeholder="${isZh ? '優惠碼' : 'Coupon Code'}"
+            value="${appliedCoupon ? appliedCoupon.code : ''}"
+            style="flex:1;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box;text-transform:uppercase;" />
+          <button onclick="applyCouponFromReview()" style="padding:10px 16px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ${t('menu.apply-coupon') || (isZh ? '套用' : 'Apply')}
+          </button>
+        </div>
+        <div id="review-coupon-display">${appliedCoupon ? `<div style="color:#059669;font-size:12px;margin-top:5px;">✓ ${t('menu.coupon-applied')||'Coupon applied'}</div>` : ''}</div>
+      </div>
     </div>
     <div style="padding:16px;border-top:1px solid #e5e7eb;flex-shrink:0;">
       <button id="review-place-order-btn" onclick="(function(){
@@ -1597,6 +1613,14 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
             customerName: customerName || null,
             placedAt: Date.now()
           }));
+          // Also append to history list (cap at 20 entries)
+          const histKey = 'togo_history_r' + restaurantId;
+          let hist = [];
+          try { hist = JSON.parse(localStorage.getItem(histKey) || '[]'); } catch (_) {}
+          hist = hist.filter(e => e.sessionId !== data.session.id);
+          hist.unshift({ sessionId: data.session.id, orderNumber: data.order.restaurant_order_number, placedAt: Date.now() });
+          if (hist.length > 20) hist = hist.slice(0, 20);
+          localStorage.setItem(histKey, JSON.stringify(hist));
         } catch (_) {}
       }
       cart.items = [];
@@ -2024,16 +2048,7 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
         <strong id="orders-total-display">$${(total / 100).toFixed(2)}</strong>
       </div>
     </div>
-    ${allPACompleted ? '' : `<div class="coupon-section">
-      <div class="coupon-row">
-        <span class="coupon-label">${t('menu.coupon-code') || 'Coupon Code'}</span>
-        <div class="coupon-input-group">
-          <input type="text" id="orders-coupon-input" placeholder="CODE" value="${appliedCoupon ? appliedCoupon.code : ''}" />
-          <button onclick="applyCouponToOrders()" class="coupon-apply-btn">${t('menu.apply-coupon') || 'Apply'}</button>
-        </div>
-      </div>
-      <div id="orders-coupon-display">${appliedCoupon ? `<div class="coupon-applied">${t('menu.coupon-applied').replace('{0}', '-$' + (appliedCoupon.discount_cents/100).toFixed(2))}</div>` : ''}</div>
-    </div>`}
+    ${allPACompleted ? '' : ''}
     <div class="orders-actions">
       ${(() => {
         if (allPACompleted) {
@@ -2324,6 +2339,7 @@ function setHeaderOrdersMode(active, isPayment = false) {
   const orderInfo    = document.getElementById('header-order-info');
   const headerIcons  = document.getElementById('header-icons');
   const searchRow    = document.getElementById('menu-search-row');
+  const historyBtn   = document.getElementById('header-history-btn');
 
   const show = el => el && (el.style.display = '');
   const hide = el => el && (el.style.display = 'none');
@@ -2336,6 +2352,8 @@ function setHeaderOrdersMode(active, isPayment = false) {
     hide(orderInfo);
     hide(headerIcons);
     if (searchRow) hide(searchRow);
+    // Show history button only in Check Orders mode (not payment), and only in order-now mode
+    if (historyBtn) historyBtn.style.display = (!isPayment && IS_ORDER_NOW) ? '' : 'none';
 
     pageTitle.textContent = isPayment ? t('menu.payment') || 'Payment' : t('menu.check-orders') || 'Check Orders';
     headerTableName.textContent = tableName ? `${t('menu.table-label') || 'Table'} ${tableName}` : '';
@@ -2346,6 +2364,7 @@ function setHeaderOrdersMode(active, isPayment = false) {
     show(menuBtn);
     show(orderInfo);
     show(headerIcons);
+    if (historyBtn) hide(historyBtn);
   }
 }
 
@@ -2429,7 +2448,9 @@ function startOrderPolling() {
 
 // ============= COUPON FUNCTIONS =============
 function applyCouponToOrders() {
-  const couponCode = document.getElementById("orders-coupon-input").value.trim().toUpperCase();
+  const couponCode = document.getElementById("orders-coupon-input")
+    ? document.getElementById("orders-coupon-input").value.trim().toUpperCase()
+    : (document.getElementById("review-coupon-input") ? document.getElementById("review-coupon-input").value.trim().toUpperCase() : '');
   if (!couponCode) {
     alert(t('menu.enter-coupon'));
     return;
@@ -2442,6 +2463,49 @@ function applyCouponToOrders() {
   
   applyCouponToSession(sessionId, couponCode);
 }
+
+async function applyCouponFromReview() {
+  const input = document.getElementById('review-coupon-input');
+  const displayEl = document.getElementById('review-coupon-display');
+  const couponCode = (input ? input.value.trim().toUpperCase() : '');
+  if (!couponCode) { alert(t('menu.enter-coupon') || 'Please enter a coupon code.'); return; }
+  if (!sessionId) { alert(t('menu.session-not-found') || 'No active session.'); return; }
+  try {
+    const response = await fetch(`${API_BASE}/sessions/${sessionId}/apply-coupon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coupon_code: couponCode })
+    });
+    const data = await response.json();
+    if (response.ok) {
+      appliedCoupon = {
+        code: data.coupon_code,
+        discount_cents: data.discount_applied_cents,
+        discount_type: data.discount_type,
+        discount_value: data.discount_value
+      };
+      if (displayEl) displayEl.innerHTML = `<div style="color:#059669;font-size:12px;margin-top:5px;">✓ ${t('menu.coupon-applied')||'Coupon applied'} (-$${(data.discount_applied_cents/100).toFixed(2)})</div>`;
+      // Update total in review overlay
+      const totalEl = document.getElementById('review-total-value');
+      if (totalEl) {
+        // Recalculate using current cart values
+        let sub = cart.items.reduce((s, i) => {
+          const price = i.variantPrice != null ? i.variantPrice : i.price || 0;
+          const addonTotal = (i.addons || []).reduce((a, ad) => a + (ad.price || 0) * (ad.quantity || 1), 0);
+          return s + (price + addonTotal) * i.quantity;
+        }, 0);
+        const sc = Math.round(sub * serviceChargePct / 100);
+        const xish = (xishMember && xishMember.discount_percent > 0) ? Math.round(sub * xishMember.discount_percent / 100) : 0;
+        totalEl.textContent = '$' + ((sub + sc - xish - data.discount_applied_cents) / 100).toFixed(2);
+      }
+    } else {
+      if (displayEl) displayEl.innerHTML = `<div style="color:#ef4444;font-size:12px;margin-top:5px;">${data.error || t('menu.coupon-failed') || 'Invalid coupon.'}</div>`;
+    }
+  } catch (e) {
+    if (displayEl) displayEl.innerHTML = `<div style="color:#ef4444;font-size:12px;margin-top:5px;">${t('menu.coupon-failed') || 'Failed to apply coupon.'}</div>`;
+  }
+}
+
 
 async function applyCouponToSession(sessionId, couponCode) {
   try {
@@ -2864,6 +2928,96 @@ async function submitPaymentInline(orderId, totalCents) {
 /* ─── ORDER-NOW / TO-GO CONFIRMATION & PICKUP POLLING ──────── */
 
 // Restore an active to-go order from localStorage after a page refresh
+window.openOrderHistory = async function() {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const histKey = 'togo_history_r' + restaurantId;
+  let hist = [];
+  try { hist = JSON.parse(localStorage.getItem(histKey) || '[]'); } catch (_) {}
+
+  // Also include current session if not already in history
+  if (sessionId && !hist.find(e => e.sessionId === sessionId)) {
+    hist.unshift({ sessionId, orderNumber: null, placedAt: Date.now() });
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'order-history-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:8600;display:flex;flex-direction:column;overflow:hidden;';
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
+      <button onclick="document.getElementById('order-history-overlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">←</button>
+      <h2 style="flex:1;text-align:center;margin:0;font-size:17px;font-weight:700;color:#1f2937;">${isZh ? '所有訂單' : 'All Orders'}</h2>
+      <div style="width:36px;flex-shrink:0;"></div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px;" id="order-history-body">
+      <div style="text-align:center;padding:40px 0;color:#9ca3af;">${isZh ? '載入中…' : 'Loading…'}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const body = document.getElementById('order-history-body');
+  if (!hist.length) {
+    body.innerHTML = `<div style="text-align:center;padding:40px 16px;color:#9ca3af;">${isZh ? '暫無歷史訂單' : 'No order history yet.'}</div>`;
+    return;
+  }
+
+  try {
+    // Fetch orders for all sessions in parallel
+    const results = await Promise.all(hist.map(async entry => {
+      try {
+        const res = await fetch(`${API_BASE}/sessions/${entry.sessionId}/orders?restaurantId=${restaurantId}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return { entry, orders: data.items || [] };
+      } catch (_) { return null; }
+    }));
+
+    const allGroups = results.filter(Boolean);
+    if (!allGroups.length) {
+      body.innerHTML = `<div style="text-align:center;padding:40px 16px;color:#9ca3af;">${isZh ? '無法載入訂單記錄' : 'Could not load order history.'}</div>`;
+      return;
+    }
+
+    let html = '';
+    allGroups.forEach(({ entry, orders }) => {
+      if (!orders.length) return;
+      const date = new Date(entry.placedAt || Date.now()).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const firstOrder = orders[0];
+      const orderNum = entry.orderNumber || firstOrder.restaurant_order_number || firstOrder.order_id;
+      const isCurrentSession = entry.sessionId === sessionId;
+
+      html += `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;${isCurrentSession ? 'border-color:var(--restaurant-color,#667eea);' : ''}">`;
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-weight:700;font-size:15px;color:#1f2937;">${isZh ? '訂單' : 'Order'} #${orderNum}${isCurrentSession ? ` <span style="font-size:10px;color:var(--restaurant-color,#667eea);font-weight:600;">${isZh ? '(當前)' : '(current)'}</span>` : ''}</div>
+        <div style="font-size:11px;color:#9ca3af;">${date}</div>
+      </div>`;
+
+      orders.forEach(order => {
+        order.items && order.items.forEach(item => {
+          const name = (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || 'Item');
+          const price = ((item.item_total_cents || 0) / 100).toFixed(2);
+          html += `<div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;padding:3px 0;">
+            <span>${escXish(name)} ×${item.quantity}</span>
+            <span style="font-weight:600;">$${price}</span>
+          </div>`;
+        });
+      });
+
+      // Total
+      let total = orders.reduce((s, o) => s + (o.items || []).reduce((ss, i) => ss + (i.item_total_cents || 0) + ((i.addons || []).reduce((a, ad) => a + (ad.item_total_cents || 0), 0)), 0), 0);
+      const sc = Math.round(total * serviceChargePct / 100);
+      html += `<div style="border-top:1px solid #f3f4f6;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#1f2937;">
+        <span>${isZh ? '合計' : 'Total'}</span><span>$${((total + sc) / 100).toFixed(2)}</span>
+      </div>`;
+      html += `</div>`;
+    });
+
+    body.innerHTML = html || `<div style="text-align:center;padding:40px 16px;color:#9ca3af;">${isZh ? '暫無歷史訂單' : 'No order history yet.'}</div>`;
+  } catch (e) {
+    body.innerHTML = `<div style="text-align:center;padding:40px 16px;color:#ef4444;">${isZh ? '無法載入訂單記錄' : 'Could not load order history.'}</div>`;
+  }
+};
+
 function restoreSavedToGoOrder() {
   if (!IS_ORDER_NOW || !restaurantId) return;
   const key = 'togo_r' + restaurantId;

@@ -72,7 +72,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
       r.payment_asia_order_pay_enabled !== false;
     const flags = r.feature_flags || {};
     const service_requests_enabled = flags.service_requests === true;
-    res.json({ order_pay_enabled, service_requests_enabled });
+    res.json({ order_pay_enabled, service_requests_enabled, show_item_status_to_diners: r.show_item_status_to_diners !== false });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
