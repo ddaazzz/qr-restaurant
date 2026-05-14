@@ -2411,5 +2411,12 @@
   "togo.pay-paid": "Paid",
   "togo.pay-unpaid": "Unpaid",
   "togo.pay-voided": "Voided",
-  "togo.pay-refunded": "Refunded"
+  "togo.pay-refunded": "Refunded",
+  "togo.marked-ready": "Order marked as ready!",
+  "togo.no-bill-printer": "No Bill Printer",
+  "togo.print-receipt": "Print Receipt",
+  "togo.print-sent": "Receipt sent to printer",
+  "togo.double-tap-ready": "Double-tap to mark as ready",
+  "togo.hint-tap": "Tap once to show actions · Double-tap to mark ready",
+  "togo.items": "items"
 }

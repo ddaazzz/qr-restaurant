@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert, Image, Modal, Platform, Dimensions, TextInput, SafeAreaView, KeyboardAvoidingView } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import * as Print from 'expo-print';
+import { Buffer } from 'buffer';
 import { apiClient, API_URL } from '../../services/apiClient';
 import { printerSettingsService } from '../../services/printerSettingsService';
+import { thermalPrinterService } from '../../services/thermalPrinterService';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { useToast } from '../../components/ToastProvider';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -279,6 +282,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [paymentModalCashReceived, setPaymentModalCashReceived] = useState('');
     const [showOrderPaymentSuccess, setShowOrderPaymentSuccess] = useState(false);
     const [orderPaymentSuccessAmount, setOrderPaymentSuccessAmount] = useState(0);
+    const [printingBill, setPrintingBill] = useState(false);
 
     // KPay terminal payment processing state
     const [kpayProcessing, setKpayProcessing] = useState(false);
@@ -1991,6 +1995,81 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       return !isPaid && !isVoided && !isRefunded && order.total_cents > 0;
     };
 
+    const printBillForSession = async (order: Order) => {
+      if (!order.session_id) {
+        Alert.alert('Error', 'No session linked to this order.');
+        return;
+      }
+      setPrintingBill(true);
+      try {
+        const printerRes = await apiClient.get(`/api/restaurants/${restaurantId}/printer-settings`);
+        const printerRows = Array.isArray(printerRes.data) ? printerRes.data : [];
+        const billPrinter = printerRows.find((p: any) => p.type === 'Bill');
+        const billPrinterType = billPrinter?.printer_type;
+        if (!billPrinterType || billPrinterType === 'none') {
+          Alert.alert('No Bill Printer', 'Please configure a bill printer in Settings → Printer Settings.');
+          return;
+        }
+        const printItems = (order.items || []).map((i: any) => ({
+          name: i.menu_item_name || i.name,
+          quantity: i.quantity,
+          price_cents: i.quantity > 0 ? Math.round((i.item_total_cents ?? i.price_cents ?? 0) / i.quantity) : (i.price_cents ?? 0),
+        }));
+        const billPayload = {
+          sessionId: order.session_id,
+          billData: {
+            table: order.customer_name || (order.table_name ? `Table ${order.table_name}` : 'Receipt'),
+            items: printItems,
+            subtotal: order.total_cents,
+            serviceCharge: 0,
+            total: order.total_cents,
+          },
+          priority: 5,
+        };
+        const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-bill`, billPayload);
+        if (printRes.data?.networkPrint) {
+          const { host, port, escposBase64 } = printRes.data.networkPrint;
+          try {
+            const escposBytes = new Uint8Array(Buffer.from(escposBase64, 'base64'));
+            const url = 'http://localhost:8001/print';
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ host, port, data: Array.from(escposBytes) }),
+              signal: controller.signal,
+            }).finally(() => clearTimeout(timer));
+            showToast(t('togo.print-sent'), 'success');
+          } catch (netErr: any) {
+            Alert.alert('Printer Unreachable', `Could not reach printer at ${host}:${port}.\n\n${netErr.message}`);
+          }
+        } else if (printRes.data?.html) {
+          await Print.printAsync({ html: printRes.data.html });
+        } else if (printRes.data?.bluetoothPayload) {
+          try {
+            const { BleManager } = require('react-native-ble-plx');
+            const manager = new BleManager();
+            await thermalPrinterService.sendEscposBase64ToBluetooth(
+              manager,
+              printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
+              printRes.data.bluetoothPayload.data.escposBase64,
+              30000
+            );
+            showToast(t('togo.print-sent'), 'success');
+          } catch (btErr: any) {
+            Alert.alert('Bluetooth Error', btErr.message);
+          }
+        } else {
+          showToast(t('togo.print-sent'), 'success');
+        }
+      } catch (err: any) {
+        Alert.alert('Print Error', err?.response?.data?.error || err.message || 'Failed to print');
+      } finally {
+        setPrintingBill(false);
+      }
+    };
+
     // Compute filtered orders for history and unpaid counts
     const filteredHistoryOrders = orders.filter(order => {
       // Order type filter
@@ -3583,6 +3662,17 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
             }
             return null;
           })()}
+
+          {/* Print Receipt Button — for paid orders with a session */}
+          {!isOrderUnpaid(selectedHistoryOrder) && selectedHistoryOrder.session_id && (
+            <TouchableOpacity
+              style={[{ backgroundColor: '#f0f0ff', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#c7d2fe', marginTop: 12, flexDirection: 'row', justifyContent: 'center' }, printingBill && { opacity: 0.6 }]}
+              onPress={() => printBillForSession(selectedHistoryOrder)}
+              disabled={printingBill}
+            >
+              {printingBill ? <ActivityIndicator size="small" color="#667eea" /> : <Text style={{ fontSize: 13, fontWeight: '600', color: '#4f46e5' }}>🖨 {t('togo.print-receipt')}</Text>}
+            </TouchableOpacity>
+          )}
 
           {/* Email Receipt Button — for paid orders when feature is enabled */}
           {emailReceiptEnabled && !isOrderUnpaid(selectedHistoryOrder) && selectedHistoryOrder.session_id && (

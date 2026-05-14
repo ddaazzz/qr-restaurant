@@ -2550,5 +2550,12 @@
   "togo.pay-paid": "已付款",
   "togo.pay-unpaid": "未付款",
   "togo.pay-voided": "已作廢",
-  "togo.pay-refunded": "已退款"
+  "togo.pay-refunded": "已退款",
+  "togo.marked-ready": "訂單已標記為備好！",
+  "togo.no-bill-printer": "未設定帳單打印機",
+  "togo.print-receipt": "打印收據",
+  "togo.print-sent": "收據已發送至打印機",
+  "togo.double-tap-ready": "雙擊標記為已備好",
+  "togo.hint-tap": "單擊顯示操作 · 雙擊標記為已備好",
+  "togo.items": "項目"
 }
