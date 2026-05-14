@@ -948,11 +948,11 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       if (sessionId) {
         const sessionResult = await pool.query(
           `SELECT ts.started_at, ts.pax,
-                  u.name as staff_name,
+                  u.name as staff_name, u.role as staff_role,
                   o.restaurant_order_number, o.order_type
            FROM table_sessions ts
-           LEFT JOIN users u ON u.id = ts.opened_by_staff_id
-           LEFT JOIN orders o ON o.session_id = ts.id
+           LEFT JOIN orders o ON o.session_id = ts.id AND o.placed_by_user_id IS NOT NULL
+           LEFT JOIN users u ON u.id = o.placed_by_user_id
            WHERE ts.id = $1
            ORDER BY o.created_at ASC
            LIMIT 1`,
@@ -962,6 +962,10 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
           const row = sessionResult.rows[0];
           if (row.started_at) startedTime = new Date(row.started_at).toLocaleString();
           if (row.pax) pax = row.pax;
+          if (row.staff_name) {
+            const roleLabel = (row.staff_role === 'admin' || row.staff_role === 'superadmin') ? ' (admin)' : '';
+            staffName = row.staff_name + roleLabel;
+          }
           if (row.restaurant_order_number) orderNumber = String(row.restaurant_order_number);
           if (row.order_type) orderType = row.order_type;
         }
@@ -1097,9 +1101,11 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       if (sessionId) {
         const sessionResult = await pool.query(
           `SELECT ts.started_at, ts.pax,
+                  u.name as staff_name, u.role as staff_role,
                   o.restaurant_order_number, o.order_type
            FROM table_sessions ts
-           LEFT JOIN orders o ON o.session_id = ts.id
+           LEFT JOIN orders o ON o.session_id = ts.id AND o.placed_by_user_id IS NOT NULL
+           LEFT JOIN users u ON u.id = o.placed_by_user_id
            WHERE ts.id = $1 ORDER BY o.created_at ASC LIMIT 1`,
           [sessionId]
         );
@@ -1107,6 +1113,10 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
           const row = sessionResult.rows[0];
           if (row.started_at) startedTime = new Date(row.started_at).toLocaleString();
           if (row.pax) pax = row.pax;
+          if (row.staff_name) {
+            const roleLabel = (row.staff_role === 'admin' || row.staff_role === 'superadmin') ? ' (admin)' : '';
+            staffName = row.staff_name + roleLabel;
+          }
           if (row.restaurant_order_number) orderNumber = String(row.restaurant_order_number);
           if (row.order_type) orderType = row.order_type;
         }
