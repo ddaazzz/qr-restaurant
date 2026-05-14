@@ -365,8 +365,6 @@
     }
   };
 
-
-  ═════════════════════════════════════════════════════ */
   const TIER_META = {
     basic:    { label: "Basic",    icon: "⭐",   cls: "basic",    desc: "All new members" },
     silver:   { label: "Silver",   icon: "🤈",   cls: "silver",   desc: "Regular diners" },
