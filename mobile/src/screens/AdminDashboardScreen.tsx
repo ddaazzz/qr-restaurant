@@ -30,6 +30,7 @@ import { ToGoTab } from './admin/ToGoTab';
 import { API_URL, apiClient } from '../services/apiClient';
 import { useSubscription, type PremiumFeatureKey } from '../contexts/SubscriptionContext';
 import { PremiumGateModal } from '../components/PremiumGateModal';
+import QRCode from 'react-native-qrcode-svg';
 
 type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings' | 'togo';
 
@@ -55,6 +56,19 @@ const ACCESS_RIGHTS_STRING_MAP: Record<string, TabType> = {
   reports: 'reports',
 };
 
+const PickupQRCode = ({ restaurantId }: { restaurantId: string }) => {
+  const baseUrl = apiClient.getCurrentBaseUrl().replace('/api', '').replace(':10000', '');
+  const toGoUrl = `${baseUrl}/order-now/${restaurantId}`;
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <View style={{ padding: 12, backgroundColor: 'white', borderWidth: 2, borderColor: '#667eea', borderRadius: 8 }}>
+        <QRCode value={toGoUrl} size={200} />
+      </View>
+      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 10, textAlign: 'center' }}>{toGoUrl}</Text>
+    </View>
+  );
+};
+
 export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout, updateUser, switchRestaurant } = useAuth();
   const { t } = useTranslation();
@@ -71,6 +85,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const isTabletDevice = (Platform as any).isPad;
   const [sidebarOpen, setSidebarOpen] = useState(isTabletDevice);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showPickupQRModal, setShowPickupQRModal] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const [restaurants, setRestaurants] = useState<Array<{ id: number; name: string }>>([]);
   const [orderForTableData, setOrderForTableData] = useState<{ sessionId: number; tableName: string } | null>(null);
@@ -492,6 +507,18 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Ionicons name="qr-code" size={16} color="#fff" />
             )}
           </TouchableOpacity>
+          {activeTab === 'togo' && (
+            <TouchableOpacity
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone, { backgroundColor: '#10b981' }]}
+              onPress={() => setShowPickupQRModal(true)}
+            >
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>Pickup QR</Text>
+              ) : (
+                <Ionicons name="bag-handle-outline" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          )}
           {user?.role === 'staff' && (
             <TouchableOpacity 
               style={[
@@ -656,6 +683,36 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         onQRScanned={handleQRScanned}
         restaurantId={user.restaurantId}
       />
+
+      {/* Pickup QR Code Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showPickupQRModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowPickupQRModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 28, maxWidth: 340, width: '90%', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Takeaway Order QR</Text>
+              <TouchableOpacity onPress={() => setShowPickupQRModal(false)}>
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, textAlign: 'center' }}>
+              Customers scan this to place takeaway orders directly.
+            </Text>
+            <PickupQRCode restaurantId={user.restaurantId} />
+            <TouchableOpacity
+              style={{ marginTop: 16, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#e5e7eb', borderRadius: 8 }}
+              onPress={() => setShowPickupQRModal(false)}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Admin Dropdown Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}

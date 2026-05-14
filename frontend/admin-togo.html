@@ -2,14 +2,6 @@
 
 <div class="togo-container">
 
-  <!-- Header row: title + QR code button -->
-  <div class="togo-header-bar">
-    <h3 class="togo-header-title">🍱 Pick-up Orders</h3>
-    <button class="togo-qr-icon-btn" id="togo-qr-header-btn" onclick="openToGoQRModal()" title="Show To-Go QR Code">
-      <img src="/uploads/website/qrcode.png" alt="QR" style="width:20px;height:20px;"> <span>QR Code</span>
-    </button>
-  </div>
-
   <!-- Two-column layout: list on left, details on right -->
   <div class="togo-body">
 
@@ -17,8 +9,22 @@
     <div class="togo-list-panel" id="togo-list-panel">
       <div class="togo-list-controls">
         <button class="togo-filter-btn active" data-filter="active" onclick="setToGoFilter('active')">Active</button>
-        <button class="togo-filter-btn" data-filter="ready" onclick="setToGoFilter('ready')">Ready ✓</button>
-        <button class="togo-filter-btn" data-filter="all" onclick="setToGoFilter('all')">All Today</button>
+        <button class="togo-filter-btn" data-filter="ready" onclick="setToGoFilter('ready')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;display:inline;vertical-align:middle;margin-right:3px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Ready
+        </button>
+        <div class="togo-timerange-wrap" style="position:relative;flex:1;">
+          <button class="togo-filter-btn togo-timerange-btn" data-filter="all" id="togo-filter-all-btn" onclick="toggleToGoTimeRangeDropdown(event)" style="width:100%;display:flex;align-items:center;justify-content:center;gap:4px;">
+            <span id="togo-timerange-label">All Today</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;flex-shrink:0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div id="togo-timerange-menu" class="togo-timerange-menu" style="display:none;">
+            <button onclick="setToGoTimeRange('today')">All Today</button>
+            <button onclick="setToGoTimeRange('yesterday')">Since Yesterday</button>
+            <button onclick="setToGoTimeRange('week')">Since 1 Week</button>
+            <button onclick="setToGoTimeRange('month')">Since 1 Month</button>
+            <button onclick="setToGoTimeRange('all')">All Time</button>
+          </div>
+        </div>
       </div>
       <div id="togo-order-list">
         <p class="togo-empty-msg">Loading orders…</p>
@@ -29,7 +35,7 @@
     <div class="togo-detail-panel" id="togo-detail-panel">
       <div class="togo-detail-placeholder" id="togo-detail-placeholder">
         <div style="text-align:center; color:#9ca3af; padding:48px 24px;">
-          <div style="font-size:40px; margin-bottom:12px;">🥡</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;display:block;margin:0 auto 12px;"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 01-8 0"></path></svg>
           <div style="font-size:15px; font-weight:600; color:#6b7280;">Select an order to view details</div>
         </div>
       </div>
@@ -64,35 +70,6 @@
   height: 100%;
   min-height: 0;
 }
-.togo-header-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
-  flex-shrink: 0;
-}
-.togo-header-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  color: #1f2937;
-}
-.togo-qr-icon-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 7px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-}
-.togo-qr-icon-btn:hover { background: #e5e7eb; }
 
 .togo-body {
   display: flex;
@@ -136,6 +113,33 @@
   border-color: #667eea;
   color: white;
 }
+.togo-timerange-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 200;
+  overflow: hidden;
+  min-width: 150px;
+}
+.togo-timerange-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+.togo-timerange-menu button:hover { background: #f3f4f6; }
+.togo-timerange-menu button.active { color: #667eea; }
 #togo-order-list {
   flex: 1;
   overflow-y: auto;

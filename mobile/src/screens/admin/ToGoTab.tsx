@@ -8,12 +8,15 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { apiClient } from '../../services/apiClient';
 import { useToast } from '../../components/ToastProvider';
 
 type FilterType = 'active' | 'ready' | 'all';
+type TimeRangeType = 'today' | 'yesterday' | 'week' | 'month' | 'all';
 
 interface OrderItem {
   id: number;
@@ -49,6 +52,8 @@ interface Props {
 export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   const { showToast } = useToast();
   const [filter, setFilter] = useState<FilterType>('active');
+  const [timeRange, setTimeRange] = useState<TimeRangeType>('today');
+  const [showTimeRangeMenu, setShowTimeRangeMenu] = useState(false);
   const [orders, setOrders] = useState<ToGoOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<ToGoOrder | null>(null);
@@ -56,6 +61,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
+  const [settlingBill, setSettlingBill] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadOrders = useCallback(async (silent = false) => {
@@ -75,8 +81,16 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
       } else if (filter === 'ready') {
         data = data.filter(o => !!o.pickup_ready_at);
       } else {
-        // 'all' = today only
-        data = data.filter(o => new Date(o.created_at).getTime() >= todayStart);
+        if (timeRange === 'today') {
+          data = data.filter(o => new Date(o.created_at).getTime() >= todayStart);
+        } else if (timeRange === 'yesterday') {
+          data = data.filter(o => new Date(o.created_at).getTime() >= todayStart - 86400000);
+        } else if (timeRange === 'week') {
+          data = data.filter(o => new Date(o.created_at).getTime() >= todayStart - 7 * 86400000);
+        } else if (timeRange === 'month') {
+          data = data.filter(o => new Date(o.created_at).getTime() >= todayStart - 30 * 86400000);
+        }
+        // 'all' = no date filter
       }
 
       setOrders(data);
@@ -86,7 +100,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [restaurantId, filter]);
+  }, [restaurantId, filter, timeRange]);
 
   const loadOrderDetail = useCallback(async (orderId: number) => {
     setDetailLoading(true);
@@ -133,6 +147,33 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
     }
   };
 
+  const handleSettleBill = async () => {
+    if (!selectedOrder || !selectedOrder.session_id) return;
+    setSettlingBill(true);
+    try {
+      const sessionId = selectedOrder.session_id;
+      const items = selectedOrder.items ?? [];
+      let subtotal = 0;
+      items.forEach(i => { subtotal += i.item_total_cents ?? 0; });
+      const total = selectedOrder.total_cents ?? subtotal;
+      await apiClient.post(`/api/sessions/${sessionId}/close-bill`, {
+        payment_method: 'cash',
+        amount_paid: total,
+        discount_applied: 0,
+        service_charge: 0,
+        notes: '',
+        restaurantId,
+      });
+      showToast('Bill settled!', 'success');
+      await loadOrders(true);
+      loadOrderDetail(selectedOrder.id);
+    } catch (err: any) {
+      showToast(err?.response?.data?.error || 'Failed to settle bill', 'error');
+    } finally {
+      setSettlingBill(false);
+    }
+  };
+
   const formatTime = (iso: string) => {
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -155,9 +196,15 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
           <Text style={styles.orderNum}>
             #{item.restaurant_order_number ?? item.id}
           </Text>
-          <View style={[styles.typeBadge, isEatHere ? styles.typeBadgeEatHere : styles.typeBadgeTakeaway]}>
+        <View style={[styles.typeBadge, isEatHere ? styles.typeBadgeEatHere : styles.typeBadgeTakeaway]}>
+            <Ionicons
+              name={isEatHere ? 'restaurant-outline' : 'bag-outline'}
+              size={9}
+              color={isEatHere ? '#1d4ed8' : '#065f46'}
+              style={{ marginRight: 3 }}
+            />
             <Text style={[styles.typeBadgeText, isEatHere ? styles.typeBadgeTextEatHere : styles.typeBadgeTextTakeaway]}>
-              {isEatHere ? '🍽 Eat Here' : '🥡 Takeaway'}
+              {isEatHere ? 'Eat Here' : 'Takeaway'}
             </Text>
           </View>
           <View style={[styles.statusPill, isReady ? styles.statusPillReady : styles.statusPillPending]}>
@@ -227,8 +274,14 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
             <View>
               <Text style={styles.detailOrderNum}>#{order.restaurant_order_number ?? order.id}</Text>
               <View style={[styles.typeBadge, isEatHere ? styles.typeBadgeEatHere : styles.typeBadgeTakeaway, { marginTop: 4 }]}>
+                <Ionicons
+                  name={isEatHere ? 'restaurant-outline' : 'bag-outline'}
+                  size={9}
+                  color={isEatHere ? '#1d4ed8' : '#065f46'}
+                  style={{ marginRight: 3 }}
+                />
                 <Text style={[styles.typeBadgeText, isEatHere ? styles.typeBadgeTextEatHere : styles.typeBadgeTextTakeaway]}>
-                  {isEatHere ? '🍽 Eat Here' : '🥡 Takeaway'}
+                  {isEatHere ? 'Eat Here' : 'Takeaway'}
                 </Text>
               </View>
             </View>
@@ -303,12 +356,40 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
             {markingReady ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.markReadyBtnText}>🛎️  Mark as Ready for Pickup</Text>
+              <>
+                <Ionicons name="cafe-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.markReadyBtnText}>Mark as Ready for Pickup</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+        {/* Settle Bill */}
+        {!isPaid && !isVoided && !isRefunded && (
+          <TouchableOpacity
+            style={[styles.settleBillBtn, settlingBill && { opacity: 0.6 }]}
+            onPress={handleSettleBill}
+            disabled={settlingBill}
+          >
+            {settlingBill ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="card-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.settleBillBtnText}>Settle Bill</Text>
+              </>
             )}
           </TouchableOpacity>
         )}
       </ScrollView>
     );
+  };
+
+  const timeRangeLabels: Record<TimeRangeType, string> = {
+    today: 'All Today',
+    yesterday: 'Since Yesterday',
+    week: 'Since 1 Week',
+    month: 'Since 1 Month',
+    all: 'All Time',
   };
 
   const emptyLabels: Record<FilterType, string> = {
@@ -321,17 +402,63 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
     <View style={styles.container}>
       {/* Filter tabs */}
       <View style={styles.filterRow}>
-        {(['active', 'ready', 'all'] as FilterType[]).map(f => (
+        {(['active', 'ready'] as FilterType[]).map(f => (
           <TouchableOpacity
             key={f}
             style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
             onPress={() => { setFilter(f); setSelectedOrderId(null); setSelectedOrder(null); }}
           >
+            {f === 'ready' && (
+              <Ionicons name="checkmark" size={12} color={filter === f ? '#fff' : '#6b7280'} style={{ marginRight: 4 }} />
+            )}
             <Text style={[styles.filterBtnText, filter === f && styles.filterBtnTextActive]}>
-              {f === 'active' ? 'Active' : f === 'ready' ? 'Ready' : 'All Today'}
+              {f === 'active' ? 'Active' : 'Ready'}
             </Text>
           </TouchableOpacity>
         ))}
+        {/* All Today with time range dropdown */}
+        <View style={{ flex: 1, position: 'relative' }}>
+          <TouchableOpacity
+            style={[styles.filterBtn, filter === 'all' && styles.filterBtnActive, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }]}
+            onPress={() => {
+              setFilter('all');
+              setSelectedOrderId(null);
+              setSelectedOrder(null);
+              setShowTimeRangeMenu(v => !v);
+            }}
+          >
+            <Text style={[styles.filterBtnText, filter === 'all' && styles.filterBtnTextActive]} numberOfLines={1}>
+              {timeRangeLabels[timeRange]}
+            </Text>
+            <Ionicons name="chevron-down" size={11} color={filter === 'all' ? '#fff' : '#6b7280'} />
+          </TouchableOpacity>
+          {showTimeRangeMenu && (
+            <>
+              <TouchableWithoutFeedback onPress={() => setShowTimeRangeMenu(false)}>
+                <View style={StyleSheet.absoluteFillObject} />
+              </TouchableWithoutFeedback>
+              <View style={styles.timeRangeMenu}>
+                {(Object.keys(timeRangeLabels) as TimeRangeType[]).map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.timeRangeItem, timeRange === r && styles.timeRangeItemActive]}
+                    onPress={() => {
+                      setTimeRange(r);
+                      setFilter('all');
+                      setShowTimeRangeMenu(false);
+                      setSelectedOrderId(null);
+                      setSelectedOrder(null);
+                    }}
+                  >
+                    <Text style={[styles.timeRangeItemText, timeRange === r && styles.timeRangeItemTextActive]}>
+                      {timeRangeLabels[r]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+        </View>
       </View>
 
       <View style={styles.body}>
@@ -417,6 +544,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   typeBadgeEatHere: { backgroundColor: '#dbeafe' },
   typeBadgeTakeaway: { backgroundColor: '#d1fae5' },
@@ -499,6 +628,42 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   markReadyBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  settleBillBtn: {
+    backgroundColor: '#10b981',
+    borderRadius: 10,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  settleBillBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  timeRangeMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 100,
+    minWidth: 140,
+  },
+  timeRangeItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  timeRangeItemActive: { backgroundColor: '#f0f0ff' },
+  timeRangeItemText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  timeRangeItemTextActive: { color: '#667eea' },
 });

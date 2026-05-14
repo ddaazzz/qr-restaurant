@@ -3,6 +3,7 @@
 // ================================================================
 
 var TOGO_FILTER = 'active'; // 'active' | 'ready' | 'all'
+var TOGO_TIMERANGE = 'today'; // 'today' | 'yesterday' | 'week' | 'month' | 'all'
 var TOGO_SELECTED_ORDER_ID = null;
 var _togoRefreshInterval = null;
 
@@ -11,12 +12,15 @@ var _togoRefreshInterval = null;
 // ──────────────────────────────────────────────────────────────
 async function initializeToGo() {
   TOGO_FILTER = 'active';
+  TOGO_TIMERANGE = 'today';
   TOGO_SELECTED_ORDER_ID = null;
 
   // Reset filter button states
   document.querySelectorAll('.togo-filter-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.filter === 'active');
   });
+  var labelEl = document.getElementById('togo-timerange-label');
+  if (labelEl) labelEl.textContent = 'All Today';
 
   await loadToGoOrders();
 
@@ -53,12 +57,22 @@ async function loadToGoOrders(silent) {
     } else if (TOGO_FILTER === 'ready') {
       orders = orders.filter(o => !!o.pickup_ready_at);
     } else {
-      // 'all' = today only
-      orders = orders.filter(o => new Date(o.created_at).getTime() >= todayStart);
+      // 'all' with time range
+      if (TOGO_TIMERANGE === 'today') {
+        orders = orders.filter(o => new Date(o.created_at).getTime() >= todayStart);
+      } else if (TOGO_TIMERANGE === 'yesterday') {
+        const yesterdayStart = todayStart - 86400000;
+        orders = orders.filter(o => new Date(o.created_at).getTime() >= yesterdayStart);
+      } else if (TOGO_TIMERANGE === 'week') {
+        orders = orders.filter(o => new Date(o.created_at).getTime() >= todayStart - 7 * 86400000);
+      } else if (TOGO_TIMERANGE === 'month') {
+        orders = orders.filter(o => new Date(o.created_at).getTime() >= todayStart - 30 * 86400000);
+      }
+      // 'all' = no date filter
     }
 
     if (!orders.length) {
-      const labels = { active: 'No active to-go orders', ready: 'No orders marked ready', all: 'No to-go orders today' };
+      const labels = { active: 'No active to-go orders', ready: 'No orders marked ready', all: 'No orders found' };
       listEl.innerHTML = `<p class="togo-empty-msg">${labels[TOGO_FILTER] || 'No orders'}</p>`;
       return;
     }
@@ -75,9 +89,11 @@ async function loadToGoOrders(silent) {
       const customer = order.customer_name || order.customer_phone || '—';
       const itemCount = order.item_count || (order.items ? order.items.length : '?');
       const total = order.total_cents != null ? `$${(order.total_cents / 100).toFixed(2)}` : '—';
+      const eatHereIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;display:inline;vertical-align:middle;margin-right:2px;"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2"></path><path d="M7 2v20"></path><path d="M21 15V2"></path><path d="M18 2c0 0 3 4 3 7s-3 7-3 7"></path></svg>`;
+      const takeawayIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;display:inline;vertical-align:middle;margin-right:2px;"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 01-8 0"></path></svg>`;
       const typeBadge = isEatHere
-        ? `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:#dbeafe;color:#1d4ed8;">🍽 Eat Here</span>`
-        : `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:#d1fae5;color:#065f46;">🥡 Takeaway</span>`;
+        ? `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:#dbeafe;color:#1d4ed8;">${eatHereIcon} Eat Here</span>`
+        : `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:#d1fae5;color:#065f46;">${takeawayIcon} Takeaway</span>`;
 
       html += `
         <div class="togo-order-row${isReady ? ' ready' : ''}${isSelected ? ' selected' : ''}"
@@ -195,7 +211,7 @@ function renderToGoDetail(order) {
          <div style="font-size:12px;color:#6b7280;margin-top:4px;">${new Date(order.pickup_ready_at).toLocaleString()}</div>
        </div>`
     : `<button class="togo-ready-btn" onclick="markOrderReady(${order.id})" id="togo-ready-btn-${order.id}">
-         🛎️ Mark as Ready for Pickup
+         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px;"><path d="M18 8h1a4 4 0 010 8h-1"></path><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg> Mark as Ready for Pickup
        </button>
        <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:6px;">This will notify the customer their order is ready.</p>`;
 
@@ -203,8 +219,9 @@ function renderToGoDetail(order) {
   let paymentActions = '';
   if (!isPaid && !isVoided && !isRefunded) {
     paymentActions = `
-      <button onclick="togoOpenSettleBill(${order.id}, ${sessionId})" style="width:100%; padding:14px; background:#667eea; color:white; border:none; border-radius:10px; font-size:16px; font-weight:700; cursor:pointer; margin-top:16px;">
-        💳 Settle Bill
+      <button onclick="togoOpenSettleBill(${order.id}, ${sessionId})" style="width:100%; padding:14px; background:#667eea; color:white; border:none; border-radius:10px; font-size:16px; font-weight:700; cursor:pointer; margin-top:16px; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+        Settle Bill
       </button>`;
   } else if (isPaid && !isVoided && !isRefunded) {
     paymentActions = `
@@ -224,8 +241,8 @@ function renderToGoDetail(order) {
           <div style="font-size:26px;font-weight:800;color:#1f2937;">#${order.restaurant_order_number || order.id}</div>
           <div style="margin-top:4px;">
             ${isEatHere
-              ? `<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;background:#dbeafe;color:#1d4ed8;">🍽 Eat Here</span>`
-              : `<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;background:#d1fae5;color:#065f46;">🥡 Takeaway</span>`}
+              ? `<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;background:#dbeafe;color:#1d4ed8;"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='width:10px;height:10px;display:inline;vertical-align:middle;margin-right:2px;'><path d='M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2'></path><path d='M7 2v20'></path><path d='M21 15V2'></path><path d='M18 2c0 0 3 4 3 7s-3 7-3 7'></path></svg> Eat Here</span>`
+              : `<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;background:#d1fae5;color:#065f46;"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='width:10px;height:10px;display:inline;vertical-align:middle;margin-right:2px;'><path d='M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z'></path><line x1='3' y1='6' x2='21' y2='6'></line><path d='M16 10a4 4 0 01-8 0'></path></svg> Takeaway</span>`}
           </div>
         </div>
         <div style="text-align:right;">
@@ -326,6 +343,55 @@ function setToGoFilter(filterType) {
   const content = document.getElementById('togo-detail-content');
   if (placeholder) placeholder.style.display = '';
   if (content) content.style.display = 'none';
+  loadToGoOrders();
+}
+
+function toggleToGoTimeRangeDropdown(e) {
+  if (e) e.stopPropagation();
+  // Switch to 'all' filter when opening dropdown
+  if (TOGO_FILTER !== 'all') {
+    TOGO_FILTER = 'all';
+    document.querySelectorAll('.togo-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === 'all');
+    });
+  }
+  const menu = document.getElementById('togo-timerange-menu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    // Close on outside click
+    const closeMenu = () => { menu.style.display = 'none'; document.removeEventListener('click', closeMenu); };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+  }
+}
+
+function setToGoTimeRange(range) {
+  TOGO_TIMERANGE = range;
+  TOGO_FILTER = 'all';
+  // Update label
+  const labels = { today: 'All Today', yesterday: 'Since Yesterday', week: 'Since 1 Week', month: 'Since 1 Month', all: 'All Time' };
+  const labelEl = document.getElementById('togo-timerange-label');
+  if (labelEl) labelEl.textContent = labels[range] || 'All Today';
+  // Highlight active in dropdown
+  const menu = document.getElementById('togo-timerange-menu');
+  if (menu) {
+    menu.querySelectorAll('button').forEach((btn, i) => {
+      const rangeMap = ['today', 'yesterday', 'week', 'month', 'all'];
+      btn.classList.toggle('active', rangeMap[i] === range);
+    });
+    menu.style.display = 'none';
+  }
+  // Mark filter button active
+  document.querySelectorAll('.togo-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === 'all');
+  });
+  // Reset detail panel
+  const placeholder = document.getElementById('togo-detail-placeholder');
+  const content = document.getElementById('togo-detail-content');
+  if (placeholder) placeholder.style.display = '';
+  if (content) content.style.display = 'none';
+  TOGO_SELECTED_ORDER_ID = null;
   loadToGoOrders();
 }
 
