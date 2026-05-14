@@ -659,6 +659,8 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     restaurantId,
     kpay_reference_id = null,
     cp_vendor_ref = null,       // PA Offline sends this; alias for kpay_reference_id
+    xish_coupon_id = null,      // optional XISH gift coupon to redeem at checkout
+    xish_member_id = null,      // optional XISH member ID for tier discount
   } = req.body;
 
   if (!sessionId) {
@@ -703,9 +705,71 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
       }
     });
 
-    const total = subtotal - discount_applied + service_charge;
+    // ── XISH: tier discount + coupon redemption ──────────────────────────────
+    let xishDiscountCents = 0;
+    let resolvedXishCouponId: number | null = xish_coupon_id ? parseInt(String(xish_coupon_id)) : null;
+    let resolvedXishMemberId: number | null = xish_member_id ? parseInt(String(xish_member_id)) : null;
+
+    // 1. Auto-apply tier discount if member is identified
+    if (resolvedXishMemberId) {
+      const tierRes = await client.query(
+        `SELECT ts.discount_percent, m.tier
+         FROM xish_members m
+         JOIN crm_customers c ON c.id = m.crm_customer_id
+         JOIN xish_tier_settings ts ON ts.restaurant_id = c.restaurant_id AND ts.tier = m.tier
+         WHERE m.id = $1
+           AND c.restaurant_id = $2
+           AND ts.is_active = true`,
+        [resolvedXishMemberId, restaurantId]
+      );
+      if (tierRes.rows[0]) {
+        const discountPct = parseFloat(tierRes.rows[0].discount_percent) || 0;
+        xishDiscountCents = Math.floor(subtotal * discountPct / 100);
+      }
+    }
+
+    // 2. Apply XISH coupon (gift or percent-off coupon from member's wallet)
+    let couponDiscountCents = 0;
+    if (resolvedXishCouponId) {
+      const couponRes = await client.query(
+        `SELECT gc.id, gc.item_type, gc.qty_remaining, gc.valid_until, gc.name, gc.member_id,
+                gc.coupon_code, gc.gift_setting_id,
+                gs.metadata, gs.discount_percent
+         FROM xish_gift_coupons gc
+         LEFT JOIN xish_gift_settings gs ON gs.id = gc.gift_setting_id
+         WHERE gc.id = $1
+           AND gc.restaurant_id = $2
+           AND gc.qty_remaining > 0
+           AND (gc.valid_until IS NULL OR gc.valid_until > NOW())`,
+        [resolvedXishCouponId, restaurantId]
+      );
+      const coupon = couponRes.rows[0];
+      if (!coupon) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "XISH coupon is invalid, expired, or already used" });
+      }
+
+      // If it's a percent-off coupon, calculate discount
+      if (coupon.item_type === 'coupon' && coupon.discount_percent) {
+        couponDiscountCents = Math.floor(subtotal * parseFloat(coupon.discount_percent) / 100);
+      }
+
+      // Mark coupon as used
+      await client.query(
+        `UPDATE xish_gift_coupons
+         SET qty_remaining = qty_remaining - 1, redeemed_at = NOW()
+         WHERE id = $1`,
+        [resolvedXishCouponId]
+      );
+    }
+
+    // Combine discounts (XISH tier + XISH coupon + any manual discount_applied)
+    const totalXishDiscount = xishDiscountCents + couponDiscountCents;
+    const effectiveDiscountApplied = discount_applied + totalXishDiscount;
+
+    const total = subtotal - effectiveDiscountApplied + service_charge;
     const posReference = `CHUIO-${Date.now()}-${sessionId}`;
-    const finalAmountPaid = amount_paid || total;
+    const finalAmountPaid = amount_paid || Math.max(0, total);
 
     // Update session - CLOSE IT
     await client.query(
@@ -715,9 +779,13 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
         amount_paid = $2,
         discount_applied = $3,
         notes = $4,
-        closed_by_staff_id = $5
+        closed_by_staff_id = $5,
+        xish_coupon_id = $7,
+        xish_discount_applied_cents = $8,
+        xish_member_id = $9
        WHERE id = $6`,
-      [payment_method, finalAmountPaid, discount_applied, notes, staff_id, sessionId]
+      [payment_method, finalAmountPaid, effectiveDiscountApplied, notes, staff_id,
+       sessionId, resolvedXishCouponId, totalXishDiscount, resolvedXishMemberId]
     );
 
     // Mark orders as completed
@@ -808,65 +876,101 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
 
     // Fire-and-forget: XISH point sync if this restaurant has XISH enabled
     pool.query(
-      `SELECT r.xish_enabled, ts.total_amount_cents, ts.customer_phone, ts.restaurant_id
+      `SELECT r.xish_enabled, r.xish_points_rate,
+              ts.total_amount_cents, ts.customer_phone, ts.restaurant_id,
+              ts.xish_member_id
        FROM table_sessions ts
        JOIN restaurants r ON r.id = ts.restaurant_id
        WHERE ts.id = $1`,
       [sessionId]
     ).then(async (xishCheck) => {
       const xr = xishCheck.rows[0];
-      if (xr?.xish_enabled && xr.total_amount_cents > 0) {
-        try {
-          await pool.query(
-            `SELECT * FROM (
-               SELECT m.id AS member_id
-               FROM crm_customers c
-               JOIN xish_members m ON m.crm_customer_id = c.id
-               WHERE c.restaurant_id = $1
-                 AND c.phone IS NOT NULL
-                 AND c.phone = $2
-               LIMIT 1
-             ) sub`,
-            [xr.restaurant_id, xr.customer_phone || ""]
-          ).then(async (memberCheck) => {
-            if (memberCheck.rows[0]) {
-              const memberId = memberCheck.rows[0].member_id;
-              const pointsToAward = Math.floor(xr.total_amount_cents / 1000);
-              if (pointsToAward > 0) {
-                await pool.query(
-                  `INSERT INTO xish_point_transactions (member_id, restaurant_id, session_id, points_delta, reason)
-                   VALUES ($1, $2, $3, $4, 'purchase')`,
-                  [memberId, xr.restaurant_id, sessionId, pointsToAward]
-                );
-                await pool.query(
-                  `UPDATE xish_members
-                   SET points_balance = points_balance + $2,
-                       tier = CASE
-                         WHEN points_balance + $2 >= 10000 THEN 'platinum'
-                         WHEN points_balance + $2 >= 5000  THEN 'gold'
-                         WHEN points_balance + $2 >= 2000  THEN 'silver'
-                         ELSE 'basic'
-                       END,
-                       updated_at = NOW()
-                   WHERE id = $1`,
-                  [memberId, pointsToAward]
-                );
-                await pool.query(
-                  `UPDATE crm_customers c
-                   SET xish_member_status = m.tier,
-                       is_previous_diner  = true,
-                       xish_discount_usage_count = xish_discount_usage_count + 1,
-                       updated_at = NOW()
-                   FROM xish_members m
-                   WHERE m.id = $1 AND m.crm_customer_id = c.id`,
-                  [memberId]
-                );
-              }
-            }
-          });
-        } catch (xishErr: any) {
-          console.warn("[XISH] point sync failed silently:", xishErr.message);
+      if (!xr?.xish_enabled) return;
+
+      try {
+        // Determine member: prefer xish_member_id stored on session, fall back to phone lookup
+        let memberId: number | null = xr.xish_member_id ? parseInt(xr.xish_member_id) : null;
+
+        if (!memberId && xr.customer_phone) {
+          const phoneRes = await pool.query(
+            `SELECT m.id AS member_id
+             FROM crm_customers c
+             JOIN xish_members m ON m.crm_customer_id = c.id
+             WHERE c.restaurant_id = $1 AND c.phone = $2
+             LIMIT 1`,
+            [xr.restaurant_id, xr.customer_phone]
+          );
+          memberId = phoneRes.rows[0]?.member_id ?? null;
         }
+
+        if (!memberId) return; // No XISH member linked to this session
+
+        const paidCents = parseInt(xr.total_amount_cents) || 0;
+        if (paidCents <= 0) return;
+
+        const pointsRate = parseFloat(xr.xish_points_rate) || 1.0;
+        const pointsToAward = Math.floor((paidCents / 100) * pointsRate);
+        if (pointsToAward <= 0) return;
+
+        // Award points and update tier using DB tier thresholds
+        await pool.query(
+          `INSERT INTO xish_point_transactions (member_id, restaurant_id, session_id, points_delta, reason)
+           VALUES ($1, $2, $3, $4, 'purchase')`,
+          [memberId, xr.restaurant_id, sessionId, pointsToAward]
+        );
+
+        const updatedMember = await pool.query(
+          `UPDATE xish_members
+           SET points_balance = points_balance + $2,
+               tier = COALESCE(
+                 (
+                   SELECT ts2.tier
+                   FROM xish_tier_settings ts2
+                   JOIN crm_customers c ON c.id = xish_members.crm_customer_id
+                   WHERE ts2.restaurant_id = c.restaurant_id
+                     AND ts2.is_active = true
+                     AND (xish_members.points_balance + $2) >= ts2.points_threshold
+                   ORDER BY ts2.points_threshold DESC
+                   LIMIT 1
+                 ),
+                 'basic'
+               ),
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING points_balance, tier`,
+          [memberId, pointsToAward]
+        );
+
+        const newTier = updatedMember.rows[0]?.tier;
+        if (newTier) {
+          await pool.query(
+            `UPDATE crm_customers c
+             SET xish_member_status = $2, is_previous_diner = true,
+                 xish_discount_usage_count = xish_discount_usage_count + 1,
+                 updated_at = NOW()
+             FROM xish_members m
+             WHERE m.id = $1 AND m.crm_customer_id = c.id`,
+            [memberId, newTier]
+          );
+        }
+
+        // Record on bill_closures
+        await pool.query(
+          `UPDATE bill_closures
+           SET xish_points_awarded = $2,
+               xish_discount_cents = $3
+           WHERE session_id = $1
+           ORDER BY created_at DESC LIMIT 1`,
+          [sessionId, pointsToAward, totalXishDiscount]
+        ).catch(() => {}); // Non-fatal
+
+        // Push updated pass to every registered device (non-blocking)
+        const { sendPassUpdatePush } = await import("../utils/xish-apns");
+        sendPassUpdatePush(memberId).catch((err: any) => {
+          console.warn("[XISH close-bill] APNs push failed:", err?.message);
+        });
+      } catch (xishErr: any) {
+        console.warn("[XISH] point sync failed silently:", xishErr.message);
       }
     }).catch(() => {});
 

@@ -30,6 +30,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Linking } from 'react-native';
 import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
 import { kpaySign } from '../../services/kpayDirectService';
+import { useProductStore } from '../../store/productStore';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
 
 interface RestaurantSettings {
@@ -217,6 +218,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const CRM_PAGE_SIZE = 30;
   const { t, lang, setLanguage } = useTranslation();
   const { user: currentUser, logout: authLogout } = useAuth();
+  const { reset: resetProduct, activeProduct } = useProductStore();
   const isSuperadmin = currentUser?.role === 'superadmin';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -4317,6 +4319,22 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
+
+      <TouchableOpacity
+        style={[styles.btn, { backgroundColor: '#7C3AED', marginVertical: 6 }]}
+        onPress={() => {
+          Alert.alert(
+            'Switch Product',
+            `Currently using: ${activeProduct === 'xish' ? 'XISH Loyalty' : 'Chuio Restaurant'}.\n\nSwitch to a different product?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Switch', onPress: () => resetProduct(), style: 'destructive' },
+            ]
+          );
+        }}
+      >
+        <Text style={styles.btnText}>⭐ Switch Product (Chuio / XISH)</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.btn, styles.btnDanger, { marginVertical: 12 }]}

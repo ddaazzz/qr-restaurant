@@ -585,4 +585,103 @@ router.delete("/xish/members/:memberId", async (req, res) => {
   }
 });
 
+// ─── GET /api/xish/members/:memberId/wallet-coupons ──────────────────────────
+// Returns all active (unredeemed) gift coupons in this member's wallet.
+router.get("/xish/members/:memberId/wallet-coupons", async (req, res) => {
+  try {
+    const memberId = parseInt(req.params.memberId);
+    if (isNaN(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+
+    const result = await pool.query(
+      `SELECT gc.id, gc.name, gc.item_type, gc.item_reward, gc.coupon_code,
+              gc.qty_remaining, gc.valid_until, gc.redeemed_at,
+              gs.discount_percent, gs.points_cost, gs.metadata
+       FROM xish_gift_coupons gc
+       LEFT JOIN xish_gift_settings gs ON gs.id = gc.gift_setting_id
+       WHERE gc.member_id = $1
+         AND gc.qty_remaining > 0
+         AND gc.redeemed_at IS NULL
+         AND (gc.valid_until IS NULL OR gc.valid_until > NOW())
+       ORDER BY gc.id DESC`,
+      [memberId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[XISH wallet coupons]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── GET /api/xish/checkout-preview ──────────────────────────────────────────
+// Preview the XISH discounts that will be applied at checkout.
+// Query params: member_id, restaurant_id, subtotal_cents, coupon_id (optional)
+router.get("/xish/checkout-preview", async (req, res) => {
+  try {
+    const memberId    = parseInt(String(req.query.member_id || ""));
+    const restaurantId = parseInt(String(req.query.restaurant_id || ""));
+    const subtotalCents = parseInt(String(req.query.subtotal_cents || "0"));
+    const couponId    = req.query.coupon_id ? parseInt(String(req.query.coupon_id)) : null;
+
+    if (isNaN(memberId) || isNaN(restaurantId)) {
+      return res.status(400).json({ error: "member_id and restaurant_id required" });
+    }
+
+    let tierDiscountCents = 0;
+    let tierDiscountPercent = 0;
+    let tier = 'basic';
+    let couponDiscountCents = 0;
+    let couponName: string | null = null;
+
+    // Tier discount
+    const tierRes = await pool.query(
+      `SELECT m.tier, ts.discount_percent
+       FROM xish_members m
+       JOIN crm_customers c ON c.id = m.crm_customer_id
+       JOIN xish_tier_settings ts ON ts.restaurant_id = c.restaurant_id AND ts.tier = m.tier
+       WHERE m.id = $1 AND c.restaurant_id = $2 AND ts.is_active = true`,
+      [memberId, restaurantId]
+    );
+    if (tierRes.rows[0]) {
+      tier = tierRes.rows[0].tier;
+      tierDiscountPercent = parseFloat(tierRes.rows[0].discount_percent) || 0;
+      tierDiscountCents = Math.floor(subtotalCents * tierDiscountPercent / 100);
+    }
+
+    // Coupon discount
+    if (couponId) {
+      const couponRes = await pool.query(
+        `SELECT gc.name, gc.item_type, gs.discount_percent
+         FROM xish_gift_coupons gc
+         LEFT JOIN xish_gift_settings gs ON gs.id = gc.gift_setting_id
+         WHERE gc.id = $1 AND gc.member_id = $2 AND gc.restaurant_id = $3
+           AND gc.qty_remaining > 0
+           AND (gc.valid_until IS NULL OR gc.valid_until > NOW())`,
+        [couponId, memberId, restaurantId]
+      );
+      if (couponRes.rows[0]) {
+        couponName = couponRes.rows[0].name;
+        if (couponRes.rows[0].item_type === 'coupon' && couponRes.rows[0].discount_percent) {
+          couponDiscountCents = Math.floor(subtotalCents * parseFloat(couponRes.rows[0].discount_percent) / 100);
+        }
+      }
+    }
+
+    const totalDiscountCents = tierDiscountCents + couponDiscountCents;
+    res.json({
+      tier,
+      tier_discount_percent: tierDiscountPercent,
+      tier_discount_cents: tierDiscountCents,
+      coupon_id: couponId,
+      coupon_name: couponName,
+      coupon_discount_cents: couponDiscountCents,
+      total_xish_discount_cents: totalDiscountCents,
+      total_after_discount_cents: Math.max(0, subtotalCents - totalDiscountCents),
+    });
+  } catch (err) {
+    console.error("[XISH checkout-preview]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
