@@ -93,28 +93,66 @@
                 <button id="qr-size-large" onclick="setQRCodeSize('large')" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 13px;" data-i18n="admin.printer-size-large">Large</button>
               </div>
             </div>
-            <div class="form-group" style="margin-bottom: 16px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-text-above">Text Above QR Code</label>
-              <input oninput="updateLivePreview()" id="qr-text-above" type="text" placeholder="e.g., Scan to Order" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Sentence 1 (Chinese)</label>
+              <input oninput="updateLivePreview()" id="qr-sentence1-zh" type="text" placeholder="請掃描二維碼落單～" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
             </div>
             <div class="form-group" style="margin-bottom: 16px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-text-below">Text Below QR Code</label>
-              <input oninput="updateLivePreview()" id="qr-text-below" type="text" placeholder="e.g., Let us know how we did!" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #6b7280;">Sentence 1 (English)</label>
+              <input oninput="updateLivePreview()" id="qr-sentence1-en" type="text" placeholder="Please scan the QR code to place an order" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Sentence 2 (Chinese)</label>
+              <input oninput="updateLivePreview()" id="qr-sentence2-zh" type="text" placeholder="可自行選取英語或粵語版本" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #6b7280;">Sentence 2 (English)</label>
+              <input oninput="updateLivePreview()" id="qr-sentence2-en" type="text" placeholder="Available in English or Chinese version" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #1f2937;">Sentence 3 (Chinese)</label>
+              <input oninput="updateLivePreview()" id="qr-sentence3-zh" type="text" placeholder="如需要協助，請通知員工！" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #6b7280;">Sentence 3 (English)</label>
+              <input oninput="updateLivePreview()" id="qr-sentence3-en" type="text" placeholder="Please tell our staff if you need any assistance" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
             </div>
           </div>
           <div>
             <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-preview">📄 Preview</label>
-            <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
-              <div style="text-align: left; margin: 8px 0; font-size: 11px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="font-weight: bold; min-width: 60px;">Table:</span><span>T02</span></div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="font-weight: bold; min-width: 60px;">Pax:</span><span>4</span></div>
-                <div style="display: flex; justify-content: space-between;"><span style="font-weight: bold; min-width: 60px;">Started:</span><span>2026-03-18 8:30 PM</span></div>
+            <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6; max-width: 280px;">
+              <!-- Restaurant name — big -->
+              <p id="qr-preview-restaurant-name" style="font-size: 16px; font-weight: bold; margin: 0 0 4px 0; color: #1f2937;">Restaurant Name</p>
+              <!-- Phone -->
+              <p id="qr-preview-phone" style="margin: 0 0 2px 0; font-size: 11px; color: #374151;"></p>
+              <!-- Address -->
+              <p id="qr-preview-address" style="margin: 0 0 8px 0; font-size: 10px; color: #374151;"></p>
+              <!-- Separator -->
+              <div style="border-top: 1px dashed #000; margin: 8px 0;"></div>
+              <!-- Session info left aligned -->
+              <div style="text-align: left; font-size: 10px; line-height: 1.8; color: #374151;">
+                <div>點餐時間: 2026-01-01 08:30 PM</div>
+                <div>Start Time: 2026-01-01 08:30 PM</div>
+                <div>侍應: Staff Name</div>
+                <div>Staff: Staff Name</div>
+                <div>訂單編號: E38 [堂食]</div>
+                <div>Order No: E38 [Dine-in]</div>
               </div>
-              <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-              <p id="qr-preview-above" style="font-weight: bold; font-size: 12px; margin: 8px 0; color: #1f2937;">Scan to Order</p>
-              <div style="border-bottom: 1px dashed #000; margin: 8px 0;"></div>
-              <div id="qr-preview-box" style="width: 100px; height: 100px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; margin: 12px auto; display: flex; align-items: center; justify-content: center; font-size: 10px;"><p style="color: #999; margin: 0;">QR Code</p></div>
-              <p id="qr-preview-below" style="margin: 8px 0 4px 0; font-size: 10px; color: #6b7280;">Let us know how we did!</p>
+              <!-- Separator -->
+              <div style="border-top: 1px dashed #000; margin: 8px 0;"></div>
+              <!-- QR Code placeholder -->
+              <div id="qr-preview-box" style="width: 100px; height: 100px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; margin: 8px auto; display: flex; align-items: center; justify-content: center; font-size: 10px;"><p style="color: #999; margin: 0;">QR Code</p></div>
+              <!-- Sentences -->
+              <div id="qr-preview-sentences" style="text-align: center; font-size: 10px; line-height: 1.7; color: #374151; margin-top: 8px;">
+                <div id="qr-preview-s1zh">請掃描二維碼落單～</div>
+                <div id="qr-preview-s1en">Please scan the QR code to place an order</div>
+                <br/>
+                <div id="qr-preview-s2zh">可自行選取英語或粵語版本</div>
+                <div id="qr-preview-s2en">Available in English or Chinese version</div>
+                <br/>
+                <div id="qr-preview-s3zh">如需要協助，請通知員工！</div>
+                <div id="qr-preview-s3en">Please tell our staff if you need any assistance</div>
+              </div>
             </div>
           </div>
         </div>

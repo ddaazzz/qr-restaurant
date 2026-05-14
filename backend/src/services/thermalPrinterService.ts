@@ -21,14 +21,19 @@ export interface ReceiptData {
   total?: number;
   timestamp?: string;
   restaurantName?: string;
-  restaurantAddress?: string; // Restaurant address for bill printing
-  restaurantPhone?: string; // Restaurant phone for bill printing
+  restaurantAddress?: string; // Restaurant address for bill/QR printing
+  restaurantPhone?: string; // Restaurant phone for bill/QR printing
+  staffName?: string; // Staff who opened the session (for QR receipt)
+  orderType?: string; // 'dine-in' | 'takeaway' | 'counter' (for QR receipt)
   qrToken?: string; // QR token (will be converted to full URL)
   qrCode?: string; // Full QR code data/URL to print
   printerPaperWidth?: number; // Paper width in mm (80 for standard, 58 for smaller)
   // QR format customization from database settings
-  qrTextAbove?: string; // Customizable text above QR (e.g., "Scan to Order")
-  qrTextBelow?: string; // Customizable text below QR (e.g., "Let us know how we did!")
+  qrTextAbove?: string; // DEPRECATED — kept for old receipts
+  qrTextBelow?: string; // DEPRECATED — kept for old receipts
+  qrSentence1?: string; // Bilingual sentence 1 below QR
+  qrSentence2?: string; // Bilingual sentence 2 below QR
+  qrSentence3?: string; // Bilingual sentence 3 below QR
   // Bill format customization from database settings
   billHeaderText?: string; // Customizable header text for bills (e.g., "Thank You")
   billFooterText?: string; // Customizable footer text for bills (e.g., "Follow us on social media")
@@ -63,69 +68,98 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
   const qrData = receipt.qrToken ? `https://${qrDomain}/${receipt.qrToken}` : receipt.qrCode;
   
   if (qrData && (!receipt.items || receipt.items.length === 0)) {
-    // QR-only layout: matches preview format exactly
-    
-    // === RESTAURANT NAME - CENTERED BOLD ===
+    // QR-only layout: restaurant name big, phone, address, separator,
+    // start time / staff / order no, separator, large QR, bilingual sentences
+
+    // === RESTAURANT NAME - DOUBLE SIZE, CENTERED ===
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    if (receipt.restaurantName && receipt.restaurantName !== 'QR Code') {
-      commands.push(27, 33, 8); // ESC '!' 8 - Bold
-      appendText(commands, receipt.restaurantName);
-      commands.push(27, 33, 0); // ESC '!' 0 - Normal
-    } else {
-      appendText(commands, 'Receipt');
+    commands.push(27, 33, 48); // ESC '!' 48 - Double width + double height
+    appendText(commands, receipt.restaurantName && receipt.restaurantName !== 'QR Code'
+      ? receipt.restaurantName
+      : 'Restaurant');
+    commands.push(27, 33, 0); // ESC '!' 0 - Normal
+    commands.push(10); // LF
+
+    // === PHONE NUMBER - CENTERED ===
+    if (receipt.restaurantPhone) {
+      appendText(commands, receipt.restaurantPhone);
+      commands.push(10);
     }
-    commands.push(10);
-    
+
+    // === ADDRESS - CENTERED ===
+    if (receipt.restaurantAddress) {
+      appendText(commands, receipt.restaurantAddress);
+      commands.push(10);
+    }
+
+    commands.push(10); // blank line
+
     // === SEPARATOR LINE ===
     appendText(commands, '================================');
-    commands.push(10, 10); // LF x2
-    
-    // === TABLE INFO - LEFT ALIGNED ===
+    commands.push(10); // LF
+
+    // === SESSION INFO - LEFT ALIGNED ===
     commands.push(27, 97, 0); // ESC 'a' 0 - Left align
-    
-    if (receipt.tableNumber || receipt.tableName) {
-      appendText(commands, `${L.table} ${receipt.tableNumber || receipt.tableName}`);
-      commands.push(10);
-    }
-    
-    if (receipt.pax) {
-      appendText(commands, `${L.pax} ${receipt.pax}`);
-      commands.push(10);
-    }
-    
+
     const timeStr = receipt.startTime || receipt.startedTime || receipt.timestamp;
     if (timeStr) {
-      appendText(commands, `${L.started} ${timeStr}`);
+      appendText(commands, `點餐時間: ${timeStr}`);
+      commands.push(10);
+      appendText(commands, `Start Time: ${timeStr}`);
       commands.push(10);
     }
-    
-    commands.push(10); // LF
-    
-    // === TEXT ABOVE QR CODE - CENTERED BOLD (appears BEFORE QR) ===
-    commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    commands.push(27, 33, 8); // ESC '!' 8 - Bold
-    appendText(commands, receipt.qrTextAbove || L.scanToOrder);
-    commands.push(27, 33, 0); // ESC '!' 0 - Normal
-    commands.push(10, 10); // LF x2
-    
+
+    if (receipt.staffName) {
+      appendText(commands, `侍應: ${receipt.staffName}`);
+      commands.push(10);
+      appendText(commands, `Staff: ${receipt.staffName}`);
+      commands.push(10);
+    }
+
+    if (receipt.orderNumber) {
+      const orderTypeLabel = receipt.orderType === 'takeaway' ? '[外帶]'
+        : receipt.orderType === 'counter' ? '[櫃台]'
+        : '[堂食]';
+      appendText(commands, `訂單編號: ${receipt.orderNumber} ${orderTypeLabel}`);
+      commands.push(10);
+      const orderTypeLabelEn = receipt.orderType === 'takeaway' ? '[Takeaway]'
+        : receipt.orderType === 'counter' ? '[Counter]'
+        : '[Dine-in]';
+      appendText(commands, `Order No: ${receipt.orderNumber} ${orderTypeLabelEn}`);
+      commands.push(10);
+    }
+
+    commands.push(10); // blank line
+
     // === SEPARATOR LINE ===
+    commands.push(27, 97, 1); // ESC 'a' 1 - Center
     appendText(commands, '================================');
     commands.push(10, 10); // LF x2
-    
+
     // === LARGE QR CODE - CENTERED ===
-    commands.push(27, 97, 1); // ESC 'a' 1 - Center
     appendQRCode(commands, qrData, receipt.printerPaperWidth);
     commands.push(10, 10); // LF x2
-    
-    // === TEXT BELOW QR CODE - CENTERED (appears AFTER QR) ===
-    commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    appendText(commands, receipt.qrTextBelow || L.feedback);
-    commands.push(10, 10); // LF x2
-    
+
+    // === BILINGUAL SENTENCES BELOW QR ===
+    const defaultSentence1 = '請掃描二維碼落單～\nPlease scan the QR code to place an order';
+    const defaultSentence2 = '可自行選取英語或粵語版本\nAvailable in English or Chinese version';
+    const defaultSentence3 = '如需要協助，請通知員工！\nPlease tell our staff if you need any assistance';
+
+    const sentences = [
+      receipt.qrSentence1 || defaultSentence1,
+      receipt.qrSentence2 || defaultSentence2,
+      receipt.qrSentence3 || defaultSentence3,
+    ];
+
+    for (const sentence of sentences) {
+      appendText(commands, sentence);
+      commands.push(10, 10); // blank line between sentences
+    }
+
     // Paper feed and cut
     commands.push(27, 100, 5); // ESC d 5 - Feed paper 5 lines
     commands.push(27, 105); // ESC i - Full cut
-    
+
     return new Uint8Array(commands);
   }
 

@@ -509,44 +509,61 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
  */
 router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: Response) => {
   const { restaurantId } = req.params;
-  const { tableName = 'T02', pax = 4, qrTextAbove, qrTextBelow } = req.body;
+  const { tableName = 'T02', pax = 4 } = req.body;
 
   try {
-    // Get restaurant name
+    // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].phone || '') : '';
+    const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].address || '') : '';
 
-    // Get QR text customization from database
-    let textAboveQR = qrTextAbove || 'Scan to Order';
-    let textBelowQR = qrTextBelow || 'Let us know how we did!';
+    // Get QR sentence customization from database
+    let qrSentence1 = '';
+    let qrSentence2 = '';
+    let qrSentence3 = '';
 
     const settingsResult = await pool.query(
-      `SELECT 
-        COALESCE((settings->>'qr_text_above'), '') as text_above,
-        COALESCE((settings->>'qr_text_below'), '') as text_below
-       FROM printers WHERE restaurant_id = $1 AND type = $2`,
+      `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
       [restaurantId, 'QR']
     );
 
     if (((settingsResult.rowCount ?? 0) > 0)) {
-      const settings = settingsResult.rows[0];
-      if (settings.text_above) textAboveQR = settings.text_above;
-      if (settings.text_below) textBelowQR = settings.text_below;
+      const settings = settingsResult.rows[0].settings || {};
+      const s1zh = settings.sentence1_zh || '請掃描二維碼落單～';
+      const s1en = settings.sentence1_en || 'Please scan the QR code to place an order';
+      const s2zh = settings.sentence2_zh || '可自行選取英語或粵語版本';
+      const s2en = settings.sentence2_en || 'Available in English or Chinese version';
+      const s3zh = settings.sentence3_zh || '如需要協助，請通知員工！';
+      const s3en = settings.sentence3_en || 'Please tell our staff if you need any assistance';
+      qrSentence1 = `${s1zh}\n${s1en}`;
+      qrSentence2 = `${s2zh}\n${s2en}`;
+      qrSentence3 = `${s3zh}\n${s3en}`;
+    } else {
+      qrSentence1 = '請掃描二維碼落單～\nPlease scan the QR code to place an order';
+      qrSentence2 = '可自行選取英語或粵語版本\nAvailable in English or Chinese version';
+      qrSentence3 = '如需要協助，請通知員工！\nPlease tell our staff if you need any assistance';
     }
 
     // Generate actual ESC/POS using the same service that prints
     const receiptData: ReceiptData = {
-      restaurantName: restaurantName,
-      tableName: tableName,
+      restaurantName,
+      restaurantPhone,
+      restaurantAddress,
+      tableName,
       pax: pax || undefined,
       qrToken: 'preview-token',
       startedTime: new Date().toLocaleString(),
+      staffName: 'Staff Name',
+      orderNumber: 'E38',
+      orderType: 'dine-in',
       printerPaperWidth: 80,
-      qrTextAbove: textAboveQR,
-      qrTextBelow: textBelowQR
+      qrSentence1,
+      qrSentence2,
+      qrSentence3,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -554,16 +571,23 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
     // Return both the actual ESC/POS and a text preview
     const previewText = `
 ${restaurantName}
+${restaurantPhone}
+${restaurantAddress}
 ================================
-Table: ${tableName}
-Pax: ${pax}
-Started: ${new Date().toLocaleString()}
-
+點餐時間: ${new Date().toLocaleString()}
+Start Time: ${new Date().toLocaleString()}
+侍應: Staff Name
+Staff: Staff Name
+訂單編號: E38 [堂食]
+Order No: E38 [Dine-in]
 ================================
        [QR CODE]
 
-${textAboveQR}
-${textBelowQR}
+${qrSentence1}
+
+${qrSentence2}
+
+${qrSentence3}
 `.trim();
 
     return res.json({
@@ -587,41 +611,54 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
   const { tableName = 'T02', pax = 4 } = req.body;
 
   try {
-    // Get restaurant name
+    // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].phone || '') : '';
+    const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].address || '') : '';
 
-    // Get QR text customization from database
-    let textAboveQR = 'Scan to Order';
-    let textBelowQR = 'Let us know how we did!';
+    // Get QR sentence customization from database
+    let qrSentence1 = '請掃描二維碼落單～\nPlease scan the QR code to place an order';
+    let qrSentence2 = '可自行選取英語或粵語版本\nAvailable in English or Chinese version';
+    let qrSentence3 = '如需要協助，請通知員工！\nPlease tell our staff if you need any assistance';
 
     const settingsResult = await pool.query(
-      `SELECT 
-        COALESCE((settings->>'qr_text_above'), '') as text_above,
-        COALESCE((settings->>'qr_text_below'), '') as text_below
-       FROM printers WHERE restaurant_id = $1 AND type = $2`,
+      `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
       [restaurantId, 'QR']
     );
 
     if (((settingsResult.rowCount ?? 0) > 0)) {
-      const settings = settingsResult.rows[0];
-      if (settings.text_above) textAboveQR = settings.text_above;
-      if (settings.text_below) textBelowQR = settings.text_below;
+      const settings = settingsResult.rows[0].settings || {};
+      if (settings.sentence1_zh || settings.sentence1_en) {
+        qrSentence1 = `${settings.sentence1_zh || '請掃描二維碼落單～'}\n${settings.sentence1_en || 'Please scan the QR code to place an order'}`;
+      }
+      if (settings.sentence2_zh || settings.sentence2_en) {
+        qrSentence2 = `${settings.sentence2_zh || '可自行選取英語或粵語版本'}\n${settings.sentence2_en || 'Available in English or Chinese version'}`;
+      }
+      if (settings.sentence3_zh || settings.sentence3_en) {
+        qrSentence3 = `${settings.sentence3_zh || '如需要協助，請通知員工！'}\n${settings.sentence3_en || 'Please tell our staff if you need any assistance'}`;
+      }
     }
 
     // Generate actual ESC/POS using the same service that prints
     const receiptData: ReceiptData = {
-      restaurantName: restaurantName,
-      tableName: tableName,
+      restaurantName,
+      restaurantPhone,
+      restaurantAddress,
+      tableName,
       pax: pax || undefined,
       qrToken: 'test-token-12345',
       startedTime: new Date().toLocaleString(),
+      staffName: 'Test Staff',
+      orderNumber: 'E38',
+      orderType: 'dine-in',
       printerPaperWidth: 80,
-      qrTextAbove: textAboveQR,
-      qrTextBelow: textBelowQR
+      qrSentence1,
+      qrSentence2,
+      qrSentence3,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -836,14 +873,18 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
 
     let printerConfig = printerResult.rows[0];
     let restaurantName = '';
+    let restaurantPhone = '';
+    let restaurantAddress = '';
 
-    // Get restaurant name
+    // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (((restaurantResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantResult.rows[0].name;
+      restaurantPhone = restaurantResult.rows[0].phone || '';
+      restaurantAddress = restaurantResult.rows[0].address || '';
     }
 
     // If not found in printers table, try old schema on restaurants table (fallback)
@@ -892,32 +933,53 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
         return res.json({ success: true, message: 'No printers configured for this table' });
       }
 
-      const textAboveQR = qrSettings?.text_above || 'Scan to Order';
-      const textBelowQR = qrSettings?.text_below || '';
+      const buildQrSentences = (s: any) => ({
+        qrSentence1: `${s?.sentence1_zh || '請掃描二維碼落單～'}\n${s?.sentence1_en || 'Please scan the QR code to place an order'}`,
+        qrSentence2: `${s?.sentence2_zh || '可自行選取英語或粵語版本'}\n${s?.sentence2_en || 'Available in English or Chinese version'}`,
+        qrSentence3: `${s?.sentence3_zh || '如需要協助，請通知員工！'}\n${s?.sentence3_en || 'Please tell our staff if you need any assistance'}`,
+      });
+      const sentences = buildQrSentences(qrSettings);
 
       let pax: number | undefined;
       let startedTime = new Date().toLocaleString();
+      let staffName: string | undefined;
+      let orderNumber: string | undefined;
+      let orderType: string | undefined;
       if (sessionId) {
         const sessionResult = await pool.query(
-          `SELECT ts.started_at, ts.pax FROM table_sessions ts WHERE ts.id = $1`,
+          `SELECT ts.started_at, ts.pax,
+                  u.name as staff_name,
+                  o.restaurant_order_number, o.order_type
+           FROM table_sessions ts
+           LEFT JOIN users u ON u.id = ts.opened_by_staff_id
+           LEFT JOIN orders o ON o.session_id = ts.id
+           WHERE ts.id = $1
+           ORDER BY o.created_at ASC
+           LIMIT 1`,
           [sessionId]
         );
         if ((sessionResult.rowCount ?? 0) > 0) {
           const row = sessionResult.rows[0];
           if (row.started_at) startedTime = new Date(row.started_at).toLocaleString();
           if (row.pax) pax = row.pax;
+          if (row.restaurant_order_number) orderNumber = String(row.restaurant_order_number);
+          if (row.order_type) orderType = row.order_type;
         }
       }
 
       const receiptData: ReceiptData = {
         restaurantName,
+        restaurantPhone,
+        restaurantAddress,
         tableName,
         ...(pax && { pax }),
         qrToken,
         startedTime,
+        ...(staffName && { staffName }),
+        ...(orderNumber && { orderNumber }),
+        ...(orderType && { orderType }),
         printerPaperWidth: 80,
-        qrTextAbove: textAboveQR,
-        qrTextBelow: textBelowQR,
+        ...sentences,
       };
       const escpos = generateESCPOS(receiptData);
       const escposBase64 = Buffer.from(escpos).toString('base64');
@@ -1027,58 +1089,56 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://${QR_DOMAIN}/${qrToken}`)}`;
       
       // Get session details (table info)
-      let tablePaxInfo = '';
       let startedTime = new Date().toLocaleString();
-      
       let pax: number | undefined = undefined;
+      let staffName: string | undefined;
+      let orderNumber: string | undefined;
+      let orderType: string | undefined;
       if (sessionId) {
         const sessionResult = await pool.query(
-          `SELECT ts.started_at, ts.pax, t.name as table_name 
-           FROM table_sessions ts 
-           LEFT JOIN tables t ON ts.table_id = t.id 
-           WHERE ts.id = $1`,
+          `SELECT ts.started_at, ts.pax,
+                  o.restaurant_order_number, o.order_type
+           FROM table_sessions ts
+           LEFT JOIN orders o ON o.session_id = ts.id
+           WHERE ts.id = $1 ORDER BY o.created_at ASC LIMIT 1`,
           [sessionId]
         );
         if (((sessionResult.rowCount ?? 0) > 0)) {
           const row = sessionResult.rows[0];
-          if (row.started_at) {
-            startedTime = new Date(row.started_at).toLocaleString();
-          }
-          if (row.pax) {
-            pax = row.pax;
-          }
+          if (row.started_at) startedTime = new Date(row.started_at).toLocaleString();
+          if (row.pax) pax = row.pax;
+          if (row.restaurant_order_number) orderNumber = String(row.restaurant_order_number);
+          if (row.order_type) orderType = row.order_type;
         }
       }
-      
-      // Get QR text configuration from printer settings
-      let textAboveQR = 'Scan to Order';
-      let textBelowQR = 'Let us know how we did!';
-      
+
+      // Get QR sentence configuration from printer settings
       const settingsResult = await pool.query(
-        `SELECT 
-          COALESCE((settings->>'qr_text_above'), '') as text_above,
-          COALESCE((settings->>'qr_text_below'), '') as text_below
-         FROM printers WHERE restaurant_id = $1 AND type = $2`,
+        `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
         [restaurantId, 'QR']
       );
-      
-      if (((settingsResult.rowCount ?? 0) > 0)) {
-        const settings = settingsResult.rows[0];
-        if (settings.text_above) textAboveQR = settings.text_above;
-        if (settings.text_below) textBelowQR = settings.text_below;
-      }
+      const btSettings = (settingsResult.rowCount ?? 0) > 0 ? settingsResult.rows[0].settings || {} : {};
+      const qrSentence1Bt = `${btSettings.sentence1_zh || '請掃描二維碼落單～'}\n${btSettings.sentence1_en || 'Please scan the QR code to place an order'}`;
+      const qrSentence2Bt = `${btSettings.sentence2_zh || '可自行選取英語或粵語版本'}\n${btSettings.sentence2_en || 'Available in English or Chinese version'}`;
+      const qrSentence3Bt = `${btSettings.sentence3_zh || '如需要協助，請通知員工！'}\n${btSettings.sentence3_en || 'Please tell our staff if you need any assistance'}`;
+
       // Generate ESC/POS commands using shared thermal printer service
       // This ensures IDENTICAL formatting between mobile and web
       const receiptData: ReceiptData = {
-        restaurantName: restaurantName,
-        tableName: tableName,
+        restaurantName,
+        restaurantPhone,
+        restaurantAddress,
+        tableName,
         ...(pax && { pax }),
-        qrToken: qrToken,
-        startedTime: startedTime,
-        printerPaperWidth: 80, // Standard 80mm paper width
-        // Pass customizable text from database settings
-        qrTextAbove: textAboveQR,
-        qrTextBelow: textBelowQR
+        qrToken,
+        startedTime,
+        ...(staffName && { staffName }),
+        ...(orderNumber && { orderNumber }),
+        ...(orderType && { orderType }),
+        printerPaperWidth: 80,
+        qrSentence1: qrSentence1Bt,
+        qrSentence2: qrSentence2Bt,
+        qrSentence3: qrSentence3Bt,
       };
       
       const escposCommands = generateESCPOS(receiptData);
@@ -1113,24 +1173,22 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       const port = printerConfig.printer_port || 9100;
 
       // Build ESC/POS QR receipt
-      let textAboveQR = 'Scan to Order';
-      let textBelowQR = 'Let us know how we did!';
       const settingsResult2 = await pool.query(
-        `SELECT COALESCE((settings->>'qr_text_above'),'') as text_above, COALESCE((settings->>'qr_text_below'),'') as text_below FROM printers WHERE restaurant_id = $1 AND type = $2`,
+        `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
         [restaurantId, 'QR']
       );
-      if ((settingsResult2.rowCount ?? 0) > 0) {
-        if (settingsResult2.rows[0].text_above) textAboveQR = settingsResult2.rows[0].text_above;
-        if (settingsResult2.rows[0].text_below) textBelowQR = settingsResult2.rows[0].text_below;
-      }
+      const netSettings = (settingsResult2.rowCount ?? 0) > 0 ? settingsResult2.rows[0].settings || {} : {};
 
       const qrReceiptData: ReceiptData = {
         restaurantName,
+        restaurantPhone,
+        restaurantAddress,
         tableName,
         qrToken,
-        qrTextAbove: textAboveQR,
-        qrTextBelow: textBelowQR,
         printerPaperWidth: 80,
+        qrSentence1: `${netSettings.sentence1_zh || '請掃描二維碼落單～'}\n${netSettings.sentence1_en || 'Please scan the QR code to place an order'}`,
+        qrSentence2: `${netSettings.sentence2_zh || '可自行選取英語或粵語版本'}\n${netSettings.sentence2_en || 'Available in English or Chinese version'}`,
+        qrSentence3: `${netSettings.sentence3_zh || '如需要協助，請通知員工！'}\n${netSettings.sentence3_en || 'Please tell our staff if you need any assistance'}`,
       };
       const escpos = generateESCPOS(qrReceiptData);
       const escposBase64 = Buffer.from(escpos).toString('base64');

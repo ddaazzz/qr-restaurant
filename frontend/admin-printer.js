@@ -127,46 +127,12 @@ async function selectPrinterType(type) {
 }
 
 /**
- * Update live QR preview as user types (calls backend to ensure accuracy)
+ * Update live QR preview as user types
  */
 async function updateLivePreview() {
   try {
-    const textAbove = document.getElementById('qr-text-above')?.value || 'Scan to Order';
-    const textBelow = document.getElementById('qr-text-below')?.value || 'Let us know how we did!';
-    const restaurantId = localStorage.getItem('restaurantId');
-
-    if (!restaurantId) {
-      console.warn('[admin-printer.js] Restaurant ID not found for preview');
-      return;
-    }
-
-    // Call backend to generate preview using actual thermalPrinterService
-    const response = await fetch(`${API}/restaurants/${restaurantId}/preview-qr`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tableName: 'T02',
-        pax: 4,
-        qrTextAbove: textAbove,
-        qrTextBelow: textBelow
-      })
-    });
-
-    if (!response.ok) {
-      console.error('[admin-printer.js] Failed to generate preview');
-      return;
-    }
-
-    const data = await response.json();
-    const previewText = data.previewText;
-
-    // Update the preview display with monospace text
-    const previewDiv = document.getElementById('qr-preview-box');
-    const previewAbove = document.getElementById('qr-preview-above');
-    const previewBelow = document.getElementById('qr-preview-below');
-
-    if (previewAbove) previewAbove.textContent = textAbove || 'Scan to Order';
-    if (previewBelow) previewBelow.textContent = textBelow || 'Let us know how we did!';
+    const size = getCurrentQRSize();
+    updateQRPreview(size);
   } catch (err) {
     console.error('[admin-printer.js] Error updating preview:', err);
   }
@@ -270,17 +236,26 @@ function updateStatusCards() {
 function loadQRCodeFormatUI() {
   try {
     const qrSize = window.currentPrinterSettings?.qr_code_size || 'medium';
-    const qrTextAbove = window.currentPrinterSettings?.qr_text_above || 'Scan to Order';
-    const qrTextBelow = window.currentPrinterSettings?.qr_text_below || 'Let us know how we did!';
     const qrAutoPrint = window.currentPrinterSettings?.qr_auto_print || false;
+    const s = window.currentPrinterSettings;
 
-    const textAboveInput = document.getElementById('qr-text-above');
-    const textBelowInput = document.getElementById('qr-text-below');
+    const sentence1Zh = s?.qr_sentence1_zh || '';
+    const sentence1En = s?.qr_sentence1_en || '';
+    const sentence2Zh = s?.qr_sentence2_zh || '';
+    const sentence2En = s?.qr_sentence2_en || '';
+    const sentence3Zh = s?.qr_sentence3_zh || '';
+    const sentence3En = s?.qr_sentence3_en || '';
+
     const autoPrintCheckbox = document.getElementById('qr-auto-print');
-
-    if (textAboveInput) textAboveInput.value = qrTextAbove;
-    if (textBelowInput) textBelowInput.value = qrTextBelow;
     if (autoPrintCheckbox) autoPrintCheckbox.checked = qrAutoPrint;
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+    set('qr-sentence1-zh', sentence1Zh);
+    set('qr-sentence1-en', sentence1En);
+    set('qr-sentence2-zh', sentence2Zh);
+    set('qr-sentence2-en', sentence2En);
+    set('qr-sentence3-zh', sentence3Zh);
+    set('qr-sentence3-en', sentence3En);
 
     document.getElementById('qr-size-small')?.classList.remove('active');
     document.getElementById('qr-size-medium')?.classList.remove('active');
@@ -288,7 +263,7 @@ function loadQRCodeFormatUI() {
     const activeBtn = document.getElementById(`qr-size-${qrSize}`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    updateQRPreview(qrTextAbove, qrTextBelow, qrSize);
+    updateQRPreview(qrSize);
   } catch (err) {
     console.error('[admin-printer.js] Failed to load QR code format UI:', err);
   }
@@ -296,37 +271,57 @@ function loadQRCodeFormatUI() {
 /**
  * Update QR code format preview
  */
-function updateQRPreview(textAbove, textBelow, size) {
+function updateQRPreview(size) {
   const sizeMap = { 'small': 80, 'medium': 100, 'large': 120 };
   const previewSize = sizeMap[size] || 100;
 
   const previewBox = document.getElementById('qr-preview-box');
-  const previewAbove = document.getElementById('qr-preview-above');
-  const previewBelow = document.getElementById('qr-preview-below');
-  const sizeDisplay = document.getElementById('qr-size-display');
-
   if (previewBox) {
     previewBox.style.width = previewSize + 'px';
     previewBox.style.height = previewSize + 'px';
   }
-  if (previewAbove) previewAbove.textContent = textAbove || 'Scan to Order';
-  if (previewBelow) previewBelow.textContent = textBelow || 'Let us know how we did!';
-  if (sizeDisplay) sizeDisplay.textContent = 'Selected: ' + (size.charAt(0).toUpperCase() + size.slice(1));
+
+  const defaults = {
+    s1zh: '請掃描二維碼落單～',
+    s1en: 'Please scan the QR code to place an order',
+    s2zh: '可自行選取英語或粵語版本',
+    s2en: 'Available in English or Chinese version',
+    s3zh: '如需要協助，請通知員工！',
+    s3en: 'Please tell our staff if you need any assistance',
+  };
+
+  const get = (id, fallback) => {
+    const el = document.getElementById(id);
+    return (el && el.value.trim()) ? el.value.trim() : fallback;
+  };
+  const setPreview = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+  setPreview('qr-preview-s1zh', get('qr-sentence1-zh', defaults.s1zh));
+  setPreview('qr-preview-s1en', get('qr-sentence1-en', defaults.s1en));
+  setPreview('qr-preview-s2zh', get('qr-sentence2-zh', defaults.s2zh));
+  setPreview('qr-preview-s2en', get('qr-sentence2-en', defaults.s2en));
+  setPreview('qr-preview-s3zh', get('qr-sentence3-zh', defaults.s3zh));
+  setPreview('qr-preview-s3en', get('qr-sentence3-en', defaults.s3en));
+
+  // Update restaurant name/phone/address from current settings
+  const restaurantName = window.currentPrinterSettings?.restaurant_name || window.restaurantName || 'Restaurant Name';
+  const restaurantPhone = window.currentPrinterSettings?.restaurant_phone || window.restaurantPhone || '';
+  const restaurantAddress = window.currentPrinterSettings?.restaurant_address || window.restaurantAddress || '';
+  setPreview('qr-preview-restaurant-name', restaurantName);
+  setPreview('qr-preview-phone', restaurantPhone);
+  setPreview('qr-preview-address', restaurantAddress);
 }
 
 /**
  * Set QR code size
  */
 function setQRCodeSize(size) {
-  const qrTextAbove = document.getElementById('qr-text-above').value || 'Scan to Order';
-  const qrTextBelow = document.getElementById('qr-text-below').value || 'Let us know how we did!';
-
   document.getElementById('qr-size-small')?.classList.remove('active');
   document.getElementById('qr-size-medium')?.classList.remove('active');
   document.getElementById('qr-size-large')?.classList.remove('active');
   document.getElementById(`qr-size-${size}`)?.classList.add('active');
 
-  updateQRPreview(qrTextAbove, qrTextBelow, size);
+  updateQRPreview(size);
 }
 
 /**
@@ -341,8 +336,6 @@ async function saveQRCodeFormat() {
     }
 
     const qrSize = getCurrentQRSize();
-    const qrTextAbove = document.getElementById('qr-text-above').value || 'Scan to Order';
-    const qrTextBelow = document.getElementById('qr-text-below').value || 'Let us know how we did!';
     const qrAutoPrint = document.getElementById('qr-auto-print').checked || false;
     const qrBluetoothDevice = window.selectedBluetoothDevices ? window.selectedBluetoothDevices.qr : null;
     
@@ -358,8 +351,12 @@ async function saveQRCodeFormat() {
       bluetooth_device_name: qrBluetoothDevice?.name || null,
       settings: {
         code_size: qrSize,
-        text_above: qrTextAbove,
-        text_below: qrTextBelow,
+        sentence1_zh: document.getElementById('qr-sentence1-zh')?.value || '',
+        sentence1_en: document.getElementById('qr-sentence1-en')?.value || '',
+        sentence2_zh: document.getElementById('qr-sentence2-zh')?.value || '',
+        sentence2_en: document.getElementById('qr-sentence2-en')?.value || '',
+        sentence3_zh: document.getElementById('qr-sentence3-zh')?.value || '',
+        sentence3_en: document.getElementById('qr-sentence3-en')?.value || '',
         auto_print: qrAutoPrint
       }
     };
@@ -396,8 +393,7 @@ async function testPrintQRCode() {
       return;
     }
 
-    const qrTextAbove = document.getElementById('qr-text-above')?.value || 'Scan to Order';
-    const qrTextBelow = document.getElementById('qr-text-below')?.value || 'Let us know how we did!';
+    // No sentence variables needed — backend reads from its own settings
 
     // Get test print ESC/POS from backend (uses actual thermalPrinterService)
     const response = await fetch(`${API}/restaurants/${restaurantId}/test-print-qr`, {
@@ -1030,9 +1026,9 @@ async function saveQRPrinterConfiguration() {
 
     const qrPrinters = typeof getQRPrinterConfig === 'function' ? getQRPrinterConfig() : [];
     const qrSize = getCurrentQRSize();
-    const qrTextAbove = document.getElementById('qr-text-above')?.value || 'Scan to Order';
-    const qrTextBelow = document.getElementById('qr-text-below')?.value || '';
     const qrAutoPrint = document.getElementById('qr-auto-print')?.checked ?? false;
+
+    const getSentence = (id) => document.getElementById(id)?.value || '';
 
     const payload = {
       type: 'QR',
@@ -1040,8 +1036,12 @@ async function saveQRPrinterConfiguration() {
       settings: {
         printers: qrPrinters,
         code_size: qrSize,
-        text_above: qrTextAbove,
-        text_below: qrTextBelow,
+        sentence1_zh: getSentence('qr-sentence1-zh'),
+        sentence1_en: getSentence('qr-sentence1-en'),
+        sentence2_zh: getSentence('qr-sentence2-zh'),
+        sentence2_en: getSentence('qr-sentence2-en'),
+        sentence3_zh: getSentence('qr-sentence3-zh'),
+        sentence3_en: getSentence('qr-sentence3-en'),
         auto_print: qrAutoPrint
       }
     };
@@ -1065,8 +1065,12 @@ async function saveQRPrinterConfiguration() {
     if (!window.currentPrinterSettings) window.currentPrinterSettings = {};
     window.currentPrinterSettings.qr_printers = result.settings?.printers || qrPrinters;
     window.currentPrinterSettings.qr_code_size = result.settings?.code_size || qrSize;
-    window.currentPrinterSettings.qr_text_above = result.settings?.text_above || qrTextAbove;
-    window.currentPrinterSettings.qr_text_below = result.settings?.text_below || qrTextBelow;
+    window.currentPrinterSettings.qr_sentence1_zh = result.settings?.sentence1_zh || getSentence('qr-sentence1-zh');
+    window.currentPrinterSettings.qr_sentence1_en = result.settings?.sentence1_en || getSentence('qr-sentence1-en');
+    window.currentPrinterSettings.qr_sentence2_zh = result.settings?.sentence2_zh || getSentence('qr-sentence2-zh');
+    window.currentPrinterSettings.qr_sentence2_en = result.settings?.sentence2_en || getSentence('qr-sentence2-en');
+    window.currentPrinterSettings.qr_sentence3_zh = result.settings?.sentence3_zh || getSentence('qr-sentence3-zh');
+    window.currentPrinterSettings.qr_sentence3_en = result.settings?.sentence3_en || getSentence('qr-sentence3-en');
     window.currentPrinterSettings.qr_auto_print = result.settings?.auto_print ?? qrAutoPrint;
 
     updateStatusCards();
