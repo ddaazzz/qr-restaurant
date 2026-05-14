@@ -950,26 +950,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             const { BleManager } = require('react-native-ble-plx');
             const manager = new BleManager();
 
-            const sessionDate = new Date(newSession.started_at);
-            const startTimeStr = sessionDate.toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            });
-
-            const receiptData = {
-              restaurantName: restaurantName || 'Restaurant',
-              tableNumber: table.name,
-              pax: newSession.pax,
-              startTime: startTimeStr,
-              qrCode: `${getQrBaseUrl()}/${qrToken}`,
-              printerPaperWidth: printerSettings?.printer_paper_width || 80,
-            };
-
-            await thermalPrinterService.sendToBluetooth(
+            // Use backend-generated ESC/POS (already has correct format, language, sentences)
+            await thermalPrinterService.sendEscposBase64ToBluetooth(
               manager,
               printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
-              receiptData,
+              printRes.data.bluetoothPayload.data.escposBase64,
               30000
             );
 
@@ -1864,28 +1849,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             const { BleManager } = require('react-native-ble-plx');
             const manager = new BleManager();
             
-            // Format start time
-            const sessionDate = new Date(selectedSession.started_at);
-            const startTimeStr = sessionDate.toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
-              minute: '2-digit',
-              hour12: true 
-            });
-            
-            // Send to printer using thermalPrinterService
-            const receiptData = {
-              restaurantName: restaurantName || 'Restaurant',
-              tableNumber: selectedTable.name,
-              pax: selectedSession.pax,
-              startTime: startTimeStr,
-              qrCode: `${getQrBaseUrl()}/${qrToken}`,
-              printerPaperWidth: printerSettings?.printer_paper_width || 80,
-            };
-            
-            await thermalPrinterService.sendToBluetooth(
+            // Use backend-generated ESC/POS (already has correct format, language, sentences)
+            await thermalPrinterService.sendEscposBase64ToBluetooth(
               manager,
               printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
-              receiptData,
+              printRes.data.bluetoothPayload.data.escposBase64,
               30000
             );
             
@@ -2156,81 +2124,29 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             }
           }
         } 
-        // Handle Bluetooth printing
-        else if (printRes.data.bluetoothDevice) {
-          console.log('[PrintBill] Initiating Bluetooth printing to:', printRes.data.bluetoothDevice);
-          console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
+        // Handle Bluetooth printing (backend returns bluetoothPayload with pre-generated ESC/POS)
+        else if (printRes.data.bluetoothPayload) {
+          console.log('[PrintBill] Initiating Bluetooth printing to:', printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceName);
           
           if (!autoPrint) {
             Alert.alert('Printing...', 'Sending receipt to Bluetooth printer...');
           }
           
           try {
-            const device = printRes.data.bluetoothDevice;
-            
-            // Import BleManager for Bluetooth printing
-            let BleManager: any = null;
-            try {
-              const ble = require('react-native-ble-plx');
-              BleManager = ble.BleManager;
-            } catch (e) {
-              throw new Error('Bluetooth not available on this device');
-            }
-
-            if (!BleManager) {
-              throw new Error('BleManager not available');
-            }
-
+            const { BleManager } = require('react-native-ble-plx');
             const manager = new BleManager();
-            
-            // Wait for BLE to be ready
-            await new Promise<void>((resolve) => {
-              let attempts = 0;
-              const checkState = async () => {
-                try {
-                  const state = await manager.state();
-                  if (state === 'PoweredOn') {
-                    resolve();
-                  } else if (++attempts < 10) {
-                    setTimeout(checkState, 200);
-                  } else {
-                    resolve();
-                  }
-                } catch (e) {
-                  if (++attempts < 10) setTimeout(checkState, 200);
-                  else resolve();
-                }
-              };
-              checkState();
-            });
 
-            console.log('[PrintBill] BLE ready, preparing thermal print data');
-            
-            // Prepare receipt data for thermal printer
-            const receiptData = {
-              orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
-              tableNumber: selectedTable?.name || 'Receipt',
-              items: sessionBill.items.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price_cents,
-              })),
-              subtotal: sessionBill.subtotal_cents,
-              serviceCharge: sessionBill.service_charge_cents || 0,
-              total: sessionBill.total_cents,
-              timestamp: new Date().toLocaleTimeString(),
-              restaurantName: 'Restaurant',
-            };
-
-            console.log('[PrintBill] Sending thermal print data to:', device.id);
-            
-            // Send to thermal printer using ESC/POS commands
-            // Use 30 second timeout for authentication and printing
-            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData, 30000);
+            // Use backend-generated ESC/POS (already has correct format, language, restaurant info)
+            await thermalPrinterService.sendEscposBase64ToBluetooth(
+              manager,
+              printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
+              printRes.data.bluetoothPayload.data.escposBase64,
+              30000
+            );
             
             console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
-              Alert.alert('Printed', `Bill sent to printer "${device.name}"`);
+              Alert.alert('Printed', `Bill sent to printer "${printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceName}"`);
             }
           } catch (bluetoothErr: any) {
             console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
