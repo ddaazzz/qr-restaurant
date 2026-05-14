@@ -240,7 +240,7 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
     // Get restaurant info and order details
     const [restaurantResult, orderResult, kitchenPrinterResult] = await Promise.all([
       pool.query(
-        `SELECT name FROM restaurants WHERE id = $1`,
+        `SELECT name, language_preference FROM restaurants WHERE id = $1`,
         [restaurantId]
       ),
       pool.query(
@@ -274,10 +274,12 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
     }
 
     const restaurantName = restaurantResult.rows[0].name;
+    const restaurantLang = restaurantResult.rows[0].language_preference || 'en';
     const kitchenRow = (kitchenPrinterResult.rowCount ?? 0) > 0
       ? kitchenPrinterResult.rows[0]
       : { printer_type: 'none', settings: {} };
     const kitchenSettings: Record<string, any> = kitchenRow.settings || {};
+    const kitchenFontLarge = kitchenSettings.font_size !== 'small';
     const items = orderResult.rows;
     const tableNumber = items[0]?.table_name || "To-Go";
     const timestamp = new Date(items[0]?.created_at || Date.now()).toLocaleTimeString();
@@ -357,6 +359,8 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
           orderNumber: String(orderId), tableNumber,
           items: routedItems.map(i => ({ name: i.item_name, quantity: i.quantity, variants: i.variants || undefined })),
           timestamp, restaurantName,
+          fontSizeLarge: kitchenFontLarge,
+          language: restaurantLang,
         };
 
         try {
@@ -410,6 +414,8 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
       })),
       timestamp,
       restaurantName,
+      fontSizeLarge: kitchenFontLarge,
+      language: restaurantLang,
     };
 
     const payload = {
@@ -514,12 +520,13 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
   try {
     // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name, phone, address FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].phone || '') : '';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].address || '') : '';
+    const restaurantLangQr = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
     // Get QR sentence customization from database
     let qrSentence1 = '';
@@ -564,6 +571,7 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
       qrSentence1,
       qrSentence2,
       qrSentence3,
+      language: restaurantLangQr,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -613,12 +621,13 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
   try {
     // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name, phone, address FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].phone || '') : '';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].address || '') : '';
+    const restaurantLangQr = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
     // Get QR sentence customization from database
     let qrSentence1 = '請掃描二維碼落單～\nPlease scan the QR code to place an order';
@@ -659,6 +668,7 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
       qrSentence1,
       qrSentence2,
       qrSentence3,
+      language: restaurantLangQr,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -692,12 +702,13 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
   try {
     // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name, address, phone FROM restaurants WHERE id = $1`,
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const restaurantLangBill = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
     // Get bill format settings from database
     let billHeaderText = headerText;
@@ -735,7 +746,8 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
       timestamp: new Date().toLocaleString(),
       printerPaperWidth: 80,
       billHeaderText: billHeaderText,
-      billFooterText: billFooterText
+      billFooterText: billFooterText,
+      language: restaurantLangBill,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -793,6 +805,7 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const restaurantLangBill = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
     // Get bill format settings
     let billHeaderText = 'Thank You';
@@ -830,7 +843,8 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
       timestamp: new Date().toLocaleString(),
       printerPaperWidth: 80,
       billHeaderText: billHeaderText,
-      billFooterText: billFooterText
+      billFooterText: billFooterText,
+      language: restaurantLangBill,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -875,16 +889,18 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
     let restaurantName = '';
     let restaurantPhone = '';
     let restaurantAddress = '';
+    let restaurantLangQr = 'en';
 
     // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name, phone, address FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (((restaurantResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantResult.rows[0].name;
       restaurantPhone = restaurantResult.rows[0].phone || '';
       restaurantAddress = restaurantResult.rows[0].address || '';
+      restaurantLangQr = restaurantResult.rows[0].language_preference || 'en';
     }
 
     // If not found in printers table, try old schema on restaurants table (fallback)
@@ -983,6 +999,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
         ...(orderNumber && { orderNumber }),
         ...(orderType && { orderType }),
         printerPaperWidth: 80,
+        language: restaurantLangQr,
         ...sentences,
       };
       const escpos = generateESCPOS(receiptData);
@@ -1149,6 +1166,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
         qrSentence1: qrSentence1Bt,
         qrSentence2: qrSentence2Bt,
         qrSentence3: qrSentence3Bt,
+        language: restaurantLangQr,
       };
       
       const escposCommands = generateESCPOS(receiptData);
@@ -1199,6 +1217,7 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
         qrSentence1: `${netSettings.sentence1_zh || '請掃描二維碼落單～'}\n${netSettings.sentence1_en || 'Please scan the QR code to place an order'}`,
         qrSentence2: `${netSettings.sentence2_zh || '可自行選取英語或粵語版本'}\n${netSettings.sentence2_en || 'Available in English or Chinese version'}`,
         qrSentence3: `${netSettings.sentence3_zh || '如需要協助，請通知員工！'}\n${netSettings.sentence3_en || 'Please tell our staff if you need any assistance'}`,
+        language: restaurantLangQr,
       };
       const escpos = generateESCPOS(qrReceiptData);
       const escposBase64 = Buffer.from(escpos).toString('base64');
@@ -1256,16 +1275,18 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
     let restaurantName = '';
     let restaurantAddress = '';
     let restaurantPhone = '';
+    let restaurantLangBill = 'en';
 
     // Get restaurant info (name, address, phone)
     const restaurantMetaResult = await pool.query(
-      `SELECT name, address, phone FROM restaurants WHERE id = $1`,
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (((restaurantMetaResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantMetaResult.rows[0].name;
       restaurantAddress = restaurantMetaResult.rows[0].address || '';
       restaurantPhone = restaurantMetaResult.rows[0].phone || '';
+      restaurantLangBill = restaurantMetaResult.rows[0].language_preference || 'en';
     }
 
     // If not found in printers table, try old schema on restaurants table (fallback)
@@ -1349,6 +1370,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         billHeaderText: mBillHeaderText,
         billFooterText: mBillFooterText,
         billFontSize: mBillFontSize,
+        language: restaurantLangBill,
       };
       const billEscpos = generateESCPOS(billReceiptData);
       const billEscposBase64 = Buffer.from(billEscpos).toString('base64');
@@ -1460,6 +1482,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         billHeaderText,
         billFooterText,
         billFontSize,
+        language: restaurantLangBill,
       };
 
       const escpos = generateESCPOS(networkReceiptData);
@@ -1534,6 +1557,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         billHeaderText,
         billFooterText,
         billFontSize: billFontSizeBt,
+        language: restaurantLangBill,
       };
       
       const escposCommands = generateESCPOS(receiptData);

@@ -255,45 +255,33 @@
       <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-kitchen-format">🍳 Kitchen Order Format</h3>
       
       <div class="printer-two-col">
-        <!-- Preview only in format section -->
+        <!-- Font Size Setting -->
+        <div>
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-kitchen-font-size">Font Size</label>
+            <div style="display: flex; gap: 8px;">
+              <button id="kitchen-font-large" onclick="setKitchenFontSize('large')" style="padding: 8px 20px; border-radius: 6px; border: 2px solid #d1d5db; cursor: pointer; font-weight: 600;" data-i18n="admin.printer-font-large">Large</button>
+              <button id="kitchen-font-small" onclick="setKitchenFontSize('small')" style="padding: 8px 20px; border-radius: 6px; border: 2px solid #d1d5db; cursor: pointer; font-weight: 600;" data-i18n="admin.printer-font-small">Small</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Preview -->
         <div>
           <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #1f2937;" data-i18n="admin.printer-kitchen-preview">📄 Kitchen Preview</label>
-          <div style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
-            <div style="border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
-              <p style="margin: 0; font-weight: bold; font-size: 13px; color: #1f2937;">La Cave Restaurant</p>
-              <p style="margin: 2px 0 0 0; font-size: 10px; color: #6b7280;">KITCHEN TICKET</p>
+          <div id="kitchen-preview" style="border: 2px dashed #d1d5db; border-radius: 6px; padding: 16px; background: white; text-align: center; font-family: monospace; font-size: 11px; line-height: 1.6;">
+            <div style="font-size: 16px; font-weight: bold;">廚打</div>
+            <div style="display: flex; justify-content: space-between; font-weight: bold; margin: 4px 0;">
+              <span>桌號:01</span><span>No:#95</span>
             </div>
-            
-            <div style="text-align: left; margin: 8px 0; font-size: 11px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span style="font-weight: bold;">TABLE:</span>
-                <span>T02</span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="font-weight: bold;">TIME:</span>
-                <span>8:30 PM</span>
-              </div>
-            </div>
-            
-            <div style="border-bottom: 1px dashed #000; margin: 8px 0; padding-bottom: 8px;">
-              <p style="margin: 0; font-weight: bold; color: #059669;">Order #1234</p>
-            </div>
-            
-            <div style="text-align: left; margin: 8px 0;">
-              <div style="font-weight: bold; margin-bottom: 4px; color: #1f2937;">Pad Thai</div>
-              <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px;">No garlic, extra vegetables</div>
-              <div style="font-size: 10px; margin-bottom: 8px;">Qty: 2</div>
-              
-              <div style="font-weight: bold; margin-top: 6px; margin-bottom: 4px; color: #1f2937;">Green Curry</div>
-              <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px;">Medium spicy</div>
-              <div style="font-size: 10px;">Qty: 1</div>
-            </div>
-            
-            <div style="border-top: 1px dashed #000; margin-top: 8px; padding-top: 8px;">
-              <p style="margin: 0; font-size: 10px; color: #6b7280;">---</p>
-            </div>
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div style="text-align: left; font-size: 10px; color: #6b7280;">數量&nbsp;&nbsp;商品名稱</div>
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div style="text-align: left; font-size: 13px; font-weight: bold;">1&nbsp;&nbsp;香茅豬扒雞翼飯</div>
+            <div style="text-align: left; font-size: 11px;">-凍咖啡 少甜，少冰</div>
+            <div style="text-align: left; font-size: 11px;">-少甜</div>
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div style="font-size: 10px; color: #6b7280;">2024-08-22 16:00:12</div>
           </div>
         </div>
       </div>

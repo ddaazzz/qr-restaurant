@@ -403,80 +403,128 @@ export interface KitchenOrderData {
   items: Array<{ name: string; quantity: number; variants?: string; notes?: string }>;
   timestamp: string;
   restaurantName?: string;
+  fontSizeLarge?: boolean; // true = big font (default), false = small/compact
+  language?: string;       // 'en' | 'zh'
 }
 
 /**
- * Generate ESC/POS commands for kitchen order tickets
- * Optimized for TM-U220 Impact Printer (dot-matrix)
+ * Generate ESC/POS commands for kitchen order tickets.
+ *
+ * Format (matching image reference):
+ *   [CENTER] "廚打" / "Kitchen Order"
+ *   [LEFT] "桌號:XX" / "Table:XX"  [RIGHT] "No:#YY"
+ *   -------------------------------- (dotted)
+ *   [SMALL] "數量  商品名稱" / "Qty  Item"
+ *   -------------------------------- (dotted)
+ *   For each item:
+ *     [BIG] quantity  item name
+ *     [NORMAL] -variant1; -variant2 …
+ *   -------------------------------- (dotted)
+ *   order time
  */
 export function generateKitchenOrderESCPOS(data: KitchenOrderData): Uint8Array {
   const commands: number[] = [];
-  const sep = '================================';
-  const lineWidth = 33;
+  const isZh = data.language === 'zh';
+  const large = data.fontSizeLarge !== false; // default large
+
+  // ESC/POS style bytes
+  const NORMAL  = [27, 33, 0];   // normal size
+  const BOLD    = [27, 33, 8];   // bold, normal size
+  const DBLH    = [27, 33, 16];  // double height
+  const DBLHW   = [27, 33, 48];  // double height + width (largest)
+  const CENTER  = [27, 97, 1];
+  const LEFT    = [27, 97, 0];
+  const SMALL   = [27, 33, 0];   // for small-mode, same as normal
+
+  // In small mode everything shrinks: items stay normal, variants are compressed
+  const itemStyle   = large ? DBLH  : BOLD;
+  const variantStyle = large ? BOLD  : NORMAL;
+
+  const sep  = '--------------------------------';
+  const SEP  = '================================';
+
+  // Labels
+  const L = {
+    header:  isZh ? '廚打' : 'Kitchen Order',
+    table:   isZh ? '桌號:' : 'Table:',
+    no:      'No:',
+    qtyItem: isZh ? '數量  商品名稱' : 'Qty  Item',
+  };
 
   commands.push(27, 64); // ESC @ - Initialize
 
-  commands.push(27, 97, 1); // Center
-  commands.push(27, 33, 8); // Bold
-  appendText(commands, 'KITCHEN ORDER');
-  commands.push(27, 33, 0); // Bold off
-  commands.push(10);
+  // ── Row 1: Header "廚打" / "Kitchen Order" ──────────────────────────
+  commands.push(...CENTER);
+  commands.push(...DBLHW);
+  appendText(commands, L.header);
+  commands.push(...NORMAL);
+  commands.push(10); // LF
 
+  // ── Row 2: Table : 01  (left)   No: #95 (right) ─────────────────────
+  // Simulate columns with padding — 32-char wide paper
+  commands.push(...LEFT);
+  commands.push(...BOLD);
+  const tableStr = `${L.table}${data.tableNumber}`;
+  const orderStr = `${L.no}#${data.orderNumber}`;
+  const gap = Math.max(1, 32 - tableStr.length - orderStr.length);
+  appendText(commands, tableStr + ' '.repeat(gap) + orderStr);
+  commands.push(...NORMAL);
+  commands.push(10); // LF
+
+  // ── Dotted separator ─────────────────────────────────────────────────
   appendText(commands, sep);
   commands.push(10);
 
-  commands.push(27, 97, 0); // Left align
+  // ── Column header: "數量  商品名稱" (small) ──────────────────────────
+  commands.push(...SMALL);
+  appendText(commands, L.qtyItem);
+  commands.push(...NORMAL);
   commands.push(10);
 
-  commands.push(27, 33, 8);
-  appendText(commands, `Order #${data.orderNumber}`);
-  commands.push(27, 33, 0);
-  commands.push(10);
-
-  commands.push(27, 33, 8);
-  appendText(commands, `Table: ${data.tableNumber}`);
-  commands.push(27, 33, 0);
-  commands.push(10);
-
-  appendText(commands, `Time:  ${data.timestamp}`);
-  commands.push(10, 10);
-
+  // ── Dotted separator ─────────────────────────────────────────────────
   appendText(commands, sep);
   commands.push(10);
 
+  // ── Items ─────────────────────────────────────────────────────────────
   for (const item of data.items) {
-    commands.push(10);
-    commands.push(27, 33, 8);
-    const itemLine = `${item.quantity}x ${item.name}`;
-    appendText(commands, itemLine.length > lineWidth ? itemLine.substring(0, lineWidth) : itemLine);
-    commands.push(27, 33, 0);
+    // Item line: big font
+    commands.push(...itemStyle);
+    appendText(commands, `${item.quantity}  ${item.name}`);
+    commands.push(...NORMAL);
     commands.push(10);
 
+    // Variants/combos: each sub-item on own line with leading dash
     if (item.variants) {
-      const variantLine = `   ${item.variants}`;
-      appendText(commands, variantLine.length > lineWidth ? variantLine.substring(0, lineWidth) : variantLine);
-      commands.push(10);
+      // variants may be semicolon-separated or newline-separated
+      const parts = item.variants.split(/[;\n]/).map(s => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        commands.push(...variantStyle);
+        appendText(commands, `-${part}`);
+        commands.push(...NORMAL);
+        commands.push(10);
+      }
     }
 
     if (item.notes) {
-      const noteLine = `   * ${item.notes}`;
-      appendText(commands, noteLine.length > lineWidth ? noteLine.substring(0, lineWidth) : noteLine);
+      commands.push(...variantStyle);
+      appendText(commands, `-${item.notes}`);
+      commands.push(...NORMAL);
       commands.push(10);
     }
   }
 
-  commands.push(10);
+  // ── Final dotted separator ───────────────────────────────────────────
   appendText(commands, sep);
-  commands.push(10, 10);
+  commands.push(10);
 
-  if (data.restaurantName) {
-    commands.push(27, 97, 1);
-    appendText(commands, data.restaurantName);
-    commands.push(10);
-  }
+  // ── Timestamp ────────────────────────────────────────────────────────
+  commands.push(...SMALL);
+  appendText(commands, data.timestamp);
+  commands.push(...NORMAL);
+  commands.push(10);
 
-  commands.push(10, 10, 10, 10, 10); // 5 line feeds
-  commands.push(29, 86, 1); // GS V 1 - Partial cut
+  commands.push(10, 10, 10, 10); // feed
+  commands.push(27, 105); // ESC i - Full cut
 
   return new Uint8Array(commands);
 }

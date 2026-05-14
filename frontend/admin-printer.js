@@ -1140,6 +1140,29 @@ async function saveBillPrinterConfiguration() {
   }
 }
 /**
+ * Kitchen font size UI helpers
+ */
+function setKitchenFontSize(size) {
+  const large = document.getElementById('kitchen-font-large');
+  const small = document.getElementById('kitchen-font-small');
+  if (large) large.style.borderColor = size === 'large' ? '#2563eb' : '#d1d5db';
+  if (large) large.style.background = size === 'large' ? '#eff6ff' : '';
+  if (small) small.style.borderColor = size === 'small' ? '#2563eb' : '#d1d5db';
+  if (small) small.style.background = size === 'small' ? '#eff6ff' : '';
+}
+
+function getCurrentKitchenFontSize() {
+  const large = document.getElementById('kitchen-font-large');
+  return large && large.style.borderColor === 'rgb(37, 99, 235)' ? 'large' : 'small';
+}
+
+function loadKitchenFormatUI() {
+  const size = window.currentPrinterSettings?.kitchen_font_size || 'large';
+  setKitchenFontSize(size);
+  return Promise.resolve();
+}
+
+/**
  * Save Kitchen Order Printer Configuration (Multi-Printer with Category Routing)
  */
 async function saveKitchenPrinterConfiguration() {
@@ -1183,13 +1206,14 @@ async function saveKitchenPrinterConfiguration() {
     const autoPrint = autoPrintEl ? autoPrintEl.checked : false;
 
     // Store the array of kitchen printers in the settings JSON field
-    // Kitchen type in printers table stores: { printers: [...], auto_print: ... }
+    // Kitchen type in printers table stores: { printers: [...], auto_print: ..., font_size: ... }
     const payload = {
       type: 'Kitchen',
       printer_type: 'none',  // Multi-printer config indicated by presence of printers array in settings
       settings: {
         printers: printersToSave,
-        auto_print: autoPrint
+        auto_print: autoPrint,
+        font_size: getCurrentKitchenFontSize(),
       }
     };
 
@@ -1217,6 +1241,7 @@ async function saveKitchenPrinterConfiguration() {
     if (result.settings) {
       window.currentPrinterSettings.kitchen_printers = result.settings.printers || [];
       window.currentPrinterSettings.kitchen_auto_print = result.settings.auto_print || false;
+      window.currentPrinterSettings.kitchen_font_size = result.settings.font_size || 'large';
       console.log('[admin-printer.js] Updated kitchen_printers:', window.currentPrinterSettings.kitchen_printers);
     }
     
