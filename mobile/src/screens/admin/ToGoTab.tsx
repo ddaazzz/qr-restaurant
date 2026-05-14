@@ -10,10 +10,10 @@ import {
   Alert,
   TouchableWithoutFeedback,
   Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CARD_WIDTH = (SCREEN_WIDTH - 8 * 5) / 4; // 4 cols with 8px margins and gaps
 import Ionicons from '@react-native-vector-icons/ionicons';
 import * as Print from 'expo-print';
 import { Buffer } from 'buffer';
@@ -84,6 +84,9 @@ function sendEscPosToNetworkPrinter(host: string, port: number, data: Uint8Array
 export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   const { showToast } = useToast();
   const { t } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
+  const numCols = windowWidth >= 1200 ? 6 : windowWidth >= 900 ? 5 : windowWidth >= 600 ? 4 : windowWidth >= 400 ? 3 : 2;
+  const cardWidth = (windowWidth - 8 * (numCols + 1)) / numCols;
   const [filter, setFilter] = useState<FilterType>('pending');
   const [timeRange, setTimeRange] = useState<TimeRangeType>('today');
   const [showTimeRangeMenu, setShowTimeRangeMenu] = useState(false);
@@ -273,7 +276,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
     return `${date} ${time}`;
   };
 
-  const renderCard = ({ item }: { item: ToGoOrder }) => {
+  const renderCard = ({ item, cardWidth: cw }: { item: ToGoOrder; cardWidth?: number }) => {
     const isReady = !!item.pickup_ready_at;
     const isExpanded = item.id === expandedOrderId;
     const isEatHere = item.order_type === 'counter';
@@ -289,7 +292,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
 
     return (
       <TouchableOpacity
-        style={[styles.card, isReady && styles.cardReady, isExpanded && styles.cardExpanded]}
+        style={[styles.card, isReady && styles.cardReady, isExpanded && styles.cardExpanded, cw ? { width: cw } : undefined]}
         onPress={() => handleCardPress(item)}
         activeOpacity={0.85}
       >
@@ -479,10 +482,10 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
         <FlatList
           data={orders}
           keyExtractor={item => String(item.id)}
-          renderItem={renderCard}
-          numColumns={4}
-          key="grid-2"
-          columnWrapperStyle={styles.columnWrapper}
+          renderItem={({ item }) => renderCard({ item, cardWidth })}
+          numColumns={numCols}
+          key={`grid-${numCols}`}
+          columnWrapperStyle={numCols > 1 ? styles.columnWrapper : undefined}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -540,7 +543,6 @@ const styles = StyleSheet.create({
 
   card: {
     flex: 1,
-    width: CARD_WIDTH,
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 10,
