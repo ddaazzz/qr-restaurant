@@ -241,7 +241,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [crmHasMore, setCrmHasMore] = useState(false);
   const [crmProfileLoading, setCrmProfileLoading] = useState(false);
   const [selectedCrmProfile, setSelectedCrmProfile] = useState<CrmCustomerProfile | null>(null);
-  const [crmError, setCrmError] = useState<string | null>(null);
+  const [crmError, setCrmError] = useState<string | null>(null);           // list-level error
+  const [crmProfileError, setCrmProfileError] = useState<string | null>(null); // profile-level error
   const [crmOrderDetail, setCrmOrderDetail] = useState<any | null>(null);
   const [crmOrderDetailLoading, setCrmOrderDetailLoading] = useState(false);
   const [showCrmEditModal, setShowCrmEditModal] = useState(false);
@@ -764,13 +765,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const openCrmProfile = async (customerId: number) => {
     try {
       setCrmProfileLoading(true);
-      setCrmError(null);
+      setCrmProfileError(null);
       setSelectedCrmProfile(null);
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
       setSelectedCrmProfile(res.data);
     } catch (err: any) {
       console.error('[Settings] Failed to fetch CRM profile:', err);
-      setCrmError(err.response?.data?.error || 'Failed to load customer profile');
+      const msg = err.response?.data?.error || 'Failed to load customer profile';
+      setCrmProfileError(msg);
+      Alert.alert('Error', msg);
     } finally {
       setCrmProfileLoading(false);
     }

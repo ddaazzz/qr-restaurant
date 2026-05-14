@@ -114,9 +114,8 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
   // CRM customer search state
   const [crmSearchResults, setCrmSearchResults] = useState<Array<{ id: number; name: string; phone: string; email: string }>>([]);
   const [showCrmDropdown, setShowCrmDropdown] = useState(false);
+  const [crmCustomerSelected, setCrmCustomerSelected] = useState(false);
   const crmSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Form state
   const [formData, setFormData] = useState({
     guest_name: '',
     phone: '',
@@ -342,6 +341,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
       status: 'confirmed',
       notes: '',
     });
+    setCrmCustomerSelected(false);
     setFormError(null);
     setShowBookingModal(true);
   };
@@ -361,6 +361,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
       status: booking.status,
       notes: (booking as any).notes || '',
     });
+    setCrmCustomerSelected(false);
     setFormError(null);
     setShowBookingModal(true);
   };
@@ -371,6 +372,7 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
     setFormError(null);
     setShowCrmDropdown(false);
     setCrmSearchResults([]);
+    setCrmCustomerSelected(false);
     if (crmSearchTimer.current) clearTimeout(crmSearchTimer.current);
   };
 
@@ -398,8 +400,14 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
 
   const selectCrmCustomer = (customer: { id: number; name: string; phone: string; email: string }) => {
     setFormData((prev) => ({ ...prev, guest_name: customer.name, phone: customer.phone || '', email: customer.email || '' }));
+    setCrmCustomerSelected(true);
     setShowCrmDropdown(false);
     setCrmSearchResults([]);
+  };
+
+  const clearCrmSelection = () => {
+    setFormData((prev) => ({ ...prev, phone: '', email: '' }));
+    setCrmCustomerSelected(false);
   };
 
   const saveBooking = async () => {
@@ -672,9 +680,20 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                     </View>
                     <View style={styles.detailGridItem}>
                       <Text style={styles.detailLabel}>{t('bookings.date')}</Text>
+                      <Text style={styles.detailValue}>
+                        {(() => {
+                          const d = selectedBookingDetail.date || (selectedBookingDetail as any).booking_date || '';
+                          if (!d) return '—';
+                          const dt = new Date(d.includes('T') ? d : d + 'T00:00:00');
+                          return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                        })()}
+                      </Text>
                     </View>
                     <View style={styles.detailGridItem}>
                       <Text style={styles.detailLabel}>{t('bookings.time')}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBookingDetail.time || (selectedBookingDetail as any).booking_time || '—'}
+                      </Text>
                     </View>
                     {(selectedBookingDetail as any).notes ? (
                       <View style={[styles.detailGridItem, { width: '100%' }]}>
@@ -971,15 +990,23 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                 </View>
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.phone-label')}</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder={t('bookings.phone-placeholder')}
-                    keyboardType="phone-pad"
-                    value={formData.phone}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, phone: text })
-                    }
-                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TextInput
+                      style={[styles.formInput, { flex: 1 }, crmCustomerSelected && { backgroundColor: '#f0f9ff', color: '#374151' }]}
+                      placeholder={t('bookings.phone-placeholder')}
+                      keyboardType="phone-pad"
+                      value={formData.phone}
+                      editable={!crmCustomerSelected}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, phone: text })
+                      }
+                    />
+                    {crmCustomerSelected && (
+                      <TouchableOpacity onPress={clearCrmSelection} style={{ marginLeft: 6, padding: 4 }}>
+                        <Text style={{ color: '#9ca3af', fontSize: 16 }}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               </View>
 
@@ -988,11 +1015,12 @@ export const BookingsTab = forwardRef<BookingsTabRef, { restaurantId: string; se
                 <View style={[styles.formGroup, { flex: 1 }]}>
                   <Text style={styles.formLabel}>{t('bookings.email-label')}</Text>
                   <TextInput
-                    style={styles.formInput}
+                    style={[styles.formInput, crmCustomerSelected && { backgroundColor: '#f0f9ff', color: '#374151' }]}
                     placeholder={t('bookings.email-placeholder')}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={formData.email}
+                    editable={!crmCustomerSelected}
                     onChangeText={(text) =>
                       setFormData({ ...formData, email: text })
                     }

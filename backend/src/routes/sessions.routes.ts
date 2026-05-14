@@ -185,6 +185,16 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       );
     }
 
+    // Auto-upsert CRM customer when session is started with customer info (e.g. from booking)
+    if (finalCustomerName) {
+      upsertCrmCustomer({
+        restaurantId: String(table.restaurant_id),
+        name:  finalCustomerName,
+        phone: finalCustomerPhone || null,
+        email: null,
+      }).catch((e: any) => console.warn('[Sessions] CRM upsert on start failed:', e?.message));
+    }
+
     res.status(201).json({ ...insertRes.rows[0], order_id: orderRes.rows[0].id, restaurant_order_number: orderRes.rows[0].restaurant_order_number });
   } catch (err) {
     await client.query("ROLLBACK");

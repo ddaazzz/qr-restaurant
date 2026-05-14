@@ -334,6 +334,7 @@ function openNewBookingModal() {
   
   const form = document.getElementById('booking-form');
   form.reset();
+  clearBookingCrmSelection();
   
   document.getElementById('booking-date').value = formatDateISO(selectedDate);
   document.getElementById('booking-time').value = '19:00';
@@ -353,6 +354,7 @@ function editBooking(bookingId) {
   document.getElementById('booking-guest-name').value = booking.guest_name;
   document.getElementById('booking-phone').value = booking.phone || '';
   document.getElementById('booking-email').value = booking.email || '';
+  clearBookingCrmSelection(); // reset readonly state when editing existing booking
   document.getElementById('booking-pax').value = booking.pax;
   document.getElementById('booking-table').value = booking.table_id;
   document.getElementById('booking-date').value = booking.booking_date;
@@ -366,6 +368,7 @@ function editBooking(bookingId) {
 function closeBookingModal() {
   document.getElementById('booking-modal').classList.add('hidden');
   editingBookingId = null;
+  clearBookingCrmSelection();
 }
 
 function saveBooking(e) {
@@ -808,10 +811,43 @@ function selectBookingCustomer(name, phone, email) {
   var phoneEl = document.getElementById('booking-phone');
   var emailEl = document.getElementById('booking-email');
   if (nameEl) nameEl.value = name;
-  if (phoneEl && phone) phoneEl.value = phone;
-  if (emailEl && email) emailEl.value = email;
+  if (phoneEl) {
+    phoneEl.value = phone || '';
+    phoneEl.readOnly = !!(phone);
+    phoneEl.style.background = phone ? '#f0f9ff' : '';
+    phoneEl.style.color = phone ? '#374151' : '';
+  }
+  if (emailEl) {
+    emailEl.value = email || '';
+    emailEl.readOnly = !!(email);
+    emailEl.style.background = email ? '#f0f9ff' : '';
+    emailEl.style.color = email ? '#374151' : '';
+  }
+
+  // Show a small "clear CRM" badge next to the phone field
+  var existingBadge = document.getElementById('crm-autofill-badge');
+  if (existingBadge) existingBadge.remove();
+  if (phone || email) {
+    var badge = document.createElement('div');
+    badge.id = 'crm-autofill-badge';
+    badge.style.cssText = 'font-size:11px;color:#6b7280;margin-top:4px;display:flex;align-items:center;gap:6px;';
+    badge.innerHTML = '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:999px;font-size:11px;">From CRM</span>'
+      + '<button type="button" onclick="clearBookingCrmSelection()" style="font-size:11px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:0;">✕ Clear</button>';
+    var phoneGroup = phoneEl ? phoneEl.closest('div') || phoneEl.parentElement : null;
+    if (phoneGroup) phoneGroup.appendChild(badge);
+  }
+
   var suggestions = document.getElementById('booking-customer-suggestions');
   if (suggestions) suggestions.style.display = 'none';
+}
+
+function clearBookingCrmSelection() {
+  var phoneEl = document.getElementById('booking-phone');
+  var emailEl = document.getElementById('booking-email');
+  if (phoneEl) { phoneEl.readOnly = false; phoneEl.style.background = ''; phoneEl.style.color = ''; phoneEl.value = ''; }
+  if (emailEl) { emailEl.readOnly = false; emailEl.style.background = ''; emailEl.style.color = ''; emailEl.value = ''; }
+  var badge = document.getElementById('crm-autofill-badge');
+  if (badge) badge.remove();
 }
 
 // Hide suggestions when clicking outside

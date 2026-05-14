@@ -496,9 +496,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       } catch (e) {
         // non-critical
       }
+
+      return tableArray;
     } catch (err: any) {
       console.error('Error fetching table data:', err);
       setError(err.message || 'Failed to load tables');
+      return null;
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -992,16 +995,32 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     if (!bookingToStart) return;
     const { tableId, booking } = bookingToStart;
     try {
-      await apiClient.post(`/api/tables/${tableId}/sessions`, {
+      const sessionRes = await apiClient.post(`/api/tables/${tableId}/sessions`, {
         pax: booking.pax,
         booking_id: booking.id,
         customer_name: booking.guest_name,
         customer_phone: booking.phone || '',
       });
+      const newSessionId = sessionRes.data?.id;
       setShowBookingStartModal(false);
       setBookingToStart(null);
-      await loadTableData();
-      setSelectedTable(null);
+
+      // Reload table data, then navigate directly to the new session
+      const updatedTables = await loadTableData();
+      if (updatedTables && newSessionId) {
+        const table = updatedTables.find((t: any) => t.id === tableId);
+        if (table) {
+          const session = table.sessions?.find((s: any) => s.id === newSessionId)
+            || table.sessions?.[table.sessions.length - 1];
+          if (session) {
+            setSelectedTable(table);
+            setSelectedSession(session);
+            setCurrentView('sessionDetail');
+            return;
+          }
+        }
+      }
+      // Fallback: just refresh the grid
       setCurrentView('grid');
     } catch (err: any) {
       Alert.alert(t('common.error') || 'Error', err.response?.data?.error || 'Failed to start session');
