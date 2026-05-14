@@ -291,8 +291,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [bookingPax, setBookingPax] = useState('2');
   const [bookingTime, setBookingTime] = useState('18:00');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [cashReceivedAmount, setCashReceivedAmount] = useState('');
   const [discountAmount, setDiscountAmount] = useState('0');
   const [closeReason, setCloseReason] = useState('');
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+  const [paymentSuccessAmount, setPaymentSuccessAmount] = useState(0);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
   const [showCouponPicker, setShowCouponPicker] = useState(false);
@@ -1180,10 +1183,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     setShowCloseBillModal(false);
     setShowKPayModal(false);
     setPaymentMethod('cash');
+    setCashReceivedAmount('');
     setDiscountAmount('0');
     setCloseReason('');
     setSelectedCouponId(null);
     setCoupons([]);
+    setPaymentSuccessAmount(finalAmt);
+    setShowPaymentSuccess(true);
     await loadTableData();
     setCurrentView('grid');
   };
@@ -2803,6 +2809,31 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 </View>
               )}
 
+              {/* Cash received */}
+              {paymentMethod === 'cash' && (
+                <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  <Text style={{ fontWeight: '600', fontSize: 13, color: '#166534', marginBottom: 6 }}>{t('admin.cash-received')}</Text>
+                  <TextInput
+                    style={[styles.input, { marginBottom: 0, backgroundColor: '#fff' }]}
+                    keyboardType="decimal-pad"
+                    value={cashReceivedAmount}
+                    onChangeText={setCashReceivedAmount}
+                    placeholder="0.00"
+                  />
+                  {cashReceivedAmount !== '' && parseFloat(cashReceivedAmount) > 0 && (() => {
+                    const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
+                    const discountCents = getDiscountCents();
+                    const finalAmount = grandTotal - discountCents;
+                    const change = parseFloat(cashReceivedAmount) - finalAmount / 100;
+                    return (
+                      <Text style={{ fontSize: 13, color: change >= 0 ? '#166534' : '#dc2626', marginTop: 6, fontWeight: '600' }}>
+                        {t('admin.cash-change')}: ${change.toFixed(2)}
+                      </Text>
+                    );
+                  })()}
+                </View>
+              )}
+
               {/* Coupon Picker */}
               <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
               <TouchableOpacity
@@ -4055,6 +4086,30 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     </Text>
                   </View>
                 )}
+                {/* Cash received */}
+                {paymentMethod === 'cash' && (
+                  <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                    <Text style={{ fontWeight: '600', fontSize: 13, color: '#166534', marginBottom: 6 }}>{t('admin.cash-received')}</Text>
+                    <TextInput
+                      style={[styles.input, { marginBottom: 0, backgroundColor: '#fff' }]}
+                      keyboardType="decimal-pad"
+                      value={cashReceivedAmount}
+                      onChangeText={setCashReceivedAmount}
+                      placeholder="0.00"
+                    />
+                    {cashReceivedAmount !== '' && parseFloat(cashReceivedAmount) > 0 && (() => {
+                      const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
+                      const discountCents = getDiscountCents();
+                      const finalAmount = grandTotal - discountCents;
+                      const change = parseFloat(cashReceivedAmount) - finalAmount / 100;
+                      return (
+                        <Text style={{ fontSize: 13, color: change >= 0 ? '#166534' : '#dc2626', marginTop: 6, fontWeight: '600' }}>
+                          {t('admin.cash-change')}: ${change.toFixed(2)}
+                        </Text>
+                      );
+                    })()}
+                  </View>
+                )}
                 <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
                 <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowCouponPicker(!showCouponPicker)}>
                   <Text style={{ color: selectedCouponId ? '#333' : '#999' }}>
@@ -4636,6 +4691,25 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
           </View>
         </InputAccessoryView>
       )}
+
+      {/* Payment Success Popup */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showPaymentSuccess} animationType="fade" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 32, alignItems: 'center', width: 260, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#d1fae5', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="checkmark-circle" size={36} color="#10b981" />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 6 }}>{t('admin.payment-success')}</Text>
+            <Text style={{ fontSize: 22, fontWeight: '800', color: '#10b981', marginBottom: 4 }}>${(paymentSuccessAmount / 100).toFixed(2)}</Text>
+            <TouchableOpacity
+              style={{ marginTop: 20, paddingHorizontal: 32, paddingVertical: 10, backgroundColor: '#10b981', borderRadius: 8 }}
+              onPress={() => setShowPaymentSuccess(false)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );

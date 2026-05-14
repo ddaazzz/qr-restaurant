@@ -174,7 +174,7 @@ router.post("/restaurants/:restaurantId/bookings", requireFeature("bookings"), a
 // PATCH update booking status - ✅ MULTI-RESTAURANT SUPPORT
 router.patch("/bookings/:bookingId", async (req, res) => {
   const { bookingId } = req.params;
-  const { guest_name, phone, pax, table_id, booking_date, booking_time, status, notes, restaurantId, session_id } = req.body;
+  const { guest_name, phone, email, pax, table_id, booking_date, booking_time, status, notes, restaurantId, session_id } = req.body;
 
   if (!restaurantId) {
     return res.status(400).json({ error: "Restaurant ID is required" });
@@ -212,7 +212,10 @@ router.patch("/bookings/:bookingId", async (req, res) => {
       updates.push(`phone = $${paramCount++}`);
       values.push(phone);
     }
-    if (pax !== undefined) {
+    if (email !== undefined) {
+      updates.push(`email = $${paramCount++}`);
+      values.push(email);
+    }
       updates.push(`pax = $${paramCount++}`);
       values.push(pax);
     }

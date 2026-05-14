@@ -10,10 +10,12 @@ import {
   ScrollView,
   Modal,
   TouchableWithoutFeedback,
+  TextInput,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { apiClient } from '../../services/apiClient';
 import { useToast } from '../../components/ToastProvider';
+import { useTranslation } from '../../contexts/TranslationContext';
 
 type FilterType = 'active' | 'ready' | 'all';
 type TimeRangeType = 'today' | 'yesterday' | 'week' | 'month' | 'all';
@@ -51,6 +53,7 @@ interface Props {
 
 export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const [filter, setFilter] = useState<FilterType>('active');
   const [timeRange, setTimeRange] = useState<TimeRangeType>('today');
   const [showTimeRangeMenu, setShowTimeRangeMenu] = useState(false);
@@ -62,6 +65,12 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
   const [settlingBill, setSettlingBill] = useState(false);
+  // Close bill modal
+  const [showCloseBillModal, setShowCloseBillModal] = useState(false);
+  const [togoPaymentMethod, setTogoPaymentMethod] = useState('cash');
+  const [togoCashReceived, setTogoCashReceived] = useState('');
+  const [showTogoPaymentSuccess, setShowTogoPaymentSuccess] = useState(false);
+  const [togoSuccessAmount, setTogoSuccessAmount] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadOrders = useCallback(async (silent = false) => {
@@ -147,28 +156,35 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
     }
   };
 
-  const handleSettleBill = async () => {
+  const handleSettleBill = () => {
+    if (!selectedOrder || !selectedOrder.session_id) return;
+    setTogoPaymentMethod('cash');
+    setTogoCashReceived('');
+    setShowCloseBillModal(true);
+  };
+
+  const handleDoSettleBill = async () => {
     if (!selectedOrder || !selectedOrder.session_id) return;
     setSettlingBill(true);
     try {
       const sessionId = selectedOrder.session_id;
-      const items = selectedOrder.items ?? [];
-      let subtotal = 0;
-      items.forEach(i => { subtotal += i.item_total_cents ?? 0; });
-      const total = selectedOrder.total_cents ?? subtotal;
+      const total = selectedOrder.total_cents ?? 0;
       await apiClient.post(`/api/sessions/${sessionId}/close-bill`, {
-        payment_method: 'cash',
+        payment_method: togoPaymentMethod,
         amount_paid: total,
         discount_applied: 0,
         service_charge: 0,
         notes: '',
         restaurantId,
       });
-      showToast('Bill settled!', 'success');
+      setShowCloseBillModal(false);
+      setTogoCashReceived('');
+      setTogoSuccessAmount(total);
+      setShowTogoPaymentSuccess(true);
       await loadOrders(true);
-      loadOrderDetail(selectedOrder.id);
+      if (selectedOrder.id) loadOrderDetail(selectedOrder.id);
     } catch (err: any) {
-      showToast(err?.response?.data?.error || 'Failed to settle bill', 'error');
+      showToast(err?.response?.data?.error || t('togo.settle-fail'), 'error');
     } finally {
       setSettlingBill(false);
     }
@@ -176,6 +192,17 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
 
   const formatTime = (iso: string) => {
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDate = (iso: string) => {
+    return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${date} ${time}`;
   };
 
   const renderOrderRow = ({ item }: { item: ToGoOrder }) => {
@@ -204,18 +231,18 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
               style={{ marginRight: 3 }}
             />
             <Text style={[styles.typeBadgeText, isEatHere ? styles.typeBadgeTextEatHere : styles.typeBadgeTextTakeaway]}>
-              {isEatHere ? 'Eat Here' : 'Takeaway'}
+              {isEatHere ? t('togo.eat-here') : t('togo.takeaway')}
             </Text>
           </View>
           <View style={[styles.statusPill, isReady ? styles.statusPillReady : styles.statusPillPending]}>
             <Text style={[styles.statusPillText, isReady ? styles.statusPillTextReady : styles.statusPillTextPending]}>
-              {isReady ? '✓ Ready' : 'Pending'}
+              {isReady ? t('togo.status-ready') : t('togo.status-pending')}
             </Text>
           </View>
         </View>
         <Text style={styles.orderCustomer}>{customer}</Text>
         <Text style={styles.orderMeta}>
-          {formatTime(item.created_at)} · {itemCount} item{itemCount !== 1 ? 's' : ''} · {total}
+          {formatDateTime(item.created_at)} · {itemCount} item{itemCount !== 1 ? 's' : ''} · {total}
         </Text>
       </TouchableOpacity>
     );
@@ -226,7 +253,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
       return (
         <View style={styles.detailPlaceholder}>
           <Ionicons name="bag-handle-outline" size={48} color="#d1d5db" />
-          <Text style={styles.detailPlaceholderText}>Select an order to view details</Text>
+          <Text style={styles.detailPlaceholderText}>{t('togo.select-order')}</Text>
         </View>
       );
     }
@@ -251,10 +278,10 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
     items.forEach(i => { subtotal += i.item_total_cents ?? 0; });
     const total = order.total_cents ?? subtotal;
 
-    const paymentStatus = isRefunded ? 'Refunded'
-      : isVoided ? 'Voided'
-      : isPaid ? 'Paid'
-      : 'Unpaid';
+    const paymentStatus = isRefunded ? t('togo.pay-refunded')
+      : isVoided ? t('togo.pay-voided')
+      : isPaid ? t('togo.pay-paid')
+      : t('togo.pay-unpaid');
 
     const paymentColor = isRefunded ? '#dc2626'
       : isVoided ? '#b45309'
@@ -281,7 +308,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
                   style={{ marginRight: 3 }}
                 />
                 <Text style={[styles.typeBadgeText, isEatHere ? styles.typeBadgeTextEatHere : styles.typeBadgeTextTakeaway]}>
-                  {isEatHere ? 'Eat Here' : 'Takeaway'}
+                  {isEatHere ? t('togo.eat-here') : t('togo.takeaway')}
                 </Text>
               </View>
             </View>
@@ -292,19 +319,19 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
           </View>
           <View style={styles.detailGrid}>
             <View style={styles.detailGridItem}>
-              <Text style={styles.detailGridLabel}>CUSTOMER</Text>
+              <Text style={styles.detailGridLabel}>{t('togo.customer').toUpperCase()}</Text>
               <Text style={styles.detailGridValue}>{order.customer_name || '—'}</Text>
             </View>
             <View style={styles.detailGridItem}>
-              <Text style={styles.detailGridLabel}>PHONE</Text>
+              <Text style={styles.detailGridLabel}>{t('togo.phone').toUpperCase()}</Text>
               <Text style={styles.detailGridValue}>{order.customer_phone || '—'}</Text>
             </View>
             <View style={styles.detailGridItem}>
-              <Text style={styles.detailGridLabel}>ORDERED</Text>
-              <Text style={styles.detailGridValue}>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              <Text style={styles.detailGridLabel}>{t('togo.ordered').toUpperCase()}</Text>
+              <Text style={styles.detailGridValue}>{formatDateTime(order.created_at)}</Text>
             </View>
             <View style={styles.detailGridItem}>
-              <Text style={styles.detailGridLabel}>PAYMENT</Text>
+              <Text style={styles.detailGridLabel}>{t('togo.payment').toUpperCase()}</Text>
               <View style={[styles.payBadge, { backgroundColor: paymentBg }]}>
                 <Text style={[styles.payBadgeText, { color: paymentColor }]}>{paymentStatus}</Text>
               </View>
@@ -314,9 +341,9 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
 
         {/* Items */}
         <View style={styles.detailCard}>
-          <Text style={styles.detailSectionTitle}>Order Items</Text>
+          <Text style={styles.detailSectionTitle}>{t('togo.order-items')}</Text>
           {items.length === 0 ? (
-            <Text style={styles.noItemsText}>No items</Text>
+            <Text style={styles.noItemsText}>{t('togo.no-items')}</Text>
           ) : (
             items.map((item, idx) => (
               <View key={idx} style={styles.orderItem}>
@@ -336,7 +363,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
             ))
           )}
           <View style={styles.totalRow}>
-            <Text style={styles.totalRowLabel}>Total</Text>
+            <Text style={styles.totalRowLabel}>{t('togo.total')}</Text>
             <Text style={styles.totalRowValue}>${(total / 100).toFixed(2)}</Text>
           </View>
         </View>
@@ -345,7 +372,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
         {isReady ? (
           <View style={styles.readyBanner}>
             <Ionicons name="checkmark-circle" size={22} color="#065f46" style={{ marginRight: 8 }} />
-            <Text style={styles.readyBannerText}>Ready for Pickup</Text>
+            <Text style={styles.readyBannerText}>{t('togo.ready-for-pickup')}</Text>
           </View>
         ) : (
           <TouchableOpacity
@@ -358,7 +385,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
             ) : (
               <>
                 <Ionicons name="cafe-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.markReadyBtnText}>Mark as Ready for Pickup</Text>
+                <Text style={styles.markReadyBtnText}>{t('togo.mark-ready')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -375,7 +402,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
             ) : (
               <>
                 <Ionicons name="card-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.settleBillBtnText}>Settle Bill</Text>
+                <Text style={styles.settleBillBtnText}>{t('togo.settle-bill')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -385,17 +412,17 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   };
 
   const timeRangeLabels: Record<TimeRangeType, string> = {
-    today: 'All Today',
-    yesterday: 'Since Yesterday',
-    week: 'Since 1 Week',
-    month: 'Since 1 Month',
-    all: 'All Time',
+    today: t('togo.time-today'),
+    yesterday: t('togo.time-yesterday'),
+    week: t('togo.time-week'),
+    month: t('togo.time-month'),
+    all: t('togo.time-all'),
   };
 
   const emptyLabels: Record<FilterType, string> = {
-    active: 'No active to-go orders',
-    ready: 'No orders marked ready',
-    all: 'No to-go orders today',
+    active: t('togo.empty-active'),
+    ready: t('togo.empty-ready'),
+    all: t('togo.empty-all'),
   };
 
   return (
@@ -412,7 +439,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
               <Ionicons name="checkmark" size={12} color={filter === f ? '#fff' : '#6b7280'} style={{ marginRight: 4 }} />
             )}
             <Text style={[styles.filterBtnText, filter === f && styles.filterBtnTextActive]}>
-              {f === 'active' ? 'Active' : 'Ready'}
+              {f === 'active' ? t('togo.filter-active') : t('togo.filter-ready')}
             </Text>
           </TouchableOpacity>
         ))}
@@ -495,6 +522,84 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
           {renderDetail()}
         </View>
       </View>
+
+      {/* Close Bill Modal */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCloseBillModal} animationType="fade" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 14, width: '85%', maxWidth: 380, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>{t('togo.settle-bill')}</Text>
+            {selectedOrder && (
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>${(selectedOrder.total_cents / 100).toFixed(2)}</Text>
+            )}
+            <Text style={{ fontWeight: '600', fontSize: 13, color: '#374151', marginBottom: 8 }}>{t('admin.payment-method')}</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              {[{ id: 'cash', label: t('admin.payment-cash') }, { id: 'card', label: t('admin.payment-card') }].map(m => (
+                <TouchableOpacity
+                  key={m.id}
+                  style={{ flex: 1, padding: 10, borderRadius: 8, alignItems: 'center', borderWidth: 2, borderColor: togoPaymentMethod === m.id ? '#3b82f6' : '#e5e7eb', backgroundColor: togoPaymentMethod === m.id ? '#3b82f6' : '#fff' }}
+                  onPress={() => setTogoPaymentMethod(m.id)}
+                >
+                  <Text style={{ fontWeight: '600', color: togoPaymentMethod === m.id ? '#fff' : '#374151' }}>{m.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {togoPaymentMethod === 'cash' && (
+              <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, padding: 12, marginBottom: 14 }}>
+                <Text style={{ fontWeight: '600', fontSize: 13, color: '#166534', marginBottom: 6 }}>{t('admin.cash-received')}</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: '#86efac', borderRadius: 6, padding: 8, fontSize: 15, fontWeight: '600', backgroundColor: '#fff' }}
+                  keyboardType="decimal-pad"
+                  value={togoCashReceived}
+                  onChangeText={setTogoCashReceived}
+                  placeholder="0.00"
+                />
+                {togoCashReceived !== '' && parseFloat(togoCashReceived) > 0 && selectedOrder && (() => {
+                  const change = parseFloat(togoCashReceived) - selectedOrder.total_cents / 100;
+                  return (
+                    <Text style={{ fontSize: 13, color: change >= 0 ? '#166534' : '#dc2626', marginTop: 6, fontWeight: '600' }}>
+                      {t('admin.cash-change')}: ${change.toFixed(2)}
+                    </Text>
+                  );
+                })()}
+              </View>
+            )}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', backgroundColor: '#f3f4f6' }}
+                onPress={() => setShowCloseBillModal(false)}
+              >
+                <Text style={{ fontWeight: '600', color: '#374151' }}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[{ flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', backgroundColor: '#10b981' }, settlingBill && { opacity: 0.6 }]}
+                onPress={handleDoSettleBill}
+                disabled={settlingBill}
+              >
+                {settlingBill ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontWeight: '600', color: '#fff' }}>{t('admin.close-bill')}</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Payment Success Popup */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showTogoPaymentSuccess} animationType="fade" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 32, alignItems: 'center', width: 260 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#d1fae5', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="checkmark-circle" size={36} color="#10b981" />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 6 }}>{t('admin.payment-success')}</Text>
+            <Text style={{ fontSize: 22, fontWeight: '800', color: '#10b981', marginBottom: 4 }}>${(togoSuccessAmount / 100).toFixed(2)}</Text>
+            <TouchableOpacity
+              style={{ marginTop: 20, paddingHorizontal: 32, paddingVertical: 10, backgroundColor: '#10b981', borderRadius: 8 }}
+              onPress={() => setShowTogoPaymentSuccess(false)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

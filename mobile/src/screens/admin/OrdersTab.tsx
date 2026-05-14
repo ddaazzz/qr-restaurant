@@ -276,6 +276,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [paymentModalOrderNumber, setPaymentModalOrderNumber] = useState<number | null>(null);
     const [paymentModalTotal, setPaymentModalTotal] = useState(0);
     const [paymentModalMethod, setPaymentModalMethod] = useState<string>('cash');
+    const [paymentModalCashReceived, setPaymentModalCashReceived] = useState('');
+    const [showOrderPaymentSuccess, setShowOrderPaymentSuccess] = useState(false);
+    const [orderPaymentSuccessAmount, setOrderPaymentSuccessAmount] = useState(0);
 
     // KPay terminal payment processing state
     const [kpayProcessing, setKpayProcessing] = useState(false);
@@ -1140,7 +1143,9 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           }
         );
         setShowPaymentModal(false);
-        showToast(t('orders.payment-confirmed'), 'success');
+        setPaymentModalCashReceived('');
+        setOrderPaymentSuccessAmount(paymentModalTotal);
+        setShowOrderPaymentSuccess(true);
         if (emailReceiptEnabled && paymentModalSessionId) {
           openEmailReceiptModal(paymentModalSessionId, selectedHistoryOrder?.customer_email || '');
         }
@@ -2259,6 +2264,27 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <Text style={{ fontSize: 12, color: '#92400e' }}>
                         Payment will be sent to PA terminal ({paOfflineTerminal.terminal_ip}:{paOfflineTerminal.terminal_port}). Tap Confirm to initiate.
                       </Text>
+                    </View>
+                  )}
+                  {/* Cash received */}
+                  {paymentModalMethod === 'cash' && (
+                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                      <Text style={{ fontWeight: '600', fontSize: 13, color: '#166534', marginBottom: 6 }}>{t('admin.cash-received')}</Text>
+                      <TextInput
+                        style={{ borderWidth: 1, borderColor: '#86efac', borderRadius: 6, padding: 8, fontSize: 15, fontWeight: '600', backgroundColor: '#fff' }}
+                        keyboardType="decimal-pad"
+                        value={paymentModalCashReceived}
+                        onChangeText={setPaymentModalCashReceived}
+                        placeholder="0.00"
+                      />
+                      {paymentModalCashReceived !== '' && parseFloat(paymentModalCashReceived) > 0 && (() => {
+                        const change = parseFloat(paymentModalCashReceived) - paymentModalTotal / 100;
+                        return (
+                          <Text style={{ fontSize: 13, color: change >= 0 ? '#166534' : '#dc2626', marginTop: 6, fontWeight: '600' }}>
+                            {t('admin.cash-change')}: ${change.toFixed(2)}
+                          </Text>
+                        );
+                      })()}
                     </View>
                   )}
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -4474,6 +4500,25 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                   <Text style={{ fontWeight: '600', color: '#fff' }}>{t('orders.submit-order')}</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Order Payment Success Popup */}
+        <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showOrderPaymentSuccess} animationType="fade" transparent>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 32, alignItems: 'center', width: 260, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#d1fae5', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                <Ionicons name="checkmark-circle" size={36} color="#10b981" />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 6 }}>{t('admin.payment-success')}</Text>
+              <Text style={{ fontSize: 22, fontWeight: '800', color: '#10b981', marginBottom: 4 }}>${(orderPaymentSuccessAmount / 100).toFixed(2)}</Text>
+              <TouchableOpacity
+                style={{ marginTop: 20, paddingHorizontal: 32, paddingVertical: 10, backgroundColor: '#10b981', borderRadius: 8 }}
+                onPress={() => setShowOrderPaymentSuccess(false)}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>OK</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>

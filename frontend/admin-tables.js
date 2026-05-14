@@ -2549,7 +2549,7 @@ async function closeBillModal(sessionId) {
       <!-- Cash received input (shown when cash is selected) -->
       <div id="cash-received-section" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:15px;">
         <label style="font-weight:600; display:block; margin-bottom:6px; font-size:13px; color:#166534;">
-          Cash Received (HKD)
+          ${t('admin.cash-received')}
         </label>
         <input type="number" id="cash-received-input" min="0" step="0.01" placeholder="e.g. 200.00"
           oninput="updateCashChange(${grandTotal})"
@@ -3103,12 +3103,8 @@ function showPaymentSuccessPopup({ sessionId, paymentMethod, billAmount, service
       </div>
 
       <div style="display:flex; gap:10px;">
-        <button onclick="printPaymentReceipt(${JSON.stringify({ sessionId, paymentMethod, billAmount, serviceCharge, discountApplied, amountReceived, changeAmount, staffName }).replace(/"/g, '&quot;')}); return false;"
-          style="flex:1; padding:12px; border:2px solid #3b82f6; border-radius:8px; background:#fff; color:#3b82f6; font-weight:600; font-size:14px; cursor:pointer;">
-          🖨 Print Receipt
-        </button>
         <button onclick="this.closest('.modal-overlay').remove()"
-          style="flex:1; padding:12px; border:none; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; font-size:14px; cursor:pointer;">
+          style="width:100%; padding:12px; border:none; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; font-size:14px; cursor:pointer;">
           Done
         </button>
       </div>

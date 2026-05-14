@@ -1684,6 +1684,9 @@ const translations = {
     'admin.switcher-off': 'Off duty',
     'admin.switcher-clocked-in': 'Clocked In',
     'admin.switcher-wrong-pin': 'Wrong PIN for this staff',
+    'admin.cash-received': 'Cash Received (HKD)',
+    'admin.cash-change': 'Change',
+    'admin.payment-success': 'Payment Successful',
     'admin.scan-qr': 'Scan Table',
 
     // Cart remarks
@@ -4007,6 +4010,15 @@ const translations = {
     'admin.header-admin': '管理員',
     'admin.header-staff': '員工',
     'admin.header-logout': '🚪 登出',
+    'admin.header-exit': '退出',
+    'admin.switcher-who': '誰在工作？',
+    'admin.switcher-active': '當前員工',
+    'admin.switcher-off': '休息中',
+    'admin.switcher-clocked-in': '已打卡',
+    'admin.switcher-wrong-pin': 'PIN碼不正確',
+    'admin.cash-received': '收取現金（港幣）',
+    'admin.cash-change': '找零',
+    'admin.payment-success': '付款成功',
     'admin.scan-qr': '掃描桌子',
 
     // Cart remarks (Chinese)

@@ -1842,7 +1842,7 @@ async function openSettleBillModal(orderId, sessionId) {
 
       <!-- Cash received input (shown when cash is selected) -->
       <div id="settle-cash-received-section" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:14px;">
-        <label style="font-weight:600; display:block; margin-bottom:6px; font-size:13px; color:#166534;">Cash Received (HKD)</label>
+        <label style="font-weight:600; display:block; margin-bottom:6px; font-size:13px; color:#166534;">${t('admin.cash-received')}</label>
         <input type="number" id="settle-cash-received-input" min="0" step="0.01" placeholder="e.g. 200.00"
           oninput="updateSettleCashChange(${grandTotal})"
           style="width:100%; padding:8px; border:1px solid #86efac; border-radius:6px; font-size:15px; font-weight:600; box-sizing:border-box;" />
