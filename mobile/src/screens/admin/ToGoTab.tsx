@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CARD_WIDTH = (SCREEN_WIDTH - 8 * 3) / 2; // 2 cols with 8px margins and gap
+const CARD_WIDTH = (SCREEN_WIDTH - 8 * 5) / 4; // 4 cols with 8px margins and gaps
 import Ionicons from '@react-native-vector-icons/ionicons';
 import * as Print from 'expo-print';
 import { Buffer } from 'buffer';
@@ -480,7 +480,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
           data={orders}
           keyExtractor={item => String(item.id)}
           renderItem={renderCard}
-          numColumns={2}
+          numColumns={4}
           key="grid-2"
           columnWrapperStyle={styles.columnWrapper}
           refreshControl={
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginBottom: 4,
   },
-  cardOrderNum: { fontSize: 16, fontWeight: '800', color: '#1f2937' },
+  cardOrderNum: { fontSize: 13, fontWeight: '800', color: '#1f2937' },
   typeBadge: {
     paddingHorizontal: 5,
     paddingVertical: 2,
@@ -590,9 +590,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#d1fae5',
   },
   readyBadgeText: { fontSize: 10, fontWeight: '700', color: '#065f46' },
-  cardTime: { fontSize: 11, color: '#9ca3af', fontWeight: '500' },
+  cardTime: { fontSize: 10, color: '#9ca3af', fontWeight: '500' },
 
-  cardCustomer: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 4 },
+  cardCustomer: { fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 },
 
   itemsList: {
     borderTopWidth: 1,
@@ -601,9 +601,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 2 },
-  itemQty: { fontSize: 12, fontWeight: '700', color: '#667eea', width: 26, flexShrink: 0 },
-  itemName: { flex: 1, fontSize: 12, fontWeight: '500', color: '#374151' },
-  itemPrice: { fontSize: 12, fontWeight: '600', color: '#6b7280', flexShrink: 0 },
+  itemQty: { fontSize: 14, fontWeight: '700', color: '#667eea', width: 28, flexShrink: 0 },
+  itemName: { flex: 1, fontSize: 14, fontWeight: '500', color: '#374151' },
+  itemPrice: { fontSize: 13, fontWeight: '600', color: '#6b7280', flexShrink: 0 },
   itemsCount: {
     fontSize: 12,
     color: '#9ca3af',
@@ -622,8 +622,8 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     marginTop: 2,
   },
-  cardTotalLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  cardTotal: { fontSize: 14, fontWeight: '800', color: '#1f2937' },
+  cardTotalLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280' },
+  cardTotal: { fontSize: 13, fontWeight: '800', color: '#1f2937' },
 
   expandedActions: { flexDirection: 'column', gap: 6, marginTop: 8 },
   printBtn: {
