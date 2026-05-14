@@ -396,6 +396,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [billShowItems, setBillShowItems] = useState(true);
   const [billShowTotal, setBillShowTotal] = useState(true);
   const [billFooterMsg, setBillFooterMsg] = useState('Thank you for your business!');
+  const [kitchenFontSize, setKitchenFontSize] = useState('large');
+  const [receiptFontSize, setReceiptFontSize] = useState('medium');
+  const [receiptHeaderText, setReceiptHeaderText] = useState('');
+  const [receiptFooterText, setReceiptFooterText] = useState('');
 
   // Form states
   const [formData, setFormData] = useState<RestaurantSettings | null>(null);
@@ -588,6 +592,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setKitchenAutoPrint(!!flatSettings.kitchen_auto_print);
       setBillAutoPrint(!!flatSettings.bill_auto_print);
       setReceiptAutoPrint(!!flatSettings.receipt_auto_print);
+      if (flatSettings.kitchen_font_size) setKitchenFontSize(flatSettings.kitchen_font_size);
+      if (flatSettings.receipt_font_size) setReceiptFontSize(flatSettings.receipt_font_size);
+      if (flatSettings.receipt_header_text !== undefined) setReceiptHeaderText(flatSettings.receipt_header_text || '');
+      if (flatSettings.receipt_footer_text !== undefined) setReceiptFooterText(flatSettings.receipt_footer_text || '');
 
       // Fetch coupons separately (non-blocking) with shorter timeout
       // Don't block settings load if coupons endpoint is slow/unavailable
@@ -964,6 +972,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         settings.show_items = billShowItems;
         settings.show_total = billShowTotal;
         settings.footer_message = billFooterMsg;
+      } else if (editingPrinterType === 'kitchen') {
+        settings.font_size = kitchenFontSize;
+      } else if (editingPrinterType === 'receipt') {
+        settings.font_size = receiptFontSize;
+        settings.header_text = receiptHeaderText;
+        settings.footer_text = receiptFooterText;
       }
 
       if (Object.keys(settings).length > 0) {
@@ -1179,7 +1193,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               if (type === 'kitchen') {
                 const updated = kitchenPrintersList.filter(p => p.id !== itemId);
                 setKitchenPrintersList(updated);
-                await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
+                await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint, kitchenFontSize);
               } else if (type === 'bill') {
                 const updated = billPrintersList.filter(p => p.id !== itemId);
                 setBillPrintersList(updated);
@@ -1187,7 +1201,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               } else if (type === 'receipt') {
                 const updated = receiptPrintersList.filter(p => p.id !== itemId);
                 setReceiptPrintersList(updated);
-                await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint);
+                await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint, receiptFontSize, receiptHeaderText, receiptFooterText);
               } else {
                 const updated = qrPrintersList.filter(p => p.id !== itemId);
                 setQrPrintersList(updated);
@@ -1222,7 +1236,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             : p
         );
         setKitchenPrintersList(updated);
-        await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
+        await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint, kitchenFontSize);
       } else if (editingPrinterType === 'bill') {
         const updated = billPrintersList.map(p =>
           p.id === editingPrinterItemId
@@ -1252,7 +1266,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             : p
         );
         setReceiptPrintersList(updated);
-        await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint);
+        await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint, receiptFontSize, receiptHeaderText, receiptFooterText);
       } else if (editingPrinterType === 'qr') {
         const updated = qrPrintersList.map(p =>
           p.id === editingPrinterItemId
@@ -2124,63 +2138,180 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
           )}
 
-          {/* Kitchen Order Format Preview (only for Kitchen printer) */}
-          {editingPrinterType === 'kitchen' && (
+          {/* Kitchen Order Format (only for Kitchen printer, not item-edit) */}
+          {editingPrinterType === 'kitchen' && !isItemEdit && (
             <View style={{ marginHorizontal: 16, marginTop: 8 }}>
               <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
-                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('admin.printer-kitchen-format') || 'Kitchen Order Format'}</Text>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 4 }]}>{t('admin.printer-kitchen-format') || 'Kitchen Order Format'}</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Configure how kitchen order tickets print.</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Font Size</Text>
+                <View style={styles.toggleGroup}>
+                  {(['large', 'small'] as const).map((sz) => (
+                    <TouchableOpacity
+                      key={sz}
+                      style={[styles.typeBtn, kitchenFontSize === sz && styles.typeBtnActive]}
+                      onPress={() => setKitchenFontSize(sz)}
+                    >
+                      <Text style={[styles.typeBtnText, kitchenFontSize === sz && styles.typeBtnTextActive]}>
+                        {sz.charAt(0).toUpperCase() + sz.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               <View style={[styles.formGroup, { marginBottom: 20 }]}>
-                <Text style={styles.label}>{t('settings.preview')}</Text>
+                <Text style={styles.label}>{t('settings.preview') || 'Preview'}</Text>
                 <View style={{ borderColor: '#ddd', borderWidth: 2, borderRadius: 6, padding: 12, backgroundColor: '#f9fafb' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 4, fontFamily: 'Courier New' }}>KITCHEN ORDER</Text>
-                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>Order #42   Table: T02</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>Time: 2026-03-13 18:24</Text>
-                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>1x  Caesar Salad</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>2x  Margherita Pizza</Text>
-                  <Text style={{ fontSize: 10, marginLeft: 20, color: '#666', fontFamily: 'Courier New' }}>Size: Large</Text>
-                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
+                  {/* Title */}
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 18 : 14, fontWeight: '700', textAlign: 'center', marginBottom: 2, fontFamily: 'Courier New' }}>廚打</Text>
+                  {/* Header row */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 2 }}>
+                    <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', fontFamily: 'Courier New' }}>桌號: T02</Text>
+                    <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', fontFamily: 'Courier New' }}>No: #42</Text>
+                  </View>
+                  <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 2, fontFamily: 'Courier New' }}>{'─'.repeat(38)}</Text>
+                  <Text style={{ fontSize: 10, color: '#666', marginBottom: 2, fontFamily: 'Courier New' }}>數量  商品名稱</Text>
+                  <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 2, fontFamily: 'Courier New' }}>{'─'.repeat(38)}</Text>
+                  {/* Items */}
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', marginVertical: 1, fontFamily: 'Courier New' }}>1  香茅豬扒雞翼飯</Text>
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 13 : 11, marginLeft: 12, marginBottom: 1, fontFamily: 'Courier New' }}>- 少甜，少冰</Text>
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', marginVertical: 1, fontFamily: 'Courier New' }}>2  Caesar Salad</Text>
+                  <Text style={{ fontSize: 10, textAlign: 'center', marginTop: 4, color: '#666', fontFamily: 'Courier New' }}>2026-03-13 18:24:05</Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 12 }}>
-                {t('settings.kitchen-format-note') || 'Kitchen order format uses a standard layout.'}
-              </Text>
-
-              {/* Category Routing (only when editing a specific kitchen printer item) */}
-              {isItemEdit && editingPrinterType === 'kitchen' && (
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { marginBottom: 8 }]}>Category Routing</Text>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Orders with items from these categories will print to this printer.</Text>
-                  {menuCategories.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: '#9ca3af' }}>Loading categories...</Text>
-                  ) : (
-                    menuCategories.map(cat => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        onPress={() => {
-                          setEditingPrinterItemCategories(prev =>
-                            prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
-                          );
-                        }}
-                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
-                      >
-                        <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
-                          {editingPrinterItemCategories.includes(cat.id) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
-                        </View>
-                        <Text style={{ fontSize: 14, color: '#1f2937' }}>{cat.name}</Text>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-              )}
-
             </View>
           )}
 
-          {/* Bill Printer Routing (only when editing a specific bill printer item) */}
+          {/* Kitchen Category Routing (only when editing a specific kitchen printer item) */}
+          {editingPrinterType === 'kitchen' && isItemEdit && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { marginBottom: 8 }]}>Category Routing</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Orders with items from these categories will print to this printer.</Text>
+                {menuCategories.length === 0 ? (
+                  <Text style={{ fontSize: 12, color: '#9ca3af' }}>Loading categories...</Text>
+                ) : (
+                  menuCategories.map(cat => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      onPress={() => {
+                        setEditingPrinterItemCategories(prev =>
+                          prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
+                        );
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                    >
+                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                        {editingPrinterItemCategories.includes(cat.id) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                      </View>
+                      <Text style={{ fontSize: 14, color: '#1f2937' }}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Payment Receipt Format (only for Receipt printer, not item-edit) */}
+          {editingPrinterType === 'receipt' && !isItemEdit && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 4 }]}>Payment Receipt Format</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Printed after every successful payment.</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Font Size</Text>
+                <View style={styles.toggleGroup}>
+                  {(['small', 'medium', 'large'] as const).map((sz) => (
+                    <TouchableOpacity
+                      key={sz}
+                      style={[styles.typeBtn, receiptFontSize === sz && styles.typeBtnActive]}
+                      onPress={() => setReceiptFontSize(sz)}
+                    >
+                      <Text style={[styles.typeBtnText, receiptFontSize === sz && styles.typeBtnTextActive]}>
+                        {sz.charAt(0).toUpperCase() + sz.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Header Text</Text>
+                <TextInput
+                  style={styles.input}
+                  value={receiptHeaderText}
+                  onChangeText={setReceiptHeaderText}
+                  placeholder="e.g. Thank You"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Footer Text</Text>
+                <TextInput
+                  style={styles.input}
+                  value={receiptFooterText}
+                  onChangeText={setReceiptFooterText}
+                  placeholder="e.g. Follow us on social media"
+                />
+              </View>
+
+              <View style={[styles.formGroup, { marginBottom: 20 }]}>
+                <Text style={styles.label}>{t('settings.preview') || 'Preview'}</Text>
+                {(() => {
+                  const fs = receiptFontSize === 'large' ? 14 : receiptFontSize === 'small' ? 10 : 12;
+                  return (
+                    <View style={{ borderColor: '#ddd', borderWidth: 2, borderRadius: 6, padding: 12, backgroundColor: '#f9fafb' }}>
+                      <Text style={{ fontSize: fs + 2, fontWeight: '700', textAlign: 'center', marginBottom: 2, fontFamily: 'Courier New' }}>{settings?.name || 'Restaurant Name'}</Text>
+                      <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 3, fontFamily: 'Courier New' }}>{'='.repeat(38)}</Text>
+                      <Text style={{ fontSize: fs, fontWeight: '600', textAlign: 'center', marginBottom: 3, fontFamily: 'Courier New' }}>PAYMENT RECEIPT</Text>
+                      <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 3, fontFamily: 'Courier New' }}>{'='.repeat(38)}</Text>
+                      <View style={{ marginVertical: 4 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 1 }}>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Subtotal:</Text>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>$500.00</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 1 }}>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Service (10%):</Text>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>$50.00</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 1 }}>
+                          <Text style={{ fontSize: fs + 1, fontWeight: '700', fontFamily: 'Courier New' }}>TOTAL:</Text>
+                          <Text style={{ fontSize: fs + 1, fontWeight: '700', fontFamily: 'Courier New' }}>$550.00</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 3, fontFamily: 'Courier New' }}>{'─'.repeat(38)}</Text>
+                      <View style={{ marginVertical: 2 }}>
+                        <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Payment: Cash</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Received:</Text>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>$600.00</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: fs, fontWeight: '600', fontFamily: 'Courier New' }}>Change:</Text>
+                          <Text style={{ fontSize: fs, fontWeight: '600', fontFamily: 'Courier New' }}>$50.00</Text>
+                        </View>
+                        <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Staff: John</Text>
+                      </View>
+                      {receiptHeaderText ? (
+                        <Text style={{ fontSize: fs, fontWeight: '600', textAlign: 'center', marginTop: 6, fontFamily: 'Courier New' }}>{receiptHeaderText}</Text>
+                      ) : null}
+                      {receiptFooterText ? (
+                        <Text style={{ fontSize: fs - 1, textAlign: 'center', color: '#555', marginTop: 2, fontFamily: 'Courier New' }}>{receiptFooterText}</Text>
+                      ) : null}
+                    </View>
+                  );
+                })()}
+              </View>
+            </View>
+          )}
+
+
           {isItemEdit && editingPrinterType === 'bill' && (
             <View style={{ marginHorizontal: 16, marginTop: 8 }}>
               <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>

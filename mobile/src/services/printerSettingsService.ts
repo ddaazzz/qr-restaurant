@@ -379,11 +379,11 @@ class PrinterSettingsService {
    * Save multi-kitchen-printer configuration
    * Encodes all kitchen printers in the Kitchen row's settings.printers JSONB
    */
-  async saveKitchenPrinters(restaurantId: string, printers: KitchenPrinter[], autoPrint: boolean): Promise<void> {
+  async saveKitchenPrinters(restaurantId: string, printers: KitchenPrinter[], autoPrint: boolean, fontSizeOpt?: string): Promise<void> {
     await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
       type: 'Kitchen',
       printer_type: 'none',
-      settings: { printers, auto_print: autoPrint },
+      settings: { printers, auto_print: autoPrint, ...(fontSizeOpt ? { font_size: fontSizeOpt } : {}) },
     });
     this.invalidateCache(restaurantId);
   }
@@ -404,11 +404,24 @@ class PrinterSettingsService {
   /**
    * Save multi-receipt-printer configuration
    */
-  async saveReceiptPrinters(restaurantId: string, printers: ReceiptPrinter[], autoPrint: boolean): Promise<void> {
+  async saveReceiptPrinters(
+    restaurantId: string,
+    printers: ReceiptPrinter[],
+    autoPrint: boolean,
+    fontSizeOpt?: string,
+    headerText?: string,
+    footerText?: string,
+  ): Promise<void> {
     await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
       type: 'Receipt',
       printer_type: 'none',
-      settings: { printers, auto_print: autoPrint },
+      settings: {
+        printers,
+        auto_print: autoPrint,
+        ...(fontSizeOpt ? { font_size: fontSizeOpt } : {}),
+        ...(headerText !== undefined ? { header_text: headerText } : {}),
+        ...(footerText !== undefined ? { footer_text: footerText } : {}),
+      },
     });
     this.invalidateCache(restaurantId);
   }

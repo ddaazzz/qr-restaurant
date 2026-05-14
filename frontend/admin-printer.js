@@ -16,6 +16,13 @@ if (typeof window.currentEditingPrinterType === 'undefined') {
  */
 async function initializePrinterSettings() {
   console.log('[admin-printer.js] Initializing printer settings module');
+
+  // Always reset to selection view on (re)open
+  const selectionView = document.getElementById('printer-type-selection');
+  const detailView    = document.getElementById('printer-detail-view');
+  if (selectionView) selectionView.style.display = 'block';
+  if (detailView)    detailView.style.display    = 'none';
+
   await loadPrinterSettings();
   await checkKPayPrinterVisibility();
   console.log('[admin-printer.js] Initialization complete, settings loaded');

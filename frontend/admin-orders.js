@@ -24,8 +24,14 @@ let ordersInitialized = false;
 
 // ========== INITIALIZE ORDERS ==========
 async function initializeOrders() {
-  // If returning to the orders section while history mode is active, refresh the list
+  // If returning to the orders section while history mode is active, restore the history UI
   if (ORDERS_HISTORY_MODE) {
+    const historyView = document.getElementById('orders-history-left-view');
+    const leftColWrapper = document.querySelector('.orders-container > .left-column-wrapper');
+    const ordersContainer = document.querySelector('.orders-container');
+    if (historyView) historyView.classList.add('active');
+    if (leftColWrapper) leftColWrapper.style.display = 'none';
+    if (ordersContainer) ordersContainer.classList.add('history-mode');
     loadOrdersHistoryLeftPanel();
   }
 
@@ -1268,20 +1274,23 @@ async function toggleOrdersHistoryMode() {
 }
 
 function closeDetailsView() {
-  // Hide details and show history instead
+  // Hide details view
   const detailsView = document.getElementById('orders-details-view');
   const historyView = document.getElementById('orders-history-left-view');
   
   if (detailsView) {
     detailsView.classList.remove('active');
   }
-  if (historyView) {
+  // Only show history view if we are currently in history mode
+  if (historyView && ORDERS_HISTORY_MODE) {
     historyView.classList.add('active');
   }
 
   VIEWING_HISTORICAL_ORDER = null;
   // Refresh the list so any status changes are reflected
-  loadOrdersHistoryLeftPanel();
+  if (ORDERS_HISTORY_MODE) {
+    loadOrdersHistoryLeftPanel();
+  }
 }
 
 async function loadOrdersHistoryLeftPanel() {
