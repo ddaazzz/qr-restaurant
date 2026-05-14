@@ -64,6 +64,14 @@ export interface BillPrinter {
   order_types: string[];             // 'dine-in' | 'order-now' | 'to-go' | 'all'
 }
 
+export interface ReceiptPrinter {
+  id: string;
+  name: string;
+  type: 'network' | 'bluetooth';
+  host?: string;
+  bluetoothDevice?: string;
+}
+
 export interface PrinterProfile {
   id: number;
   restaurant_id: number;
@@ -130,7 +138,14 @@ export interface BackendPrinterSettings {
   
   // Bill Printer Configuration (multi-printer support)
   bill_printers?: BillPrinter[];        // Array of bill printers with table/order routing
-  
+
+  // Receipt Printer Configuration (post-payment receipt)
+  receipt_printers?: ReceiptPrinter[];  // Array of receipt printers
+  receipt_auto_print?: boolean;
+  receipt_font_size?: string;
+  receipt_header_text?: string;
+  receipt_footer_text?: string;
+
   // Other settings
   print_logo?: boolean;
   printer_paper_width?: number; // Paper width in mm (80 for standard, 58 for compact)
@@ -192,6 +207,14 @@ class PrinterSettingsService {
           // CRITICAL: Extract multi-printer array
           if (Array.isArray(row.settings.printers) && row.settings.printers.length > 0) {
             flat.kitchen_printers = row.settings.printers as unknown as KitchenPrinter[];
+          }
+        } else if (row.type === 'Receipt') {
+          if (row.settings.font_size) flat.receipt_font_size = row.settings.font_size;
+          if (row.settings.header_text) flat.receipt_header_text = row.settings.header_text;
+          if (row.settings.footer_text) flat.receipt_footer_text = row.settings.footer_text;
+          if (typeof row.settings.auto_print === 'boolean') flat.receipt_auto_print = row.settings.auto_print;
+          if (Array.isArray(row.settings.printers) && row.settings.printers.length > 0) {
+            flat.receipt_printers = row.settings.printers as unknown as ReceiptPrinter[];
           }
         }
       }
@@ -372,6 +395,18 @@ class PrinterSettingsService {
   async saveBillPrinters(restaurantId: string, printers: BillPrinter[], autoPrint: boolean): Promise<void> {
     await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
       type: 'Bill',
+      printer_type: 'none',
+      settings: { printers, auto_print: autoPrint },
+    });
+    this.invalidateCache(restaurantId);
+  }
+
+  /**
+   * Save multi-receipt-printer configuration
+   */
+  async saveReceiptPrinters(restaurantId: string, printers: ReceiptPrinter[], autoPrint: boolean): Promise<void> {
+    await apiClient.patch(`/api/restaurants/${restaurantId}/printer-settings`, {
+      type: 'Receipt',
       printer_type: 'none',
       settings: { printers, auto_print: autoPrint },
     });

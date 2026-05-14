@@ -1597,6 +1597,228 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
 });
 
 /**
+ * POST /restaurants/:restaurantId/print-receipt
+ * Print a payment receipt — same as print-bill but auto-fetches payment details
+ * (method, reference, paid time, order#, cash received/change) from DB.
+ * Body: { sessionId: number, billData?: { table, items, subtotal, serviceCharge, total } }
+ */
+router.post("/restaurants/:restaurantId/print-receipt", async (req: Request, res: Response) => {
+  const restaurantId = req.params.restaurantId as string;
+  let { sessionId, billData, priority = 5 } = req.body;
+
+  if (!sessionId) {
+    return res.status(400).json({ error: "sessionId is required" });
+  }
+
+  sessionId = String(sessionId);
+
+  try {
+    // ── Fetch session + payment data from DB ──────────────────────────────
+    const paymentRes = await pool.query(
+      `SELECT
+         ts.payment_method    AS session_payment_method,
+         ts.amount_paid       AS session_amount_paid,
+         ts.ended_at          AS session_ended_at,
+         t.name               AS table_name,
+         ts.order_type,
+         r.service_charge_percent,
+         r.name               AS restaurant_name,
+         r.address            AS restaurant_address,
+         r.phone              AS restaurant_phone,
+         r.language_preference AS restaurant_lang,
+         (SELECT MIN(o.restaurant_order_number) FROM orders o WHERE o.session_id = ts.id AND o.restaurant_order_number IS NOT NULL) AS order_number,
+         cp.payment_vendor,
+         cp.payment_method    AS cp_payment_method,
+         cp.vendor_reference,
+         cp.completed_at      AS cp_completed_at,
+         cp.total_cents       AS cp_total_cents
+       FROM table_sessions ts
+       JOIN tables t ON t.id = ts.table_id
+       JOIN restaurants r ON r.id = t.restaurant_id
+       LEFT JOIN chuio_payments cp
+         ON cp.session_id = ts.id AND cp.status = 'completed'
+       WHERE ts.id = $1
+       ORDER BY cp.completed_at DESC
+       LIMIT 1`,
+      [sessionId]
+    );
+
+    if ((paymentRes.rowCount ?? 0) === 0) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const row = paymentRes.rows[0];
+
+    // Determine payment method label
+    const rawMethod = row.cp_payment_method || row.cp_payment_vendor || row.session_payment_method || 'cash';
+    const paymentReference: string | undefined = row.vendor_reference || undefined;
+    const paidAt: string | undefined = row.cp_completed_at
+      ? new Date(row.cp_completed_at).toISOString()
+      : row.session_ended_at
+        ? new Date(row.session_ended_at).toISOString()
+        : undefined;
+
+    const restaurantName = row.restaurant_name || '';
+    const restaurantAddress = row.restaurant_address || '';
+    const restaurantPhone = row.restaurant_phone || '';
+    const restaurantLang = row.restaurant_lang || 'en';
+    const orderNumber = row.order_number ? String(row.order_number) : sessionId;
+
+    // Cash change calculation
+    const sessionAmountPaid = row.session_amount_paid || 0;
+    const isCash = (rawMethod || '').toLowerCase() === 'cash';
+
+    // ── Fetch bill items from DB if billData not provided ────────────────
+    if (!billData || !billData.items || billData.items.length === 0) {
+      const itemsRes = await pool.query(
+        `SELECT
+           oi.id, mi.name, oi.quantity, oi.price_cents, oi.is_addon, oi.parent_order_item_id
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+         JOIN menu_items mi ON mi.id = oi.menu_item_id
+         WHERE o.session_id = $1 AND o.status <> 'cancelled'
+         ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC`,
+        [sessionId]
+      );
+      const subtotalCents = itemsRes.rows.reduce((s: number, r: any) => s + r.quantity * r.price_cents, 0);
+      const scPercent = row.service_charge_percent || 0;
+      const scCents = Math.round(subtotalCents * scPercent / 100);
+      const totalCents = subtotalCents + scCents;
+      billData = {
+        table: row.table_name || 'Receipt',
+        items: itemsRes.rows.map((r: any) => ({ name: r.name, quantity: r.quantity, price_cents: r.price_cents, is_addon: r.is_addon, parent_order_item_id: r.parent_order_item_id })),
+        subtotal: subtotalCents,
+        serviceCharge: scCents,
+        total: totalCents,
+      };
+    }
+
+    const total = billData.total || 0;
+    const amountReceived = isCash ? sessionAmountPaid : undefined;
+    const changeAmount = isCash && sessionAmountPaid > 0 ? Math.max(0, sessionAmountPaid - total) : undefined;
+
+    // ── Get printer config ────────────────────────────────────────────────
+    let printerResult = await pool.query(
+      `SELECT printer_type, printer_host, printer_port,
+              bluetooth_device_id, bluetooth_device_name, settings
+       FROM printers WHERE restaurant_id = $1 AND type = 'Bill'`,
+      [restaurantId]
+    );
+
+    let printerConfig = printerResult.rows[0];
+
+    if (!printerConfig) {
+      const oldSchema = await pool.query(
+        `SELECT rps.printer_type, rps.printer_host, rps.printer_port,
+                rps.bluetooth_device_id, rps.bluetooth_device_name
+         FROM restaurant_printer_settings rps
+         WHERE rps.restaurant_id = $1`,
+        [restaurantId]
+      );
+      if ((oldSchema.rowCount ?? 0) === 0) {
+        return res.status(404).json({ error: "Restaurant printer not found" });
+      }
+      printerConfig = oldSchema.rows[0];
+    }
+
+    // ── Build receipt payload ─────────────────────────────────────────────
+    const buildEscposReceiptData = (override: any = {}): any => ({
+      restaurantName,
+      restaurantAddress,
+      restaurantPhone,
+      orderNumber,
+      tableNumber: billData.table || row.table_name || 'Receipt',
+      items: billData.items || [],
+      subtotal: billData.subtotal,
+      serviceCharge: billData.serviceCharge,
+      total,
+      timestamp: paidAt ? new Date(paidAt).toLocaleString() : new Date().toLocaleString(),
+      paymentMethod: rawMethod,
+      amountReceived,
+      changeAmount,
+      paymentReference,
+      paidAt,
+      printerPaperWidth: 80,
+      language: restaurantLang,
+      ...override,
+    });
+
+    const buildHtmlPayload = (): any => ({
+      orderNumber,
+      tableNumber: billData.table || row.table_name || 'Receipt',
+      items: (billData.items || []).map((i: any) => ({ name: i.name, quantity: i.quantity, variants: i.variants, isAddon: !!i.is_addon })),
+      timestamp: paidAt ? new Date(paidAt).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' }) : new Date().toLocaleString(),
+      restaurantName,
+      type: 'bill' as const,
+      paymentMethod: rawMethod,
+      amountReceived,
+      changeAmount,
+      paymentReference,
+      paidAt,
+      subtotal: billData.subtotal,
+      serviceCharge: billData.serviceCharge,
+      total,
+    });
+
+    console.log('[PrintReceipt] session', sessionId, 'payment method:', rawMethod, 'ref:', paymentReference, 'paidAt:', paidAt);
+
+    // ── Route to printer type ─────────────────────────────────────────────
+    if (!printerConfig.printer_type || printerConfig.printer_type === 'browser' || printerConfig.printer_type === 'none') {
+      return res.json({
+        success: true,
+        html: generateReceiptHTML(buildHtmlPayload()),
+        message: 'Receipt HTML generated for browser printing',
+      });
+    }
+
+    if (printerConfig.printer_type === 'thermal' || printerConfig.printer_type === 'network') {
+      const host = printerConfig.printer_host;
+      const port = printerConfig.printer_port || 9100;
+
+      const escpos = generateESCPOS(buildEscposReceiptData());
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+
+      try {
+        await sendToNetworkPrinter(host, port, Buffer.from(escpos));
+        return res.json({ success: true, jobId: `receipt-${sessionId}-${Date.now()}` });
+      } catch (tcpErr: any) {
+        console.log('[PrintReceipt] Direct TCP failed, returning payload for client:', tcpErr.message);
+        return res.json({
+          success: true,
+          networkPrint: { host, port, escposBase64 },
+          html: generateReceiptHTML(buildHtmlPayload()),
+        });
+      }
+    }
+
+    if (printerConfig.printer_type === 'bluetooth') {
+      const escposData = buildEscposReceiptData();
+      const escpos = generateESCPOS(escposData);
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+      return res.json({
+        success: true,
+        bluetoothPayload: {
+          printerConfig: {
+            bluetoothDeviceId: printerConfig.bluetooth_device_id,
+            bluetoothDeviceName: printerConfig.bluetooth_device_name,
+          },
+          data: {
+            type: 'receipt',
+            escposBase64,
+            escposArray: Array.from(escpos),
+          },
+        },
+      });
+    }
+
+    return res.status(400).json({ error: "Unknown printer type: " + printerConfig.printer_type });
+  } catch (err) {
+    console.error('[PrintReceipt] Error:', err);
+    res.status(500).json({ error: "Failed to process receipt print request" });
+  }
+});
+
+/**
  * Register a discovered Bluetooth device with its service UUID
  * Called after frontend discovers a device and finds its working service
  * Stores UUID in the printers table for future reuse

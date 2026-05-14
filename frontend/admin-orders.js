@@ -1669,7 +1669,7 @@ function displayOrderDetails(order) {
         <div style="display:flex; gap:8px; margin-top:8px;" id="non-kpay-actions-${order.id}">
           <button onclick="orderVoid(${order.id})" style="padding:5px 12px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Void</button>
           <button onclick="orderRefund(${order.id})" style="padding:5px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Refund</button>
-          ${order.session_id ? `<button onclick="printBill(${order.session_id})" style="padding:5px 12px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">🖨 Print Bill</button>` : ''}
+          ${order.session_id ? `<button onclick="printReceipt(${order.session_id})" style="padding:5px 12px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">🧾 Print Receipt</button>` : ''}
         </div>` : ''}
 
         ${paymentMethod === 'kpay' && order.kpay_reference_id ? `

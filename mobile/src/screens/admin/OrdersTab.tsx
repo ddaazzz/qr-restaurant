@@ -2026,7 +2026,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           },
           priority: 5,
         };
-        const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-bill`, billPayload);
+        const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-receipt`, billPayload);
         if (printRes.data?.networkPrint) {
           const { host, port, escposBase64 } = printRes.data.networkPrint;
           try {

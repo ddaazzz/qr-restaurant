@@ -44,6 +44,8 @@ export interface ReceiptData {
   amountReceived?: number; // Amount given by customer in cents (cash only)
   changeAmount?: number;   // Change to return in cents (cash only)
   closedByStaff?: string;  // Display name of staff who closed the bill
+  paymentReference?: string; // Payment reference / transaction ID (card/online)
+  paidAt?: string;           // ISO timestamp when payment was completed
 }
 
 /**
@@ -333,6 +335,21 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
       appendText(commands, changeLabel + ' '.repeat(changePadding) + changeStr);
       commands.push(27, 33, 0); // Normal
       commands.push(10);
+    }
+
+    if (receipt.paymentReference) {
+      const refLabel = isZh ? '參考編號' : 'Ref';
+      appendText(commands, `${refLabel}: ${receipt.paymentReference}`);
+      commands.push(10);
+    }
+
+    if (receipt.paidAt) {
+      try {
+        const paidDate = new Date(receipt.paidAt).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const timeLabel = isZh ? '付款時間' : 'Paid';
+        appendText(commands, `${timeLabel}: ${paidDate}`);
+        commands.push(10);
+      } catch (_) { /* ignore */ }
     }
 
     if (receipt.closedByStaff) {

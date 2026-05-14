@@ -959,6 +959,13 @@ router.get("/restaurants/:restaurantId/orders", async (req, res) => {
         COALESCE(o.custom_amount_cents,
           ROUND(COALESCE(SUM(oi.price_cents * oi.quantity), 0) * (1 + COALESCE(r.service_charge_percent, 0) / 100.0))
         ) as total_cents,
+        COALESCE(
+          json_agg(
+            json_build_object('name', mi.name, 'quantity', oi.quantity, 'price_cents', oi.price_cents)
+            ORDER BY oi.id
+          ) FILTER (WHERE mi.name IS NOT NULL AND (oi.is_addon = false OR oi.is_addon IS NULL)),
+          '[]'::json
+        ) AS items_summary,
         COALESCE(array_agg(DISTINCT mi.name) FILTER (WHERE mi.name IS NOT NULL), '{}') AS item_names,
         COALESCE(array_agg(DISTINCT mc.name) FILTER (WHERE mc.name IS NOT NULL), '{}') AS category_names,
         u.name AS closed_by_staff_name,

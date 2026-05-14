@@ -296,6 +296,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [closeReason, setCloseReason] = useState('');
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [paymentSuccessAmount, setPaymentSuccessAmount] = useState(0);
+  const [paymentSuccessMethod, setPaymentSuccessMethod] = useState('');
+  const [paymentSuccessReceived, setPaymentSuccessReceived] = useState(0); // cents
+  const [paymentSuccessChange, setPaymentSuccessChange] = useState(0);     // cents
+  const [paymentSuccessSessionId, setPaymentSuccessSessionId] = useState<number | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
   const [showCouponPicker, setShowCouponPicker] = useState(false);
@@ -1174,7 +1178,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     try {
       const printerRes = await apiClient.get(`/api/restaurants/${restaurantId}/printer-settings`);
       if (printerRes.data?.bill_auto_print === true) {
-        await printBill(true);
+        await printBill(true, true); // auto-print receipt after payment
       }
     } catch (autoError) {
       console.log('[CloseBill] Auto-print check failed (non-critical):', autoError);
@@ -1183,6 +1187,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     setShowCloseBillModal(false);
     setShowKPayModal(false);
     setPaymentMethod('cash');
+    // Populate payment success popup data
+    const receivedCents = method === 'cash' && cashReceivedAmount !== ''
+      ? Math.round(parseFloat(cashReceivedAmount) * 100)
+      : 0;
+    const changeCents = receivedCents > 0 ? Math.max(0, receivedCents - finalAmt) : 0;
+    setPaymentSuccessMethod(method);
+    setPaymentSuccessAmount(finalAmt);
+    setPaymentSuccessReceived(receivedCents);
+    setPaymentSuccessChange(changeCents);
+    setPaymentSuccessSessionId(selectedSession.id);
     setCashReceivedAmount('');
     setDiscountAmount('0');
     setCloseReason('');
@@ -2035,7 +2049,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     `;
   };
 
-  const printBill = async (autoPrint: boolean = false) => {
+  const printBill = async (autoPrint: boolean = false, isReceipt: boolean = false) => {
     console.log('[PrintBill] Starting printBill, autoPrint=', autoPrint);
     console.log('[PrintBill] selectedSession:', selectedSession);
     console.log('[PrintBill] sessionBill:', sessionBill);
@@ -2059,7 +2073,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       // API returns an array of printer rows — find the Bill printer
       const printerRows = Array.isArray(printerRes.data) ? printerRes.data : [];
       const billPrinter = printerRows.find((p: any) => p.type === 'Bill');
-      const billPrinterType = billPrinter?.printer_type;
+      // The printer config is stored in settings.printers[]; printer_type on the row is legacy/unused
+      const billPrinterEntry = billPrinter?.settings?.printers?.[0];
+      const billPrinterType: string | undefined = billPrinterEntry?.type; // 'network' | 'bluetooth'
 
       if (!billPrinterType || billPrinterType === 'none') {
         if (!autoPrint) {
@@ -2106,8 +2122,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       console.log('[PrintBill] Sending print request with payload:', billPayload);
 
       // Send to backend for printing
+      const printEndpoint = isReceipt ? 'print-receipt' : 'print-bill';
       const printRes = await apiClient.post(
-        `/api/restaurants/${restaurantId}/print-bill`,
+        `/api/restaurants/${restaurantId}/${printEndpoint}`,
         billPayload
       );
 
@@ -4694,19 +4711,70 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
       {/* Payment Success Popup */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showPaymentSuccess} animationType="fade" transparent>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 32, alignItems: 'center', width: 260, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 }}>
-            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#d1fae5', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-              <Ionicons name="checkmark-circle" size={36} color="#10b981" />
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: 340, maxWidth: '100%', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 }}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#d1fae5', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="checkmark-circle" size={36} color="#10b981" />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>{t('admin.payment-success')}</Text>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>Bill has been closed</Text>
             </View>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 6 }}>{t('admin.payment-success')}</Text>
-            <Text style={{ fontSize: 22, fontWeight: '800', color: '#10b981', marginBottom: 4 }}>${(paymentSuccessAmount / 100).toFixed(2)}</Text>
-            <TouchableOpacity
-              style={{ marginTop: 20, paddingHorizontal: 32, paddingVertical: 10, backgroundColor: '#10b981', borderRadius: 8 }}
-              onPress={() => setShowPaymentSuccess(false)}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>OK</Text>
-            </TouchableOpacity>
+            {/* Details block */}
+            <View style={{ backgroundColor: '#f9fafb', borderRadius: 10, padding: 14, marginBottom: 20, gap: 8 }}>
+              {(() => {
+                const methodLabels: Record<string, string> = {
+                  cash: 'Cash',
+                  kpay: 'KPay',
+                  'payment-asia-offline': 'Payment Asia',
+                };
+                const methodLabel = methodLabels[paymentSuccessMethod] || paymentSuccessMethod || '—';
+                const isCash = paymentSuccessMethod === 'cash';
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Method</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{methodLabel}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>Bill Amount</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>HKD {(paymentSuccessAmount / 100).toFixed(2)}</Text>
+                    </View>
+                    {isCash && paymentSuccessReceived > 0 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount Received</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>HKD {(paymentSuccessReceived / 100).toFixed(2)}</Text>
+                      </View>
+                    )}
+                    {isCash && paymentSuccessReceived > 0 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>Change</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#059669' }}>HKD {(paymentSuccessChange / 100).toFixed(2)}</Text>
+                      </View>
+                    )}
+                  </>
+                );
+              })()}
+            </View>
+            {/* Buttons */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff', alignItems: 'center' }}
+                onPress={() => setShowPaymentSuccess(false)}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 8, backgroundColor: '#10b981', alignItems: 'center' }}
+                onPress={() => {
+                  setShowPaymentSuccess(false);
+                  printBill(false, true);
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>🧾 Print Receipt</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

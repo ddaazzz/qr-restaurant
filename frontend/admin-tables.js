@@ -1861,6 +1861,31 @@ async function printBill(sessionId, autoPrint = false) {
   }
 }
 
+async function printReceipt(sessionId, autoPrint = false) {
+  console.log('[PrintReceipt] Starting receipt print for session:', sessionId);
+  try {
+    const restaurantId = localStorage.getItem('restaurantId');
+    // Backend auto-fetches all payment details — just pass sessionId
+    const res = await fetch(`${window.API || API}/restaurants/${restaurantId}/print-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!res.ok) throw new Error('Receipt print request failed');
+    const data = await res.json();
+    if (data.html) {
+      const w = window.open('', '_blank');
+      if (w) { w.document.write(data.html); w.document.close(); }
+    } else if (data.networkPrint || data.bluetoothPayload) {
+      await window.printBillViaAPI(restaurantId, sessionId, null, data);
+    }
+    console.log('[PrintReceipt] Done');
+  } catch (err) {
+    console.error('[PrintReceipt] Error:', err);
+    if (!autoPrint) alert('Print error: ' + err.message);
+  }
+}
+
 async function splitBill(sessionId) {
   const res = await fetch(`${API}/sessions/${sessionId}/bill`);
   if (!res.ok) {
@@ -3103,8 +3128,12 @@ function showPaymentSuccessPopup({ sessionId, paymentMethod, billAmount, service
       </div>
 
       <div style="display:flex; gap:10px;">
+        ${sessionId ? `<button onclick="printReceipt(${sessionId})"
+          style="flex:1; padding:12px; border:1px solid #d1fae5; border-radius:8px; background:#ecfdf5; color:#065f46; font-weight:600; font-size:14px; cursor:pointer;">
+          🧾 Print Receipt
+        </button>` : ''}
         <button onclick="this.closest('.modal-overlay').remove()"
-          style="width:100%; padding:12px; border:none; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; font-size:14px; cursor:pointer;">
+          style="flex:1; padding:12px; border:none; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; font-size:14px; cursor:pointer;">
           Done
         </button>
       </div>

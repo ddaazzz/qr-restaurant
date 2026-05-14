@@ -9,7 +9,11 @@ import {
   RefreshControl,
   Alert,
   TouchableWithoutFeedback,
+  Dimensions,
 } from 'react-native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CARD_WIDTH = (SCREEN_WIDTH - 8 * 3) / 2; // 2 cols with 8px margins and gap
 import Ionicons from '@react-native-vector-icons/ionicons';
 import * as Print from 'expo-print';
 import { Buffer } from 'buffer';
@@ -30,6 +34,12 @@ interface OrderItem {
   addons?: Array<{ menu_item_name: string; quantity: number }>;
 }
 
+interface ItemSummary {
+  name: string;
+  quantity: number;
+  price_cents: number;
+}
+
 interface ToGoOrder {
   id: number;
   restaurant_order_number?: number;
@@ -42,6 +52,7 @@ interface ToGoOrder {
   customer_name?: string;
   customer_phone?: string;
   item_count?: number;
+  items_summary?: ItemSummary[];
   items?: OrderItem[];
   payment_status?: string;
   payment_received?: boolean;
@@ -188,7 +199,8 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
       const printerRes = await apiClient.get(`/api/restaurants/${restaurantId}/printer-settings`);
       const printerRows = Array.isArray(printerRes.data) ? printerRes.data : [];
       const billPrinter = printerRows.find((p: any) => p.type === 'Bill');
-      const billPrinterType = billPrinter?.printer_type;
+      const billPrinterEntry = billPrinter?.settings?.printers?.[0];
+      const billPrinterType: string | undefined = billPrinterEntry?.type;
 
       if (!billPrinterType || billPrinterType === 'none') {
         Alert.alert(
@@ -217,7 +229,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
         priority: 5,
       };
 
-      const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-bill`, billPayload);
+      const printRes = await apiClient.post(`/api/restaurants/${restaurantId}/print-receipt`, billPayload);
 
       if (printRes.data?.networkPrint) {
         const { host, port, escposBase64 } = printRes.data.networkPrint;
@@ -265,9 +277,13 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
     const isReady = !!item.pickup_ready_at;
     const isExpanded = item.id === expandedOrderId;
     const isEatHere = item.order_type === 'counter';
-    const customer = item.customer_name || item.customer_phone || '—';
+    const customer = item.customer_name || item.customer_phone || '';
     const total = item.total_cents != null ? `$${(item.total_cents / 100).toFixed(2)}` : '—';
-    const items = item.items || [];
+    // Use items_summary from list response (contains name+qty), fall back to full items if available
+    const displayItems: Array<{ name: string; quantity: number }> =
+      (item.items_summary && item.items_summary.length > 0)
+        ? item.items_summary
+        : (item.items || []).map(i => ({ name: i.menu_item_name, quantity: i.quantity }));
     const isMarkingThisReady = markingReadyId === item.id;
     const isPrintingThis = printingOrderId === item.id;
 
@@ -277,48 +293,49 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
         onPress={() => handleCardPress(item)}
         activeOpacity={0.85}
       >
-        {/* Card header row */}
+        {/* Header: order# + time */}
         <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <Text style={styles.cardOrderNum}>#{item.restaurant_order_number ?? item.id}</Text>
-            <View style={[styles.typeBadge, isEatHere ? styles.typeBadgeEatHere : styles.typeBadgeTakeaway]}>
-              <Ionicons
-                name={isEatHere ? 'restaurant-outline' : 'bag-outline'}
-                size={9}
-                color={isEatHere ? '#1d4ed8' : '#065f46'}
-                style={{ marginRight: 3 }}
-              />
-              <Text style={[styles.typeBadgeText, isEatHere ? styles.typeBadgeTextEatHere : styles.typeBadgeTextTakeaway]}>
-                {isEatHere ? t('togo.eat-here') : t('togo.takeaway')}
-              </Text>
-            </View>
-            {isReady && (
-              <View style={styles.readyBadge}>
-                <Ionicons name="checkmark-circle" size={10} color="#065f46" style={{ marginRight: 2 }} />
-                <Text style={styles.readyBadgeText}>{t('togo.status-ready')}</Text>
-              </View>
-            )}
-          </View>
+          <Text style={styles.cardOrderNum}>#{item.restaurant_order_number ?? item.id}</Text>
           <Text style={styles.cardTime}>{formatDateTime(item.created_at)}</Text>
         </View>
 
-        {/* Customer */}
-        <Text style={styles.cardCustomer}>{customer}</Text>
-
-        {/* Items */}
-        {items.length > 0 ? (
-          <View style={styles.itemsList}>
-            {items.map((orderItem, idx) => (
-              <View key={idx} style={styles.itemRow}>
-                <Text style={styles.itemQty}>×{orderItem.quantity}</Text>
-                <Text style={styles.itemName} numberOfLines={2}>{orderItem.menu_item_name}</Text>
-                <Text style={styles.itemPrice}>${((orderItem.item_total_cents ?? 0) / 100).toFixed(2)}</Text>
-              </View>
-            ))}
+        {/* Type badge + ready badge */}
+        <View style={styles.badgeRow}>
+          <View style={[styles.typeBadge, isEatHere ? styles.typeBadgeEatHere : styles.typeBadgeTakeaway]}>
+            <Ionicons
+              name={isEatHere ? 'restaurant-outline' : 'bag-outline'}
+              size={9}
+              color={isEatHere ? '#1d4ed8' : '#065f46'}
+              style={{ marginRight: 3 }}
+            />
+            <Text style={[styles.typeBadgeText, isEatHere ? styles.typeBadgeTextEatHere : styles.typeBadgeTextTakeaway]}>
+              {isEatHere ? t('togo.eat-here') : t('togo.takeaway')}
+            </Text>
           </View>
-        ) : (
-          <Text style={styles.itemsCount}>{item.item_count ?? '?'} {t('togo.items')}</Text>
-        )}
+          {isReady && (
+            <View style={styles.readyBadge}>
+              <Ionicons name="checkmark-circle" size={10} color="#065f46" style={{ marginRight: 2 }} />
+              <Text style={styles.readyBadgeText}>{t('togo.status-ready')}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Customer name */}
+        {!!customer && <Text style={styles.cardCustomer} numberOfLines={1}>{customer}</Text>}
+
+        {/* Items list */}
+        <View style={styles.itemsList}>
+          {displayItems.length > 0 ? (
+            displayItems.map((di, idx) => (
+              <View key={idx} style={styles.itemRow}>
+                <Text style={styles.itemQty}>×{di.quantity}</Text>
+                <Text style={styles.itemName} numberOfLines={2}>{di.name}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.itemsCount}>{item.item_count ?? '?'} {t('togo.items')}</Text>
+          )}
+        </View>
 
         {/* Total */}
         <View style={styles.cardTotalRow}>
@@ -326,7 +343,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
           <Text style={styles.cardTotal}>{total}</Text>
         </View>
 
-        {/* Expanded actions */}
+        {/* Expanded actions - stacked vertically to fit narrow card */}
         {isExpanded && (
           <View style={styles.expandedActions}>
             <TouchableOpacity
@@ -338,7 +355,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="print-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+                  <Ionicons name="print-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
                   <Text style={styles.printBtnText}>{t('togo.print-receipt')}</Text>
                 </>
               )}
@@ -353,7 +370,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <>
-                    <Ionicons name="cafe-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Ionicons name="cafe-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
                     <Text style={styles.markReadyBtnText}>{t('togo.mark-ready')}</Text>
                   </>
                 )}
@@ -463,6 +480,9 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
           data={orders}
           keyExtractor={item => String(item.id)}
           renderItem={renderCard}
+          numColumns={2}
+          key="grid-2"
+          columnWrapperStyle={styles.columnWrapper}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -515,13 +535,15 @@ const styles = StyleSheet.create({
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   emptyText: { marginTop: 12, fontSize: 14, color: '#9ca3af', textAlign: 'center' },
 
-  listContent: { padding: 12, paddingBottom: 32 },
+  listContent: { padding: 8, paddingBottom: 32 },
+  columnWrapper: { gap: 8, marginBottom: 8 },
 
   card: {
+    flex: 1,
+    width: CARD_WIDTH,
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#e5e7eb',
     shadowColor: '#000',
@@ -537,18 +559,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  cardHeaderLeft: {
+  badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
+    gap: 4,
     flexWrap: 'wrap',
+    marginBottom: 4,
   },
-  cardOrderNum: { fontSize: 18, fontWeight: '800', color: '#1f2937', marginRight: 2 },
+  cardOrderNum: { fontSize: 16, fontWeight: '800', color: '#1f2937' },
   typeBadge: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 10,
     flexDirection: 'row',
@@ -562,30 +584,30 @@ const styles = StyleSheet.create({
   readyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 10,
     backgroundColor: '#d1fae5',
   },
   readyBadgeText: { fontSize: 10, fontWeight: '700', color: '#065f46' },
-  cardTime: { fontSize: 12, color: '#9ca3af', fontWeight: '500', flexShrink: 0 },
+  cardTime: { fontSize: 11, color: '#9ca3af', fontWeight: '500' },
 
-  cardCustomer: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 8 },
+  cardCustomer: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 4 },
 
   itemsList: {
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
-    paddingTop: 8,
-    marginBottom: 8,
+    paddingTop: 6,
+    marginBottom: 6,
   },
-  itemRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 3 },
-  itemQty: { fontSize: 13, fontWeight: '700', color: '#667eea', width: 32, flexShrink: 0 },
-  itemName: { flex: 1, fontSize: 13, fontWeight: '500', color: '#374151', marginRight: 8 },
-  itemPrice: { fontSize: 13, fontWeight: '600', color: '#6b7280', flexShrink: 0 },
+  itemRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 2 },
+  itemQty: { fontSize: 12, fontWeight: '700', color: '#667eea', width: 26, flexShrink: 0 },
+  itemName: { flex: 1, fontSize: 12, fontWeight: '500', color: '#374151' },
+  itemPrice: { fontSize: 12, fontWeight: '600', color: '#6b7280', flexShrink: 0 },
   itemsCount: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#9ca3af',
-    marginBottom: 8,
+    marginBottom: 6,
     paddingTop: 4,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
@@ -597,35 +619,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
-    paddingTop: 8,
-    marginTop: 4,
+    paddingTop: 6,
+    marginTop: 2,
   },
-  cardTotalLabel: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
-  cardTotal: { fontSize: 16, fontWeight: '800', color: '#1f2937' },
+  cardTotalLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
+  cardTotal: { fontSize: 14, fontWeight: '800', color: '#1f2937' },
 
-  expandedActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  expandedActions: { flexDirection: 'column', gap: 6, marginTop: 8 },
   printBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#667eea',
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
-  printBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  printBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   markReadyBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#10b981',
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
-  markReadyBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  markReadyBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
 
-  doubleTapHint: { textAlign: 'center', fontSize: 11, color: '#9ca3af', marginTop: 6 },
+  doubleTapHint: { textAlign: 'center', fontSize: 10, color: '#9ca3af', marginTop: 4 },
 
   timeRangeMenu: {
     position: 'absolute',

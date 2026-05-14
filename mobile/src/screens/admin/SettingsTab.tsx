@@ -22,7 +22,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
 import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
-import { printerSettingsService, QRPrinter, KitchenPrinter, BillPrinter, PrinterProfile } from '../../services/printerSettingsService';
+import { printerSettingsService, QRPrinter, KitchenPrinter, BillPrinter, ReceiptPrinter, PrinterProfile } from '../../services/printerSettingsService';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
@@ -339,7 +339,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [editingPrinterType, setEditingPrinterType] = useState<'qr' | 'bill' | 'kitchen' | 'kpay' | null>(null);
+  const [editingPrinterType, setEditingPrinterType] = useState<'qr' | 'bill' | 'receipt' | 'kitchen' | 'kpay' | null>(null);
   const [bluetoothSearching, setBluetoothSearching] = useState(false);
   const [bluetoothDevices, setBluetoothDevices] = useState<Array<{ id: string; name: string; signal: number }>>([]);
   // Modal state: 'printer' | 'bluetooth' | null
@@ -406,9 +406,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [qrPrintersList, setQrPrintersList] = useState<QRPrinter[]>([]);
   const [kitchenPrintersList, setKitchenPrintersList] = useState<KitchenPrinter[]>([]);
   const [billPrintersList, setBillPrintersList] = useState<BillPrinter[]>([]);
+  const [receiptPrintersList, setReceiptPrintersList] = useState<ReceiptPrinter[]>([]);
   const [qrAutoPrint, setQrAutoPrint] = useState(false);
   const [kitchenAutoPrint, setKitchenAutoPrint] = useState(false);
   const [billAutoPrint, setBillAutoPrint] = useState(false);
+  const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
   const [editingPrinterItemId, setEditingPrinterItemId] = useState<string | null>(null);
   const [editingPrinterItemName, setEditingPrinterItemName] = useState('');
   const [editingPrinterItemCategories, setEditingPrinterItemCategories] = useState<number[]>([]);
@@ -473,7 +475,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       if (Array.isArray(printerData)) {
         printerData.forEach((printer: any) => {
           const typeLower = (printer.type || '').toLowerCase();
-          const prefix = typeLower === 'qr' ? 'qr_' : typeLower === 'bill' ? 'bill_' : typeLower === 'kpay' ? 'kpay_' : 'kitchen_';
+          const prefix = typeLower === 'qr' ? 'qr_' : typeLower === 'bill' ? 'bill_' : typeLower === 'receipt' ? 'receipt_' : typeLower === 'kpay' ? 'kpay_' : 'kitchen_';
           
           if (typeLower === 'kitchen') {
             flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
@@ -494,9 +496,24 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             flatSettings[`${prefix}bluetooth_device_id`] = printer.bluetooth_device_id;
             flatSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
             if (printer.settings) {
-              // bill printers array is in settings.printers (matching web admin format)
               if (Array.isArray(printer.settings.printers)) {
                 flatSettings.bill_printers = printer.settings.printers;
+              }
+              Object.entries(printer.settings).forEach(([key, value]) => {
+                if (key !== 'printers') {
+                  flatSettings[`${prefix}${key}`] = value;
+                }
+              });
+            }
+          } else if (typeLower === 'receipt') {
+            flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
+            flatSettings[`${prefix}printer_host`] = printer.printer_host;
+            flatSettings[`${prefix}printer_port`] = printer.printer_port;
+            flatSettings[`${prefix}bluetooth_device_id`] = printer.bluetooth_device_id;
+            flatSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
+            if (printer.settings) {
+              if (Array.isArray(printer.settings.printers)) {
+                flatSettings.receipt_printers = printer.settings.printers;
               }
               Object.entries(printer.settings).forEach(([key, value]) => {
                 if (key !== 'printers') {
@@ -564,9 +581,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       if (Array.isArray(flatSettings.bill_printers)) {
         setBillPrintersList(flatSettings.bill_printers);
       }
+      if (Array.isArray(flatSettings.receipt_printers)) {
+        setReceiptPrintersList(flatSettings.receipt_printers);
+      }
       setQrAutoPrint(!!flatSettings.qr_auto_print);
       setKitchenAutoPrint(!!flatSettings.kitchen_auto_print);
       setBillAutoPrint(!!flatSettings.bill_auto_print);
+      setReceiptAutoPrint(!!flatSettings.receipt_auto_print);
 
       // Fetch coupons separately (non-blocking) with shorter timeout
       // Don't block settings load if coupons endpoint is slow/unavailable
@@ -1091,11 +1112,13 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
-  const openPrinterItemConfigure = (type: 'kitchen' | 'bill' | 'qr', itemId: string) => {
+  const openPrinterItemConfigure = (type: 'kitchen' | 'bill' | 'receipt' | 'qr', itemId: string) => {
     const item = type === 'kitchen'
       ? kitchenPrintersList.find(p => p.id === itemId)
       : type === 'bill'
       ? billPrintersList.find(p => p.id === itemId)
+      : type === 'receipt'
+      ? receiptPrintersList.find(p => p.id === itemId)
       : qrPrintersList.find(p => p.id === itemId);
     if (!item) return;
 
@@ -1117,13 +1140,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     } else if (type === 'bill') {
       setEditingPrinterItemTables((item as BillPrinter).tables ?? 'all');
       setEditingPrinterItemOrderTypes((item as BillPrinter).order_types || ['all']);
+    } else if (type === 'receipt') {
+      // receipt printers have no table/order routing
     } else {
       setEditingPrinterItemTables((item as QRPrinter).tables ?? 'all');
     }
     setShowingPrinterSettingsPage(true);
   };
 
-  const addNewPrinterItem = (type: 'kitchen' | 'bill' | 'qr') => {
+  const addNewPrinterItem = (type: 'kitchen' | 'bill' | 'receipt' | 'qr') => {
     const newId = `new-${Date.now()}`;
     if (type === 'kitchen') {
       const newItem: KitchenPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', categories: [] };
@@ -1131,6 +1156,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     } else if (type === 'bill') {
       const newItem: BillPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', tables: 'all', order_types: ['all'] };
       setBillPrintersList(prev => [...prev, newItem]);
+    } else if (type === 'receipt') {
+      const newItem: ReceiptPrinter = { id: newId, name: 'New Printer', type: 'network', host: '' };
+      setReceiptPrintersList(prev => [...prev, newItem]);
     } else {
       const newItem: QRPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', tables: 'all' };
       setQrPrintersList(prev => [...prev, newItem]);
@@ -1138,7 +1166,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     openPrinterItemConfigure(type, newId);
   };
 
-  const deletePrinterItem = async (type: 'kitchen' | 'bill' | 'qr', itemId: string) => {
+  const deletePrinterItem = async (type: 'kitchen' | 'bill' | 'receipt' | 'qr', itemId: string) => {
     Alert.alert(
       'Delete Printer',
       'Remove this printer from the list?',
@@ -1156,6 +1184,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 const updated = billPrintersList.filter(p => p.id !== itemId);
                 setBillPrintersList(updated);
                 await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+              } else if (type === 'receipt') {
+                const updated = receiptPrintersList.filter(p => p.id !== itemId);
+                setReceiptPrintersList(updated);
+                await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint);
               } else {
                 const updated = qrPrintersList.filter(p => p.id !== itemId);
                 setQrPrintersList(updated);
@@ -1207,6 +1239,20 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         );
         setBillPrintersList(updated);
         await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+      } else if (editingPrinterType === 'receipt') {
+        const updated = receiptPrintersList.map(p =>
+          p.id === editingPrinterItemId
+            ? {
+                ...p,
+                name: editingPrinterItemName || p.name,
+                type: (printerFormData.printer_type as ReceiptPrinter['type']) || p.type,
+                host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+                bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
+              }
+            : p
+        );
+        setReceiptPrintersList(updated);
+        await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint);
       } else if (editingPrinterType === 'qr') {
         const updated = qrPrintersList.map(p =>
           p.id === editingPrinterItemId
@@ -1745,6 +1791,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <Text style={styles.printerPageTitle}>
             {editingPrinterType === 'qr' && t('settings.qr-printer')}
             {editingPrinterType === 'bill' && (isItemEdit ? editingPrinterItemName || t('settings.bill-printer') : t('settings.bill-printer'))}
+            {editingPrinterType === 'receipt' && (isItemEdit ? editingPrinterItemName || 'Receipt Printer' : 'Receipt Printer')}
             {editingPrinterType === 'kitchen' && (isItemEdit ? editingPrinterItemName || t('settings.kitchen-printer') : t('settings.kitchen-printer'))}
             {editingPrinterType === 'kpay' && t('settings.kpay-printer')}
           </Text>
@@ -3106,6 +3153,41 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               }}
             >
               <Text style={styles.btnText}>Format Settings</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Receipt Printer — multi-printer list */}
+          <View style={{ backgroundColor: '#e0f2fe', borderWidth: 1, borderColor: '#7dd3fc', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>Receipt Printer</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                <Switch value={receiptAutoPrint} onValueChange={async (v) => { setReceiptAutoPrint(v); await printerSettingsService.saveReceiptPrinters(restaurantId, receiptPrintersList, v); }} />
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, color: '#0369a1', marginBottom: 8 }}>Prints the payment receipt after bill is closed. If not set, falls back to Bill Printer.</Text>
+            {receiptPrintersList.length === 0 ? (
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No receipt printers configured.</Text>
+            ) : (
+              receiptPrintersList.map(p => (
+                <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => openPrinterItemConfigure('receipt', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deletePrinterItem('receipt', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8 }]} onPress={() => addNewPrinterItem('receipt')}>
+              <Text style={styles.btnText}>+ Add Receipt Printer</Text>
             </TouchableOpacity>
           </View>
 
