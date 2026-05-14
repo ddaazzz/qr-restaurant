@@ -96,6 +96,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [markingReadyId, setMarkingReadyId] = useState<number | null>(null);
   const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
+  const [printingKitchenId, setPrintingKitchenId] = useState<number | null>(null);
   const lastTapRef = useRef<{ id: number; time: number } | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -171,6 +172,76 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
     } finally {
       setMarkingReadyId(null);
     }
+  };
+
+  const handlePrintKitchenOrder = async (order: ToGoOrder) => {
+    setPrintingKitchenId(order.id);
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/print-order`, { orderId: order.id, orderType: 'kitchen' });
+      showToast('Kitchen order sent to printer', 'success');
+    } catch (err: any) {
+      Alert.alert('Print Error', err?.response?.data?.error || err.message || 'Failed to print kitchen order');
+    } finally {
+      setPrintingKitchenId(null);
+    }
+  };
+
+  const handleCancelOrderItem = async (order: ToGoOrder) => {
+    // Fetch full detail to get items if not yet loaded
+    let detail = order;
+    if (!order.items || order.items.length === 0) {
+      const fetched = await loadOrderDetail(order.id);
+      if (fetched) detail = fetched;
+    }
+    const items = (detail.items || []).filter((i: OrderItem) => true);
+    if (items.length === 0) {
+      Alert.alert('No Items', 'This order has no items to cancel.');
+      return;
+    }
+    if (items.length === 1) {
+      Alert.alert(
+        'Cancel Order',
+        'This is the last item. Cancel the entire order?',
+        [
+          { text: 'No', style: 'cancel' },
+          {
+            text: 'Cancel Order',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await apiClient.post(`/api/restaurants/${restaurantId}/orders/${order.id}/void`);
+                showToast('Order cancelled', 'success');
+                await loadOrders(true);
+              } catch (err: any) {
+                Alert.alert('Error', err?.response?.data?.error || 'Failed to cancel order');
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+    Alert.alert(
+      'Cancel Item',
+      'Select an item to cancel:',
+      [
+        ...items.map((item: OrderItem) => ({
+          text: `${item.menu_item_name} ×${item.quantity}`,
+          onPress: async () => {
+            try {
+              await apiClient.delete(`/api/restaurants/${restaurantId}/order-items/${item.id}`, {
+                data: { restaurantId },
+              });
+              showToast('Item cancelled', 'success');
+              await loadOrders(true);
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.error || 'Failed to cancel item');
+            }
+          },
+        })),
+        { text: 'No', style: 'cancel' },
+      ]
+    );
   };
 
   const handleCardPress = (item: ToGoOrder) => {
@@ -289,6 +360,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
         : (item.items || []).map(i => ({ name: i.menu_item_name, quantity: i.quantity }));
     const isMarkingThisReady = markingReadyId === item.id;
     const isPrintingThis = printingOrderId === item.id;
+    const isPrintingKitchenThis = printingKitchenId === item.id;
 
     return (
       <TouchableOpacity
@@ -379,6 +451,27 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
                 )}
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={[styles.kitchenBtn, isPrintingKitchenThis && { opacity: 0.6 }]}
+              onPress={() => handlePrintKitchenOrder(item)}
+              disabled={isPrintingKitchenThis}
+            >
+              {isPrintingKitchenThis ? (
+                <ActivityIndicator size="small" color="#15803d" />
+              ) : (
+                <>
+                  <Ionicons name="restaurant-outline" size={14} color="#15803d" style={{ marginRight: 4 }} />
+                  <Text style={styles.kitchenBtnText}>Print Kitchen Order</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cancelItemBtn}
+              onPress={() => handleCancelOrderItem(item)}
+            >
+              <Ionicons name="close-circle-outline" size={14} color="#c2410c" style={{ marginRight: 4 }} />
+              <Text style={styles.cancelItemBtnText}>Cancel Item</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -646,6 +739,30 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   markReadyBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  kitchenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  kitchenBtnText: { fontSize: 12, fontWeight: '700', color: '#15803d' },
+
+  cancelItemBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff7ed',
+    borderRadius: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  cancelItemBtnText: { fontSize: 12, fontWeight: '700', color: '#c2410c' },
 
   doubleTapHint: { textAlign: 'center', fontSize: 10, color: '#9ca3af', marginTop: 4 },
 

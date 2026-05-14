@@ -283,6 +283,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
     const [showOrderPaymentSuccess, setShowOrderPaymentSuccess] = useState(false);
     const [orderPaymentSuccessAmount, setOrderPaymentSuccessAmount] = useState(0);
     const [printingBill, setPrintingBill] = useState(false);
+    const [printingKitchen, setPrintingKitchen] = useState(false);
 
     // KPay terminal payment processing state
     const [kpayProcessing, setKpayProcessing] = useState(false);
@@ -2070,6 +2071,67 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
       }
     };
 
+    // Print kitchen order for any order (re-trigger kitchen print)
+    const handlePrintKitchenOrder = async (order: Order) => {
+      if (!order.id) return;
+      setPrintingKitchen(true);
+      try {
+        await apiClient.post(`/api/restaurants/${restaurantId}/print-order`, { orderId: order.id, orderType: 'kitchen' });
+        showToast('Kitchen order sent to printer', 'success');
+      } catch (err: any) {
+        Alert.alert('Print Error', err?.response?.data?.error || err.message || 'Failed to print kitchen order');
+      } finally {
+        setPrintingKitchen(false);
+      }
+    };
+
+    // Cancel a single order item; if it's the last item, cancel the whole order
+    const handleCancelOrderItem = (order: Order) => {
+      const items = (order.items || []).filter((i: any) => !i.removed);
+      if (items.length === 0) {
+        Alert.alert('No Items', 'This order has no items to cancel.');
+        return;
+      }
+      if (items.length === 1) {
+        // Last item — cancel the whole order
+        Alert.alert(
+          t('orders.void-order'),
+          t('orders.void-manual-msg'),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: t('orders.void'),
+              style: 'destructive',
+              onPress: () => handleVoidOrder(order.id),
+            },
+          ]
+        );
+        return;
+      }
+      // Multiple items — show picker
+      Alert.alert(
+        'Cancel Item',
+        'Select an item to cancel:',
+        [
+          ...items.map((item: any) => ({
+            text: `${item.menu_item_name || item.name} ×${item.quantity}`,
+            onPress: async () => {
+              try {
+                await apiClient.delete(`/api/restaurants/${restaurantId}/order-items/${item.id}`, {
+                  data: { restaurantId },
+                });
+                showToast('Item cancelled', 'success');
+                await reloadSelectedOrder(order.id);
+              } catch (err: any) {
+                Alert.alert('Error', err?.response?.data?.error || 'Failed to cancel item');
+              }
+            },
+          })),
+          { text: t('common.cancel'), style: 'cancel' },
+        ]
+      );
+    };
+
     // Compute filtered orders for history and unpaid counts
     const filteredHistoryOrders = orders.filter(order => {
       // Order type filter
@@ -3671,6 +3733,27 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               disabled={printingBill}
             >
               {printingBill ? <ActivityIndicator size="small" color="#667eea" /> : <Text style={{ fontSize: 13, fontWeight: '600', color: '#4f46e5' }}>🖨 {t('togo.print-receipt')}</Text>}
+            </TouchableOpacity>
+          )}
+
+          {/* Print Kitchen Order Button */}
+          <TouchableOpacity
+            style={[{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#86efac', marginTop: 8, flexDirection: 'row', justifyContent: 'center' }, printingKitchen && { opacity: 0.6 }]}
+            onPress={() => handlePrintKitchenOrder(selectedHistoryOrder)}
+            disabled={printingKitchen}
+          >
+            {printingKitchen ? <ActivityIndicator size="small" color="#16a34a" /> : <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803d' }}>🍳 Print Kitchen Order</Text>}
+          </TouchableOpacity>
+
+          {/* Cancel Item Button */}
+          {(selectedHistoryOrder.items || []).filter((i: any) => !i.removed).length > 0 && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#fff7ed', borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#fed7aa', marginTop: 8, flexDirection: 'row', justifyContent: 'center' }}
+              onPress={() => handleCancelOrderItem(selectedHistoryOrder)}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#c2410c' }}>
+                {(selectedHistoryOrder.items || []).filter((i: any) => !i.removed).length === 1 ? '✕ Cancel Order' : '✕ Cancel Item'}
+              </Text>
             </TouchableOpacity>
           )}
 

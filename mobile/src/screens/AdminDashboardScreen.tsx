@@ -97,6 +97,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [showRoomDropdown, setShowRoomDropdown] = useState(false);
   const [unpaidOrderCount, setUnpaidOrderCount] = useState(0);
   const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
+  const [hasTableService, setHasTableService] = useState<boolean>(true);
   const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
   const staffTabRef = useRef<StaffTabRef>(null);
@@ -127,13 +128,15 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     return () => clearInterval(interval);
   }, [loadUnpaidCount]);
 
-  // Fetch restaurant feature flags
+  // Fetch restaurant feature flags + venue type (has_table_service)
   useEffect(() => {
     if (!user?.restaurantId) return;
+    // Settings gives us has_table_service for tab visibility
+    apiClient.get(`/api/restaurants/${user.restaurantId}/settings`)
+      .then((res: any) => { setHasTableService(res.data?.has_table_service !== false); })
+      .catch(() => {});
     apiClient.get(`/api/restaurants/${user.restaurantId}/config`)
-      .then((res: any) => {
-        if (res.data?.feature_flags) setFeatureFlags(res.data.feature_flags);
-      })
+      .then((res: any) => { if (res.data?.feature_flags) setFeatureFlags(res.data.feature_flags); })
       .catch(() => {});
   }, [user?.restaurantId]);
 
@@ -143,6 +146,13 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       setShowClockInPrompt(true);
     }
   }, []);
+
+  // When venue has no table service, redirect away from tables/bookings
+  useEffect(() => {
+    if (!hasTableService && (activeTab === 'tables' || activeTab === 'bookings')) {
+      setActiveTab('togo');
+    }
+  }, [hasTableService]);
 
   // Compute visible tabs based on role and access_rights
   const visibleTabs = useMemo((): TabType[] => {
@@ -175,13 +185,16 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   }, [user]);
 
   // Filter tabs by feature flags (opt-out: hidden only if explicitly false)
+  // Also hide tables + bookings when restaurant has no table service (cafe/counter)
   const TAB_FLAG_MAP: Record<string, string> = { bookings: 'bookings', staff: 'staff_timekeeping' };
   const filteredTabs = useMemo(() => {
     return visibleTabs.filter(tab => {
+      // Hide tables and bookings for non-table-service venues
+      if (!hasTableService && (tab === 'tables' || tab === 'bookings')) return false;
       const flag = TAB_FLAG_MAP[tab];
       return !flag || featureFlags[flag] !== false;
     });
-  }, [visibleTabs, featureFlags]);
+  }, [visibleTabs, featureFlags, hasTableService]);
 
   // Map tabs to premium feature keys
   const TAB_PREMIUM_FEATURE: Partial<Record<TabType, PremiumFeatureKey>> = {
