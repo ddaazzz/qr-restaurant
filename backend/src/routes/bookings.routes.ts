@@ -216,6 +216,7 @@ router.patch("/bookings/:bookingId", async (req, res) => {
       updates.push(`email = $${paramCount++}`);
       values.push(email);
     }
+    if (pax !== undefined) {
       updates.push(`pax = $${paramCount++}`);
       values.push(pax);
     }
