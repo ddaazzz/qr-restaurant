@@ -2546,6 +2546,19 @@ async function closeBillModal(sessionId) {
         Process the payment on the physical PA terminal, then click <strong>Close Bill</strong> to confirm.
       </div>
 
+      <!-- Cash received input (shown when cash is selected) -->
+      <div id="cash-received-section" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:15px;">
+        <label style="font-weight:600; display:block; margin-bottom:6px; font-size:13px; color:#166534;">
+          Cash Received (HKD)
+        </label>
+        <input type="number" id="cash-received-input" min="0" step="0.01" placeholder="e.g. 200.00"
+          oninput="updateCashChange(${grandTotal})"
+          style="width:100%; padding:8px; border:1px solid #86efac; border-radius:6px; font-size:15px; font-weight:600; box-sizing:border-box;" />
+        <div id="cash-change-display" style="margin-top:8px; font-size:14px; color:#166534; font-weight:600; display:none;">
+          Change: HKD <span id="cash-change-amount">0.00</span>
+        </div>
+      </div>
+
       <label style="display: block; margin-bottom: 15px;">
         <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.discount-section')}</span>
         <select id="discount-coupon" onchange="updateBillTotal(${grandTotal})" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -2577,6 +2590,22 @@ function onPaymentMethodChange() {
   if (notice) notice.style.display = method === 'kpay' ? 'block' : 'none';
 }
 
+function updateCashChange(grandTotal) {
+  const input = document.getElementById('cash-received-input');
+  const changeDisplay = document.getElementById('cash-change-display');
+  const changeAmountEl = document.getElementById('cash-change-amount');
+  if (!input || !changeDisplay || !changeAmountEl) return;
+  const cashReceivedCents = Math.round(parseFloat(input.value || '0') * 100);
+  const change = cashReceivedCents - grandTotal;
+  if (cashReceivedCents > 0) {
+    changeDisplay.style.display = 'block';
+    changeAmountEl.textContent = (change / 100).toFixed(2);
+    changeAmountEl.style.color = change < 0 ? '#dc2626' : '#166534';
+  } else {
+    changeDisplay.style.display = 'none';
+  }
+}
+
 function selectPaymentMethod(method) {
   const hidden = document.getElementById('payment-method');
   if (hidden) hidden.value = method;
@@ -2592,6 +2621,9 @@ function selectPaymentMethod(method) {
   if (kpayNotice) kpayNotice.style.display = method === 'kpay' ? 'block' : 'none';
   const paOfflineNotice = document.getElementById('pa-offline-notice');
   if (paOfflineNotice) paOfflineNotice.style.display = method === 'payment-asia-offline' ? 'block' : 'none';
+  // Show/hide cash received input
+  const cashSection = document.getElementById('cash-received-section');
+  if (cashSection) cashSection.style.display = method === 'cash' ? 'block' : 'none';
 }
 
 async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
@@ -2614,6 +2646,16 @@ async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
   }
 
   const finalAmount = grandTotal - discountApplied;
+
+  // Read cash received (cash only)
+  let amountReceivedCents = null;
+  let changeCents = null;
+  if (paymentMethod === 'cash') {
+    const cashInput = document.getElementById('cash-received-input');
+    const cashVal = parseFloat(cashInput ? cashInput.value : '0') || 0;
+    amountReceivedCents = Math.round(cashVal * 100);
+    changeCents = amountReceivedCents - finalAmount;
+  }
 
   // Capture customer info for email receipt (if feature is enabled)
   const customerNameEl = document.getElementById('receipt-customer-name');
@@ -2650,7 +2692,7 @@ async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
   }
 
   // ── Cash / Card path (original flow) ──────────────────────────────────
-  await _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason });
+  await _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason, amountReceived: amountReceivedCents, changeAmount: changeCents });
 
   // ── Email receipt (if customer email provided) ──────────────────────────
   if (customerEmail) {
@@ -2948,7 +2990,7 @@ async function printKPayReceipt({ sessionId, outTradeNo, amountCents, transactio
 /**
  * Core close-bill API call, shared by both cash/card and KPay paths.
  */
-async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason, kpay_reference_id = null }) {
+async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason, kpay_reference_id = null, amountReceived = null, changeAmount = null }) {
   const restaurantId = localStorage.getItem('restaurantId');
 
   await fetch(`${API}/sessions/${sessionId}/request-bill-closure`, {
@@ -2986,14 +3028,134 @@ async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApp
   // Remove any remaining modals (cash/card path)
   document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
 
-  if (paymentMethod !== 'kpay') {
-    showToast(`Bill closed\n${paymentMethod.toUpperCase()} · HKD ${(finalAmount / 100).toFixed(2)}`, 'success');
-  }
-
   await loadTablesCategoryTable();
   if (typeof loadOrdersHistoryLeftPanel === 'function') await loadOrdersHistoryLeftPanel();
-
   closeSessionPanel();
+
+  // Fetch the current staff name for the receipt popup
+  let staffName = '';
+  try {
+    const meRes = await fetch(`${API}/me`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+    if (meRes.ok) { const me = await meRes.json(); staffName = me.name || ''; }
+  } catch (_) {}
+
+  showPaymentSuccessPopup({
+    sessionId,
+    paymentMethod,
+    billAmount: finalAmount,
+    serviceCharge: serviceChargeAmount,
+    discountApplied,
+    amountReceived,
+    changeAmount,
+    staffName,
+  });
+}
+
+/**
+ * Show a payment success popup after bill closure.
+ * Has two buttons: Print Receipt (white/outlined) and Done (primary).
+ */
+function showPaymentSuccessPopup({ sessionId, paymentMethod, billAmount, serviceCharge, discountApplied, amountReceived, changeAmount, staffName }) {
+  const methodLabels = {
+    cash: 'Cash',
+    card: 'Card',
+    kpay: 'KPay Terminal',
+    'payment-asia-offline': 'UnionPay Terminal',
+  };
+  const methodLabel = methodLabels[paymentMethod?.toLowerCase?.()] || (paymentMethod || 'Unknown');
+  const isCash = paymentMethod === 'cash';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-content" style="width:380px; text-align:center;">
+      <div style="margin-bottom:12px;">
+        <div style="width:60px; height:60px; background:#d1fae5; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto; font-size:28px;">✓</div>
+        <h3 style="margin:0 0 4px 0; font-size:20px; color:#065f46;">Payment Successful</h3>
+        <p style="margin:0; font-size:13px; color:#6b7280;">Bill has been closed</p>
+      </div>
+
+      <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:16px; margin-bottom:20px; text-align:left;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #e5e7eb;">
+          <span style="color:#6b7280; font-size:13px;">Payment Method</span>
+          <span style="font-weight:600; font-size:13px;">${methodLabel}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span style="color:#6b7280; font-size:13px;">Bill Amount</span>
+          <span style="font-weight:600; font-size:14px;">HKD ${(billAmount / 100).toFixed(2)}</span>
+        </div>
+        ${isCash && amountReceived !== null && amountReceived > 0 ? `
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span style="color:#6b7280; font-size:13px;">Amount Received</span>
+          <span style="font-weight:600; font-size:14px;">HKD ${(amountReceived / 100).toFixed(2)}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px; padding:8px; background:#ecfdf5; border-radius:6px;">
+          <span style="color:#065f46; font-size:14px; font-weight:700;">Change</span>
+          <span style="font-weight:700; font-size:16px; color:#065f46;">HKD ${(Math.max(0, changeAmount || 0) / 100).toFixed(2)}</span>
+        </div>
+        ` : ''}
+        ${staffName ? `
+        <div style="display:flex; justify-content:space-between; margin-top:6px; padding-top:10px; border-top:1px solid #e5e7eb;">
+          <span style="color:#6b7280; font-size:13px;">Staff</span>
+          <span style="font-size:13px;">${staffName}</span>
+        </div>
+        ` : ''}
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        <button onclick="printPaymentReceipt(${JSON.stringify({ sessionId, paymentMethod, billAmount, serviceCharge, discountApplied, amountReceived, changeAmount, staffName }).replace(/"/g, '&quot;')}); return false;"
+          style="flex:1; padding:12px; border:2px solid #3b82f6; border-radius:8px; background:#fff; color:#3b82f6; font-weight:600; font-size:14px; cursor:pointer;">
+          🖨 Print Receipt
+        </button>
+        <button onclick="this.closest('.modal-overlay').remove()"
+          style="flex:1; padding:12px; border:none; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; font-size:14px; cursor:pointer;">
+          Done
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Print a payment receipt via the Receipt printer (or Bill printer fallback).
+ */
+async function printPaymentReceipt(data) {
+  const restaurantId = localStorage.getItem('restaurantId');
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/print-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: data.sessionId,
+        receiptData: {
+          paymentMethod: data.paymentMethod,
+          total: data.billAmount,
+          serviceCharge: data.serviceCharge,
+          discountApplied: data.discountApplied,
+          amountReceived: data.amountReceived,
+          changeAmount: data.changeAmount,
+          closedByStaff: data.staffName,
+        },
+      }),
+    });
+    const result = await res.json();
+    if (result.bluetoothPayload && window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'bluetooth_print',
+        payload: {
+          escposBase64: result.bluetoothPayload.data?.escposBase64,
+          escposArray: result.bluetoothPayload.data?.escposArray,
+          printerConfig: result.bluetoothPayload.printerConfig,
+        },
+      }));
+    }
+    if (result.success && !result.bluetoothPayload) {
+      showToast('Receipt printed', 'success');
+    }
+  } catch (err) {
+    showToast('Failed to print receipt', 'error');
+  }
 }
 
 async function createTable() {

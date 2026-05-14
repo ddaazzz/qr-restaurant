@@ -1826,7 +1826,10 @@ async function openSettleBillModal(orderId, sessionId) {
 
       <label style="display:block; margin-bottom:14px;">
         <span style="font-weight:600; display:block; margin-bottom:5px;">Payment Method</span>
-        <select id="settle-payment-method" onchange="document.getElementById('settle-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        <select id="settle-payment-method" onchange="
+          document.getElementById('settle-kpay-notice').style.display=this.value==='kpay'?'block':'none';
+          document.getElementById('settle-cash-received-section').style.display=this.value==='cash'?'block':'none';
+        " style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
           <option value="cash">Cash</option>
           <option value="card">Card</option>
           ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
@@ -1835,6 +1838,17 @@ async function openSettleBillModal(orderId, sessionId) {
 
       <div id="settle-kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:14px; font-size:13px; color:#1d4ed8;">
         Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
+      </div>
+
+      <!-- Cash received input (shown when cash is selected) -->
+      <div id="settle-cash-received-section" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:14px;">
+        <label style="font-weight:600; display:block; margin-bottom:6px; font-size:13px; color:#166534;">Cash Received (HKD)</label>
+        <input type="number" id="settle-cash-received-input" min="0" step="0.01" placeholder="e.g. 200.00"
+          oninput="updateSettleCashChange(${grandTotal})"
+          style="width:100%; padding:8px; border:1px solid #86efac; border-radius:6px; font-size:15px; font-weight:600; box-sizing:border-box;" />
+        <div id="settle-cash-change-display" style="margin-top:8px; font-size:14px; color:#166534; font-weight:600; display:none;">
+          Change: HKD <span id="settle-cash-change-amount">0.00</span>
+        </div>
       </div>
 
       <label style="display:block; margin-bottom:14px;">
@@ -1857,6 +1871,22 @@ async function openSettleBillModal(orderId, sessionId) {
     </div>
   `;
   document.body.appendChild(overlay);
+}
+
+function updateSettleCashChange(grandTotal) {
+  const input = document.getElementById('settle-cash-received-input');
+  const changeDisplay = document.getElementById('settle-cash-change-display');
+  const changeAmountEl = document.getElementById('settle-cash-change-amount');
+  if (!input || !changeDisplay || !changeAmountEl) return;
+  const cashReceivedCents = Math.round(parseFloat(input.value || '0') * 100);
+  const change = cashReceivedCents - grandTotal;
+  if (cashReceivedCents > 0) {
+    changeDisplay.style.display = 'block';
+    changeAmountEl.textContent = (change / 100).toFixed(2);
+    changeAmountEl.style.color = change < 0 ? '#dc2626' : '#166534';
+  } else {
+    changeDisplay.style.display = 'none';
+  }
 }
 
 function updateSettleBillTotal(grandTotal) {
@@ -1890,6 +1920,16 @@ async function submitSettleBill(sessionId, grandTotal, serviceChargeCents, order
   const reason = document.getElementById('settle-close-reason')?.value || '';
   const finalAmount = grandTotal - discountApplied;
 
+  // Read cash received (cash only)
+  let amountReceivedCents = null;
+  let changeCents = null;
+  if (paymentMethod === 'cash') {
+    const cashInput = document.getElementById('settle-cash-received-input');
+    const cashVal = parseFloat(cashInput ? cashInput.value : '0') || 0;
+    amountReceivedCents = Math.round(cashVal * 100);
+    changeCents = amountReceivedCents - finalAmount;
+  }
+
   document.querySelector('.modal-overlay')?.remove();
 
   if (paymentMethod === 'kpay') {
@@ -1910,6 +1950,8 @@ async function submitSettleBill(sessionId, grandTotal, serviceChargeCents, order
       discountApplied,
       serviceChargeAmount: serviceChargeCents,
       reason,
+      amountReceived: amountReceivedCents,
+      changeAmount: changeCents,
     });
     await loadOrdersHistoryLeftPanel();
   }

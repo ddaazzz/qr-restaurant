@@ -39,6 +39,11 @@ export interface ReceiptData {
   billFooterText?: string; // Customizable footer text for bills (e.g., "Follow us on social media")
   billFontSize?: 'small' | 'medium' | 'large'; // Font size for bill receipt
   language?: string; // 'en' (default) or 'zh' for Chinese labels
+  // Payment receipt fields (used for post-payment receipt printer)
+  paymentMethod?: string; // e.g. 'cash' | 'card' | 'kpay' | 'payment-asia-offline'
+  amountReceived?: number; // Amount given by customer in cents (cash only)
+  changeAmount?: number;   // Change to return in cents (cash only)
+  closedByStaff?: string;  // Display name of staff who closed the bill
 }
 
 /**
@@ -293,6 +298,47 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
     appendText(commands, totalLine);
     commands.push(27, 33, 0); // ESC '!' 0 - Bold off
     commands.push(10);
+  }
+
+  // === PAYMENT DETAILS (shown on receipt printer output) ===
+  if (receipt.paymentMethod) {
+    commands.push(10); // blank line after total
+    appendText(commands, '========================================');
+    commands.push(10);
+
+    const methodLabels: Record<string, string> = {
+      cash: isZh ? '付款方式: 現金' : 'Payment: Cash',
+      card: isZh ? '付款方式: 信用卡' : 'Payment: Card',
+      kpay: isZh ? '付款方式: KPay終端機' : 'Payment: KPay Terminal',
+      'payment-asia-offline': isZh ? '付款方式: 銀聯' : 'Payment: UnionPay Terminal',
+    };
+    const methodLabel = methodLabels[receipt.paymentMethod.toLowerCase()] ||
+      (isZh ? `付款方式: ${receipt.paymentMethod}` : `Payment: ${receipt.paymentMethod}`);
+    appendText(commands, methodLabel);
+    commands.push(10);
+
+    if (receipt.amountReceived !== undefined && receipt.amountReceived > 0) {
+      const rcvdLabel = isZh ? '收款金額' : 'Received';
+      const rcvdStr = (receipt.amountReceived / 100).toFixed(2);
+      const rcvdPadding = Math.max(1, 32 - rcvdLabel.length - rcvdStr.length);
+      appendText(commands, rcvdLabel + ' '.repeat(rcvdPadding) + rcvdStr);
+      commands.push(10);
+    }
+
+    if (receipt.changeAmount !== undefined && receipt.changeAmount >= 0) {
+      const changeLabel = isZh ? '找零' : 'Change';
+      const changeStr = (receipt.changeAmount / 100).toFixed(2);
+      const changePadding = Math.max(1, 32 - changeLabel.length - changeStr.length);
+      commands.push(27, 33, 8); // Bold
+      appendText(commands, changeLabel + ' '.repeat(changePadding) + changeStr);
+      commands.push(27, 33, 0); // Normal
+      commands.push(10);
+    }
+
+    if (receipt.closedByStaff) {
+      appendText(commands, isZh ? `員工: ${receipt.closedByStaff}` : `Staff: ${receipt.closedByStaff}`);
+      commands.push(10);
+    }
   }
 
   commands.push(10, 10); // LF x2

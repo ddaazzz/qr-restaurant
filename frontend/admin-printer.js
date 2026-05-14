@@ -90,13 +90,14 @@ async function selectPrinterType(type) {
     qr:      t('admin.printer-qr-title')      || '📋 QR Code Printing',
     bill:    t('admin.printer-bill-title')    || '🧾 Bill Receipt Printing',
     kitchen: t('admin.printer-kitchen-title') || '🍳 Kitchen Order Printing',
-    kpay:    t('admin.printer-kpay-title')    || '💳 KPay Receipt Printing'
+    kpay:    t('admin.printer-kpay-title')    || '💳 KPay Receipt Printing',
+    receipt: '🧾 Payment Receipt Printing',
   };
   if (detailTitle) detailTitle.textContent = titles[type] || 'Configuration';
 
-  // Show/hide the four format sections
-  const sectionIds = ['qr-format-section', 'bill-format-section', 'kitchen-format-section', 'kpay-format-section'];
-  const typeMap    = { qr: 'qr-format-section', bill: 'bill-format-section', kitchen: 'kitchen-format-section', kpay: 'kpay-format-section' };
+  // Show/hide the format sections
+  const sectionIds = ['qr-format-section', 'bill-format-section', 'kitchen-format-section', 'kpay-format-section', 'receipt-format-section'];
+  const typeMap    = { qr: 'qr-format-section', bill: 'bill-format-section', kitchen: 'kitchen-format-section', kpay: 'kpay-format-section', receipt: 'receipt-format-section' };
   sectionIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = (id === typeMap[type]) ? 'block' : 'none';
@@ -121,6 +122,8 @@ async function selectPrinterType(type) {
     }
   } else if (type === 'kpay') {
     loadKPayFormatUI();
+  } else if (type === 'receipt') {
+    loadReceiptFormatUI();
   }
 
   console.log('[admin-printer.js] selectPrinterType done for:', type);
@@ -210,6 +213,15 @@ function updateStatusCards() {
     kpayEl.innerHTML = hasKpay ? 'Configured' : 'Not configured';
     kpayEl.style.background = hasKpay ? '#dcfce7' : '#f3f4f6';
     kpayEl.style.color = hasKpay ? '#166534' : '#666';
+  }
+
+  // Receipt printer status
+  const receiptEl = document.getElementById('receipt-status');
+  if (receiptEl) {
+    const hasReceipt = Array.isArray(settings.receipt_printers) && settings.receipt_printers.length > 0;
+    receiptEl.innerHTML = hasReceipt ? `${settings.receipt_printers.length} Printer${settings.receipt_printers.length !== 1 ? 's' : ''}` : 'Not configured';
+    receiptEl.style.background = hasReceipt ? '#dcfce7' : '#f3f4f6';
+    receiptEl.style.color = hasReceipt ? '#166534' : '#666';
   }
 
   // KPay current printer summary (new iOS-style main view)
@@ -1548,9 +1560,9 @@ async function loadPrinterSettings() {
           window.currentPrinterSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
           window.currentPrinterSettings[`${prefix}bluetooth_device`] = printer.bluetooth_device_name || printer.bluetooth_device_id;
           
-          // Extract multi-printer arrays for QR and Bill
+          // Extract multi-printer arrays for QR, Bill, and Receipt
           const typeLC = printer.type.toLowerCase();
-          if ((typeLC === 'qr' || typeLC === 'bill') && printer.settings?.printers) {
+          if ((typeLC === 'qr' || typeLC === 'bill' || typeLC === 'receipt') && printer.settings?.printers) {
             window.currentPrinterSettings[`${typeLC}_printers`] = printer.settings.printers;
             console.log(`[admin-printer.js] Loaded ${typeLC}_printers array:`, printer.settings.printers);
           }
@@ -1594,12 +1606,18 @@ async function loadPrinterSettings() {
       window.selectedBluetoothDevices.kpay = window.currentPrinterSettings.kpay_bluetooth_device;
       console.log('[admin-printer.js] ✓ KPay device loaded from DB:', window.currentPrinterSettings.kpay_bluetooth_device);
     }
+
+    if (window.currentPrinterSettings.receipt_bluetooth_device) {
+      window.selectedBluetoothDevices.receipt = window.currentPrinterSettings.receipt_bluetooth_device;
+      console.log('[admin-printer.js] ✓ Receipt device loaded from DB:', window.currentPrinterSettings.receipt_bluetooth_device);
+    }
     
     // Ensure all defaults are set
     if (!window.currentPrinterSettings.qr_printer_type) window.currentPrinterSettings.qr_printer_type = 'none';
     if (!window.currentPrinterSettings.bill_printer_type) window.currentPrinterSettings.bill_printer_type = 'none';
     if (!window.currentPrinterSettings.kitchen_printer_type) window.currentPrinterSettings.kitchen_printer_type = 'none';
     if (!window.currentPrinterSettings.kpay_printer_type) window.currentPrinterSettings.kpay_printer_type = 'none';
+    if (!window.currentPrinterSettings.receipt_printer_type) window.currentPrinterSettings.receipt_printer_type = 'none';
     
     updateStatusCards();
     window.currentPrinterSettings = window.currentPrinterSettings;

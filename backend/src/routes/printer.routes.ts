@@ -120,6 +120,7 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
         'bill': 'Bill', 'BILL': 'Bill', 'Bill': 'Bill',
         'kitchen': 'Kitchen', 'KITCHEN': 'Kitchen', 'Kitchen': 'Kitchen',
         'kpay': 'KPAY', 'KPAY': 'KPAY',
+        'receipt': 'Receipt', 'RECEIPT': 'Receipt', 'Receipt': 'Receipt',
       };
       const normalizedType = typeNormalizeMap[type] || type;
 
@@ -1983,6 +1984,159 @@ router.delete("/restaurants/:restaurantId/printer-profiles/:profileId", async (r
   } catch (err) {
     console.error("[PrinterProfiles] DELETE failed:", err);
     res.status(500).json({ error: "Failed to delete printer profile" });
+  }
+});
+
+/**
+ * Print Receipt — called after bill closure to print a payment receipt
+ * Uses the 'Receipt' printer if configured; falls back to 'Bill' printer.
+ */
+router.post("/restaurants/:restaurantId/print-receipt", async (req: Request, res: Response) => {
+  const restaurantId = req.params.restaurantId as string;
+  const { sessionId, receiptData } = req.body;
+
+  console.log('[PrintReceipt] Received request:', { restaurantId, sessionId, receiptData });
+
+  if (!sessionId || !receiptData) {
+    return res.status(400).json({ error: "sessionId and receiptData are required" });
+  }
+
+  try {
+    // Try Receipt printer first, fall back to Bill printer
+    let printerResult = await pool.query(
+      `SELECT printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, settings
+       FROM printers WHERE restaurant_id = $1 AND type = 'Receipt'`,
+      [restaurantId]
+    );
+
+    if (!printerResult.rows[0]) {
+      printerResult = await pool.query(
+        `SELECT printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, settings
+         FROM printers WHERE restaurant_id = $1 AND type = 'Bill'`,
+        [restaurantId]
+      );
+    }
+
+    const printerConfig = printerResult.rows[0];
+    if (!printerConfig) {
+      return res.status(404).json({ error: "No receipt or bill printer configured" });
+    }
+
+    // Get restaurant info
+    let restaurantName = '';
+    let restaurantAddress = '';
+    let restaurantPhone = '';
+    let restaurantLang = 'en';
+    const restaurantMetaResult = await pool.query(
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    if ((restaurantMetaResult.rowCount ?? 0) > 0) {
+      restaurantName = restaurantMetaResult.rows[0].name;
+      restaurantAddress = restaurantMetaResult.rows[0].address || '';
+      restaurantPhone = restaurantMetaResult.rows[0].phone || '';
+      restaurantLang = restaurantMetaResult.rows[0].language_preference || 'en';
+    }
+
+    const settingsRaw = printerConfig.settings as any;
+    const multiPrinters = settingsRaw?.printers;
+    const headerText = settingsRaw?.header_text || 'Thank You';
+    const footerText = settingsRaw?.footer_text || '';
+    const fontSize: 'small' | 'medium' | 'large' = (settingsRaw?.font_size === 'small' || settingsRaw?.font_size === 'large') ? settingsRaw.font_size : 'medium';
+
+    const escposData: ReceiptData = {
+      restaurantName,
+      restaurantAddress,
+      restaurantPhone,
+      orderNumber: String(sessionId),
+      tableNumber: receiptData.table || receiptData.tableNumber || 'Receipt',
+      pax: receiptData.pax,
+      items: receiptData.items || [],
+      subtotal: receiptData.subtotal,
+      serviceCharge: receiptData.serviceCharge,
+      tax: receiptData.tax,
+      total: receiptData.total,
+      timestamp: new Date().toLocaleString(),
+      printerPaperWidth: 80,
+      billHeaderText: headerText,
+      billFooterText: footerText,
+      billFontSize: fontSize,
+      language: restaurantLang,
+      paymentMethod: receiptData.paymentMethod,
+      amountReceived: receiptData.amountReceived,
+      changeAmount: receiptData.changeAmount,
+      closedByStaff: receiptData.closedByStaff,
+    };
+
+    const escpos = generateESCPOS(escposData);
+    const escposBase64 = Buffer.from(escpos).toString('base64');
+    const escposArray = Array.from(escpos);
+
+    // Multi-printer mode
+    if (Array.isArray(multiPrinters) && multiPrinters.length > 0) {
+      const bluetoothPayloads: any[] = [];
+      const networkResults: any[] = [];
+
+      for (const printer of multiPrinters) {
+        if (printer.type === 'network' && printer.host) {
+          const port = printer.port || 9100;
+          try {
+            await sendToNetworkPrinter(printer.host, port, Buffer.from(escpos));
+            networkResults.push({ printer: printer.name, host: printer.host, success: true });
+          } catch (tcpErr: any) {
+            networkResults.push({ printer: printer.name, host: printer.host, success: false, escposBase64, port });
+          }
+        } else if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+          bluetoothPayloads.push({
+            printerConfig: {
+              bluetoothDeviceId: printer.bluetoothDevice,
+              bluetoothDeviceName: printer.bluetoothDevice,
+            },
+            data: { type: 'receipt', escposBase64, escposArray },
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        ...(bluetoothPayloads.length > 0 && { bluetoothPayload: bluetoothPayloads[0] }),
+        bluetoothPayloads,
+        networkResults,
+        jobId: `receipt-${sessionId}-${Date.now()}`,
+      });
+    }
+
+    // Single-printer mode
+    if (printerConfig.printer_type === 'network' || printerConfig.printer_type === 'thermal') {
+      const host = printerConfig.printer_host;
+      const port = printerConfig.printer_port || 9100;
+      try {
+        await sendToNetworkPrinter(host, port, Buffer.from(escpos));
+        return res.json({ success: true, jobId: `receipt-${sessionId}-${Date.now()}` });
+      } catch (tcpErr: any) {
+        return res.json({ success: true, escposBase64, escposArray, jobId: `receipt-${sessionId}-${Date.now()}`, networkFallback: true });
+      }
+    }
+
+    if (printerConfig.printer_type === 'bluetooth' || printerConfig.bluetooth_device_id) {
+      return res.json({
+        success: true,
+        bluetoothPayload: {
+          printerConfig: {
+            bluetoothDeviceId: printerConfig.bluetooth_device_id,
+            bluetoothDeviceName: printerConfig.bluetooth_device_name,
+          },
+          data: { type: 'receipt', escposBase64, escposArray },
+        },
+        jobId: `receipt-${sessionId}-${Date.now()}`,
+      });
+    }
+
+    // No usable printer config
+    return res.json({ success: true, message: 'No receipt printer configured', escposBase64, escposArray });
+  } catch (err) {
+    console.error('[PrintReceipt] Error:', err);
+    res.status(500).json({ error: "Failed to print receipt" });
   }
 });
 

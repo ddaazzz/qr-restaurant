@@ -33,6 +33,11 @@ export interface ReceiptData {
   billHeaderText?: string;
   billFooterText?: string;
   billFontSize?: 'small' | 'medium' | 'large';
+  // Payment receipt fields
+  paymentMethod?: string;
+  amountReceived?: number; // in cents
+  changeAmount?: number;   // in cents
+  closedByStaff?: string;
 }
 
 class ThermalPrinterService {
