@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   InputAccessoryView,
+  useWindowDimensions,
 } from 'react-native';
 import * as Print from 'expo-print';
 import RNModal from 'react-native-modal';
@@ -216,6 +217,8 @@ const getTableTextColor = (bgColor: string) => {
 
 export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) => {
   const { t } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -2410,7 +2413,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     sessionOrders.some(
       (o) => o.order_payment_method === 'payment-asia' && o.order_status === 'completed'
     );
-  const screenWidth = Dimensions.get('window').width;
+  const screenWidth = windowWidth;
   const sidebarWidth = 130;
   const contentWidth = isTablet ? screenWidth - sidebarWidth - 24 : screenWidth - 24; // iPhone sidebar is overlay
   const tableNumColumns = isTablet ? (screenWidth > 1100 ? 5 : 4) : (screenWidth > 500 ? 3 : 2);
