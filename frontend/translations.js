@@ -1678,6 +1678,12 @@ const translations = {
     'admin.header-admin': 'Admin',
     'admin.header-staff': 'Staff',
     'admin.header-logout': '🚪 Logout',
+    'admin.header-exit': 'Exit',
+    'admin.switcher-who': "Who's working?",
+    'admin.switcher-active': 'Active',
+    'admin.switcher-off': 'Off duty',
+    'admin.switcher-clocked-in': 'Clocked In',
+    'admin.switcher-wrong-pin': 'Wrong PIN for this staff',
     'admin.scan-qr': 'Scan Table',
 
     // Cart remarks

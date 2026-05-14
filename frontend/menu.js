@@ -468,7 +468,6 @@ async function _applySessionToLanding(session, isOrderNow) {
   const dineInBtn      = document.getElementById("dine-in-btn");
   const togoBtn        = document.getElementById("togo-btn");
   const checkBtn       = document.getElementById("check-orders-btn");
-  const hasTableService = session.has_table_service !== false;
 
   // Helper to relabel a landing action button
   function _relabelBtn(btn, svgOrIcon, main, sub) {

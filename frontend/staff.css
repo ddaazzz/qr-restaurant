@@ -245,6 +245,28 @@ body.app-loaded {
   .switcher-staff-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
+/* Page mode: full-page layout for initial login (no overlay dim) */
+.staff-switcher.page-mode {
+  background: #f8fafc;
+  backdrop-filter: none;
+  align-items: flex-start;
+  overflow-y: auto;
+}
+
+.staff-switcher.page-mode .staff-switcher-box {
+  border-radius: 0;
+  box-shadow: none;
+  max-height: none;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  padding: 40px 32px;
+}
+
+@media (max-width: 540px) {
+  .staff-switcher.page-mode .staff-switcher-box { padding: 24px 16px; }
+}
+
 .switcher-staff-card {
   background: #f8fafc;
   border: 2px solid #e2e8f0;
