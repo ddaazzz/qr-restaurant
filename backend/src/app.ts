@@ -29,6 +29,7 @@ import xishCampaignsRoutes from "./routes/xish-campaigns.routes";
 import xishWalletRoutes from "./routes/xish-wallet.routes";
 import xishPosRoutes from "./routes/xish-pos.routes";
 import queueRoutes from "./routes/queue.routes";
+import giftCardsRoutes from "./routes/gift-cards.routes";
 import { isR2Configured, s3Client, R2_BUCKET_NAME } from "./config/storage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 
@@ -192,6 +193,7 @@ app.use("/api", xishCampaignsRoutes);
 app.use("/api", xishWalletRoutes);
 app.use("/api", xishPosRoutes);
 app.use("/api", queueRoutes);
+app.use("/api", giftCardsRoutes);
 
 /* ======================
    FRONTEND STATIC FILES

@@ -258,15 +258,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [tiersSaving, setTiersSaving] = useState(false);
 
   // Gift cards state
-  const [giftSettings, setGiftSettings] = useState<Array<{ id: number; item_name: string; item_type: string; points_cost: number; quantity: number | null; redemption_start: string | null; redemption_end: string | null; is_active: boolean }>>([]);
+  interface GiftCard { id: number; code: string; original_value_cents: number; balance_cents: number; purchaser_name: string | null; purchaser_email: string | null; purchaser_phone: string | null; note: string | null; issued_at: string; expires_at: string | null; is_active: boolean; }
+  const [giftCards, setGiftCards] = useState<GiftCard[]>([]);
   const [giftsLoading, setGiftsLoading] = useState(false);
   const [giftsLoaded, setGiftsLoaded] = useState(false);
-  const [showAddGift, setShowAddGift] = useState(false);
-  const [newGiftName, setNewGiftName] = useState('');
-  const [newGiftType, setNewGiftType] = useState('gift');
-  const [newGiftPoints, setNewGiftPoints] = useState('0');
-  const [newGiftQty, setNewGiftQty] = useState('');
-  const [addingGift, setAddingGift] = useState(false);
+  const [showIssueCard, setShowIssueCard] = useState(false);
+  const [gcValueCents, setGcValueCents] = useState('');
+  const [gcName, setGcName] = useState('');
+  const [gcEmail, setGcEmail] = useState('');
+  const [gcPhone, setGcPhone] = useState('');
+  const [gcNote, setGcNote] = useState('');
+  const [gcExpiry, setGcExpiry] = useState('');
+  const [issuingCard, setIssuingCard] = useState(false);
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -2485,7 +2488,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Member Tiers', description: 'Configure loyalty tier levels' },
-    { page: 'gift-cards' as SettingsPage, iconName: 'gift-outline' as keyof typeof Ionicons.glyphMap, label: 'Gift Cards', description: 'Manage gift card rewards' },
+    { page: 'gift-cards' as SettingsPage, iconName: 'gift-outline' as keyof typeof Ionicons.glyphMap, label: 'Gift Cards', description: 'Issue and manage prepaid credit cards' },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
     ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
@@ -4393,49 +4396,54 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Gift Cards page
-  const loadGiftSettings = async () => {
+  const loadGiftCards = async () => {
     setGiftsLoading(true);
     try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/xish/gift-settings`);
-      setGiftSettings(res.data || []);
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/gift-cards`);
+      setGiftCards(res.data || []);
       setGiftsLoaded(true);
     } catch {}
     setGiftsLoading(false);
   };
 
-  const addGift = async () => {
-    if (!newGiftName.trim()) { Alert.alert('Error', 'Gift name is required'); return; }
-    setAddingGift(true);
+  const issueGiftCard = async () => {
+    const valueCents = Math.round(parseFloat(gcValueCents) * 100);
+    if (!valueCents || valueCents <= 0) { Alert.alert('Error', 'Enter a valid dollar value'); return; }
+    setIssuingCard(true);
     try {
-      await apiClient.post(`/api/restaurants/${restaurantId}/xish/gift-settings`, {
-        item_name: newGiftName.trim(),
-        item_type: newGiftType,
-        points_cost: parseInt(newGiftPoints) || 0,
-        quantity: newGiftQty ? parseInt(newGiftQty) : null,
+      const res = await apiClient.post(`/api/restaurants/${restaurantId}/gift-cards`, {
+        original_value_cents: valueCents,
+        purchaser_name: gcName.trim() || null,
+        purchaser_email: gcEmail.trim() || null,
+        purchaser_phone: gcPhone.trim() || null,
+        note: gcNote.trim() || null,
+        expires_at: gcExpiry ? new Date(gcExpiry).toISOString() : null,
       });
-      setNewGiftName(''); setNewGiftType('gift'); setNewGiftPoints('0'); setNewGiftQty('');
-      setShowAddGift(false);
-      await loadGiftSettings();
+      setGiftCards(prev => [res.data, ...prev]);
+      setGcValueCents(''); setGcName(''); setGcEmail(''); setGcPhone(''); setGcNote(''); setGcExpiry('');
+      setShowIssueCard(false);
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to add gift');
+      Alert.alert('Error', err.response?.data?.error || 'Failed to issue gift card');
     } finally {
-      setAddingGift(false);
+      setIssuingCard(false);
     }
   };
 
-  const deleteGiftItem = (id: number, name: string) => {
-    Alert.alert('Delete Gift', `Delete "${name}"?`, [
+  const deactivateGiftCard = (card: { id: number; code: string }) => {
+    Alert.alert('Deactivate Card', `Deactivate gift card ${card.code}? It can no longer be used.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+      { text: 'Deactivate', style: 'destructive', onPress: async () => {
         try {
-          await apiClient.delete(`/api/restaurants/${restaurantId}/xish/gift-settings/${id}`);
-          await loadGiftSettings();
+          await apiClient.patch(`/api/restaurants/${restaurantId}/gift-cards/${card.id}`, { is_active: false });
+          setGiftCards(prev => prev.map(c => c.id === card.id ? { ...c, is_active: false } : c));
         } catch (err: any) {
-          Alert.alert('Error', err.response?.data?.error || 'Failed to delete');
+          Alert.alert('Error', err.response?.data?.error || 'Failed to deactivate');
         }
       }},
     ]);
   };
+
+  const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   const renderGiftCardsPage = () => (
     <View style={styles.container}>
@@ -4443,71 +4451,92 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Gift Rewards</Text>
-            <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => setShowAddGift(true)}>
-              <Text style={styles.btnSmallText}>+ New</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Issued Gift Cards</Text>
+              <Text style={styles.sectionDescription}>Prepaid credit cards customers can purchase and use at checkout.</Text>
+            </View>
+            <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => setShowIssueCard(true)}>
+              <Text style={styles.btnSmallText}>+ Issue</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.sectionDescription}>Members can redeem their points for these rewards.</Text>
         </View>
+
+        {showIssueCard && (
+          <View style={[styles.section, { marginBottom: 8 }]}>
+            <Text style={styles.sectionTitle}>Issue New Gift Card</Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Value *  (e.g. 50 for $50.00)</Text>
+              <TextInput style={styles.input} value={gcValueCents} onChangeText={setGcValueCents} keyboardType="decimal-pad" inputAccessoryViewID="numpadDone" placeholder="0.00" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Purchaser Name</Text>
+              <TextInput style={styles.input} value={gcName} onChangeText={setGcName} placeholder="Optional" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Purchaser Email</Text>
+              <TextInput style={styles.input} value={gcEmail} onChangeText={setGcEmail} keyboardType="email-address" autoCapitalize="none" placeholder="Optional" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Purchaser Phone</Text>
+              <TextInput style={styles.input} value={gcPhone} onChangeText={setGcPhone} keyboardType="phone-pad" placeholder="Optional" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Expiry Date  (YYYY-MM-DD, leave blank = no expiry)</Text>
+              <TextInput style={styles.input} value={gcExpiry} onChangeText={setGcExpiry} placeholder="e.g. 2027-12-31" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Note</Text>
+              <TextInput style={styles.input} value={gcNote} onChangeText={setGcNote} placeholder="Optional internal note" />
+            </View>
+            <View style={styles.formActions}>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowIssueCard(false)}>
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.btnPrimary, issuingCard && { opacity: 0.6 }]} onPress={issueGiftCard} disabled={issuingCard}>
+                <Text style={styles.btnText}>{issuingCard ? 'Issuing…' : 'Issue Card'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {giftsLoading ? (
           <ActivityIndicator color="#4f46e5" style={{ marginTop: 32 }} />
-        ) : giftSettings.length === 0 ? (
-          <Text style={styles.emptyText}>No gift rewards configured yet.</Text>
+        ) : giftCards.length === 0 ? (
+          <Text style={styles.emptyText}>No gift cards issued yet.</Text>
         ) : (
-          giftSettings.map((gift) => (
-            <View key={gift.id} style={[styles.section, { flexDirection: 'row', alignItems: 'center', marginBottom: 8 }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.couponCode}>{gift.item_name}</Text>
-                <Text style={styles.couponValue}>{gift.item_type} · {gift.points_cost || 0} pts{gift.quantity ? ` · qty ${gift.quantity}` : ''}</Text>
-                {!gift.is_active && <Text style={{ color: '#9ca3af', fontSize: 11 }}>Inactive</Text>}
+          giftCards.map((card) => {
+            const pct = card.original_value_cents > 0 ? Math.round((card.balance_cents / card.original_value_cents) * 100) : 0;
+            return (
+              <View key={card.id} style={[styles.section, { marginBottom: 8 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={[styles.couponCode, { flex: 1 }]}>{card.code}</Text>
+                  {!card.is_active && (
+                    <View style={{ backgroundColor: '#fee2e2', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '600' }}>Deactivated</Text>
+                    </View>
+                  )}
+                  {card.is_active && (
+                    <TouchableOpacity onPress={() => deactivateGiftCard(card)} style={{ padding: 6 }}>
+                      <Ionicons name="close-circle-outline" size={18} color="#9ca3af" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937', marginRight: 8 }}>{formatMoney(card.balance_cents)}</Text>
+                  <Text style={{ fontSize: 13, color: '#9ca3af', alignSelf: 'flex-end', marginBottom: 2 }}>of {formatMoney(card.original_value_cents)} remaining ({pct}%)</Text>
+                </View>
+                {/* Balance bar */}
+                <View style={{ height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, marginBottom: 8 }}>
+                  <View style={{ height: 4, width: `${pct}%` as any, backgroundColor: pct > 50 ? '#10b981' : pct > 20 ? '#f59e0b' : '#ef4444', borderRadius: 2 }} />
+                </View>
+                {card.purchaser_name && <Text style={{ fontSize: 12, color: '#6b7280' }}>👤 {card.purchaser_name}{card.purchaser_email ? `  ·  ${card.purchaser_email}` : ''}{card.purchaser_phone ? `  ·  ${card.purchaser_phone}` : ''}</Text>}
+                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                  Issued {new Date(card.issued_at).toLocaleDateString()}
+                  {card.expires_at ? `  ·  Expires ${new Date(card.expires_at).toLocaleDateString()}` : ''}
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => deleteGiftItem(gift.id, gift.item_name)} style={{ padding: 8 }}>
-                <Ionicons name="trash-outline" size={18} color="#ef4444" />
-              </TouchableOpacity>
-            </View>
-          ))
-        )}
-
-        {showAddGift && (
-          <View style={[styles.section, { marginTop: 8 }]}>
-            <Text style={styles.sectionTitle}>New Gift Reward</Text>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Name *</Text>
-              <TextInput style={styles.input} value={newGiftName} onChangeText={setNewGiftName} placeholder="e.g. Free Drink" />
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Type</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {['gift', 'coupon', 'experience'].map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.option, newGiftType === type && styles.optionActive]}
-                    onPress={() => setNewGiftType(type)}
-                  >
-                    <Text style={[styles.optionText, newGiftType === type && styles.optionTextActive]}>{type}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Points Cost (0 = free)</Text>
-              <TextInput style={styles.input} value={newGiftPoints} onChangeText={setNewGiftPoints} keyboardType="number-pad" inputAccessoryViewID="numpadDone" />
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Quantity (leave blank = unlimited)</Text>
-              <TextInput style={styles.input} value={newGiftQty} onChangeText={setNewGiftQty} keyboardType="number-pad" inputAccessoryViewID="numpadDone" placeholder="Unlimited" />
-            </View>
-            <View style={styles.formActions}>
-              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowAddGift(false)}>
-                <Text style={styles.btnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.btnPrimary, addingGift && { opacity: 0.6 }]} onPress={addGift} disabled={addingGift}>
-                <Text style={styles.btnText}>{addingGift ? 'Adding…' : 'Add Gift'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -4980,7 +5009,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         if (!tiersLoading && !tiersLoaded) loadTiers();
         return renderTiersPage();
       case 'gift-cards':
-        if (!giftsLoading && !giftsLoaded) loadGiftSettings();
+        if (!giftsLoading && !giftsLoaded) loadGiftCards();
         return renderGiftCardsPage();
       case 'variant-presets': return renderVariantPresetsPage();
       case 'addon-presets': return renderAddonPresetsPage();
