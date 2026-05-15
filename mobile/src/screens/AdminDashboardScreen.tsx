@@ -27,12 +27,13 @@ import { SettingsTab } from './admin/SettingsTab';
 import { BookingsTab, BookingsTabRef } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
 import { ToGoTab } from './admin/ToGoTab';
+import { CrmTab } from './admin/CrmTab';
 import { API_URL, apiClient } from '../services/apiClient';
 import { useSubscription, type PremiumFeatureKey } from '../contexts/SubscriptionContext';
 import { PremiumGateModal } from '../components/PremiumGateModal';
 import QRCode from 'react-native-qrcode-svg';
 
-type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings' | 'togo';
+type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings' | 'togo' | 'crm';
 
 // Map access_rights IDs to tab names
 const ACCESS_RIGHTS_TAB_MAP: Record<number, TabType> = {
@@ -156,7 +157,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
   // Compute visible tabs based on role and access_rights
   const visibleTabs = useMemo((): TabType[] => {
-    const allTabs: TabType[] = ['tables', 'orders', 'togo', 'menu', 'staff', 'bookings', 'reports', 'settings'];
+    const allTabs: TabType[] = ['tables', 'orders', 'togo', 'menu', 'staff', 'crm', 'bookings', 'reports', 'settings'];
     
     // Admin and superadmin always see all tabs
     if (!user || user.role === 'admin' || user.role === 'superadmin') {
@@ -348,6 +349,8 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         return <ReportsTab restaurantId={user.restaurantId} />;
       case 'togo':
         return <ToGoTab restaurantId={user.restaurantId} />;
+      case 'crm':
+        return <CrmTab restaurantId={user.restaurantId} />;
       case 'settings':
         return <SettingsTab restaurantId={user.restaurantId} navigation={navigation} />;
       default:
@@ -362,6 +365,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       'togo': 'Pick-up Orders',
       'menu': t('admin.menu'),
       'staff': t('admin.staff'),
+      'crm': 'CRM',
       'bookings': t('admin.bookings'),
       'reports': t('admin.reports'),
       'settings': t('admin.settings'),
@@ -376,6 +380,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       'togo': 'Search order...',
       'menu': 'Search food item...',
       'staff': 'Search staff name...',
+      'crm': '',
       'bookings': 'Search name, phone, email...',
       'reports': '',
       'settings': '',
@@ -383,7 +388,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     return placeholders[activeTab];
   };
 
-  const showSearchBar = activeTab !== 'reports' && activeTab !== 'settings' && activeTab !== 'togo';
+  const showSearchBar = activeTab !== 'reports' && activeTab !== 'settings' && activeTab !== 'togo' && activeTab !== 'crm';
 
   return (
     <View style={styles.rootContainer}>
@@ -627,6 +632,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                     'togo': { label: 'Pick-up', icon: 'bag-handle' },
                     'menu': { label: t('admin.menu'), icon: 'restaurant' },
                     'staff': { label: t('admin.staff'), icon: 'people' },
+                    'crm': { label: 'CRM', icon: 'people-circle' },
                     'bookings': { label: t('admin.bookings'), icon: 'calendar' },
                     'reports': { label: t('admin.reports'), icon: 'stats-chart' },
                     'settings': { label: t('admin.more'), icon: 'cog' },

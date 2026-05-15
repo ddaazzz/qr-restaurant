@@ -7,7 +7,6 @@ import { ToastProvider } from './components/ToastProvider';
 import { LoginScreen } from './screens/LoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
-import { ProductSelectorScreen } from './screens/ProductSelectorScreen';
 import { useProductStore } from './store/productStore';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
@@ -45,12 +44,6 @@ const RootNavigator = () => {
     );
   }
 
-  // No product chosen yet → show selector before anything else
-  if (!activeProduct) {
-    return <ProductSelectorScreen />;
-  }
-
-  // XISH product → for now shows LoginScreen then AdminDashboard (XISH screens TBD)
   // Chuio product → existing flow
   if (isSignedIn && user) {
     if (user.role === 'kitchen') {

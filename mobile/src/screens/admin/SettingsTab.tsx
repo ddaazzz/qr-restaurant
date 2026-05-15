@@ -30,7 +30,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { Linking } from 'react-native';
 import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
 import { kpaySign } from '../../services/kpayDirectService';
-import { useProductStore } from '../../store/productStore';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
 
 interface RestaurantSettings {
@@ -218,7 +217,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const CRM_PAGE_SIZE = 30;
   const { t, lang, setLanguage } = useTranslation();
   const { user: currentUser, logout: authLogout } = useAuth();
-  const { reset: resetProduct, activeProduct } = useProductStore();
   const isSuperadmin = currentUser?.role === 'superadmin';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -252,6 +250,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [crmEditPhone, setCrmEditPhone] = useState('');
   const [crmEditEmail, setCrmEditEmail] = useState('');
   const [crmEditSaving, setCrmEditSaving] = useState(false);
+
+  // Tiers state
+  const [tiers, setTiers] = useState<Array<{ tier: string; points_threshold: number; discount_percent: number; is_active: boolean }>>([]);
+  const [tiersLoading, setTiersLoading] = useState(false);
+  const [tiersLoaded, setTiersLoaded] = useState(false);
+  const [tiersSaving, setTiersSaving] = useState(false);
+
+  // Gift cards state
+  const [giftSettings, setGiftSettings] = useState<Array<{ id: number; item_name: string; item_type: string; points_cost: number; quantity: number | null; redemption_start: string | null; redemption_end: string | null; is_active: boolean }>>([]);
+  const [giftsLoading, setGiftsLoading] = useState(false);
+  const [giftsLoaded, setGiftsLoaded] = useState(false);
+  const [showAddGift, setShowAddGift] = useState(false);
+  const [newGiftName, setNewGiftName] = useState('');
+  const [newGiftType, setNewGiftType] = useState('gift');
+  const [newGiftPoints, setNewGiftPoints] = useState('0');
+  const [newGiftQty, setNewGiftQty] = useState('');
+  const [addingGift, setAddingGift] = useState(false);
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -295,7 +310,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-methods' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-methods' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests' | 'tiers' | 'gift-cards';
 
   interface SRItem {
     id: number;
@@ -2469,6 +2484,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
+    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Member Tiers', description: 'Configure loyalty tier levels' },
+    { page: 'gift-cards' as SettingsPage, iconName: 'gift-outline' as keyof typeof Ionicons.glyphMap, label: 'Gift Cards', description: 'Manage gift card rewards' },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
     ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
@@ -4299,6 +4316,203 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     );
   };
 
+  // Member Tiers page
+  const loadTiers = async () => {
+    setTiersLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/xish/tier-settings`);
+      setTiers(res.data?.tiers || []);
+      setTiersLoaded(true);
+    } catch {}
+    setTiersLoading(false);
+  };
+
+  const saveTiers = async () => {
+    setTiersSaving(true);
+    try {
+      await apiClient.put(`/api/restaurants/${restaurantId}/xish/tier-settings`, { tiers });
+      Alert.alert('Saved', 'Member tiers updated.');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to save tiers');
+    } finally {
+      setTiersSaving(false);
+    }
+  };
+
+  const renderTiersPage = () => {
+    const TIER_LABELS: Record<string, string> = { basic: '🥉 Basic', silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader('Member Tiers')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Loyalty Tier Settings</Text>
+            <Text style={styles.sectionDescription}>Members automatically advance when their point balance reaches the threshold.</Text>
+          </View>
+          {tiersLoading ? (
+            <ActivityIndicator color="#4f46e5" style={{ marginTop: 32 }} />
+          ) : (
+            <>
+              {tiers.map((tier) => (
+                <View key={tier.tier} style={[styles.section, { marginBottom: 10 }]}>
+                  <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>{TIER_LABELS[tier.tier] || tier.tier}</Text>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Points Threshold</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={String(tier.points_threshold)}
+                      onChangeText={(v) => setTiers(prev => prev.map(t => t.tier === tier.tier ? { ...t, points_threshold: parseFloat(v) || 0 } : t))}
+                      keyboardType="number-pad"
+                      inputAccessoryViewID="numpadDone"
+                    />
+                  </View>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Discount % (applied at checkout)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={String(tier.discount_percent)}
+                      onChangeText={(v) => setTiers(prev => prev.map(t => t.tier === tier.tier ? { ...t, discount_percent: parseFloat(v) || 0 } : t))}
+                      keyboardType="decimal-pad"
+                      inputAccessoryViewID="numpadDone"
+                    />
+                  </View>
+                </View>
+              ))}
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, tiersSaving && { opacity: 0.6 }]}
+                onPress={saveTiers}
+                disabled={tiersSaving}
+              >
+                <Text style={styles.btnText}>{tiersSaving ? 'Saving…' : 'Save Tiers'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  // Gift Cards page
+  const loadGiftSettings = async () => {
+    setGiftsLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/xish/gift-settings`);
+      setGiftSettings(res.data || []);
+      setGiftsLoaded(true);
+    } catch {}
+    setGiftsLoading(false);
+  };
+
+  const addGift = async () => {
+    if (!newGiftName.trim()) { Alert.alert('Error', 'Gift name is required'); return; }
+    setAddingGift(true);
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/xish/gift-settings`, {
+        item_name: newGiftName.trim(),
+        item_type: newGiftType,
+        points_cost: parseInt(newGiftPoints) || 0,
+        quantity: newGiftQty ? parseInt(newGiftQty) : null,
+      });
+      setNewGiftName(''); setNewGiftType('gift'); setNewGiftPoints('0'); setNewGiftQty('');
+      setShowAddGift(false);
+      await loadGiftSettings();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to add gift');
+    } finally {
+      setAddingGift(false);
+    }
+  };
+
+  const deleteGiftItem = (id: number, name: string) => {
+    Alert.alert('Delete Gift', `Delete "${name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await apiClient.delete(`/api/restaurants/${restaurantId}/xish/gift-settings/${id}`);
+          await loadGiftSettings();
+        } catch (err: any) {
+          Alert.alert('Error', err.response?.data?.error || 'Failed to delete');
+        }
+      }},
+    ]);
+  };
+
+  const renderGiftCardsPage = () => (
+    <View style={styles.container}>
+      {renderSubPageHeader('Gift Cards')}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Gift Rewards</Text>
+            <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => setShowAddGift(true)}>
+              <Text style={styles.btnSmallText}>+ New</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.sectionDescription}>Members can redeem their points for these rewards.</Text>
+        </View>
+
+        {giftsLoading ? (
+          <ActivityIndicator color="#4f46e5" style={{ marginTop: 32 }} />
+        ) : giftSettings.length === 0 ? (
+          <Text style={styles.emptyText}>No gift rewards configured yet.</Text>
+        ) : (
+          giftSettings.map((gift) => (
+            <View key={gift.id} style={[styles.section, { flexDirection: 'row', alignItems: 'center', marginBottom: 8 }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.couponCode}>{gift.item_name}</Text>
+                <Text style={styles.couponValue}>{gift.item_type} · {gift.points_cost || 0} pts{gift.quantity ? ` · qty ${gift.quantity}` : ''}</Text>
+                {!gift.is_active && <Text style={{ color: '#9ca3af', fontSize: 11 }}>Inactive</Text>}
+              </View>
+              <TouchableOpacity onPress={() => deleteGiftItem(gift.id, gift.item_name)} style={{ padding: 8 }}>
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+
+        {showAddGift && (
+          <View style={[styles.section, { marginTop: 8 }]}>
+            <Text style={styles.sectionTitle}>New Gift Reward</Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Name *</Text>
+              <TextInput style={styles.input} value={newGiftName} onChangeText={setNewGiftName} placeholder="e.g. Free Drink" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Type</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {['gift', 'coupon', 'experience'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.option, newGiftType === type && styles.optionActive]}
+                    onPress={() => setNewGiftType(type)}
+                  >
+                    <Text style={[styles.optionText, newGiftType === type && styles.optionTextActive]}>{type}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Points Cost (0 = free)</Text>
+              <TextInput style={styles.input} value={newGiftPoints} onChangeText={setNewGiftPoints} keyboardType="number-pad" inputAccessoryViewID="numpadDone" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Quantity (leave blank = unlimited)</Text>
+              <TextInput style={styles.input} value={newGiftQty} onChangeText={setNewGiftQty} keyboardType="number-pad" inputAccessoryViewID="numpadDone" placeholder="Unlimited" />
+            </View>
+            <View style={styles.formActions}>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowAddGift(false)}>
+                <Text style={styles.btnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.btnPrimary, addingGift && { opacity: 0.6 }]} onPress={addGift} disabled={addingGift}>
+                <Text style={styles.btnText}>{addingGift ? 'Adding…' : 'Add Gift'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+
   // Card grid main page
   const renderMainPage = () => (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -4319,22 +4533,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
-
-      <TouchableOpacity
-        style={[styles.btn, { backgroundColor: '#7C3AED', marginVertical: 6 }]}
-        onPress={() => {
-          Alert.alert(
-            'Switch Product',
-            `Currently using: ${activeProduct === 'xish' ? 'XISH Loyalty' : 'Chuio Restaurant'}.\n\nSwitch to a different product?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Switch', onPress: () => resetProduct(), style: 'destructive' },
-            ]
-          );
-        }}
-      >
-        <Text style={styles.btnText}>⭐ Switch Product (Chuio / XISH)</Text>
-      </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.btn, styles.btnDanger, { marginVertical: 12 }]}
@@ -4778,6 +4976,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'qr-settings': return renderQRSettingsPage();
       case 'staff-links': return renderStaffLinksPage();
       case 'coupons': return renderCouponsPage();
+      case 'tiers':
+        if (!tiersLoading && !tiersLoaded) loadTiers();
+        return renderTiersPage();
+      case 'gift-cards':
+        if (!giftsLoading && !giftsLoaded) loadGiftSettings();
+        return renderGiftCardsPage();
       case 'variant-presets': return renderVariantPresetsPage();
       case 'addon-presets': return renderAddonPresetsPage();
       case 'menu-settings':

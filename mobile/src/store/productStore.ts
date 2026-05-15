@@ -35,19 +35,15 @@ export const useProductStore = create<ProductState>((set) => ({
 
   hydrate: async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored === 'chuio' || stored === 'xish') {
-        set({ activeProduct: stored, isHydrated: true });
-      } else {
-        set({ activeProduct: null, isHydrated: true });
-      }
+      await AsyncStorage.getItem(STORAGE_KEY); // read to stay backward-compat, always use chuio
     } catch {
-      set({ activeProduct: null, isHydrated: true });
+      // ignore
     }
+    set({ activeProduct: 'chuio', isHydrated: true });
   },
 
   reset: async () => {
     await AsyncStorage.removeItem(STORAGE_KEY);
-    set({ activeProduct: null });
+    set({ activeProduct: 'chuio' });
   },
 }));
