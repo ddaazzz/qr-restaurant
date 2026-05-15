@@ -435,7 +435,19 @@ router.get("/restaurants/:restaurantId/xish/tier-settings", async (req, res) => 
       rows = DEFAULT_TIERS.map(t => ({ ...t, is_active: true }));
     }
 
-    res.json({ tiers: rows });
+    // Load points_per_dollar from restaurant feature_flags (default 1)
+    let points_per_dollar = 1;
+    try {
+      const rRes = await pool.query(
+        `SELECT feature_flags FROM restaurants WHERE id = $1`,
+        [restaurantId]
+      );
+      if (rRes.rows[0]?.feature_flags?.points_per_dollar !== undefined) {
+        points_per_dollar = Number(rRes.rows[0].feature_flags.points_per_dollar) || 1;
+      }
+    } catch {}
+
+    res.json({ tiers: rows, points_per_dollar });
   } catch (err) {
     console.error("[XISH tier-settings GET]", err);
     res.status(500).json({ error: "Internal server error" });
@@ -443,11 +455,11 @@ router.get("/restaurants/:restaurantId/xish/tier-settings", async (req, res) => 
 });
 
 // PUT /api/restaurants/:restaurantId/xish/tier-settings
-// Body: { tiers: [{ tier, points_threshold, discount_percent, is_active }] }
+// Body: { tiers: [{ tier, points_threshold, discount_percent, is_active }], points_per_dollar? }
 router.put("/restaurants/:restaurantId/xish/tier-settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { tiers } = req.body as { tiers: Array<{ tier: string; points_threshold: number; discount_percent: number; is_active?: boolean }> };
+    const { tiers, points_per_dollar } = req.body as { tiers: Array<{ tier: string; points_threshold: number; discount_percent: number; is_active?: boolean }>; points_per_dollar?: number };
     if (!Array.isArray(tiers) || tiers.length === 0) {
       return res.status(400).json({ error: "tiers array required" });
     }
@@ -471,13 +483,24 @@ router.put("/restaurants/:restaurantId/xish/tier-settings", async (req, res) => 
       );
     }
 
+    // Persist points_per_dollar in feature_flags
+    if (points_per_dollar !== undefined) {
+      const ppd = Math.max(0.01, Number(points_per_dollar) || 1);
+      await pool.query(
+        `UPDATE restaurants
+         SET feature_flags = COALESCE(feature_flags, '{}'::jsonb) || jsonb_build_object('points_per_dollar', $2::numeric)
+         WHERE id = $1`,
+        [restaurantId, ppd]
+      );
+    }
+
     const rows = (await pool.query(
       `SELECT tier, points_threshold, discount_percent, is_active
        FROM xish_tier_settings WHERE restaurant_id = $1 ORDER BY points_threshold ASC`,
       [restaurantId]
     )).rows;
 
-    res.json({ ok: true, tiers: rows });
+    res.json({ ok: true, tiers: rows, points_per_dollar: points_per_dollar ?? 1 });
   } catch (err) {
     console.error("[XISH tier-settings PUT]", err);
     res.status(500).json({ error: "Internal server error" });

@@ -85,7 +85,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
   const { showToast } = useToast();
   const { t } = useTranslation();
   const { width: windowWidth } = useWindowDimensions();
-  const numCols = windowWidth >= 1200 ? 6 : windowWidth >= 900 ? 5 : windowWidth >= 600 ? 4 : windowWidth >= 400 ? 3 : 2;
+  const numCols = windowWidth >= 1200 ? 3 : windowWidth >= 768 ? 2 : 1;
   const cardWidth = (windowWidth - 8 * (numCols + 1)) / numCols;
   const [filter, setFilter] = useState<FilterType>('pending');
   const [timeRange, setTimeRange] = useState<TimeRangeType>('today');
@@ -637,8 +637,8 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#e5e7eb',
     shadowColor: '#000',
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginBottom: 4,
   },
-  cardOrderNum: { fontSize: 13, fontWeight: '800', color: '#1f2937' },
+  cardOrderNum: { fontSize: 16, fontWeight: '800', color: '#1f2937' },
   typeBadge: {
     paddingHorizontal: 5,
     paddingVertical: 2,
@@ -685,9 +685,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#d1fae5',
   },
   readyBadgeText: { fontSize: 10, fontWeight: '700', color: '#065f46' },
-  cardTime: { fontSize: 10, color: '#9ca3af', fontWeight: '500' },
+  cardTime: { fontSize: 12, color: '#9ca3af', fontWeight: '500' },
 
-  cardCustomer: { fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 },
+  cardCustomer: { fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 4 },
 
   itemsList: {
     borderTopWidth: 1,
@@ -696,8 +696,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 2 },
-  itemQty: { fontSize: 14, fontWeight: '700', color: '#667eea', width: 28, flexShrink: 0 },
-  itemName: { flex: 1, fontSize: 14, fontWeight: '500', color: '#374151' },
+  itemQty: { fontSize: 15, fontWeight: '700', color: '#667eea', width: 28, flexShrink: 0 },
+  itemName: { flex: 1, fontSize: 15, fontWeight: '500', color: '#374151' },
   itemPrice: { fontSize: 13, fontWeight: '600', color: '#6b7280', flexShrink: 0 },
   itemsCount: {
     fontSize: 12,

@@ -23,7 +23,7 @@ router.get("/restaurants/:restaurantId/coupons", requireFeature("coupons"), asyn
 router.post("/restaurants/:restaurantId/coupons", requireFeature("coupons"), async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value, coupon_type } = req.body;
+    const { code, discount_type, discount_value, description, max_uses, valid_from, valid_until, minimum_order_value, coupon_type } = req.body;
 
     if (!code || !discount_type || !discount_value) {
       return res.status(400).json({ error: "Code, discount_type, and discount_value are required" });
@@ -32,18 +32,18 @@ router.post("/restaurants/:restaurantId/coupons", requireFeature("coupons"), asy
     const resolvedType = coupon_type === 'closed' ? 'closed' : 'open';
 
     const result = await db.query(
-      `INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value, coupon_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_from, valid_until, minimum_order_value, coupon_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_until || null, minimum_order_value || 0, resolvedType]
+      [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_from || null, valid_until || null, minimum_order_value || 0, resolvedType]
     ).catch(async (err: any) => {
       // Graceful fallback if migration 086 not yet applied
       if (err.message?.includes('coupon_type')) {
         return db.query(
-          `INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_until, minimum_order_value)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `INSERT INTO coupons (restaurant_id, code, discount_type, discount_value, description, max_uses, valid_from, valid_until, minimum_order_value)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING *`,
-          [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_until || null, minimum_order_value || 0]
+          [restaurantId, code.toUpperCase(), discount_type, discount_value, description || null, max_uses || null, valid_from || null, valid_until || null, minimum_order_value || 0]
         );
       }
       throw err;
@@ -64,7 +64,7 @@ router.post("/restaurants/:restaurantId/coupons", requireFeature("coupons"), asy
 const updateCouponHandler = async (req: any, res: any) => {
   try {
     const { couponId } = req.params;
-    const { code, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, coupon_type, restaurantId } = req.body;
+    const { code, discount_type, discount_value, description, is_active, max_uses, valid_from, valid_until, minimum_order_value, coupon_type, restaurantId } = req.body;
 
     if (!restaurantId) {
       return res.status(400).json({ error: "Restaurant ID is required" });
@@ -92,19 +92,20 @@ const updateCouponHandler = async (req: any, res: any) => {
            description = COALESCE($4, description),
            is_active = COALESCE($5, is_active),
            max_uses = COALESCE($6, max_uses),
-           valid_until = COALESCE($7, valid_until),
-           minimum_order_value = COALESCE($8, minimum_order_value),
-           coupon_type = COALESCE($9, coupon_type),
+           valid_from = COALESCE($7, valid_from),
+           valid_until = COALESCE($8, valid_until),
+           minimum_order_value = COALESCE($9, minimum_order_value),
+           coupon_type = COALESCE($10, coupon_type),
            updated_at = CURRENT_TIMESTAMP
-         WHERE id = $10 AND restaurant_id = $11
+         WHERE id = $11 AND restaurant_id = $12
          RETURNING *`,
-        [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, resolvedType, couponId, restaurantId]
+        [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_from, valid_until, minimum_order_value, resolvedType, couponId, restaurantId]
       );
     } catch (colErr: any) {
       if (colErr.message?.includes('coupon_type')) {
         result = await db.query(
-          `UPDATE coupons SET code = COALESCE($1, code), discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value), description = COALESCE($4, description), is_active = COALESCE($5, is_active), max_uses = COALESCE($6, max_uses), valid_until = COALESCE($7, valid_until), minimum_order_value = COALESCE($8, minimum_order_value), updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND restaurant_id = $10 RETURNING *`,
-          [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_until, minimum_order_value, couponId, restaurantId]
+          `UPDATE coupons SET code = COALESCE($1, code), discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value), description = COALESCE($4, description), is_active = COALESCE($5, is_active), max_uses = COALESCE($6, max_uses), valid_from = COALESCE($7, valid_from), valid_until = COALESCE($8, valid_until), minimum_order_value = COALESCE($9, minimum_order_value), updated_at = CURRENT_TIMESTAMP WHERE id = $10 AND restaurant_id = $11 RETURNING *`,
+          [code ? code.toUpperCase() : null, discount_type, discount_value, description, is_active, max_uses, valid_from, valid_until, minimum_order_value, couponId, restaurantId]
         );
       } else throw colErr;
     }

@@ -110,7 +110,10 @@ interface Coupon {
   discount_value: number;
   min_order_value?: number;
   minimum_order_value?: number;
-  max_uses?: number;
+  max_uses?: number | null;
+  current_uses?: number;
+  valid_from?: string | null;
+  valid_until?: string | null;
   description?: string;
   coupon_type?: 'open' | 'closed';
 }
@@ -256,20 +259,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [tiersLoading, setTiersLoading] = useState(false);
   const [tiersLoaded, setTiersLoaded] = useState(false);
   const [tiersSaving, setTiersSaving] = useState(false);
-
-  // Gift cards state
-  interface GiftCard { id: number; code: string; original_value_cents: number; balance_cents: number; purchaser_name: string | null; purchaser_email: string | null; purchaser_phone: string | null; note: string | null; issued_at: string; expires_at: string | null; is_active: boolean; }
-  const [giftCards, setGiftCards] = useState<GiftCard[]>([]);
-  const [giftsLoading, setGiftsLoading] = useState(false);
-  const [giftsLoaded, setGiftsLoaded] = useState(false);
-  const [showIssueCard, setShowIssueCard] = useState(false);
-  const [gcValueCents, setGcValueCents] = useState('');
-  const [gcName, setGcName] = useState('');
-  const [gcEmail, setGcEmail] = useState('');
-  const [gcPhone, setGcPhone] = useState('');
-  const [gcNote, setGcNote] = useState('');
-  const [gcExpiry, setGcExpiry] = useState('');
-  const [issuingCard, setIssuingCard] = useState(false);
+  const [pointsPerDollar, setPointsPerDollar] = useState('1');
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -313,7 +303,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-methods' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests' | 'tiers' | 'gift-cards';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-methods' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests' | 'tiers';
 
   interface SRItem {
     id: number;
@@ -451,6 +441,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     min_order_value: '',
     description: '',
     coupon_type: 'open' as 'open' | 'closed',
+    max_uses: '',
+    valid_from: '',
+    valid_until: '',
   });
   const [terminalForm, setTerminalForm] = useState({
     vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'other',
@@ -1352,7 +1345,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // ─── End Multi-Printer helpers ─────────────────────────────────────────────
 
   const resetCouponForm = () => {
-    setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open' });
+    setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open', max_uses: '', valid_from: '', valid_until: '' });
     setEditingCouponId(null);
   };
 
@@ -1373,6 +1366,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           minimum_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
           description: couponForm.description || null,
           coupon_type: couponForm.coupon_type,
+          max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
+          valid_from: couponForm.valid_from ? new Date(couponForm.valid_from).toISOString() : null,
+          valid_until: couponForm.valid_until ? new Date(couponForm.valid_until).toISOString() : null,
           restaurantId,
         });
         await fetchCoupons();
@@ -1389,6 +1385,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
         description: couponForm.description || null,
         coupon_type: couponForm.coupon_type,
+        max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
+        valid_from: couponForm.valid_from ? new Date(couponForm.valid_from).toISOString() : null,
+        valid_until: couponForm.valid_until ? new Date(couponForm.valid_until).toISOString() : null,
       });
 
       await fetchSettings();
@@ -1408,6 +1407,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       min_order_value: String(coupon.minimum_order_value || coupon.min_order_value || ''),
       description: coupon.description || '',
       coupon_type: coupon.coupon_type || 'open',
+      max_uses: coupon.max_uses ? String(coupon.max_uses) : '',
+      valid_from: coupon.valid_from ? String(coupon.valid_from).slice(0, 10) : '',
+      valid_until: coupon.valid_until ? String(coupon.valid_until).slice(0, 10) : '',
     });
     setEditingCouponId(coupon.id);
     setShowCouponDetailModal(false);
@@ -2487,8 +2489,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
-    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Member Tiers', description: 'Configure loyalty tier levels' },
-    { page: 'gift-cards' as SettingsPage, iconName: 'gift-outline' as keyof typeof Ionicons.glyphMap, label: 'Gift Cards', description: 'Issue and manage prepaid credit cards' },
+    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Member Tiers', description: 'Configure tiers and points rate' },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
     ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
@@ -4325,6 +4326,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/xish/tier-settings`);
       setTiers(res.data?.tiers || []);
+      if (res.data?.points_per_dollar !== undefined) {
+        setPointsPerDollar(String(res.data.points_per_dollar));
+      }
       setTiersLoaded(true);
     } catch {}
     setTiersLoading(false);
@@ -4333,7 +4337,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const saveTiers = async () => {
     setTiersSaving(true);
     try {
-      await apiClient.put(`/api/restaurants/${restaurantId}/xish/tier-settings`, { tiers });
+      await apiClient.put(`/api/restaurants/${restaurantId}/xish/tier-settings`, { tiers, points_per_dollar: parseFloat(pointsPerDollar) || 1 });
       Alert.alert('Saved', 'Member tiers updated.');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to save tiers');
@@ -4349,8 +4353,23 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         {renderSubPageHeader('Member Tiers')}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Loyalty Tier Settings</Text>
-            <Text style={styles.sectionDescription}>Members automatically advance when their point balance reaches the threshold.</Text>
+            <Text style={styles.sectionTitle}>Points Rate</Text>
+            <Text style={styles.sectionDescription}>How many points a customer earns per dollar spent.</Text>
+            <View style={[styles.formGroup, { marginTop: 10 }]}>
+              <Text style={styles.label}>Points per $1 spent</Text>
+              <TextInput
+                style={styles.input}
+                value={pointsPerDollar}
+                onChangeText={setPointsPerDollar}
+                keyboardType="decimal-pad"
+                inputAccessoryViewID="numpadDone"
+                placeholder="1"
+              />
+            </View>
+          </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tier Levels</Text>
+            <Text style={styles.sectionDescription}>Members automatically advance when their points balance reaches the threshold.</Text>
           </View>
           {tiersLoading ? (
             <ActivityIndicator color="#4f46e5" style={{ marginTop: 32 }} />
@@ -4394,153 +4413,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       </View>
     );
   };
-
-  // Gift Cards page
-  const loadGiftCards = async () => {
-    setGiftsLoading(true);
-    try {
-      const res = await apiClient.get(`/api/restaurants/${restaurantId}/gift-cards`);
-      setGiftCards(res.data || []);
-      setGiftsLoaded(true);
-    } catch {}
-    setGiftsLoading(false);
-  };
-
-  const issueGiftCard = async () => {
-    const valueCents = Math.round(parseFloat(gcValueCents) * 100);
-    if (!valueCents || valueCents <= 0) { Alert.alert('Error', 'Enter a valid dollar value'); return; }
-    setIssuingCard(true);
-    try {
-      const res = await apiClient.post(`/api/restaurants/${restaurantId}/gift-cards`, {
-        original_value_cents: valueCents,
-        purchaser_name: gcName.trim() || null,
-        purchaser_email: gcEmail.trim() || null,
-        purchaser_phone: gcPhone.trim() || null,
-        note: gcNote.trim() || null,
-        expires_at: gcExpiry ? new Date(gcExpiry).toISOString() : null,
-      });
-      setGiftCards(prev => [res.data, ...prev]);
-      setGcValueCents(''); setGcName(''); setGcEmail(''); setGcPhone(''); setGcNote(''); setGcExpiry('');
-      setShowIssueCard(false);
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to issue gift card');
-    } finally {
-      setIssuingCard(false);
-    }
-  };
-
-  const deactivateGiftCard = (card: { id: number; code: string }) => {
-    Alert.alert('Deactivate Card', `Deactivate gift card ${card.code}? It can no longer be used.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Deactivate', style: 'destructive', onPress: async () => {
-        try {
-          await apiClient.patch(`/api/restaurants/${restaurantId}/gift-cards/${card.id}`, { is_active: false });
-          setGiftCards(prev => prev.map(c => c.id === card.id ? { ...c, is_active: false } : c));
-        } catch (err: any) {
-          Alert.alert('Error', err.response?.data?.error || 'Failed to deactivate');
-        }
-      }},
-    ]);
-  };
-
-  const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-
-  const renderGiftCardsPage = () => (
-    <View style={styles.container}>
-      {renderSubPageHeader('Gift Cards')}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Issued Gift Cards</Text>
-              <Text style={styles.sectionDescription}>Prepaid credit cards customers can purchase and use at checkout.</Text>
-            </View>
-            <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => setShowIssueCard(true)}>
-              <Text style={styles.btnSmallText}>+ Issue</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {showIssueCard && (
-          <View style={[styles.section, { marginBottom: 8 }]}>
-            <Text style={styles.sectionTitle}>Issue New Gift Card</Text>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Value *  (e.g. 50 for $50.00)</Text>
-              <TextInput style={styles.input} value={gcValueCents} onChangeText={setGcValueCents} keyboardType="decimal-pad" inputAccessoryViewID="numpadDone" placeholder="0.00" />
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Purchaser Name</Text>
-              <TextInput style={styles.input} value={gcName} onChangeText={setGcName} placeholder="Optional" />
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Purchaser Email</Text>
-              <TextInput style={styles.input} value={gcEmail} onChangeText={setGcEmail} keyboardType="email-address" autoCapitalize="none" placeholder="Optional" />
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Purchaser Phone</Text>
-              <TextInput style={styles.input} value={gcPhone} onChangeText={setGcPhone} keyboardType="phone-pad" placeholder="Optional" />
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Expiry Date  (YYYY-MM-DD, leave blank = no expiry)</Text>
-              <TextInput style={styles.input} value={gcExpiry} onChangeText={setGcExpiry} placeholder="e.g. 2027-12-31" />
-            </View>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Note</Text>
-              <TextInput style={styles.input} value={gcNote} onChangeText={setGcNote} placeholder="Optional internal note" />
-            </View>
-            <View style={styles.formActions}>
-              <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowIssueCard(false)}>
-                <Text style={styles.btnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.btnPrimary, issuingCard && { opacity: 0.6 }]} onPress={issueGiftCard} disabled={issuingCard}>
-                <Text style={styles.btnText}>{issuingCard ? 'Issuing…' : 'Issue Card'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {giftsLoading ? (
-          <ActivityIndicator color="#4f46e5" style={{ marginTop: 32 }} />
-        ) : giftCards.length === 0 ? (
-          <Text style={styles.emptyText}>No gift cards issued yet.</Text>
-        ) : (
-          giftCards.map((card) => {
-            const pct = card.original_value_cents > 0 ? Math.round((card.balance_cents / card.original_value_cents) * 100) : 0;
-            return (
-              <View key={card.id} style={[styles.section, { marginBottom: 8 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={[styles.couponCode, { flex: 1 }]}>{card.code}</Text>
-                  {!card.is_active && (
-                    <View style={{ backgroundColor: '#fee2e2', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
-                      <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '600' }}>Deactivated</Text>
-                    </View>
-                  )}
-                  {card.is_active && (
-                    <TouchableOpacity onPress={() => deactivateGiftCard(card)} style={{ padding: 6 }}>
-                      <Ionicons name="close-circle-outline" size={18} color="#9ca3af" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-                <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#1f2937', marginRight: 8 }}>{formatMoney(card.balance_cents)}</Text>
-                  <Text style={{ fontSize: 13, color: '#9ca3af', alignSelf: 'flex-end', marginBottom: 2 }}>of {formatMoney(card.original_value_cents)} remaining ({pct}%)</Text>
-                </View>
-                {/* Balance bar */}
-                <View style={{ height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, marginBottom: 8 }}>
-                  <View style={{ height: 4, width: `${pct}%` as any, backgroundColor: pct > 50 ? '#10b981' : pct > 20 ? '#f59e0b' : '#ef4444', borderRadius: 2 }} />
-                </View>
-                {card.purchaser_name && <Text style={{ fontSize: 12, color: '#6b7280' }}>👤 {card.purchaser_name}{card.purchaser_email ? `  ·  ${card.purchaser_email}` : ''}{card.purchaser_phone ? `  ·  ${card.purchaser_phone}` : ''}</Text>}
-                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                  Issued {new Date(card.issued_at).toLocaleDateString()}
-                  {card.expires_at ? `  ·  Expires ${new Date(card.expires_at).toLocaleDateString()}` : ''}
-                </Text>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
-    </View>
-  );
 
   // Card grid main page
   const renderMainPage = () => (
@@ -5008,9 +4880,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'tiers':
         if (!tiersLoading && !tiersLoaded) loadTiers();
         return renderTiersPage();
-      case 'gift-cards':
-        if (!giftsLoading && !giftsLoaded) loadGiftCards();
-        return renderGiftCardsPage();
       case 'variant-presets': return renderVariantPresetsPage();
       case 'addon-presets': return renderAddonPresetsPage();
       case 'menu-settings':
@@ -5213,6 +5082,39 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 }
                 placeholder={t('settings.coupon-desc-placeholder')}
                 multiline
+              />
+            </View>
+
+            {/* Coupon access type */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{'Max Uses  (leave blank = unlimited)'}</Text>
+              <TextInput
+                style={styles.input}
+                value={couponForm.max_uses}
+                onChangeText={(text) => setCouponForm({ ...couponForm, max_uses: text })}
+                placeholder="e.g. 100"
+                keyboardType="number-pad"
+                inputAccessoryViewID="numpadDone"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{'Valid From  (YYYY-MM-DD, optional)'}</Text>
+              <TextInput
+                style={styles.input}
+                value={couponForm.valid_from}
+                onChangeText={(text) => setCouponForm({ ...couponForm, valid_from: text })}
+                placeholder="e.g. 2025-06-01"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{'Valid Until  (YYYY-MM-DD, optional)'}</Text>
+              <TextInput
+                style={styles.input}
+                value={couponForm.valid_until}
+                onChangeText={(text) => setCouponForm({ ...couponForm, valid_until: text })}
+                placeholder="e.g. 2025-12-31"
               />
             </View>
 

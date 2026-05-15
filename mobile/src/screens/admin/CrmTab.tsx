@@ -103,17 +103,7 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
   const [awardReason, setAwardReason] = useState('');
   const [awardSaving, setAwardSaving] = useState(false);
 
-  // Redeem points modal state
-  const [showRedeem, setShowRedeem] = useState(false);
-  const [redeemType, setRedeemType] = useState<'gift_card' | 'coupon'>('gift_card');
-  const [redeemPoints, setRedeemPoints] = useState('');
-  // gift card fields
-  const [redeemGcValue, setRedeemGcValue] = useState('');
-  // coupon fields
-  const [redeemCouponCode, setRedeemCouponCode] = useState('');
-  const [redeemDiscountType, setRedeemDiscountType] = useState<'percentage' | 'fixed'>('percentage');
-  const [redeemDiscountValue, setRedeemDiscountValue] = useState('');
-  const [redeemSaving, setRedeemSaving] = useState(false);
+  // Redeem state removed — points are for tier tracking only
 
   // ── Fetch members ──────────────────────────────────────────────────────────
 
@@ -222,59 +212,6 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
       Alert.alert('Error', err.response?.data?.error || 'Failed to award points');
     } finally {
       setAwardSaving(false);
-    }
-  };
-
-  // ── Redeem points ──────────────────────────────────────────────────────────
-
-  const handleRedeem = async () => {
-    if (!selected?.xish_member_id) return;
-    const pts = parseInt(redeemPoints);
-    if (isNaN(pts) || pts <= 0) { Alert.alert('Invalid', 'Enter a valid points cost'); return; }
-    if ((selected.points_balance ?? 0) < pts) {
-      Alert.alert('Insufficient Points', `Member only has ${selected.points_balance ?? 0} pts`);
-      return;
-    }
-    if (redeemType === 'gift_card') {
-      const val = Math.round(parseFloat(redeemGcValue) * 100);
-      if (!val || val <= 0) { Alert.alert('Invalid', 'Enter a valid gift card value (e.g. 50 for $50)'); return; }
-    } else {
-      if (!redeemCouponCode.trim()) { Alert.alert('Invalid', 'Enter a coupon code'); return; }
-      const dv = parseFloat(redeemDiscountValue);
-      if (isNaN(dv) || dv <= 0) { Alert.alert('Invalid', 'Enter a valid discount value'); return; }
-    }
-    setRedeemSaving(true);
-    try {
-      const body: Record<string, any> = {
-        restaurant_id: Number(restaurantId),
-        reward_type: redeemType,
-        points_cost: pts,
-      };
-      if (redeemType === 'gift_card') {
-        body.gift_card_value_cents = Math.round(parseFloat(redeemGcValue) * 100);
-      } else {
-        body.coupon_code = redeemCouponCode.trim().toUpperCase();
-        body.coupon_discount_type = redeemDiscountType;
-        body.coupon_discount_value = parseFloat(redeemDiscountValue);
-      }
-      const res = await apiClient.post(
-        `/api/xish/members/${selected.xish_member_id}/redeem-points`,
-        body
-      );
-      const { points_balance, tier, reward } = res.data;
-      const updated = { ...selected, points_balance, tier };
-      setSelected(updated);
-      setMembers(prev => prev.map(m => m.xish_member_id === selected.xish_member_id ? { ...m, points_balance, tier } : m));
-      setShowRedeem(false);
-      setRedeemPoints(''); setRedeemGcValue(''); setRedeemCouponCode(''); setRedeemDiscountValue('');
-      const summary = reward.type === 'gift_card'
-        ? `Gift card ${reward.code} ($${(reward.original_value_cents / 100).toFixed(2)}) issued!`
-        : `Coupon ${reward.code} issued!`;
-      Alert.alert('Redeemed!', `${summary}\n\nNew points balance: ${points_balance}`);
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Redemption failed');
-    } finally {
-      setRedeemSaving(false);
     }
   };
 
@@ -401,13 +338,6 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
               >
                 <Ionicons name="star" size={14} color="#fff" />
                 <Text style={styles.awardBtnText}>Award Points</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.awardBtn, { flex: 1, backgroundColor: '#10b981' }]}
-                onPress={() => { setRedeemPoints(''); setRedeemGcValue(''); setRedeemCouponCode(''); setRedeemDiscountValue(''); setRedeemType('gift_card'); setShowRedeem(true); }}
-              >
-                <Ionicons name="gift" size={14} color="#fff" />
-                <Text style={styles.awardBtnText}>Redeem Points</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -539,98 +469,6 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
                 disabled={editSaving}
               >
                 <Text style={styles.btnText}>{editSaving ? 'Saving…' : 'Save'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Redeem points modal */}
-      <Modal
-        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-        visible={showRedeem}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRedeem(false)}
-      >
-        <View style={styles.overlay}>
-          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Redeem Points</Text>
-              <TouchableOpacity onPress={() => setShowRedeem(false)}>
-                <Ionicons name="close" size={20} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView keyboardShouldPersistTaps="handled">
-              <Text style={styles.label}>Points to spend (balance: {selected?.points_balance ?? 0})</Text>
-              <TextInput style={styles.input} value={redeemPoints} onChangeText={setRedeemPoints} placeholder="e.g. 100" keyboardType="number-pad" />
-
-              <Text style={[styles.label, { marginTop: 10 }]}>Reward type</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                {(['gift_card', 'coupon'] as const).map(type => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center', borderWidth: 1.5,
-                        borderColor: redeemType === type ? '#10b981' : '#e5e7eb',
-                        backgroundColor: redeemType === type ? '#ecfdf5' : '#fff' }
-                    ]}
-                    onPress={() => setRedeemType(type)}
-                  >
-                    <Ionicons name={type === 'gift_card' ? 'card' : 'pricetag'} size={18} color={redeemType === type ? '#10b981' : '#9ca3af'} />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: redeemType === type ? '#10b981' : '#6b7280', marginTop: 2 }}>
-                      {type === 'gift_card' ? 'Gift Card' : 'Coupon'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {redeemType === 'gift_card' ? (
-                <>
-                  <Text style={styles.label}>Gift card value (e.g. 50 for $50.00)</Text>
-                  <TextInput style={styles.input} value={redeemGcValue} onChangeText={setRedeemGcValue} placeholder="0.00" keyboardType="decimal-pad" />
-                </>
-              ) : (
-                <>
-                  <Text style={styles.label}>Coupon code</Text>
-                  <TextInput style={styles.input} value={redeemCouponCode} onChangeText={setRedeemCouponCode} placeholder="e.g. LOYAL10" autoCapitalize="characters" />
-
-                  <Text style={[styles.label, { marginTop: 8 }]}>Discount type</Text>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-                    {(['percentage', 'fixed'] as const).map(dt => (
-                      <TouchableOpacity
-                        key={dt}
-                        style={[
-                          { flex: 1, padding: 8, borderRadius: 8, alignItems: 'center', borderWidth: 1.5,
-                            borderColor: redeemDiscountType === dt ? '#4f46e5' : '#e5e7eb',
-                            backgroundColor: redeemDiscountType === dt ? '#ede9fe' : '#fff' }
-                        ]}
-                        onPress={() => setRedeemDiscountType(dt)}
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: redeemDiscountType === dt ? '#4f46e5' : '#6b7280' }}>
-                          {dt === 'percentage' ? '% off' : '$ off'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <Text style={styles.label}>{redeemDiscountType === 'percentage' ? 'Discount %' : 'Discount amount ($)'}</Text>
-                  <TextInput style={styles.input} value={redeemDiscountValue} onChangeText={setRedeemDiscountValue} placeholder={redeemDiscountType === 'percentage' ? 'e.g. 10' : 'e.g. 5.00'} keyboardType="decimal-pad" />
-                </>
-              )}
-            </ScrollView>
-
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-              <TouchableOpacity style={[styles.btn, styles.btnSecondary, { flex: 1 }]} onPress={() => setShowRedeem(false)}>
-                <Text style={[styles.btnText, { color: '#374151' }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, { flex: 1, backgroundColor: '#10b981' }, redeemSaving && { opacity: 0.6 }]}
-                onPress={handleRedeem}
-                disabled={redeemSaving}
-              >
-                <Text style={styles.btnText}>{redeemSaving ? 'Redeeming…' : 'Redeem'}</Text>
               </TouchableOpacity>
             </View>
           </View>
