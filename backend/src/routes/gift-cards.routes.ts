@@ -1,6 +1,5 @@
 import { Router } from "express";
 import pool from "../config/db";
-import { requireAuth } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -15,7 +14,7 @@ function generateCode(): string {
 }
 
 // GET /api/restaurants/:restaurantId/gift-cards
-router.get("/restaurants/:restaurantId/gift-cards", requireAuth, async (req, res) => {
+router.get("/restaurants/:restaurantId/gift-cards", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT * FROM gift_cards WHERE restaurant_id = $1 ORDER BY issued_at DESC`,
@@ -30,7 +29,7 @@ router.get("/restaurants/:restaurantId/gift-cards", requireAuth, async (req, res
 
 // GET /api/gift-cards/lookup?code=GC-XXXX-XXXX&restaurantId=1
 // Used at POS / checkout to look up a card by code
-router.get("/gift-cards/lookup", requireAuth, async (req, res) => {
+router.get("/gift-cards/lookup", async (req, res) => {
   const { code, restaurantId } = req.query as { code: string; restaurantId: string };
   if (!code || !restaurantId) return res.status(400).json({ error: "code and restaurantId required" });
   try {
@@ -48,7 +47,7 @@ router.get("/gift-cards/lookup", requireAuth, async (req, res) => {
 
 // POST /api/restaurants/:restaurantId/gift-cards
 // Issue a new gift card
-router.post("/restaurants/:restaurantId/gift-cards", requireAuth, async (req, res) => {
+router.post("/restaurants/:restaurantId/gift-cards", async (req, res) => {
   try {
     const { original_value_cents, purchaser_name, purchaser_email, purchaser_phone, note, expires_at } = req.body;
     if (!original_value_cents || original_value_cents <= 0) {
@@ -92,7 +91,7 @@ router.post("/restaurants/:restaurantId/gift-cards", requireAuth, async (req, re
 
 // PATCH /api/restaurants/:restaurantId/gift-cards/:cardId
 // Update balance (redemption), note, or active status
-router.patch("/restaurants/:restaurantId/gift-cards/:cardId", requireAuth, async (req, res) => {
+router.patch("/restaurants/:restaurantId/gift-cards/:cardId", async (req, res) => {
   try {
     const { balance_cents, note, is_active, expires_at } = req.body;
     const updates: string[] = [];
