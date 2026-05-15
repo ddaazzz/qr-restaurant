@@ -241,7 +241,7 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
 
     // 4. Eligible coupons (active, not expired, not exhausted)
     const couponsRes = await pool.query(
-      `SELECT id, code, discount_type, discount_value, min_order_cents,
+      `SELECT id, code, discount_type, discount_value, minimum_order_value,
               max_uses, current_uses, valid_from, valid_until, is_active
        FROM coupons
        WHERE restaurant_id = $1
