@@ -17,7 +17,35 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     ).catch(async (err: any) => {
-      // If columns don't exist yet, fetch without them
+      // If newer columns don't exist yet, progressively fall back
+      if (err.message?.includes('operating_hours') || err.message?.includes('featured_item_ids')) {
+        // Migration 117 not applied — try without those two columns
+        return pool.query(
+          `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
+                  language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
+                  active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
+                  show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
+                  custom_domain, is_customized, xish_enabled, lat, lng,
+                  venue_type, has_table_service
+           FROM restaurants WHERE id = $1`,
+          [req.params.restaurantId]
+        ).catch(async (err2: any) => {
+          // Migration 074 also not applied — fetch only base columns
+          if (err2.message?.includes('feature_flags') || err2.message?.includes('ui_mode') || err2.message?.includes('ui_config')) {
+            console.warn('[Settings] Migrations 074+117 not applied, falling back to base query');
+            return pool.query(
+              `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
+                      language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
+                      active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
+                      show_item_status_to_diners
+               FROM restaurants WHERE id = $1`,
+              [req.params.restaurantId]
+            );
+          }
+          throw err2;
+        });
+      }
+      // Migration 074 not applied
       if (err.message?.includes('feature_flags') || err.message?.includes('ui_mode') || err.message?.includes('ui_config')) {
         console.warn('[Settings] Migration 074 not yet applied, falling back to basic query');
         return pool.query(

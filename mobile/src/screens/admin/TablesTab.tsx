@@ -22,7 +22,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import * as Print from 'expo-print';
-import RNModal from 'react-native-modal';
+
 import { apiClient, API_URL, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
@@ -4837,13 +4837,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       </Modal>
 
       {/* Queue Modal */}
-      <RNModal
-        isVisible={showQueueModal}
-        onBackdropPress={() => setShowQueueModal(false)}
-        style={{ margin: 0, justifyContent: 'flex-end' }}
-        useNativeDriver
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showQueueModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowQueueModal(false)}
       >
-        <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowQueueModal(false)} />
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
             <Text style={{ flex: 1, fontSize: 17, fontWeight: '700' }}>Live Queue</Text>
             <TouchableOpacity onPress={loadQueueEntries} style={{ marginRight: 12 }}>
@@ -4889,7 +4892,8 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             </ScrollView>
           )}
         </View>
-      </RNModal>
+        </View>
+      </Modal>
 
     </View>
   );
