@@ -331,12 +331,70 @@ function _refreshHeaderText() {
   }
 }
 
+/* ─── Main tab navigation ───────────────────────────────────────────────── */
+let _activeMainTab = 'home';
+
+window.switchMainTab = function(tab) { switchMainTab(tab); };
+
+function switchMainTab(tab) {
+  if (tab === 'menu' && !orderingInitialized) {
+    // Not yet in an ordering session — scroll to order-type cards to prompt
+    switchMainTab('home');
+    return;
+  }
+  _activateMainTab(tab);
+}
+
+function _activateMainTab(tab) {
+  _activeMainTab = tab;
+  document.querySelectorAll('.main-tab').forEach(el => el.classList.remove('active-tab'));
+  const tabEl = document.getElementById(tab + '-tab');
+  if (tabEl) tabEl.classList.add('active-tab');
+  document.querySelectorAll('.bn-item').forEach(el => el.classList.remove('active'));
+  const bnEl = document.getElementById('bn-' + tab);
+  if (bnEl) bnEl.classList.add('active');
+  if (tab === 'orders') _renderOrdersTabContent();
+  if (tab === 'profile') _renderProfileTabContent();
+}
+
+function _renderOrdersTabContent() {
+  const content = document.getElementById('orders-tab-content');
+  const empty = document.getElementById('orders-empty-state');
+  if (!content) return;
+  // If no active session, show empty state
+  if (!sessionId && !IS_ORDER_NOW) {
+    if (empty) empty.style.display = 'flex';
+    return;
+  }
+  // Reuse orders drawer rendering into this container
+  if (typeof renderOrdersDrawerContent === 'function') {
+    renderOrdersDrawerContent(content);
+    if (empty) empty.style.display = 'none';
+  }
+}
+
+function _renderProfileTabContent() {
+  const content = document.getElementById('profile-tab-content');
+  if (!content) return;
+  if (typeof xishMember !== 'undefined' && xishMember) {
+    // Show XISH member info
+    content.innerHTML = `
+      <div style="padding:16px;text-align:center">
+        <div style="font-size:14px;font-weight:700;color:var(--restaurant-color);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">${(xishMember.tier||'member').toUpperCase()}</div>
+        <div style="font-size:20px;font-weight:700;color:#1f2937;margin-bottom:4px">${xishMember.name||''}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:20px">${xishMember.xish_id||''}</div>
+        <button onclick="openXishTab('points')" style="width:100%;padding:12px;background:var(--restaurant-color);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">XISH 會員中心</button>
+      </div>`;
+  } else {
+    content.innerHTML = '<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">尚未登入 XISH 會員</div>';
+  }
+}
+
 function backToLanding() {
   closeAllDrawers();
   if (idlePollTimer)         { clearInterval(idlePollTimer);         idlePollTimer = null; }
   if (confirmationPollTimer) { clearInterval(confirmationPollTimer); confirmationPollTimer = null; }
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('landing-page').style.display = '';
+  _activateMainTab('home');
 }
 
 function cycleHeaderLang() {
@@ -348,6 +406,119 @@ function openXishOrJoin() {
   if (typeof xishEnabled !== 'undefined' && xishEnabled) {
     openXishTab('points');
   }
+}
+
+/* ── Info expand toggles ─────────────────────────── */
+window.toggleHomeInfoExpand = function() {
+  const el = document.getElementById('home-info-expand');
+  const ch = document.getElementById('home-info-chevron');
+  if (!el) return;
+  const open = el.style.display === 'none' || !el.style.display;
+  el.style.display = open ? 'flex' : 'none';
+  if (ch) ch.style.transform = open ? 'rotate(180deg)' : '';
+};
+
+window.toggleMenuInfoExpand = function() {
+  const el = document.getElementById('mth-expand');
+  const ch = document.getElementById('mth-chevron');
+  if (!el) return;
+  const open = el.style.display === 'none' || !el.style.display;
+  el.style.display = open ? 'flex' : 'none';
+  if (ch) ch.style.transform = open ? 'rotate(180deg)' : '';
+};
+
+/* ── Featured items ─────────────────────────────── */
+function renderFeaturedItems(menuData) {
+  const featuredIds = (window.sessionData && window.sessionData.featured_item_ids) || [];
+  const allItems = menuData.items || [];
+  const featured = featuredIds.length > 0
+    ? featuredIds.map(id => allItems.find(i => i.id === id)).filter(Boolean)
+    : allItems.filter(i => i.image_url).slice(0, 8);
+  if (!featured.length) return;
+
+  function makeFeaturedCard(item, context) {
+    const wrap = document.createElement('div');
+    if (context === 'home') {
+      wrap.className = 'home-featured-item';
+      wrap.innerHTML = '<img src="' + item.image_url + '" alt="' + item.name + '" onerror="this.parentElement.style.display=\'none\'">' +
+        '<div class="home-featured-item-name">' + getItemDisplayName(item) + '</div>' +
+        '<div class="home-featured-item-price">$' + (item.price_cents/100).toFixed(2) + '</div>';
+    } else {
+      wrap.className = 'mf-item';
+      wrap.innerHTML = '<img src="' + item.image_url + '" alt="' + item.name + '" onerror="this.parentElement.style.display=\'none\'">' +
+        '<div class="mf-item-label">' + getItemDisplayName(item) + '</div>';
+    }
+    wrap.onclick = () => {
+      if (!orderingInitialized) { switchMainTab('home'); return; }
+      openDrawer(item.id);
+    };
+    return wrap;
+  }
+
+  const homeScroll = document.getElementById('home-featured-scroll');
+  const menuScroll = document.getElementById('menu-featured-scroll');
+  featured.forEach(item => {
+    if (homeScroll) homeScroll.appendChild(makeFeaturedCard(item, 'home'));
+    if (menuScroll) menuScroll.appendChild(makeFeaturedCard(item, 'menu'));
+  });
+  const homeSection = document.getElementById('home-featured-section');
+  if (homeSection) homeSection.style.display = '';
+  const menuStrip = document.getElementById('menu-featured-strip');
+  if (menuStrip) menuStrip.style.display = '';
+}
+
+/* ── Member QR modal ────────────────────────────── */
+window.showMemberQR = function() {
+  if (typeof xishMember === 'undefined' || !xishMember) return;
+  const tierEl = document.getElementById('mqr-tier');
+  const nameEl = document.getElementById('mqr-name');
+  const idEl   = document.getElementById('mqr-xish-id');
+  if (tierEl) tierEl.textContent = (xishMember.tier || 'member').toUpperCase();
+  if (nameEl) nameEl.textContent = xishMember.name || '';
+  if (idEl)   idEl.textContent   = xishMember.xish_id || '';
+  const container = document.getElementById('mqr-qr-container');
+  if (container) {
+    container.innerHTML = '';
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(container, {
+        text: xishMember.xish_id || String(xishMember.member_id || ''),
+        width: 160,
+        height: 160,
+        colorDark: '#1f2937',
+        colorLight: '#ffffff',
+      });
+    }
+  }
+  const modal = document.getElementById('member-qr-modal');
+  if (modal) modal.style.display = 'flex';
+};
+
+window.closeMemberQR = function() {
+  const modal = document.getElementById('member-qr-modal');
+  if (modal) modal.style.display = 'none';
+};
+
+function renderMembershipCard(member) {
+  if (!member) return;
+  const card = document.getElementById('home-membership-card');
+  if (!card) return;
+  const tierEl = document.getElementById('hmc-tier');
+  const nameEl = document.getElementById('hmc-name');
+  const couponEl = document.getElementById('hmc-coupon-count');
+  const stampEl  = document.getElementById('hmc-stamp-count');
+  if (tierEl) tierEl.textContent = (member.tier || 'member').toUpperCase();
+  if (nameEl) nameEl.textContent = member.name || '';
+  if (couponEl) couponEl.textContent = member.active_coupons || member.coupon_count || 0;
+  if (stampEl)  stampEl.textContent  = member.points_balance || 0;
+  card.style.display = '';
+}
+
+/* ── Update menu-tab order-type badge ─────────────── */
+function updateMthOrderTypeBadge(type) {
+  const el = document.getElementById('mth-order-type-badge');
+  if (!el) return;
+  const labels = { 'dine-in': '堂食', 'takeaway': '外帶', 'counter': '取餐' };
+  el.textContent = labels[type] || type || '';
 }
 
 function toggleMenuSearch() {
@@ -398,6 +569,7 @@ async function _applySessionToLanding(session, isOrderNow) {
   hasTableService = session.has_table_service !== false;
   tableName = session.table_name;
   tableUnitId = session.table_unit_id || null;
+  window.sessionData = session; // store for featured items etc.
   pax = session.pax;
   serviceChargePct = session.service_charge_percent || 0;
 
@@ -409,8 +581,6 @@ async function _applySessionToLanding(session, isOrderNow) {
 
   // Apply portal styling from ui_config
   if (session.ui_config?.portal_bg) {
-    const content = document.getElementById('landing-content');
-    if (content) content.style.backgroundColor = session.ui_config.portal_bg;
     document.documentElement.style.setProperty('--landing-bg', session.ui_config.portal_bg);
   }
   if (session.ui_config?.portal_card_bg) {
@@ -443,19 +613,41 @@ async function _applySessionToLanding(session, isOrderNow) {
     }
   }
 
-  // Apply background image to hero section
-  const landingHero = document.getElementById("landing-hero");
-  if (session.background_url && landingHero) {
-    landingHero.style.backgroundImage = `url('${session.background_url}')`;
-    landingHero.style.backgroundSize = 'cover';
-    landingHero.style.backgroundPosition = 'center';
+  // Apply background image to home cover
+  const homeCover = document.getElementById('home-cover');
+  if (session.background_url && homeCover) {
+    homeCover.style.backgroundImage = `url('${session.background_url}')`;
+    homeCover.style.backgroundSize = 'cover';
+    homeCover.style.backgroundPosition = 'center';
   }
+
+  // Populate new home elements
+  const homeCoverName = document.getElementById('home-cover-name');
+  if (homeCoverName) homeCoverName.textContent = session.restaurant_name || '';
+  const homeInfoName = document.getElementById('home-info-name');
+  if (homeInfoName) homeInfoName.textContent = session.restaurant_name || '';
+  const homeInfoHours = document.getElementById('home-info-hours');
+  if (homeInfoHours) homeInfoHours.textContent = session.operating_hours || '';
+  if (!session.operating_hours) {
+    const sep = document.getElementById('home-info-sep'); if (sep) sep.style.display = 'none';
+  }
+  const homeInfoAddr = document.getElementById('home-info-address');
+  if (homeInfoAddr) homeInfoAddr.textContent = session.address || '';
+  if (!session.address) {
+    const moreBtn = document.getElementById('home-info-more-btn'); if (moreBtn) moreBtn.style.display = 'none';
+  }
+  const mthName = document.getElementById('mth-restaurant-name');
+  if (mthName) mthName.textContent = session.restaurant_name || '';
+  const mthHours = document.getElementById('mth-hours');
+  if (mthHours) mthHours.textContent = session.operating_hours || '';
+  const mthAddr = document.getElementById('mth-address');
+  if (mthAddr) mthAddr.textContent = session.address || '';
 
   // Store cleanup function
   window.resetMenuBackground = function() {
-    if (landingHero) landingHero.style.backgroundImage = "";
-    document.body.style.backgroundImage = "none";
-    document.body.style.backgroundColor = "#ffffff";
+    if (homeCover) homeCover.style.backgroundImage = '';
+    document.body.style.backgroundImage = 'none';
+    document.body.style.backgroundColor = '#ffffff';
   };
 
   const nameEl = document.getElementById("restaurantName");
@@ -465,9 +657,9 @@ async function _applySessionToLanding(session, isOrderNow) {
   if (addressEl) addressEl.textContent = session.address || "";
 
   // Wire action buttons based on restaurant type (has_table_service)
-  const dineInBtn      = document.getElementById("dine-in-btn");
-  const togoBtn        = document.getElementById("togo-btn");
-  const checkBtn       = document.getElementById("check-orders-btn");
+  const dineInBtn      = document.getElementById('home-dine-btn');
+  const togoBtn        = document.getElementById('home-pickup-btn');
+  const checkBtn       = document.getElementById('check-orders-btn');
 
   // Helper to relabel a landing action button
   function _relabelBtn(btn, svgOrIcon, main, sub) {
@@ -667,8 +859,7 @@ async function _processCustomerTableScan(qrText) {
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 async function startOrdering() {
-  document.getElementById("landing-page").style.display = "none";
-  document.getElementById("app").style.display = "flex";
+  _activateMainTab('menu');
 
   // Initialize language button for menu page
   const currentLang = localStorage.getItem('language') || 'zh';
@@ -696,9 +887,8 @@ async function startOrdering() {
       .getElementById("cart-total")
       .addEventListener("click", openCartDrawer);
 
-    document
-      .getElementById("orders-btn")
-      .addEventListener("click", openOrdersDrawer);
+    const _ordersBtn = document.getElementById('orders-btn');
+    if (_ordersBtn) _ordersBtn.addEventListener('click', openOrdersDrawer);
 
     // Overlay click to close drawer
     document
@@ -715,8 +905,10 @@ async function startOrdering() {
 
   renderMenu(window.menu);
   renderCategories(window.menu.categories);
+  renderFeaturedItems(window.menu);
 
-  // Load cart from localStorage if exists
+  // Update order-type badge in menu tab header
+  updateMthOrderTypeBadge(orderType);
   loadCartFromStorage();
   loadPendingFromStorage();
   updateCartBadges();
@@ -1876,6 +2068,7 @@ function onVariantChange(itemId, variantId, optionId, checked) {
   // ------------------------------
   updateVariantCounter(itemId, variant);
   updateAddToCartButton(item);
+  _updateDrawerFooter();
 }
 
 async function loadOrderStatus({ forceRender = false } = {}) {
@@ -2409,11 +2602,68 @@ function updateCartBar() {
   updateSrBadges();
 }
 
+// Qty state for the sticky footer
+let _drawerQty = 1;
+let _drawerActiveItem = null;
+
+window.changeDrawerQty = function(delta) {
+  _drawerQty = Math.max(1, _drawerQty + delta);
+  const el = document.getElementById('idf-qty');
+  if (el) el.textContent = _drawerQty;
+  _updateDrawerFooter();
+};
+
+window.addFromDrawer = function() {
+  if (_drawerActiveItem) {
+    for (let i = 0; i < _drawerQty; i++) addToCart(_drawerActiveItem);
+    closeAllDrawers();
+  }
+};
+
+function _updateDrawerFooter() {
+  if (!_drawerActiveItem) return;
+  const item = _drawerActiveItem;
+  let price = item.price_cents;
+  const sels = variantSelections[item.id] || {};
+  if (item.variants) {
+    item.variants.forEach(v => {
+      (sels[v.id] || []).forEach(optId => {
+        const opt = v.options.find(o => o.id === optId);
+        if (opt) price += (opt.price_cents || 0);
+      });
+    });
+  }
+  price *= _drawerQty;
+  const priceEl = document.getElementById('idf-price');
+  if (priceEl) priceEl.textContent = `$${(price / 100).toFixed(2)}`;
+  // Options summary
+  const summaryEl = document.getElementById('idf-options-summary');
+  if (summaryEl) {
+    const parts = [];
+    if (item.variants) {
+      item.variants.forEach(v => {
+        const ids = sels[v.id] || [];
+        if (ids.length) {
+          const names = ids.map(id => { const o = v.options.find(o => o.id === id); return o ? o.name : ''; }).filter(Boolean);
+          if (names.length) parts.push(names.join(', '));
+        }
+      });
+    }
+    summaryEl.textContent = parts.join(' · ');
+  }
+  // Enable/disable add btn
+  const addBtn = document.getElementById('idf-add-btn');
+  if (addBtn) addBtn.disabled = !canAddToCart(item);
+}
+
 async function openDrawer(itemId) {
   closeAllDrawers();
 
   const item = window.menu.items.find(i => i.id === itemId);
   if (!item) return;
+
+  _drawerActiveItem = item;
+  _drawerQty = 1;
 
   // Reset addon state
   drawerAddons = [];
@@ -2440,12 +2690,37 @@ async function openDrawer(itemId) {
 
   content.innerHTML = ""; // FULL RESET
 
+  // Set hero image
+  const heroImg = document.getElementById('item-drawer-hero-img');
+  const imgWrap = document.getElementById('item-drawer-img-wrap');
+  if (heroImg) {
+    if (item.image_url) {
+      heroImg.src = item.image_url;
+      heroImg.style.display = 'block';
+      if (imgWrap) imgWrap.style.display = 'block';
+    } else {
+      heroImg.style.display = 'none';
+      if (imgWrap) imgWrap.style.display = 'none';
+    }
+  }
+
   const itemUI = renderMenuItemWithVariants(item, drawerAddons);
   itemUI.classList.add("drawer-item"); // important
+  // Hide the inner add-btn (replaced by sticky footer)
+  const innerAddBtn = itemUI.querySelector('.add-btn');
+  if (innerAddBtn) innerAddBtn.style.display = 'none';
   content.appendChild(itemUI);
 
   activeDrawer.classList.add("open");
   setCartBarVisible(false);
+
+  // Show + populate footer
+  const footer = document.getElementById('item-drawer-footer');
+  if (footer) {
+    footer.style.display = '';
+    document.getElementById('idf-qty').textContent = '1';
+    _updateDrawerFooter();
+  }
 
   content.scrollTop = 0;
 }
@@ -2531,6 +2806,10 @@ function closeAllDrawers() {
     if (!d) return;
     d.classList.remove("open");
   });
+  // Hide item drawer footer
+  const footer = document.getElementById('item-drawer-footer');
+  if (footer) footer.style.display = 'none';
+  _drawerActiveItem = null;
 
   // Also close payment screen
   const paymentScreen = document.getElementById('payment-screen');
@@ -2899,8 +3178,7 @@ async function endSessionFromMenu() {
     }
     closeAllDrawers();
     // Return to landing page
-    document.getElementById('app').style.display = 'none';
-    document.getElementById('landing-page').style.display = 'flex';
+    _activateMainTab('home');
   } catch (e) {
     console.error('❌ Error ending session:', e);
     alert('Error ending session');
@@ -3480,7 +3758,10 @@ function decorateLandingXish(session) {
   const xishSection = document.getElementById('xish-landing-section');
   if (xishSection) xishSection.style.display = 'flex';
 
-  // Show / update member bar in the card
+  // Populate new home membership card
+  if (xishMember) renderMembershipCard(xishMember);
+
+  // Legacy hidden xish-member-bar (still referenced elsewhere)
   const memberBarEl = document.getElementById('xish-member-bar');
   if (memberBarEl) {
     if (xishMember) {

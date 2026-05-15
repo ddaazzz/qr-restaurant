@@ -5,63 +5,153 @@
   <title>Chuio - Welcome</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
-  <!-- Translations -->
   <script src="/translations.js"></script>
-  <!-- Landing styles -->
-  <link rel="stylesheet" href="/landing.css?v=20260511c" />
-  <!-- Language Switcher Styles -->
+  <link rel="stylesheet" href="/landing.css?v=20260515a" />
   <link rel="stylesheet" href="/language-switcher.css" />
-  <!-- Menu styles -->
-  <link rel="stylesheet" href="/menu.css?v=20260514a" />
-  <!-- QR Code scanner (used for customer table-scan from order-now mode) -->
+  <link rel="stylesheet" href="/menu.css?v=20260515a" />
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
-
 <body>
 <div id="phone-frame">
 
-  <!-- ================= LANDING PAGE ================= -->
-  <div id="landing-page" class="landing">
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="bn-item active" id="bn-home" onclick="switchMainTab('home')">
+      <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span class="bn-label">首頁</span>
+    </button>
+    <button class="bn-item" id="bn-menu" onclick="switchMainTab('menu')">
+      <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg>
+      <span class="bn-label">點單</span>
+    </button>
+    <button class="bn-item" id="bn-orders" onclick="switchMainTab('orders')">
+      <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+      <span class="bn-badge" id="bn-orders-badge" style="display:none"></span>
+      <span class="bn-label">訂單</span>
+    </button>
+    <button class="bn-item" id="bn-profile" onclick="switchMainTab('profile')">
+      <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="bn-label">我的</span>
+    </button>
+  </nav>
 
-    <!-- ── HERO IMAGE ─────────────────────────────────── -->
-    <div id="landing-hero" class="landing-hero">
-      <div class="landing-hero-bottom">
-        <img id="logo" class="landing-logo" />
-        <h2 id="restaurantName"></h2>
-        <p id="address"></p>
-        <div id="xish-hero-badge" class="xish-hero-badge" style="display:none"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> XISH Partner</div>
+  <!-- HOME TAB -->
+  <div id="home-tab" class="main-tab active-tab">
+    <div id="home-cover" class="home-cover">
+      <div class="home-cover-overlay"></div>
+      <div class="home-cover-logo-wrap">
+        <img id="logo" class="home-logo" />
+        <div class="home-cover-name" id="home-cover-name"></div>
       </div>
+      <div id="home-banners" class="home-banners" style="display:none"></div>
     </div>
-
-    <!-- ── SCROLLABLE CONTENT ─────────────────────────── -->
-    <div id="landing-content" class="landing-content">
-
-      <!-- XISH member bar (shown when member is logged in) -->
-      <div id="xish-member-bar" class="xish-member-bar-card" style="display:none"></div>
-
-      <!-- Primary actions -->
-      <div class="landing-action-row">
-        <button id="dine-in-btn" class="landing-action-btn">
-          <span class="action-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg></span>
-          <span class="action-label-main">堂食</span>
-          <span class="action-label-sub">ORDER FOR TABLE</span>
+    <div class="home-scroll">
+      <!-- Info strip with hours -->
+      <div id="home-info-strip" class="home-info-strip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span id="home-info-name" class="home-info-name"></span>
+        <span id="home-info-sep" class="home-info-sep">·</span>
+        <span id="home-info-hours" class="home-info-hours"></span>
+        <button class="home-info-more-btn" id="home-info-more-btn" onclick="toggleHomeInfoExpand()">
+          更多 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="home-info-chevron"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <button id="togo-btn" class="landing-action-btn">
-          <span class="action-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
-          <span class="action-label-main">外帶</span>
-          <span class="action-label-sub">TAKEAWAY</span>
+      </div>
+      <div id="home-info-expand" class="home-info-expand" style="display:none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span id="home-info-address"></span>
+      </div>
+
+      <!-- Order type cards -->
+      <div class="home-order-cards" id="home-order-cards">
+        <button class="home-order-card" id="home-dine-btn">
+          <span class="hoc-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg>
+          </span>
+          <span class="hoc-label-zh">堂食</span>
+          <span class="hoc-label-en">DINE IN</span>
+        </button>
+        <button class="home-order-card" id="home-pickup-btn">
+          <span class="hoc-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          </span>
+          <span class="hoc-label-zh">外帶</span>
+          <span class="hoc-label-en">PICK UP</span>
         </button>
       </div>
 
-      <!-- Transaction Record (hidden in order-now mode) -->
+      <!-- XISH Membership card -->
+      <div id="home-membership-card" class="home-membership-card" style="display:none">
+        <div class="hmc-bg"></div>
+        <div class="hmc-content">
+          <div class="hmc-left">
+            <div class="hmc-tier" id="hmc-tier">MEMBER</div>
+            <div class="hmc-name" id="hmc-name">—</div>
+            <div class="hmc-counts">
+              <div class="hmc-count-item" onclick="openXishTab('coupons')">
+                <span class="hmc-count-num" id="hmc-coupon-count">0</span>
+                <span class="hmc-count-label">優惠券</span>
+              </div>
+              <div class="hmc-count-divider"></div>
+              <div class="hmc-count-item" onclick="openXishTab('points')">
+                <span class="hmc-count-num" id="hmc-stamp-count">0</span>
+                <span class="hmc-count-label">積分</span>
+              </div>
+            </div>
+          </div>
+          <div class="hmc-right">
+            <button class="hmc-qr-btn" onclick="showMemberQR()">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/></svg>
+              <span>我的QR</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue placeholder -->
+      <div id="home-queue-section" class="home-quick-section" style="display:none">
+        <div class="hqs-inner">
+          <div class="hqs-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="19"/><rect x="10" y="8" width="5" height="14"/><rect x="17" y="13" width="5" height="9"/></svg>
+          </div>
+          <div class="hqs-text">
+            <div class="hqs-title">在線取號</div>
+            <div class="hqs-sub">即時取號，按時到來，按位就座</div>
+          </div>
+          <svg class="hqs-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
+      <!-- Pre-order placeholder -->
+      <div id="home-preorder-section" class="home-quick-section" style="display:none">
+        <div class="hqs-inner">
+          <div class="hqs-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14" stroke-width="3"/><line x1="12" y1="14" x2="12" y2="14" stroke-width="3"/><line x1="8" y1="18" x2="8" y2="18" stroke-width="3"/></svg>
+          </div>
+          <div class="hqs-text">
+            <div class="hqs-title">預選菜品</div>
+            <div class="hqs-sub">提前點好菜單，落座後快速確認</div>
+          </div>
+          <svg class="hqs-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
+      <!-- Featured items -->
+      <div id="home-featured-section" class="home-featured-section" style="display:none">
+        <div class="home-featured-header">
+          <span class="home-featured-title">精選推薦</span>
+          <button class="home-featured-more" onclick="switchMainTab('menu')">查看更多 ›</button>
+        </div>
+        <div id="home-featured-scroll" class="home-featured-scroll"></div>
+      </div>
+
+      <!-- Transaction record -->
       <button id="check-orders-btn" class="landing-secondary-btn">
-        <span class="secondary-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
-        <span class="landing-secondary-zh">交易記錄</span>
-        <span class="landing-secondary-sep"> · </span>
-        <span class="landing-secondary-en">Transaction Record</span>
+        <span class="secondary-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+        <span>交易記錄 · Transaction Record</span>
       </button>
 
-      <!-- XISH loyalty section (revealed by JS when xish_enabled) -->
+      <!-- XISH join section -->
       <div id="xish-landing-section" class="xish-landing-section" style="display:none">
         <div class="xish-section-divider">
           <span class="xish-divider-line"></span>
@@ -70,33 +160,120 @@
         </div>
         <div class="xish-action-row">
           <button class="xish-action-btn" id="my-points-btn" onclick="openXishTab('points')">
-          <span class="xish-act-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+            <span class="xish-act-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
             <span class="xish-act-label-zh">積分</span>
             <span class="xish-act-label-en">My Points</span>
           </button>
           <button class="xish-action-btn" id="coupons-btn" onclick="openXishTab('coupons')">
-          <span class="xish-act-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg></span>
+            <span class="xish-act-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg></span>
             <span class="xish-act-label-zh">優惠券</span>
             <span class="xish-act-label-en">Coupons</span>
           </button>
           <button class="xish-action-btn" id="gift-cards-btn" onclick="openXishTab('gifts')">
-          <span class="xish-act-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
+            <span class="xish-act-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
             <span class="xish-act-label-zh">禮品卡</span>
             <span class="xish-act-label-en">Gift Cards</span>
           </button>
         </div>
       </div>
 
-    </div><!-- /.landing-content -->
+      <div style="height: 80px;"></div>
+    </div><!-- /.home-scroll -->
 
-    <!-- Hidden data elements still written to by JS -->
+    <!-- Hidden elements still used by JS -->
     <p id="tableInfo" style="display:none"></p>
-    <p id="phone"     style="display:none"></p>
+    <p id="phone" style="display:none"></p>
+    <p id="restaurantName" style="display:none"></p>
+    <p id="address" style="display:none"></p>
+    <div id="xish-member-bar" style="display:none"></div>
+    <div id="xish-hero-badge" style="display:none"></div>
+  </div><!-- /#home-tab -->
 
-  </div><!-- /#landing-page -->
+  <!-- MENU TAB -->
+  <div id="menu-tab" class="main-tab">
+    <!-- Restaurant name row + lang/search -->
+    <div class="menu-tab-header" id="menu-tab-header">
+      <div class="mth-main">
+        <div class="mth-restaurant-name" id="mth-restaurant-name"></div>
+        <div class="mth-info-row">
+          <span class="mth-hours" id="mth-hours"></span>
+          <span class="mth-sep" id="mth-sep">·</span>
+          <span class="mth-order-type-badge" id="mth-order-type-badge"></span>
+          <button class="mth-more-btn" id="mth-info-toggle" onclick="toggleMenuInfoExpand()">
+            更多門店信息
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="mth-chevron"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <div id="mth-expand" class="mth-expand" style="display:none">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span id="mth-address"></span>
+        </div>
+      </div>
+      <div class="mth-right">
+        <button class="header-icon-btn" id="header-lang-btn" onclick="cycleHeaderLang()" title="Language">
+          <span id="header-lang-label">中</span>
+        </button>
+        <button class="header-icon-btn" id="header-search-btn" onclick="toggleMenuSearch()" title="Search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+      </div>
+    </div>
 
-  <!-- ================= CUSTOMER TABLE SCAN PANEL ================= -->
-  <!-- Shown when user taps "Order for Table" from an order-now QR -->
+    <!-- Featured items strip -->
+    <div id="menu-featured-strip" class="menu-featured-strip" style="display:none">
+      <div id="menu-featured-scroll" class="menu-featured-scroll"></div>
+    </div>
+
+    <!-- Search row -->
+    <div id="menu-search-row" class="menu-search-row" style="display:none">
+      <input type="text" id="search-input" placeholder="🔍 Search…" oninput="filterMenu(this.value)" autocomplete="off" />
+    </div>
+
+    <!-- Categories + menu -->
+    <div class="layout">
+      <div id="categories"></div>
+      <div id="menu"></div>
+    </div>
+
+    <!-- Cart bar -->
+    <div id="cart-bar">
+      <div class="cart-info">
+        <span id="cart-count" data-i18n="menu.cart-count-label">0 items</span>
+        <span id="cart-total" data-i18n="menu.cart-total-label">$0.00</span>
+      </div>
+      <button id="confirm-order-btn" data-i18n="menu.confirm-order" disabled>Confirm Order</button>
+    </div>
+  </div><!-- /#menu-tab -->
+
+  <!-- ORDERS TAB -->
+  <div id="orders-tab" class="main-tab">
+    <div class="simple-tab-header">
+      <button class="sth-back" onclick="switchMainTab('home')" style="display:none"></button>
+      <span class="sth-title">訂單 · Orders</span>
+      <button class="header-icon-btn" id="header-history-btn" onclick="openOrderHistory()" title="History">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+    </div>
+    <div id="orders-tab-content" class="orders-tab-content">
+      <div class="tab-empty-state" id="orders-empty-state">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p>暫無訂單</p>
+        <span>No active orders</span>
+      </div>
+    </div>
+    <div style="height: 80px;"></div>
+  </div>
+
+  <!-- PROFILE TAB -->
+  <div id="profile-tab" class="main-tab">
+    <div class="simple-tab-header">
+      <span class="sth-title">我的 · Profile</span>
+    </div>
+    <div id="profile-tab-content" class="profile-tab-content"></div>
+    <div style="height: 80px;"></div>
+  </div>
+
+  <!-- TABLE SCAN OVERLAY -->
   <div id="table-scan-overlay" class="table-scan-overlay">
     <div class="table-scan-panel">
       <div class="table-scan-header">
@@ -110,103 +287,62 @@
     </div>
   </div>
 
-  <!-- ================= MENU APP (HIDDEN INITIALLY) ================= -->
-  <div id="app" style="display:none;">
+  <!-- SHARED DRAWERS -->
+  <div id="drawer-overlay"></div>
 
-    <!-- Header -->
-    <div class="app-header">
-      <!-- Left: back to landing -->
-      <button id="header-menu-btn" class="header-menu-btn" onclick="backToLanding()">
-        <svg width="18" height="13" viewBox="0 0 18 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="0" y1="1.5" x2="18" y2="1.5"/>
-          <line x1="0" y1="6.5" x2="18" y2="6.5"/>
-          <line x1="0" y1="11.5" x2="18" y2="11.5"/>
-        </svg>
-      </button>
-      <!-- Center: order type + sub-info -->
-      <div class="header-order-info" id="header-order-info">
-        <div class="header-order-type" id="header-order-type"></div>
-        <div class="header-order-sub" id="header-order-sub"></div>
-      </div>
-      <!-- Right: icon buttons -->
-      <div class="header-icons" id="header-icons">
-        <button class="header-icon-btn" id="header-search-btn" onclick="toggleMenuSearch()" title="Search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <div id="item-drawer" class="item-drawer-fullscreen">
+    <div class="item-drawer-scroll">
+      <div class="item-drawer-img-wrap" id="item-drawer-img-wrap">
+        <img id="item-drawer-hero-img" class="item-drawer-hero-img" src="" alt="" onerror="this.style.display='none'" />
+        <button class="item-drawer-close-btn" onclick="closeAllDrawers()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
-        <button class="header-icon-btn" id="header-lang-btn" onclick="cycleHeaderLang()" title="Language">
-          <span id="header-lang-label">中</span>
-        </button>
-        <button class="header-icon-btn" id="orders-btn" title="Orders">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        </button>
-        <button class="header-icon-btn" id="header-profile-btn" onclick="openXishOrJoin()" title="Profile">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </button>
-      </div>
-      <!-- Orders/payment mode overrides (shown instead of above) -->
-      <button id="header-back-btn" class="header-back-btn" style="display:none" onclick="headerBackAction()">‹</button>
-      <span id="header-page-title" class="header-page-title" style="display:none"></span>
-      <span id="header-table-name" class="header-table-name" style="display:none"></span>
-      <!-- History button shown in orders mode -->
-      <button id="header-history-btn" class="header-icon-btn" style="display:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);" onclick="openOrderHistory()" title="Order History">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      </button>
-    </div>
-    <!-- Collapsible search row (toggled by search icon) -->
-    <div id="menu-search-row" class="menu-search-row" style="display:none">
-      <input type="text" id="search-input" placeholder="🔍 Search…" oninput="filterMenu(this.value)" autocomplete="off" />
-    </div>
-
-    <!-- Main layout -->
-    <div class="layout">
-      <div id="categories"></div>
-      <div id="menu"></div>
-    </div>
-
-    <!-- Cart bar -->
-    <div id="cart-bar">
-      <div class="cart-info">
-        <span id="cart-count" data-i18n="menu.cart-count-label">0 items</span>
-        <span id="cart-total" data-i18n="menu.cart-total-label">$0.00</span>
-      </div>
-      <button id="confirm-order-btn" data-i18n="menu.confirm-order" disabled>
-        Confirm Order
-      </button>
-    </div>
-
-    <!-- ================= DRAWERS & OVERLAY ================= -->
-    <div id="drawer-overlay"></div>
-
-    <div id="item-drawer">
-      <div class="item-page-header">
-        <button class="item-page-back" onclick="closeAllDrawers()">‹ Back</button>
       </div>
       <div class="drawer-content"></div>
     </div>
-
-    <div id="cart-drawer">
-      <div class="drawer-panel-header">
-        <button class="drawer-back-btn" onclick="closeActiveDrawer()">‹</button>
-        <span class="drawer-panel-title" data-i18n="menu.your-cart">Your Cart</span>
-        <span class="drawer-panel-spacer"></span>
+    <div class="item-drawer-footer" id="item-drawer-footer" style="display:none">
+      <div class="idf-top">
+        <span class="idf-price" id="idf-price"></span>
+        <div class="idf-qty-row">
+          <button class="idf-qty-btn idf-minus" onclick="changeDrawerQty(-1)">−</button>
+          <span class="idf-qty" id="idf-qty">1</span>
+          <button class="idf-qty-btn idf-plus" onclick="changeDrawerQty(1)">+</button>
+        </div>
       </div>
-      <div class="drawer-content" id="cart-drawer-content"></div>
+      <div class="idf-options-summary" id="idf-options-summary"></div>
+      <button class="idf-add-btn" id="idf-add-btn" onclick="addFromDrawer()">加入購物車</button>
     </div>
+  </div>
 
-    <div id="orders-drawer">
-      <div class="drawer-content" id="orders-drawer-content"></div>
+  <div id="cart-drawer">
+    <div class="drawer-panel-header">
+      <button class="drawer-back-btn" onclick="closeActiveDrawer()">‹</button>
+      <span class="drawer-panel-title" data-i18n="menu.your-cart">Your Cart</span>
+      <span class="drawer-panel-spacer"></span>
     </div>
+    <div class="drawer-content" id="cart-drawer-content"></div>
+  </div>
 
-    <div id="payment-screen">
-      <div id="payment-screen-content"></div>
+  <div id="orders-drawer">
+    <div class="drawer-content" id="orders-drawer-content"></div>
+  </div>
+
+  <div id="payment-screen">
+    <div id="payment-screen-content"></div>
+  </div>
+
+  <!-- Member QR modal -->
+  <div id="member-qr-modal" class="member-qr-modal" style="display:none" onclick="closeMemberQR()">
+    <div class="mqr-card" onclick="event.stopPropagation()">
+      <button class="mqr-close" onclick="closeMemberQR()">✕</button>
+      <div class="mqr-tier" id="mqr-tier"></div>
+      <div class="mqr-name" id="mqr-name"></div>
+      <div id="mqr-qr-container" class="mqr-qr-container"></div>
+      <div class="mqr-xish-id" id="mqr-xish-id"></div>
     </div>
-
-  </div><!-- #app -->
+  </div>
 
 </div><!-- #phone-frame -->
-
-  <!-- ================= SCRIPTS ================= -->
-  <script src="/menu.js?v=20260514b" defer></script>
-
+<script src="/menu.js?v=20260515a" defer></script>
 </body>
 </html>

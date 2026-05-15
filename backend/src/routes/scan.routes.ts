@@ -54,7 +54,8 @@ router.post("/scan/:qrToken", async (req, res) => {
       restaurantResult = await pool.query(
         `SELECT id, name, address, phone, logo_url, background_url, theme_color,
                 service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
-                timezone, language_preference, xish_enabled, venue_type, has_table_service
+                timezone, language_preference, xish_enabled, venue_type, has_table_service,
+                operating_hours, featured_item_ids
          FROM restaurants WHERE id = $1`,
         [unit.restaurant_id]
       );
@@ -94,6 +95,8 @@ router.post("/scan/:qrToken", async (req, res) => {
       language_preference: restaurant?.language_preference || null,
       venue_type: restaurant?.venue_type || "restaurant",
       has_table_service: restaurant?.has_table_service !== false,
+      operating_hours: restaurant?.operating_hours || "",
+      featured_item_ids: restaurant?.featured_item_ids || [],
     });
 
   } catch (err) {
@@ -115,7 +118,8 @@ router.post("/scan/order-now/:restaurantId", async (req, res) => {
       restaurantResult = await pool.query(
         `SELECT id, name, address, phone, logo_url, background_url, theme_color,
                 service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
-                timezone, language_preference, xish_enabled, venue_type, has_table_service
+                timezone, language_preference, xish_enabled, venue_type, has_table_service,
+                operating_hours, featured_item_ids
          FROM restaurants WHERE id = $1`,
         [restaurantId]
       );
@@ -158,6 +162,8 @@ router.post("/scan/order-now/:restaurantId", async (req, res) => {
       language_preference: restaurant.language_preference || null,
       venue_type: restaurant.venue_type || "restaurant",
       has_table_service: restaurant.has_table_service !== false,
+      operating_hours: restaurant.operating_hours || "",
+      featured_item_ids: restaurant.featured_item_ids || [],
     });
   } catch (err) {
     console.error(err);

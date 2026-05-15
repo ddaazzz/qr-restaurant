@@ -13,7 +13,7 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
               show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
               custom_domain, is_customized, xish_enabled, lat, lng,
-              venue_type, has_table_service
+              venue_type, has_table_service, operating_hours, featured_item_ids
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     ).catch(async (err: any) => {
@@ -48,6 +48,8 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     r.is_customized = r.is_customized || false;
     r.venue_type = r.venue_type || 'restaurant';
     r.has_table_service = r.has_table_service !== false; // default true
+    r.operating_hours = r.operating_hours || '';
+    r.featured_item_ids = r.featured_item_ids || [];
     res.json(r);
   } catch (err: any) {
     console.error('[Settings] Error fetching settings:', err);
@@ -111,7 +113,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service } = req.body;
+    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids } = req.body;
     
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -207,6 +209,14 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
     if (has_table_service !== undefined) {
       updates.push(`has_table_service = $${paramCount++}`);
       values.push(has_table_service);
+    }
+    if (operating_hours !== undefined) {
+      updates.push(`operating_hours = $${paramCount++}`);
+      values.push(operating_hours);
+    }
+    if (featured_item_ids !== undefined) {
+      updates.push(`featured_item_ids = $${paramCount++}`);
+      values.push(featured_item_ids);
     }
 
     if (updates.length === 0) {
