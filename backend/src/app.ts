@@ -28,6 +28,7 @@ import xishAuthRoutes from "./routes/xish-auth.routes";
 import xishCampaignsRoutes from "./routes/xish-campaigns.routes";
 import xishWalletRoutes from "./routes/xish-wallet.routes";
 import xishPosRoutes from "./routes/xish-pos.routes";
+import queueRoutes from "./routes/queue.routes";
 import { isR2Configured, s3Client, R2_BUCKET_NAME } from "./config/storage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 
@@ -190,6 +191,7 @@ app.use("/api", xishAuthRoutes);
 app.use("/api", xishCampaignsRoutes);
 app.use("/api", xishWalletRoutes);
 app.use("/api", xishPosRoutes);
+app.use("/api", queueRoutes);
 
 /* ======================
    FRONTEND STATIC FILES
@@ -280,6 +282,10 @@ app.get("/terms", (_req, res) => {
 
 app.get("/console", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "console.html"));
+});
+
+app.get("/queue/:queueToken", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "queue.html"));
 });
 
 app.get("/careers", (_req, res) => {

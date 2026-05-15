@@ -198,6 +198,7 @@ type ViewType = 'grid' | 'sessionDetail' | 'sessionList';
 export interface TablesTabRef {
   toggleEditMode: () => void;
   navigateToScannedQR: (sessionId: number) => void;
+  openQueueModal: () => void;
 }
 
 type TablesTabProps = {
@@ -217,7 +218,6 @@ const getTableTextColor = (bgColor: string) => {
 
 export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) => {
   const { t } = useTranslation();
-  const { width: windowWidth } = useWindowDimensions();
   const { width: windowWidth } = useWindowDimensions();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -280,6 +280,14 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false);
   const [showDeleteTableModal, setShowDeleteTableModal] = useState(false);
 
+  // ── Queue modal state ─────────────────────────────────
+  const [showQueueModal, setShowQueueModal] = useState(false);
+  const [queueEntries, setQueueEntries] = useState<Array<{
+    id: number; queue_number: number; pax: number; pax_band_label: string;
+    status: string; created_at: string;
+  }>>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+
   // Form inputs
   const [categoryName, setCategoryName] = useState('');
   const [tableName, setTableName] = useState('');
@@ -340,6 +348,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   }, []);
 
   // Expose toggleEditMode and navigateToScannedQR through ref
+  const loadQueueEntriesRef = useRef<(() => void) | null>(null);
   useImperativeHandle(ref, () => ({
     toggleEditMode() {
       setIsEditMode(prev => {
@@ -369,7 +378,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       
       console.error('[TablesTab] Session not found with ID:', sessionId);
       Alert.alert('Order Not Found', 'Could not find this order. Please try again.');
-    }
+    },
+    openQueueModal() {
+      setShowQueueModal(true);
+      loadQueueEntriesRef.current?.();
+    },
   }), [tables]);
 
   const getTodayDateString = useCallback(() => {
@@ -523,6 +536,47 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     const interval = setInterval(loadTableData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, [restaurantId, loadTableData]);
+
+  // ── Queue helpers ─────────────────────────────────────
+  const loadQueueEntries = useCallback(async () => {
+    setQueueLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/queue?status=waiting,called`);
+      setQueueEntries(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      setQueueEntries([]);
+    } finally {
+      setQueueLoading(false);
+    }
+  }, [restaurantId]);
+  loadQueueEntriesRef.current = loadQueueEntries;
+
+  const callQueueEntry = useCallback(async (entryId: number) => {
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/queue/${entryId}/call`, {});
+      loadQueueEntries();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to call entry');
+    }
+  }, [restaurantId, loadQueueEntries]);
+
+  const seatQueueEntry = useCallback(async (entryId: number) => {
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/queue/${entryId}/seat`, {});
+      loadQueueEntries();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to seat entry');
+    }
+  }, [restaurantId, loadQueueEntries]);
+
+  const removeQueueEntry = useCallback(async (entryId: number) => {
+    try {
+      await apiClient.delete(`/api/restaurants/${restaurantId}/queue/${entryId}`);
+      loadQueueEntries();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to remove entry');
+    }
+  }, [restaurantId, loadQueueEntries]);
 
   // Load QR image when modal opens
   useEffect(() => {
@@ -4781,6 +4835,61 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
           </View>
         </View>
       </Modal>
+
+      {/* Queue Modal */}
+      <RNModal
+        isVisible={showQueueModal}
+        onBackdropPress={() => setShowQueueModal(false)}
+        style={{ margin: 0, justifyContent: 'flex-end' }}
+        useNativeDriver
+      >
+        <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <Text style={{ flex: 1, fontSize: 17, fontWeight: '700' }}>Live Queue</Text>
+            <TouchableOpacity onPress={loadQueueEntries} style={{ marginRight: 12 }}>
+              <Ionicons name="refresh" size={20} color="#374151" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowQueueModal(false)}>
+              <Ionicons name="close" size={22} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          {queueLoading ? (
+            <ActivityIndicator style={{ padding: 40 }} size="large" color="#A10035" />
+          ) : queueEntries.length === 0 ? (
+            <Text style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No groups waiting</Text>
+          ) : (
+            <ScrollView style={{ padding: 16 }}>
+              {queueEntries.map(entry => (
+                <View key={entry.id} style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 32, fontWeight: '900', color: '#A10035', marginRight: 12 }}>#{entry.queue_number}</Text>
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '700' }}>{entry.pax_band_label || `${entry.pax} pax`}</Text>
+                      <Text style={{ fontSize: 12, color: '#9ca3af' }}>{new Date(entry.created_at).toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' })}</Text>
+                    </View>
+                    <View style={{ marginLeft: 'auto' as any, backgroundColor: entry.status === 'called' ? '#fef3c7' : '#f3f4f6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: entry.status === 'called' ? '#d97706' : '#6b7280', textTransform: 'capitalize' }}>{entry.status}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {entry.status === 'waiting' && (
+                      <TouchableOpacity onPress={() => callQueueEntry(entry.id)} style={{ flex: 1, backgroundColor: '#f59e0b', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Call</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={() => seatQueueEntry(entry.id)} style={{ flex: 1, backgroundColor: '#16a34a', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Seat</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => removeQueueEntry(entry.id)} style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                      <Text style={{ color: '#ef4444', fontWeight: '700', fontSize: 13 }}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </RNModal>
 
     </View>
   );

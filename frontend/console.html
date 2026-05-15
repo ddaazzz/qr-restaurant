@@ -48,6 +48,9 @@
       <button class="console-nav-btn" data-section="tables" onclick="consoleSwitchSection('tables', this)">
         <span class="console-nav-icon">🪑</span> Table Management
       </button>
+      <button class="console-nav-btn" data-section="queue" onclick="consoleSwitchSection('queue', this)">
+        <span class="console-nav-icon">🎟</span> Queue Management
+      </button>
       <button class="console-nav-btn" data-section="crm" onclick="consoleSwitchSection('crm', this)">
         <span class="console-nav-icon">👥</span> CRM
       </button>
@@ -188,62 +191,92 @@
 
       </section>
 
+      <!-- ─── QUEUE MANAGEMENT ─────────────────────────── -->
+      <section class="console-section" id="section-queue">
+
+        <div class="console-toolbar">
+          <span style="font-weight:700;font-size:15px;">Queue Settings</span>
+          <label class="console-toggle-wrap" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="queue-enabled-toggle" onchange="consoleToggleQueueEnabled(this)" />
+            <span>Queue Active</span>
+          </label>
+          <button class="console-btn console-btn-primary" onclick="consoleOpenAddBandModal()">＋ Add Pax Band</button>
+        </div>
+
+        <div class="console-card" style="padding:20px;margin-bottom:16px;">
+          <div style="font-weight:700;margin-bottom:8px;">Queue QR Code</div>
+          <div id="queue-qr-url" style="font-size:12px;color:#6b7280;margin-bottom:12px;word-break:break-all;"></div>
+        </div>
+
+        <div class="console-card" style="padding:0;overflow:hidden;margin-bottom:16px;">
+          <table class="console-table">
+            <thead><tr><th>Label</th><th>Min Pax</th><th>Max Pax</th><th>Actions</th></tr></thead>
+            <tbody id="queue-bands-body">
+              <tr><td colspan="4" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Live Queue</div>
+        <button class="console-btn" onclick="consoleLoadLiveQueue()" style="margin-bottom:12px;">↻ Refresh</button>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <table class="console-table">
+            <thead><tr><th>#</th><th>Pax</th><th>Band</th><th>Status</th><th>Wait Time</th><th>Actions</th></tr></thead>
+            <tbody id="queue-live-body">
+              <tr><td colspan="6" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <!-- Modal: add/edit pax band -->
+      <div class="console-modal-overlay" id="modal-queue-band" style="display:none;">
+        <div class="console-modal">
+          <div class="console-modal-header">
+            <span id="modal-queue-band-title">Add Pax Band</span>
+            <button class="console-modal-close" onclick="consoleCloseModal('modal-queue-band')">✕</button>
+          </div>
+          <div class="console-modal-body">
+            <label>Label</label>
+            <input type="text" class="console-input" id="band-label-input" placeholder="e.g. 1–2 pax" style="width:100%;margin-bottom:12px;" />
+            <label>Min Pax</label>
+            <input type="number" class="console-input" id="band-min-input" min="1" placeholder="1" style="width:100%;margin-bottom:12px;" />
+            <label>Max Pax</label>
+            <input type="number" class="console-input" id="band-max-input" min="1" placeholder="4" style="width:100%;" />
+          </div>
+          <div class="console-modal-footer">
+            <button class="console-btn" onclick="consoleCloseModal('modal-queue-band')">Cancel</button>
+            <button class="console-btn console-btn-primary" onclick="consoleSaveQueueBand()">Save</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ─── CRM ──────────────────────────────────────── -->
       <section class="console-section" id="section-crm">
 
-        <div class="console-crm-tabs">
-          <button class="console-crm-tab active" onclick="consoleCrmTab('customers', this)">Restaurant Customers</button>
-          <button class="console-crm-tab" onclick="consoleCrmTab('members', this)">Loyalty Members</button>
+        <div class="console-toolbar">
+          <input type="text" class="console-input" id="crm-mem-search" placeholder="Search by name or phone…" style="max-width:280px;" oninput="consoleDebounceCrmMembers()" />
+          <select class="console-input" id="crm-mem-tier" style="max-width:160px;" onchange="consoleLoadCrmMembers()">
+            <option value="">All Tiers</option>
+            <option value="platinum">Platinum</option>
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+            <option value="basic">Basic</option>
+          </select>
+          <button class="console-btn console-btn-primary" onclick="xaOpenRegisterModal()">＋ Add Member</button>
         </div>
-
-        <!-- Restaurant Customers tab -->
-        <div id="crm-tab-customers">
-          <div class="console-toolbar">
-            <input type="text" class="console-input" id="crm-cust-search" placeholder="Search by name, phone…" style="max-width:260px;" oninput="consoleDebounceCrmCustomers()" />
-            <select class="console-input" id="crm-cust-sort" style="max-width:180px;" onchange="consoleLoadCrmCustomers()">
-              <option value="last_visit">Last Visit</option>
-              <option value="total_visits">Total Visits</option>
-              <option value="name">Name</option>
-            </select>
-          </div>
-          <div class="console-card" style="padding:0;overflow:hidden;">
-            <table class="console-table">
-              <thead>
-                <tr><th>Name</th><th>Phone</th><th>Visits</th><th>Last Visit</th><th>Notes</th></tr>
-              </thead>
-              <tbody id="crm-customers-body">
-                <tr><td colspan="5" class="console-empty">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="console-pagination" id="crm-customers-pagination"></div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <table class="console-table">
+            <thead>
+              <tr><th>Name</th><th>Phone</th><th>Tier</th><th>Points</th><th>Joined</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="crm-members-body">
+              <tr><td colspan="6" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
         </div>
-
-        <!-- Loyalty Members tab -->
-        <div id="crm-tab-members" style="display:none;">
-          <div class="console-toolbar">
-            <input type="text" class="console-input" id="crm-mem-search" placeholder="Search by name, phone, XISH ID…" style="max-width:280px;" oninput="consoleDebounceCrmMembers()" />
-            <select class="console-input" id="crm-mem-tier" style="max-width:160px;" onchange="consoleLoadCrmMembers()">
-              <option value="">All Tiers</option>
-              <option value="platinum">Platinum</option>
-              <option value="gold">Gold</option>
-              <option value="silver">Silver</option>
-              <option value="basic">Basic</option>
-            </select>
-            <button class="console-btn console-btn-primary" onclick="xaOpenRegisterModal()">＋ Register Member</button>
-          </div>
-          <div class="console-card" style="padding:0;overflow:hidden;">
-            <table class="console-table">
-              <thead>
-                <tr><th>Name</th><th>Phone</th><th>Tier</th><th>Points</th><th>Joined</th><th>Actions</th></tr>
-              </thead>
-              <tbody id="crm-members-body">
-                <tr><td colspan="6" class="console-empty">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="console-pagination" id="crm-members-pagination"></div>
-        </div>
+        <div class="console-pagination" id="crm-members-pagination"></div>
 
       </section>
 

@@ -452,6 +452,18 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         <View style={styles.headerCenterActions}>
           {activeTab === 'tables' && (
             <TouchableOpacity 
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone, { marginRight: 4 }]}
+              onPress={() => tablesTabRef.current?.openQueueModal?.()}
+            >
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>Queue</Text>
+              ) : (
+                <Ionicons name="people" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          )}
+          {activeTab === 'tables' && (
+            <TouchableOpacity 
               style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
               onPress={handleEditToggle}
             >

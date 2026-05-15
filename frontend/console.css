@@ -262,19 +262,6 @@ body { display: block !important; }
 }
 .console-table-action-btn:hover { background: #f3f4f6; }
 
-/* ─── CRM ─────────────────────────────────────────────── */
-.console-crm-tabs {
-  display: flex; gap: 0; border-bottom: 2px solid #e5e7eb; margin-bottom: 16px;
-}
-.console-crm-tab {
-  padding: 10px 20px; border: none; background: none;
-  font-size: 13.5px; font-weight: 600; color: #6b7280;
-  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
-  transition: color .15s; font-family: inherit;
-}
-.console-crm-tab:hover { color: #111; }
-.console-crm-tab.active { color: #A10035; border-bottom-color: #A10035; }
-
 /* ─── MODALS ──────────────────────────────────────────── */
 .console-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);

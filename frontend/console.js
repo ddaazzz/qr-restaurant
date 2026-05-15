@@ -71,6 +71,7 @@
       dashboard: 'Dashboard',
       menu: 'Menu Management · 菜單管理',
       tables: 'Table Management · 桌台管理',
+      queue: 'Queue Management · 排隊管理',
       crm: 'CRM · 顧客管理',
       tiers: 'Member Tiers · 會員等級',
       discounts: 'Discounts · 折扣',
@@ -95,9 +96,12 @@
     } else if (name === 'tables' && !_sectionLoaded.tables) {
       _sectionLoaded.tables = true;
       consoleLoadTables();
+    } else if (name === 'queue' && !_sectionLoaded.queue) {
+      _sectionLoaded.queue = true;
+      consoleLoadQueue();
     } else if (name === 'crm' && !_sectionLoaded.crm) {
       _sectionLoaded.crm = true;
-      consoleLoadCrmCustomers();
+      consoleLoadCrmMembers();
     }
 
     // Close sidebar on mobile
@@ -567,58 +571,10 @@
   /* ═══════════════════════════════════════════════════════
      CRM
   ═══════════════════════════════════════════════════════ */
-  var _crmCustOffset = 0;
-  var _crmCustSearchTimer = null;
   var _crmMemPage = 1;
   var _crmMemSearchTimer = null;
 
-  window.consoleCrmTab = function (tab, btn) {
-    document.querySelectorAll('.console-crm-tab').forEach(function (b) { b.classList.remove('active'); });
-    if (btn) btn.classList.add('active');
-    document.getElementById('crm-tab-customers').style.display = tab === 'customers' ? '' : 'none';
-    document.getElementById('crm-tab-members').style.display = tab === 'members' ? '' : 'none';
-    if (tab === 'members' && !_sectionLoaded.crmMembers) {
-      _sectionLoaded.crmMembers = true;
-      consoleLoadCrmMembers();
-    }
-  };
-
-  /* ── Restaurant Customers ── */
-  window.consoleDebounceCrmCustomers = function () {
-    clearTimeout(_crmCustSearchTimer);
-    _crmCustSearchTimer = setTimeout(function () { _crmCustOffset = 0; consoleLoadCrmCustomers(); }, 350);
-  };
-
-  window.consoleLoadCrmCustomers = async function () {
-    var tbody = document.getElementById('crm-customers-body');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="5" class="console-empty">Loading…</td></tr>';
-    var search = (document.getElementById('crm-cust-search') || {}).value || '';
-    var sort = (document.getElementById('crm-cust-sort') || {}).value || 'last_visit';
-    var url = '/restaurants/' + restaurantId + '/crm/customers?limit=30&offset=0&sort_by=' + sort;
-    if (search.trim()) url += '&search=' + encodeURIComponent(search.trim());
-    try {
-      var data = await api('GET', url);
-      if (!Array.isArray(data) || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="console-empty">No customers found.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = data.map(function (c) {
-        var lastVisit = c.last_visit ? new Date(c.last_visit).toLocaleDateString('zh-HK') : '—';
-        return '<tr>'
-          + '<td>' + escHtml(c.name || '—') + '</td>'
-          + '<td>' + escHtml(c.phone || '—') + '</td>'
-          + '<td>' + (c.total_visits || 0) + '</td>'
-          + '<td>' + lastVisit + '</td>'
-          + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(c.notes || '') + '</td>'
-          + '</tr>';
-      }).join('');
-    } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="5" class="console-empty" style="color:#e74c3c;">Failed to load customers.</td></tr>';
-    }
-  };
-
-  /* ── Loyalty Members ── */
+  /* ── Members ── */
   window.consoleDebounceCrmMembers = function () {
     clearTimeout(_crmMemSearchTimer);
     _crmMemSearchTimer = setTimeout(function () { _crmMemPage = 1; consoleLoadCrmMembers(); }, 350);
@@ -688,6 +644,141 @@
   function escHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+
+  /* ─── Queue Management ───────────────────────────────── */
+  var _queueSettings = null;
+  var _editingBandIdx = null;
+
+  window.consoleLoadQueue = async function () {
+    try {
+      var data = await api('GET', '/restaurants/' + restaurantId + '/queue/settings');
+      _queueSettings = data;
+      var toggle = document.getElementById('queue-enabled-toggle');
+      if (toggle) toggle.checked = !!data.enabled;
+      var qrUrl = window.location.origin + '/queue/' + data.queue_qr_token;
+      var qrUrlEl = document.getElementById('queue-qr-url');
+      if (qrUrlEl) qrUrlEl.textContent = qrUrl;
+      renderQueueBands(data.pax_bands || []);
+      consoleLoadLiveQueue();
+    } catch (e) {
+      console.error('[Queue]', e);
+    }
+  };
+
+  window.consoleToggleQueueEnabled = async function (chk) {
+    try {
+      await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', { enabled: chk.checked });
+      toast(chk.checked ? 'Queue enabled' : 'Queue disabled');
+    } catch (e) {
+      toast('Failed to update queue status', 'error');
+    }
+  };
+
+  function renderQueueBands(bands) {
+    var tbody = document.getElementById('queue-bands-body');
+    if (!tbody) return;
+    if (!bands.length) { tbody.innerHTML = '<tr><td colspan="4" class="console-empty">No bands configured</td></tr>'; return; }
+    tbody.innerHTML = bands.map(function (b, i) {
+      return '<tr><td>' + escHtml(b.label) + '</td><td>' + b.min + '</td><td>' + b.max + '</td>'
+        + '<td><button class="console-btn console-btn-sm" onclick="consoleEditBand(' + i + ')">Edit</button> '
+        + '<button class="console-btn console-btn-sm" style="color:#e74c3c" onclick="consoleDeleteBand(' + i + ')">Del</button></td></tr>';
+    }).join('');
+  }
+
+  window.consoleOpenAddBandModal = function () {
+    _editingBandIdx = null;
+    document.getElementById('modal-queue-band-title').textContent = 'Add Pax Band';
+    document.getElementById('band-label-input').value = '';
+    document.getElementById('band-min-input').value = '';
+    document.getElementById('band-max-input').value = '';
+    document.getElementById('modal-queue-band').style.display = 'flex';
+  };
+
+  window.consoleEditBand = function (idx) {
+    _editingBandIdx = idx;
+    var b = _queueSettings.pax_bands[idx];
+    document.getElementById('modal-queue-band-title').textContent = 'Edit Pax Band';
+    document.getElementById('band-label-input').value = b.label;
+    document.getElementById('band-min-input').value = b.min;
+    document.getElementById('band-max-input').value = b.max;
+    document.getElementById('modal-queue-band').style.display = 'flex';
+  };
+
+  window.consoleSaveQueueBand = async function () {
+    var label = document.getElementById('band-label-input').value.trim();
+    var min = parseInt(document.getElementById('band-min-input').value, 10);
+    var max = parseInt(document.getElementById('band-max-input').value, 10);
+    if (!label || isNaN(min) || isNaN(max) || min < 1 || max < min) { toast('Please fill all fields correctly', 'error'); return; }
+    var bands = JSON.parse(JSON.stringify(_queueSettings.pax_bands || []));
+    if (_editingBandIdx !== null) { bands[_editingBandIdx] = { min: min, max: max, label: label }; }
+    else { bands.push({ min: min, max: max, label: label }); }
+    try {
+      var data = await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', { pax_bands: bands });
+      _queueSettings = data;
+      renderQueueBands(data.pax_bands);
+      consoleCloseModal('modal-queue-band');
+      toast('Saved');
+    } catch (e) {
+      toast('Failed to save band', 'error');
+    }
+  };
+
+  window.consoleDeleteBand = async function (idx) {
+    if (!confirm('Delete this pax band?')) return;
+    var bands = JSON.parse(JSON.stringify(_queueSettings.pax_bands || []));
+    bands.splice(idx, 1);
+    try {
+      var data = await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', { pax_bands: bands });
+      _queueSettings = data;
+      renderQueueBands(data.pax_bands);
+      toast('Deleted');
+    } catch (e) {
+      toast('Failed to delete band', 'error');
+    }
+  };
+
+  window.consoleLoadLiveQueue = async function () {
+    var tbody = document.getElementById('queue-live-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" class="console-empty">Loading…</td></tr>';
+    try {
+      var entries = await api('GET', '/restaurants/' + restaurantId + '/queue?status=waiting,called');
+      if (!entries || !entries.length) { tbody.innerHTML = '<tr><td colspan="6" class="console-empty">Queue is empty</td></tr>'; return; }
+      tbody.innerHTML = entries.map(function (e) {
+        var wait = Math.round((Date.now() - new Date(e.created_at).getTime()) / 60000);
+        var statusColor = e.status === 'called' ? '#d97706' : '#16a34a';
+        return '<tr>'
+          + '<td><strong style="color:#A10035;font-size:18px;">#' + e.queue_number + '</strong></td>'
+          + '<td>' + e.pax + '</td>'
+          + '<td>' + escHtml(e.pax_band_label || '') + '</td>'
+          + '<td><span style="color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + e.status + '</span></td>'
+          + '<td>' + wait + ' min</td>'
+          + '<td style="white-space:nowrap;">'
+          + (e.status === 'waiting' ? '<button class="console-btn console-btn-sm" style="background:#f59e0b;color:#fff;margin-right:4px;" onclick="consoleCallQueueEntry(' + e.id + ')">Call</button>' : '')
+          + '<button class="console-btn console-btn-sm" style="background:#16a34a;color:#fff;margin-right:4px;" onclick="consoleSeatQueueEntry(' + e.id + ')">Seat</button>'
+          + '<button class="console-btn console-btn-sm" onclick="consoleCancelQueueEntry(' + e.id + ')">Remove</button>'
+          + '</td></tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="console-empty">Failed to load queue</td></tr>';
+    }
+  };
+
+  window.consoleCallQueueEntry = async function (id) {
+    try { await api('POST', '/restaurants/' + restaurantId + '/queue/' + id + '/call', {}); consoleLoadLiveQueue(); }
+    catch (e) { toast('Failed to call entry', 'error'); }
+  };
+
+  window.consoleSeatQueueEntry = async function (id) {
+    try { await api('POST', '/restaurants/' + restaurantId + '/queue/' + id + '/seat', {}); consoleLoadLiveQueue(); }
+    catch (e) { toast('Failed to seat entry', 'error'); }
+  };
+
+  window.consoleCancelQueueEntry = async function (id) {
+    if (!confirm('Remove this entry from queue?')) return;
+    try { await api('DELETE', '/restaurants/' + restaurantId + '/queue/' + id); consoleLoadLiveQueue(); }
+    catch (e) { toast('Failed to remove entry', 'error'); }
+  };
 
   /* ═══════════════════════════════════════════════════════
      INIT

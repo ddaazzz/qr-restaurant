@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Queue</title>
+  <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
+  <link rel="stylesheet" href="/queue.css?v=1" />
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<div id="q-shell">
+
+  <!-- ─── HEADER ──────────────────────────────────────── -->
+  <div id="q-header">
+    <img id="q-logo" src="" alt="" style="display:none" />
+    <div id="q-restaurant-name" class="q-restaurant-name"></div>
+  </div>
+
+  <!-- ─── STEP 0: Loading ──────────────────────────────── -->
+  <div id="step-loading" class="q-step active">
+    <div class="q-spinner"></div>
+    <div class="q-loading-text">Loading…</div>
+  </div>
+
+  <!-- ─── STEP 1: Queue closed ─────────────────────────── -->
+  <div id="step-closed" class="q-step" style="display:none">
+    <div class="q-icon-wrap">🚫</div>
+    <div class="q-step-title">Queue Not Active</div>
+    <div class="q-step-sub">Online queuing is currently unavailable.</div>
+  </div>
+
+  <!-- ─── STEP 2: Pax selection ─────────────────────────── -->
+  <div id="step-pax" class="q-step" style="display:none">
+    <div class="q-step-title" data-zh="幾位？" data-en="How many in your party?">幾位？</div>
+    <div class="q-step-sub" data-zh="請選擇人數" data-en="Select your party size">請選擇人數</div>
+    <div id="q-bands" class="q-bands"></div>
+    <div class="q-pax-custom">
+      <span data-zh="或輸入人數：" data-en="Or enter number:">或輸入人數：</span>
+      <input type="number" id="q-pax-custom-input" min="1" max="99" placeholder="e.g. 10" />
+      <button class="q-btn q-btn-outline" onclick="qJoinWithCustomPax()">Join</button>
+    </div>
+  </div>
+
+  <!-- ─── STEP 3: Queue number ─────────────────────────── -->
+  <div id="step-number" class="q-step" style="display:none">
+    <div class="q-step-sub" data-zh="您的取號" data-en="Your queue number">您的取號</div>
+    <div id="q-number-display" class="q-number-display">—</div>
+    <div class="q-ahead-wrap">
+      <span id="q-ahead-count" class="q-ahead-count">0</span>
+      <span id="q-ahead-label" data-zh="組在您前面" data-en="groups ahead of you">組在您前面</span>
+    </div>
+    <div class="q-number-actions">
+      <button class="q-btn q-btn-primary q-btn-big" onclick="qStartPreorder()" id="q-preorder-btn">
+        <span data-zh="提前點單" data-en="Pre-order Menu">提前點單</span>
+        <small data-zh="落座後即時確認" data-en="Confirm when seated">落座後即時確認</small>
+      </button>
+      <button class="q-btn q-btn-ghost" onclick="qCancelEntry()">
+        <span data-zh="取消取號" data-en="Cancel Queue">取消取號</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── STEP 4: Pre-order menu ─────────────────────────── -->
+  <div id="step-menu" class="q-step q-step-menu" style="display:none">
+
+    <div id="q-menu-header" class="q-menu-header">
+      <button class="q-back-btn" onclick="qBackToNumber()">← <span data-zh="返回" data-en="Back">返回</span></button>
+      <span class="q-menu-title" data-zh="提前點單" data-en="Pre-order">提前點單</span>
+      <span id="q-menu-number-badge" class="q-menu-number-badge"></span>
+    </div>
+
+    <!-- Category tabs -->
+    <div id="q-cat-bar" class="q-cat-bar"></div>
+
+    <!-- Items scroll -->
+    <div id="q-items-scroll" class="q-items-scroll"></div>
+
+    <!-- Cart bar -->
+    <div id="q-cart-bar" class="q-cart-bar" style="display:none" onclick="qShowCart()">
+      <span id="q-cart-count" class="q-cart-count"></span>
+      <span data-zh="查看已選" data-en="View order">查看已選</span>
+      <span id="q-cart-total" class="q-cart-total"></span>
+    </div>
+
+  </div>
+
+  <!-- ─── STEP 5: Cart review ─────────────────────────── -->
+  <div id="step-cart" class="q-step" style="display:none">
+    <div class="q-menu-header">
+      <button class="q-back-btn" onclick="qBackToMenu()">←</button>
+      <span class="q-menu-title" data-zh="確認訂單" data-en="Review Order">確認訂單</span>
+    </div>
+    <div id="q-cart-list" class="q-cart-list"></div>
+    <div class="q-cart-footer">
+      <div class="q-cart-total-row">
+        <span data-zh="合計" data-en="Total">合計</span>
+        <span id="q-cart-total-big"></span>
+      </div>
+      <button class="q-btn q-btn-primary q-btn-big" onclick="qScanTableQR()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:middle;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 18h.01M18 14h.01M18 18h.01M21 14v.01M21 18v.01M14 21v.01M18 21v.01M21 21v.01"/></svg>
+        <span data-zh="掃描座位 QR 確認" data-en="Scan Table QR to Confirm">掃描座位 QR 確認</span>
+      </button>
+      <button class="q-btn q-btn-ghost" style="margin-top:8px" onclick="qSkipPreorder()">
+        <span data-zh="跳過，落座後再點" data-en="Skip — order when seated">跳過，落座後再點</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── STEP 6: QR scanner ─────────────────────────── -->
+  <div id="step-scanner" class="q-step q-step-scanner" style="display:none">
+    <div class="q-menu-header">
+      <button class="q-back-btn" onclick="qCancelScan()">←</button>
+      <span class="q-menu-title" data-zh="掃描座位 QR" data-en="Scan Table QR">掃描座位 QR</span>
+    </div>
+    <div class="q-scanner-hint" data-zh="將鏡頭對準座位上的 QR 碼" data-en="Point camera at the QR code on your table">將鏡頭對準座位上的 QR 碼</div>
+    <div id="q-scanner-container" class="q-scanner-container"></div>
+    <div id="q-scan-status" class="q-scan-status"></div>
+  </div>
+
+  <!-- ─── STEP 7: Seated / Redirect ──────────────────── -->
+  <div id="step-seated" class="q-step" style="display:none">
+    <div class="q-icon-wrap q-icon-success">✓</div>
+    <div class="q-step-title" data-zh="成功！" data-en="Seated!">成功！</div>
+    <div class="q-step-sub" id="step-seated-sub">Redirecting to your order…</div>
+    <div class="q-spinner q-spinner-sm"></div>
+  </div>
+
+</div><!-- /#q-shell -->
+
+<script src="/queue.js?v=1"></script>
+</body>
+</html>
