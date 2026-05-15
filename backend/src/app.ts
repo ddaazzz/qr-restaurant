@@ -278,6 +278,10 @@ app.get("/terms", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "terms.html"));
 });
 
+app.get("/console", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "console.html"));
+});
+
 app.get("/careers", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "careers.html"));
 });

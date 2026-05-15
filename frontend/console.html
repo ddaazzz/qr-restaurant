@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chuio Web Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/xish-admin.css" />
+  <link rel="stylesheet" href="/console.css" />
+</head>
+<body>
+
+<!-- Token bridge: copy admin token → xish namespace for loyalty sections -->
+<script>
+(function () {
+  var t = localStorage.getItem('token');
+  var r = localStorage.getItem('restaurantId');
+  var role = localStorage.getItem('role');
+  if (!t) { window.location.href = '/login.html'; return; }
+  if (t) localStorage.setItem('xish_merchant_token', t);
+  if (r) localStorage.setItem('xish_restaurantId', r);
+  if (role) localStorage.setItem('xish_role', role);
+})();
+</script>
+
+<!-- Dummy elements required by xish-admin.js (silent fail prevention) -->
+<div id="xa-page-title" style="display:none"></div>
+<div id="xa-toast" class="xa-toast"></div>
+
+<div class="console-shell">
+
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <aside class="console-sidebar" id="console-sidebar">
+
+    <div class="console-logo">
+      <span class="console-logo-mark">✦</span>Chuio
+      <span class="console-logo-tag">Web Console</span>
+    </div>
+
+    <nav class="console-nav">
+      <button class="console-nav-btn active" data-section="dashboard" onclick="consoleSwitchSection('dashboard', this)">
+        <span class="console-nav-icon">📊</span> Dashboard
+      </button>
+      <button class="console-nav-btn" data-section="menu" onclick="consoleSwitchSection('menu', this)">
+        <span class="console-nav-icon">🍽</span> Menu Management
+      </button>
+      <button class="console-nav-btn" data-section="tables" onclick="consoleSwitchSection('tables', this)">
+        <span class="console-nav-icon">🪑</span> Table Management
+      </button>
+      <button class="console-nav-btn" data-section="crm" onclick="consoleSwitchSection('crm', this)">
+        <span class="console-nav-icon">👥</span> CRM
+      </button>
+
+      <div class="console-nav-divider"></div>
+      <div class="console-nav-group-title">Loyalty Program</div>
+
+      <button class="console-nav-btn" data-section="tiers" onclick="consoleSwitchSection('tiers', this)">
+        <span class="console-nav-icon">⭐</span> Member Tiers
+      </button>
+      <button class="console-nav-btn" data-section="discounts" onclick="consoleSwitchSection('discounts', this)">
+        <span class="console-nav-icon">🏷</span> Discounts
+      </button>
+      <button class="console-nav-btn" data-section="gifts" onclick="consoleSwitchSection('gifts', this)">
+        <span class="console-nav-icon">🎁</span> Gift Cards
+      </button>
+      <button class="console-nav-btn" data-section="coupons" onclick="consoleSwitchSection('coupons', this)">
+        <span class="console-nav-icon">🎟</span> Coupons
+      </button>
+      <button class="console-nav-btn" data-section="campaigns" onclick="consoleSwitchSection('campaigns', this)">
+        <span class="console-nav-icon">📣</span> Campaigns
+      </button>
+      <button class="console-nav-btn" data-section="wallet" onclick="consoleSwitchSection('wallet', this)">
+        <span class="console-nav-icon">💳</span> Wallet Pass
+      </button>
+    </nav>
+
+    <div class="console-sidebar-footer">
+      <a href="/admin.html" class="console-back-link">← Admin Portal</a>
+    </div>
+
+  </aside><!-- /sidebar -->
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <div class="console-main">
+
+    <!-- Top bar -->
+    <div class="console-topbar">
+      <button class="console-hamburger" onclick="consoleToggleSidebar()">☰</button>
+      <span class="console-page-title" id="console-page-title">Dashboard</span>
+      <div class="console-topbar-right">
+        <span class="console-restaurant-badge" id="console-restaurant-badge">Loading…</span>
+        <button class="console-logout-btn" onclick="consoleLogout()">Logout</button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="console-content">
+
+      <!-- ─── DASHBOARD ────────────────────────────────── -->
+      <section class="console-section active" id="section-dashboard">
+
+        <div class="console-kpi-grid">
+          <div class="console-kpi-card">
+            <div class="ckpi-label">Today's Revenue</div>
+            <div class="ckpi-value" id="dash-rev-today">—</div>
+            <div class="ckpi-sub" id="dash-rev-today-sub"></div>
+          </div>
+          <div class="console-kpi-card">
+            <div class="ckpi-label">This Month</div>
+            <div class="ckpi-value" id="dash-rev-month">—</div>
+            <div class="ckpi-sub" id="dash-rev-month-sub"></div>
+          </div>
+          <div class="console-kpi-card">
+            <div class="ckpi-label">Orders Today</div>
+            <div class="ckpi-value" id="dash-orders-today">—</div>
+            <div class="ckpi-sub" id="dash-orders-sub"></div>
+          </div>
+          <div class="console-kpi-card">
+            <div class="ckpi-label">Loyalty Members</div>
+            <div class="ckpi-value" id="dash-members">—</div>
+            <div class="ckpi-sub" id="dash-members-sub"></div>
+          </div>
+        </div>
+
+        <div class="console-card">
+          <div class="console-card-title">
+            Recent Orders
+            <span id="dash-period-label" style="font-size:11px;font-weight:400;color:#9ca3af;"></span>
+          </div>
+          <table class="console-table">
+            <thead>
+              <tr><th>Time</th><th>Table / Order</th><th>Amount</th><th>Status</th></tr>
+            </thead>
+            <tbody id="dash-orders-body">
+              <tr><td colspan="4" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <!-- ─── MENU MANAGEMENT ──────────────────────────── -->
+      <section class="console-section" id="section-menu">
+
+        <div class="console-toolbar">
+          <button class="console-btn console-btn-primary" onclick="consoleOpenItemModal()">＋ Add Item</button>
+          <button class="console-btn" onclick="consoleOpenCategoryModal()">＋ Add Category</button>
+          <div style="flex:1"></div>
+          <input type="text" class="console-input" id="menu-search" placeholder="Search items…" style="max-width:220px;" oninput="consoleFilterItems()" />
+        </div>
+
+        <div class="console-two-panel">
+          <!-- Category list -->
+          <div class="console-panel-left">
+            <div class="console-panel-left-title">
+              Categories
+            </div>
+            <ul class="console-cat-list" id="menu-cat-list">
+              <li style="padding:16px;text-align:center;color:#9ca3af;font-size:13px;">Loading…</li>
+            </ul>
+          </div>
+
+          <!-- Items panel -->
+          <div>
+            <div id="menu-items-header" style="font-size:14px;font-weight:700;color:#374151;margin-bottom:14px;"></div>
+            <div class="console-items-grid" id="menu-items-grid">
+              <div style="grid-column:1/-1;" class="console-empty">Select a category to view items.</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ─── TABLE MANAGEMENT ─────────────────────────── -->
+      <section class="console-section" id="section-tables">
+
+        <div class="console-toolbar">
+          <button class="console-btn console-btn-primary" onclick="consoleOpenAddTableModal()">＋ Add Table</button>
+          <button class="console-btn" onclick="consoleOpenAddZoneModal()">＋ Add Zone</button>
+          <div style="flex:1"></div>
+          <button class="console-btn" onclick="consoleLoadTables()">↻ Refresh</button>
+        </div>
+
+        <div id="tables-zones-container">
+          <div class="console-empty">Loading…</div>
+        </div>
+
+      </section>
+
+      <!-- ─── CRM ──────────────────────────────────────── -->
+      <section class="console-section" id="section-crm">
+
+        <div class="console-crm-tabs">
+          <button class="console-crm-tab active" onclick="consoleCrmTab('customers', this)">Restaurant Customers</button>
+          <button class="console-crm-tab" onclick="consoleCrmTab('members', this)">Loyalty Members</button>
+        </div>
+
+        <!-- Restaurant Customers tab -->
+        <div id="crm-tab-customers">
+          <div class="console-toolbar">
+            <input type="text" class="console-input" id="crm-cust-search" placeholder="Search by name, phone…" style="max-width:260px;" oninput="consoleDebounceCrmCustomers()" />
+            <select class="console-input" id="crm-cust-sort" style="max-width:180px;" onchange="consoleLoadCrmCustomers()">
+              <option value="last_visit">Last Visit</option>
+              <option value="total_visits">Total Visits</option>
+              <option value="name">Name</option>
+            </select>
+          </div>
+          <div class="console-card" style="padding:0;overflow:hidden;">
+            <table class="console-table">
+              <thead>
+                <tr><th>Name</th><th>Phone</th><th>Visits</th><th>Last Visit</th><th>Notes</th></tr>
+              </thead>
+              <tbody id="crm-customers-body">
+                <tr><td colspan="5" class="console-empty">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="console-pagination" id="crm-customers-pagination"></div>
+        </div>
+
+        <!-- Loyalty Members tab -->
+        <div id="crm-tab-members" style="display:none;">
+          <div class="console-toolbar">
+            <input type="text" class="console-input" id="crm-mem-search" placeholder="Search by name, phone, XISH ID…" style="max-width:280px;" oninput="consoleDebounceCrmMembers()" />
+            <select class="console-input" id="crm-mem-tier" style="max-width:160px;" onchange="consoleLoadCrmMembers()">
+              <option value="">All Tiers</option>
+              <option value="platinum">Platinum</option>
+              <option value="gold">Gold</option>
+              <option value="silver">Silver</option>
+              <option value="basic">Basic</option>
+            </select>
+            <button class="console-btn console-btn-primary" onclick="xaOpenRegisterModal()">＋ Register Member</button>
+          </div>
+          <div class="console-card" style="padding:0;overflow:hidden;">
+            <table class="console-table">
+              <thead>
+                <tr><th>Name</th><th>Phone</th><th>Tier</th><th>Points</th><th>Joined</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="crm-members-body">
+                <tr><td colspan="6" class="console-empty">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="console-pagination" id="crm-members-pagination"></div>
+        </div>
+
+      </section>
+
+      <!-- ─── MEMBER TIERS ──────────────────────────────── -->
+      <section class="console-section xa-section" id="section-tiers">
+        <div class="xa-toolbar">
+          <div class="xa-section-desc">設定各會員等級的積分門標及自動折扣。更改將在下次會員結責時生效。<br><small style="opacity:.65">Configure point thresholds and automatic discounts per member tier. Changes apply at next member checkout.</small></div>
+          <button class="xa-btn-gold" onclick="xaSaveTiers()">💾 儲存設定 · Save Tier Settings</button>
+        </div>
+        <div class="xa-tier-config-grid" id="tiers-grid">
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+        </div>
+      </section>
+
+      <!-- ─── DISCOUNTS ─────────────────────────────────── -->
+      <section class="console-section xa-section" id="section-discounts">
+        <div class="xa-toolbar">
+          <div class="xa-section-desc">為各會員等級設定折扣百分比。會員結責時自動獲得最高適用折扣。<br><small style="opacity:.65">Define discount percentages per member tier. Members automatically receive the highest applicable discount at checkout.</small></div>
+          <button class="xa-btn-gold" onclick="xaOpenDiscountModal()">＋ 新增折扣 · Add Discount Rule</button>
+        </div>
+        <div class="xa-cards-list" id="discount-list"><div class="xa-empty-state">Loading…</div></div>
+      </section>
+
+      <!-- ─── GIFT CARDS ─────────────────────────────────── -->
+      <section class="console-section xa-section" id="section-gifts">
+        <div class="xa-toolbar">
+          <div class="xa-section-desc">定義可兑換的禮品項目。會員在餐廳出示入得積分卡即可兑換。<br><small style="opacity:.65">Define redeemable gift items. Members scan their loyalty card to claim their gift at the restaurant.</small></div>
+          <button class="xa-btn-gold" onclick="xaOpenGiftModal()">＋ 新增禮品卡 · Add Gift Card</button>
+        </div>
+        <div class="xa-cards-list" id="gift-list"><div class="xa-empty-state">Loading…</div></div>
+      </section>
+
+      <!-- ─── COUPONS ────────────────────────────────────── -->
+      <section class="console-section xa-section" id="section-coupons">
+        <div class="xa-toolbar">
+          <div class="xa-section-desc">您餐廳的 Chuio 優惠券。同步到禮品卡就能讓會員用積分卡兑換。<br><small style="opacity:.65">Your restaurant's Chuio coupons. Sync any coupon to Gift Cards so members can redeem them with their loyalty card.</small></div>
+          <button class="xa-btn-outline" onclick="xaLoadCoupons()">↻ 重新載入 · Refresh</button>
+        </div>
+        <div class="xa-cards-list" id="coupons-list"><div class="xa-empty-state">Loading…</div></div>
+      </section>
+
+      <!-- ─── CAMPAIGNS ─────────────────────────────────── -->
+      <section class="console-section xa-section" id="section-campaigns">
+        <div class="xa-toolbar">
+          <div class="xa-section-desc">向會員發送點對推送通知，可按等級、年齢、性別、生日月份或舊點客篩選。<br><small style="opacity:.65">Send targeted push notifications to your members. Filter by tier, age, gender, birthday month, or previous-diner status.</small></div>
+          <button class="xa-btn-gold" onclick="xaOpenCampaignModal()">＋ 新建推廣 · New Campaign</button>
+        </div>
+        <div class="xa-cards-list" id="campaign-list"><div class="xa-empty-state">Loading…</div></div>
+      </section>
+
+      <!-- ─── WALLET PASS ────────────────────────────────── -->
+      <section class="console-section xa-section" id="section-wallet">
+
+        <div class="xa-section-header">
+          <div>
+            <div class="xa-section-title">🎫 Loyalty Card / Wallet Pass</div>
+            <div class="xa-section-desc">Customise how your loyalty card looks in Apple Wallet and Google Wallet. Changes apply the next time a member generates their pass.</div>
+          </div>
+          <button class="xa-btn-gold" onclick="xaSaveWalletSettings()">Save Changes</button>
+        </div>
+
+        <div id="wallet-cert-notice" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; color:#78350f;">
+          ⚠️ <strong>Apple Developer Certificate Required:</strong> To generate real <code>.pkpass</code> files, set <code>APPLE_PASS_TYPE_ID</code>, <code>APPLE_TEAM_ID</code>, and sign with your PassKit certificate.
+        </div>
+
+        <!-- Print / Join QR -->
+        <div class="xa-card" style="margin-bottom:24px; display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;">
+            <div class="xa-card-title" style="margin-bottom:6px;">🖨️ Print-at-Counter QR Code</div>
+            <div style="font-size:13px;color:#9ca3af;line-height:1.6;margin-bottom:14px;">Print this QR and place it at your counter. Customers scan it with their iPhone to join directly in Apple Wallet.</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input class="xa-input" id="wp-join-url" readonly style="flex:1;font-size:12px;color:#9ca3af;cursor:text;" onclick="this.select()">
+              <button class="xa-btn-outline" onclick="xaCopyJoinUrl()">Copy URL</button>
+              <button class="xa-btn-gold" onclick="xaPrintJoinQR()">🖨️ Print QR</button>
+            </div>
+          </div>
+          <div style="flex-shrink:0;text-align:center;">
+            <div id="wp-join-qr" style="background:white;padding:12px;border-radius:12px;display:inline-block;"></div>
+            <div style="font-size:11px;color:#6b7280;margin-top:6px;">Scan to join loyalty programme</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 380px; gap:28px; align-items:start;">
+
+          <div>
+            <!-- Identity -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:16px;">✏️ Identity</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Program Name</span><input class="xa-input" id="wp-program-name" placeholder="e.g. My Café Rewards"></label>
+                <label class="xa-label-group"><span class="xa-label">Logo Text</span><input class="xa-input" id="wp-logo-text" placeholder="e.g. Chuio" maxlength="20"></label>
+                <label class="xa-label-group" style="grid-column:span 2;"><span class="xa-label">Organisation Name</span><input class="xa-input" id="wp-org-name" placeholder="e.g. My Restaurant Group"></label>
+                <label class="xa-label-group" style="grid-column:span 2;"><span class="xa-label">Description</span><input class="xa-input" id="wp-description" placeholder="e.g. My Café Loyalty Card"></label>
+              </div>
+            </div>
+
+            <!-- Colors -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:16px;">🎨 Colors</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Card Background</span><div style="display:flex;gap:8px;align-items:center;"><input type="color" id="wp-bg-picker" oninput="xaWalletColorSync('bg')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;"><input class="xa-input" id="wp-bg-color" oninput="xaWalletPreview()" placeholder="rgb(15,15,20)" style="flex:1;"></div></label>
+                <label class="xa-label-group"><span class="xa-label">Text Color</span><div style="display:flex;gap:8px;align-items:center;"><input type="color" id="wp-fg-picker" oninput="xaWalletColorSync('fg')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;"><input class="xa-input" id="wp-fg-color" oninput="xaWalletPreview()" placeholder="rgb(255,255,255)" style="flex:1;"></div></label>
+                <label class="xa-label-group"><span class="xa-label">Label Color</span><div style="display:flex;gap:8px;align-items:center;"><input type="color" id="wp-lbl-picker" oninput="xaWalletColorSync('lbl')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;"><input class="xa-input" id="wp-lbl-color" oninput="xaWalletPreview()" placeholder="rgb(161,0,53)" style="flex:1;"></div></label>
+              </div>
+            </div>
+
+            <!-- Front Fields -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:4px;">📋 Front Card Fields</div>
+              <div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Label names shown on the front of the card. Values filled automatically from the member's profile.</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Header Label (top right)</span><input class="xa-input" id="wp-header-lbl" placeholder="TIER" oninput="xaWalletPreview()"></label>
+                <label class="xa-label-group"><span class="xa-label">Primary Label (large center)</span><input class="xa-input" id="wp-primary-lbl" placeholder="POINTS BALANCE" oninput="xaWalletPreview()"></label>
+                <label class="xa-label-group"><span class="xa-label">Secondary Label 1 (member name)</span><input class="xa-input" id="wp-sec1-lbl" placeholder="MEMBER" oninput="xaWalletPreview()"></label>
+                <label class="xa-label-group"><span class="xa-label">Secondary Label 2 (member ID)</span><input class="xa-input" id="wp-sec2-lbl" placeholder="ID" oninput="xaWalletPreview()"></label>
+              </div>
+            </div>
+
+            <!-- Back Fields -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:4px;">🔄 Back of Card Fields</div>
+              <div style="display:grid; grid-template-columns:1fr 2fr; gap:10px; align-items:center;">
+                <span class="xa-label" style="margin:0;">Field 1 Label</span><input class="xa-input" id="wp-back1-lbl" placeholder="Order Online">
+                <span class="xa-label" style="margin:0;">Field 1 Value</span><input class="xa-input" id="wp-back1-val" placeholder="https://…">
+                <span class="xa-label" style="margin:0;">Field 2 Label</span><input class="xa-input" id="wp-back2-lbl" placeholder="About Us">
+                <span class="xa-label" style="margin:0;">Field 2 Value</span><input class="xa-input" id="wp-back2-val" placeholder="Visit our website">
+                <span class="xa-label" style="margin:0;">Field 3 Label</span><input class="xa-input" id="wp-back3-lbl" placeholder="Terms">
+                <span class="xa-label" style="margin:0;">Field 3 Value</span><input class="xa-input" id="wp-back3-val" placeholder="Points expire after 12 months of inactivity.">
+              </div>
+            </div>
+
+            <!-- Barcode & Location -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:16px;">⚙️ Barcode &amp; Location</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Barcode Format</span><select class="xa-input" id="wp-barcode-format" onchange="xaWalletPreview()"><option value="PKBarcodeFormatQR">QR Code (recommended)</option><option value="PKBarcodeFormatPDF417">PDF417 (barcode)</option><option value="PKBarcodeFormatAztec">Aztec</option><option value="PKBarcodeFormatCode128">Code 128</option></select></label>
+                <label class="xa-label-group"><span class="xa-label">Location Label (lock screen hint)</span><input class="xa-input" id="wp-location-label" placeholder="e.g. You're near My Café!"></label>
+                <label class="xa-label-group"><span class="xa-label">Location Latitude</span><input class="xa-input" id="wp-location-lat" type="number" step="0.0001" placeholder="e.g. 22.3193"></label>
+                <label class="xa-label-group"><span class="xa-label">Location Longitude</span><input class="xa-input" id="wp-location-lng" type="number" step="0.0001" placeholder="e.g. 114.1694"></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Preview -->
+          <div style="position:sticky;top:80px;">
+            <div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Live Preview</div>
+            <div id="wp-preview-card" style="width:340px;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);font-family:'Inter',sans-serif;background:rgb(15,15,20);color:rgb(255,255,255);user-select:none;">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px 8px;">
+                <span id="wp-prev-logo-text" style="font-size:15px;font-weight:800;letter-spacing:.04em;color:rgb(161,0,53);">Chuio</span>
+                <div style="text-align:right;">
+                  <div id="wp-prev-header-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">TIER</div>
+                  <div id="wp-prev-header-val" style="font-size:13px;font-weight:700;">GOLD</div>
+                </div>
+              </div>
+              <div id="wp-prev-strip" style="height:4px;background:linear-gradient(90deg,rgb(161,0,53),rgba(161,0,53,.25));"></div>
+              <div style="padding:12px 18px 6px;">
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;opacity:.65;color:rgb(161,0,53);">POINTS BALANCE</div>
+                <div id="wp-prev-primary-val" style="font-size:30px;font-weight:800;margin-top:2px;">1,250 pts</div>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:0 18px 10px;">
+                <div><div id="wp-prev-sec1-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">MEMBER</div><div style="font-size:13px;font-weight:600;">Jane Smith</div></div>
+                <div style="text-align:right;"><div id="wp-prev-sec2-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">ID</div><div style="font-size:13px;font-weight:600;">CIO-00042</div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;border-top:1px solid rgba(255,255,255,.08);">
+                <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);"><div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">TO GOLD</div><div style="font-size:10px;font-weight:700;">████░░ 67%</div></div>
+                <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);"><div id="wp-prev-aux2-lbl" style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">DISCOUNT</div><div style="font-size:10px;font-weight:700;">5% off</div></div>
+                <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);"><div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">GIFTS</div><div style="font-size:10px;font-weight:700;">1 avail.</div></div>
+                <div style="padding:8px 10px;"><div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">VENUES</div><div style="font-size:10px;font-weight:700;">3 restaurants</div></div>
+              </div>
+              <div style="background:white;margin:10px 14px 14px;border-radius:10px;padding:14px;text-align:center;">
+                <div id="wp-prev-barcode" style="width:90px;height:90px;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                  <svg viewBox="0 0 100 100" width="80" height="80" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/><rect x="15" y="15" width="15" height="15" fill="#111"/><rect x="60" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/><rect x="70" y="15" width="15" height="15" fill="#111"/><rect x="5" y="60" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/><rect x="15" y="70" width="15" height="15" fill="#111"/><rect x="55" y="55" width="10" height="10" fill="#111"/><rect x="70" y="55" width="10" height="10" fill="#111"/><rect x="85" y="55" width="10" height="10" fill="#111"/><rect x="55" y="70" width="10" height="10" fill="#111"/><rect x="85" y="70" width="10" height="10" fill="#111"/><rect x="55" y="85" width="10" height="10" fill="#111"/><rect x="70" y="85" width="10" height="10" fill="#111"/></svg>
+                </div>
+                <div style="font-size:11px;color:#666;margin-top:6px;font-family:monospace;">CIO-00042</div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /two-col -->
+
+        <!-- Member Pass QR -->
+        <div class="xa-card" style="margin-top:28px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;">
+            <div>
+              <div class="xa-card-title" style="margin-bottom:4px;">📱 Generate Member Pass QR</div>
+              <div style="font-size:13px;color:#9ca3af;max-width:520px;">Search for a member below. Their QR code links directly to their signed <code>.pkpass</code>.</div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+              <input class="xa-input" id="wp-member-search" placeholder="Search by name or phone…" style="width:240px;" oninput="xaWalletSearchMembers()">
+              <button class="xa-btn-gold" onclick="xaWalletSearchMembers()">Search</button>
+            </div>
+          </div>
+          <div id="wp-member-results" style="margin-top:16px;"></div>
+          <div id="wp-member-qr-area" style="display:none;margin-top:20px;">
+            <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;">
+              <div style="background:white;border-radius:12px;padding:20px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.12);flex-shrink:0;">
+                <div id="wp-member-qr-name" style="font-weight:700;font-size:14px;color:#111;margin-bottom:12px;"></div>
+                <div id="wp-member-qr-code" style="display:inline-block;"></div>
+                <div id="wp-member-qr-url" style="font-size:10px;color:#9ca3af;margin-top:10px;word-break:break-all;max-width:220px;"></div>
+              </div>
+              <div style="flex:1;min-width:220px;padding-top:8px;">
+                <div style="font-weight:600;font-size:14px;margin-bottom:10px;">How to use</div>
+                <ol style="margin:0;padding-left:18px;font-size:13px;color:#6b7280;line-height:2;">
+                  <li>Show this QR to the member on your screen</li>
+                  <li>Member scans with iPhone camera</li>
+                  <li>iOS prompts to add card to Apple Wallet</li>
+                  <li>Card shows tier, points, and barcode</li>
+                </ol>
+                <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+                  <button class="xa-btn-outline" onclick="xaDownloadMemberQR()">⬇ Download QR PNG</button>
+                  <button class="xa-btn-outline" onclick="document.getElementById('wp-member-qr-area').style.display='none';">✕ Clear</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </div><!-- /console-content -->
+  </div><!-- /console-main -->
+</div><!-- /console-shell -->
+
+<!-- ══════════════════════════════════════════════════════
+     MODALS — Console (Menu/Tables)
+══════════════════════════════════════════════════════ -->
+
+<!-- Add/Edit Category Modal -->
+<div class="console-modal-overlay" id="modal-category" onclick="if(event.target===this)consoleCloseModal('modal-category')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-category-title">Add Category</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-category')">✕</button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-category-id" />
+      <div class="console-form-group">
+        <label class="console-label">Category Name</label>
+        <input type="text" class="console-input" id="modal-category-name" placeholder="e.g. Main Dishes" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Sort Order</label>
+        <input type="number" class="console-input" id="modal-category-order" value="0" min="0" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-category')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveCategory()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Item Modal -->
+<div class="console-modal-overlay" id="modal-item" onclick="if(event.target===this)consoleCloseModal('modal-item')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-item-title">Add Menu Item</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-item')">✕</button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-item-id" />
+      <div class="console-form-group">
+        <label class="console-label">Category</label>
+        <select class="console-input" id="modal-item-category"></select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Item Name</label>
+        <input type="text" class="console-input" id="modal-item-name" placeholder="e.g. Beef Stir Fry" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Description (optional)</label>
+        <textarea class="console-input" id="modal-item-desc" rows="2" placeholder="Brief description…" style="resize:vertical;"></textarea>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Price (HKD)</label>
+        <input type="number" class="console-input" id="modal-item-price" min="0" step="0.5" placeholder="0.00" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Sort Order</label>
+        <input type="number" class="console-input" id="modal-item-order" value="0" min="0" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-item')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveItem()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Zone Modal -->
+<div class="console-modal-overlay" id="modal-zone" onclick="if(event.target===this)consoleCloseModal('modal-zone')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-zone-title">Add Zone</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-zone')">✕</button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-zone-id" />
+      <div class="console-form-group">
+        <label class="console-label">Zone Name</label>
+        <input type="text" class="console-input" id="modal-zone-name" placeholder="e.g. Indoor, Outdoor, VIP" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-zone')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveZone()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Table Modal -->
+<div class="console-modal-overlay" id="modal-table" onclick="if(event.target===this)consoleCloseModal('modal-table')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-table-title">Add Table</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-table')">✕</button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-table-id" />
+      <div class="console-form-group">
+        <label class="console-label">Zone</label>
+        <select class="console-input" id="modal-table-zone"></select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Table Name / Number</label>
+        <input type="text" class="console-input" id="modal-table-name" placeholder="e.g. A1 or Table 5" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Capacity (seats)</label>
+        <input type="number" class="console-input" id="modal-table-capacity" min="1" value="4" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-table')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveTable()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODALS — Loyalty (from xish-admin)
+══════════════════════════════════════════════════════ -->
+
+<!-- Award Points Modal -->
+<div class="xa-modal-overlay" id="modal-award" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Award Points</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-award')">✕</button></div>
+    <div class="xa-modal-body">
+      <p class="xa-modal-sub">Member: <strong id="award-member-name">—</strong></p>
+      <label class="xa-label">Points to Award</label><input type="number" class="xa-input" id="award-points" min="1" placeholder="e.g. 100" />
+      <label class="xa-label">Reason</label><input type="text" class="xa-input" id="award-reason" placeholder="e.g. Birthday bonus" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-award')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitAwardPoints()">Award Points</button>
+    </div>
+  </div>
+</div>
+
+<!-- Register Member Modal -->
+<div class="xa-modal-overlay" id="modal-register" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Register New Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-register')">✕</button></div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Full Name</label><input type="text" class="xa-input" id="reg-name" placeholder="Guest name" />
+      <label class="xa-label">Phone Number</label><input type="tel" class="xa-input" id="reg-phone" placeholder="+852 9123 4567" />
+      <label class="xa-label">Email (optional)</label><input type="email" class="xa-input" id="reg-email" placeholder="guest@email.com" />
+      <label class="xa-label">Date of Birth (optional)</label><input type="date" class="xa-input" id="reg-dob" />
+      <label class="xa-label">Gender (optional)</label>
+      <select class="xa-input" id="reg-gender"><option value="">Prefer not to say</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-register')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitRegister()">Register</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="xa-modal-overlay" id="modal-edit-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Edit Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-edit-member')">✕</button></div>
+    <div class="xa-modal-body">
+      <input type="hidden" id="edit-member-id">
+      <label class="xa-label">Name</label><input class="xa-input" id="edit-member-name" type="text" placeholder="Member name">
+      <label class="xa-label">Phone</label><input class="xa-input" id="edit-member-phone" type="tel" placeholder="Phone number">
+      <label class="xa-label">Points Balance</label><input class="xa-input" id="edit-member-points" type="number" min="0" placeholder="0">
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-edit-member')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitEditMember()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Member Modal -->
+<div class="xa-modal-overlay" id="modal-delete-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Delete Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-delete-member')">✕</button></div>
+    <div class="xa-modal-body">
+      <p>Confirm delete <strong id="delete-member-name">—</strong>? This cannot be undone.</p>
+      <input type="hidden" id="delete-member-id">
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-delete-member')">Cancel</button>
+      <button class="xa-btn-gold" style="background:#e74c3c;border-color:#e74c3c;" onclick="xaSubmitDeleteMember()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Discount Modal -->
+<div class="xa-modal-overlay" id="modal-discount" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3 id="discount-modal-title">Add Discount Rule</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-discount')">✕</button></div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Member Tier</label>
+      <select class="xa-input" id="ds-tier"><option value="basic">Basic</option><option value="silver">Silver</option><option value="gold">Gold</option><option value="platinum">Platinum</option></select>
+      <label class="xa-label">Discount %</label><input type="number" class="xa-input" id="ds-pct" min="1" max="100" placeholder="e.g. 10" />
+      <label class="xa-label">Uses Per Member</label><input type="number" class="xa-input" id="ds-limit" min="1" placeholder="e.g. 1 (leave blank = unlimited)" />
+      <label class="xa-label">Valid Days of Week</label>
+      <div class="xa-days-picker" id="ds-days">
+        <label><input type="checkbox" value="1"> Mon</label><label><input type="checkbox" value="2"> Tue</label><label><input type="checkbox" value="3"> Wed</label><label><input type="checkbox" value="4"> Thu</label><label><input type="checkbox" value="5"> Fri</label><label><input type="checkbox" value="6"> Sat</label><label><input type="checkbox" value="0"> Sun</label>
+      </div>
+      <input type="hidden" id="ds-editing-id" value="" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-discount')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitDiscount()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gift Modal -->
+<div class="xa-modal-overlay" id="modal-gift" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Add Gift Reward</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-gift')">✕</button></div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Item Name</label><input type="text" class="xa-input" id="gift-name" placeholder="e.g. Complimentary Dessert" />
+      <label class="xa-label">Quantity Per Redemption</label><input type="number" class="xa-input" id="gift-qty" min="1" value="1" />
+      <label class="xa-label">Valid From</label><input type="date" class="xa-input" id="gift-start" />
+      <label class="xa-label">Valid Until</label><input type="date" class="xa-input" id="gift-end" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-gift')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitGift()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign Modal -->
+<div class="xa-modal-overlay" id="modal-campaign" style="display:none">
+  <div class="xa-modal xa-modal-wide">
+    <div class="xa-modal-header"><h3>New Campaign</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-campaign')">✕</button></div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Title</label><input type="text" class="xa-input" id="camp-title" placeholder="e.g. Member Appreciation Month" />
+      <label class="xa-label">Message</label><textarea class="xa-input xa-textarea" id="camp-body" rows="3" placeholder="Write your push notification message…"></textarea>
+      <div class="xa-form-row">
+        <div><label class="xa-label">Min Age</label><input type="number" class="xa-input" id="camp-age-min" min="0" placeholder="Any" /></div>
+        <div><label class="xa-label">Max Age</label><input type="number" class="xa-input" id="camp-age-max" min="0" placeholder="Any" /></div>
+        <div><label class="xa-label">Gender</label><select class="xa-input" id="camp-gender"><option value="">Any</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
+        <div><label class="xa-label">Birthday Month</label><select class="xa-input" id="camp-bday-month"><option value="">Any</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></div>
+      </div>
+      <label class="xa-label" style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="camp-prev-diner" /> Previous diners only</label>
+      <label class="xa-label" style="margin-top:16px">Schedule (leave blank to send immediately)</label>
+      <input type="datetime-local" class="xa-input" id="camp-scheduled" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-campaign')">Cancel</button>
+      <button class="xa-btn-outline" onclick="xaSubmitCampaign(false)">Save Draft</button>
+      <button class="xa-btn-gold" onclick="xaSubmitCampaign(true)">Save &amp; Send Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Console Toast -->
+<div class="console-toast" id="console-toast"></div>
+
+<script src="/xish-admin.js"></script>
+<script src="/console.js"></script>
+
+</body>
+</html>

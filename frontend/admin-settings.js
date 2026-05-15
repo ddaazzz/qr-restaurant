@@ -52,16 +52,16 @@ async function initializeSettings() {
     });
   }
 
-  // Show XISH card if XISH is enabled for this restaurant
+  // Web Console card — always visible
+  var xishCard = document.getElementById('settings-card-xish');
+  if (xishCard) xishCard.style.display = '';
   var xishEnabled = !!(
     ADMIN_SETTINGS_CACHE.xish_enabled ||
     (ADMIN_SETTINGS_CACHE.feature_flags && ADMIN_SETTINGS_CACHE.feature_flags.xish)
   );
-  var xishCard = document.getElementById('settings-card-xish');
-  if (xishCard) xishCard.style.display = xishEnabled ? '' : 'none';
-  // Hide coupons card when XISH is enabled (coupons are managed in XISH dashboard instead)
+  // Show coupons card (managed in Web Console now)
   var couponsCard = document.getElementById('settings-card-coupons');
-  if (couponsCard) couponsCard.style.display = xishEnabled ? 'none' : '';
+  if (couponsCard) couponsCard.style.display = '';
   // Expose for coupon renderer
   window._xishEnabled = xishEnabled;
 

@@ -75,10 +75,10 @@
       <p id="crm-count-preview" data-i18n="admin.crm-desc">Customer relationships</p>
     </div>
 
-    <!-- XISH Loyalty Card — shown only when xish_enabled -->
-    <div class="settings-card xish-only" id="settings-card-xish" style="display:none; border: 1px solid rgba(161,0,53,0.4); background: linear-gradient(135deg, rgba(161,0,53,0.06), transparent);" onclick="showSettingsPage('xish')">
-      <h3 style="color:#A10035;">✦ XISH Loyalty</h3>
-      <p id="xish-settings-preview">Loyalty rewards & campaigns</p>
+    <!-- Web Console Card -->
+    <div class="settings-card" id="settings-card-xish" style="border: 1px solid rgba(161,0,53,0.4); background: linear-gradient(135deg, rgba(161,0,53,0.06), transparent);" onclick="window.location.href='/console.html'">
+      <h3 style="color:#A10035;">✦ Web Console</h3>
+      <p id="xish-settings-preview">CRM · Menu · Tables · Loyalty</p>
     </div>
 
     <!-- Coupons Card — hidden when XISH is enabled (managed in XISH dashboard) -->
@@ -458,17 +458,16 @@
     </div>
   </div>
 
-  <!-- HIDDEN: XISH Loyalty Modal -->
+  <!-- Web Console redirect (kept as stub for any JS that calls showSettingsPage('xish')) -->
   <div id="page-xish" class="settings-page hidden">
   <div class="settings-page-inner">
     <div class="settings-page-header">
       <button class="btn-back" onclick="hideSettingsPage('xish')">&#8592; Back</button>
-      <h3 style="color:#A10035;">✦ XISH Loyalty</h3>
-      <a href="/xish/admin" target="_blank" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">Open Dashboard ↗</a>
+      <h3 style="color:#A10035;">✦ Web Console</h3>
+      <a href="/console.html" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">Open Web Console ↗</a>
     </div>
     <div class="settings-page-content">
-      <p style="color: #888; font-size: 14px; margin-bottom: 20px;">XISH Loyalty is enabled for your restaurant. Use the merchant dashboard to configure tiers, discounts, gift rewards, and push campaigns.</p>
-
+      <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Manage your loyalty programme, CRM, menu, and tables from the Chuio Web Console.</p>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
         <div style="background: rgba(161,0,53,0.08); border: 1px solid rgba(161,0,53,0.25); border-radius: 10px; padding: 20px; text-align:center;">
           <div id="xish-quick-members" style="font-size: 28px; font-weight: 700; color: #A10035;">—</div>
@@ -479,9 +478,8 @@
           <div style="font-size: 12px; color: #888; margin-top: 4px;">Rewards Redeemed</div>
         </div>
       </div>
-
       <div style="text-align:center; padding: 20px;">
-        <a href="/xish/admin" target="_blank" class="btn-primary" style="display:inline-block; padding: 12px 28px;">Open Full XISH Dashboard ↗</a>
+        <a href="/console.html" class="btn-primary" style="display:inline-block; padding: 12px 28px;">Open Chuio Web Console ↗</a>
       </div>
     </div>
   </div>
