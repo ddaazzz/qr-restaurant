@@ -256,6 +256,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [crmEditPhone, setCrmEditPhone] = useState('');
   const [crmEditEmail, setCrmEditEmail] = useState('');
   const [crmEditSaving, setCrmEditSaving] = useState(false);
+  const [crmProfileEditMode, setCrmProfileEditMode] = useState(false);
 
   // Tiers state
   const [tiers, setTiers] = useState<Array<{ tier: string; points_threshold: number; discount_percent: number; is_active: boolean }>>([]);
@@ -2647,7 +2648,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-          <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => setSelectedCrmProfile(null)}>
+          <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => { setSelectedCrmProfile(null); setCrmProfileEditMode(false); }}>
             <Ionicons name="arrow-back" size={16} color="#4f46e5" />
             <Text style={styles.crmBackToListText}>{t('admin.crm-back-to-list') || 'Back to customers'}</Text>
           </TouchableOpacity>
@@ -2658,27 +2659,74 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+                {crmProfileEditMode ? (
+                  <TextInput
+                    style={[styles.crmProfileName, { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.5)', minWidth: 120, color: '#fff', padding: 0 }]}
+                    value={crmEditName}
+                    onChangeText={setCrmEditName}
+                    placeholder="Name"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                  />
+                ) : (
+                  <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+                )}
                 <TouchableOpacity
                   onPress={() => {
-                    setCrmEditName(customer.name || '');
-                    setCrmEditPhone(customer.phone || '');
-                    setCrmEditEmail(customer.email || '');
-                    setShowCrmEditModal(true);
+                    if (!crmProfileEditMode) {
+                      setCrmEditName(customer.name || '');
+                      setCrmEditPhone(customer.phone || '');
+                      setCrmEditEmail(customer.email || '');
+                    }
+                    setCrmProfileEditMode(e => !e);
                   }}
                   style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: 6, marginLeft: 8 }}
                 >
-                  <Ionicons name="pencil" size={14} color="#fff" />
+                  <Ionicons name={crmProfileEditMode ? 'close' : 'pencil'} size={14} color="#fff" />
                 </TouchableOpacity>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <Text style={{ color: '#9ca3af', fontSize: 11 }}>📞</Text>
-                <Text style={styles.crmProfileContact}>{customer.phone || '—'}</Text>
+                {crmProfileEditMode ? (
+                  <TextInput
+                    style={[styles.crmProfileContact, { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)', minWidth: 100, color: '#e5e7eb', padding: 0 }]}
+                    value={crmEditPhone}
+                    onChangeText={setCrmEditPhone}
+                    placeholder="Phone"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    keyboardType="phone-pad"
+                  />
+                ) : (
+                  <Text style={styles.crmProfileContact}>{customer.phone || '—'}</Text>
+                )}
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <Text style={{ color: '#9ca3af', fontSize: 11 }}>✉️</Text>
-                <Text style={styles.crmProfileContact}>{customer.email || '—'}</Text>
+                {crmProfileEditMode ? (
+                  <TextInput
+                    style={[styles.crmProfileContact, { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)', minWidth: 120, color: '#e5e7eb', padding: 0 }]}
+                    value={crmEditEmail}
+                    onChangeText={setCrmEditEmail}
+                    placeholder="Email"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                ) : (
+                  <Text style={styles.crmProfileContact}>{customer.email || '—'}</Text>
+                )}
               </View>
+              {crmProfileEditMode && (
+                <TouchableOpacity
+                  onPress={async () => {
+                    await saveCrmCustomerEdit();
+                    setCrmProfileEditMode(false);
+                  }}
+                  disabled={crmEditSaving}
+                  style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12, alignSelf: 'flex-start' }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{crmEditSaving ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -3937,10 +3985,27 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   );
 
   // Coupons page
-  const renderCouponsPage = () => (
+  const renderCouponsPage = () => {
+    if (!moduleFlagsLoaded && !moduleFlagsLoading) loadFeatureFlags();
+    return (
     <View style={styles.container}>
       {renderSubPageHeader(t('admin.coupons') || 'Coupons')}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings.module-settings') || 'Module Settings'}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={styles.label}>{t('settings.flag-coupons') || 'Coupons'}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('settings.flag-coupons-desc') || 'Discount coupons in customer menu (requires Members Area)'}</Text>
+            </View>
+            <Switch
+              value={moduleFlags['coupons'] !== false}
+              onValueChange={(val) => saveModuleFlag('coupons', val)}
+              trackColor={{ false: '#d1d5db', true: '#6366f1' }}
+              thumbColor="#ffffff"
+            />
+          </View>
+        </View>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('admin.coupons')}</Text>
@@ -3970,7 +4035,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
       </ScrollView>
     </View>
-  );
+    );
+  };
 
   // Variant Presets page
   const renderVariantPresetsPage = () => (

@@ -27,6 +27,7 @@ body {
   max-width: 430px;
   margin: 0 auto;
   height: 100vh;
+  height: 100dvh;
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: #111;
   color: var(--text-dark);
@@ -823,6 +824,7 @@ body {
 #phone-frame {
   position: relative;
   height: 100vh;
+  height: 100dvh;
   max-width: 430px;
   margin: 0 auto;
   display: flex;
